@@ -45,10 +45,14 @@ modules, checks the fixed program-entry signature, emits x86-64 assembly and obj
 files, links with the system linker, and runs `examples/hello.e` on Windows and
 Linux. The first `neper-0` increment adds typed integer range `for`, `break`,
 `continue`, integer local `+=`, and lexical block scopes. Startup constructs the
-root arena and UTF-8 `args`; `try` propagates named errors; bounds and invalid-division checks exit
-through the trap path; and emitted
-objects carry line, symbol, unwind and compact `.nepersym`/`.nepsym` data. The
-self-hosted compiler has not started.
+root arena and UTF-8 `args`; `try` propagates named errors; bounds and
+invalid-division checks exit through the trap path; and emitted objects carry line,
+symbol, unwind and compact `.nepersym`/`.nepsym` data. The self-hosted compiler has
+not started.
+
+Local fixed arrays are also underway: explicit and inferred literal lengths,
+`zero`/`undef`, `.len`, element-size-aware reads, and bounds traps are implemented.
+Array value ABI passing and indexed mutation are not implemented yet.
 
 On Windows with the Visual Studio C++ tools installed:
 

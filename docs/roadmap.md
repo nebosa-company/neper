@@ -121,11 +121,16 @@ compiler needs — `list.e` is `neper-0` code — and no more.
 
 **In progress (started 2026-09-04).** The first executable increment implements
 typed integer range `for`, `break`, `continue`, integer local `+=`, and lexical block
-scopes in the C99 bootstrap. `tests/neper0/run.*` cover signed ascending and empty ranges, early loop
-exits, sibling-scope name reuse, out-of-scope rejection, and invalid loop control on
-Windows and Linux. Slice/array/protocol iteration, aggregates, `defer`, `switch`,
-compile-time parameters, constant folding, the full intrinsic set, and debug locals
-remain open; this callout does not mark the `neper-0` milestone complete.
+scopes in the C99 bootstrap. `tests/neper0/run.*` cover signed ascending and empty
+ranges, early loop exits, sibling-scope name reuse, out-of-scope rejection, and invalid loop control on
+Windows and Linux. A second increment implements local fixed arrays with explicit or
+inferred literal lengths, `zero`/`undef` initialization, `.len`, element-size-aware
+reads, and bounds traps. The same suite covers adjacent narrow elements, signed
+loads, count mismatches, bounds failures, and non-overlapping slice/local frame
+slots. Array value ABI passing, indexed mutation, slice/array/protocol iteration,
+aggregate declarations, `defer`, `switch`, compile-time parameters, constant
+folding, the full intrinsic set, and debug locals remain open; this callout does not
+mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
