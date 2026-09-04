@@ -176,4 +176,12 @@ if ($LASTEXITCODE -ne 1 -or ($genericInference -join "`n") -notmatch 'cannot inf
     throw 'generic inference rejection failed'
 }
 
+$genericAggregate = & $neper run (Join-Path $PSScriptRoot 'generic-aggregate.e') --output (Join-Path $testBuild 'generic-aggregate.exe')
+if ($LASTEXITCODE -ne 0 -or $genericAggregate -ne 'generic aggregate ok') { throw 'generic aggregate behavior failed' }
+
+$genericAggregateArity = & $neper build (Join-Path $PSScriptRoot 'generic-aggregate-arity-error.e') --output (Join-Path $testBuild 'generic-aggregate-arity-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($genericAggregateArity -join "`n") -notmatch 'compile-time argument count does not match generic type') {
+    throw 'generic aggregate arity rejection failed'
+}
+
 'neper-0 Windows tests passed'

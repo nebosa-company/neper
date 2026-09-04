@@ -211,4 +211,13 @@ set -e
 test "$generic_inference_status" -eq 1
 printf '%s' "$generic_inference" | grep -q 'cannot infer compile-time parameter `T`'
 
+test "$("$neper" run "$repo/tests/neper0/generic-aggregate.e" --output "$test_build/generic-aggregate")" = 'generic aggregate ok'
+
+set +e
+generic_aggregate_arity=$("$neper" build "$repo/tests/neper0/generic-aggregate-arity-error.e" --output "$test_build/generic-aggregate-arity-error" 2>&1)
+generic_aggregate_arity_status=$?
+set -e
+test "$generic_aggregate_arity_status" -eq 1
+printf '%s' "$generic_aggregate_arity" | grep -q 'compile-time argument count does not match generic type'
+
 printf '%s\n' 'neper-0 Linux tests passed'

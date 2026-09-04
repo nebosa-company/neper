@@ -39,7 +39,7 @@ models.
 - Validate every tooling record and document against
   `schemas/neper-v1.schema.json`. Add sequence, key-order, sorting, lossless-source,
   recovery and cross-record tests for constraints JSON Schema cannot express.
-- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 67
+- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 68
   toolchain modules. Check that `modules.json`, `modules.md` and `module-apis.md`
   contain the same names; that layers, direct dependencies, blockers, surfaces,
   schedules and milestones are valid; and that the graph is acyclic. Keep the 30
@@ -161,7 +161,9 @@ overflow diagnostics, runtime constant references, and integer folding for array
 lengths. Generic functions now specialize `[T: type]` and `[N: usize]` parameters
 from explicit arguments or structural value-argument inference, cache duplicate
 instances, and substitute parameters through signatures, bodies, and array layouts.
-Generic aggregate types, the full intrinsic set, and debug locals remain open.
+Generic aggregate types now share that canonical specialization cache, substitute
+field types and array lengths, compute concrete layouts, and support specialized
+aggregate literals. The full intrinsic set and debug locals remain open.
 This callout does not
 mark the `neper-0` milestone complete.
 
@@ -400,7 +402,7 @@ GP-09/GP-10 have been rerun for every new applicable backend.
 
 ## Later toolchain-library waves — unnumbered
 
-The 31 entries with `schedule:"later"` and `milestone:null` in `modules.json` are
+The 32 entries with `schedule:"later"` and `milestone:null` in `modules.json` are
 real proposed toolchain modules, but this roadmap does not disguise them as part of
 M4, M5 or M6. They may begin when their declared dependencies exist. Before each
 wave starts, its `surface:"planned"` API is frozen; delivery requires tests, extracted
@@ -421,10 +423,12 @@ in parallel once their prerequisites and specifications are ready.
   These build over the M1/M2 platform boundary and must demonstrate cancellation,
   backpressure, bounded buffers, partial I/O, deterministic shutdown and no hidden
   allocation or entropy. They unlock the GP-04 service workload.
-- **Interchange formats:** `fmt.yaml`, `fmt.xml`, `fmt.bson`, `fmt.msgpack` and
-  `fmt.protobuf`. These consume caller-provided slices/readers and writers, never
+- **Interchange formats:** `fmt.yaml`, `fmt.xml`, `fmt.html`, `fmt.bson`, `fmt.msgpack`
+  and `fmt.protobuf`. These consume caller-provided slices/readers and writers, never
   open resources themselves, and require malformed, streaming, bounds and round-trip
-  corpora in addition to API equality.
+  corpora in addition to API equality. `fmt.html` additionally runs the pinned
+  html5lib tokenizer and tree-construction fixtures for the WHATWG behavior frozen by
+  that toolchain release.
 - **GPU composition:** `e.gpu.tensor` follows both M3 `e.gpu` and
   `algo.linalg.tensor`; every operation remains an explicit queue submission and is
   added to the applicable GP-10 matrix.

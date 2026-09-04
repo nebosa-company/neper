@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.10-neper0"
+#define NEPER_VERSION "0.0.11-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -156,6 +156,10 @@ typedef struct Type {
     int element_is_const;
     size_t array_length;
     Expr *array_length_expr;
+    struct Type *generic_types[MAX_ARGS];
+    Expr *generic_values[MAX_ARGS];
+    unsigned char generic_is_type[MAX_ARGS];
+    int generic_arg_count;
     struct Type *element;
 } Type;
 
@@ -460,6 +464,9 @@ typedef struct StructDecl {
     char name[96];
     Token token;
     NamedDeclKind kind;
+    ComptimeParam comptime_params[MAX_ARGS];
+    int comptime_param_count;
+    int is_template;
     Type backing_type;
     FieldDecl fields[MAX_FIELDS];
     int field_count;
@@ -909,12 +916,45 @@ static Type parse_type(Compiler *c) {
     {
         Token *first = expect(c, TK_IDENT, "expected type name");
         char name[96];
+        StructDecl *generic_decl = 0;
+        int generic_index;
         copy_text(name, sizeof(name), first->start, (size_t)first->length);
         while (match(c, TK_DOT)) {
             Token *part = expect(c, TK_IDENT, "expected type name after `.`");
             size_t used = strlen(name);
             if (used + 1 < sizeof(name)) name[used++] = '.';
             copy_text(name + used, sizeof(name) - used, part->start, (size_t)part->length);
+        }
+        for (generic_index = 0; generic_index < c->program.struct_count; ++generic_index)
+            if (strcmp(c->program.structs[generic_index].name, name) == 0 &&
+                c->program.structs[generic_index].is_template) {
+                generic_decl = &c->program.structs[generic_index]; break;
+            }
+        if (generic_decl && match(c, TK_LBRACKET)) {
+            Type generic_type = type_make(TY_NAMED, name);
+            if (!check(c, TK_RBRACKET)) {
+                do {
+                    ComptimeParam *parameter;
+                    Type *type_argument;
+                    int argument = generic_type.generic_arg_count;
+                    if (argument >= MAX_ARGS) {
+                        diagnostic_at(c, peek(c), "E-TOOL-9999", "compile-time argument limit exceeded");
+                        break;
+                    }
+                    parameter = argument < generic_decl->comptime_param_count ?
+                                &generic_decl->comptime_params[argument] : 0;
+                    if (parameter && parameter->is_type) {
+                        type_argument = (Type *)calloc(1, sizeof(*type_argument));
+                        if (!type_argument) { fputs("neper: out of memory\n", stderr); exit(2); }
+                        *type_argument = parse_type(c);
+                        generic_type.generic_types[argument] = type_argument;
+                        generic_type.generic_is_type[argument] = 1;
+                    } else generic_type.generic_values[argument] = parse_expression(c);
+                    generic_type.generic_arg_count++;
+                } while (match(c, TK_COMMA));
+            }
+            expect(c, TK_RBRACKET, "expected `]` after compile-time arguments");
+            return generic_type;
         }
         if (strcmp(name, "bool") == 0) return type_make(TY_BOOL, name);
         if (strcmp(name, "err") == 0) return type_make(TY_ERR, name);
@@ -1159,7 +1199,10 @@ static Expr *parse_primary(Compiler *c) {
         Expr *generic_values[MAX_ARGS] = {0};
         unsigned char generic_is_type[MAX_ARGS] = {0};
         int generic_arg_count = 0;
+        Type generic_struct_type;
+        int has_generic_struct = 0;
         memset(generic_types, 0, sizeof(generic_types));
+        memset(&generic_struct_type, 0, sizeof(generic_struct_type));
         copy_text(name, sizeof(name), token->start, (size_t)token->length);
         while (match(c, TK_DOT)) {
             Token *part = expect(c, TK_IDENT, "expected name after `.`");
@@ -1189,11 +1232,42 @@ static Expr *parse_primary(Compiler *c) {
             }
             expect(c, TK_RBRACKET, "expected `]` after compile-time arguments");
         }
-        if (name_ends_in_type_segment(name) &&
+        if (!generic_function && check(c, TK_LBRACKET)) {
+            StructDecl *generic_decl = 0;
+            int declaration_index;
+            for (declaration_index = 0; declaration_index < c->program.struct_count; ++declaration_index)
+                if (strcmp(c->program.structs[declaration_index].name, name) == 0 &&
+                    c->program.structs[declaration_index].is_template) {
+                    generic_decl = &c->program.structs[declaration_index]; break;
+                }
+            if (generic_decl) {
+                match(c, TK_LBRACKET);
+                generic_struct_type = type_make(TY_NAMED, name);
+                while (!check(c, TK_RBRACKET)) {
+                    int argument = generic_struct_type.generic_arg_count;
+                    ComptimeParam *parameter = argument < generic_decl->comptime_param_count ?
+                                                &generic_decl->comptime_params[argument] : 0;
+                    if (argument >= MAX_ARGS) break;
+                    if (parameter && parameter->is_type) {
+                        Type *stored = (Type *)calloc(1, sizeof(*stored));
+                        if (!stored) { fputs("neper: out of memory\n", stderr); exit(2); }
+                        *stored = parse_type(c);
+                        generic_struct_type.generic_types[argument] = stored;
+                        generic_struct_type.generic_is_type[argument] = 1;
+                    } else generic_struct_type.generic_values[argument] = parse_expression(c);
+                    generic_struct_type.generic_arg_count++;
+                    if (!match(c, TK_COMMA)) break;
+                }
+                expect(c, TK_RBRACKET, "expected `]` after generic type arguments");
+                has_generic_struct = 1;
+            }
+        }
+        if ((has_generic_struct || name_ends_in_type_segment(name)) &&
             (name_is_declared_aggregate(c, name) ||
-             (strchr(name, '.') == 0 && !name_is_declared_error(c, name))) &&
+             has_generic_struct || (strchr(name, '.') == 0 && !name_is_declared_error(c, name))) &&
             match(c, TK_LBRACE)) {
             e = new_expr(EX_STRUCT_LITERAL, *token);
+            if (has_generic_struct) e->type = generic_struct_type;
             copy_text(e->as.aggregate.type_name, sizeof(e->as.aggregate.type_name),
                       name, strlen(name));
             skip_newlines(c);
@@ -1656,6 +1730,26 @@ static void parse_type_declaration(Compiler *c, Token token) {
     memset(decl, 0, sizeof(*decl));
     copy_text(decl->name, sizeof(decl->name), name->start, (size_t)name->length);
     decl->token = token;
+    if (match(c, TK_LBRACKET)) {
+        decl->is_template = 1;
+        do {
+            ComptimeParam *parameter;
+            Token *parameter_name;
+            if (decl->comptime_param_count >= MAX_ARGS) {
+                diagnostic_at(c, peek(c), "E-TOOL-9999", "compile-time parameter limit exceeded");
+                break;
+            }
+            parameter = &decl->comptime_params[decl->comptime_param_count++];
+            parameter_name = expect(c, TK_IDENT, "expected compile-time parameter name");
+            parameter->token = *parameter_name;
+            copy_text(parameter->name, sizeof(parameter->name), parameter_name->start,
+                      (size_t)parameter_name->length);
+            expect(c, TK_COLON, "expected `:` after compile-time parameter name");
+            if (match(c, TK_TYPE)) parameter->is_type = 1;
+            else parameter->value_type = parse_type(c);
+        } while (match(c, TK_COMMA));
+        expect(c, TK_RBRACKET, "expected `]` after compile-time parameters");
+    }
     expect(c, TK_ASSIGN, "expected `=` after type name");
     if (match(c, TK_STRUCT)) decl->kind = ND_STRUCT;
     else if (match(c, TK_UNION)) {
@@ -2275,6 +2369,7 @@ static int evaluate_integer_expression(Compiler *c, Expr *expr, int64_t *out,
                                        Type *out_type);
 static int checked_integer_binary(Compiler *c, Expr *expr, int64_t left,
                                   int64_t right, int64_t *out);
+static int instantiate_struct_type(Compiler *c, Type *type, Token *token);
 
 static int template_parameter_index(Function *template_fn, const char *name) {
     int i;
@@ -2322,7 +2417,7 @@ static int evaluate_template_integer(Compiler *c, Function *template_fn,
 
 static Type specialize_type(Compiler *c, Function *template_fn, Type *type_args,
                             int64_t *integer_args, Type source) {
-    int parameter_index;
+    int parameter_index, i;
     if (source.kind == TY_NAMED &&
         (parameter_index = template_parameter_index(template_fn, source.name)) >= 0 &&
         template_fn->comptime_params[parameter_index].is_type)
@@ -2331,6 +2426,25 @@ static Type specialize_type(Compiler *c, Function *template_fn, Type *type_args,
         Type element = specialize_type(c, template_fn, type_args, integer_args,
                                        *source.element);
         type_set_element(&source, element);
+    }
+    for (i = 0; i < source.generic_arg_count; ++i) {
+        if (source.generic_is_type[i] && source.generic_types[i]) {
+            Type specialized = specialize_type(c, template_fn, type_args, integer_args,
+                                               *source.generic_types[i]);
+            Type *stored = (Type *)calloc(1, sizeof(*stored));
+            if (!stored) { fputs("neper: out of memory\n", stderr); exit(2); }
+            *stored = specialized;
+            source.generic_types[i] = stored;
+        } else if (source.generic_values[i]) {
+            int64_t value;
+            if (evaluate_template_integer(c, template_fn, integer_args,
+                                          source.generic_values[i], &value)) {
+                Expr *stored = new_expr(EX_INTEGER, source.generic_values[i]->token);
+                stored->as.integer = value;
+                stored->type = type_make(TY_UNTYPED_INT, "");
+                source.generic_values[i] = stored;
+            }
+        }
     }
     if (source.kind == TY_ARRAY && source.array_length_expr) {
         int64_t length;
@@ -2345,6 +2459,8 @@ static Type specialize_type(Compiler *c, Function *template_fn, Type *type_args,
             }
         }
     }
+    if (source.kind == TY_NAMED && source.generic_arg_count)
+        instantiate_struct_type(c, &source, &template_fn->token);
     return source;
 }
 
@@ -2782,6 +2898,11 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             return e->type;
         }
         case EX_STRUCT_LITERAL: {
+            if (e->type.kind == TY_NAMED && e->type.generic_arg_count) {
+                resolve_type_constants(c, &e->type, &e->token);
+                copy_text(e->as.aggregate.type_name, sizeof(e->as.aggregate.type_name),
+                          e->type.name, strlen(e->type.name));
+            }
             StructDecl *decl = find_struct(c, e->as.aggregate.type_name);
             unsigned char seen[MAX_FIELDS];
             memset(seen, 0, sizeof(seen));
@@ -3875,7 +3996,83 @@ static int evaluate_integer_expression(Compiler *c, Expr *expr, int64_t *out,
     return 0;
 }
 
+static int instantiate_struct_type(Compiler *c, Type *type, Token *token) {
+    StructDecl *template_decl = find_struct(c, type->name);
+    Function environment;
+    Type type_args[MAX_ARGS];
+    int64_t integer_args[MAX_ARGS] = {0};
+    char instance_name[96];
+    size_t used;
+    StructDecl *instance;
+    int i;
+    if (!template_decl || !template_decl->is_template) return 1;
+    if (type->generic_arg_count != template_decl->comptime_param_count) {
+        diagnostic_at(c, token, "E-TYPE-0003",
+                      "compile-time argument count does not match generic type");
+        return 0;
+    }
+    memset(&environment, 0, sizeof(environment));
+    memset(type_args, 0, sizeof(type_args));
+    environment.comptime_param_count = template_decl->comptime_param_count;
+    copy_text(instance_name, sizeof(instance_name), template_decl->name,
+              strlen(template_decl->name));
+    used = strlen(instance_name);
+    for (i = 0; i < template_decl->comptime_param_count; ++i) {
+        ComptimeParam *parameter = &template_decl->comptime_params[i];
+        char part[112];
+        environment.comptime_params[i] = *parameter;
+        if (parameter->is_type) {
+            if (!type->generic_is_type[i] || !type->generic_types[i]) {
+                diagnostic_at(c, token, "E-TYPE-0003", "generic type argument must be a type");
+                return 0;
+            }
+            type_args[i] = *type->generic_types[i];
+            resolve_type_constants(c, &type_args[i], token);
+            snprintf(part, sizeof(part), "$%s", type_args[i].name);
+        } else {
+            Type actual;
+            if (type->generic_is_type[i] || !type->generic_values[i] ||
+                !evaluate_integer_expression(c, type->generic_values[i],
+                                             &integer_args[i], &actual)) return 0;
+            if (actual.kind != TY_UNTYPED_INT && !type_equal(actual, parameter->value_type)) {
+                diagnostic_at(c, token, "E-TYPE-0002",
+                              "generic integer argument has the wrong type");
+                return 0;
+            }
+            snprintf(part, sizeof(part), "$%lld", (long long)integer_args[i]);
+        }
+        copy_text(instance_name + used, sizeof(instance_name) - used, part, strlen(part));
+        used = strlen(instance_name);
+    }
+    instance = find_struct(c, instance_name);
+    if (!instance) {
+        if (c->program.struct_count >= MAX_DECLS) {
+            diagnostic_at(c, token, "E-TOOL-9999", "generic type instance limit exceeded");
+            return 0;
+        }
+        instance = &c->program.structs[c->program.struct_count++];
+        memset(instance, 0, sizeof(*instance));
+        copy_text(instance->name, sizeof(instance->name), instance_name, strlen(instance_name));
+        instance->token = template_decl->token;
+        instance->kind = template_decl->kind;
+        instance->backing_type = specialize_type(c, &environment, type_args, integer_args,
+                                                 template_decl->backing_type);
+        instance->field_count = template_decl->field_count;
+        for (i = 0; i < instance->field_count; ++i) {
+            instance->fields[i] = template_decl->fields[i];
+            instance->fields[i].type = specialize_type(c, &environment, type_args,
+                                                       integer_args, template_decl->fields[i].type);
+            resolve_type_constants(c, &instance->fields[i].type, &instance->fields[i].token);
+        }
+    }
+    copy_text(type->name, sizeof(type->name), instance_name, strlen(instance_name));
+    type->generic_arg_count = 0;
+    return 1;
+}
+
 static void resolve_type_constants(Compiler *c, Type *type, Token *token) {
+    if (type->kind == TY_NAMED && type->generic_arg_count)
+        instantiate_struct_type(c, type, token);
     if (type->kind == TY_ARRAY) {
         if (type->array_length_expr) {
             int64_t value;
@@ -3975,6 +4172,7 @@ static void check_program(Compiler *c) {
         for (j = 0; j < i; ++j)
             if (strcmp(decl->name, c->program.structs[j].name) == 0)
                 diagnostic_at(c, &decl->token, "E-NAME-0001", "duplicate type declaration");
+        if (decl->is_template) continue;
         if (decl->kind == ND_ENUM || decl->kind == ND_TAGGED_UNION) {
             resolve_type_constants(c, &decl->backing_type, &decl->token);
             check_known_type(c, decl->backing_type, &decl->token);
