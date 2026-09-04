@@ -15,6 +15,9 @@ if ($LASTEXITCODE -ne 0 -or $array -ne 'array ok') { throw 'fixed array behavior
 $slice = & $neper run (Join-Path $PSScriptRoot 'slice-mutate.e') --output (Join-Path $testBuild 'slice-mutate.exe') -- original
 if ($LASTEXITCODE -ne 0 -or $slice -ne 'slice mutation ok') { throw 'slice mutation failed' }
 
+$iteration = & $neper run (Join-Path $PSScriptRoot 'slice-iterate.e') --output (Join-Path $testBuild 'slice-iterate.exe') -- 'slice iteration ok'
+if ($LASTEXITCODE -ne 0 -or $iteration -ne 'slice iteration ok') { throw 'slice iteration failed' }
+
 $bounds = & $neper run (Join-Path $PSScriptRoot 'array-bounds.e') --output (Join-Path $testBuild 'array-bounds.exe') 2>&1
 if ($LASTEXITCODE -ne 134 -or ($bounds -join "`n") -notmatch 'trap\[bounds\]') {
     throw 'array bounds trap failed'
@@ -28,6 +31,11 @@ if ($LASTEXITCODE -ne 1 -or ($countError -join "`n") -notmatch '4:18: error\[E-T
 $mutationError = & $neper build (Join-Path $PSScriptRoot 'array-mutation-error.e') --output (Join-Path $testBuild 'array-mutation-error.exe') 2>&1
 if ($LASTEXITCODE -ne 1 -or ($mutationError -join "`n") -notmatch '5:5: error\[E-TYPE-9999\]') {
     throw 'immutable array mutation rejection failed'
+}
+
+$bindingError = & $neper build (Join-Path $PSScriptRoot 'for-binding-error.e') --output (Join-Path $testBuild 'for-binding-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($bindingError -join "`n") -notmatch '6:9: error\[E-TYPE-9999\]') {
+    throw 'immutable for binding rejection failed'
 }
 
 $scopeError = & $neper build (Join-Path $PSScriptRoot 'scope-error.e') --output (Join-Path $testBuild 'scope-error.exe') 2>&1

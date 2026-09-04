@@ -212,6 +212,7 @@ typedef enum StmtKind {
     ST_IF,
     ST_WHILE,
     ST_FOR_RANGE,
+    ST_FOR_EACH,
     ST_BREAK,
     ST_CONTINUE
 } StmtKind;
@@ -263,6 +264,17 @@ struct Stmt {
             int local_index;
             int end_local_index;
         } for_range;
+        struct {
+            char index_name[96];
+            char value_name[96];
+            int has_index;
+            Expr *subject;
+            Stmt *body;
+            int pointer_local_index;
+            int length_local_index;
+            int index_local_index;
+            int value_local_index;
+        } for_each;
     } as;
 };
 
@@ -673,6 +685,12 @@ static Type array_element_type(Type array) {
     return element;
 }
 
+static Type sequence_element_type(Type sequence) {
+    if (sequence.kind == TY_STR) return type_make(TY_INT, "u8");
+    if (sequence.kind == TY_ARRAY) return array_element_type(sequence);
+    return type_make(sequence.element_kind, sequence.element_name);
+}
+
 static int parse_array_length(Compiler *c, Token *token, size_t *out) {
     static const char *suffixes[] = {
         "usize", "isize", "u64", "u32", "u16", "u8", "i64", "i32", "i16", "i8"
@@ -1074,18 +1092,44 @@ static Stmt *parse_statement(Compiler *c) {
         return s;
     }
     if (match(c, TK_FOR)) {
-        Stmt *s = new_stmt(ST_FOR_RANGE, *token);
-        Token *name = expect(c, TK_IDENT, "expected range binding after `for`");
-        copy_text(s->as.for_range.name, sizeof(s->as.for_range.name),
-                  name->start, (size_t)name->length);
-        s->as.for_range.local_index = -1;
-        s->as.for_range.end_local_index = -1;
-        expect(c, TK_IN, "expected `in` after range binding");
-        s->as.for_range.start = parse_expression(c);
-        expect(c, TK_RANGE, "neper-0 currently requires a range in `for`");
-        s->as.for_range.end = parse_expression(c);
-        s->as.for_range.body = parse_block(c);
-        return s;
+        Token *first = expect(c, TK_IDENT, "expected binding after `for`");
+        Token *second = 0;
+        Expr *subject;
+        if (match(c, TK_COMMA)) second = expect(c, TK_IDENT, "expected value binding after `,`");
+        expect(c, TK_IN, "expected `in` after for binding");
+        subject = parse_expression(c);
+        if (match(c, TK_RANGE)) {
+            Stmt *s = new_stmt(ST_FOR_RANGE, *token);
+            if (second)
+                diagnostic_at(c, second, "E-SYNTAX-9999", "a range loop has exactly one binding");
+            copy_text(s->as.for_range.name, sizeof(s->as.for_range.name),
+                      first->start, (size_t)first->length);
+            s->as.for_range.local_index = -1;
+            s->as.for_range.end_local_index = -1;
+            s->as.for_range.start = subject;
+            s->as.for_range.end = parse_expression(c);
+            s->as.for_range.body = parse_block(c);
+            return s;
+        } else {
+            Stmt *s = new_stmt(ST_FOR_EACH, *token);
+            s->as.for_each.pointer_local_index = -1;
+            s->as.for_each.length_local_index = -1;
+            s->as.for_each.index_local_index = -1;
+            s->as.for_each.value_local_index = -1;
+            s->as.for_each.has_index = second != 0;
+            if (second) {
+                copy_text(s->as.for_each.index_name, sizeof(s->as.for_each.index_name),
+                          first->start, (size_t)first->length);
+                copy_text(s->as.for_each.value_name, sizeof(s->as.for_each.value_name),
+                          second->start, (size_t)second->length);
+            } else {
+                copy_text(s->as.for_each.value_name, sizeof(s->as.for_each.value_name),
+                          first->start, (size_t)first->length);
+            }
+            s->as.for_each.subject = subject;
+            s->as.for_each.body = parse_block(c);
+            return s;
+        }
     }
     if (match(c, TK_BREAK)) return new_stmt(ST_BREAK, *token);
     if (match(c, TK_CONTINUE)) return new_stmt(ST_CONTINUE, *token);
@@ -1600,6 +1644,67 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 }
                 break;
             }
+            case ST_FOR_EACH: {
+                Type sequence = check_expr(c, fn, s->as.for_each.subject);
+                Type element;
+                int local_start, i;
+                if (!(sequence.kind == TY_ARRAY || sequence.kind == TY_SLICE || sequence.kind == TY_STR)) {
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "for subject must be a range, array, or slice in this neper-0 increment");
+                    break;
+                }
+                element = sequence_element_type(sequence);
+                if (!(element.kind == TY_BOOL || element.kind == TY_INT ||
+                      element.kind == TY_ERR || element.kind == TY_POINTER ||
+                      element.kind == TY_ARENA || element.kind == TY_STR ||
+                      element.kind == TY_SLICE)) {
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "this neper-0 increment iterates scalar, pointer, and slice elements");
+                    break;
+                }
+                if (find_local(fn, s->as.for_each.value_name) >= 0 ||
+                    (s->as.for_each.has_index && find_local(fn, s->as.for_each.index_name) >= 0)) {
+                    diagnostic_at(c, &s->token, "E-NAME-0003", "for binding shadows an active name");
+                    break;
+                }
+                if (s->as.for_each.has_index &&
+                    strcmp(s->as.for_each.index_name, s->as.for_each.value_name) == 0) {
+                    diagnostic_at(c, &s->token, "E-NAME-0001", "duplicate for binding");
+                    break;
+                }
+                local_start = fn->local_count;
+                if (fn->local_count + 4 <= MAX_LOCALS) {
+                    Type usize_type = type_make(TY_INT, "usize");
+                    Type pointer_type = type_make(TY_POINTER, element.name);
+                    Local *pointer = &fn->locals[fn->local_count];
+                    Local *length = &fn->locals[fn->local_count + 1];
+                    Local *index = &fn->locals[fn->local_count + 2];
+                    Local *value = &fn->locals[fn->local_count + 3];
+                    memset(pointer, 0, sizeof(*pointer)); memset(length, 0, sizeof(*length));
+                    memset(index, 0, sizeof(*index)); memset(value, 0, sizeof(*value));
+                    snprintf(pointer->name, sizeof(pointer->name), "$for_ptr_%d", local_start);
+                    snprintf(length->name, sizeof(length->name), "$for_len_%d", local_start);
+                    if (s->as.for_each.has_index) strcpy(index->name, s->as.for_each.index_name);
+                    else snprintf(index->name, sizeof(index->name), "$for_index_%d", local_start);
+                    strcpy(value->name, s->as.for_each.value_name);
+                    pointer->type = pointer_type; length->type = usize_type;
+                    index->type = usize_type; value->type = element;
+                    pointer->active = length->active = index->active = value->active = 1;
+                    s->as.for_each.pointer_local_index = fn->local_count++;
+                    s->as.for_each.length_local_index = fn->local_count++;
+                    s->as.for_each.index_local_index = fn->local_count++;
+                    s->as.for_each.value_local_index = fn->local_count++;
+                    if (loop_depth >= MAX_LOOP_DEPTH)
+                        diagnostic_at(c, &s->token, "E-TOOL-9999", "loop nesting limit exceeded");
+                    else
+                        check_statements_in_scope(c, fn, s->as.for_each.body,
+                                                  loop_depth + 1, 1);
+                    for (i = local_start; i < local_start + 4; ++i) fn->locals[i].active = 0;
+                } else {
+                    diagnostic_at(c, &s->token, "E-TOOL-9999", "local limit exceeded");
+                }
+                break;
+            }
             case ST_BREAK:
                 if (loop_depth == 0)
                     diagnostic_at(c, &s->token, "E-TYPE-9999", "break requires an enclosing loop");
@@ -1764,6 +1869,10 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
                 collect_traps_expr(c, fn, statement->as.for_range.end);
                 collect_traps_statements(c, fn, statement->as.for_range.body);
                 break;
+            case ST_FOR_EACH:
+                collect_traps_expr(c, fn, statement->as.for_each.subject);
+                collect_traps_statements(c, fn, statement->as.for_each.body);
+                break;
             case ST_BREAK: case ST_CONTINUE: break;
         }
     }
@@ -1875,9 +1984,7 @@ static void emit_trap_call(Emitter *e, Expr *x) {
 }
 
 static Type index_element_type(Type base) {
-    if (base.kind == TY_STR) return type_make(TY_INT, "u8");
-    if (base.kind == TY_ARRAY) return array_element_type(base);
-    return type_make(base.element_kind, base.element_name);
+    return sequence_element_type(base);
 }
 
 static int emit_index_address(Emitter *e, Expr *index) {
@@ -2154,6 +2261,42 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 fprintf(e->out, "    jmp np_label_%d\nnp_label_%d:\n", start, done);
                 break;
             }
+            case ST_FOR_EACH: {
+                Local *pointer = &e->fn->locals[s->as.for_each.pointer_local_index];
+                Local *length = &e->fn->locals[s->as.for_each.length_local_index];
+                Local *index = &e->fn->locals[s->as.for_each.index_local_index];
+                Local *value = &e->fn->locals[s->as.for_each.value_local_index];
+                Type element = value->type;
+                size_t size = scalar_byte_size(element);
+                int start = e->label++, step = e->label++, done = e->label++;
+                emit_expr(e, s->as.for_each.subject);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", pointer->offset);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", length->offset);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], 0\n", index->offset);
+                fprintf(e->out, "np_label_%d:\n", start);
+                fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", index->offset);
+                fprintf(e->out, "    cmp rax, QWORD PTR [rbp-%d]\n", length->offset);
+                fprintf(e->out, "    jae np_label_%d\n", done);
+                fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", pointer->offset);
+                if (size == 16) fputs("    shl rax, 4\n    add r10, rax\n", e->out);
+                else if (size == 8) fputs("    lea r10, [r10+rax*8]\n", e->out);
+                else if (size == 4) fputs("    lea r10, [r10+rax*4]\n", e->out);
+                else if (size == 2) fputs("    lea r10, [r10+rax*2]\n", e->out);
+                else fputs("    add r10, rax\n", e->out);
+                emit_address_load(e->out, element);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", value->offset);
+                if (size == 16)
+                    fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", value->offset - 8);
+                e->loop_break[e->loop_depth] = done;
+                e->loop_continue[e->loop_depth] = step;
+                e->loop_depth++;
+                emit_statements(e, s->as.for_each.body);
+                e->loop_depth--;
+                fprintf(e->out, "np_label_%d:\n", step);
+                fprintf(e->out, "    add QWORD PTR [rbp-%d], 1\n", index->offset);
+                fprintf(e->out, "    jmp np_label_%d\nnp_label_%d:\n", start, done);
+                break;
+            }
             case ST_BREAK:
                 fprintf(e->out, "    jmp np_label_%d\n", e->loop_break[e->loop_depth - 1]);
                 break;
@@ -2282,6 +2425,7 @@ static int statement_line_count(Stmt *statement) {
             count += statement_line_count(statement->as.if_stmt.else_body);
         } else if (statement->kind == ST_WHILE) count += statement_line_count(statement->as.while_stmt.body);
         else if (statement->kind == ST_FOR_RANGE) count += statement_line_count(statement->as.for_range.body);
+        else if (statement->kind == ST_FOR_EACH) count += statement_line_count(statement->as.for_each.body);
     }
     return count;
 }
@@ -2297,6 +2441,8 @@ static void emit_codeview_statement_lines(FILE *out, Function *fn, Stmt *stateme
             emit_codeview_statement_lines(out, fn, statement->as.while_stmt.body);
         else if (statement->kind == ST_FOR_RANGE)
             emit_codeview_statement_lines(out, fn, statement->as.for_range.body);
+        else if (statement->kind == ST_FOR_EACH)
+            emit_codeview_statement_lines(out, fn, statement->as.for_each.body);
     }
 }
 

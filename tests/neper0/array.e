@@ -12,7 +12,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     for i in 0usize..values.len {
         total += values[i]
     }
-    if total == 507u16 && values.len == 4usize && signed[0usize] == -2i16 && zeros[1usize] == 9u8 && zeros[2usize] == 0u8 && scratch.len == 2usize {
+    var each_total: u16 = 0u16
+    for i, value in values {
+        if i == 1usize {
+            continue
+        }
+        each_total += value
+    }
+    if total == 507u16 && each_total == 505u16 && values.len == 4usize && signed[0usize] == -2i16 && zeros[1usize] == 9u8 && zeros[2usize] == 0u8 && scratch.len == 2usize {
         try io.print("array ok\n")
     } else {
         try io.print("array failed\n")
