@@ -71,6 +71,8 @@ and aggregate yielded values. Multiple-return calls can be consumed with
 `let (a, b) = call()` or assigned with `(a, b) = call()`, including `_` discards.
 Integer `const` declarations are folded with checked arithmetic and can drive array
 lengths in declarations, annotations, and literals.
+Generic functions accept explicit or inferred `[T: type]` and `[N: usize]`
+parameters, with cached concrete specializations emitted per argument set.
 Explicit-backing enums, unchecked bare unions,
 tagged `union enum` values, exact tag/payload layout, tag-checked payload access,
 contextual and qualified member names, and non-fallthrough `switch` are implemented.

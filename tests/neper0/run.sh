@@ -202,4 +202,13 @@ set -e
 test "$array_length_type_status" -eq 1
 printf '%s' "$array_length_type" | grep -q 'array length must have type usize'
 
+test "$("$neper" run "$repo/tests/neper0/generic-function.e" --output "$test_build/generic-function")" = 'generic function ok'
+
+set +e
+generic_inference=$("$neper" build "$repo/tests/neper0/generic-inference-error.e" --output "$test_build/generic-inference-error" 2>&1)
+generic_inference_status=$?
+set -e
+test "$generic_inference_status" -eq 1
+printf '%s' "$generic_inference" | grep -q 'cannot infer compile-time parameter `T`'
+
 printf '%s\n' 'neper-0 Linux tests passed'

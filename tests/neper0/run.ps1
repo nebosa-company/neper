@@ -168,4 +168,12 @@ if ($LASTEXITCODE -ne 1 -or ($arrayLengthType -join "`n") -notmatch 'array lengt
     throw 'array length type rejection failed'
 }
 
+$genericFunction = & $neper run (Join-Path $PSScriptRoot 'generic-function.e') --output (Join-Path $testBuild 'generic-function.exe')
+if ($LASTEXITCODE -ne 0 -or $genericFunction -ne 'generic function ok') { throw 'generic function behavior failed' }
+
+$genericInference = & $neper build (Join-Path $PSScriptRoot 'generic-inference-error.e') --output (Join-Path $testBuild 'generic-inference-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($genericInference -join "`n") -notmatch 'cannot infer compile-time parameter `T`') {
+    throw 'generic inference rejection failed'
+}
+
 'neper-0 Windows tests passed'

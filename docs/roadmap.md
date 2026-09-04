@@ -39,7 +39,7 @@ models.
 - Validate every tooling record and document against
   `schemas/neper-v1.schema.json`. Add sequence, key-order, sorting, lossless-source,
   recovery and cross-record tests for constraints JSON Schema cannot express.
-- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 60
+- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 67
   toolchain modules. Check that `modules.json`, `modules.md` and `module-apis.md`
   contain the same names; that layers, direct dependencies, blockers, surfaces,
   schedules and milestones are valid; and that the graph is acyclic. Keep the 30
@@ -158,8 +158,10 @@ destructuring now supports `let`/`var` bindings, `_` discards, and assignment to
 mutable locals for register- and caller-slot-returned result sets. The constant
 increment adds order-independent integer `const` declarations, dependency-cycle and
 overflow diagnostics, runtime constant references, and integer folding for array
-lengths. Compile-time parameters, the full intrinsic set, and debug locals remain
-open.
+lengths. Generic functions now specialize `[T: type]` and `[N: usize]` parameters
+from explicit arguments or structural value-argument inference, cache duplicate
+instances, and substitute parameters through signatures, bodies, and array layouts.
+Generic aggregate types, the full intrinsic set, and debug locals remain open.
 This callout does not
 mark the `neper-0` milestone complete.
 
@@ -398,7 +400,7 @@ GP-09/GP-10 have been rerun for every new applicable backend.
 
 ## Later toolchain-library waves — unnumbered
 
-The 24 entries with `schedule:"later"` and `milestone:null` in `modules.json` are
+The 31 entries with `schedule:"later"` and `milestone:null` in `modules.json` are
 real proposed toolchain modules, but this roadmap does not disguise them as part of
 M4, M5 or M6. They may begin when their declared dependencies exist. Before each
 wave starts, its `surface:"planned"` API is frozen; delivery requires tests, extracted
@@ -406,14 +408,16 @@ source/API equality and a same-change transition to `surface:"source"`.
 Their position here does not order them before M5 or M6; independent waves may run
 in parallel once their prerequisites and specifications are ready.
 
-- **Pure algorithms, text and cryptography:** `algo.stat`, `algo.bignum`,
+- **Pure algorithms, text and cryptography:** `algo.stat`, `algo.bitset`,
+  `algo.complex`, `algo.bignum`,
   `algo.linalg.matrix`, `algo.linalg.tensor`, `text.utf8`, `text.unicode`,
-  `text.normalize`, `text.collate`, `text.regex`, `crypto.hash`, `crypto.aead`,
+  `text.encoding`, `text.normalize`, `text.collate`, `text.regex`, `crypto.hash`, `crypto.aead`,
   `crypto.sign`, `crypto.kx` and `crypto.random`. Preserve caller-owned allocation,
   caller-supplied entropy and the declared dependency edges. Cryptographic delivery
   requires published standard vectors, malformed-input cases and verification of
   every API that explicitly promises constant-time behavior.
-- **Host services and networking:** `e.async`, `e.net`, `e.net.http` and `e.net.ws`.
+- **Host services and networking:** `text.io`, `e.task`, `e.time.calendar`, `e.tz`,
+  `e.async`, `e.net`, `e.net.http` and `e.net.ws`.
   These build over the M1/M2 platform boundary and must demonstrate cancellation,
   backpressure, bounded buffers, partial I/O, deterministic shutdown and no hidden
   allocation or entropy. They unlock the GP-04 service workload.
@@ -428,6 +432,9 @@ in parallel once their prerequisites and specifications are ready.
 The 30 owner-qualified `x.*` reservations are versioned external packages, not a
 fifth wave. Each gets a separate package specification only after its upstream API
 version, supported targets, ownership rules and licensing boundary are selected.
+`x.neper.locale` and the URI/MIME foundation of `x.neper.web` already have proposed
+package specifications; delivery still waits for pinned CLDR data and normal package
+verification. `e.tz` instead pins its IANA data to the toolchain version.
 
 ## M5 — Native Metal
 

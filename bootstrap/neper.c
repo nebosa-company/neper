@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.9-neper0"
+#define NEPER_VERSION "0.0.10-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -159,6 +159,13 @@ typedef struct Type {
     struct Type *element;
 } Type;
 
+typedef struct ComptimeParam {
+    char name[96];
+    Token token;
+    int is_type;
+    Type value_type;
+} ComptimeParam;
+
 typedef enum ExprKind {
     EX_INTEGER,
     EX_STRING,
@@ -204,6 +211,10 @@ struct Expr {
         char name[160];
         struct {
             char callee[160];
+            Type generic_types[MAX_ARGS];
+            Expr *generic_values[MAX_ARGS];
+            unsigned char generic_is_type[MAX_ARGS];
+            int generic_arg_count;
             Expr *args[MAX_ARGS];
             int arg_count;
         } call;
@@ -391,6 +402,9 @@ typedef struct Function {
     Token token;
     Param params[MAX_PARAMS];
     int param_count;
+    ComptimeParam comptime_params[MAX_ARGS];
+    int comptime_param_count;
+    int is_template;
     Type return_type;
     Type return_types[MAX_ARGS];
     int return_count;
@@ -1061,6 +1075,14 @@ static int name_is_declared_error(Compiler *c, const char *name) {
     return 0;
 }
 
+static Function *parsed_function_named(Compiler *c, const char *name) {
+    int i;
+    for (i = 0; i < c->program.function_count; ++i)
+        if (strcmp(c->program.functions[i].name, name) == 0)
+            return &c->program.functions[i];
+    return 0;
+}
+
 static Expr *parse_primary(Compiler *c) {
     Token *token = peek(c);
     if (match(c, TK_DOT)) {
@@ -1132,12 +1154,40 @@ static Expr *parse_primary(Compiler *c) {
     if (match(c, TK_IDENT)) {
         Expr *e;
         char name[160];
+        Function *generic_function;
+        Type generic_types[MAX_ARGS];
+        Expr *generic_values[MAX_ARGS] = {0};
+        unsigned char generic_is_type[MAX_ARGS] = {0};
+        int generic_arg_count = 0;
+        memset(generic_types, 0, sizeof(generic_types));
         copy_text(name, sizeof(name), token->start, (size_t)token->length);
         while (match(c, TK_DOT)) {
             Token *part = expect(c, TK_IDENT, "expected name after `.`");
             size_t used = strlen(name);
             if (used + 1 < sizeof(name)) name[used++] = '.';
             copy_text(name + used, sizeof(name) - used, part->start, (size_t)part->length);
+        }
+        generic_function = parsed_function_named(c, name);
+        if (generic_function && generic_function->is_template && match(c, TK_LBRACKET)) {
+            if (!check(c, TK_RBRACKET)) {
+                do {
+                    ComptimeParam *parameter;
+                    if (generic_arg_count >= MAX_ARGS) {
+                        diagnostic_at(c, peek(c), "E-TOOL-9999", "compile-time argument limit exceeded");
+                        break;
+                    }
+                    parameter = generic_arg_count < generic_function->comptime_param_count ?
+                                &generic_function->comptime_params[generic_arg_count] : 0;
+                    if (parameter && parameter->is_type) {
+                        generic_is_type[generic_arg_count] = 1;
+                        generic_types[generic_arg_count] = parse_type(c);
+                    } else {
+                        generic_values[generic_arg_count] = parse_expression(c);
+                    }
+                    generic_arg_count++;
+                } while (match(c, TK_COMMA));
+            }
+            expect(c, TK_RBRACKET, "expected `]` after compile-time arguments");
         }
         if (name_ends_in_type_segment(name) &&
             (name_is_declared_aggregate(c, name) ||
@@ -1163,6 +1213,15 @@ static Expr *parse_primary(Compiler *c) {
         } else if (match(c, TK_LPAREN)) {
             e = new_expr(EX_CALL, *token);
             strcpy(e->as.call.callee, name);
+            e->as.call.generic_arg_count = generic_arg_count;
+            if (generic_arg_count) {
+                int generic_index;
+                for (generic_index = 0; generic_index < generic_arg_count; ++generic_index) {
+                    e->as.call.generic_is_type[generic_index] = generic_is_type[generic_index];
+                    e->as.call.generic_types[generic_index] = generic_types[generic_index];
+                    e->as.call.generic_values[generic_index] = generic_values[generic_index];
+                }
+            }
             if (!check(c, TK_RPAREN)) {
                 do {
                     if (e->as.call.arg_count >= MAX_ARGS) {
@@ -1174,6 +1233,9 @@ static Expr *parse_primary(Compiler *c) {
             }
             expect(c, TK_RPAREN, "expected `)` after arguments");
         } else {
+            if (generic_arg_count)
+                diagnostic_at(c, token, "E-SYNTAX-9999",
+                              "generic function arguments must be followed by a call");
             e = new_expr(EX_NAME, *token); strcpy(e->as.name, name);
         }
         for (;;) {
@@ -1671,6 +1733,27 @@ static void parse_function(Compiler *c, Token token) {
     copy_text(fn->name, sizeof(fn->name), name->start, (size_t)name->length);
     if (strcmp(fn->name, "main") == 0) strcpy(fn->symbol, "neper_main");
     else { strcpy(fn->symbol, "neper_fn_"); strcat(fn->symbol, fn->name); }
+    if (match(c, TK_LBRACKET)) {
+        fn->is_template = 1;
+        do {
+            ComptimeParam *parameter;
+            Token *parameter_name;
+            if (fn->comptime_param_count >= MAX_ARGS) {
+                diagnostic_at(c, peek(c), "E-TOOL-9999", "compile-time parameter limit exceeded");
+                break;
+            }
+            parameter = &fn->comptime_params[fn->comptime_param_count++];
+            memset(parameter, 0, sizeof(*parameter));
+            parameter_name = expect(c, TK_IDENT, "expected compile-time parameter name");
+            parameter->token = *parameter_name;
+            copy_text(parameter->name, sizeof(parameter->name), parameter_name->start,
+                      (size_t)parameter_name->length);
+            expect(c, TK_COLON, "expected `:` after compile-time parameter name");
+            if (match(c, TK_TYPE)) parameter->is_type = 1;
+            else parameter->value_type = parse_type(c);
+        } while (match(c, TK_COMMA));
+        expect(c, TK_RBRACKET, "expected `]` after compile-time parameters");
+    }
     expect(c, TK_LPAREN, "expected `(` after function name");
     if (!check(c, TK_RPAREN)) {
         do {
@@ -2188,12 +2271,462 @@ static Type resolve_name_place(Compiler *c, Function *fn, Expr *e) {
 static Type check_expr(Compiler *c, Function *fn, Expr *e);
 static int evaluate_constant(Compiler *c, ConstDecl *constant);
 static void resolve_type_constants(Compiler *c, Type *type, Token *token);
+static int evaluate_integer_expression(Compiler *c, Expr *expr, int64_t *out,
+                                       Type *out_type);
+static int checked_integer_binary(Compiler *c, Expr *expr, int64_t left,
+                                  int64_t right, int64_t *out);
+
+static int template_parameter_index(Function *template_fn, const char *name) {
+    int i;
+    for (i = 0; i < template_fn->comptime_param_count; ++i)
+        if (strcmp(template_fn->comptime_params[i].name, name) == 0) return i;
+    return -1;
+}
+
+static int evaluate_template_integer(Compiler *c, Function *template_fn,
+                                     int64_t *integer_args, Expr *expr, int64_t *out) {
+    int parameter_index;
+    if (expr->kind == EX_NAME &&
+        (parameter_index = template_parameter_index(template_fn, expr->as.name)) >= 0 &&
+        !template_fn->comptime_params[parameter_index].is_type) {
+        *out = integer_args[parameter_index];
+        return 1;
+    }
+    if (expr->kind == EX_INTEGER) { *out = expr->as.integer; return 1; }
+    if (expr->kind == EX_NAME) {
+        Type ignored;
+        return evaluate_integer_expression(c, expr, out, &ignored);
+    }
+    if (expr->kind == EX_UNARY && expr->as.unary.op == TK_MINUS) {
+        if (!evaluate_template_integer(c, template_fn, integer_args,
+                                       expr->as.unary.value, out)) return 0;
+        if (*out == INT64_MIN) {
+            diagnostic_at(c, &expr->token, "E-TYPE-0004", "compile-time argument overflow");
+            return 0;
+        }
+        *out = -*out;
+        return 1;
+    }
+    if (expr->kind == EX_BINARY) {
+        int64_t left, right;
+        if (!evaluate_template_integer(c, template_fn, integer_args,
+                                       expr->as.binary.left, &left) ||
+            !evaluate_template_integer(c, template_fn, integer_args,
+                                       expr->as.binary.right, &right)) return 0;
+        return checked_integer_binary(c, expr, left, right, out);
+    }
+    diagnostic_at(c, &expr->token, "E-TYPE-9999",
+                  "unsupported expression involving a compile-time integer parameter");
+    return 0;
+}
+
+static Type specialize_type(Compiler *c, Function *template_fn, Type *type_args,
+                            int64_t *integer_args, Type source) {
+    int parameter_index;
+    if (source.kind == TY_NAMED &&
+        (parameter_index = template_parameter_index(template_fn, source.name)) >= 0 &&
+        template_fn->comptime_params[parameter_index].is_type)
+        return type_args[parameter_index];
+    if (source.element) {
+        Type element = specialize_type(c, template_fn, type_args, integer_args,
+                                       *source.element);
+        type_set_element(&source, element);
+    }
+    if (source.kind == TY_ARRAY && source.array_length_expr) {
+        int64_t length;
+        if (evaluate_template_integer(c, template_fn, integer_args,
+                                      source.array_length_expr, &length)) {
+            if (length < 0)
+                diagnostic_at(c, &source.array_length_expr->token, "E-TYPE-0004",
+                              "array length is not representable as usize");
+            else {
+                source.array_length = (size_t)length;
+                source.array_length_expr = 0;
+            }
+        }
+    }
+    return source;
+}
+
+static Expr *clone_specialized_expr(Compiler *c, Function *template_fn,
+                                    Type *type_args, int64_t *integer_args,
+                                    Expr *source) {
+    Expr *copy;
+    int i, parameter_index;
+    if (!source) return 0;
+    copy = (Expr *)calloc(1, sizeof(*copy));
+    if (!copy) { fputs("neper: out of memory\n", stderr); exit(2); }
+    *copy = *source;
+    copy->type = specialize_type(c, template_fn, type_args, integer_args, source->type);
+    copy->local_index = -1;
+    copy->trap_id = -1;
+    copy->field_path_count = 0;
+    copy->place_mutable = 0;
+    copy->is_len = 0;
+    if (copy->kind == EX_NAME &&
+        (parameter_index = template_parameter_index(template_fn, copy->as.name)) >= 0 &&
+        !template_fn->comptime_params[parameter_index].is_type) {
+        copy->kind = EX_INTEGER;
+        copy->as.integer = integer_args[parameter_index];
+        copy->type = template_fn->comptime_params[parameter_index].value_type;
+        copy->constant_value = copy->as.integer;
+        copy->is_constant = 1;
+        return copy;
+    }
+    switch (copy->kind) {
+        case EX_CALL:
+            for (i = 0; i < copy->as.call.arg_count; ++i)
+                copy->as.call.args[i] = clone_specialized_expr(c, template_fn, type_args,
+                                                               integer_args, source->as.call.args[i]);
+            for (i = 0; i < copy->as.call.generic_arg_count; ++i) {
+                if (copy->as.call.generic_is_type[i])
+                    copy->as.call.generic_types[i] = specialize_type(c, template_fn, type_args,
+                                                                     integer_args, source->as.call.generic_types[i]);
+                else copy->as.call.generic_values[i] = clone_specialized_expr(
+                    c, template_fn, type_args, integer_args, source->as.call.generic_values[i]);
+            }
+            break;
+        case EX_INDEX:
+            copy->as.index.base = clone_specialized_expr(c, template_fn, type_args,
+                                                         integer_args, source->as.index.base);
+            copy->as.index.index = clone_specialized_expr(c, template_fn, type_args,
+                                                          integer_args, source->as.index.index);
+            break;
+        case EX_FIELD:
+            copy->as.field.base = clone_specialized_expr(c, template_fn, type_args,
+                                                         integer_args, source->as.field.base);
+            break;
+        case EX_SLICE:
+            copy->as.slice.base = clone_specialized_expr(c, template_fn, type_args,
+                                                         integer_args, source->as.slice.base);
+            copy->as.slice.start = clone_specialized_expr(c, template_fn, type_args,
+                                                          integer_args, source->as.slice.start);
+            copy->as.slice.end = clone_specialized_expr(c, template_fn, type_args,
+                                                        integer_args, source->as.slice.end);
+            break;
+        case EX_ARRAY_LITERAL:
+            copy->as.array.items = (Expr **)calloc((size_t)(source->as.array.item_count ?
+                                                   source->as.array.item_count : 1), sizeof(Expr *));
+            if (!copy->as.array.items) { fputs("neper: out of memory\n", stderr); exit(2); }
+            copy->as.array.item_capacity = source->as.array.item_count;
+            for (i = 0; i < source->as.array.item_count; ++i)
+                copy->as.array.items[i] = clone_specialized_expr(c, template_fn, type_args,
+                                                                 integer_args, source->as.array.items[i]);
+            break;
+        case EX_STRUCT_LITERAL:
+            copy->as.aggregate.items = (StructInit *)calloc(
+                (size_t)(source->as.aggregate.item_count ? source->as.aggregate.item_count : 1),
+                sizeof(StructInit));
+            if (!copy->as.aggregate.items) { fputs("neper: out of memory\n", stderr); exit(2); }
+            copy->as.aggregate.item_capacity = source->as.aggregate.item_count;
+            for (i = 0; i < source->as.aggregate.item_count; ++i) {
+                copy->as.aggregate.items[i] = source->as.aggregate.items[i];
+                copy->as.aggregate.items[i].field_index = -1;
+                copy->as.aggregate.items[i].value = clone_specialized_expr(
+                    c, template_fn, type_args, integer_args, source->as.aggregate.items[i].value);
+            }
+            break;
+        case EX_BINARY:
+            copy->as.binary.left = clone_specialized_expr(c, template_fn, type_args,
+                                                          integer_args, source->as.binary.left);
+            copy->as.binary.right = clone_specialized_expr(c, template_fn, type_args,
+                                                           integer_args, source->as.binary.right);
+            break;
+        case EX_UNARY:
+            copy->as.unary.value = clone_specialized_expr(c, template_fn, type_args,
+                                                          integer_args, source->as.unary.value);
+            break;
+        default: break;
+    }
+    return copy;
+}
+
+static Stmt *clone_specialized_statements(Compiler *c, Function *template_fn,
+                                          Type *type_args, int64_t *integer_args,
+                                          Stmt *source);
+
+static SwitchCase *clone_specialized_cases(Compiler *c, Function *template_fn,
+                                           Type *type_args, int64_t *integer_args,
+                                           SwitchCase *source) {
+    SwitchCase *head = 0, **tail = &head;
+    for (; source; source = source->next) {
+        SwitchCase *copy = (SwitchCase *)calloc(1, sizeof(*copy));
+        int i;
+        if (!copy) { fputs("neper: out of memory\n", stderr); exit(2); }
+        *copy = *source; copy->next = 0; copy->local_index = -1; copy->member_index = -1;
+        for (i = 0; i < source->value_count; ++i)
+            copy->values[i] = clone_specialized_expr(c, template_fn, type_args,
+                                                      integer_args, source->values[i]);
+        copy->body = clone_specialized_statements(c, template_fn, type_args,
+                                                  integer_args, source->body);
+        *tail = copy; tail = &copy->next;
+    }
+    return head;
+}
+
+static Stmt *clone_specialized_statements(Compiler *c, Function *template_fn,
+                                          Type *type_args, int64_t *integer_args,
+                                          Stmt *source) {
+    Stmt *head = 0, **tail = &head;
+    for (; source; source = source->next) {
+        Stmt *copy = (Stmt *)calloc(1, sizeof(*copy));
+        int i;
+        if (!copy) { fputs("neper: out of memory\n", stderr); exit(2); }
+        *copy = *source; copy->next = 0;
+        switch (copy->kind) {
+            case ST_BIND:
+                copy->as.bind.local_index = -1;
+                copy->as.bind.declared_type = specialize_type(c, template_fn, type_args,
+                                                              integer_args, source->as.bind.declared_type);
+                copy->as.bind.value = clone_specialized_expr(c, template_fn, type_args,
+                                                             integer_args, source->as.bind.value);
+                break;
+            case ST_MULTI_BIND: case ST_MULTI_ASSIGN:
+                for (i = 0; i < copy->as.multi.count; ++i) copy->as.multi.local_indices[i] = -1;
+                copy->as.multi.call = clone_specialized_expr(c, template_fn, type_args,
+                                                             integer_args, source->as.multi.call);
+                break;
+            case ST_ASSIGN:
+                copy->as.assign.local_index = -1;
+                copy->as.assign.target = clone_specialized_expr(c, template_fn, type_args,
+                                                                integer_args, source->as.assign.target);
+                copy->as.assign.value = clone_specialized_expr(c, template_fn, type_args,
+                                                               integer_args, source->as.assign.value);
+                break;
+            case ST_INDEX_ASSIGN:
+                copy->as.index_assign.target = clone_specialized_expr(c, template_fn, type_args,
+                                                                      integer_args, source->as.index_assign.target);
+                copy->as.index_assign.value = clone_specialized_expr(c, template_fn, type_args,
+                                                                     integer_args, source->as.index_assign.value);
+                break;
+            case ST_EXPR: case ST_TRY:
+                copy->as.expr = clone_specialized_expr(c, template_fn, type_args,
+                                                       integer_args, source->as.expr); break;
+            case ST_RETURN:
+                for (i = 0; i < copy->as.ret.value_count; ++i)
+                    copy->as.ret.values[i] = clone_specialized_expr(c, template_fn, type_args,
+                                                                   integer_args, source->as.ret.values[i]);
+                copy->as.ret.value = copy->as.ret.value_count ? copy->as.ret.values[0] : 0;
+                break;
+            case ST_IF:
+                copy->as.if_stmt.condition = clone_specialized_expr(c, template_fn, type_args,
+                                                                    integer_args, source->as.if_stmt.condition);
+                copy->as.if_stmt.then_body = clone_specialized_statements(c, template_fn, type_args,
+                                                                          integer_args, source->as.if_stmt.then_body);
+                copy->as.if_stmt.else_body = clone_specialized_statements(c, template_fn, type_args,
+                                                                          integer_args, source->as.if_stmt.else_body);
+                break;
+            case ST_WHILE:
+                copy->as.while_stmt.condition = clone_specialized_expr(c, template_fn, type_args,
+                                                                       integer_args, source->as.while_stmt.condition);
+                copy->as.while_stmt.body = clone_specialized_statements(c, template_fn, type_args,
+                                                                        integer_args, source->as.while_stmt.body);
+                break;
+            case ST_FOR_RANGE:
+                copy->as.for_range.local_index = copy->as.for_range.end_local_index = -1;
+                copy->as.for_range.start = clone_specialized_expr(c, template_fn, type_args,
+                                                                  integer_args, source->as.for_range.start);
+                copy->as.for_range.end = clone_specialized_expr(c, template_fn, type_args,
+                                                                integer_args, source->as.for_range.end);
+                copy->as.for_range.body = clone_specialized_statements(c, template_fn, type_args,
+                                                                       integer_args, source->as.for_range.body);
+                break;
+            case ST_FOR_EACH:
+                copy->as.for_each.pointer_local_index = copy->as.for_each.length_local_index = -1;
+                copy->as.for_each.index_local_index = copy->as.for_each.value_local_index = -1;
+                copy->as.for_each.iterator_pointer_local_index = copy->as.for_each.iterator_has_local_index = -1;
+                copy->as.for_each.subject = clone_specialized_expr(c, template_fn, type_args,
+                                                                   integer_args, source->as.for_each.subject);
+                copy->as.for_each.body = clone_specialized_statements(c, template_fn, type_args,
+                                                                      integer_args, source->as.for_each.body);
+                break;
+            case ST_SWITCH:
+                copy->as.switch_stmt.subject = clone_specialized_expr(c, template_fn, type_args,
+                                                                      integer_args, source->as.switch_stmt.subject);
+                copy->as.switch_stmt.cases = clone_specialized_cases(c, template_fn, type_args,
+                                                                    integer_args, source->as.switch_stmt.cases);
+                break;
+            case ST_DEFER:
+                copy->as.defer_stmt.capture_count = 0;
+                copy->as.defer_stmt.is_captured_call = 0;
+                copy->as.defer_stmt.call = 0;
+                copy->as.defer_stmt.body = clone_specialized_statements(c, template_fn, type_args,
+                                                                        integer_args, source->as.defer_stmt.body);
+                break;
+            default: break;
+        }
+        *tail = copy; tail = &copy->next;
+    }
+    return head;
+}
+
+static Function *instantiate_function(Compiler *c, Function *template_fn, Expr *call) {
+    Type type_args[MAX_ARGS];
+    int64_t integer_args[MAX_ARGS] = {0};
+    char instance_name[96];
+    size_t used;
+    Function *instance;
+    int i;
+    if (call->as.call.generic_arg_count != template_fn->comptime_param_count) {
+        diagnostic_at(c, &call->token, "E-TYPE-0003",
+                      "compile-time argument count does not match function");
+        return 0;
+    }
+    memset(type_args, 0, sizeof(type_args));
+    copy_text(instance_name, sizeof(instance_name), template_fn->name, strlen(template_fn->name));
+    used = strlen(instance_name);
+    for (i = 0; i < template_fn->comptime_param_count; ++i) {
+        ComptimeParam *parameter = &template_fn->comptime_params[i];
+        char part[112];
+        if (parameter->is_type) {
+            if (!call->as.call.generic_is_type[i]) {
+                diagnostic_at(c, &call->token, "E-TYPE-0003", "compile-time argument must be a type");
+                return 0;
+            }
+            type_args[i] = call->as.call.generic_types[i];
+            snprintf(part, sizeof(part), "$%s", type_args[i].name);
+        } else {
+            Type actual;
+            if (call->as.call.generic_is_type[i] ||
+                !evaluate_integer_expression(c, call->as.call.generic_values[i],
+                                             &integer_args[i], &actual)) return 0;
+            if (actual.kind != TY_UNTYPED_INT && !type_equal(actual, parameter->value_type)) {
+                diagnostic_at(c, &call->token, "E-TYPE-0002",
+                              "compile-time integer argument has the wrong type");
+                return 0;
+            }
+            snprintf(part, sizeof(part), "$%lld", (long long)integer_args[i]);
+        }
+        copy_text(instance_name + used, sizeof(instance_name) - used, part, strlen(part));
+        used = strlen(instance_name);
+    }
+    instance = find_function(c, instance_name);
+    if (instance) return instance;
+    if (c->program.function_count >= MAX_DECLS) {
+        diagnostic_at(c, &call->token, "E-TOOL-9999", "function instance limit exceeded");
+        return 0;
+    }
+    instance = &c->program.functions[c->program.function_count++];
+    memset(instance, 0, sizeof(*instance));
+    copy_text(instance->name, sizeof(instance->name), instance_name, strlen(instance_name));
+    strcpy(instance->symbol, "neper_fn_");
+    for (i = 0; instance_name[i] && strlen(instance->symbol) + 2 < sizeof(instance->symbol); ++i) {
+        size_t at = strlen(instance->symbol);
+        char ch = instance_name[i];
+        instance->symbol[at] = (ch == '$' || ch == '.' || ch == '*') ? '_' : ch;
+        instance->symbol[at + 1] = 0;
+    }
+    instance->token = template_fn->token;
+    instance->return_slot_local_index = instance->scalar_return_local_index = -1;
+    for (i = 0; i < MAX_ARGS; ++i) instance->return_value_locals[i] = -1;
+    instance->param_count = template_fn->param_count;
+    for (i = 0; i < instance->param_count; ++i) {
+        instance->params[i] = template_fn->params[i];
+        instance->params[i].type = specialize_type(c, template_fn, type_args, integer_args,
+                                                   template_fn->params[i].type);
+    }
+    instance->return_count = template_fn->return_count;
+    for (i = 0; i < instance->return_count; ++i)
+        instance->return_types[i] = specialize_type(c, template_fn, type_args, integer_args,
+                                                    template_fn->return_types[i]);
+    instance->return_type = instance->return_count ? instance->return_types[0] : type_make(TY_VOID, "void");
+    instance->body = clone_specialized_statements(c, template_fn, type_args, integer_args,
+                                                  template_fn->body);
+    return instance;
+}
+
+static void infer_comptime_from_types(Compiler *c, Function *template_fn,
+                                      Type formal, Type actual, Type *type_args,
+                                      int64_t *integer_args, unsigned char *inferred,
+                                      Token *token) {
+    int parameter_index;
+    if (formal.kind == TY_NAMED &&
+        (parameter_index = template_parameter_index(template_fn, formal.name)) >= 0 &&
+        template_fn->comptime_params[parameter_index].is_type) {
+        if (!inferred[parameter_index]) {
+            type_args[parameter_index] = actual;
+            inferred[parameter_index] = 1;
+        } else if (!type_equal(type_args[parameter_index], actual))
+            diagnostic_at(c, token, "E-TYPE-0002",
+                          "conflicting inference for compile-time type parameter");
+        return;
+    }
+    if (formal.kind != actual.kind) return;
+    if (formal.kind == TY_ARRAY && formal.array_length_expr &&
+        formal.array_length_expr->kind == EX_NAME &&
+        (parameter_index = template_parameter_index(template_fn,
+                                                     formal.array_length_expr->as.name)) >= 0 &&
+        !template_fn->comptime_params[parameter_index].is_type) {
+        if (!inferred[parameter_index]) {
+            integer_args[parameter_index] = (int64_t)actual.array_length;
+            inferred[parameter_index] = 1;
+        } else if (integer_args[parameter_index] != (int64_t)actual.array_length)
+            diagnostic_at(c, token, "E-TYPE-0002",
+                          "conflicting inference for compile-time integer parameter");
+    }
+    if (formal.element && actual.element)
+        infer_comptime_from_types(c, template_fn, *formal.element, *actual.element,
+                                  type_args, integer_args, inferred, token);
+}
+
+static int infer_function_arguments(Compiler *c, Function *fn, Function *template_fn,
+                                    Expr *call) {
+    Type type_args[MAX_ARGS];
+    int64_t integer_args[MAX_ARGS] = {0};
+    unsigned char inferred[MAX_ARGS] = {0};
+    int i;
+    memset(type_args, 0, sizeof(type_args));
+    for (i = 0; i < call->as.call.arg_count && i < template_fn->param_count; ++i) {
+        Type actual = check_expr(c, fn, call->as.call.args[i]);
+        if (actual.kind == TY_UNTYPED_INT) continue;
+        infer_comptime_from_types(c, template_fn, template_fn->params[i].type, actual,
+                                  type_args, integer_args, inferred,
+                                  &call->as.call.args[i]->token);
+    }
+    for (i = 0; i < template_fn->comptime_param_count; ++i) {
+        if (!inferred[i]) {
+            char message[256];
+            snprintf(message, sizeof(message),
+                     "cannot infer compile-time parameter `%s`",
+                     template_fn->comptime_params[i].name);
+            diagnostic_at(c, &call->token, "E-TYPE-0001", message);
+            return 0;
+        }
+        if (template_fn->comptime_params[i].is_type) {
+            call->as.call.generic_is_type[i] = 1;
+            call->as.call.generic_types[i] = type_args[i];
+        } else {
+            Expr *value = new_expr(EX_INTEGER, call->token);
+            value->as.integer = integer_args[i];
+            value->type = template_fn->comptime_params[i].value_type;
+            call->as.call.generic_values[i] = value;
+        }
+    }
+    call->as.call.generic_arg_count = template_fn->comptime_param_count;
+    return 1;
+}
 
 static Function *check_declared_call(Compiler *c, Function *fn, Expr *e) {
     Function *callee = find_function(c, e->as.call.callee);
     int i;
+    if (callee && callee->is_template && !e->as.call.generic_arg_count) {
+        if (!infer_function_arguments(c, fn, callee, e)) return 0;
+        callee = instantiate_function(c, callee, e);
+        if (callee) copy_text(e->as.call.callee, sizeof(e->as.call.callee),
+                              callee->name, strlen(callee->name));
+    }
+    if (callee && callee->is_template && e->as.call.generic_arg_count) {
+        callee = instantiate_function(c, callee, e);
+        if (callee) copy_text(e->as.call.callee, sizeof(e->as.call.callee),
+                              callee->name, strlen(callee->name));
+    }
     if (!callee) {
         diagnostic_at(c, &e->token, "E-NAME-9999", "unknown function");
+        return 0;
+    }
+    if (callee->is_template) {
+        diagnostic_at(c, &e->token, "E-TYPE-0001",
+                      "generic call requires explicit or inferable compile-time arguments");
         return 0;
     }
     if (callee->param_count != e->as.call.arg_count)
@@ -3467,6 +4000,7 @@ static void check_program(Compiler *c) {
         Function *fn = &c->program.functions[i];
         for (j = 0; j < i; ++j) if (strcmp(fn->name, c->program.functions[j].name) == 0)
             diagnostic_at(c, &fn->token, "E-NAME-0001", "duplicate function declaration");
+        if (fn->is_template) continue;
         for (j = 0; j < fn->return_count; ++j)
             resolve_type_constants(c, &fn->return_types[j], &fn->token);
         if (fn->return_count) fn->return_type = fn->return_types[0];
@@ -3623,7 +4157,8 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
 static void collect_traps(Compiler *c) {
     int i;
     for (i = 0; i < c->program.function_count; ++i)
-        collect_traps_statements(c, &c->program.functions[i], c->program.functions[i].body);
+        if (!c->program.functions[i].is_template)
+            collect_traps_statements(c, &c->program.functions[i], c->program.functions[i].body);
 }
 
 typedef struct Emitter {
@@ -4672,8 +5207,8 @@ static void emit_function(Emitter *e, Function *fn) {
     emit_statements(e, fn->body);
     fputs("    xor eax, eax\n", e->out);
     fprintf(e->out, "np_ret_%d:\n    mov rsp, rbp\n    pop rbp\n    ret\n", e->return_label);
-    if (e->windows) fprintf(e->out, "np_end_%s LABEL BYTE\n%s ENDP\n\n", fn->name, symbol_name(fn));
-    else { fprintf(e->out, "np_end_%s:\n", fn->name); fputs("    .cfi_endproc\n", e->out); fprintf(e->out, ".size %s, .-%s\n\n", symbol_name(fn), symbol_name(fn)); }
+    if (e->windows) fprintf(e->out, "np_end_%s LABEL BYTE\n%s ENDP\n\n", symbol_name(fn), symbol_name(fn));
+    else { fprintf(e->out, "np_end_%s:\n", symbol_name(fn)); fputs("    .cfi_endproc\n", e->out); fprintf(e->out, ".size %s, .-%s\n\n", symbol_name(fn), symbol_name(fn)); }
 }
 
 static void emit_bytes(FILE *out, const unsigned char *bytes, size_t n, int windows) {
@@ -4700,48 +5235,58 @@ static void error_message(Compiler *c, ErrorDecl *error, char *out, size_t capac
 }
 
 static void emit_nepersym(Compiler *c, FILE *out, int windows) {
-    int i;
+    int i, concrete_count = 0, record_index = 0;
+    for (i = 0; i < c->program.function_count; ++i)
+        if (!c->program.functions[i].is_template) concrete_count++;
     if (windows) {
         fputs("\n.nepsym SEGMENT READ\nPUBLIC np_nepersym\nnp_nepersym LABEL BYTE\n"
               "DB 'N','E','P','S'\nDW 1,0\n", out);
-        fprintf(out, "DD %d\n", c->program.function_count);
+        fprintf(out, "DD %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i) {
             Function *fn = &c->program.functions[i];
+            if (fn->is_template) continue;
             fprintf(out, "DQ %s, np_end_%s\nDD %d, %d, %d\n",
-                    symbol_name(fn), fn->name, i, c->program.function_count, i);
+                    symbol_name(fn), symbol_name(fn), record_index, concrete_count, record_index);
+            record_index++;
         }
-        fprintf(out, "DD %d\n", c->program.function_count + 1);
+        fprintf(out, "DD %d\n", concrete_count + 1);
         for (i = 0; i < c->program.function_count; ++i) {
             Function *fn = &c->program.functions[i];
+            if (fn->is_template) continue;
             fprintf(out, "DD %u\n", (unsigned)strlen(fn->name));
             emit_bytes(out, (const unsigned char *)fn->name, strlen(fn->name), 1);
         }
         fprintf(out, "DD %u\n", (unsigned)strlen(c->source_path));
         emit_bytes(out, (const unsigned char *)c->source_path, strlen(c->source_path), 1);
-        fprintf(out, "DD %d\n", c->program.function_count);
+        fprintf(out, "DD %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i)
-            fprintf(out, "DD 8, %d, %d\n", c->program.functions[i].token.line, c->program.functions[i].token.column);
+            if (!c->program.functions[i].is_template)
+                fprintf(out, "DD 8, %d, %d\n", c->program.functions[i].token.line, c->program.functions[i].token.column);
         fputs(".nepsym ENDS\n\n.code\n", out);
     } else {
         fputs("\n.section .nepersym,\"R\",@progbits\n.globl np_nepersym\nnp_nepersym:\n"
               ".ascii \"NEPS\"\n.short 1\n.short 0\n", out);
-        fprintf(out, ".long %d\n", c->program.function_count);
+        fprintf(out, ".long %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i) {
             Function *fn = &c->program.functions[i];
+            if (fn->is_template) continue;
             fprintf(out, ".quad %s, np_end_%s\n.long %d, %d, %d\n",
-                    symbol_name(fn), fn->name, i, c->program.function_count, i);
+                    symbol_name(fn), symbol_name(fn), record_index, concrete_count, record_index);
+            record_index++;
         }
-        fprintf(out, ".long %d\n", c->program.function_count + 1);
+        fprintf(out, ".long %d\n", concrete_count + 1);
         for (i = 0; i < c->program.function_count; ++i) {
             Function *fn = &c->program.functions[i];
+            if (fn->is_template) continue;
             fprintf(out, ".long %u\n", (unsigned)strlen(fn->name));
             emit_bytes(out, (const unsigned char *)fn->name, strlen(fn->name), 0);
         }
         fprintf(out, ".long %u\n", (unsigned)strlen(c->source_path));
         emit_bytes(out, (const unsigned char *)c->source_path, strlen(c->source_path), 0);
-        fprintf(out, ".long %d\n", c->program.function_count);
+        fprintf(out, ".long %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i)
-            fprintf(out, ".long 8, %d, %d\n", c->program.functions[i].token.line, c->program.functions[i].token.column);
+            if (!c->program.functions[i].is_template)
+                fprintf(out, ".long 8, %d, %d\n", c->program.functions[i].token.line, c->program.functions[i].token.column);
         fputs("\n.text\n", out);
     }
 }
@@ -4784,13 +5329,14 @@ static void emit_windows_codeview(Compiler *c, FILE *out) {
     fputs(".debug_s_neper SEGMENT BYTE READ DISCARD ALIAS('.debug$S')\nDD 4\n", out);
     for (i = 0; i < c->program.function_count; ++i) {
         Function *fn = &c->program.functions[i];
+        if (fn->is_template) continue;
         int line_count = 1 + statement_line_count(fn->body);
         int block_size = 12 + line_count * 8;
         int subsection_size = 12 + block_size;
         fprintf(out, "DD 0F2h, %d\nDD SECTIONREL %s\nDD SECTIONREL %s\n",
                 subsection_size, symbol_name(fn), symbol_name(fn));
         fprintf(out, "DD np_end_%s - %s\nDD 0, %d, %d\n",
-                fn->name, symbol_name(fn), line_count, block_size);
+                symbol_name(fn), symbol_name(fn), line_count, block_size);
         fprintf(out, "DD 0, 080000000h + %d\n", fn->token.line);
         emit_codeview_statement_lines(out, fn, fn->body);
     }
@@ -4956,7 +5502,8 @@ static int emit_assembly(Compiler *c, const char *path, int windows) {
         emit_bytes(out, (const unsigned char *)site->message, site->message_length, windows);
     }
     emit_nepersym(c, out, windows);
-    for (i = 0; i < c->program.function_count; ++i) emit_function(&e, &c->program.functions[i]);
+    for (i = 0; i < c->program.function_count; ++i)
+        if (!c->program.functions[i].is_template) emit_function(&e, &c->program.functions[i]);
     if (windows) { emit_windows_runtime(c, out); emit_windows_codeview(c, out); fputs("END\n", out); }
     else { emit_linux_runtime(c, out); fputs(".section .note.GNU-stack,\"\",@progbits\n", out); }
     fclose(out);
