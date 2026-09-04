@@ -142,4 +142,17 @@ if ($LASTEXITCODE -ne 1 -or ($protocolMissing -join "`n") -notmatch 'protocol it
     throw 'missing iterator protocol rejection failed'
 }
 
+$multipleReturn = & $neper run (Join-Path $PSScriptRoot 'multiple-return.e') --output (Join-Path $testBuild 'multiple-return.exe')
+if ($LASTEXITCODE -ne 0 -or $multipleReturn -ne 'multiple return ok') { throw 'multiple return behavior failed' }
+
+$multipleReturnCount = & $neper build (Join-Path $PSScriptRoot 'multiple-return-count-error.e') --output (Join-Path $testBuild 'multiple-return-count-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($multipleReturnCount -join "`n") -notmatch 'multiple binding count does not match function results') {
+    throw 'multiple return count rejection failed'
+}
+
+$multipleReturnMutable = & $neper build (Join-Path $PSScriptRoot 'multiple-return-mutable-error.e') --output (Join-Path $testBuild 'multiple-return-mutable-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($multipleReturnMutable -join "`n") -notmatch 'multiple assignment target is immutable') {
+    throw 'immutable multiple assignment rejection failed'
+}
+
 'neper-0 Windows tests passed'

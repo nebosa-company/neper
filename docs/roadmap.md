@@ -154,7 +154,8 @@ fallible calls, and return-value preservation. The iterator increment adds the
 compiler-generated `<type>_next(*Type) -> (T, bool)` lookup used by `for value in
 iterator`, requires a mutable variable or mutable pointer subject, and implements
 the two-result x64 ABI needed for scalar and aggregate yields. Direct source-level
-destructuring of arbitrary multiple-return calls remains open. Compile-time
+destructuring now supports `let`/`var` bindings, `_` discards, and assignment to
+mutable locals for register- and caller-slot-returned result sets. Compile-time
 parameters, constant folding, the full intrinsic set, and debug locals remain open.
 This callout does not
 mark the `neper-0` milestone complete.

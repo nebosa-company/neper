@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.7-neper0"
+#define NEPER_VERSION "0.0.8-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -248,7 +248,9 @@ struct Expr {
 
 typedef enum StmtKind {
     ST_BIND,
+    ST_MULTI_BIND,
     ST_ASSIGN,
+    ST_MULTI_ASSIGN,
     ST_INDEX_ASSIGN,
     ST_EXPR,
     ST_TRY,
@@ -291,6 +293,13 @@ struct Stmt {
             int is_mutable;
             int local_index;
         } bind;
+        struct {
+            char names[MAX_ARGS][96];
+            int local_indices[MAX_ARGS];
+            int count;
+            int is_mutable;
+            Expr *call;
+        } multi;
         struct {
             char name[96];
             Expr *target;
@@ -1298,6 +1307,29 @@ static Stmt *parse_statement(Compiler *c) {
     Token *token = peek(c);
     if (match(c, TK_LET) || match(c, TK_VAR)) {
         int is_mutable = token->kind == TK_VAR;
+        if (match(c, TK_LPAREN)) {
+            Stmt *s = new_stmt(ST_MULTI_BIND, *token);
+            s->as.multi.is_mutable = is_mutable;
+            do {
+                Token *name;
+                if (s->as.multi.count >= MAX_ARGS) {
+                    diagnostic_at(c, peek(c), "E-TOOL-9999", "multiple binding limit exceeded");
+                    break;
+                }
+                name = expect(c, TK_IDENT, "expected name in multiple binding");
+                copy_text(s->as.multi.names[s->as.multi.count],
+                          sizeof(s->as.multi.names[s->as.multi.count]),
+                          name->start, (size_t)name->length);
+                s->as.multi.local_indices[s->as.multi.count++] = -1;
+            } while (match(c, TK_COMMA));
+            expect(c, TK_RPAREN, "expected `)` after multiple binding");
+            if (s->as.multi.count < 2)
+                diagnostic_at(c, token, "E-SYNTAX-9999", "multiple binding requires at least two names");
+            expect(c, TK_ASSIGN, "expected `=` after multiple binding");
+            s->as.multi.call = parse_expression(c);
+            return s;
+        }
+        {
         Token *name = expect(c, TK_IDENT, "expected binding name");
         Stmt *s = new_stmt(ST_BIND, *token);
         copy_text(s->as.bind.name, sizeof(s->as.bind.name), name->start, (size_t)name->length);
@@ -1307,6 +1339,7 @@ static Stmt *parse_statement(Compiler *c) {
         expect(c, TK_ASSIGN, "expected `=` in binding");
         s->as.bind.value = parse_expression(c);
         return s;
+        }
     }
     if (match(c, TK_RET)) {
         Stmt *s = new_stmt(ST_RETURN, *token);
@@ -1404,6 +1437,34 @@ static Stmt *parse_statement(Compiler *c) {
     }
     if (match(c, TK_BREAK)) return new_stmt(ST_BREAK, *token);
     if (match(c, TK_CONTINUE)) return new_stmt(ST_CONTINUE, *token);
+    if (check(c, TK_LPAREN)) {
+        int saved = c->current;
+        int count = 0;
+        c->current++;
+        while (check(c, TK_IDENT)) {
+            count++;
+            c->current++;
+            if (!match(c, TK_COMMA)) break;
+        }
+        if (count >= 2 && match(c, TK_RPAREN) && match(c, TK_ASSIGN)) {
+            Stmt *s = new_stmt(ST_MULTI_ASSIGN, *token);
+            int i;
+            c->current = saved + 1;
+            for (i = 0; i < count; ++i) {
+                Token *name = expect(c, TK_IDENT, "expected name in multiple assignment");
+                copy_text(s->as.multi.names[i], sizeof(s->as.multi.names[i]),
+                          name->start, (size_t)name->length);
+                s->as.multi.local_indices[i] = -1;
+                if (i + 1 < count) expect(c, TK_COMMA, "expected `,` in multiple assignment");
+            }
+            s->as.multi.count = count;
+            expect(c, TK_RPAREN, "expected `)` after multiple assignment");
+            expect(c, TK_ASSIGN, "expected `=` after multiple assignment");
+            s->as.multi.call = parse_expression(c);
+            return s;
+        }
+        c->current = saved;
+    }
     {
         Expr *left = parse_expression(c);
         if (check(c, TK_ASSIGN) || check(c, TK_ADD_ASSIGN)) {
@@ -2124,6 +2185,36 @@ static Type resolve_name_place(Compiler *c, Function *fn, Expr *e) {
     return current;
 }
 
+static Type check_expr(Compiler *c, Function *fn, Expr *e);
+
+static Function *check_declared_call(Compiler *c, Function *fn, Expr *e) {
+    Function *callee = find_function(c, e->as.call.callee);
+    int i;
+    if (!callee) {
+        diagnostic_at(c, &e->token, "E-NAME-9999", "unknown function");
+        return 0;
+    }
+    if (callee->param_count != e->as.call.arg_count)
+        diagnostic_at(c, &e->token, "E-TYPE-0003", "argument count does not match function");
+    for (i = 0; i < e->as.call.arg_count && i < callee->param_count; ++i) {
+        Type actual;
+        if (e->as.call.args[i]->kind == EX_ZERO || e->as.call.args[i]->kind == EX_UNDEF)
+            e->as.call.args[i]->type = callee->params[i].type;
+        if (e->as.call.args[i]->kind == EX_ENUM_MEMBER)
+            resolve_contextual_member(c, e->as.call.args[i], callee->params[i].type);
+        actual = check_expr(c, fn, e->as.call.args[i]);
+        check_zeroable(c, e->as.call.args[i], callee->params[i].type);
+        if (actual.kind == TY_UNTYPED_INT && callee->params[i].type.kind == TY_INT) {
+            coerce_untyped_integer(e->as.call.args[i], callee->params[i].type);
+            actual = callee->params[i].type;
+        }
+        if (!type_assignable(actual, callee->params[i].type))
+            diagnostic_at(c, &e->as.call.args[i]->token, "E-TYPE-0003",
+                          "argument type does not match parameter");
+    }
+    return callee;
+}
+
 static Type check_expr(Compiler *c, Function *fn, Expr *e) {
     int i;
     switch (e->kind) {
@@ -2347,27 +2438,9 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                     diagnostic_at(c, &e->as.call.args[0]->token, "E-TYPE-0003", "io.print expects str");
                 result = type_make(TY_ERR, "err");
             } else {
-                Function *callee = find_function(c, e->as.call.callee);
-                if (!callee) {
-                    diagnostic_at(c, &e->token, "E-NAME-9999", "unknown function");
-                    result = type_make(TY_INVALID, 0);
-                } else {
-                    if (callee->param_count != e->as.call.arg_count)
-                        diagnostic_at(c, &e->token, "E-TYPE-0003", "argument count does not match function");
-                    for (i = 0; i < e->as.call.arg_count && i < callee->param_count; ++i) {
-                        if (e->as.call.args[i]->kind == EX_ZERO || e->as.call.args[i]->kind == EX_UNDEF)
-                            e->as.call.args[i]->type = callee->params[i].type;
-                        if (e->as.call.args[i]->kind == EX_ENUM_MEMBER)
-                            resolve_contextual_member(c, e->as.call.args[i], callee->params[i].type);
-                        Type actual = check_expr(c, fn, e->as.call.args[i]);
-                        check_zeroable(c, e->as.call.args[i], callee->params[i].type);
-                        if (actual.kind == TY_UNTYPED_INT && callee->params[i].type.kind == TY_INT) {
-                            coerce_untyped_integer(e->as.call.args[i], callee->params[i].type);
-                            actual = callee->params[i].type;
-                        }
-                        if (!type_assignable(actual, callee->params[i].type))
-                            diagnostic_at(c, &e->as.call.args[i]->token, "E-TYPE-0003", "argument type does not match parameter");
-                    }
+                Function *callee = check_declared_call(c, fn, e);
+                if (!callee) result = type_make(TY_INVALID, 0);
+                else {
                     if (callee->return_count > 1) {
                         diagnostic_at(c, &e->token, "E-TYPE-9999",
                                       "a multiple-return call requires destructuring or protocol iteration");
@@ -2555,6 +2628,47 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 }
                 break;
             }
+            case ST_MULTI_BIND: {
+                Function *callee = 0;
+                int i, j;
+                if (s->as.multi.call->kind != EX_CALL ||
+                    strcmp(s->as.multi.call->as.call.callee, "io.print") == 0) {
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "multiple binding requires a multiple-return function call");
+                    break;
+                }
+                callee = check_declared_call(c, fn, s->as.multi.call);
+                if (!callee) break;
+                if (callee->return_count != s->as.multi.count) {
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "multiple binding count does not match function results");
+                    break;
+                }
+                s->as.multi.call->type = callee->return_types[0];
+                for (i = 0; i < s->as.multi.count; ++i) {
+                    Local *local;
+                    if (strcmp(s->as.multi.names[i], "_") == 0) continue;
+                    for (j = 0; j < i; ++j)
+                        if (strcmp(s->as.multi.names[i], s->as.multi.names[j]) == 0)
+                            diagnostic_at(c, &s->token, "E-NAME-0001", "duplicate name in multiple binding");
+                    if (find_local(fn, s->as.multi.names[i]) >= 0) {
+                        diagnostic_at(c, &s->token, "E-NAME-0001", "duplicate local declaration");
+                        continue;
+                    }
+                    if (fn->local_count >= MAX_LOCALS) {
+                        diagnostic_at(c, &s->token, "E-TOOL-9999", "local limit exceeded");
+                        break;
+                    }
+                    local = &fn->locals[fn->local_count];
+                    memset(local, 0, sizeof(*local));
+                    strcpy(local->name, s->as.multi.names[i]);
+                    local->type = callee->return_types[i];
+                    local->is_mutable = s->as.multi.is_mutable;
+                    local->active = 1;
+                    s->as.multi.local_indices[i] = fn->local_count++;
+                }
+                break;
+            }
             case ST_ASSIGN: {
                 Type target = check_expr(c, fn, s->as.assign.target);
                 int index = s->as.assign.target->local_index;
@@ -2577,6 +2691,42 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     if (s->as.assign.op == TK_ADD_ASSIGN &&
                         (target.kind != TY_INT || actual.kind != TY_INT))
                         diagnostic_at(c, &s->token, "E-TYPE-9999", "`+=` requires integer operands");
+                }
+                break;
+            }
+            case ST_MULTI_ASSIGN: {
+                Function *callee = 0;
+                int i;
+                if (s->as.multi.call->kind != EX_CALL ||
+                    strcmp(s->as.multi.call->as.call.callee, "io.print") == 0) {
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "multiple assignment requires a multiple-return function call");
+                    break;
+                }
+                callee = check_declared_call(c, fn, s->as.multi.call);
+                if (!callee) break;
+                if (callee->return_count != s->as.multi.count) {
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "multiple assignment count does not match function results");
+                    break;
+                }
+                s->as.multi.call->type = callee->return_types[0];
+                for (i = 0; i < s->as.multi.count; ++i) {
+                    int local_index;
+                    if (strcmp(s->as.multi.names[i], "_") == 0) continue;
+                    local_index = find_local(fn, s->as.multi.names[i]);
+                    if (local_index < 0) {
+                        diagnostic_at(c, &s->token, "E-NAME-9999",
+                                      "unknown target in multiple assignment");
+                        continue;
+                    }
+                    s->as.multi.local_indices[i] = local_index;
+                    if (!fn->locals[local_index].is_mutable)
+                        diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                      "multiple assignment target is immutable");
+                    if (!type_assignable(callee->return_types[i], fn->locals[local_index].type))
+                        diagnostic_at(c, &s->token, "E-TYPE-0002",
+                                      "multiple assignment result type mismatch");
                 }
                 break;
             }
@@ -3211,6 +3361,8 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
     for (; statement; statement = statement->next) {
         switch (statement->kind) {
             case ST_BIND: collect_traps_expr(c, fn, statement->as.bind.value); break;
+            case ST_MULTI_BIND: case ST_MULTI_ASSIGN:
+                collect_traps_expr(c, fn, statement->as.multi.call); break;
             case ST_ASSIGN: collect_traps_expr(c, fn, statement->as.assign.value); break;
             case ST_INDEX_ASSIGN:
                 collect_traps_expr(c, fn, statement->as.index_assign.target);
@@ -3851,6 +4003,41 @@ static void emit_defers_to_depth(Emitter *e, int keep_depth) {
         emit_scope_defers(e, scope);
 }
 
+static void emit_multiple_call(Emitter *e, Stmt *statement) {
+    Function *callee = find_function(e->compiler, statement->as.multi.call->as.call.callee);
+    int saved[MAX_ARGS] = {0};
+    int i;
+    if (!callee) return;
+    if (callee->returns_via_slot) {
+        int result_slot = alloc_aggregate_temp(e, callee->return_storage_size);
+        emit_call(e, statement->as.multi.call, result_slot);
+        for (i = 0; i < statement->as.multi.count; ++i) {
+            int local_index = statement->as.multi.local_indices[i];
+            size_t bytes;
+            if (local_index < 0) continue;
+            bytes = type_size(e->compiler, callee->return_types[i]);
+            fprintf(e->out, "    lea r11, [rbp-%d]\n", result_slot);
+            if (callee->return_offsets[i])
+                fprintf(e->out, "    add r11, %llu\n",
+                        (unsigned long long)callee->return_offsets[i]);
+            fprintf(e->out, "    lea r10, [rbp-%d]\n", e->fn->locals[local_index].offset);
+            emit_copy_addresses(e->out, bytes);
+        }
+        return;
+    }
+    emit_call(e, statement->as.multi.call, 0);
+    for (i = 0; i < statement->as.multi.count; ++i) {
+        saved[i] = alloc_temp(e, 1);
+        fprintf(e->out, "    mov QWORD PTR [rbp-%d], %s\n", saved[i], i == 0 ? "rax" : "rdx");
+    }
+    for (i = 0; i < statement->as.multi.count; ++i) {
+        int local_index = statement->as.multi.local_indices[i];
+        if (local_index < 0) continue;
+        fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", saved[i]);
+        emit_stack_store(e, e->fn->locals[local_index].offset, callee->return_types[i]);
+    }
+}
+
 static void emit_statements(Emitter *e, Stmt *s) {
     int defer_scope = e->defer_scope_depth++;
     e->defer_scopes[defer_scope].count = 0;
@@ -3873,6 +4060,10 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 }
                 break;
             }
+            case ST_MULTI_BIND:
+            case ST_MULTI_ASSIGN:
+                emit_multiple_call(e, s);
+                break;
             case ST_ASSIGN: {
                 int address_slot;
                 emit_name_address(e, s->as.assign.target);

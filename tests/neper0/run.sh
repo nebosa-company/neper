@@ -170,4 +170,20 @@ set -e
 test "$protocol_missing_status" -eq 1
 printf '%s' "$protocol_missing" | grep -q 'protocol iteration needs `fn counter_next'
 
+test "$("$neper" run "$repo/tests/neper0/multiple-return.e" --output "$test_build/multiple-return")" = 'multiple return ok'
+
+set +e
+multiple_return_count=$("$neper" build "$repo/tests/neper0/multiple-return-count-error.e" --output "$test_build/multiple-return-count-error" 2>&1)
+multiple_return_count_status=$?
+set -e
+test "$multiple_return_count_status" -eq 1
+printf '%s' "$multiple_return_count" | grep -q 'multiple binding count does not match function results'
+
+set +e
+multiple_return_mutable=$("$neper" build "$repo/tests/neper0/multiple-return-mutable-error.e" --output "$test_build/multiple-return-mutable-error" 2>&1)
+multiple_return_mutable_status=$?
+set -e
+test "$multiple_return_mutable_status" -eq 1
+printf '%s' "$multiple_return_mutable" | grep -q 'multiple assignment target is immutable'
+
 printf '%s\n' 'neper-0 Linux tests passed'

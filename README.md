@@ -67,7 +67,9 @@ words in integer lanes, pass larger arguments by immutable hidden reference, and
 return every aggregate through caller-provided storage on both x64 ABIs.
 Protocol-style `for value in iterator` resolves the declaring type's
 `<type>_next(*Type) -> (T, bool)`, requires a mutable iterator, and supports scalar
-and aggregate yielded values. Explicit-backing enums, unchecked bare unions,
+and aggregate yielded values. Multiple-return calls can be consumed with
+`let (a, b) = call()` or assigned with `(a, b) = call()`, including `_` discards.
+Explicit-backing enums, unchecked bare unions,
 tagged `union enum` values, exact tag/payload layout, tag-checked payload access,
 contextual and qualified member names, and non-fallthrough `switch` are implemented.
 Enum and tagged-union switches require exhaustive cases unless they have `default`;
