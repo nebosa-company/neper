@@ -51,8 +51,9 @@ symbol, unwind and compact `.nepersym`/`.nepsym` data. The self-hosted compiler 
 not started.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
-`zero`/`undef`, `.len`, element-size-aware reads, and bounds traps are implemented.
-Array value ABI passing and indexed mutation are not implemented yet.
+`zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
+assignment, and bounds traps are implemented. Array value ABI passing, slicing, and
+iteration are not implemented yet.
 
 On Windows with the Visual Studio C++ tools installed:
 

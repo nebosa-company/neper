@@ -125,9 +125,10 @@ scopes in the C99 bootstrap. `tests/neper0/run.*` cover signed ascending and emp
 ranges, early loop exits, sibling-scope name reuse, out-of-scope rejection, and invalid loop control on
 Windows and Linux. A second increment implements local fixed arrays with explicit or
 inferred literal lengths, `zero`/`undef` initialization, `.len`, element-size-aware
-reads, and bounds traps. The same suite covers adjacent narrow elements, signed
-loads, count mismatches, bounds failures, and non-overlapping slice/local frame
-slots. Array value ABI passing, indexed mutation, slice/array/protocol iteration,
+reads and writes, mutable slice-element assignment, and bounds traps. The same suite
+covers adjacent narrow elements, signed loads, checked mutation, immutability, count
+mismatches, bounds failures, and non-overlapping slice/local frame slots. Array value
+ABI passing, slicing, slice/array/protocol iteration,
 aggregate declarations, `defer`, `switch`, compile-time parameters, constant
 folding, the full intrinsic set, and debug locals remain open; this callout does not
 mark the `neper-0` milestone complete.

@@ -12,6 +12,9 @@ if ($LASTEXITCODE -ne 0 -or $range -ne 'range ok') { throw 'range control flow f
 $array = & $neper run (Join-Path $PSScriptRoot 'array.e') --output (Join-Path $testBuild 'array.exe')
 if ($LASTEXITCODE -ne 0 -or $array -ne 'array ok') { throw 'fixed array behavior failed' }
 
+$slice = & $neper run (Join-Path $PSScriptRoot 'slice-mutate.e') --output (Join-Path $testBuild 'slice-mutate.exe') -- original
+if ($LASTEXITCODE -ne 0 -or $slice -ne 'slice mutation ok') { throw 'slice mutation failed' }
+
 $bounds = & $neper run (Join-Path $PSScriptRoot 'array-bounds.e') --output (Join-Path $testBuild 'array-bounds.exe') 2>&1
 if ($LASTEXITCODE -ne 134 -or ($bounds -join "`n") -notmatch 'trap\[bounds\]') {
     throw 'array bounds trap failed'
@@ -20,6 +23,11 @@ if ($LASTEXITCODE -ne 134 -or ($bounds -join "`n") -notmatch 'trap\[bounds\]') {
 $countError = & $neper build (Join-Path $PSScriptRoot 'array-count-error.e') --output (Join-Path $testBuild 'array-count-error.exe') 2>&1
 if ($LASTEXITCODE -ne 1 -or ($countError -join "`n") -notmatch '4:18: error\[E-TYPE-9999\]') {
     throw 'array literal count rejection failed'
+}
+
+$mutationError = & $neper build (Join-Path $PSScriptRoot 'array-mutation-error.e') --output (Join-Path $testBuild 'array-mutation-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($mutationError -join "`n") -notmatch '5:5: error\[E-TYPE-9999\]') {
+    throw 'immutable array mutation rejection failed'
 }
 
 $scopeError = & $neper build (Join-Path $PSScriptRoot 'scope-error.e') --output (Join-Path $testBuild 'scope-error.exe') 2>&1

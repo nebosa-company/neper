@@ -1,7 +1,7 @@
 use e.mem
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    var values = [2]u32{ 10u32, 20u32 }
-    values[2usize] = 30u32
+    let values = [2]u64{ 1u64, 2u64 }
+    values[0usize] = 3u64
     ret ok
 }

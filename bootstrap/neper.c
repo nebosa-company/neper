@@ -205,6 +205,7 @@ struct Expr {
 typedef enum StmtKind {
     ST_BIND,
     ST_ASSIGN,
+    ST_INDEX_ASSIGN,
     ST_EXPR,
     ST_TRY,
     ST_RETURN,
@@ -236,6 +237,11 @@ struct Stmt {
             int local_index;
             TokenKind op;
         } assign;
+        struct {
+            Expr *target;
+            Expr *value;
+            TokenKind op;
+        } index_assign;
         Expr *expr;
         struct {
             Expr *value;
@@ -1083,19 +1089,33 @@ static Stmt *parse_statement(Compiler *c) {
     }
     if (match(c, TK_BREAK)) return new_stmt(ST_BREAK, *token);
     if (match(c, TK_CONTINUE)) return new_stmt(ST_CONTINUE, *token);
-    if (check(c, TK_IDENT) && c->current + 1 < c->token_count &&
-        (c->tokens[c->current + 1].kind == TK_ASSIGN ||
-         c->tokens[c->current + 1].kind == TK_ADD_ASSIGN)) {
-        Token *name = peek(c);
-        TokenKind op = c->tokens[c->current + 1].kind;
-        c->current += 2;
-        { Stmt *s = new_stmt(ST_ASSIGN, *name);
-          copy_text(s->as.assign.name, sizeof(s->as.assign.name), name->start, (size_t)name->length);
-          s->as.assign.value = parse_expression(c); s->as.assign.local_index = -1;
-          s->as.assign.op = op; return s; }
-    }
     {
-        Stmt *s = new_stmt(ST_EXPR, *token); s->as.expr = parse_expression(c); return s;
+        Expr *left = parse_expression(c);
+        if (check(c, TK_ASSIGN) || check(c, TK_ADD_ASSIGN)) {
+            TokenKind op = peek(c)->kind;
+            Expr *value;
+            c->current++;
+            value = parse_expression(c);
+            if (left->kind == EX_NAME) {
+                Stmt *s = new_stmt(ST_ASSIGN, left->token);
+                copy_text(s->as.assign.name, sizeof(s->as.assign.name),
+                          left->as.name, strlen(left->as.name));
+                s->as.assign.value = value;
+                s->as.assign.local_index = -1;
+                s->as.assign.op = op;
+                return s;
+            }
+            if (left->kind == EX_INDEX) {
+                Stmt *s = new_stmt(ST_INDEX_ASSIGN, left->token);
+                s->as.index_assign.target = left;
+                s->as.index_assign.value = value;
+                s->as.index_assign.op = op;
+                return s;
+            }
+            diagnostic_at(c, &left->token, "E-TYPE-9999", "assignment target is not a place");
+            return new_stmt(ST_EXPR, left->token);
+        }
+        { Stmt *s = new_stmt(ST_EXPR, *token); s->as.expr = left; return s; }
     }
 }
 
@@ -1485,6 +1505,32 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 }
                 break;
             }
+            case ST_INDEX_ASSIGN: {
+                Expr *target_expr = s->as.index_assign.target;
+                Expr *base_expr = target_expr->as.index.base;
+                Type target = check_expr(c, fn, target_expr);
+                Type actual = check_expr(c, fn, s->as.index_assign.value);
+                Type base = base_expr->type;
+                if (actual.kind == TY_UNTYPED_INT && target.kind == TY_INT) {
+                    coerce_untyped_integer(s->as.index_assign.value, target);
+                    actual = target;
+                }
+                if (!type_equal(target, actual))
+                    diagnostic_at(c, &s->token, "E-TYPE-0002", "indexed assignment type mismatch");
+                if (base.kind == TY_ARRAY) {
+                    if (base_expr->kind != EX_NAME || base_expr->local_index < 0 ||
+                        !fn->locals[base_expr->local_index].is_mutable)
+                        diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                      "indexed assignment requires a mutable array binding");
+                } else if (base.kind == TY_STR || base.is_const) {
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "indexed assignment requires mutable elements");
+                }
+                if (s->as.index_assign.op == TK_ADD_ASSIGN &&
+                    (target.kind != TY_INT || actual.kind != TY_INT))
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "indexed `+=` requires integer operands");
+                break;
+            }
             case ST_EXPR: check_expr(c, fn, s->as.expr); break;
             case ST_TRY:
                 if (check_expr(c, fn, s->as.expr).kind != TY_ERR || fn->return_type.kind != TY_ERR)
@@ -1698,6 +1744,10 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
         switch (statement->kind) {
             case ST_BIND: collect_traps_expr(c, fn, statement->as.bind.value); break;
             case ST_ASSIGN: collect_traps_expr(c, fn, statement->as.assign.value); break;
+            case ST_INDEX_ASSIGN:
+                collect_traps_expr(c, fn, statement->as.index_assign.target);
+                collect_traps_expr(c, fn, statement->as.index_assign.value);
+                break;
             case ST_EXPR: case ST_TRY: collect_traps_expr(c, fn, statement->as.expr); break;
             case ST_RETURN: collect_traps_expr(c, fn, statement->as.ret.value); break;
             case ST_IF:
@@ -1764,25 +1814,31 @@ static void emit_stack_store(FILE *out, int displacement, Type type) {
     }
 }
 
-static void emit_index_load(FILE *out, Type element) {
-    size_t size = scalar_byte_size(element);
-    if (size == 16) {
-        fputs("    shl rax, 4\n    add r10, rax\n"
-              "    mov rax, QWORD PTR [r10]\n    mov rdx, QWORD PTR [r10+8]\n", out);
-    } else if (size == 8) {
-        fputs("    mov rax, QWORD PTR [r10+rax*8]\n", out);
-    } else if (size == 4) {
-        fputs(type_is_signed_integer(element) ?
-              "    movsxd rax, DWORD PTR [r10+rax*4]\n" :
-              "    mov eax, DWORD PTR [r10+rax*4]\n", out);
-    } else if (size == 2) {
-        fputs(type_is_signed_integer(element) ?
-              "    movsx rax, WORD PTR [r10+rax*2]\n" :
-              "    movzx rax, WORD PTR [r10+rax*2]\n", out);
-    } else {
-        fputs(type_is_signed_integer(element) ?
-              "    movsx rax, BYTE PTR [r10+rax]\n" :
-              "    movzx rax, BYTE PTR [r10+rax]\n", out);
+static void emit_address_load(FILE *out, Type type) {
+    size_t size = scalar_byte_size(type);
+    if (size == 16) fputs("    mov rax, QWORD PTR [r10]\n    mov rdx, QWORD PTR [r10+8]\n", out);
+    else if (size == 8) fputs("    mov rax, QWORD PTR [r10]\n", out);
+    else if (size == 4) fputs(type_is_signed_integer(type) ?
+        "    movsxd rax, DWORD PTR [r10]\n" : "    mov eax, DWORD PTR [r10]\n", out);
+    else if (size == 2) fputs(type_is_signed_integer(type) ?
+        "    movsx rax, WORD PTR [r10]\n" : "    movzx rax, WORD PTR [r10]\n", out);
+    else fputs(type_is_signed_integer(type) ?
+        "    movsx rax, BYTE PTR [r10]\n" : "    movzx rax, BYTE PTR [r10]\n", out);
+}
+
+static void emit_address_store(FILE *out, Type type, TokenKind op) {
+    size_t size = scalar_byte_size(type);
+    if (op == TK_ADD_ASSIGN) {
+        if (size == 1) fputs("    add BYTE PTR [r10], al\n", out);
+        else if (size == 2) fputs("    add WORD PTR [r10], ax\n", out);
+        else if (size == 4) fputs("    add DWORD PTR [r10], eax\n", out);
+        else fputs("    add QWORD PTR [r10], rax\n", out);
+    } else if (size == 1) fputs("    mov BYTE PTR [r10], al\n", out);
+    else if (size == 2) fputs("    mov WORD PTR [r10], ax\n", out);
+    else if (size == 4) fputs("    mov DWORD PTR [r10], eax\n", out);
+    else {
+        fputs("    mov QWORD PTR [r10], rax\n", out);
+        if (size == 16) fputs("    mov QWORD PTR [r10+8], rdx\n", out);
     }
 }
 
@@ -1816,6 +1872,36 @@ static void emit_trap_call(Emitter *e, Expr *x) {
                 x->trap_id, (unsigned)site->message_length);
     }
     fputs("    call neper_trap_abort\n", e->out);
+}
+
+static Type index_element_type(Type base) {
+    if (base.kind == TY_STR) return type_make(TY_INT, "u8");
+    if (base.kind == TY_ARRAY) return array_element_type(base);
+    return type_make(base.element_kind, base.element_name);
+}
+
+static int emit_index_address(Emitter *e, Expr *index) {
+    Type element = index_element_type(index->as.index.base->type);
+    size_t size = scalar_byte_size(element);
+    int base_slot = alloc_temp(e, 2);
+    int address_slot = alloc_temp(e, 1);
+    int ok_label = e->label++;
+    emit_expr(e, index->as.index.base);
+    fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", base_slot);
+    fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", base_slot + 8);
+    emit_expr(e, index->as.index.index);
+    fprintf(e->out, "    cmp rax, QWORD PTR [rbp-%d]\n", base_slot + 8);
+    fprintf(e->out, "    jb np_index_ok_%d\n", ok_label);
+    emit_trap_call(e, index);
+    fprintf(e->out, "np_index_ok_%d:\n", ok_label);
+    fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", base_slot);
+    if (size == 16) fputs("    shl rax, 4\n    add r10, rax\n", e->out);
+    else if (size == 8) fputs("    lea r10, [r10+rax*8]\n", e->out);
+    else if (size == 4) fputs("    lea r10, [r10+rax*4]\n", e->out);
+    else if (size == 2) fputs("    lea r10, [r10+rax*2]\n", e->out);
+    else fputs("    add r10, rax\n", e->out);
+    fprintf(e->out, "    mov QWORD PTR [rbp-%d], r10\n", address_slot);
+    return address_slot;
 }
 
 static void emit_call(Emitter *e, Expr *x) {
@@ -1885,26 +1971,10 @@ static void emit_expr(Emitter *e, Expr *x) {
         }
         case EX_CALL: emit_call(e, x); break;
         case EX_INDEX: {
-            int base_slot = alloc_temp(e, 2);
-            int ok_label = e->label++;
-            emit_expr(e, x->as.index.base);
-            fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", base_slot);
-            fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", base_slot + 8);
-            emit_expr(e, x->as.index.index);
-            fprintf(e->out, "    cmp rax, QWORD PTR [rbp-%d]\n", base_slot + 8);
-            fprintf(e->out, "    jb np_index_ok_%d\n", ok_label);
-            emit_trap_call(e, x);
-            fprintf(e->out, "np_index_ok_%d:\n", ok_label);
-            fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", base_slot);
-            if (x->as.index.base->type.kind == TY_STR)
-                emit_index_load(e->out, type_make(TY_INT, "u8"));
-            else if (x->as.index.base->type.kind == TY_ARRAY)
-                emit_index_load(e->out, array_element_type(x->as.index.base->type));
-            else {
-                Type element = type_make(x->as.index.base->type.element_kind,
-                                         x->as.index.base->type.element_name);
-                emit_index_load(e->out, element);
-            }
+            Type element = index_element_type(x->as.index.base->type);
+            int address_slot = emit_index_address(e, x);
+            fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", address_slot);
+            emit_address_load(e->out, element);
             break;
         }
         case EX_ARRAY_LITERAL: case EX_ZERO: case EX_UNDEF:
@@ -2015,6 +2085,15 @@ static void emit_statements(Emitter *e, Stmt *s) {
                     fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", local->offset);
                     if (type_lanes(local->type) == 2) fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", local->offset - 8);
                 }
+                break;
+            }
+            case ST_INDEX_ASSIGN: {
+                Expr *target = s->as.index_assign.target;
+                Type element = index_element_type(target->as.index.base->type);
+                int address_slot = emit_index_address(e, target);
+                emit_expr(e, s->as.index_assign.value);
+                fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", address_slot);
+                emit_address_store(e->out, element, s->as.index_assign.op);
                 break;
             }
             case ST_EXPR: emit_expr(e, s->as.expr); break;

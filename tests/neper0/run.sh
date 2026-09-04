@@ -9,6 +9,7 @@ mkdir -p "$test_build"
 
 test "$("$neper" run "$repo/tests/neper0/range.e" --output "$test_build/range")" = 'range ok'
 test "$("$neper" run "$repo/tests/neper0/array.e" --output "$test_build/array")" = 'array ok'
+test "$("$neper" run "$repo/tests/neper0/slice-mutate.e" --output "$test_build/slice-mutate" -- original)" = 'slice mutation ok'
 
 set +e
 array_bounds=$("$neper" run "$repo/tests/neper0/array-bounds.e" --output "$test_build/array-bounds" 2>&1)
@@ -23,6 +24,13 @@ count_status=$?
 set -e
 test "$count_status" -eq 1
 printf '%s' "$count_error" | grep -q '4:18: error\[E-TYPE-9999\]'
+
+set +e
+mutation_error=$("$neper" build "$repo/tests/neper0/array-mutation-error.e" --output "$test_build/array-mutation-error" 2>&1)
+mutation_status=$?
+set -e
+test "$mutation_status" -eq 1
+printf '%s' "$mutation_error" | grep -q '5:5: error\[E-TYPE-9999\]'
 
 set +e
 scope_error=$("$neper" build "$repo/tests/neper0/scope-error.e" --output "$test_build/scope-error" 2>&1)
