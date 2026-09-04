@@ -93,4 +93,35 @@ set -e
 test "$aggregate_param_status" -eq 1
 printf '%s' "$aggregate_param_error" | grep -q '10:5: error\[E-TYPE-9999\]'
 
+test "$("$neper" run "$repo/tests/neper0/enum-union-switch.e" --output "$test_build/enum-union-switch")" = 'enum union switch ok'
+
+set +e
+exhaustive_error=$("$neper" build "$repo/tests/neper0/switch-exhaustive-error.e" --output "$test_build/switch-exhaustive-error" 2>&1)
+exhaustive_status=$?
+set -e
+test "$exhaustive_status" -eq 1
+printf '%s' "$exhaustive_error" | grep -q 'non-exhaustive switch; missing member `Two`'
+
+set +e
+enum_value_error=$("$neper" build "$repo/tests/neper0/enum-value-error.e" --output "$test_build/enum-value-error" 2>&1)
+enum_value_status=$?
+set -e
+test "$enum_value_status" -eq 1
+printf '%s' "$enum_value_error" | grep -q 'enum member value is outside its backing type'
+printf '%s' "$enum_value_error" | grep -q 'duplicate enum backing value'
+
+set +e
+tag_trap=$("$neper" run "$repo/tests/neper0/tagged-payload-trap.e" --output "$test_build/tagged-payload-trap" 2>&1)
+tag_trap_status=$?
+set -e
+test "$tag_trap_status" -eq 134
+printf '%s' "$tag_trap" | grep -q 'trap\[tag\]'
+
+set +e
+enum_zero_error=$("$neper" build "$repo/tests/neper0/enum-zero-error.e" --output "$test_build/enum-zero-error" 2>&1)
+enum_zero_status=$?
+set -e
+test "$enum_zero_status" -eq 1
+printf '%s' "$enum_zero_error" | grep -q 'has no zero value'
+
 printf '%s\n' 'neper-0 Linux tests passed'

@@ -82,4 +82,28 @@ if ($LASTEXITCODE -ne 1 -or ($aggregateParamError -join "`n") -notmatch '10:5: e
     throw 'immutable aggregate parameter rejection failed'
 }
 
+$enumUnion = & $neper run (Join-Path $PSScriptRoot 'enum-union-switch.e') --output (Join-Path $testBuild 'enum-union-switch.exe')
+if ($LASTEXITCODE -ne 0 -or $enumUnion -ne 'enum union switch ok') { throw 'enum, union, and switch behavior failed' }
+
+$exhaustiveError = & $neper build (Join-Path $PSScriptRoot 'switch-exhaustive-error.e') --output (Join-Path $testBuild 'switch-exhaustive-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($exhaustiveError -join "`n") -notmatch 'non-exhaustive switch; missing member `Two`') {
+    throw 'enum switch exhaustiveness rejection failed'
+}
+
+$enumValueError = & $neper build (Join-Path $PSScriptRoot 'enum-value-error.e') --output (Join-Path $testBuild 'enum-value-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($enumValueError -join "`n") -notmatch 'enum member value is outside its backing type' -or
+    ($enumValueError -join "`n") -notmatch 'duplicate enum backing value') {
+    throw 'invalid enum value rejection failed'
+}
+
+$tagTrap = & $neper run (Join-Path $PSScriptRoot 'tagged-payload-trap.e') --output (Join-Path $testBuild 'tagged-payload-trap.exe') 2>&1
+if ($LASTEXITCODE -ne 134 -or ($tagTrap -join "`n") -notmatch 'trap\[tag\]') {
+    throw 'tagged-union payload trap failed'
+}
+
+$enumZeroError = & $neper build (Join-Path $PSScriptRoot 'enum-zero-error.e') --output (Join-Path $testBuild 'enum-zero-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($enumZeroError -join "`n") -notmatch 'has no zero value') {
+    throw 'non-zeroable enum rejection failed'
+}
+
 'neper-0 Windows tests passed'

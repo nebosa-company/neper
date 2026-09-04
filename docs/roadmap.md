@@ -141,8 +141,14 @@ aggregate-value increment adds exact struct and array copies through bindings,
 assignments, nested literals, indexed places and by-value iteration; arrays may nest
 or hold structs; aggregates of at most two words use integer argument lanes, larger
 arguments use immutable hidden references, and aggregate returns use caller-owned
-slots on both x64 ABIs. Protocol iteration, `defer`, `switch`, compile-time
-parameters, constant folding, the full intrinsic set, and debug locals remain open.
+slots on both x64 ABIs. The enum-and-variant increment adds explicit integer-backed
+enums with implicit or explicit checked values, bare-union shared storage, tagged
+`union enum` layout and literals, implicit `.tag` enums, debug tag checks on payload
+access, payload-copy `as` bindings, scalar cases and exhaustive non-fallthrough
+`switch`. It also enforces duplicate cases, `default`, enum zeroability, branch
+scopes, and `break`/`continue` targeting on both x64 ABIs. Protocol iteration,
+`defer`, compile-time parameters, constant folding, the full intrinsic set, and debug
+locals remain open.
 This callout does not
 mark the `neper-0` milestone complete.
 

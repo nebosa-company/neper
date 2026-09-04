@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.4-neper0"
+#define NEPER_VERSION "0.0.5-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -60,6 +60,8 @@ typedef enum TokenKind {
     TK_USE,
     TK_TYPE,
     TK_STRUCT,
+    TK_UNION,
+    TK_ENUM,
     TK_ERROR,
     TK_FN,
     TK_LET,
@@ -72,6 +74,10 @@ typedef enum TokenKind {
     TK_IN,
     TK_BREAK,
     TK_CONTINUE,
+    TK_SWITCH,
+    TK_CASE,
+    TK_DEFAULT,
+    TK_AS,
     TK_TRY,
     TK_OK,
     TK_TRUE,
@@ -159,6 +165,7 @@ typedef enum ExprKind {
     EX_SLICE,
     EX_ARRAY_LITERAL,
     EX_STRUCT_LITERAL,
+    EX_ENUM_MEMBER,
     EX_ZERO,
     EX_UNDEF,
     EX_BINARY,
@@ -174,8 +181,12 @@ struct Expr {
     int local_index;
     int trap_id;
     int error_code;
+    int64_t constant_value;
     int field_offsets[MAX_FIELD_PATH];
     unsigned char field_dereferences[MAX_FIELD_PATH];
+    unsigned char field_tag_checks[MAX_FIELD_PATH];
+    unsigned char field_tag_sizes[MAX_FIELD_PATH];
+    int64_t field_tag_values[MAX_FIELD_PATH];
     int field_path_count;
     int place_mutable;
     int is_len;
@@ -201,6 +212,9 @@ struct Expr {
             Expr *base;
             char name[96];
             int offset;
+            int tag_check;
+            int tag_size;
+            int64_t tag_value;
         } field;
         struct {
             Expr *base;
@@ -242,11 +256,25 @@ typedef enum StmtKind {
     ST_WHILE,
     ST_FOR_RANGE,
     ST_FOR_EACH,
+    ST_SWITCH,
     ST_BREAK,
     ST_CONTINUE
 } StmtKind;
 
 typedef struct Stmt Stmt;
+typedef struct SwitchCase SwitchCase;
+
+struct SwitchCase {
+    Token token;
+    Expr *values[MAX_ARGS];
+    int value_count;
+    int is_default;
+    char binding[96];
+    int local_index;
+    int member_index;
+    Stmt *body;
+    SwitchCase *next;
+};
 
 struct Stmt {
     StmtKind kind;
@@ -305,6 +333,10 @@ struct Stmt {
             int index_local_index;
             int value_local_index;
         } for_each;
+        struct {
+            Expr *subject;
+            SwitchCase *cases;
+        } switch_stmt;
     } as;
 };
 
@@ -354,15 +386,27 @@ typedef struct FieldDecl {
     Token token;
     Type type;
     size_t offset;
+    int has_payload;
+    int64_t value;
 } FieldDecl;
+
+typedef enum NamedDeclKind {
+    ND_STRUCT,
+    ND_UNION,
+    ND_ENUM,
+    ND_TAGGED_UNION
+} NamedDeclKind;
 
 typedef struct StructDecl {
     char name[96];
     Token token;
+    NamedDeclKind kind;
+    Type backing_type;
     FieldDecl fields[MAX_FIELDS];
     int field_count;
     size_t size;
     size_t alignment;
+    size_t payload_offset;
     int layout_state;
 } StructDecl;
 
@@ -478,11 +522,13 @@ static void lexical_error(Compiler *c, size_t byte, int line, int column,
 static TokenKind keyword_kind(const char *s, int n) {
     struct Keyword { const char *text; TokenKind kind; };
     static const struct Keyword keywords[] = {
-        {"use", TK_USE}, {"type", TK_TYPE}, {"struct", TK_STRUCT}, {"error", TK_ERROR},
+        {"use", TK_USE}, {"type", TK_TYPE}, {"struct", TK_STRUCT},
+        {"union", TK_UNION}, {"enum", TK_ENUM}, {"error", TK_ERROR},
         {"fn", TK_FN}, {"let", TK_LET}, {"var", TK_VAR},
         {"ret", TK_RET}, {"if", TK_IF}, {"else", TK_ELSE},
         {"while", TK_WHILE}, {"for", TK_FOR}, {"in", TK_IN},
         {"break", TK_BREAK}, {"continue", TK_CONTINUE},
+        {"switch", TK_SWITCH}, {"case", TK_CASE}, {"default", TK_DEFAULT}, {"as", TK_AS},
         {"try", TK_TRY}, {"ok", TK_OK},
         {"true", TK_TRUE}, {"false", TK_FALSE}, {"zero", TK_ZERO},
         {"undef", TK_UNDEF}, {"const", TK_CONST}
@@ -990,8 +1036,22 @@ static int name_ends_in_type_segment(const char *name) {
     return segment[0] >= 'A' && segment[0] <= 'Z';
 }
 
+static int name_is_declared_aggregate(Compiler *c, const char *name) {
+    int i;
+    for (i = 0; i < c->program.struct_count; ++i)
+        if (strcmp(c->program.structs[i].name, name) == 0 &&
+            c->program.structs[i].kind != ND_ENUM) return 1;
+    return 0;
+}
+
 static Expr *parse_primary(Compiler *c) {
     Token *token = peek(c);
+    if (match(c, TK_DOT)) {
+        Token *member = expect(c, TK_IDENT, "expected enum member after `.`");
+        Expr *e = new_expr(EX_ENUM_MEMBER, *token);
+        copy_text(e->as.name, sizeof(e->as.name), member->start, (size_t)member->length);
+        return e;
+    }
     if (match(c, TK_INTEGER)) {
         Expr *e = new_expr(EX_INTEGER, *token);
         parse_integer_value(c, token, e);
@@ -1062,16 +1122,19 @@ static Expr *parse_primary(Compiler *c) {
             if (used + 1 < sizeof(name)) name[used++] = '.';
             copy_text(name + used, sizeof(name) - used, part->start, (size_t)part->length);
         }
-        if (name_ends_in_type_segment(name) && match(c, TK_LBRACE)) {
+        if (name_ends_in_type_segment(name) &&
+            (name_is_declared_aggregate(c, name) || strchr(name, '.') == 0) &&
+            match(c, TK_LBRACE)) {
             e = new_expr(EX_STRUCT_LITERAL, *token);
             copy_text(e->as.aggregate.type_name, sizeof(e->as.aggregate.type_name),
                       name, strlen(name));
             skip_newlines(c);
             if (!check(c, TK_RBRACE)) {
                 for (;;) {
-                    Token *field = expect(c, TK_IDENT, "expected field name in aggregate literal");
-                    expect(c, TK_COLON, "expected `:` after aggregate field name");
-                    aggregate_add_item(c, e, field, parse_expression(c));
+                    Token *field = expect(c, TK_IDENT, "expected member name in aggregate literal");
+                    Expr *value = 0;
+                    if (match(c, TK_COLON)) value = parse_expression(c);
+                    aggregate_add_item(c, e, field, value);
                     skip_newlines(c);
                     if (!match(c, TK_COMMA)) break;
                     skip_newlines(c);
@@ -1193,6 +1256,8 @@ static Expr *parse_expression(Compiler *c) {
 }
 
 static Stmt *parse_block(Compiler *c);
+static Stmt *parse_statement(Compiler *c);
+static Stmt *parse_switch_statement(Compiler *c, Token token);
 
 static Stmt *parse_statement(Compiler *c) {
     Token *token = peek(c);
@@ -1229,6 +1294,7 @@ static Stmt *parse_statement(Compiler *c) {
         s->as.while_stmt.body = parse_block(c);
         return s;
     }
+    if (match(c, TK_SWITCH)) return parse_switch_statement(c, *token);
     if (match(c, TK_FOR)) {
         Token *first = expect(c, TK_IDENT, "expected binding after `for`");
         Token *second = 0;
@@ -1303,6 +1369,55 @@ static Stmt *parse_statement(Compiler *c) {
     }
 }
 
+static Stmt *parse_case_body(Compiler *c) {
+    Stmt *head = 0, **tail = &head;
+    skip_newlines(c);
+    while (!check(c, TK_CASE) && !check(c, TK_DEFAULT) &&
+           !check(c, TK_RBRACE) && !check(c, TK_EOF)) {
+        Stmt *s = parse_statement(c);
+        *tail = s; tail = &s->next;
+        if (!check(c, TK_CASE) && !check(c, TK_DEFAULT) && !check(c, TK_RBRACE))
+            expect(c, TK_NEWLINE, "expected newline after statement");
+        skip_newlines(c);
+    }
+    return head;
+}
+
+static Stmt *parse_switch_statement(Compiler *c, Token token) {
+    Stmt *s = new_stmt(ST_SWITCH, token);
+    SwitchCase **tail = &s->as.switch_stmt.cases;
+    s->as.switch_stmt.subject = parse_expression(c);
+    expect(c, TK_LBRACE, "expected `{` after switch subject");
+    skip_newlines(c);
+    while (!check(c, TK_RBRACE) && !check(c, TK_EOF)) {
+        SwitchCase *arm = (SwitchCase *)calloc(1, sizeof(*arm));
+        if (!arm) { fputs("neper: out of memory\n", stderr); exit(2); }
+        arm->local_index = -1; arm->member_index = -1;
+        arm->token = *peek(c);
+        if (match(c, TK_DEFAULT)) arm->is_default = 1;
+        else {
+            expect(c, TK_CASE, "expected `case` or `default` in switch");
+            do {
+                if (arm->value_count >= MAX_ARGS) {
+                    diagnostic_at(c, peek(c), "E-TOOL-9999", "switch case value limit exceeded");
+                    break;
+                }
+                arm->values[arm->value_count++] = parse_expression(c);
+            } while (match(c, TK_COMMA));
+            if (match(c, TK_AS)) {
+                Token *binding = expect(c, TK_IDENT, "expected payload binding after `as`");
+                copy_text(arm->binding, sizeof(arm->binding), binding->start, (size_t)binding->length);
+            }
+        }
+        expect(c, TK_COLON, "expected `:` after switch case");
+        expect(c, TK_NEWLINE, "switch case body must start on the next line");
+        arm->body = parse_case_body(c);
+        *tail = arm; tail = &arm->next;
+    }
+    expect(c, TK_RBRACE, "expected `}` after switch cases");
+    return s;
+}
+
 static Stmt *parse_block(Compiler *c) {
     Stmt *head = 0, **tail = &head;
     expect(c, TK_LBRACE, "expected `{`");
@@ -1361,33 +1476,65 @@ static void parse_type_declaration(Compiler *c, Token token) {
     copy_text(decl->name, sizeof(decl->name), name->start, (size_t)name->length);
     decl->token = token;
     expect(c, TK_ASSIGN, "expected `=` after type name");
-    expect(c, TK_STRUCT, "this neper-0 increment implements struct type declarations");
-    expect(c, TK_LBRACE, "expected `{` after `struct`");
+    if (match(c, TK_STRUCT)) decl->kind = ND_STRUCT;
+    else if (match(c, TK_UNION)) {
+        if (match(c, TK_ENUM)) {
+            decl->kind = ND_TAGGED_UNION;
+            decl->backing_type = parse_type(c);
+        } else decl->kind = ND_UNION;
+    } else if (match(c, TK_ENUM)) {
+        decl->kind = ND_ENUM;
+        decl->backing_type = parse_type(c);
+    } else {
+        diagnostic_at(c, peek(c), "E-SYNTAX-9999", "expected `struct`, `union`, or `enum` after `=`");
+    }
+    expect(c, TK_LBRACE, "expected `{` after type declaration");
     skip_newlines(c);
     while (!check(c, TK_RBRACE) && !check(c, TK_EOF)) {
         FieldDecl *field;
         Token *field_name;
         if (decl->field_count >= MAX_FIELDS) {
-            diagnostic_at(c, peek(c), "E-TOOL-9999", "struct field limit exceeded");
+            diagnostic_at(c, peek(c), "E-TOOL-9999", "type member limit exceeded");
             break;
         }
         field = &decl->fields[decl->field_count++];
         memset(field, 0, sizeof(*field));
-        field_name = expect(c, TK_IDENT, "expected struct field name");
+        field_name = expect(c, TK_IDENT, "expected type member name");
         copy_text(field->name, sizeof(field->name), field_name->start,
                   (size_t)field_name->length);
         field->token = *field_name;
-        expect(c, TK_COLON, "expected `:` after struct field name");
-        field->type = parse_type(c);
+        if (decl->kind == ND_ENUM) {
+            if (match(c, TK_ASSIGN)) {
+                int negative = match(c, TK_MINUS);
+                Token *value_token = expect(c, TK_INTEGER, "enum value must be an integer literal");
+                Expr value_expr;
+                memset(&value_expr, 0, sizeof(value_expr));
+                parse_integer_value(c, value_token, &value_expr);
+                field->value = negative ? -value_expr.as.integer : value_expr.as.integer;
+            } else if (decl->field_count == 1) field->value = 0;
+            else if (decl->fields[decl->field_count - 2].value == INT64_MAX) {
+                diagnostic_at(c, field_name, "E-TYPE-0004", "implicit enum member value overflows");
+                field->value = INT64_MAX;
+            } else field->value = decl->fields[decl->field_count - 2].value + 1;
+            field->type = decl->backing_type;
+        } else if (decl->kind == ND_TAGGED_UNION) {
+            field->value = decl->field_count - 1;
+            field->has_payload = match(c, TK_COLON);
+            field->type = field->has_payload ? parse_type(c) : type_make(TY_VOID, "void");
+        } else {
+            expect(c, TK_COLON, "expected `:` after aggregate field name");
+            field->has_payload = 1;
+            field->type = parse_type(c);
+        }
         skip_newlines(c);
         if (!match(c, TK_COMMA)) {
             if (!check(c, TK_RBRACE))
-                diagnostic_at(c, peek(c), "E-SYNTAX-9999", "expected `,` after struct field");
+                diagnostic_at(c, peek(c), "E-SYNTAX-9999", "expected `,` after type member");
             break;
         }
         skip_newlines(c);
     }
-    expect(c, TK_RBRACE, "expected `}` after struct fields");
+    expect(c, TK_RBRACE, "expected `}` after type members");
 }
 
 static void parse_function(Compiler *c, Token token) {
@@ -1477,7 +1624,7 @@ static int type_assignable(Type actual, Type expected) {
 
 static int type_lanes(Type t) { return (t.kind == TY_STR || t.kind == TY_SLICE) ? 2 : (t.kind == TY_VOID ? 0 : 1); }
 
-static int type_is_value_aggregate(Type t) { return t.kind == TY_ARRAY || t.kind == TY_NAMED; }
+static int type_is_value_aggregate(Compiler *c, Type t);
 
 static size_t scalar_byte_size(Type type) {
     if (type.kind == TY_BOOL) return 1;
@@ -1513,6 +1660,26 @@ static StructDecl *find_struct(Compiler *c, const char *name) {
     return 0;
 }
 
+static StructDecl *find_tag_owner(Compiler *c, const char *name) {
+    size_t length = strlen(name);
+    int i;
+    if (length < 5 || strcmp(name + length - 4, ".Tag") != 0) return 0;
+    for (i = 0; i < c->program.struct_count; ++i) {
+        StructDecl *decl = &c->program.structs[i];
+        if (decl->kind == ND_TAGGED_UNION && strlen(decl->name) == length - 4 &&
+            memcmp(decl->name, name, length - 4) == 0) return decl;
+    }
+    return 0;
+}
+
+static int type_is_value_aggregate(Compiler *c, Type t) {
+    StructDecl *decl;
+    if (t.kind == TY_ARRAY) return 1;
+    if (t.kind != TY_NAMED) return 0;
+    decl = find_struct(c, t.name);
+    return decl && decl->kind != ND_ENUM;
+}
+
 static void check_known_type(Compiler *c, Type type, Token *token);
 
 static size_t align_up_size(size_t value, size_t alignment) {
@@ -1545,7 +1712,11 @@ static int type_layout(Compiler *c, Type type, size_t *size, size_t *alignment) 
     }
     if (type.kind == TY_NAMED) {
         StructDecl *decl = find_struct(c, type.name);
+        if (!decl) decl = find_tag_owner(c, type.name);
         if (!decl || !layout_struct(c, decl)) return 0;
+        if (find_tag_owner(c, type.name)) {
+            return type_layout(c, decl->backing_type, size, alignment);
+        }
         *size = decl->size; *alignment = decl->alignment;
         return 1;
     }
@@ -1553,35 +1724,87 @@ static int type_layout(Compiler *c, Type type, size_t *size, size_t *alignment) 
 }
 
 static int layout_struct(Compiler *c, StructDecl *decl) {
-    size_t size = 0, alignment = 1;
+    size_t size = 0, alignment = 1, payload_size = 0, payload_alignment = 1;
     int i, j;
     if (decl->layout_state == 2) return 1;
     if (decl->layout_state == 3) return 0;
     if (decl->layout_state == 1) {
-        diagnostic_at(c, &decl->token, "E-TYPE-9999", "recursive struct value layout");
+        diagnostic_at(c, &decl->token, "E-TYPE-9999", "recursive aggregate value layout");
         decl->layout_state = 3;
         return 0;
     }
     decl->layout_state = 1;
+    if ((decl->kind == ND_ENUM || decl->kind == ND_TAGGED_UNION) &&
+        decl->backing_type.kind != TY_INT) {
+        diagnostic_at(c, &decl->token, "E-TYPE-9999", "enum backing type must be an integer");
+        decl->layout_state = 3;
+        return 0;
+    }
+    if (decl->kind != ND_STRUCT && decl->field_count == 0) {
+        diagnostic_at(c, &decl->token, "E-TYPE-9999", "union and enum declarations may not be empty");
+        decl->layout_state = 3;
+        return 0;
+    }
     for (i = 0; i < decl->field_count; ++i) {
         FieldDecl *field = &decl->fields[i];
         size_t field_size, field_alignment;
         for (j = 0; j < i; ++j)
             if (strcmp(field->name, decl->fields[j].name) == 0)
-                diagnostic_at(c, &field->token, "E-NAME-0001", "duplicate struct field");
+                diagnostic_at(c, &field->token, "E-NAME-0001", "duplicate type member");
+        if (decl->kind == ND_ENUM) {
+            int bits = (int)(scalar_byte_size(decl->backing_type) * 8);
+            int is_signed = decl->backing_type.name[0] == 'i';
+            int64_t minimum = is_signed && bits < 64 ? -(INT64_C(1) << (bits - 1)) : 0;
+            uint64_t maximum = bits == 64 ? (is_signed ? (uint64_t)INT64_MAX : UINT64_MAX) :
+                               (is_signed ? ((UINT64_C(1) << (bits - 1)) - 1) : ((UINT64_C(1) << bits) - 1));
+            if (field->value < minimum || (field->value >= 0 && (uint64_t)field->value > maximum))
+                diagnostic_at(c, &field->token, "E-TYPE-0004", "enum member value is outside its backing type");
+            for (j = 0; j < i; ++j)
+                if (field->value == decl->fields[j].value)
+                    diagnostic_at(c, &field->token, "E-NAME-0001", "duplicate enum backing value");
+            continue;
+        }
+        if (decl->kind == ND_TAGGED_UNION && !field->has_payload) continue;
         if (!type_layout(c, field->type, &field_size, &field_alignment)) {
             StructDecl *field_decl = field->type.kind == TY_NAMED ? find_struct(c, field->type.name) : 0;
             if (!field_decl || field_decl->layout_state != 3)
-                diagnostic_at(c, &field->token, "E-TYPE-9999", "struct field has an unknown or unsized type");
+                diagnostic_at(c, &field->token, "E-TYPE-9999", "aggregate member has an unknown or unsized type");
             decl->layout_state = 3;
             return 0;
         }
-        size = align_up_size(size, field_alignment);
-        field->offset = size;
-        size += field_size;
-        if (field_alignment > alignment) alignment = field_alignment;
+        if (decl->kind == ND_STRUCT) {
+            size = align_up_size(size, field_alignment);
+            field->offset = size;
+            size += field_size;
+            if (field_alignment > alignment) alignment = field_alignment;
+        } else {
+            if (field_size > payload_size) payload_size = field_size;
+            if (field_alignment > payload_alignment) payload_alignment = field_alignment;
+            field->offset = 0;
+        }
     }
-    if (decl->field_count == 0) size = 1;
+    if (decl->kind == ND_ENUM) {
+        type_layout(c, decl->backing_type, &size, &alignment);
+    } else if (decl->kind == ND_UNION) {
+        alignment = payload_alignment;
+        size = align_up_size(payload_size, alignment);
+    } else if (decl->kind == ND_TAGGED_UNION) {
+        size_t tag_size, tag_alignment;
+        int backing_bits = (int)(scalar_byte_size(decl->backing_type) * 8);
+        int backing_signed = decl->backing_type.name[0] == 'i';
+        uint64_t tag_maximum = backing_bits == 64 ?
+                               (backing_signed ? (uint64_t)INT64_MAX : UINT64_MAX) :
+                               (backing_signed ? ((UINT64_C(1) << (backing_bits - 1)) - 1) :
+                                ((UINT64_C(1) << backing_bits) - 1));
+        type_layout(c, decl->backing_type, &tag_size, &tag_alignment);
+        if ((uint64_t)(decl->field_count - 1) > tag_maximum)
+            diagnostic_at(c, &decl->token, "E-TYPE-0004", "tagged union has too many members for its backing type");
+        decl->payload_offset = align_up_size(tag_size, payload_alignment);
+        for (i = 0; i < decl->field_count; ++i)
+            if (decl->fields[i].has_payload) decl->fields[i].offset = decl->payload_offset;
+        alignment = tag_alignment > payload_alignment ? tag_alignment : payload_alignment;
+        size = align_up_size(decl->payload_offset + payload_size, alignment);
+    } else if (decl->field_count == 0) size = 1;
     decl->alignment = alignment;
     decl->size = align_up_size(size, alignment);
     decl->layout_state = 2;
@@ -1623,6 +1846,107 @@ static FieldDecl *find_struct_field(StructDecl *decl, const char *name, int *ind
     return 0;
 }
 
+static StructDecl *enum_decl_for_type(Compiler *c, Type type) {
+    StructDecl *decl;
+    if (type.kind != TY_NAMED) return 0;
+    decl = find_struct(c, type.name);
+    if (decl && (decl->kind == ND_ENUM || decl->kind == ND_TAGGED_UNION)) return decl;
+    return find_tag_owner(c, type.name);
+}
+
+static int resolve_contextual_member(Compiler *c, Expr *e, Type expected) {
+    StructDecl *decl;
+    FieldDecl *member;
+    if (!e || e->kind != EX_ENUM_MEMBER) return 0;
+    decl = enum_decl_for_type(c, expected);
+    if (!decl) {
+        diagnostic_at(c, &e->token, "E-TYPE-0001", "enum member requires an enum or tagged-union context");
+        e->type = type_make(TY_INVALID, 0);
+        return 0;
+    }
+    member = find_struct_field(decl, e->as.name, 0);
+    if (!member) {
+        diagnostic_at(c, &e->token, "E-NAME-9999", "unknown enum member");
+        e->type = type_make(TY_INVALID, 0);
+        return 0;
+    }
+    if (decl->kind == ND_TAGGED_UNION && strcmp(expected.name, decl->name) == 0 && member->has_payload) {
+        diagnostic_at(c, &e->token, "E-TYPE-9999", "tagged-union member with a payload requires an aggregate literal");
+        e->type = type_make(TY_INVALID, 0);
+        return 0;
+    }
+    e->constant_value = member->value;
+    e->type = expected;
+    return 1;
+}
+
+static int resolve_qualified_member(Compiler *c, Expr *e) {
+    char qualified[160], *last;
+    StructDecl *decl;
+    FieldDecl *member;
+    copy_text(qualified, sizeof(qualified), e->as.name, strlen(e->as.name));
+    last = strrchr(qualified, '.');
+    if (!last) return 0;
+    *last++ = 0;
+    decl = find_struct(c, qualified);
+    if (!decl) decl = find_tag_owner(c, qualified);
+    if (!decl || (decl->kind != ND_ENUM && !find_tag_owner(c, qualified))) return 0;
+    member = find_struct_field(decl, last, 0);
+    if (!member) {
+        diagnostic_at(c, &e->token, "E-NAME-9999", "unknown enum member");
+        e->type = type_make(TY_INVALID, 0);
+        return 1;
+    }
+    e->kind = EX_ENUM_MEMBER;
+    e->constant_value = member->value;
+    e->type = type_make(TY_NAMED, qualified);
+    return 1;
+}
+
+static int case_constant_value(Expr *e, int64_t *value) {
+    if (e->kind == EX_INTEGER) { *value = e->as.integer; return 1; }
+    if (e->kind == EX_ENUM_MEMBER) { *value = e->constant_value; return 1; }
+    if (e->kind == EX_NAME && strcmp(e->as.name, "ok") == 0) { *value = 0; return 1; }
+    if (e->kind == EX_NAME && e->error_code) { *value = e->error_code; return 1; }
+    return 0;
+}
+
+static int type_has_zero_at(Compiler *c, Type type, int depth, char *offending, size_t capacity) {
+    StructDecl *decl;
+    int i;
+    if (depth > MAX_FIELD_PATH) return 0;
+    if (type.kind == TY_ARRAY)
+        return type_has_zero_at(c, array_element_type(type), depth + 1, offending, capacity);
+    if (type.kind != TY_NAMED) return 1;
+    decl = find_struct(c, type.name);
+    if (!decl) decl = find_tag_owner(c, type.name);
+    if (!decl) return 0;
+    if (decl->kind == ND_ENUM || find_tag_owner(c, type.name)) {
+        for (i = 0; i < decl->field_count; ++i) if (decl->fields[i].value == 0) return 1;
+        copy_text(offending, capacity, type.name, strlen(type.name));
+        return 0;
+    }
+    for (i = 0; i < decl->field_count; ++i) {
+        FieldDecl *field = &decl->fields[i];
+        if (decl->kind == ND_TAGGED_UNION && !field->has_payload) continue;
+        if (!type_has_zero_at(c, field->type, depth + 1, offending, capacity)) {
+            if (!offending[0]) copy_text(offending, capacity, field->name, strlen(field->name));
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void check_zeroable(Compiler *c, Expr *value, Type type) {
+    char offending[96] = {0};
+    if (value && value->kind == EX_ZERO && !type_has_zero_at(c, type, 0, offending, sizeof(offending))) {
+        char message[256];
+        snprintf(message, sizeof(message), "type `%s` has no zero value because `%s` has no member at 0",
+                 type.name[0] ? type.name : "aggregate", offending[0] ? offending : "an enum");
+        diagnostic_at(c, &value->token, "E-TYPE-9999", message);
+    }
+}
+
 static Type pointer_element_type(Type pointer) {
     if (pointer.element) return *pointer.element;
     Type element = type_make(pointer.element_kind, pointer.element_name);
@@ -1662,13 +1986,22 @@ static Type resolve_name_place(Compiler *c, Function *fn, Expr *e) {
             current = pointer_element_type(current);
             dereference = 1;
         }
-        if (current.kind != TY_NAMED || !(decl = find_struct(c, current.name))) {
-            diagnostic_at(c, &e->token, "E-TYPE-9999", "field access requires a struct value or pointer");
+        if (current.kind != TY_NAMED || !(decl = find_struct(c, current.name)) || decl->kind == ND_ENUM) {
+            diagnostic_at(c, &e->token, "E-TYPE-9999", "field access requires an aggregate value or pointer");
             return type_make(TY_INVALID, 0);
+        }
+        if (decl->kind == ND_TAGGED_UNION && strcmp(part, "tag") == 0) {
+            char tag_name[160];
+            snprintf(tag_name, sizeof(tag_name), "%s.Tag", decl->name);
+            current = type_make(TY_NAMED, tag_name);
+            e->field_offsets[e->field_path_count] = 0;
+            e->field_dereferences[e->field_path_count] = (unsigned char)dereference;
+            e->field_path_count++;
+            continue;
         }
         field = find_struct_field(decl, part, 0);
         if (!field) {
-            diagnostic_at(c, &e->token, "E-NAME-9999", "unknown struct field");
+            diagnostic_at(c, &e->token, "E-NAME-9999", "unknown aggregate field or member");
             return type_make(TY_INVALID, 0);
         }
         if (e->field_path_count >= MAX_FIELD_PATH) {
@@ -1677,6 +2010,11 @@ static Type resolve_name_place(Compiler *c, Function *fn, Expr *e) {
         }
         e->field_offsets[e->field_path_count] = (int)field->offset;
         e->field_dereferences[e->field_path_count] = (unsigned char)dereference;
+        if (decl->kind == ND_TAGGED_UNION) {
+            e->field_tag_checks[e->field_path_count] = 1;
+            e->field_tag_sizes[e->field_path_count] = (unsigned char)scalar_byte_size(decl->backing_type);
+            e->field_tag_values[e->field_path_count] = field->value;
+        }
         e->field_path_count++;
         current = field->type;
     }
@@ -1687,6 +2025,10 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
     int i;
     switch (e->kind) {
         case EX_INTEGER: return e->type;
+        case EX_ENUM_MEMBER:
+            if (e->type.kind == TY_INVALID)
+                diagnostic_at(c, &e->token, "E-TYPE-0001", "unqualified enum member has no typing context");
+            return e->type;
         case EX_STRING: return e->type;
         case EX_ZERO: case EX_UNDEF: return e->type;
         case EX_ARRAY_LITERAL: {
@@ -1694,7 +2036,11 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             if ((size_t)e->as.array.item_count != e->type.array_length)
                 diagnostic_at(c, &e->token, "E-TYPE-9999", "array literal element count does not match its length");
             for (i = 0; i < e->as.array.item_count; ++i) {
-                Type item = check_expr(c, fn, e->as.array.items[i]);
+                Type item;
+                if (e->as.array.items[i]->kind == EX_ZERO || e->as.array.items[i]->kind == EX_UNDEF)
+                    e->as.array.items[i]->type = element;
+                item = check_expr(c, fn, e->as.array.items[i]);
+                check_zeroable(c, e->as.array.items[i], element);
                 if (item.kind == TY_UNTYPED_INT && element.kind == TY_INT) {
                     coerce_untyped_integer(e->as.array.items[i], element);
                     item = element;
@@ -1710,42 +2056,60 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             unsigned char seen[MAX_FIELDS];
             memset(seen, 0, sizeof(seen));
             if (!decl) {
-                diagnostic_at(c, &e->token, "E-NAME-9999", "unknown struct type in literal");
+                diagnostic_at(c, &e->token, "E-NAME-9999", "unknown aggregate type in literal");
+                e->type = type_make(TY_INVALID, 0);
+                return e->type;
+            }
+            if (decl->kind == ND_ENUM) {
+                diagnostic_at(c, &e->token, "E-TYPE-9999", "enum values use member syntax, not aggregate literals");
                 e->type = type_make(TY_INVALID, 0);
                 return e->type;
             }
             e->type = type_make(TY_NAMED, decl->name);
+            if ((decl->kind == ND_UNION || decl->kind == ND_TAGGED_UNION) &&
+                e->as.aggregate.item_count != 1)
+                diagnostic_at(c, &e->token, "E-TYPE-9999", "union literal must name exactly one member");
             for (i = 0; i < e->as.aggregate.item_count; ++i) {
                 StructInit *item = &e->as.aggregate.items[i];
                 int field_index = -1;
                 FieldDecl *field = find_struct_field(decl, item->name, &field_index);
                 Type actual;
                 if (!field) {
-                    diagnostic_at(c, &item->token, "E-NAME-9999", "unknown field in struct literal");
+                    diagnostic_at(c, &item->token, "E-NAME-9999", "unknown aggregate member in literal");
                     continue;
                 }
                 item->field_index = field_index;
                 if (seen[field_index])
                     diagnostic_at(c, &item->token, "E-NAME-0001", "duplicate field in struct literal");
                 seen[field_index] = 1;
+                if (!item->value) {
+                    if (decl->kind != ND_TAGGED_UNION || field->has_payload)
+                        diagnostic_at(c, &item->token, "E-TYPE-9999", "aggregate member requires a value");
+                    continue;
+                }
+                if (item->value->kind == EX_ENUM_MEMBER)
+                    resolve_contextual_member(c, item->value, field->type);
                 actual = check_expr(c, fn, item->value);
                 if (item->value->kind == EX_ZERO || item->value->kind == EX_UNDEF) {
                     item->value->type = field->type;
                     actual = field->type;
                 }
+                check_zeroable(c, item->value, field->type);
                 if (actual.kind == TY_UNTYPED_INT && field->type.kind == TY_INT) {
                     coerce_untyped_integer(item->value, field->type); actual = field->type;
                 }
                 if (!type_assignable(actual, field->type))
                     diagnostic_at(c, &item->token, "E-TYPE-0002",
-                                  "struct literal field has the wrong type");
+                                   "aggregate literal member has the wrong type");
             }
-            for (i = 0; i < decl->field_count; ++i)
-                if (!seen[i]) diagnostic_at(c, &e->token, "E-TYPE-9999", "struct literal omits a field");
+            if (decl->kind == ND_STRUCT)
+                for (i = 0; i < decl->field_count; ++i)
+                    if (!seen[i]) diagnostic_at(c, &e->token, "E-TYPE-9999", "struct literal omits a field");
             return e->type;
         }
         case EX_NAME:
             if (strcmp(e->as.name, "ok") == 0) return e->type;
+            if (resolve_qualified_member(c, e)) return e->type;
             {
                 ErrorDecl *error = find_error(c, e->as.name);
                 if (error) {
@@ -1776,18 +2140,30 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             } else {
                 e->place_mutable = e->as.field.base->place_mutable;
             }
-            if (base.kind != TY_NAMED || !(decl = find_struct(c, base.name))) {
-                diagnostic_at(c, &e->token, "E-TYPE-9999", "field access requires a struct value or pointer");
+            if (base.kind != TY_NAMED || !(decl = find_struct(c, base.name)) || decl->kind == ND_ENUM) {
+                diagnostic_at(c, &e->token, "E-TYPE-9999", "field access requires an aggregate value or pointer");
                 e->type = type_make(TY_INVALID, 0);
+                return e->type;
+            }
+            if (decl->kind == ND_TAGGED_UNION && strcmp(e->as.field.name, "tag") == 0) {
+                char tag_name[160];
+                snprintf(tag_name, sizeof(tag_name), "%s.Tag", decl->name);
+                e->as.field.offset = 0;
+                e->type = type_make(TY_NAMED, tag_name);
                 return e->type;
             }
             field = find_struct_field(decl, e->as.field.name, 0);
             if (!field) {
-                diagnostic_at(c, &e->token, "E-NAME-9999", "unknown struct field");
+                diagnostic_at(c, &e->token, "E-NAME-9999", "unknown aggregate field or member");
                 e->type = type_make(TY_INVALID, 0);
                 return e->type;
             }
             e->as.field.offset = (int)field->offset;
+            if (decl->kind == ND_TAGGED_UNION) {
+                e->as.field.tag_check = 1;
+                e->as.field.tag_size = (int)scalar_byte_size(decl->backing_type);
+                e->as.field.tag_value = field->value;
+            }
             e->type = field->type;
             return e->type;
         }
@@ -1876,7 +2252,12 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                     if (callee->param_count != e->as.call.arg_count)
                         diagnostic_at(c, &e->token, "E-TYPE-0003", "argument count does not match function");
                     for (i = 0; i < e->as.call.arg_count && i < callee->param_count; ++i) {
+                        if (e->as.call.args[i]->kind == EX_ZERO || e->as.call.args[i]->kind == EX_UNDEF)
+                            e->as.call.args[i]->type = callee->params[i].type;
+                        if (e->as.call.args[i]->kind == EX_ENUM_MEMBER)
+                            resolve_contextual_member(c, e->as.call.args[i], callee->params[i].type);
                         Type actual = check_expr(c, fn, e->as.call.args[i]);
+                        check_zeroable(c, e->as.call.args[i], callee->params[i].type);
                         if (actual.kind == TY_UNTYPED_INT && callee->params[i].type.kind == TY_INT) {
                             coerce_untyped_integer(e->as.call.args[i], callee->params[i].type);
                             actual = callee->params[i].type;
@@ -1890,8 +2271,18 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             e->type = result; return result;
         }
         case EX_BINARY: {
-            Type a = check_expr(c, fn, e->as.binary.left);
-            Type b = check_expr(c, fn, e->as.binary.right);
+            Type a, b;
+            if (e->as.binary.left->kind == EX_ENUM_MEMBER &&
+                e->as.binary.right->kind != EX_ENUM_MEMBER) {
+                b = check_expr(c, fn, e->as.binary.right);
+                resolve_contextual_member(c, e->as.binary.left, b);
+                a = check_expr(c, fn, e->as.binary.left);
+            } else {
+                a = check_expr(c, fn, e->as.binary.left);
+                if (e->as.binary.right->kind == EX_ENUM_MEMBER)
+                    resolve_contextual_member(c, e->as.binary.right, a);
+                b = check_expr(c, fn, e->as.binary.right);
+            }
             if (e->as.binary.op == TK_AND || e->as.binary.op == TK_OR) {
                 if (a.kind != TY_BOOL || b.kind != TY_BOOL)
                     diagnostic_at(c, &e->token, "E-TYPE-9999", "logical operators require bool operands");
@@ -1902,8 +2293,14 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                 } else if (b.kind == TY_UNTYPED_INT && a.kind == TY_INT) {
                     coerce_untyped_integer(e->as.binary.right, a); b = a;
                 }
-                if ((a.kind != TY_INT && a.kind != TY_UNTYPED_INT) ||
-                    (b.kind != TY_INT && b.kind != TY_UNTYPED_INT))
+                if (a.kind == TY_NAMED || b.kind == TY_NAMED) {
+                    if (!type_equal(a, b) || !enum_decl_for_type(c, a) ||
+                        !(e->as.binary.op == TK_EQ || e->as.binary.op == TK_NE ||
+                          e->as.binary.op == TK_LT || e->as.binary.op == TK_LE ||
+                          e->as.binary.op == TK_GT || e->as.binary.op == TK_GE))
+                        diagnostic_at(c, &e->token, "E-TYPE-9999", "enum operators require matching enum types and a comparison operator");
+                } else if ((a.kind != TY_INT && a.kind != TY_UNTYPED_INT) ||
+                           (b.kind != TY_INT && b.kind != TY_UNTYPED_INT))
                     diagnostic_at(c, &e->token, "E-TYPE-9999",
                                   "the bootstrap currently supports integer arithmetic and comparisons");
                 else if (a.kind == TY_INT && b.kind == TY_INT && !type_equal(a, b))
@@ -1960,12 +2357,16 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
 }
 
 static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
-                                      int loop_depth, int close_scope) {
+                                      int loop_depth, int break_depth, int close_scope) {
     int scope_start = fn->local_count;
     for (; s; s = s->next) {
         switch (s->kind) {
             case ST_BIND: {
-                Type actual = check_expr(c, fn, s->as.bind.value);
+                Type actual;
+                if (s->as.bind.declared_type.kind != TY_INVALID &&
+                    s->as.bind.value->kind == EX_ENUM_MEMBER)
+                    resolve_contextual_member(c, s->as.bind.value, s->as.bind.declared_type);
+                actual = check_expr(c, fn, s->as.bind.value);
                 Type chosen = s->as.bind.declared_type.kind == TY_INVALID ? actual : s->as.bind.declared_type;
                 if (s->as.bind.declared_type.kind != TY_INVALID)
                     check_known_type(c, s->as.bind.declared_type, &s->token);
@@ -1976,6 +2377,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     } else {
                         s->as.bind.value->type = s->as.bind.declared_type;
                         actual = chosen = s->as.bind.declared_type;
+                        check_zeroable(c, s->as.bind.value, chosen);
                     }
                 }
                 if (actual.kind == TY_UNTYPED_INT && chosen.kind == TY_INT) {
@@ -1994,7 +2396,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 if (chosen.kind == TY_NAMED) {
                     StructDecl *decl = find_struct(c, chosen.name);
                     if (!decl || !layout_struct(c, decl))
-                        diagnostic_at(c, &s->token, "E-TYPE-9999", "binding has an unknown struct type");
+                        diagnostic_at(c, &s->token, "E-TYPE-9999", "binding has an unknown named type");
                 }
                 if (find_local(fn, s->as.bind.name) >= 0)
                     diagnostic_at(c, &s->token, "E-NAME-0001", "duplicate local declaration");
@@ -2010,7 +2412,12 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
             case ST_ASSIGN: {
                 Type target = check_expr(c, fn, s->as.assign.target);
                 int index = s->as.assign.target->local_index;
+                if (s->as.assign.value->kind == EX_ZERO || s->as.assign.value->kind == EX_UNDEF)
+                    s->as.assign.value->type = target;
+                if (s->as.assign.value->kind == EX_ENUM_MEMBER)
+                    resolve_contextual_member(c, s->as.assign.value, target);
                 Type actual = check_expr(c, fn, s->as.assign.value);
+                check_zeroable(c, s->as.assign.value, target);
                 if (index < 0) diagnostic_at(c, &s->token, "E-NAME-9999", "unknown assignment target");
                 else {
                     s->as.assign.local_index = index;
@@ -2030,7 +2437,12 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
             case ST_INDEX_ASSIGN: {
                 Expr *target_expr = s->as.index_assign.target;
                 Type target = check_expr(c, fn, target_expr);
+                if (s->as.index_assign.value->kind == EX_ZERO || s->as.index_assign.value->kind == EX_UNDEF)
+                    s->as.index_assign.value->type = target;
+                if (s->as.index_assign.value->kind == EX_ENUM_MEMBER)
+                    resolve_contextual_member(c, s->as.index_assign.value, target);
                 Type actual = check_expr(c, fn, s->as.index_assign.value);
+                check_zeroable(c, s->as.index_assign.value, target);
                 if (actual.kind == TY_UNTYPED_INT && target.kind == TY_INT) {
                     coerce_untyped_integer(s->as.index_assign.value, target);
                     actual = target;
@@ -2066,7 +2478,12 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     diagnostic_at(c, &s->token, "E-ERROR-9999", "try requires an err expression in an err-returning function");
                 break;
             case ST_RETURN: {
+                if (s->as.ret.value && (s->as.ret.value->kind == EX_ZERO || s->as.ret.value->kind == EX_UNDEF))
+                    s->as.ret.value->type = fn->return_type;
+                if (s->as.ret.value && s->as.ret.value->kind == EX_ENUM_MEMBER)
+                    resolve_contextual_member(c, s->as.ret.value, fn->return_type);
                 Type actual = s->as.ret.value ? check_expr(c, fn, s->as.ret.value) : type_make(TY_VOID, "void");
+                check_zeroable(c, s->as.ret.value, fn->return_type);
                 if (s->as.ret.value && actual.kind == TY_UNTYPED_INT && fn->return_type.kind == TY_INT) {
                     coerce_untyped_integer(s->as.ret.value, fn->return_type); actual = fn->return_type;
                 }
@@ -2076,8 +2493,8 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
             case ST_IF:
                 if (check_expr(c, fn, s->as.if_stmt.condition).kind != TY_BOOL)
                     diagnostic_at(c, &s->token, "E-TYPE-9999", "if condition must be bool");
-                check_statements_in_scope(c, fn, s->as.if_stmt.then_body, loop_depth, 1);
-                check_statements_in_scope(c, fn, s->as.if_stmt.else_body, loop_depth, 1);
+                check_statements_in_scope(c, fn, s->as.if_stmt.then_body, loop_depth, break_depth, 1);
+                check_statements_in_scope(c, fn, s->as.if_stmt.else_body, loop_depth, break_depth, 1);
                 break;
             case ST_WHILE:
                 if (check_expr(c, fn, s->as.while_stmt.condition).kind != TY_BOOL)
@@ -2085,7 +2502,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 if (loop_depth >= MAX_LOOP_DEPTH)
                     diagnostic_at(c, &s->token, "E-TOOL-9999", "loop nesting limit exceeded");
                 else
-                    check_statements_in_scope(c, fn, s->as.while_stmt.body, loop_depth + 1, 1);
+                    check_statements_in_scope(c, fn, s->as.while_stmt.body, loop_depth + 1, break_depth + 1, 1);
                 break;
             case ST_FOR_RANGE: {
                 Type start = check_expr(c, fn, s->as.for_range.start);
@@ -2121,7 +2538,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     if (loop_depth >= MAX_LOOP_DEPTH)
                         diagnostic_at(c, &s->token, "E-TOOL-9999", "loop nesting limit exceeded");
                     else
-                        check_statements_in_scope(c, fn, s->as.for_range.body, loop_depth + 1, 1);
+                        check_statements_in_scope(c, fn, s->as.for_range.body, loop_depth + 1, break_depth + 1, 1);
                     fn->locals[range_start].active = 0;
                     fn->locals[range_start + 1].active = 0;
                 } else {
@@ -2176,16 +2593,119 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                         diagnostic_at(c, &s->token, "E-TOOL-9999", "loop nesting limit exceeded");
                     else
                         check_statements_in_scope(c, fn, s->as.for_each.body,
-                                                  loop_depth + 1, 1);
+                                                  loop_depth + 1, break_depth + 1, 1);
                     for (i = local_start; i < local_start + 4; ++i) fn->locals[i].active = 0;
                 } else {
                     diagnostic_at(c, &s->token, "E-TOOL-9999", "local limit exceeded");
                 }
                 break;
             }
+            case ST_SWITCH: {
+                Type subject = check_expr(c, fn, s->as.switch_stmt.subject);
+                StructDecl *decl = enum_decl_for_type(c, subject);
+                int tagged_subject = decl && decl->kind == ND_TAGGED_UNION &&
+                                     strcmp(subject.name, decl->name) == 0;
+                Type case_type = subject;
+                unsigned char seen[MAX_FIELDS];
+                int default_seen = 0;
+                SwitchCase *arm;
+                memset(seen, 0, sizeof(seen));
+                if (tagged_subject) {
+                    char tag_name[160];
+                    snprintf(tag_name, sizeof(tag_name), "%s.Tag", decl->name);
+                    case_type = type_make(TY_NAMED, tag_name);
+                }
+                if (!decl && !(subject.kind == TY_INT || subject.kind == TY_BOOL || subject.kind == TY_ERR))
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "switch subject must be an enum, tagged union, integer, bool, or err");
+                for (arm = s->as.switch_stmt.cases; arm; arm = arm->next) {
+                    int scope_local = -1, value_index;
+                    if (arm->is_default) {
+                        if (default_seen++) diagnostic_at(c, &arm->token, "E-NAME-0001", "duplicate default case");
+                        if (arm->binding[0]) diagnostic_at(c, &arm->token, "E-TYPE-9999", "default case cannot bind a payload");
+                    } else {
+                        if (arm->value_count == 0)
+                            diagnostic_at(c, &arm->token, "E-SYNTAX-9999", "case requires at least one value");
+                        for (value_index = 0; value_index < arm->value_count; ++value_index) {
+                            Expr *value = arm->values[value_index];
+                            int member_index = -1, prior;
+                            int64_t constant = 0;
+                            Type actual;
+                            if (value->kind == EX_ENUM_MEMBER) resolve_contextual_member(c, value, case_type);
+                            actual = check_expr(c, fn, value);
+                            if (!case_constant_value(value, &constant))
+                                diagnostic_at(c, &value->token, "E-TYPE-9999", "switch case must be a compile-time constant");
+                            if (decl) {
+                                FieldDecl *member = 0;
+                                if (value->kind == EX_ENUM_MEMBER)
+                                    member = find_struct_field(decl, value->as.name, &member_index);
+                                else if (actual.kind == TY_NAMED && type_equal(actual, case_type)) {
+                                    for (prior = 0; prior < decl->field_count; ++prior)
+                                        if (decl->fields[prior].value == value->as.integer) { member_index = prior; member = &decl->fields[prior]; break; }
+                                }
+                                if (!member) {
+                                    diagnostic_at(c, &value->token, "E-TYPE-0002", "enum switch case has the wrong type or is not a member");
+                                    continue;
+                                }
+                                value->constant_value = constant = member->value;
+                                if (seen[member_index]) diagnostic_at(c, &value->token, "E-NAME-0001", "duplicate switch case value");
+                                seen[member_index] = 1;
+                                if (arm->value_count == 1) arm->member_index = member_index;
+                            } else {
+                                SwitchCase *previous;
+                                if (actual.kind == TY_UNTYPED_INT && subject.kind == TY_INT) {
+                                    coerce_untyped_integer(value, subject); actual = subject;
+                                }
+                                if (!type_assignable(actual, subject))
+                                    diagnostic_at(c, &value->token, "E-TYPE-0002", "switch case has the wrong type");
+                                for (previous = s->as.switch_stmt.cases; previous != arm; previous = previous->next) {
+                                    int previous_index;
+                                    for (previous_index = 0; previous_index < previous->value_count; ++previous_index) {
+                                        int64_t previous_constant;
+                                        if (case_constant_value(previous->values[previous_index], &previous_constant) &&
+                                            previous_constant == constant)
+                                            diagnostic_at(c, &value->token, "E-NAME-0001", "duplicate switch case value");
+                                    }
+                                }
+                                for (prior = 0; prior < value_index; ++prior) {
+                                    int64_t previous_constant;
+                                    if (case_constant_value(arm->values[prior], &previous_constant) &&
+                                        previous_constant == constant)
+                                        diagnostic_at(c, &value->token, "E-NAME-0001", "duplicate switch case value");
+                                }
+                            }
+                        }
+                        if (arm->binding[0]) {
+                            FieldDecl *member = tagged_subject && arm->member_index >= 0 ?
+                                                &decl->fields[arm->member_index] : 0;
+                            if (arm->value_count != 1 || !member || !member->has_payload)
+                                diagnostic_at(c, &arm->token, "E-TYPE-9999", "payload binding requires one tagged-union case with a payload");
+                            else if (find_local(fn, arm->binding) >= 0)
+                                diagnostic_at(c, &arm->token, "E-NAME-0003", "payload binding shadows an active name");
+                            else if (fn->local_count < MAX_LOCALS) {
+                                Local *local = &fn->locals[fn->local_count];
+                                memset(local, 0, sizeof(*local));
+                                strcpy(local->name, arm->binding); local->type = member->type; local->active = 1;
+                                arm->local_index = scope_local = fn->local_count++;
+                            }
+                        }
+                    }
+                    check_statements_in_scope(c, fn, arm->body, loop_depth, break_depth + 1, 1);
+                    if (scope_local >= 0) fn->locals[scope_local].active = 0;
+                }
+                if (decl && !default_seen) {
+                    int member_index;
+                    for (member_index = 0; member_index < decl->field_count; ++member_index)
+                        if (!seen[member_index]) {
+                            char message[256];
+                            snprintf(message, sizeof(message), "non-exhaustive switch; missing member `%s`", decl->fields[member_index].name);
+                            diagnostic_at(c, &s->token, "E-TYPE-9999", message);
+                        }
+                }
+                break;
+            }
             case ST_BREAK:
-                if (loop_depth == 0)
-                    diagnostic_at(c, &s->token, "E-TYPE-9999", "break requires an enclosing loop");
+                if (break_depth == 0)
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "break requires an enclosing loop or switch");
                 break;
             case ST_CONTINUE:
                 if (loop_depth == 0)
@@ -2200,7 +2720,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
 }
 
 static void check_statements(Compiler *c, Function *fn, Stmt *s) {
-    check_statements_in_scope(c, fn, s, 0, 0);
+    check_statements_in_scope(c, fn, s, 0, 0, 0);
 }
 
 static int path_exists(const char *path) {
@@ -2244,8 +2764,8 @@ static void check_imports(Compiler *c) {
 
 static void check_known_type(Compiler *c, Type type, Token *token) {
     Type element;
-    if (type.kind == TY_NAMED && !find_struct(c, type.name)) {
-        diagnostic_at(c, token, "E-NAME-9999", "unknown struct type");
+    if (type.kind == TY_NAMED && !find_struct(c, type.name) && !find_tag_owner(c, type.name)) {
+        diagnostic_at(c, token, "E-NAME-9999", "unknown named type");
         return;
     }
     if (type.kind != TY_POINTER && type.kind != TY_SLICE && type.kind != TY_ARRAY) return;
@@ -2269,17 +2789,30 @@ static void check_program(Compiler *c) {
         StructDecl *decl = &c->program.structs[i];
         for (j = 0; j < i; ++j)
             if (strcmp(decl->name, c->program.structs[j].name) == 0)
-                diagnostic_at(c, &decl->token, "E-NAME-0001", "duplicate struct declaration");
+                diagnostic_at(c, &decl->token, "E-NAME-0001", "duplicate type declaration");
+        if (decl->kind == ND_ENUM || decl->kind == ND_TAGGED_UNION)
+            check_known_type(c, decl->backing_type, &decl->token);
         for (j = 0; j < decl->field_count; ++j)
-            check_known_type(c, decl->fields[j].type, &decl->fields[j].token);
+            if (decl->fields[j].has_payload || decl->kind == ND_STRUCT || decl->kind == ND_UNION)
+                check_known_type(c, decl->fields[j].type, &decl->fields[j].token);
         layout_struct(c, decl);
+        if (decl->kind == ND_TAGGED_UNION) {
+            char tag_name[128];
+            snprintf(tag_name, sizeof(tag_name), "%s.Tag", decl->name);
+            for (j = 0; j < c->program.struct_count; ++j)
+                if (strcmp(c->program.structs[j].name, tag_name) == 0)
+                    diagnostic_at(c, &c->program.structs[j].token, "E-NAME-0001", "type name collides with an implicit tagged-union tag type");
+            for (j = 0; j < decl->field_count; ++j)
+                if (strcmp(decl->fields[j].name, "Tag") == 0)
+                    diagnostic_at(c, &decl->fields[j].token, "E-NAME-0001", "tagged union may not declare a member named Tag");
+        }
     }
     for (i = 0; i < c->program.function_count; ++i) {
         Function *fn = &c->program.functions[i];
         for (j = 0; j < i; ++j) if (strcmp(fn->name, c->program.functions[j].name) == 0)
             diagnostic_at(c, &fn->token, "E-NAME-0001", "duplicate function declaration");
         check_known_type(c, fn->return_type, &fn->token);
-        if (type_is_value_aggregate(fn->return_type)) {
+        if (type_is_value_aggregate(c, fn->return_type)) {
             Local *slot = &fn->locals[fn->local_count];
             Type pointer = type_make(TY_POINTER, fn->return_type.name);
             type_set_element(&pointer, fn->return_type);
@@ -2293,7 +2826,7 @@ static void check_program(Compiler *c) {
             check_known_type(c, fn->params[j].type, &fn->params[j].token);
             memset(local, 0, sizeof(*local)); strcpy(local->name, fn->params[j].name);
             local->type = fn->params[j].type; local->is_mutable = 0; local->active = 1;
-            if (type_is_value_aggregate(local->type) && type_size(c, local->type) > 16)
+            if (type_is_value_aggregate(c, local->type) && type_size(c, local->type) > 16)
                 local->is_indirect = 1;
             fn->params[j].local_index = fn->local_count++;
         }
@@ -2318,6 +2851,14 @@ static void collect_traps_expr(Compiler *c, Function *fn, Expr *expr) {
     if (!expr) return;
     if (expr->kind == EX_INDEX) { kind = "bounds"; detail = "index out of bounds"; }
     else if (expr->kind == EX_SLICE) { kind = "bounds"; detail = "slice bounds out of range"; }
+    else if (expr->kind == EX_FIELD && expr->as.field.tag_check) {
+        kind = "tag"; detail = "tagged-union payload does not match the active member";
+    } else if (expr->kind == EX_NAME) {
+        for (i = 0; i < expr->field_path_count; ++i)
+            if (expr->field_tag_checks[i]) {
+                kind = "tag"; detail = "tagged-union payload does not match the active member"; break;
+            }
+    }
     else if (expr->kind == EX_BINARY && (expr->as.binary.op == TK_SLASH || expr->as.binary.op == TK_PERCENT)) {
         kind = "divide"; detail = "invalid integer division";
     }
@@ -2396,6 +2937,17 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
                 collect_traps_expr(c, fn, statement->as.for_each.subject);
                 collect_traps_statements(c, fn, statement->as.for_each.body);
                 break;
+            case ST_SWITCH: {
+                SwitchCase *arm;
+                collect_traps_expr(c, fn, statement->as.switch_stmt.subject);
+                for (arm = statement->as.switch_stmt.cases; arm; arm = arm->next) {
+                    int value_index;
+                    for (value_index = 0; value_index < arm->value_count; ++value_index)
+                        collect_traps_expr(c, fn, arm->values[value_index]);
+                    collect_traps_statements(c, fn, arm->body);
+                }
+                break;
+            }
             case ST_BREAK: case ST_CONTINUE: break;
         }
     }
@@ -2426,51 +2978,59 @@ static const char *symbol_name(Function *fn) { return fn->symbol; }
 
 static int align16(int value) { return (value + 15) & ~15; }
 
-static int type_is_unsigned(Type type) {
+static Type storage_scalar_type(Compiler *c, Type type) {
+    StructDecl *decl = enum_decl_for_type(c, type);
+    if (decl && (decl->kind == ND_ENUM || find_tag_owner(c, type.name))) return decl->backing_type;
+    return type;
+}
+
+static int type_is_unsigned(Compiler *c, Type type) {
+    type = storage_scalar_type(c, type);
     return type.kind == TY_INT &&
            (type.name[0] == 'u' || strcmp(type.name, "usize") == 0);
 }
 
-static int type_is_signed_integer(Type type) {
+static int type_is_signed_integer(Compiler *c, Type type) {
+    type = storage_scalar_type(c, type);
     return type.kind == TY_INT && type.name[0] == 'i';
 }
 
-static void emit_stack_store(FILE *out, int displacement, Type type) {
-    size_t size = scalar_byte_size(type);
-    if (size == 1) fprintf(out, "    mov BYTE PTR [rbp-%d], al\n", displacement);
-    else if (size == 2) fprintf(out, "    mov WORD PTR [rbp-%d], ax\n", displacement);
-    else if (size == 4) fprintf(out, "    mov DWORD PTR [rbp-%d], eax\n", displacement);
+static void emit_stack_store(Emitter *e, int displacement, Type type) {
+    size_t size = type_size(e->compiler, type);
+    if (size == 1) fprintf(e->out, "    mov BYTE PTR [rbp-%d], al\n", displacement);
+    else if (size == 2) fprintf(e->out, "    mov WORD PTR [rbp-%d], ax\n", displacement);
+    else if (size == 4) fprintf(e->out, "    mov DWORD PTR [rbp-%d], eax\n", displacement);
     else {
-        fprintf(out, "    mov QWORD PTR [rbp-%d], rax\n", displacement);
-        if (size == 16) fprintf(out, "    mov QWORD PTR [rbp-%d], rdx\n", displacement - 8);
+        fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", displacement);
+        if (size == 16) fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", displacement - 8);
     }
 }
 
-static void emit_address_load(FILE *out, Type type) {
-    size_t size = scalar_byte_size(type);
-    if (size == 16) fputs("    mov rax, QWORD PTR [r10]\n    mov rdx, QWORD PTR [r10+8]\n", out);
-    else if (size == 8) fputs("    mov rax, QWORD PTR [r10]\n", out);
-    else if (size == 4) fputs(type_is_signed_integer(type) ?
-        "    movsxd rax, DWORD PTR [r10]\n" : "    mov eax, DWORD PTR [r10]\n", out);
-    else if (size == 2) fputs(type_is_signed_integer(type) ?
-        "    movsx rax, WORD PTR [r10]\n" : "    movzx rax, WORD PTR [r10]\n", out);
-    else fputs(type_is_signed_integer(type) ?
-        "    movsx rax, BYTE PTR [r10]\n" : "    movzx rax, BYTE PTR [r10]\n", out);
+static void emit_address_load(Emitter *e, Type type) {
+    size_t size = type_size(e->compiler, type);
+    if (size == 16) fputs("    mov rax, QWORD PTR [r10]\n    mov rdx, QWORD PTR [r10+8]\n", e->out);
+    else if (size == 8) fputs("    mov rax, QWORD PTR [r10]\n", e->out);
+    else if (size == 4) fputs(type_is_signed_integer(e->compiler, type) ?
+        "    movsxd rax, DWORD PTR [r10]\n" : "    mov eax, DWORD PTR [r10]\n", e->out);
+    else if (size == 2) fputs(type_is_signed_integer(e->compiler, type) ?
+        "    movsx rax, WORD PTR [r10]\n" : "    movzx rax, WORD PTR [r10]\n", e->out);
+    else fputs(type_is_signed_integer(e->compiler, type) ?
+        "    movsx rax, BYTE PTR [r10]\n" : "    movzx rax, BYTE PTR [r10]\n", e->out);
 }
 
-static void emit_address_store(FILE *out, Type type, TokenKind op) {
-    size_t size = scalar_byte_size(type);
+static void emit_address_store(Emitter *e, Type type, TokenKind op) {
+    size_t size = type_size(e->compiler, type);
     if (op == TK_ADD_ASSIGN) {
-        if (size == 1) fputs("    add BYTE PTR [r10], al\n", out);
-        else if (size == 2) fputs("    add WORD PTR [r10], ax\n", out);
-        else if (size == 4) fputs("    add DWORD PTR [r10], eax\n", out);
-        else fputs("    add QWORD PTR [r10], rax\n", out);
-    } else if (size == 1) fputs("    mov BYTE PTR [r10], al\n", out);
-    else if (size == 2) fputs("    mov WORD PTR [r10], ax\n", out);
-    else if (size == 4) fputs("    mov DWORD PTR [r10], eax\n", out);
+        if (size == 1) fputs("    add BYTE PTR [r10], al\n", e->out);
+        else if (size == 2) fputs("    add WORD PTR [r10], ax\n", e->out);
+        else if (size == 4) fputs("    add DWORD PTR [r10], eax\n", e->out);
+        else fputs("    add QWORD PTR [r10], rax\n", e->out);
+    } else if (size == 1) fputs("    mov BYTE PTR [r10], al\n", e->out);
+    else if (size == 2) fputs("    mov WORD PTR [r10], ax\n", e->out);
+    else if (size == 4) fputs("    mov DWORD PTR [r10], eax\n", e->out);
     else {
-        fputs("    mov QWORD PTR [r10], rax\n", out);
-        if (size == 16) fputs("    mov QWORD PTR [r10+8], rdx\n", out);
+        fputs("    mov QWORD PTR [r10], rax\n", e->out);
+        if (size == 16) fputs("    mov QWORD PTR [r10+8], rdx\n", e->out);
     }
 }
 
@@ -2542,6 +3102,17 @@ static int emit_index_address(Emitter *e, Expr *index) {
     return address_slot;
 }
 
+static void emit_tag_check(Emitter *e, Expr *expr, int size, int64_t expected) {
+    int ok = e->label++;
+    if (size == 1) fputs("    movzx eax, BYTE PTR [r10]\n", e->out);
+    else if (size == 2) fputs("    movzx eax, WORD PTR [r10]\n", e->out);
+    else if (size == 4) fputs("    mov eax, DWORD PTR [r10]\n", e->out);
+    else fputs("    mov rax, QWORD PTR [r10]\n", e->out);
+    fprintf(e->out, "    cmp rax, %lld\n    je np_tag_ok_%d\n", (long long)expected, ok);
+    emit_trap_call(e, expr);
+    fprintf(e->out, "np_tag_ok_%d:\n", ok);
+}
+
 static void emit_name_address(Emitter *e, Expr *name) {
     Local *local = &e->fn->locals[name->local_index];
     int i;
@@ -2551,6 +3122,8 @@ static void emit_name_address(Emitter *e, Expr *name) {
     for (i = 0; i < name->field_path_count; ++i) {
         if (name->field_dereferences[i])
             fputs("    mov r10, QWORD PTR [r10]\n", e->out);
+        if (name->field_tag_checks[i])
+            emit_tag_check(e, name, name->field_tag_sizes[i], name->field_tag_values[i]);
         if (name->field_offsets[i])
             fprintf(e->out, "    add r10, %d\n", name->field_offsets[i]);
     }
@@ -2576,6 +3149,8 @@ static void emit_place_address(Emitter *e, Expr *place) {
             emit_value_to_stack(e, place->as.field.base, place->as.field.base->type, slot);
             fprintf(e->out, "    lea r10, [rbp-%d]\n", slot);
         }
+        if (place->as.field.tag_check)
+            emit_tag_check(e, place, place->as.field.tag_size, place->as.field.tag_value);
         if (place->as.field.offset)
             fprintf(e->out, "    add r10, %d\n", place->as.field.offset);
     } else if (place->kind == EX_UNARY && place->as.unary.op == TK_STAR) {
@@ -2599,7 +3174,7 @@ static void emit_argument_lane(Emitter *e, int lane, const char *source) {
 
 static void emit_call(Emitter *e, Expr *x, int aggregate_destination) {
     int slots[MAX_ARGS], lanes[MAX_ARGS], indirect[MAX_ARGS], aggregate[MAX_ARGS], i;
-    int returns_aggregate = type_is_value_aggregate(x->type);
+    int returns_aggregate = type_is_value_aggregate(e->compiler, x->type);
     int result_slot = aggregate_destination;
     int lane = returns_aggregate ? 1 : 0;
     if (returns_aggregate && !result_slot) {
@@ -2609,7 +3184,7 @@ static void emit_call(Emitter *e, Expr *x, int aggregate_destination) {
     for (i = 0; i < x->as.call.arg_count; ++i) {
         Type type = x->as.call.args[i]->type;
         indirect[i] = 0;
-        aggregate[i] = type_is_value_aggregate(type);
+        aggregate[i] = type_is_value_aggregate(e->compiler, type);
         if (aggregate[i]) {
             size_t bytes = type_size(e->compiler, type);
             int storage_lanes = (int)((bytes + 7) / 8);
@@ -2666,6 +3241,8 @@ static void emit_expr(Emitter *e, Expr *x) {
     switch (x->kind) {
         case EX_INTEGER:
             fprintf(e->out, "    mov rax, %lld\n", (long long)x->as.integer); break;
+        case EX_ENUM_MEMBER:
+            fprintf(e->out, "    mov rax, %lld\n", (long long)x->constant_value); break;
         case EX_STRING:
             if (e->windows) fprintf(e->out, "    lea rax, np_str_%d\n", x->as.string.label);
             else fprintf(e->out, "    lea rax, np_str_%d[rip]\n", x->as.string.label);
@@ -2691,7 +3268,7 @@ static void emit_expr(Emitter *e, Expr *x) {
                             (unsigned long long)x->type.array_length);
                 } else if (x->field_path_count || local->type.kind == TY_NAMED) {
                     emit_name_address(e, x);
-                    emit_address_load(e->out, x->type);
+                    emit_address_load(e, x->type);
                 } else {
                     fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", local->offset);
                     if (type_lanes(local->type) == 2)
@@ -2708,7 +3285,7 @@ static void emit_expr(Emitter *e, Expr *x) {
             if (element.kind == TY_ARRAY) {
                 fputs("    mov rax, r10\n", e->out);
                 fprintf(e->out, "    mov rdx, %llu\n", (unsigned long long)element.array_length);
-            } else emit_address_load(e->out, element);
+            } else emit_address_load(e, element);
             break;
         }
         case EX_FIELD:
@@ -2719,7 +3296,7 @@ static void emit_expr(Emitter *e, Expr *x) {
                 fputs("    mov rax, QWORD PTR [r10+8]\n", e->out);
             } else {
                 emit_place_address(e, x);
-                emit_address_load(e->out, x->type);
+                emit_address_load(e, x->type);
             }
             break;
         case EX_SLICE: {
@@ -2772,7 +3349,7 @@ static void emit_expr(Emitter *e, Expr *x) {
             } else if (x->as.unary.op == TK_STAR) {
                 emit_expr(e, x->as.unary.value);
                 fputs("    mov r10, rax\n", e->out);
-                emit_address_load(e->out, x->type);
+                emit_address_load(e, x->type);
             } else {
                 emit_expr(e, x->as.unary.value);
                 if (x->as.unary.op == TK_MINUS) fputs("    neg rax\n", e->out);
@@ -2839,6 +3416,14 @@ static void emit_zero_stack(Emitter *e, int displacement, size_t bytes) {
         fprintf(e->out, "    mov BYTE PTR [rbp-%d], 0\n", displacement - (int)at);
 }
 
+static void emit_integer_stack(Emitter *e, int displacement, Type type, int64_t value) {
+    size_t size = type_size(e->compiler, type);
+    if (size == 1) fprintf(e->out, "    mov BYTE PTR [rbp-%d], %lld\n", displacement, (long long)value);
+    else if (size == 2) fprintf(e->out, "    mov WORD PTR [rbp-%d], %lld\n", displacement, (long long)value);
+    else if (size == 4) fprintf(e->out, "    mov DWORD PTR [rbp-%d], %lld\n", displacement, (long long)value);
+    else fprintf(e->out, "    mov QWORD PTR [rbp-%d], %lld\n", displacement, (long long)value);
+}
+
 static int expr_is_place(Expr *value) {
     return value->kind == EX_NAME || value->kind == EX_INDEX || value->kind == EX_FIELD ||
            (value->kind == EX_UNARY && value->as.unary.op == TK_STAR);
@@ -2866,12 +3451,29 @@ static void emit_value_to_stack(Emitter *e, Expr *value, Type type, int displace
         StructDecl *decl = find_struct(e->compiler, type.name);
         int i;
         if (!decl) return;
+        if (decl->kind == ND_TAGGED_UNION && value->as.aggregate.item_count == 1) {
+            StructInit *item = &value->as.aggregate.items[0];
+            FieldDecl *field = item->field_index >= 0 ? &decl->fields[item->field_index] : 0;
+            if (!field) return;
+            emit_integer_stack(e, displacement, decl->backing_type, field->value);
+            if (item->value)
+                emit_value_to_stack(e, item->value, field->type, displacement - (int)field->offset);
+            return;
+        }
         for (i = 0; i < value->as.aggregate.item_count; ++i) {
             StructInit *item = &value->as.aggregate.items[i];
             FieldDecl *field = &decl->fields[item->field_index];
+            if (!item->value) continue;
             emit_value_to_stack(e, item->value, field->type,
                                 displacement - (int)field->offset);
         }
+        return;
+    }
+    if (type.kind == TY_NAMED && value->kind == EX_ENUM_MEMBER) {
+        StructDecl *decl = find_struct(e->compiler, type.name);
+        if (decl && decl->kind == ND_TAGGED_UNION)
+            emit_integer_stack(e, displacement, decl->backing_type, value->constant_value);
+        else emit_integer_stack(e, displacement, type, value->constant_value);
         return;
     }
     if (type.kind == TY_ARRAY && value->kind == EX_ARRAY_LITERAL) {
@@ -2883,11 +3485,11 @@ static void emit_value_to_stack(Emitter *e, Expr *value, Type type, int displace
                                 displacement - (int)((size_t)i * stride));
         return;
     }
-    if (type_is_value_aggregate(type) && value->kind == EX_CALL) {
+    if (type_is_value_aggregate(e->compiler, type) && value->kind == EX_CALL) {
         emit_call(e, value, displacement);
         return;
     }
-    if (type_is_value_aggregate(type) && expr_is_place(value)) {
+    if (type_is_value_aggregate(e->compiler, type) && expr_is_place(value)) {
         emit_place_address(e, value);
         fputs("    mov r11, r10\n", e->out);
         fprintf(e->out, "    lea r10, [rbp-%d]\n", displacement);
@@ -2895,7 +3497,7 @@ static void emit_value_to_stack(Emitter *e, Expr *value, Type type, int displace
         return;
     }
     emit_expr(e, value);
-    emit_stack_store(e->out, displacement, type);
+    emit_stack_store(e, displacement, type);
 }
 
 static void emit_statements(Emitter *e, Stmt *s) {
@@ -2909,7 +3511,7 @@ static void emit_statements(Emitter *e, Stmt *s) {
         switch (s->kind) {
             case ST_BIND: {
                 Local *local = &e->fn->locals[s->as.bind.local_index];
-                if (type_is_value_aggregate(local->type)) {
+                if (type_is_value_aggregate(e->compiler, local->type)) {
                     emit_value_to_stack(e, s->as.bind.value, local->type, local->offset);
                 } else if (s->as.bind.value->kind != EX_UNDEF) {
                     emit_expr(e, s->as.bind.value);
@@ -2923,7 +3525,7 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 emit_name_address(e, s->as.assign.target);
                 address_slot = alloc_temp(e, 1);
                 fprintf(e->out, "    mov QWORD PTR [rbp-%d], r10\n", address_slot);
-                if (type_is_value_aggregate(s->as.assign.target->type)) {
+                if (type_is_value_aggregate(e->compiler, s->as.assign.target->type)) {
                     size_t bytes = type_size(e->compiler, s->as.assign.target->type);
                     int source_slot = alloc_aggregate_temp(e, bytes);
                     emit_value_to_stack(e, s->as.assign.value,
@@ -2934,7 +3536,7 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 } else {
                     emit_expr(e, s->as.assign.value);
                     fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", address_slot);
-                    emit_address_store(e->out, s->as.assign.target->type, s->as.assign.op);
+                    emit_address_store(e, s->as.assign.target->type, s->as.assign.op);
                 }
                 break;
             }
@@ -2952,7 +3554,7 @@ static void emit_statements(Emitter *e, Stmt *s) {
                     address_slot = alloc_temp(e, 1);
                     fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", address_slot);
                 }
-                if (type_is_value_aggregate(element)) {
+                if (type_is_value_aggregate(e->compiler, element)) {
                     size_t bytes = type_size(e->compiler, element);
                     int source_slot = alloc_aggregate_temp(e, bytes);
                     emit_value_to_stack(e, s->as.index_assign.value, element, source_slot);
@@ -2962,7 +3564,7 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 } else {
                     emit_expr(e, s->as.index_assign.value);
                     fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", address_slot);
-                    emit_address_store(e->out, element, s->as.index_assign.op);
+                    emit_address_store(e, element, s->as.index_assign.op);
                 }
                 break;
             }
@@ -2973,7 +3575,7 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 fprintf(e->out, "    jne np_ret_%d\n", e->return_label);
                 break;
             case ST_RETURN:
-                if (s->as.ret.value && type_is_value_aggregate(e->fn->return_type)) {
+                if (s->as.ret.value && type_is_value_aggregate(e->compiler, e->fn->return_type)) {
                     size_t bytes = type_size(e->compiler, e->fn->return_type);
                     int source_slot = alloc_aggregate_temp(e, bytes);
                     Local *return_slot = &e->fn->locals[e->fn->return_slot_local_index];
@@ -3022,7 +3624,7 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 fprintf(e->out, "np_label_%d:\n", start);
                 fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", index->offset);
                 fprintf(e->out, "    cmp rax, QWORD PTR [rbp-%d]\n", limit->offset);
-                fprintf(e->out, type_is_unsigned(index->type) ?
+                fprintf(e->out, type_is_unsigned(e->compiler, index->type) ?
                         "    jae np_label_%d\n" : "    jge np_label_%d\n", done);
                 e->loop_break[e->loop_depth] = done;
                 e->loop_continue[e->loop_depth] = step;
@@ -3057,12 +3659,12 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 else if (size == 2) fputs("    lea r10, [r10+rax*2]\n", e->out);
                 else if (size == 1) fputs("    add r10, rax\n", e->out);
                 else fprintf(e->out, "    imul rax, %llu\n    add r10, rax\n", (unsigned long long)size);
-                if (type_is_value_aggregate(element)) {
+                if (type_is_value_aggregate(e->compiler, element)) {
                     fputs("    mov r11, r10\n", e->out);
                     fprintf(e->out, "    lea r10, [rbp-%d]\n", value->offset);
                     emit_copy_addresses(e->out, size);
                 } else {
-                    emit_address_load(e->out, element);
+                    emit_address_load(e, element);
                     fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", value->offset);
                     if (size == 16)
                         fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", value->offset - 8);
@@ -3077,12 +3679,70 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 fprintf(e->out, "    jmp np_label_%d\nnp_label_%d:\n", start, done);
                 break;
             }
+            case ST_SWITCH: {
+                Type subject_type = s->as.switch_stmt.subject->type;
+                StructDecl *decl = enum_decl_for_type(e->compiler, subject_type);
+                int tagged_subject = decl && decl->kind == ND_TAGGED_UNION &&
+                                     strcmp(subject_type.name, decl->name) == 0;
+                int subject_slot = 0, tag_slot, done = e->label++, default_label = done;
+                int arm_count = 0, arm_index = 0;
+                int *arm_labels;
+                SwitchCase *arm;
+                for (arm = s->as.switch_stmt.cases; arm; arm = arm->next) arm_count++;
+                arm_labels = (int *)calloc((size_t)(arm_count ? arm_count : 1), sizeof(*arm_labels));
+                if (!arm_labels) { fputs("neper: out of memory\n", stderr); exit(2); }
+                for (arm_index = 0; arm_index < arm_count; ++arm_index) arm_labels[arm_index] = e->label++;
+                if (tagged_subject) {
+                    subject_slot = alloc_aggregate_temp(e, type_size(e->compiler, subject_type));
+                    emit_value_to_stack(e, s->as.switch_stmt.subject, subject_type, subject_slot);
+                    fprintf(e->out, "    lea r10, [rbp-%d]\n", subject_slot);
+                    emit_address_load(e, decl->backing_type);
+                } else emit_expr(e, s->as.switch_stmt.subject);
+                tag_slot = alloc_temp(e, 1);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", tag_slot);
+                arm_index = 0;
+                for (arm = s->as.switch_stmt.cases; arm; arm = arm->next, ++arm_index) {
+                    int value_index;
+                    if (arm->is_default) { default_label = arm_labels[arm_index]; continue; }
+                    for (value_index = 0; value_index < arm->value_count; ++value_index) {
+                        Expr *value = arm->values[value_index];
+                        int64_t constant = 0;
+                        case_constant_value(value, &constant);
+                        fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n    cmp rax, %lld\n    je np_label_%d\n",
+                                tag_slot, (long long)constant, arm_labels[arm_index]);
+                    }
+                }
+                fprintf(e->out, "    jmp np_label_%d\n", default_label);
+                e->loop_break[e->loop_depth] = done;
+                e->loop_continue[e->loop_depth] = -1;
+                e->loop_depth++;
+                arm_index = 0;
+                for (arm = s->as.switch_stmt.cases; arm; arm = arm->next, ++arm_index) {
+                    fprintf(e->out, "np_label_%d:\n", arm_labels[arm_index]);
+                    if (arm->local_index >= 0 && tagged_subject && arm->member_index >= 0) {
+                        FieldDecl *member = &decl->fields[arm->member_index];
+                        Local *local = &e->fn->locals[arm->local_index];
+                        fprintf(e->out, "    lea r11, [rbp-%d]\n", subject_slot - (int)member->offset);
+                        fprintf(e->out, "    lea r10, [rbp-%d]\n", local->offset);
+                        emit_copy_addresses(e->out, type_size(e->compiler, member->type));
+                    }
+                    emit_statements(e, arm->body);
+                    fprintf(e->out, "    jmp np_label_%d\n", done);
+                }
+                e->loop_depth--;
+                fprintf(e->out, "np_label_%d:\n", done);
+                free(arm_labels);
+                break;
+            }
             case ST_BREAK:
                 fprintf(e->out, "    jmp np_label_%d\n", e->loop_break[e->loop_depth - 1]);
                 break;
-            case ST_CONTINUE:
-                fprintf(e->out, "    jmp np_label_%d\n", e->loop_continue[e->loop_depth - 1]);
+            case ST_CONTINUE: {
+                int depth = e->loop_depth - 1;
+                while (depth >= 0 && e->loop_continue[depth] < 0) depth--;
+                if (depth >= 0) fprintf(e->out, "    jmp np_label_%d\n", e->loop_continue[depth]);
                 break;
+            }
         }
     }
 }
@@ -3113,7 +3773,7 @@ static void emit_function(Emitter *e, Function *fn) {
     for (i = 0; i < fn->param_count; ++i) {
         int k, lanes;
         Local *local = &fn->locals[fn->params[i].local_index];
-        if (type_is_value_aggregate(fn->params[i].type)) {
+        if (type_is_value_aggregate(e->compiler, fn->params[i].type)) {
             size_t bytes = type_size(e->compiler, fn->params[i].type);
             lanes = local->is_indirect ? 1 : (int)((bytes + 7) / 8);
             if (lanes == 0) lanes = 1;

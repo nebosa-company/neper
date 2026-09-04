@@ -65,7 +65,11 @@ array elements and nested literals. Arrays may contain structs or other arrays a
 can be iterated by value. Internal calls pass aggregates of at most two machine
 words in integer lanes, pass larger arguments by immutable hidden reference, and
 return every aggregate through caller-provided storage on both x64 ABIs. Protocol
-iteration is not implemented yet.
+iteration is not implemented yet. Explicit-backing enums, unchecked bare unions,
+tagged `union enum` values, exact tag/payload layout, tag-checked payload access,
+contextual and qualified member names, and non-fallthrough `switch` are implemented.
+Enum and tagged-union switches require exhaustive cases unless they have `default`;
+tagged cases can bind payload copies with `as`.
 
 On Windows with the Visual Studio C++ tools installed:
 
