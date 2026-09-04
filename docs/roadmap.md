@@ -136,10 +136,14 @@ The aggregate-foundation increment adds named struct declarations, deterministic
 natural layout and padding, source-ordered named-field literals including nested
 structs, `zero`/`undef` storage, field places, pointer-recursive layouts, chained
 pointer auto-dereference, `&`/`*`, mutation through `*T`, rejection through
-`*const T`, and the one-way mutable-to-const pointer conversion. Aggregate value ABI
-passing, arrays of aggregates, protocol iteration, `defer`, `switch`, compile-time
-parameters, constant folding, the full intrinsic set, and debug locals remain open;
-this callout does not
+`*const T`, and the one-way mutable-to-const pointer conversion. A subsequent
+aggregate-value increment adds exact struct and array copies through bindings,
+assignments, nested literals, indexed places and by-value iteration; arrays may nest
+or hold structs; aggregates of at most two words use integer argument lanes, larger
+arguments use immutable hidden references, and aggregate returns use caller-owned
+slots on both x64 ABIs. Protocol iteration, `defer`, `switch`, compile-time
+parameters, constant folding, the full intrinsic set, and debug locals remain open.
+This callout does not
 mark the `neper-0` milestone complete.
 
 - Everything in M0

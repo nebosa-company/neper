@@ -58,8 +58,14 @@ Named structs now have deterministic declaration-order layout, exact padding,
 source-ordered named-field literals (including nested structs), `zero`/`undef`
 storage, field places, and chained pointer auto-dereference. Address-of and explicit
 dereference support mutable pointer writes, enforce pointee `const`, and permit the
-one-way `*T` to `*const T` conversion. Aggregate value ABI passing and protocol
-iteration are not implemented yet.
+one-way `*T` to `*const T` conversion.
+
+Aggregate values now copy exactly through bindings, assignments, indexed fields,
+array elements and nested literals. Arrays may contain structs or other arrays and
+can be iterated by value. Internal calls pass aggregates of at most two machine
+words in integer lanes, pass larger arguments by immutable hidden reference, and
+return every aggregate through caller-provided storage on both x64 ABIs. Protocol
+iteration is not implemented yet.
 
 On Windows with the Visual Studio C++ tools installed:
 

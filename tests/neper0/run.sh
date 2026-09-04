@@ -84,11 +84,13 @@ set -e
 test "$recursive_struct_status" -eq 1
 printf '%s' "$recursive_struct_error" | grep -q '3:1: error\[E-TYPE-9999\]'
 
+test "$("$neper" run "$repo/tests/neper0/aggregate-abi.e" --output "$test_build/aggregate-abi")" = 'aggregate abi ok'
+
 set +e
-aggregate_abi_error=$("$neper" build "$repo/tests/neper0/aggregate-abi-error.e" --output "$test_build/aggregate-abi-error" 2>&1)
-aggregate_abi_status=$?
+aggregate_param_error=$("$neper" build "$repo/tests/neper0/aggregate-param-mutation-error.e" --output "$test_build/aggregate-param-mutation-error" 2>&1)
+aggregate_param_status=$?
 set -e
-test "$aggregate_abi_status" -eq 1
-printf '%s' "$aggregate_abi_error" | grep -q '7:12: error\[E-TYPE-9999\]'
+test "$aggregate_param_status" -eq 1
+printf '%s' "$aggregate_param_error" | grep -q '10:5: error\[E-TYPE-9999\]'
 
 printf '%s\n' 'neper-0 Linux tests passed'

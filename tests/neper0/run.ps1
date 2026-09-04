@@ -74,9 +74,12 @@ if ($LASTEXITCODE -ne 1 -or ($recursiveStructError -join "`n") -notmatch '3:1: e
     throw 'recursive struct rejection failed'
 }
 
-$aggregateAbiError = & $neper build (Join-Path $PSScriptRoot 'aggregate-abi-error.e') --output (Join-Path $testBuild 'aggregate-abi-error.exe') 2>&1
-if ($LASTEXITCODE -ne 1 -or ($aggregateAbiError -join "`n") -notmatch '7:12: error\[E-TYPE-9999\]') {
-    throw 'aggregate ABI gating failed'
+$aggregateAbi = & $neper run (Join-Path $PSScriptRoot 'aggregate-abi.e') --output (Join-Path $testBuild 'aggregate-abi.exe')
+if ($LASTEXITCODE -ne 0 -or $aggregateAbi -ne 'aggregate abi ok') { throw 'aggregate ABI behavior failed' }
+
+$aggregateParamError = & $neper build (Join-Path $PSScriptRoot 'aggregate-param-mutation-error.e') --output (Join-Path $testBuild 'aggregate-param-mutation-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($aggregateParamError -join "`n") -notmatch '10:5: error\[E-TYPE-9999\]') {
+    throw 'immutable aggregate parameter rejection failed'
 }
 
 'neper-0 Windows tests passed'
