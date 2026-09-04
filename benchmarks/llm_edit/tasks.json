@@ -1,0 +1,33 @@
+[
+  {
+    "id": "find-threshold",
+    "kind": "search",
+    "prompt": "Which named constant controls whether a temperature is considered above the warning threshold? Reply with only the constant name.",
+    "expected": "WARN_ABOVE"
+  },
+  {
+    "id": "find-comparator",
+    "kind": "search",
+    "prompt": "Which function orders sensors by temperature? Reply with only the function name.",
+    "expected": "sensor_cmp"
+  },
+  {
+    "id": "raise-threshold",
+    "kind": "update",
+    "prompt": "Change the warning threshold from 40.0 to 42.5. Change only the constant's value; do not reformat or otherwise edit the file.",
+    "checks": [
+      {"pattern": "(?m)^const WARN_ABOVE(?P<syntax>\\s*:\\s*f32\\s*=|\\s*:\\s*f32\\s*=)\\s*42\\.5;?\\s*$", "count": 1}
+    ],
+    "max_changed_lines": 2
+  },
+  {
+    "id": "rename-comparator",
+    "kind": "update",
+    "prompt": "Rename the sensor_cmp function to compare_sensor_temperature and update every call site in this file. Do not make unrelated edits.",
+    "checks": [
+      {"pattern": "\\bcompare_sensor_temperature\\b", "min_count": 3},
+      {"pattern": "(?m)^(?!\\s*//).*\\bsensor_cmp\\b", "count": 0}
+    ],
+    "max_changed_lines": 10
+  }
+]

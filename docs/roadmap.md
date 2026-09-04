@@ -1,0 +1,494 @@
+# neper — roadmap
+
+Sequenced so that each implementation milestone produces something runnable, the
+bootstrap compiler is discarded as early as possible, and no implementation starts
+against a moving language or harness contract.
+
+**The labels name deliverables, not a simple numeric order.** The order is: S0, M0,
+`neper-0`, the M2 rewrite of the compiler in `neper-0`, M1 implemented inside that
+self-hosted compiler, the rest of M2 (`.em`, the pool and the own linker), M3 and M4.
+M5 follows M4. Pacman P0/P1 may proceed after M2; P2/P3 and M6 completion follow M4
+independently of M5. The later library waves remain deliberately unnumbered. M1 and
+M2 overlap by design; every other dependency is stated at its milestone.
+
+The normative documents divide authority rather than duplicate it: [`spec.md`](spec.md)
+defines language semantics, [`grammar.ebnf`](grammar.ebnf) defines concrete syntax
+and the closed token/syntax-node registries, [`tooling.md`](tooling.md) and
+[`schemas/neper-v1.schema.json`](schemas/neper-v1.schema.json) define machine
+interfaces, [`diagnostics.md`](diagnostics.md) owns stable diagnostic codes,
+[`modules.json`](modules.json) owns the module/package plan, and
+[`module-apis.md`](module-apis.md) fixes proposed toolchain APIs. The prose grouping
+in [`modules.md`](modules.md) explains that machine plan. A change that crosses these
+boundaries updates every affected document and fixture in the same change.
+
+## S0 — Specification, API and harness freeze
+
+This is documentation and test-data work only. It precedes compiler implementation
+and turns the current design into an executable contract for humans, harnesses and
+models.
+
+- Resolve every contradiction among the language specification, grammar, tooling
+  protocol, diagnostic registry, module plan, API catalogue, package-manager design
+  and general-purpose verification plan. Record intentional tradeoffs in
+  [`DECISIONS.md`](../DECISIONS.md); do not leave behavior to an implementation
+  choice.
+- Validate `grammar.ebnf` mechanically and give every grammar production an accepted
+  fixture and every stated restriction a rejected fixture with a registered primary
+  diagnostic. Establish the normative `tests/conformance/{accept,reject,format,
+  tokens,parse,tools}/` layout and version every expected result.
+- Validate every tooling record and document against
+  `schemas/neper-v1.schema.json`. Add sequence, key-order, sorting, lossless-source,
+  recovery and cross-record tests for constraints JSON Schema cannot express.
+- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 60
+  toolchain modules. Check that `modules.json`, `modules.md` and `module-apis.md`
+  contain the same names; that layers, direct dependencies, blockers, surfaces,
+  schedules and milestones are valid; and that the graph is acyclic. Keep the 30
+  `x.<owner>.*` entries classified as package reservations, never implicit modules.
+- Design GP-01 through GP-14 before implementation: contracts, expected module
+  graphs, failure injection, portability targets, resource budgets, deterministic
+  artifacts and comparison implementations. A workload may expose a specification
+  gap; it may not silently define new language behavior.
+- Freeze the generated-code benchmark corpus and prompts. Record model, model
+  version, tokenizer, compiler/formatter/schema versions, first-pass parse/type-check/
+  test rates, repair turns, model tokens, tokens per non-comment line and syntax
+  node, unrelated formatted diff, hallucinated features/APIs, name/import collisions
+  and cleanup/lifetime/race defects. Include equivalent C, C++, Rust, Go, Python,
+  Java and C# tasks; never infer token efficiency from spelling length.
+- Make documentation checks runnable as a single read-only validation command whose
+  output is deterministic and suitable for CI and agent harnesses.
+
+**Done when:** all normative documents and schemas validate; every registry and
+cross-document reference is closed and consistent; every proposed module API is
+mechanically extractable; the complete conformance and benchmark fixture manifests
+exist; the GP workloads have reviewable designs; and no unresolved item can change
+the grammar, semantics, diagnostic identity, machine protocol or public API beneath
+M0. Later specification changes remain possible, but require an explicit version or
+compatibility decision and updated fixtures.
+
+## M0 — Bootstrap compiler, walking skeleton
+
+Throwaway C99. Enough language to print "hello, neper".
+
+**Implemented (2026-09-04).** `bootstrap/neper.c` and `scripts/build-bootstrap.*`
+produce the native bootstrap on Windows and Linux. `tests/m0/run.*` exercise the
+cross-directory program root, both x64 argument paths, UTF-8 startup arguments,
+control flow, calls across register and stack arguments, slices, named-error
+propagation, deterministic rejection diagnostics, traps, and retained debug and
+compact-symbol metadata. `neper-0` and the self-hosted compiler have not started.
+
+- Lexer and parser generated or checked against grammar revision 1, including exact
+  original-byte/scalar/UTF-16 position tracking, normalized line handling, the closed
+  token registry and recovery barriers. The bootstrap need not expose `tokens` or
+  `parse`, but it must not create a second concrete language
+- Order-independent module resolution and type checking, with registered diagnostic
+  codes and deterministic source ordering from the first rejected fixture
+- NIR (typed SSA-lite IR), linear-scan register allocator
+- x64 emitter, System V + Windows x64 ABIs
+- Emit object files, link with the system linker
+- Line tables, symbol tables and unwind info — enough for `lldb` breakpoints,
+  stepping and stack traces with no locals, and enough for profilers to symbolise.
+  Locals and types follow in `neper-0`/M1 (spec §13, D9)
+- Subset: `fn`, `let`/`var`, integers, `if`/`while`, calls, structs by value, `use`,
+  `err`/`try`/`ok`, pointer types and `[]T` slices over any element with `.len` and
+  indexing (string literals as `[]const u8`; `main`'s `*mem.Arena` and `[]str`), and
+  an `e.mem` stub declaring `Arena` and `arena_from` — exactly what `hello.e`
+  needs and no more
+- `io.print` and the startup code over a fixed bootstrap intrinsic set — `os.write`,
+  `os.stdout`, `os.stderr`, `os.exit`, `os.reserve`, `os.commit`, `os.args`; the
+  general `extern` form and
+  `e.os` land in M1
+- The `main` entry signature (spec §13, D34): startup code that reserves the root
+  arena, builds `args`, calls `main`, and maps its `err` to the exit code and the
+  `error: <name>` line; the trap protocol's stderr record and exit code `134`
+  (spec §11) — the backtrace reads the `.nepersym` line-and-symbol section
+  (`.nepsym` on COFF/PE) the
+  compiler emits into every object file (spec §13), which the system linker carries
+  into the executable unchanged
+- Program roots (spec §2, D41): `neper run <file.e>` names a file declaring `fn
+  main`; a file outside every source root is module `<filename>`, so
+  `examples/hello.e` is module `hello` with no package around it, and `e.*` is
+  found in the toolchain's own `lib/` beside the binary
+
+**Done when:** `neper run examples/hello.e` works on Windows and Linux, from any
+working directory; and the bootstrap passes the applicable S0 lexical, syntactic,
+module, type and trap fixtures with the expected primary codes and source spans.
+
+## neper-0 — the bootstrap subset
+
+The throwaway C99 compiler (D4) implements exactly this subset and nothing beyond
+it, and the self-hosted compiler is written in it. `neper-0` is the language a
+compiler needs — `list.e` is `neper-0` code — and no more.
+
+- Everything in M0
+- Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
+  `for`
+- `err`/`try`/`ok`, arenas (`e.mem`), `let`/`var` with `= zero`/`= undef`
+- `[T: type]` and `[N: usize]` comptime parameters with monomorphisation. The
+  interpreter does **integer constant folding only**: `const N: usize = 4096` and
+  `[N*2]u8` evaluate (an array length is `usize`, spec §3); a function call in a
+  `const` does not
+- The debug-mode checks of spec §11 and the trap protocol
+- Line tables, symbols, unwind info, and the fixed DWARF/CodeView
+  locals-and-types subset (spec §13) — hundreds of lines, and it means the
+  self-hosted compiler can be debugged with locals while the bootstrap still builds
+  it
+- A **fixed intrinsic set** standing in for `extern` and `e.os`: `os.open`,
+  `os.read`, `os.write`, `os.close`, `os.stdout`, `os.stderr`, `os.readdir`,
+  `os.spawn`, `os.wait`, `os.exit`, `os.args`, `os.reserve`, `os.commit`,
+  `os.clock` — what a
+  single-threaded compiler needs to read sources, write `.em` files and objects,
+  spawn `--linker=system` and time itself
+
+Not in `neper-0`, and therefore not written in C: argument packs and
+`printf`/`format` (the self-hosted compiler formats its diagnostics with
+`str.push_*`), the general compile-time interpreter, threads and atomics, function
+  pointers and the `K: fn` comptime kind, `@test` and `neper test`, `neper fmt`,
+  `neper tokens`, `neper parse`, `neper index` and `neper info`, general `extern`
+and `e.os`, `Vec[T, N]`/`simd`, `when`/`target`, `@gpu`, protocols and `e.meta`
+(the bootstrap's own containers are written per element type, by hand). Each is implemented
+once, in the self-hosted compiler, after it compiles itself.
+
+**Size, recorded against D4.** `neper-0` in C99 is roughly 15k lines: lexer 1k,
+parser 2.5k, resolve and typecheck 3.5k, NIR and monomorphisation 2.5k, linear-scan
+allocator 1.5k, x64 emitter 2.5k, ELF/COFF object writer with the debug subset
+1.5k. The full M1 language in C would be some 35k — the interpreter, packs, threads,
+the test runner, `fmt`, `index`, the `extern` ABI, `simd` and `e.os` on top —
+and every line of it thrown away. The subset halves what is written twice.
+
+**Done when:** the language can express a compiler — containers over arenas,
+interning, hash maps — with no heap, and the bootstrap compiles the self-hosted
+compiler's source; the bootstrap and self-hosted front ends accept and reject the
+same `neper-0` corpus and emit the same versioned diagnostics and recovery spans.
+M2 gates on this.
+
+## M1 — The full CPU language
+
+Everything in the spec that is not GPU-specific. The bootstrap stops at `neper-0`
+(above); every item below that `neper-0` lacks is implemented in the self-hosted
+compiler, so M1 completes after M2's rewrite compiles itself, not before.
+
+- Slices, arrays, unions (untagged and `union enum`), enums, `defer`, `switch`
+  (exhaustive over enums and tagged unions), `for` — no tuples: `(A, B)` is a return
+  convention only (spec §5, D17)
+- `err` + `try`, arenas, compile-time parameters in `[...]` and monomorphisation
+- Compile-time interpreter for `const` and `[...]` arguments
+- The full debug-mode check table of spec §11 — bounds, null, tag, overflow,
+  narrow, shift, enum, align — the trap protocol, `unreachable()`, and the arena
+  fills
+- `Vec[T, N]`, `Mask[T, N]` and the `simd` module (spec §4, D40): the closed width
+  table, register-class passing, and lowering at every `--cpu` level including the
+  split below the vector's width
+- Debug info on the default path (spec §13, D9, D64): the fixed DWARF (ELF/Mach-O)
+  and CodeView (PE) locals-and-types subset with `DW_OP_fbreg` locations, so
+  `lldb`, `gdb`, WinDbg, `lldb-dap` and `codelldb` show locals from here — VS Code
+  and Zed debugging with zero adapters of our own. Debug builds do not inline;
+  `--g` adds the subset and `inlined_subroutine` records to a release build
+- The finite-command JSONL contract for `build`, `check`, `run`, `test`, `fmt`,
+  `tokens`, `parse`, `index`, `dis` and `info`: one version header, advertised
+  `language_profiles`, closed record discriminators, diagnostics in-stream, one final
+  result and no human text on stdout. Validate every record with the v1 schema and
+  every non-schema ordering rule with the S0 tooling corpus (D65)
+- Lossless `tokens`/`parse` output over grammar revision 1's closed 94-token and
+  54-syntax-node registries in `grammar.ebnf`: trivia, BOM, physical newline
+  spelling, invalid-byte capture,
+  `ErrorNode` recovery and reconstruction of every original byte. Spans retain
+  original byte offsets plus normalized one-based scalar and UTF-16 columns
+- Complete deterministic `index` output for every specified symbol and reference,
+  including unresolved references and compiler-origin protocol, iterator and
+  formatting calls. Stable diagnostic codes come only from `diagnostics.md`; fixes
+  carry non-overlapping original-byte edits and expected-source hashes
+- `neper fmt` implements the complete canonical-layout contract: LF/UTF-8 output,
+  four-space indentation, deterministic 100-scalar wrapping, preserved comments and
+  literal spelling, sorted eligible `use` declarations, exact failure behavior,
+  idempotence and golden output
+- `@test` discovery uses one child process and fresh arena per test, parallel
+  scheduling with deterministic report order, capture, the 60-second timeout and
+  structured outcomes. `run --json` captures arbitrary child bytes without corrupting
+  JSONL; every duration is the sole normalized volatile field in golden comparisons
+- Every build writes the canonical v1 build manifest with language/grammar versions,
+  normalized source identities, SHA-256 inputs/dependencies/libraries/artifacts and
+  effective options. Generated-source maps use exact tooling spans and hashes; stale
+  or malformed maps fail with `E-TOOL-0001` and never change compilation semantics
+- `extern` declarations with `@import`/`@cc` (spec §5, D32): the C ABI for every
+  crossing type on System V and win64, C variadics, `*void` and `mem.cast`,
+  `@cc` callbacks; `e.os` per target — files, directories, processes, memory
+  reservation, clock, threads, wait/wake, sockets, polling and dynamic loading —
+  over raw syscalls on Linux and
+  `kernel32` on Windows. **M1 depends on this landing first:** every other
+  `lib/e` module that touches the OS is written over `e.os`
+- Builtin `Atomic[T]` and orderings; `e.thread` over OS threads
+- Protocols and `e.meta` (spec §9, D52, D53): `T.f(...)` resolution at
+  instantiation, `for` over a `next`, the comptime-unrolled `for`, and
+  `fields`/`members`/`type_name`/`get`/`set`. **`e.data.map`, `e.data.sort` and every
+  `fmt.*` module depend on these**
+- M1 library set, using canonical qualified names from `docs/modules.json`:
+  `e.mem`, `e.meta`, `e.math`, `e.simd`, `e.atomic`, `e.bytes`, `e.str`, `e.path`,
+  `e.data.list`, `e.data.map`, `e.data.sort`, `e.data.iter`, `e.os`, `e.io`,
+  `e.thread`, `e.time`, `e.test`. Implement exactly the M1 declarations frozen in
+  `module-apis.md`; a module is not delivered while a declared surface is missing
+
+**Done when:** every item above is implemented in the self-hosted compiler, and
+`lib/e` builds and its tests pass under `neper test`; all applicable conformance
+fixtures validate byte-for-byte after the specified duration normalization; tooling
+streams reconstruct source exactly and validate against the schema; formatter
+idempotence holds; every M1 API fence matches extracted source declarations; and the
+S0 generated-code benchmark has been rerun with no unexplained regression.
+
+## M2 — Self-hosting and `.em` modules
+
+- Rewrite the compiler in `neper-0`, compiled by the bootstrap; single-threaded at
+  first, gaining the pool and the rest of M1 once it compiles itself
+- Bootstrap compiler frozen, then deleted
+- Work-stealing thread pool, per-thread arenas, sharded intern table
+- Parallel parse phase, then function-granular parallel codegen
+- Determinism harness: byte-identical output across `-j 1` and `-j N`, **and
+  byte-identical output from an incremental rebuild and a clean build** of the same
+  sources, over an edit script that touches bodies of inlined, generic and
+  comptime-executed functions (spec §12, D36); the device-reached case is added to
+  the same harness at M3, when `@gpu` exists
+- `.em` format: per-declaration signature and body hashes, fine-grained `Deps`
+  edges, NIR with body hashes, machine code, standard-format debug sections
+- Incremental and parallel module compilation on the edge rule of spec §12
+- Cross-module inlining via NIR, capped at 40 NIR instructions per callee, each
+  inlined body recorded as a body-hash edge
+- Monomorphised instances and device-compiled helpers emitted into the
+  instantiating module's `.em` with module-local linkage; the own linker folds
+  copies by content hash
+- M2 library set from the machine plan: `e.data.deque`, `e.data.ring`,
+  `e.data.heap`, `e.data.tree`, `algo.rand`, `algo.uuid`, `algo.hash`, `e.fs`,
+  `e.proc`, `e.sync`, `e.channel`, `e.debug`, `e.metrics`, `e.log`, `e.cli`,
+  `fmt.json`, `fmt.csv` and `fmt.ini`, with the exact frozen APIs and only their
+  declared direct dependencies
+- Module-plan validation in CI: source imports are a subset of each module's
+  `direct_dependencies`; no layer violation, cycle, undeclared public symbol or
+  package reservation enters the toolchain graph; implemented surfaces advance to
+  `surface:"source"` only in the same plan revision that verifies their extracted
+  public declarations
+- Own linker, easy case first: freestanding ELF executables, and PE executables
+  with a fixed `kernel32` import table (spec §13, D13), so `hello.e`, the compiler
+  and `lib/e` link on Windows too with no object files and no process spawn.
+  No PDB yet: Windows symbolication by external tools stays on `--linker=system`
+  until M4
+
+**Done when:** `neper` compiles itself; GP-01 passes its applicable correctness,
+failure-injection and deterministic-build cases; a one-function edit rebuilds in
+milliseconds on Linux and Windows; clean, incremental, relocated, `-j 1`, every
+supported worker count and perturbed-schedule builds produce byte-identical
+deterministic artifacts; every M2 API matches source; and the language- and
+tool-complete release gates below pass.
+
+## M3 — GPU
+
+- `@gpu(X, Y, Z)` profile enforcement with call-chain diagnostics; device types,
+  device slices and address spaces (`[]shared T`); `shared var` (spec §10, D37)
+- SPIR-V emitter on the Vulkan 1.2 floor — `PhysicalStorageBuffer64`, scalar block
+  layout, `NoContraction` on every result, correctly rounded division and square
+  root sequences; Vulkan compute runtime written over `extern` (spec §5, D32).
+  Its `libvulkan` import needs the M4 dynamic-import linking stage, so a program
+  that opens a `.Vulkan` (or, once the PTX emitter exists, a `.Cuda`) device links
+  under `--linker=system` until that stage lands (spec §13)
+- CPU backend (spec §10, D38): a launch runs workgroup by workgroup on the calling
+  thread; a workgroup runs on one host thread by barrier loop-fission, with
+  per-invocation slots for locals that cross a barrier, the `barrier` divergence
+  trap and the `0xCD` fill of `shared` — same semantics, steppable
+- `e.gpu`: `Device`, `Queue`, `Buf[T]`, synchronous staging `upload`/`write`,
+  asynchronous `launch[K]` with the compile-time pack check, in-order `release`,
+  syncing `download`, `gpu.sync`, `grid1/2/3` as invocation counts,
+  `gpu.barrier`, `gpu.memory_barrier`, `gpu.atomic_*` with scopes, the subgroup
+  set, capability inference into the `.em` and the launch check
+  — the implementation and documentation must match the exact `e.gpu` API fence in
+  `module-apis.md`
+- Device-callable inference: plain functions reached from a kernel compile for the
+  device into the kernel-owning module's `.em` (spec §12, D24), with call-chain
+  diagnostics on violations
+- Floating point (spec §11, D39): no contraction anywhere, `math.fma` the only
+  FMA, denormals preserved, `@gpu(..., ftz)` as the opt-in
+- The M2 determinism harness gains the device-reached edit case (spec §12, D36)
+
+**Done when:** GP-09 and GP-10 pass on every backend available at M3, and every
+kernel in the test suite that uses no approximate builtin —
+the `e.math` transcendentals `sin cos tan asin acos atan atan2 exp exp2 log log2
+log10 pow`, `math.rsqrt`, and the float `gpu.subgroup_add/min/max` reductions (spec
+§11) — produces **bit-identical** output on the CPU backend and on a Vulkan device (linked with `--linker=system`,
+above),
+the `saxpy` kernel of `examples/saxpy.e` among them (the example is a program root
+run as `neper run examples/saxpy.e`, spec §2; it runs on `.Cpu`, then on `.Vulkan`
+when one is present, and prints both checksums); and every
+kernel that uses one agrees within its stated ULP bound.
+The performance-language gate is rerun whenever M4 or M5 adds an applicable CPU or
+GPU backend; published comparisons use identical algorithms and report distributions,
+compile time, runtime and memory rather than isolated best cases.
+
+## M4 — Breadth and depth
+
+- aarch64 emitter (macOS, Linux, Windows on ARM)
+- x86-32 emitter
+- PTX emitter
+- Own linker, hard case: dynamic imports by name from any `.dll`/`.so`/`.dylib`,
+  plus ad-hoc code signing on Apple Silicon, plus the PDB writer — MSF container,
+  DBI, module, symbol and line streams, no type stream (spec §13, D13).
+  `--linker=system` remains for static archives
+- neper-format debug side table in `.em` — types, locals, scopes, variable
+  locations over the serialised type table — beside the standard subset, never
+  instead of it (spec §13, D9)
+- Debug engine: process control, breakpoints, single-step, stack walking, location
+  rendering
+- `neper dap` over that engine, plus VS Code and Zed extensions — the optimisation
+  over the M1 `lldb-dap`/`codelldb` path. DAP keeps its framed JSON transport and
+  rejects `--json` and `--absolute-paths`; it is the intentional exception to the
+  finite-command JSONL envelope
+- Optimiser depth: better inlining heuristics, load/store forwarding, scheduling;
+  cross-`.em` inlining stays under the M2 cap
+
+M4 expands the platform matrix for all applicable conformance, ABI, determinism,
+debugging and GP workloads. It does not by itself claim general-purpose completion:
+networking, advanced pure domains, interchange formats and multi-package verification
+remain in the later library waves and M6.
+
+**Done when:** every promised M4 target passes the applicable language/tooling corpus
+and bidirectional C ABI fixtures; clean and incremental outputs remain deterministic;
+the native debug path agrees with standard debugger locations on shared fixtures; and
+GP-09/GP-10 have been rerun for every new applicable backend.
+
+## Later toolchain-library waves — unnumbered
+
+The 24 entries with `schedule:"later"` and `milestone:null` in `modules.json` are
+real proposed toolchain modules, but this roadmap does not disguise them as part of
+M4, M5 or M6. They may begin when their declared dependencies exist. Before each
+wave starts, its `surface:"planned"` API is frozen; delivery requires tests, extracted
+source/API equality and a same-change transition to `surface:"source"`.
+Their position here does not order them before M5 or M6; independent waves may run
+in parallel once their prerequisites and specifications are ready.
+
+- **Pure algorithms, text and cryptography:** `algo.stat`, `algo.bignum`,
+  `algo.linalg.matrix`, `algo.linalg.tensor`, `text.utf8`, `text.unicode`,
+  `text.normalize`, `text.collate`, `text.regex`, `crypto.hash`, `crypto.aead`,
+  `crypto.sign`, `crypto.kx` and `crypto.random`. Preserve caller-owned allocation,
+  caller-supplied entropy and the declared dependency edges. Cryptographic delivery
+  requires published standard vectors, malformed-input cases and verification of
+  every API that explicitly promises constant-time behavior.
+- **Host services and networking:** `e.async`, `e.net`, `e.net.http` and `e.net.ws`.
+  These build over the M1/M2 platform boundary and must demonstrate cancellation,
+  backpressure, bounded buffers, partial I/O, deterministic shutdown and no hidden
+  allocation or entropy. They unlock the GP-04 service workload.
+- **Interchange formats:** `fmt.yaml`, `fmt.xml`, `fmt.bson`, `fmt.msgpack` and
+  `fmt.protobuf`. These consume caller-provided slices/readers and writers, never
+  open resources themselves, and require malformed, streaming, bounds and round-trip
+  corpora in addition to API equality.
+- **GPU composition:** `e.gpu.tensor` follows both M3 `e.gpu` and
+  `algo.linalg.tensor`; every operation remains an explicit queue submission and is
+  added to the applicable GP-10 matrix.
+
+The 30 owner-qualified `x.*` reservations are versioned external packages, not a
+fifth wave. Each gets a separate package specification only after its upstream API
+version, supported targets, ownership rules and licensing boundary are selected.
+
+## M5 — Native Metal
+
+- Metal backend: MSL or AIR emitter plus a Metal runtime, replacing MoltenVK as the
+  first-tier Apple GPU path
+- Metal-only capabilities exposed where they map onto the GPU profile
+
+Sequenced after M4 because a GPU backend costs an emitter *and* a runtime, and Apple
+is one vendor. Until then Apple GPUs are reached through MoltenVK, supported but
+second-tier (spec §10).
+
+**Done when:** the Metal backend passes the same capability, ABI, source-map,
+determinism and GP-10 correctness/ULP fixtures as the other applicable GPU backends,
+and its published performance results satisfy the performance-language gate.
+
+## M6 — pacman package manager
+
+Pacman starts after M2 stabilizes self-hosting and `.em`; its remote and task stages
+land after M4 stabilizes the platform and dynamic-linking path. It does not wait for
+M5's independent Metal backend. It is bundled as the portable `neper pacman` command group;
+the package manager remains outside compilation, and the compiler never accesses the
+network. The normative design is [`pacman.md`](pacman.md).
+
+- **P0, formats and resolution:** strict `project.yaml` subset, canonical
+  `project.lock`, SemVer 2.0 constraints, deterministic PubGrub resolution and
+  explanations, module-export collision checks, language-version checks, and golden
+  fixtures
+- **P1, local and offline:** path dependencies, global immutable content-addressed
+  cache, atomic concurrent population, `sync --frozen --offline`, a read-only virtual
+  package-module map, reproducible dependency source identities, and compiler build-
+  manifest/cache integration. Every vendored root has the canonical
+  `neper-package.json` shape from the v1 schema; package source identities use the
+  same root/path rules as compiler tooling
+- **P2, remote sources:** signed central/private registry protocol, immutable release
+  archives, Git dependencies pinned to commit and tree hash through an external Git
+  adapter, credential-store integration, publish/yank, cache verification and explicit
+  garbage collection
+- **P3, generated inputs:** root-only explicit tasks instead of dependency lifecycle
+  hooks, argument-array execution, scratch directories, capability approval, locked
+  tools, content-addressed outputs and v1 generated-source maps with exact hashes and
+  spans. Install and `sync` never execute package code
+- Portable CLI: `init`, `add`, `remove`, `resolve`, `sync`, `upgrade`, `build`, `run`,
+  `task`, `vendor`, `publish`, `cache`, and `info`, all with the toolchain's versioned
+  JSON output conventions, shared diagnostic registry, deterministic record ordering
+  and schema validation
+- The public namespace policy reserves `e.*`, `algo.*`, `text.*`, `crypto.*`, and
+  `fmt.*` to the toolchain;
+  registry packages normally export `x.<owner>.*`
+
+**Done when:** GP-12 passes; the same manifest and signed registry snapshot resolve to
+a byte-identical lockfile on Windows, Linux, macOS, and in a container; a clean cache
+can be populated from the lock and then build byte-identically under
+`sync --frozen --offline`; mutable Git refs cannot alter a locked sync; concurrent
+syncs expose no partial entry; and neither transitive packages nor denied tasks can
+execute code.
+
+## Cross-milestone verification and release claims
+
+[`general-purpose-verification.md`](general-purpose-verification.md) is the
+authority for the workloads, metrics and decision rule. The roadmap supplies
+sequencing only. A workload starts as soon as its prerequisites exist and is rerun
+when a relevant backend, ABI, module, package or protocol changes.
+
+| Workloads | Primary enabling delivery |
+|---|---|
+| GP-01 self-hosted compiler | `neper-0` and M2 |
+| GP-02 CLI, GP-03 parallel executor, GP-06 streaming parser, GP-07 bounded cache, GP-13 binary format | M1 tooling plus the M2 library set |
+| GP-04 HTTP service | later `e.async`, `e.net` and `e.net.http` |
+| GP-05 database client, GP-08 plugin C ABI | M1 FFI, M4 dynamic linking and a selected external package/API |
+| GP-09 SIMD codec | M1 SIMD; rerun for each M4 CPU backend |
+| GP-10 CPU/GPU numerical work | M3; rerun for M4 PTX, M5 Metal and later `e.gpu.tensor` |
+| GP-11 terminal application | platform support plus a separately specified `x.neper.tui` package |
+| GP-12 multi-package application | M6 |
+| GP-14 image/audio pipeline | M2 concurrency, M4 target/FFI coverage and a separately specified media package |
+
+The four named release gates are cumulative:
+
+1. **Language-complete:** `spec.md` and `grammar.ebnf` have no unresolved
+   contradiction; every syntax/semantic rule has planned conformance coverage;
+   non-goals have constructions or excluded workloads; no GP design requires an
+   unapproved language feature. S0 must satisfy this gate before M0.
+2. **Tool-complete:** formatter, lossless tokens/parse, complete index, stable
+   diagnostics/fixes, tests, build manifests and source maps obey their versioned
+   contracts; all locations have exact original-byte spans; clean, incremental,
+   parallel and relocated builds are deterministic. M2 cannot complete without it.
+3. **General-purpose:** GP-01 through GP-08 and GP-12 pass on Windows and Linux;
+   long-running profiles have bounded resources; FFI and failure-injection suites
+   pass every promised host ABI; and the LLM thresholds pass on at least two
+   independently trained model families. This gate necessarily waits for M6 and the
+   required later networking/package work; no earlier milestone implies it.
+4. **Performance-language:** GP-09 and GP-10 are correct on every applicable backend,
+   and comparable C, C++, Rust and Go results publish distributions for compile time,
+   runtime and memory using the same algorithms. M3 establishes the first result;
+   M4, M5 and later GPU work reopen it.
+
+The initial LLM thresholds are release criteria, not aspirations: at least 95% of
+local edits parse first pass, at least 90% type-check first pass, median unrelated
+formatted diff is zero, at least 95% of compiler-error repairs finish in one
+additional turn, no task requires parsing human diagnostics, and no accepted task
+uses undocumented behavior or intrinsics. Thresholds may tighten after a versioned
+baseline, but may not be silently relaxed. A syntax/API change is justified by total
+model effort, repair behavior and review risk across the supported model/tokenizer
+matrix—not by character count or a single tokenizer.
+
+## Deliberately not scheduled
+
+Auto-vectorisation, an LSP beyond the public `neper parse`/`neper index` data, and any
+form of runtime reflection.
+Each is a real cost against the two headline goals. Package management is scheduled
+as M6 under the deliberately constrained pacman design above.

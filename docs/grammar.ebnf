@@ -1,0 +1,284 @@
+# neper concrete grammar — revision 1
+
+# Status: normative companion to docs/spec.md. This file specifies concrete syntax;
+# spec.md specifies typing, legality, evaluation and runtime semantics.
+#
+# Notation: `x` is a terminal; x? is optional; x* repeats zero or more times; x+
+# repeats one or more times; (a | b) chooses one. UPPER_CASE names lexer tokens.
+# `soft` NEWLINE tokens are retained by the lexer and ignored by the parser only in
+# the delimiter contexts listed under line structure below.
+
+file            = separator* top_decl (separator+ top_decl)* separator* EOF ;
+separator       = NEWLINE ;
+
+top_decl        = use_decl
+                | attribute* type_decl
+                | attribute* const_decl
+                | attribute* var_decl
+                | attribute* error_decl
+                | attribute* fn_decl
+                | attribute* extern_decl ;
+
+use_decl        = `use` module_path (`as` value_name)? ;
+module_path     = module_name (`.` module_name)* ;
+
+attribute       = `@` value_name (`(` argument_list? `)`)? NEWLINE ;
+type_decl       = `type` type_name comptime_params? `=` type_rhs ;
+const_decl      = `const` const_name (`:` type_expr)? `=` expression ;
+var_decl        = `var` value_name (`:` type_expr)? (`=` initializer)? ;
+error_decl      = `error` type_name ;
+fn_decl         = `fn` value_name comptime_params? signature block ;
+extern_decl     = `extern` `fn` value_name comptime_params? signature ;
+
+signature       = `(` parameter_list? `)` (`->` return_spec)? ;
+parameter_list  = parameter (`,` parameter)* `,`? ;
+parameter       = value_name `:` type_expr
+                | value_name `:` `...`
+                | `...` ;
+return_spec     = type_expr | `(` type_list `)` ;
+type_list       = type_expr (`,` type_expr)+ `,`? ;
+comptime_params = `[` comptime_param (`,` comptime_param)* `,`? `]` ;
+comptime_param  = comptime_name `:` comptime_kind ;
+comptime_kind   = `type` | `fn` | type_expr ;
+
+type_rhs        = struct_type | union_type | enum_type | union_enum_type | type_expr ;
+struct_type     = `struct` type_body ;
+union_type      = `union` type_body ;
+enum_type       = `enum` type_expr? enum_body ;
+union_enum_type = `union` `enum` type_expr? union_enum_body ;
+type_body       = `{` soft* (field_decl (field_sep field_decl)* field_sep?)? soft* `}` ;
+enum_body       = `{` soft* enum_member (field_sep enum_member)* field_sep? soft* `}` ;
+union_enum_body = `{` soft* union_member (field_sep union_member)* field_sep? soft* `}` ;
+field_sep       = `,` soft* ;
+field_decl      = value_name `:` type_expr ;
+enum_member     = type_name (`=` expression)? ;
+union_member    = type_name (`:` type_expr)? ;
+
+type_expr       = pointer_type
+                | slice_type
+                | array_type
+                | function_type
+                | comptime_type
+                | named_type ;
+comptime_type   = `type` ;
+pointer_type    = `*` `const`? `shared`? type_expr ;
+slice_type      = `[` `]` `const`? `shared`? type_expr ;
+array_type      = `[` (expression | `_`) `]` type_expr ;
+function_type   = `extern`? `fn` `(` function_type_parameters? `)`
+                  (`->` return_spec)? ;
+function_type_parameters = function_type_parameter
+                  (`,` function_type_parameter)* `,`? ;
+function_type_parameter = (value_name `:`)? type_expr | `...` ;
+named_type      = qualified_name comptime_args? ;
+
+block           = `{` separator* statement_list? separator* `}` ;
+statement_list  = statement (separator+ statement)* ;
+statement       = binding_stmt
+                | assignment_stmt
+                | call_stmt
+                | try_stmt
+                | if_stmt
+                | while_stmt
+                | for_stmt
+                | switch_stmt
+                | when_stmt
+                | defer_stmt
+                | nocheck_stmt
+                | shared_var_stmt
+                | `break`
+                | `continue`
+                | return_stmt ;
+
+binding_stmt    = (`let` | `var`) binding (`:` type_expr)? `=` initializer ;
+binding         = value_name | `_` | `(` binding_item (`,` binding_item)+ `,`? `)` ;
+binding_item    = value_name | `_` ;
+initializer     = `zero` | `undef` | try_call | expression ;
+assignment_stmt = assignment_target assignment_op (`zero` | try_call | expression) ;
+assignment_target = place | `(` place (`,` place)+ `,`? `)` ;
+assignment_op   = `=` | `+=` | `-=` | `*=` | `/=` | `%=`
+                | `+%=` | `-%=` | `*%=` | `<<=` | `>>=` | `&=` | `^=` | `|=` ;
+call_stmt       = call_expr ;
+try_stmt        = `try` call_expr ;
+try_call        = `try` call_expr ;
+return_stmt     = `ret` return_values? ;
+return_values   = expression | `(` argument_list `)` ;
+defer_stmt      = `defer` (simple_statement | block) ;
+simple_statement= binding_stmt | assignment_stmt | call_stmt ;
+nocheck_stmt    = `@` `nocheck` block ;
+shared_var_stmt = `shared` `var` value_name `:` type_expr (`=` initializer)? ;
+
+if_stmt         = `if` expression block (`else` (`if` expression block | block))? ;
+while_stmt      = `while` expression block ;
+for_stmt        = `for` binding_item (`,` binding_item)? `in` for_subject block ;
+for_subject     = expression (`..` expression)? ;
+when_stmt       = `when` expression block (`else` block)? ;
+switch_stmt     = `switch` expression `{` separator* switch_arm+ `}` ;
+switch_arm      = (`case` case_pattern | `default`) `:` separator+
+                  statement_list? separator+ ;
+case_pattern    = expression (`as` value_name)? ;
+
+expression_list = expression (`,` expression)+ `,`? ;
+expression      = logical_or ;
+logical_or      = logical_and (`||` logical_and)* ;
+logical_and     = comparison (`&&` comparison)* ;
+comparison      = bit_or (compare_op bit_or)? ;
+compare_op      = `==` | `!=` | `<` | `<=` | `>` | `>=` ;
+bit_or          = bit_xor (`|` bit_xor)* ;
+bit_xor         = bit_and (`^` bit_and)* ;
+bit_and         = shift (`&` shift)* ;
+shift           = additive ((`<<` | `>>`) additive)* ;
+additive        = multiplicative ((`+` | `-` | `+%` | `-%`) multiplicative)* ;
+multiplicative  = prefix ((`*` | `/` | `%` | `*%`) prefix)* ;
+prefix          = (`-` | `!` | `~` | `&` | `*`)* postfix ;
+postfix         = primary postfix_part* ;
+postfix_part    = `.` identifier
+                | `[` bracket_contents? `]`
+                | `(` argument_list? `)` ;
+bracket_contents= expression (`..` expression?)?
+                | `..` expression?
+                | argument_list ;
+argument_list   = expression (`,` expression)* `,`? ;
+call_expr       = postfix ;
+place           = postfix ;
+
+primary         = literal
+                | qualified_name
+                | `.` type_name
+                | `unreachable`
+                | `(` expression `)`
+                | aggregate_literal ;
+aggregate_literal = aggregate_type `{` soft* literal_item
+                    (field_sep literal_item)* field_sep? soft* `}` ;
+aggregate_type  = named_type | `[` (expression | `_`) `]` type_expr ;
+literal_item    = value_name `:` expression | type_name (`:` expression)? | expression ;
+
+literal         = INTEGER | FLOAT | STRING | RAW_STRING | CHARACTER
+                | `true` | `false` | `nil` | `ok` ;
+qualified_name  = identifier (`.` identifier)* ;
+comptime_args   = `[` argument_list? `]` ;
+
+identifier      = IDENTIFIER ;
+value_name      = IDENTIFIER ;
+module_name     = IDENTIFIER ;
+type_name       = IDENTIFIER ;
+const_name      = IDENTIFIER ;
+comptime_name   = IDENTIFIER ;
+
+# Lexical productions. Keyword recognition happens after IDENTIFIER scanning.
+KEYWORD         = `use` | `type` | `const` | `var` | `let` | `fn` | `ret`
+                | `if` | `else` | `while` | `for` | `in` | `switch` | `case`
+                | `default` | `break` | `continue` | `defer` | `try`
+                | `struct` | `union` | `enum` | `error` | `when`
+                | `true` | `false` | `nil` | `ok` | `as` | `zero` | `undef`
+                | `extern` | `unreachable` | `shared` ;
+IDENTIFIER      = ASCII_LETTER_OR_UNDERSCORE ASCII_LETTER_DIGIT_OR_UNDERSCORE* ;
+INTEGER         = decimal_integer integer_suffix?
+                | hex_integer integer_suffix?
+                | octal_integer integer_suffix?
+                | binary_integer integer_suffix? ;
+decimal_integer = DIGIT (`_`? DIGIT)* ;
+hex_integer     = `0x` HEX_DIGIT (`_`? HEX_DIGIT)* ;
+octal_integer   = `0o` OCT_DIGIT (`_`? OCT_DIGIT)* ;
+binary_integer  = `0b` BIN_DIGIT (`_`? BIN_DIGIT)* ;
+integer_suffix  = `i8` | `i16` | `i32` | `i64` | `isize`
+                | `u8` | `u16` | `u32` | `u64` | `usize` ;
+FLOAT           = decimal_float float_suffix? ;
+decimal_float   = decimal_integer `.` decimal_integer exponent?
+                | decimal_integer exponent ;
+exponent        = (`e` | `E`) (`+` | `-`)? decimal_integer ;
+float_suffix    = `f16` | `bf16` | `f32` | `f64` ;
+STRING          = `"` string_element* `"` ;
+CHARACTER       = `'` character_element `'` ;
+string_element  = STRING_SCALAR | escape_sequence ;
+character_element = CHARACTER_SCALAR | escape_sequence ;
+escape_sequence = `\n` | `\t` | `\r` | `\\` | `\"` | `\'` | `\0`
+                | `\x` HEX_DIGIT HEX_DIGIT ;
+RAW_STRING      = raw_string_0 | raw_string_1 | raw_string_2 | raw_string_3
+                | raw_string_4 | raw_string_5 | raw_string_6 | raw_string_7
+                | raw_string_8 ;
+
+raw_string_0    = `r"` RAW_BODY_0 `"` ;
+raw_string_1    = `r#"` RAW_BODY_1 `"#` ;
+raw_string_2    = `r##"` RAW_BODY_2 `"##` ;
+raw_string_3    = `r###"` RAW_BODY_3 `"###` ;
+raw_string_4    = `r####"` RAW_BODY_4 `"####` ;
+raw_string_5    = `r#####"` RAW_BODY_5 `"#####` ;
+raw_string_6    = `r######"` RAW_BODY_6 `"######` ;
+raw_string_7    = `r#######"` RAW_BODY_7 `"#######` ;
+raw_string_8    = `r########"` RAW_BODY_8 `"########` ;
+
+TRIVIA          = SPACE | DOC_COMMENT | LINE_COMMENT ;
+SPACE           = ` `+ ;
+DOC_COMMENT     = `///` COMMENT_SCALAR* ;
+LINE_COMMENT    = `//` COMMENT_SCALAR* ;
+
+# STRING excludes quote, backslash, LF and forbidden controls. A backslash begins
+# exactly one of: n t r \\ \" \' 0 x HEX_DIGIT HEX_DIGIT. CHARACTER uses the same
+# escapes.
+# STRING_SCALAR is any Unicode scalar except quote, backslash, LF or a forbidden
+# control. CHARACTER_SCALAR additionally must encode as one UTF-8 byte. A character's
+# decoded value must be exactly one byte. RAW_BODY_N is the longest sequence of
+# permitted UTF-8 source scalars not containing the corresponding closing delimiter;
+# it may contain normalized LF and TAB but not NUL or another forbidden control.
+# ASCII_LETTER is A-Z or a-z; DIGIT is 0-9; HEX_DIGIT adds
+# A-F and a-f; OCT_DIGIT is 0-7; BIN_DIGIT is 0 or 1. The `_OR_UNDERSCORE` and
+# `_DIGIT_OR_UNDERSCORE` classes have their literal meanings. These named character
+# classes, COMMENT_SCALAR and RAW_BODY_N are lexer primitives, not parser
+# productions. COMMENT_SCALAR excludes LF, NUL and forbidden controls but admits
+# TAB. DOC_COMMENT is tested before LINE_COMMENT; both emit tooling trivia kind
+# `comment`, with exact text retained for documentation attachment.
+
+# Line structure. NEWLINE is always emitted by the lexer. It is `soft` only while
+# parsing parentheses, brackets, an aggregate literal body, or a type body. It is a
+# separator everywhere else, including ordinary blocks. A soft delimiter cannot
+# cross the declaration, containing-block, case, default or EOF recovery barriers
+# specified by spec.md §3.
+soft            = NEWLINE ;
+
+# Longest-match punctuation, in descending ambiguity order:
+# ... .. -> == != <= >= << >> +% -% *% += -= *= /= %= +%= -%= *%= <<= >>= &= ^= |=
+# && ||, then the remaining one-character punctuation and operators.
+
+# Public keyword kinds are KW_USE, KW_TYPE, KW_CONST, KW_VAR, KW_LET, KW_FN,
+# KW_RET, KW_IF, KW_ELSE, KW_WHILE, KW_FOR, KW_IN, KW_SWITCH, KW_CASE,
+# KW_DEFAULT, KW_BREAK, KW_CONTINUE, KW_DEFER, KW_TRY, KW_STRUCT, KW_UNION,
+# KW_ENUM, KW_ERROR, KW_WHEN, KW_TRUE, KW_FALSE, KW_NIL, KW_OK, KW_AS, KW_ZERO,
+# KW_UNDEF, KW_EXTERN, KW_UNREACHABLE and KW_SHARED.
+#
+# Public punctuation kinds map exactly as follows:
+# PUNCT_ELLIPSIS `...`; PUNCT_RANGE `..`; PUNCT_ARROW `->`;
+# PUNCT_EQ_EQ `==`; PUNCT_BANG_EQ `!=`; PUNCT_LT_EQ `<=`; PUNCT_GT_EQ `>=`;
+# PUNCT_SHIFT_LEFT `<<`; PUNCT_SHIFT_RIGHT `>>`; PUNCT_ADD_WRAP `+%`;
+# PUNCT_SUB_WRAP `-%`; PUNCT_MUL_WRAP `*%`; PUNCT_ADD_ASSIGN `+=`;
+# PUNCT_SUB_ASSIGN `-=`; PUNCT_MUL_ASSIGN `*=`; PUNCT_DIV_ASSIGN `/=`;
+# PUNCT_REM_ASSIGN `%=`; PUNCT_ADD_WRAP_ASSIGN `+%=`;
+# PUNCT_SUB_WRAP_ASSIGN `-%=`; PUNCT_MUL_WRAP_ASSIGN `*%=`;
+# PUNCT_SHIFT_LEFT_ASSIGN `<<=`; PUNCT_SHIFT_RIGHT_ASSIGN `>>=`;
+# PUNCT_BIT_AND_ASSIGN `&=`; PUNCT_BIT_XOR_ASSIGN `^=`;
+# PUNCT_BIT_OR_ASSIGN `|=`; PUNCT_AND_AND `&&`; PUNCT_OR_OR `||`;
+# PUNCT_AT `@`; PUNCT_DOT `.`; PUNCT_COMMA `,`; PUNCT_COLON `:`;
+# PUNCT_ASSIGN `=`; PUNCT_LPAREN `(`; PUNCT_RPAREN `)`;
+# PUNCT_LBRACKET `[`; PUNCT_RBRACKET `]`; PUNCT_LBRACE `{`;
+# PUNCT_RBRACE `}`; PUNCT_STAR `*`; PUNCT_SLASH `/`; PUNCT_PERCENT `%`;
+# PUNCT_PLUS `+`; PUNCT_MINUS `-`; PUNCT_LT `<`; PUNCT_GT `>`;
+# PUNCT_AMP `&`; PUNCT_CARET `^`; PUNCT_PIPE `|`; PUNCT_BANG `!`;
+# PUNCT_TILDE `~`; PUNCT_UNDERSCORE `_`.
+#
+# The remaining public kinds are IDENTIFIER, INTEGER, FLOAT, STRING, RAW_STRING,
+# CHARACTER, NEWLINE, EOF and INVALID. Exact `_` is PUNCT_UNDERSCORE rather than
+# IDENTIFIER. Comments and spaces are trivia, never parser tokens.
+#
+# Public syntax-node kinds are exactly: File, UseDecl, Attribute, TypeDecl,
+# ConstDecl, VarDecl, ErrorDecl, FnDecl, ExternDecl, ComptimeParam, Parameter,
+# ReturnSpec, StructType, UnionType, EnumType, UnionEnumType, FieldDecl, EnumMember,
+# UnionMember, PointerType, SliceType, ArrayType, FunctionType, NamedType, Block,
+# Binding, BindingStmt, AssignmentStmt, CallStmt, TryStmt, ReturnStmt, DeferStmt,
+# NocheckStmt, SharedVarStmt, BreakStmt, ContinueStmt, IfStmt, WhileStmt, ForStmt,
+# WhenStmt, SwitchStmt, SwitchArm, UnaryExpr, BinaryExpr, FieldExpr,
+# BracketPostfix, CallExpr, NameExpr, MemberExpr, GroupExpr, AggregateLiteral,
+# LiteralItem, LiteralExpr and ErrorNode. Grammar helper productions are inlined;
+# they do not create wrapper nodes. UnaryExpr and BinaryExpr carry their operator
+# token as an ordered child. FieldExpr, BracketPostfix and CallExpr contain their
+# receiver as their first child. Recovery creates ErrorNode and never a synthetic
+# token. This closes both registries for tooling version 1 without making the public
+# tree mirror parser implementation detail.

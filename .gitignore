@@ -1,0 +1,17 @@
+/build/
+/build-linux/
+/progress-site/
+/.pytest_cache/
+**/__pycache__/
+*.pyc
+*.asm
+*.obj
+*.o
+*.pdb
+*.ilk
+*.link.bat
+/neper-progress-site.tar.gz
+examples/hello
+examples/*.exe
+tests/m0/control
+tests/m0/*.exe
