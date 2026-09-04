@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.5-neper0"
+#define NEPER_VERSION "0.0.6-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -78,6 +78,7 @@ typedef enum TokenKind {
     TK_CASE,
     TK_DEFAULT,
     TK_AS,
+    TK_DEFER,
     TK_TRY,
     TK_OK,
     TK_TRUE,
@@ -257,6 +258,7 @@ typedef enum StmtKind {
     ST_FOR_RANGE,
     ST_FOR_EACH,
     ST_SWITCH,
+    ST_DEFER,
     ST_BREAK,
     ST_CONTINUE
 } StmtKind;
@@ -337,6 +339,15 @@ struct Stmt {
             Expr *subject;
             SwitchCase *cases;
         } switch_stmt;
+        struct {
+            Stmt *body;
+            int is_block;
+            int is_captured_call;
+            Expr *call;
+            Expr *capture_values[MAX_ARGS];
+            int capture_locals[MAX_ARGS];
+            int capture_count;
+        } defer_stmt;
     } as;
 };
 
@@ -368,6 +379,7 @@ typedef struct Function {
     int local_count;
     int frame_size;
     int return_slot_local_index;
+    int scalar_return_local_index;
 } Function;
 
 typedef struct UseDecl {
@@ -453,6 +465,7 @@ typedef struct Compiler {
     int token_count;
     int current;
     int errors;
+    int checking_defer;
     Diagnostic diagnostics[MAX_DIAGNOSTICS];
     Program program;
     char executable_dir[MAX_PATH_LEN];
@@ -529,6 +542,7 @@ static TokenKind keyword_kind(const char *s, int n) {
         {"while", TK_WHILE}, {"for", TK_FOR}, {"in", TK_IN},
         {"break", TK_BREAK}, {"continue", TK_CONTINUE},
         {"switch", TK_SWITCH}, {"case", TK_CASE}, {"default", TK_DEFAULT}, {"as", TK_AS},
+        {"defer", TK_DEFER},
         {"try", TK_TRY}, {"ok", TK_OK},
         {"true", TK_TRUE}, {"false", TK_FALSE}, {"zero", TK_ZERO},
         {"undef", TK_UNDEF}, {"const", TK_CONST}
@@ -1044,6 +1058,13 @@ static int name_is_declared_aggregate(Compiler *c, const char *name) {
     return 0;
 }
 
+static int name_is_declared_error(Compiler *c, const char *name) {
+    int i;
+    for (i = 0; i < c->program.error_count; ++i)
+        if (strcmp(c->program.errors[i].name, name) == 0) return 1;
+    return 0;
+}
+
 static Expr *parse_primary(Compiler *c) {
     Token *token = peek(c);
     if (match(c, TK_DOT)) {
@@ -1123,7 +1144,8 @@ static Expr *parse_primary(Compiler *c) {
             copy_text(name + used, sizeof(name) - used, part->start, (size_t)part->length);
         }
         if (name_ends_in_type_segment(name) &&
-            (name_is_declared_aggregate(c, name) || strchr(name, '.') == 0) &&
+            (name_is_declared_aggregate(c, name) ||
+             (strchr(name, '.') == 0 && !name_is_declared_error(c, name))) &&
             match(c, TK_LBRACE)) {
             e = new_expr(EX_STRUCT_LITERAL, *token);
             copy_text(e->as.aggregate.type_name, sizeof(e->as.aggregate.type_name),
@@ -1295,6 +1317,24 @@ static Stmt *parse_statement(Compiler *c) {
         return s;
     }
     if (match(c, TK_SWITCH)) return parse_switch_statement(c, *token);
+    if (match(c, TK_DEFER)) {
+        Stmt *s = new_stmt(ST_DEFER, *token);
+        if (check(c, TK_LBRACE)) {
+            s->as.defer_stmt.is_block = 1;
+            s->as.defer_stmt.body = parse_block(c);
+        } else {
+            Stmt *body = parse_statement(c);
+            s->as.defer_stmt.body = body;
+            if (!(body->kind == ST_BIND || body->kind == ST_ASSIGN ||
+                  body->kind == ST_INDEX_ASSIGN || body->kind == ST_EXPR))
+                diagnostic_at(c, &body->token, "E-SYNTAX-9999",
+                              "defer single-statement form requires a binding, assignment, or call");
+            if (body->kind == ST_EXPR && body->as.expr->kind != EX_CALL)
+                diagnostic_at(c, &body->token, "E-SYNTAX-9999",
+                              "defer expression statement must be a call");
+        }
+        return s;
+    }
     if (match(c, TK_FOR)) {
         Token *first = expect(c, TK_IDENT, "expected binding after `for`");
         Token *second = 0;
@@ -1546,6 +1586,7 @@ static void parse_function(Compiler *c, Token token) {
     fn = &c->program.functions[c->program.function_count++];
     memset(fn, 0, sizeof(*fn)); fn->token = token;
     fn->return_slot_local_index = -1;
+    fn->scalar_return_local_index = -1;
     name = expect(c, TK_IDENT, "expected function name");
     copy_text(fn->name, sizeof(fn->name), name->start, (size_t)name->length);
     if (strcmp(fn->name, "main") == 0) strcpy(fn->symbol, "neper_main");
@@ -2293,7 +2334,10 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                 } else if (b.kind == TY_UNTYPED_INT && a.kind == TY_INT) {
                     coerce_untyped_integer(e->as.binary.right, a); b = a;
                 }
-                if (a.kind == TY_NAMED || b.kind == TY_NAMED) {
+                if (a.kind == TY_BOOL || b.kind == TY_BOOL || a.kind == TY_ERR || b.kind == TY_ERR) {
+                    if (!type_equal(a, b) || !(e->as.binary.op == TK_EQ || e->as.binary.op == TK_NE))
+                        diagnostic_at(c, &e->token, "E-TYPE-9999", "bool and err values support equality only with the same type");
+                } else if (a.kind == TY_NAMED || b.kind == TY_NAMED) {
                     if (!type_equal(a, b) || !enum_decl_for_type(c, a) ||
                         !(e->as.binary.op == TK_EQ || e->as.binary.op == TK_NE ||
                           e->as.binary.op == TK_LT || e->as.binary.op == TK_LE ||
@@ -2354,6 +2398,42 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             return e->type;
     }
     return type_make(TY_INVALID, 0);
+}
+
+static void prepare_deferred_call(Compiler *c, Function *fn, Stmt *defer,
+                                  Expr *call, int discarded) {
+    Type result = check_expr(c, fn, call);
+    int i;
+    if (!discarded && result.kind != TY_VOID)
+        diagnostic_at(c, &call->token, "E-TYPE-9999",
+                      "a deferred call returning a value must use `defer let _ = call()`");
+    defer->as.defer_stmt.is_captured_call = 1;
+    defer->as.defer_stmt.call = call;
+    for (i = 0; i < call->as.call.arg_count; ++i) {
+        Expr *source = call->as.call.args[i];
+        Expr *captured;
+        Local *local;
+        char name[96];
+        if (fn->local_count >= MAX_LOCALS) {
+            diagnostic_at(c, &source->token, "E-TOOL-9999", "local limit exceeded by defer captures");
+            break;
+        }
+        local = &fn->locals[fn->local_count];
+        memset(local, 0, sizeof(*local));
+        snprintf(name, sizeof(name), "$defer_%d_%d", fn->local_count, i);
+        strcpy(local->name, name);
+        local->type = source->type;
+        local->active = 1;
+        defer->as.defer_stmt.capture_values[defer->as.defer_stmt.capture_count] = source;
+        defer->as.defer_stmt.capture_locals[defer->as.defer_stmt.capture_count++] = fn->local_count;
+        captured = new_expr(EX_NAME, source->token);
+        strcpy(captured->as.name, name);
+        captured->type = source->type;
+        captured->local_index = fn->local_count;
+        captured->place_mutable = 0;
+        call->as.call.args[i] = captured;
+        fn->local_count++;
+    }
 }
 
 static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
@@ -2472,12 +2552,22 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     diagnostic_at(c, &s->token, "E-TYPE-9999", "`+=` requires integer operands");
                 break;
             }
-            case ST_EXPR: check_expr(c, fn, s->as.expr); break;
+            case ST_EXPR: {
+                Type result = check_expr(c, fn, s->as.expr);
+                if (s->as.expr->kind == EX_CALL && result.kind != TY_VOID)
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "a call returning a value must be bound, discarded with `let _`, or used by `try`");
+                break;
+            }
             case ST_TRY:
+                if (c->checking_defer)
+                    diagnostic_at(c, &s->token, "E-ERROR-9999", "try is not legal inside defer");
                 if (check_expr(c, fn, s->as.expr).kind != TY_ERR || fn->return_type.kind != TY_ERR)
                     diagnostic_at(c, &s->token, "E-ERROR-9999", "try requires an err expression in an err-returning function");
                 break;
             case ST_RETURN: {
+                if (c->checking_defer)
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "ret is not legal inside defer");
                 if (s->as.ret.value && (s->as.ret.value->kind == EX_ZERO || s->as.ret.value->kind == EX_UNDEF))
                     s->as.ret.value->type = fn->return_type;
                 if (s->as.ret.value && s->as.ret.value->kind == EX_ENUM_MEMBER)
@@ -2703,6 +2793,22 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 }
                 break;
             }
+            case ST_DEFER: {
+                Stmt *body = s->as.defer_stmt.body;
+                if (!s->as.defer_stmt.is_block && body && body->kind == ST_EXPR &&
+                    body->as.expr->kind == EX_CALL) {
+                    prepare_deferred_call(c, fn, s, body->as.expr, 0);
+                } else if (!s->as.defer_stmt.is_block && body && body->kind == ST_BIND &&
+                           strcmp(body->as.bind.name, "_") == 0 && body->as.bind.value &&
+                           body->as.bind.value->kind == EX_CALL) {
+                    prepare_deferred_call(c, fn, s, body->as.bind.value, 1);
+                } else {
+                    c->checking_defer++;
+                    check_statements_in_scope(c, fn, body, 0, 0, 1);
+                    c->checking_defer--;
+                }
+                break;
+            }
             case ST_BREAK:
                 if (break_depth == 0)
                     diagnostic_at(c, &s->token, "E-TYPE-9999", "break requires an enclosing loop or switch");
@@ -2820,6 +2926,12 @@ static void check_program(Compiler *c) {
             strcpy(slot->name, "$return_slot");
             slot->type = pointer; slot->active = 1;
             fn->return_slot_local_index = fn->local_count++;
+        } else if (fn->return_type.kind != TY_VOID && fn->local_count < MAX_LOCALS) {
+            Local *slot = &fn->locals[fn->local_count];
+            memset(slot, 0, sizeof(*slot));
+            strcpy(slot->name, "$return_value");
+            slot->type = fn->return_type; slot->active = 1;
+            fn->scalar_return_local_index = fn->local_count++;
         }
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
@@ -2948,6 +3060,15 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
                 }
                 break;
             }
+            case ST_DEFER: {
+                int capture_index;
+                for (capture_index = 0; capture_index < statement->as.defer_stmt.capture_count; ++capture_index)
+                    collect_traps_expr(c, fn, statement->as.defer_stmt.capture_values[capture_index]);
+                if (statement->as.defer_stmt.is_captured_call)
+                    collect_traps_expr(c, fn, statement->as.defer_stmt.call);
+                else collect_traps_statements(c, fn, statement->as.defer_stmt.body);
+                break;
+            }
             case ST_BREAK: case ST_CONTINUE: break;
         }
     }
@@ -2971,7 +3092,14 @@ typedef struct Emitter {
     int debug_label;
     int loop_break[MAX_LOOP_DEPTH];
     int loop_continue[MAX_LOOP_DEPTH];
+    int loop_break_scope[MAX_LOOP_DEPTH];
+    int loop_continue_scope[MAX_LOOP_DEPTH];
     int loop_depth;
+    struct {
+        Stmt *items[MAX_LOCALS];
+        int count;
+    } defer_scopes[MAX_LOOP_DEPTH];
+    int defer_scope_depth;
 } Emitter;
 
 static const char *symbol_name(Function *fn) { return fn->symbol; }
@@ -3500,7 +3628,29 @@ static void emit_value_to_stack(Emitter *e, Expr *value, Type type, int displace
     emit_stack_store(e, displacement, type);
 }
 
+static void emit_statements(Emitter *e, Stmt *s);
+
+static void emit_deferred_statement(Emitter *e, Stmt *defer) {
+    if (defer->as.defer_stmt.is_captured_call)
+        emit_expr(e, defer->as.defer_stmt.call);
+    else emit_statements(e, defer->as.defer_stmt.body);
+}
+
+static void emit_scope_defers(Emitter *e, int scope) {
+    int i;
+    for (i = e->defer_scopes[scope].count - 1; i >= 0; --i)
+        emit_deferred_statement(e, e->defer_scopes[scope].items[i]);
+}
+
+static void emit_defers_to_depth(Emitter *e, int keep_depth) {
+    int scope;
+    for (scope = e->defer_scope_depth - 1; scope >= keep_depth; --scope)
+        emit_scope_defers(e, scope);
+}
+
 static void emit_statements(Emitter *e, Stmt *s) {
+    int defer_scope = e->defer_scope_depth++;
+    e->defer_scopes[defer_scope].count = 0;
     for (; s; s = s->next) {
         if (!e->windows) fprintf(e->out, "    .loc 1 %d %d\n", s->token.line, s->token.column);
         else {
@@ -3569,11 +3719,19 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 break;
             }
             case ST_EXPR: emit_expr(e, s->as.expr); break;
-            case ST_TRY:
+            case ST_TRY: {
+                int success = e->label++;
+                Local *return_value = &e->fn->locals[e->fn->scalar_return_local_index];
                 emit_expr(e, s->as.expr);
                 fputs("    test rax, rax\n", e->out);
-                fprintf(e->out, "    jne np_ret_%d\n", e->return_label);
+                fprintf(e->out, "    je np_label_%d\n", success);
+                emit_stack_store(e, return_value->offset, return_value->type);
+                emit_defers_to_depth(e, 0);
+                fprintf(e->out, "    lea r10, [rbp-%d]\n", return_value->offset);
+                emit_address_load(e, return_value->type);
+                fprintf(e->out, "    jmp np_ret_%d\nnp_label_%d:\n", e->return_label, success);
                 break;
+            }
             case ST_RETURN:
                 if (s->as.ret.value && type_is_value_aggregate(e->compiler, e->fn->return_type)) {
                     size_t bytes = type_size(e->compiler, e->fn->return_type);
@@ -3583,9 +3741,19 @@ static void emit_statements(Emitter *e, Stmt *s) {
                     fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", return_slot->offset);
                     fprintf(e->out, "    lea r11, [rbp-%d]\n", source_slot);
                     emit_copy_addresses(e->out, bytes);
-                    fputs("    mov rax, r10\n", e->out);
-                } else if (s->as.ret.value) emit_expr(e, s->as.ret.value);
-                else fputs("    xor eax, eax\n", e->out);
+                    emit_defers_to_depth(e, 0);
+                    fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", return_slot->offset);
+                } else if (s->as.ret.value) {
+                    Local *return_value = &e->fn->locals[e->fn->scalar_return_local_index];
+                    emit_expr(e, s->as.ret.value);
+                    emit_stack_store(e, return_value->offset, return_value->type);
+                    emit_defers_to_depth(e, 0);
+                    fprintf(e->out, "    lea r10, [rbp-%d]\n", return_value->offset);
+                    emit_address_load(e, return_value->type);
+                } else {
+                    emit_defers_to_depth(e, 0);
+                    fputs("    xor eax, eax\n", e->out);
+                }
                 fprintf(e->out, "    jmp np_ret_%d\n", e->return_label);
                 break;
             case ST_IF: {
@@ -3607,6 +3775,8 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 fprintf(e->out, "    je np_label_%d\n", done);
                 e->loop_break[e->loop_depth] = done;
                 e->loop_continue[e->loop_depth] = start;
+                e->loop_break_scope[e->loop_depth] = e->defer_scope_depth;
+                e->loop_continue_scope[e->loop_depth] = e->defer_scope_depth;
                 e->loop_depth++;
                 emit_statements(e, s->as.while_stmt.body);
                 e->loop_depth--;
@@ -3628,6 +3798,8 @@ static void emit_statements(Emitter *e, Stmt *s) {
                         "    jae np_label_%d\n" : "    jge np_label_%d\n", done);
                 e->loop_break[e->loop_depth] = done;
                 e->loop_continue[e->loop_depth] = step;
+                e->loop_break_scope[e->loop_depth] = e->defer_scope_depth;
+                e->loop_continue_scope[e->loop_depth] = e->defer_scope_depth;
                 e->loop_depth++;
                 emit_statements(e, s->as.for_range.body);
                 e->loop_depth--;
@@ -3671,6 +3843,8 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 }
                 e->loop_break[e->loop_depth] = done;
                 e->loop_continue[e->loop_depth] = step;
+                e->loop_break_scope[e->loop_depth] = e->defer_scope_depth;
+                e->loop_continue_scope[e->loop_depth] = e->defer_scope_depth;
                 e->loop_depth++;
                 emit_statements(e, s->as.for_each.body);
                 e->loop_depth--;
@@ -3715,6 +3889,8 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 fprintf(e->out, "    jmp np_label_%d\n", default_label);
                 e->loop_break[e->loop_depth] = done;
                 e->loop_continue[e->loop_depth] = -1;
+                e->loop_break_scope[e->loop_depth] = e->defer_scope_depth;
+                e->loop_continue_scope[e->loop_depth] = -1;
                 e->loop_depth++;
                 arm_index = 0;
                 for (arm = s->as.switch_stmt.cases; arm; arm = arm->next, ++arm_index) {
@@ -3734,17 +3910,39 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 free(arm_labels);
                 break;
             }
+            case ST_DEFER: {
+                int capture_index;
+                for (capture_index = 0; capture_index < s->as.defer_stmt.capture_count; ++capture_index) {
+                    Expr *value = s->as.defer_stmt.capture_values[capture_index];
+                    Local *local = &e->fn->locals[s->as.defer_stmt.capture_locals[capture_index]];
+                    if (type_is_value_aggregate(e->compiler, local->type))
+                        emit_value_to_stack(e, value, local->type, local->offset);
+                    else {
+                        emit_expr(e, value);
+                        emit_stack_store(e, local->offset, local->type);
+                    }
+                }
+                if (e->defer_scopes[defer_scope].count < MAX_LOCALS)
+                    e->defer_scopes[defer_scope].items[e->defer_scopes[defer_scope].count++] = s;
+                break;
+            }
             case ST_BREAK:
+                emit_defers_to_depth(e, e->loop_break_scope[e->loop_depth - 1]);
                 fprintf(e->out, "    jmp np_label_%d\n", e->loop_break[e->loop_depth - 1]);
                 break;
             case ST_CONTINUE: {
                 int depth = e->loop_depth - 1;
                 while (depth >= 0 && e->loop_continue[depth] < 0) depth--;
-                if (depth >= 0) fprintf(e->out, "    jmp np_label_%d\n", e->loop_continue[depth]);
+                if (depth >= 0) {
+                    emit_defers_to_depth(e, e->loop_continue_scope[depth]);
+                    fprintf(e->out, "    jmp np_label_%d\n", e->loop_continue[depth]);
+                }
                 break;
             }
         }
     }
+    emit_scope_defers(e, defer_scope);
+    e->defer_scope_depth--;
 }
 
 static void emit_function(Emitter *e, Function *fn) {

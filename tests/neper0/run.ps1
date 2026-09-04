@@ -106,4 +106,22 @@ if ($LASTEXITCODE -ne 1 -or ($enumZeroError -join "`n") -notmatch 'has no zero v
     throw 'non-zeroable enum rejection failed'
 }
 
+$defer = & $neper run (Join-Path $PSScriptRoot 'defer.e') --output (Join-Path $testBuild 'defer.exe')
+if ($LASTEXITCODE -ne 0 -or $defer -ne 'defer ok') { throw 'defer behavior failed' }
+
+$deferTryError = & $neper build (Join-Path $PSScriptRoot 'defer-try-error.e') --output (Join-Path $testBuild 'defer-try-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($deferTryError -join "`n") -notmatch 'try is not legal inside defer') {
+    throw 'try-inside-defer rejection failed'
+}
+
+$deferValueError = & $neper build (Join-Path $PSScriptRoot 'defer-value-error.e') --output (Join-Path $testBuild 'defer-value-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($deferValueError -join "`n") -notmatch 'deferred call returning a value') {
+    throw 'undiscarded deferred value rejection failed'
+}
+
+$deferRetError = & $neper build (Join-Path $PSScriptRoot 'defer-ret-error.e') --output (Join-Path $testBuild 'defer-ret-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($deferRetError -join "`n") -notmatch 'ret is not legal inside defer') {
+    throw 'ret-inside-defer rejection failed'
+}
+
 'neper-0 Windows tests passed'

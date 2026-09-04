@@ -146,9 +146,12 @@ enums with implicit or explicit checked values, bare-union shared storage, tagge
 `union enum` layout and literals, implicit `.tag` enums, debug tag checks on payload
 access, payload-copy `as` bindings, scalar cases and exhaustive non-fallthrough
 `switch`. It also enforces duplicate cases, `default`, enum zeroability, branch
-scopes, and `break`/`continue` targeting on both x64 ABIs. Protocol iteration,
-`defer`, compile-time parameters, constant folding, the full intrinsic set, and debug
-locals remain open.
+scopes, and `break`/`continue` targeting on both x64 ABIs. The cleanup increment adds
+both forms of lexical `defer`, immediate left-to-right
+argument capture for deferred calls, place capture for deferred blocks, reverse-order
+cleanup on normal and structured exits, per-iteration cleanup, deliberate discarded
+fallible calls, and return-value preservation. Protocol iteration, compile-time
+parameters, constant folding, the full intrinsic set, and debug locals remain open.
 This callout does not
 mark the `neper-0` milestone complete.
 

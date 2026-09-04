@@ -1493,6 +1493,9 @@ defer { ... } // the block form; the same rule
   `defer let _ = f(...)` discard is a deferred call for this rule and captures its
   arguments immediately. Any other deferred single statement behaves as a one-
   statement block.
+- Control may not leave a deferred body: `ret` and `try` are illegal anywhere inside
+  it, and `break` or `continue` may target only a loop or switch lexically inside that
+  body. A nested `defer` is legal and runs when its deferred body's own scope exits.
 - There is no `goto`, no labelled break in v1, and no expression-level `if`.
 
 ### Operators

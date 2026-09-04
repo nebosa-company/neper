@@ -71,6 +71,11 @@ contextual and qualified member names, and non-fallthrough `switch` are implemen
 Enum and tagged-union switches require exhaustive cases unless they have `default`;
 tagged cases can bind payload copies with `as`.
 
+Lexical `defer` is also implemented in both forms. Deferred calls capture arguments
+left to right when registered; deferred blocks read their referenced places at exit.
+Cleanup runs in reverse order on normal block exit, `ret`, propagated `try`, `break`,
+and `continue`, including once per loop iteration, while preserving return values.
+
 On Windows with the Visual Studio C++ tools installed:
 
 ```powershell

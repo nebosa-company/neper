@@ -124,4 +124,27 @@ set -e
 test "$enum_zero_status" -eq 1
 printf '%s' "$enum_zero_error" | grep -q 'has no zero value'
 
+test "$("$neper" run "$repo/tests/neper0/defer.e" --output "$test_build/defer")" = 'defer ok'
+
+set +e
+defer_try_error=$("$neper" build "$repo/tests/neper0/defer-try-error.e" --output "$test_build/defer-try-error" 2>&1)
+defer_try_status=$?
+set -e
+test "$defer_try_status" -eq 1
+printf '%s' "$defer_try_error" | grep -q 'try is not legal inside defer'
+
+set +e
+defer_value_error=$("$neper" build "$repo/tests/neper0/defer-value-error.e" --output "$test_build/defer-value-error" 2>&1)
+defer_value_status=$?
+set -e
+test "$defer_value_status" -eq 1
+printf '%s' "$defer_value_error" | grep -q 'deferred call returning a value'
+
+set +e
+defer_ret_error=$("$neper" build "$repo/tests/neper0/defer-ret-error.e" --output "$test_build/defer-ret-error" 2>&1)
+defer_ret_status=$?
+set -e
+test "$defer_ret_status" -eq 1
+printf '%s' "$defer_ret_error" | grep -q 'ret is not legal inside defer'
+
 printf '%s\n' 'neper-0 Linux tests passed'
