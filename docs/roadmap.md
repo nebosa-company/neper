@@ -74,7 +74,8 @@ produce the native bootstrap on Windows and Linux. `tests/m0/run.*` exercise the
 cross-directory program root, both x64 argument paths, UTF-8 startup arguments,
 control flow, calls across register and stack arguments, slices, named-error
 propagation, deterministic rejection diagnostics, traps, and retained debug and
-compact-symbol metadata. `neper-0` and the self-hosted compiler have not started.
+compact-symbol metadata. The incremental `neper-0` extension is in progress; the
+self-hosted compiler has not started.
 
 - Lexer and parser generated or checked against grammar revision 1, including exact
   original-byte/scalar/UTF-16 position tracking, normalized line handling, the closed
@@ -131,9 +132,14 @@ mismatches, bounds failures, and non-overlapping slice/local frame slots. A thir
 increment adds one-binding and index/value `for` iteration over arrays and slices,
 with iteration values held as immutable copies. A fourth increment adds checked
 `[lo..hi]`, `[lo..]`, and `[..hi]` slicing with array-to-slice mutability propagation.
-Array value ABI passing, protocol iteration,
-aggregate declarations, `defer`, `switch`, compile-time parameters, constant
-folding, the full intrinsic set, and debug locals remain open; this callout does not
+The aggregate-foundation increment adds named struct declarations, deterministic
+natural layout and padding, source-ordered named-field literals including nested
+structs, `zero`/`undef` storage, field places, pointer-recursive layouts, chained
+pointer auto-dereference, `&`/`*`, mutation through `*T`, rejection through
+`*const T`, and the one-way mutable-to-const pointer conversion. Aggregate value ABI
+passing, arrays of aggregates, protocol iteration, `defer`, `switch`, compile-time
+parameters, constant folding, the full intrinsic set, and debug locals remain open;
+this callout does not
 mark the `neper-0` milestone complete.
 
 - Everything in M0

@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.2-neper0"
+#define NEPER_VERSION "0.0.3-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -48,6 +48,8 @@
 #define MAX_PATH_LEN 4096
 #define MAX_LOOP_DEPTH 64
 #define MAX_ARRAY_ELEMENTS 4096
+#define MAX_FIELDS 128
+#define MAX_FIELD_PATH 32
 
 typedef enum TokenKind {
     TK_EOF,
@@ -87,6 +89,7 @@ typedef enum TokenKind {
     TK_COMMA,
     TK_DOT,
     TK_RANGE,
+    TK_AMP,
     TK_STAR,
     TK_ARROW,
     TK_ASSIGN,
@@ -143,6 +146,7 @@ typedef struct Type {
     char element_name[96];
     int element_is_const;
     size_t array_length;
+    struct Type *element;
 } Type;
 
 typedef enum ExprKind {
@@ -153,6 +157,7 @@ typedef enum ExprKind {
     EX_INDEX,
     EX_SLICE,
     EX_ARRAY_LITERAL,
+    EX_STRUCT_LITERAL,
     EX_ZERO,
     EX_UNDEF,
     EX_BINARY,
@@ -168,6 +173,12 @@ struct Expr {
     int local_index;
     int trap_id;
     int error_code;
+    int field_offsets[MAX_FIELD_PATH];
+    unsigned char field_dereferences[MAX_FIELD_PATH];
+    int field_path_count;
+    int place_mutable;
+    int is_len;
+    Type place_type;
     union {
         int64_t integer;
         struct {
@@ -196,6 +207,12 @@ struct Expr {
             int item_capacity;
             int infer_length;
         } array;
+        struct {
+            char type_name[96];
+            struct StructInit *items;
+            int item_count;
+            int item_capacity;
+        } aggregate;
         struct {
             TokenKind op;
             Expr *left;
@@ -240,6 +257,7 @@ struct Stmt {
         } bind;
         struct {
             char name[96];
+            Expr *target;
             Expr *value;
             int local_index;
             TokenKind op;
@@ -323,11 +341,37 @@ typedef struct ErrorDecl {
     int code;
 } ErrorDecl;
 
+typedef struct FieldDecl {
+    char name[96];
+    Token token;
+    Type type;
+    size_t offset;
+} FieldDecl;
+
+typedef struct StructDecl {
+    char name[96];
+    Token token;
+    FieldDecl fields[MAX_FIELDS];
+    int field_count;
+    size_t size;
+    size_t alignment;
+    int layout_state;
+} StructDecl;
+
+typedef struct StructInit {
+    char name[96];
+    Token token;
+    Expr *value;
+    int field_index;
+} StructInit;
+
 typedef struct Program {
     UseDecl uses[MAX_USES];
     int use_count;
     ErrorDecl errors[MAX_DECLS];
     int error_count;
+    StructDecl structs[MAX_DECLS];
+    int struct_count;
     Function functions[MAX_DECLS];
     int function_count;
     Expr *strings[MAX_STRINGS];
@@ -634,6 +678,7 @@ static void lex(Compiler *c) {
                     case '[': kind = TK_LBRACKET; break; case ']': kind = TK_RBRACKET; break;
                     case ':': kind = TK_COLON; break; case ',': kind = TK_COMMA; break;
                     case '.': kind = TK_DOT; break; case '*': kind = TK_STAR; break;
+                    case '&': kind = TK_AMP; break;
                     case '=': kind = TK_ASSIGN; break; case '+': kind = TK_PLUS; break;
                     case '-': kind = TK_MINUS; break; case '/': kind = TK_SLASH; break;
                     case '%': kind = TK_PERCENT; break; case '<': kind = TK_LT; break;
@@ -676,16 +721,25 @@ static Type type_make(TypeKind kind, const char *name) {
     return t;
 }
 
+static void type_set_element(Type *container, Type element) {
+    container->element = (Type *)malloc(sizeof(Type));
+    if (!container->element) { fputs("neper: out of memory\n", stderr); exit(2); }
+    *container->element = element;
+    container->element_kind = element.kind;
+    copy_text(container->element_name, sizeof(container->element_name),
+              element.name, strlen(element.name));
+    container->element_is_const = element.is_const;
+}
+
 static Type type_array(Type element, size_t length) {
     Type type = type_make(TY_ARRAY, "array");
-    type.element_kind = element.kind;
-    copy_text(type.element_name, sizeof(type.element_name), element.name, strlen(element.name));
-    type.element_is_const = element.is_const;
+    type_set_element(&type, element);
     type.array_length = length;
     return type;
 }
 
 static Type array_element_type(Type array) {
+    if (array.element) return *array.element;
     Type element = type_make(array.element_kind, array.element_name);
     element.is_const = array.element_is_const;
     return element;
@@ -694,7 +748,12 @@ static Type array_element_type(Type array) {
 static Type sequence_element_type(Type sequence) {
     if (sequence.kind == TY_STR) return type_make(TY_INT, "u8");
     if (sequence.kind == TY_ARRAY) return array_element_type(sequence);
-    return type_make(sequence.element_kind, sequence.element_name);
+    if (sequence.element) return *sequence.element;
+    {
+        Type element = type_make(sequence.element_kind, sequence.element_name);
+        element.is_const = sequence.element_is_const;
+        return element;
+    }
 }
 
 static int parse_array_length(Compiler *c, Token *token, size_t *out) {
@@ -746,6 +805,7 @@ static Type parse_type(Compiler *c) {
         Type inner = parse_type(c);
         t = type_make(TY_POINTER, inner.name);
         t.is_const = is_const;
+        type_set_element(&t, inner);
         return t;
     }
     if (match(c, TK_LBRACKET)) {
@@ -755,8 +815,7 @@ static Type parse_type(Compiler *c) {
             if (is_const && t.kind == TY_INT && strcmp(t.name, "u8") == 0) return type_make(TY_STR, "str");
             {
                 Type slice = type_make(TY_SLICE, t.name);
-                slice.element_kind = t.kind;
-                copy_text(slice.element_name, sizeof(slice.element_name), t.name, strlen(t.name));
+                type_set_element(&slice, t);
                 slice.is_const = is_const;
                 return slice;
             }
@@ -894,6 +953,37 @@ static void array_add_item(Compiler *c, Expr *array, Expr *item) {
     array->as.array.items[array->as.array.item_count++] = item;
 }
 
+static void aggregate_add_item(Compiler *c, Expr *aggregate, Token *name, Expr *value) {
+    StructInit *items;
+    StructInit *item;
+    if (aggregate->as.aggregate.item_count >= MAX_FIELDS) {
+        diagnostic_at(c, name, "E-TOOL-9999", "aggregate literal field limit exceeded");
+        return;
+    }
+    if (aggregate->as.aggregate.item_count == aggregate->as.aggregate.item_capacity) {
+        int capacity = aggregate->as.aggregate.item_capacity ?
+                       aggregate->as.aggregate.item_capacity * 2 : 8;
+        if (capacity > MAX_FIELDS) capacity = MAX_FIELDS;
+        items = (StructInit *)realloc(aggregate->as.aggregate.items,
+                                     (size_t)capacity * sizeof(*items));
+        if (!items) { fputs("neper: out of memory\n", stderr); exit(2); }
+        aggregate->as.aggregate.items = items;
+        aggregate->as.aggregate.item_capacity = capacity;
+    }
+    item = &aggregate->as.aggregate.items[aggregate->as.aggregate.item_count++];
+    memset(item, 0, sizeof(*item));
+    copy_text(item->name, sizeof(item->name), name->start, (size_t)name->length);
+    item->token = *name;
+    item->value = value;
+    item->field_index = -1;
+}
+
+static int name_ends_in_type_segment(const char *name) {
+    const char *segment = strrchr(name, '.');
+    segment = segment ? segment + 1 : name;
+    return segment[0] >= 'A' && segment[0] <= 'Z';
+}
+
 static Expr *parse_primary(Compiler *c) {
     Token *token = peek(c);
     if (match(c, TK_INTEGER)) {
@@ -968,7 +1058,24 @@ static Expr *parse_primary(Compiler *c) {
             if (used + 1 < sizeof(name)) name[used++] = '.';
             copy_text(name + used, sizeof(name) - used, part->start, (size_t)part->length);
         }
-        if (match(c, TK_LPAREN)) {
+        if (name_ends_in_type_segment(name) && match(c, TK_LBRACE)) {
+            e = new_expr(EX_STRUCT_LITERAL, *token);
+            copy_text(e->as.aggregate.type_name, sizeof(e->as.aggregate.type_name),
+                      name, strlen(name));
+            skip_newlines(c);
+            if (!check(c, TK_RBRACE)) {
+                for (;;) {
+                    Token *field = expect(c, TK_IDENT, "expected field name in aggregate literal");
+                    expect(c, TK_COLON, "expected `:` after aggregate field name");
+                    aggregate_add_item(c, e, field, parse_expression(c));
+                    skip_newlines(c);
+                    if (!match(c, TK_COMMA)) break;
+                    skip_newlines(c);
+                    if (check(c, TK_RBRACE)) break;
+                }
+            }
+            expect(c, TK_RBRACE, "expected `}` after aggregate literal");
+        } else if (match(c, TK_LPAREN)) {
             e = new_expr(EX_CALL, *token);
             strcpy(e->as.call.callee, name);
             if (!check(c, TK_RPAREN)) {
@@ -1011,7 +1118,8 @@ static Expr *parse_primary(Compiler *c) {
 
 static Expr *parse_unary(Compiler *c) {
     Token *token = peek(c);
-    if (match(c, TK_MINUS) || match(c, TK_BANG)) {
+    if (match(c, TK_MINUS) || match(c, TK_BANG) ||
+        match(c, TK_AMP) || match(c, TK_STAR)) {
         Expr *e = new_expr(EX_UNARY, *token);
         e->as.unary.op = token->kind;
         e->as.unary.value = parse_unary(c);
@@ -1161,12 +1269,14 @@ static Stmt *parse_statement(Compiler *c) {
                 Stmt *s = new_stmt(ST_ASSIGN, left->token);
                 copy_text(s->as.assign.name, sizeof(s->as.assign.name),
                           left->as.name, strlen(left->as.name));
+                s->as.assign.target = left;
                 s->as.assign.value = value;
                 s->as.assign.local_index = -1;
                 s->as.assign.op = op;
                 return s;
             }
-            if (left->kind == EX_INDEX) {
+            if (left->kind == EX_INDEX ||
+                (left->kind == EX_UNARY && left->as.unary.op == TK_STAR)) {
                 Stmt *s = new_stmt(ST_INDEX_ASSIGN, left->token);
                 s->as.index_assign.target = left;
                 s->as.index_assign.value = value;
@@ -1226,6 +1336,47 @@ static void parse_error(Compiler *c, Token token) {
     c->program.error_count++;
 }
 
+static void parse_type_declaration(Compiler *c, Token token) {
+    StructDecl *decl;
+    Token *name = expect(c, TK_IDENT, "expected type name");
+    if (c->program.struct_count >= MAX_DECLS) {
+        diagnostic_at(c, &token, "E-TYPE-9999", "too many type declarations");
+        return;
+    }
+    decl = &c->program.structs[c->program.struct_count++];
+    memset(decl, 0, sizeof(*decl));
+    copy_text(decl->name, sizeof(decl->name), name->start, (size_t)name->length);
+    decl->token = token;
+    expect(c, TK_ASSIGN, "expected `=` after type name");
+    expect(c, TK_STRUCT, "this neper-0 increment implements struct type declarations");
+    expect(c, TK_LBRACE, "expected `{` after `struct`");
+    skip_newlines(c);
+    while (!check(c, TK_RBRACE) && !check(c, TK_EOF)) {
+        FieldDecl *field;
+        Token *field_name;
+        if (decl->field_count >= MAX_FIELDS) {
+            diagnostic_at(c, peek(c), "E-TOOL-9999", "struct field limit exceeded");
+            break;
+        }
+        field = &decl->fields[decl->field_count++];
+        memset(field, 0, sizeof(*field));
+        field_name = expect(c, TK_IDENT, "expected struct field name");
+        copy_text(field->name, sizeof(field->name), field_name->start,
+                  (size_t)field_name->length);
+        field->token = *field_name;
+        expect(c, TK_COLON, "expected `:` after struct field name");
+        field->type = parse_type(c);
+        skip_newlines(c);
+        if (!match(c, TK_COMMA)) {
+            if (!check(c, TK_RBRACE))
+                diagnostic_at(c, peek(c), "E-SYNTAX-9999", "expected `,` after struct field");
+            break;
+        }
+        skip_newlines(c);
+    }
+    expect(c, TK_RBRACE, "expected `}` after struct fields");
+}
+
 static void parse_function(Compiler *c, Token token) {
     Function *fn;
     Token *name;
@@ -1265,11 +1416,12 @@ static void parse_program(Compiler *c) {
     while (!check(c, TK_EOF)) {
         Token token = *peek(c);
         if (match(c, TK_USE)) parse_use(c, token);
+        else if (match(c, TK_TYPE)) parse_type_declaration(c, token);
         else if (match(c, TK_ERROR)) parse_error(c, token);
         else if (match(c, TK_FN)) parse_function(c, token);
         else {
             diagnostic_at(c, peek(c), "E-SYNTAX-9999",
-                          "the bootstrap currently supports top-level `use`, `error`, and `fn`");
+                          "the bootstrap currently supports top-level `use`, `type`, `error`, and `fn`");
             while (!check(c, TK_NEWLINE) && !check(c, TK_EOF)) c->current++;
         }
         if (!check(c, TK_EOF)) expect(c, TK_NEWLINE, "expected newline after declaration");
@@ -1281,12 +1433,30 @@ static int type_equal(Type a, Type b) {
     if (a.kind == b.kind) {
         if (a.kind == TY_ARRAY)
             return a.array_length == b.array_length &&
-                   a.element_kind == b.element_kind &&
+                   type_equal(array_element_type(a), array_element_type(b));
+        if (a.kind == TY_POINTER || a.kind == TY_SLICE) {
+            if (a.is_const != b.is_const) return 0;
+            if (a.element && b.element) return type_equal(*a.element, *b.element);
+            return a.element_kind == b.element_kind &&
                    strcmp(a.element_name, b.element_name) == 0 &&
                    a.element_is_const == b.element_is_const;
-        if (a.kind == TY_POINTER || a.kind == TY_SLICE || a.kind == TY_NAMED || a.kind == TY_INT)
+        }
+        if (a.kind == TY_NAMED || a.kind == TY_INT)
             return strcmp(a.name, b.name) == 0 && a.is_const == b.is_const;
         return 1;
+    }
+    return 0;
+}
+
+static int type_assignable(Type actual, Type expected) {
+    if (type_equal(actual, expected)) return 1;
+    if ((actual.kind == TY_POINTER || actual.kind == TY_SLICE) &&
+        actual.kind == expected.kind && !actual.is_const && expected.is_const) {
+        if (actual.element && expected.element)
+            return type_equal(*actual.element, *expected.element);
+        if (actual.element_kind == expected.element_kind &&
+            strcmp(actual.element_name, expected.element_name) == 0)
+            return 1;
     }
     return 0;
 }
@@ -1306,12 +1476,6 @@ static size_t scalar_byte_size(Type type) {
     return 8;
 }
 
-static size_t type_size(Type type) {
-    if (type.kind == TY_ARRAY)
-        return type.array_length * scalar_byte_size(array_element_type(type));
-    return (size_t)type_lanes(type) * 8;
-}
-
 static Function *find_function(Compiler *c, const char *name) {
     int i;
     for (i = 0; i < c->program.function_count; ++i)
@@ -1324,6 +1488,94 @@ static ErrorDecl *find_error(Compiler *c, const char *name) {
     for (i = 0; i < c->program.error_count; ++i)
         if (strcmp(c->program.errors[i].name, name) == 0) return &c->program.errors[i];
     return 0;
+}
+
+static StructDecl *find_struct(Compiler *c, const char *name) {
+    int i;
+    for (i = 0; i < c->program.struct_count; ++i)
+        if (strcmp(c->program.structs[i].name, name) == 0) return &c->program.structs[i];
+    return 0;
+}
+
+static void check_known_type(Compiler *c, Type type, Token *token);
+
+static size_t align_up_size(size_t value, size_t alignment) {
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+static int layout_struct(Compiler *c, StructDecl *decl);
+
+static int type_layout(Compiler *c, Type type, size_t *size, size_t *alignment) {
+    if (type.kind == TY_VOID || type.kind == TY_INVALID || type.kind == TY_UNTYPED_INT) return 0;
+    if (type.kind == TY_BOOL) { *size = 1; *alignment = 1; return 1; }
+    if (type.kind == TY_ERR) { *size = 4; *alignment = 4; return 1; }
+    if (type.kind == TY_INT) {
+        *size = scalar_byte_size(type); *alignment = *size; return 1;
+    }
+    if (type.kind == TY_POINTER || type.kind == TY_ARENA) {
+        *size = 8; *alignment = 8; return 1;
+    }
+    if (type.kind == TY_STR || type.kind == TY_SLICE) {
+        *size = 16; *alignment = 8; return 1;
+    }
+    if (type.kind == TY_ARRAY) {
+        Type element = array_element_type(type);
+        size_t element_size, element_alignment;
+        if (!type_layout(c, element, &element_size, &element_alignment)) return 0;
+        if (element_size != 0 && type.array_length > SIZE_MAX / element_size) return 0;
+        *size = type.array_length * element_size;
+        *alignment = element_alignment;
+        return 1;
+    }
+    if (type.kind == TY_NAMED) {
+        StructDecl *decl = find_struct(c, type.name);
+        if (!decl || !layout_struct(c, decl)) return 0;
+        *size = decl->size; *alignment = decl->alignment;
+        return 1;
+    }
+    return 0;
+}
+
+static int layout_struct(Compiler *c, StructDecl *decl) {
+    size_t size = 0, alignment = 1;
+    int i, j;
+    if (decl->layout_state == 2) return 1;
+    if (decl->layout_state == 3) return 0;
+    if (decl->layout_state == 1) {
+        diagnostic_at(c, &decl->token, "E-TYPE-9999", "recursive struct value layout");
+        decl->layout_state = 3;
+        return 0;
+    }
+    decl->layout_state = 1;
+    for (i = 0; i < decl->field_count; ++i) {
+        FieldDecl *field = &decl->fields[i];
+        size_t field_size, field_alignment;
+        for (j = 0; j < i; ++j)
+            if (strcmp(field->name, decl->fields[j].name) == 0)
+                diagnostic_at(c, &field->token, "E-NAME-0001", "duplicate struct field");
+        if (!type_layout(c, field->type, &field_size, &field_alignment)) {
+            StructDecl *field_decl = field->type.kind == TY_NAMED ? find_struct(c, field->type.name) : 0;
+            if (!field_decl || field_decl->layout_state != 3)
+                diagnostic_at(c, &field->token, "E-TYPE-9999", "struct field has an unknown or unsized type");
+            decl->layout_state = 3;
+            return 0;
+        }
+        size = align_up_size(size, field_alignment);
+        field->offset = size;
+        size += field_size;
+        if (field_alignment > alignment) alignment = field_alignment;
+    }
+    if (decl->field_count == 0) size = 1;
+    decl->alignment = alignment;
+    decl->size = align_up_size(size, alignment);
+    decl->layout_state = 2;
+    return 1;
+}
+
+static size_t type_size(Compiler *c, Type type) {
+    size_t size = 0, alignment = 1;
+    if (!type_layout(c, type, &size, &alignment)) return 0;
+    return size;
 }
 
 static int find_local(Function *fn, const char *name) {
@@ -1344,11 +1596,75 @@ static void coerce_untyped_integer(Expr *expr, Type target) {
     }
 }
 
-static int split_len_member(const char *name, char *base, size_t capacity) {
-    size_t n = strlen(name);
-    if (n <= 4 || strcmp(name + n - 4, ".len") != 0) return 0;
-    copy_text(base, capacity, name, n - 4);
-    return 1;
+static FieldDecl *find_struct_field(StructDecl *decl, const char *name, int *index) {
+    int i;
+    for (i = 0; i < decl->field_count; ++i) {
+        if (strcmp(decl->fields[i].name, name) == 0) {
+            if (index) *index = i;
+            return &decl->fields[i];
+        }
+    }
+    return 0;
+}
+
+static Type pointer_element_type(Type pointer) {
+    if (pointer.element) return *pointer.element;
+    Type element = type_make(pointer.element_kind, pointer.element_name);
+    element.is_const = pointer.element_is_const;
+    return element;
+}
+
+static Type resolve_name_place(Compiler *c, Function *fn, Expr *e) {
+    char path[160], *part, *next;
+    int root;
+    Type current;
+    copy_text(path, sizeof(path), e->as.name, strlen(e->as.name));
+    part = path;
+    next = strchr(part, '.');
+    if (next) *next++ = 0;
+    root = find_local(fn, part);
+    if (root < 0) return type_make(TY_INVALID, 0);
+    current = fn->locals[root].type;
+    e->local_index = root;
+    e->field_path_count = 0;
+    e->place_mutable = fn->locals[root].is_mutable;
+    while (next) {
+        StructDecl *decl;
+        FieldDecl *field;
+        int dereference = 0;
+        part = next;
+        next = strchr(part, '.');
+        if (next) *next++ = 0;
+        if (strcmp(part, "len") == 0 && !next &&
+            (current.kind == TY_ARRAY || current.kind == TY_SLICE || current.kind == TY_STR)) {
+            e->is_len = 1;
+            e->place_type = current;
+            return type_make(TY_INT, "usize");
+        }
+        if (current.kind == TY_POINTER) {
+            e->place_mutable = !current.is_const;
+            current = pointer_element_type(current);
+            dereference = 1;
+        }
+        if (current.kind != TY_NAMED || !(decl = find_struct(c, current.name))) {
+            diagnostic_at(c, &e->token, "E-TYPE-9999", "field access requires a struct value or pointer");
+            return type_make(TY_INVALID, 0);
+        }
+        field = find_struct_field(decl, part, 0);
+        if (!field) {
+            diagnostic_at(c, &e->token, "E-NAME-9999", "unknown struct field");
+            return type_make(TY_INVALID, 0);
+        }
+        if (e->field_path_count >= MAX_FIELD_PATH) {
+            diagnostic_at(c, &e->token, "E-TOOL-9999", "field access path limit exceeded");
+            return type_make(TY_INVALID, 0);
+        }
+        e->field_offsets[e->field_path_count] = (int)field->offset;
+        e->field_dereferences[e->field_path_count] = (unsigned char)dereference;
+        e->field_path_count++;
+        current = field->type;
+    }
+    return current;
 }
 
 static Type check_expr(Compiler *c, Function *fn, Expr *e) {
@@ -1367,10 +1683,52 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                     coerce_untyped_integer(e->as.array.items[i], element);
                     item = element;
                 }
-                if (!type_equal(item, element))
+                if (!type_assignable(item, element))
                     diagnostic_at(c, &e->as.array.items[i]->token, "E-TYPE-0002",
                                   "array literal element has the wrong type");
             }
+            return e->type;
+        }
+        case EX_STRUCT_LITERAL: {
+            StructDecl *decl = find_struct(c, e->as.aggregate.type_name);
+            unsigned char seen[MAX_FIELDS];
+            memset(seen, 0, sizeof(seen));
+            if (!decl) {
+                diagnostic_at(c, &e->token, "E-NAME-9999", "unknown struct type in literal");
+                e->type = type_make(TY_INVALID, 0);
+                return e->type;
+            }
+            e->type = type_make(TY_NAMED, decl->name);
+            for (i = 0; i < e->as.aggregate.item_count; ++i) {
+                StructInit *item = &e->as.aggregate.items[i];
+                int field_index = -1;
+                FieldDecl *field = find_struct_field(decl, item->name, &field_index);
+                Type actual;
+                if (!field) {
+                    diagnostic_at(c, &item->token, "E-NAME-9999", "unknown field in struct literal");
+                    continue;
+                }
+                item->field_index = field_index;
+                if (seen[field_index])
+                    diagnostic_at(c, &item->token, "E-NAME-0001", "duplicate field in struct literal");
+                seen[field_index] = 1;
+                actual = check_expr(c, fn, item->value);
+                if (item->value->kind == EX_ZERO || item->value->kind == EX_UNDEF) {
+                    item->value->type = field->type;
+                    actual = field->type;
+                }
+                if (actual.kind == TY_UNTYPED_INT && field->type.kind == TY_INT) {
+                    coerce_untyped_integer(item->value, field->type); actual = field->type;
+                }
+                if (!type_assignable(actual, field->type))
+                    diagnostic_at(c, &item->token, "E-TYPE-0002",
+                                  "struct literal field has the wrong type");
+                if (field->type.kind == TY_ARRAY)
+                    diagnostic_at(c, &item->token, "E-TYPE-9999",
+                                  "array-valued struct literal fields are not implemented in this neper-0 increment");
+            }
+            for (i = 0; i < decl->field_count; ++i)
+                if (!seen[i]) diagnostic_at(c, &e->token, "E-TYPE-9999", "struct literal omits a field");
             return e->type;
         }
         case EX_NAME:
@@ -1381,23 +1739,13 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                     e->type = type_make(TY_ERR, "err"); e->error_code = error->code; return e->type;
                 }
             }
-            i = find_local(fn, e->as.name);
-            if (i < 0) {
-                char base[160];
-                if (split_len_member(e->as.name, base, sizeof(base))) {
-                    i = find_local(fn, base);
-                    if (i >= 0 && (fn->locals[i].type.kind == TY_STR ||
-                                   fn->locals[i].type.kind == TY_SLICE ||
-                                   fn->locals[i].type.kind == TY_ARRAY)) {
-                        e->type = type_make(TY_INT, "usize"); e->local_index = i; return e->type;
-                    }
-                }
-            }
-            if (i < 0) {
-                diagnostic_at(c, &e->token, "E-NAME-9999", "unknown value name");
+            e->type = resolve_name_place(c, fn, e);
+            if (e->type.kind == TY_INVALID) {
+                if (e->local_index < 0)
+                    diagnostic_at(c, &e->token, "E-NAME-9999", "unknown value name");
                 return type_make(TY_INVALID, 0);
             }
-            e->type = fn->locals[i].type; e->local_index = i; return e->type;
+            return e->type;
         case EX_INDEX: {
             Type base = check_expr(c, fn, e->as.index.base);
             Type index = check_expr(c, fn, e->as.index.index);
@@ -1410,9 +1758,7 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             if (base.kind == TY_STR) e->type = type_make(TY_INT, "u8");
             else if (base.kind == TY_SLICE) {
                 if (strcmp(base.name, "str") == 0) e->type = type_make(TY_STR, "str");
-                else {
-                    e->type = type_make(base.element_kind, base.element_name);
-                }
+                else e->type = sequence_element_type(base);
             } else if (base.kind == TY_ARRAY) {
                 e->type = array_element_type(base);
             } else {
@@ -1461,9 +1807,7 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                 e->type = type_make(TY_STR, "str");
             else {
                 e->type = type_make(TY_SLICE, element.name);
-                e->type.element_kind = element.kind;
-                copy_text(e->type.element_name, sizeof(e->type.element_name),
-                          element.name, strlen(element.name));
+                type_set_element(&e->type, element);
                 e->type.is_const = is_const;
             }
             return e->type;
@@ -1489,7 +1833,7 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                             coerce_untyped_integer(e->as.call.args[i], callee->params[i].type);
                             actual = callee->params[i].type;
                         }
-                        if (!type_equal(actual, callee->params[i].type))
+                        if (!type_assignable(actual, callee->params[i].type))
                             diagnostic_at(c, &e->as.call.args[i]->token, "E-TYPE-0003", "argument type does not match parameter");
                     }
                     result = callee->return_type;
@@ -1530,7 +1874,39 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
         }
         case EX_UNARY:
             e->type = check_expr(c, fn, e->as.unary.value);
-            if (e->as.unary.op == TK_BANG) {
+            if (e->as.unary.op == TK_AMP) {
+                Expr *place = e->as.unary.value;
+                int mutable = 0;
+                Type pointer;
+                if (place->kind == EX_NAME && !place->is_len) mutable = place->place_mutable;
+                else if (place->kind == EX_INDEX) {
+                    Type base = place->as.index.base->type;
+                    if (base.kind == TY_ARRAY && place->as.index.base->kind == EX_NAME &&
+                        place->as.index.base->local_index >= 0)
+                        mutable = place->as.index.base->place_mutable;
+                    else if (base.kind == TY_SLICE) mutable = !base.is_const;
+                } else if (place->kind == EX_UNARY && place->as.unary.op == TK_STAR) {
+                    mutable = !place->as.unary.value->type.is_const;
+                } else {
+                    diagnostic_at(c, &e->token, "E-TYPE-9999", "address-of requires a place");
+                    e->type = type_make(TY_INVALID, 0);
+                    return e->type;
+                }
+                if (e->type.kind == TY_ARRAY) {
+                    diagnostic_at(c, &e->token, "E-TYPE-9999",
+                                  "pointers to arrays are not implemented in this neper-0 increment");
+                    return type_make(TY_INVALID, 0);
+                }
+                pointer = type_make(TY_POINTER, e->type.name);
+                type_set_element(&pointer, e->type);
+                pointer.is_const = !mutable;
+                e->type = pointer;
+            } else if (e->as.unary.op == TK_STAR) {
+                if (e->type.kind != TY_POINTER) {
+                    diagnostic_at(c, &e->token, "E-TYPE-9999", "dereference requires a pointer");
+                    e->type = type_make(TY_INVALID, 0);
+                } else e->type = pointer_element_type(e->type);
+            } else if (e->as.unary.op == TK_BANG) {
                 if (e->type.kind != TY_BOOL) diagnostic_at(c, &e->token, "E-TYPE-9999", "`!` requires bool");
                 e->type = type_make(TY_BOOL, "bool");
             } else if (e->type.kind != TY_INT && e->type.kind != TY_UNTYPED_INT)
@@ -1548,6 +1924,8 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
             case ST_BIND: {
                 Type actual = check_expr(c, fn, s->as.bind.value);
                 Type chosen = s->as.bind.declared_type.kind == TY_INVALID ? actual : s->as.bind.declared_type;
+                if (s->as.bind.declared_type.kind != TY_INVALID)
+                    check_known_type(c, s->as.bind.declared_type, &s->token);
                 if (s->as.bind.value->kind == EX_ZERO || s->as.bind.value->kind == EX_UNDEF) {
                     if (s->as.bind.declared_type.kind == TY_INVALID) {
                         diagnostic_at(c, &s->token, "E-TYPE-0001",
@@ -1562,7 +1940,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 }
                 if (s->as.bind.declared_type.kind == TY_INVALID && actual.kind == TY_UNTYPED_INT)
                     diagnostic_at(c, &s->token, "E-TYPE-0001", "integer initializer has no typing context");
-                if (s->as.bind.declared_type.kind != TY_INVALID && !type_equal(chosen, actual))
+                if (s->as.bind.declared_type.kind != TY_INVALID && !type_assignable(actual, chosen))
                     diagnostic_at(c, &s->token, "E-TYPE-0002", "initializer type does not match binding");
                 if (chosen.kind == TY_ARRAY) {
                     Type element = array_element_type(chosen);
@@ -1581,6 +1959,16 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                         diagnostic_at(c, &s->token, "E-TYPE-9999",
                                       "array copy initialization is not implemented in this neper-0 increment");
                 }
+                if (chosen.kind == TY_NAMED) {
+                    StructDecl *decl = find_struct(c, chosen.name);
+                    if (!decl || !layout_struct(c, decl))
+                        diagnostic_at(c, &s->token, "E-TYPE-9999", "binding has an unknown struct type");
+                    if (!(s->as.bind.value->kind == EX_STRUCT_LITERAL ||
+                          s->as.bind.value->kind == EX_ZERO ||
+                          s->as.bind.value->kind == EX_UNDEF))
+                        diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                      "struct copy initialization is not implemented in this neper-0 increment");
+                }
                 if (find_local(fn, s->as.bind.name) >= 0)
                     diagnostic_at(c, &s->token, "E-NAME-0001", "duplicate local declaration");
                 else if (fn->local_count < MAX_LOCALS) {
@@ -1593,50 +1981,60 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 break;
             }
             case ST_ASSIGN: {
-                int index = find_local(fn, s->as.assign.name);
+                Type target = check_expr(c, fn, s->as.assign.target);
+                int index = s->as.assign.target->local_index;
                 Type actual = check_expr(c, fn, s->as.assign.value);
                 if (index < 0) diagnostic_at(c, &s->token, "E-NAME-9999", "unknown assignment target");
                 else {
                     s->as.assign.local_index = index;
-                    if (actual.kind == TY_UNTYPED_INT && fn->locals[index].type.kind == TY_INT) {
-                        coerce_untyped_integer(s->as.assign.value, fn->locals[index].type);
-                        actual = fn->locals[index].type;
+                    if (actual.kind == TY_UNTYPED_INT && target.kind == TY_INT) {
+                        coerce_untyped_integer(s->as.assign.value, target);
+                        actual = target;
                     }
-                    if (!fn->locals[index].is_mutable) diagnostic_at(c, &s->token, "E-TYPE-9999", "cannot assign to let binding");
-                    if (fn->locals[index].type.kind == TY_ARRAY)
+                    if (!s->as.assign.target->place_mutable || s->as.assign.target->is_len)
+                        diagnostic_at(c, &s->token, "E-TYPE-9999", "assignment target is immutable");
+                    if (target.kind == TY_ARRAY || target.kind == TY_NAMED)
                         diagnostic_at(c, &s->token, "E-TYPE-9999",
-                                      "whole-array assignment is not implemented in this neper-0 increment");
-                    if (!type_equal(fn->locals[index].type, actual)) diagnostic_at(c, &s->token, "E-TYPE-0002", "assignment type mismatch");
+                                      "aggregate assignment is not implemented in this neper-0 increment");
+                    if (!type_assignable(actual, target)) diagnostic_at(c, &s->token, "E-TYPE-0002", "assignment type mismatch");
                     if (s->as.assign.op == TK_ADD_ASSIGN &&
-                        (fn->locals[index].type.kind != TY_INT || actual.kind != TY_INT))
+                        (target.kind != TY_INT || actual.kind != TY_INT))
                         diagnostic_at(c, &s->token, "E-TYPE-9999", "`+=` requires integer operands");
                 }
                 break;
             }
             case ST_INDEX_ASSIGN: {
                 Expr *target_expr = s->as.index_assign.target;
-                Expr *base_expr = target_expr->as.index.base;
                 Type target = check_expr(c, fn, target_expr);
                 Type actual = check_expr(c, fn, s->as.index_assign.value);
-                Type base = base_expr->type;
                 if (actual.kind == TY_UNTYPED_INT && target.kind == TY_INT) {
                     coerce_untyped_integer(s->as.index_assign.value, target);
                     actual = target;
                 }
-                if (!type_equal(target, actual))
-                    diagnostic_at(c, &s->token, "E-TYPE-0002", "indexed assignment type mismatch");
-                if (base.kind == TY_ARRAY) {
-                    if (base_expr->kind != EX_NAME || base_expr->local_index < 0 ||
-                        !fn->locals[base_expr->local_index].is_mutable)
-                        diagnostic_at(c, &s->token, "E-TYPE-9999",
-                                      "indexed assignment requires a mutable array binding");
-                } else if (base.kind == TY_STR || base.is_const) {
+                if (!type_assignable(actual, target))
+                    diagnostic_at(c, &s->token, "E-TYPE-0002", "place assignment type mismatch");
+                if (target.kind == TY_ARRAY || target.kind == TY_NAMED)
                     diagnostic_at(c, &s->token, "E-TYPE-9999",
-                                  "indexed assignment requires mutable elements");
+                                  "aggregate assignment is not implemented in this neper-0 increment");
+                if (target_expr->kind == EX_INDEX) {
+                    Expr *base_expr = target_expr->as.index.base;
+                    Type base = base_expr->type;
+                    if (base.kind == TY_ARRAY) {
+                        if (base_expr->kind != EX_NAME || base_expr->local_index < 0 ||
+                            !base_expr->place_mutable)
+                            diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                          "indexed assignment requires a mutable array binding");
+                    } else if (base.kind == TY_STR || base.is_const) {
+                        diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                      "indexed assignment requires mutable elements");
+                    }
+                } else if (target_expr->as.unary.value->type.is_const) {
+                    diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                  "dereference assignment requires a mutable pointer");
                 }
                 if (s->as.index_assign.op == TK_ADD_ASSIGN &&
                     (target.kind != TY_INT || actual.kind != TY_INT))
-                    diagnostic_at(c, &s->token, "E-TYPE-9999", "indexed `+=` requires integer operands");
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "`+=` requires integer operands");
                 break;
             }
             case ST_EXPR: check_expr(c, fn, s->as.expr); break;
@@ -1649,7 +2047,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 if (s->as.ret.value && actual.kind == TY_UNTYPED_INT && fn->return_type.kind == TY_INT) {
                     coerce_untyped_integer(s->as.ret.value, fn->return_type); actual = fn->return_type;
                 }
-                if (!type_equal(actual, fn->return_type)) diagnostic_at(c, &s->token, "E-TYPE-9999", "return type mismatch");
+                if (!type_assignable(actual, fn->return_type)) diagnostic_at(c, &s->token, "E-TYPE-9999", "return type mismatch");
                 break;
             }
             case ST_IF:
@@ -1751,6 +2149,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     if (s->as.for_each.has_index) strcpy(index->name, s->as.for_each.index_name);
                     else snprintf(index->name, sizeof(index->name), "$for_index_%d", local_start);
                     strcpy(value->name, s->as.for_each.value_name);
+                    type_set_element(&pointer_type, element);
                     pointer->type = pointer_type; length->type = usize_type;
                     index->type = usize_type; value->type = element;
                     pointer->active = length->active = index->active = value->active = 1;
@@ -1828,6 +2227,22 @@ static void check_imports(Compiler *c) {
     }
 }
 
+static void check_known_type(Compiler *c, Type type, Token *token) {
+    Type element;
+    if (type.kind == TY_NAMED && !find_struct(c, type.name)) {
+        diagnostic_at(c, token, "E-NAME-9999", "unknown struct type");
+        return;
+    }
+    if (type.kind != TY_POINTER && type.kind != TY_SLICE && type.kind != TY_ARRAY) return;
+    if (type.kind == TY_ARRAY) element = array_element_type(type);
+    else if (type.element) element = *type.element;
+    else {
+        element = type_make(type.element_kind, type.element_name);
+        element.is_const = type.element_is_const;
+    }
+    check_known_type(c, element, token);
+}
+
 static void check_program(Compiler *c) {
     int i, j;
     Function *main_fn = 0;
@@ -1835,22 +2250,33 @@ static void check_program(Compiler *c) {
         for (j = 0; j < i; ++j)
             if (strcmp(c->program.errors[i].name, c->program.errors[j].name) == 0)
                 diagnostic_at(c, &c->program.errors[i].token, "E-NAME-0001", "duplicate error declaration");
+    for (i = 0; i < c->program.struct_count; ++i) {
+        StructDecl *decl = &c->program.structs[i];
+        for (j = 0; j < i; ++j)
+            if (strcmp(decl->name, c->program.structs[j].name) == 0)
+                diagnostic_at(c, &decl->token, "E-NAME-0001", "duplicate struct declaration");
+        for (j = 0; j < decl->field_count; ++j)
+            check_known_type(c, decl->fields[j].type, &decl->fields[j].token);
+        layout_struct(c, decl);
+    }
     for (i = 0; i < c->program.function_count; ++i) {
         Function *fn = &c->program.functions[i];
         for (j = 0; j < i; ++j) if (strcmp(fn->name, c->program.functions[j].name) == 0)
             diagnostic_at(c, &fn->token, "E-NAME-0001", "duplicate function declaration");
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
-            if (fn->params[j].type.kind == TY_ARRAY)
+            check_known_type(c, fn->params[j].type, &fn->params[j].token);
+            if (fn->params[j].type.kind == TY_ARRAY || fn->params[j].type.kind == TY_NAMED)
                 diagnostic_at(c, &fn->params[j].token, "E-TYPE-9999",
-                              "array parameters are not implemented in this neper-0 increment");
+                              "aggregate parameters are not implemented in this neper-0 increment; pass a pointer");
             memset(local, 0, sizeof(*local)); strcpy(local->name, fn->params[j].name);
             local->type = fn->params[j].type; local->is_mutable = 0; local->active = 1;
             fn->params[j].local_index = fn->local_count++;
         }
-        if (fn->return_type.kind == TY_ARRAY)
+        check_known_type(c, fn->return_type, &fn->token);
+        if (fn->return_type.kind == TY_ARRAY || fn->return_type.kind == TY_NAMED)
             diagnostic_at(c, &fn->token, "E-TYPE-9999",
-                          "array returns are not implemented in this neper-0 increment");
+                          "aggregate returns are not implemented in this neper-0 increment; return through a pointer");
         check_statements(c, fn, fn->body);
         if (strcmp(fn->name, "main") == 0) main_fn = fn;
     }
@@ -1895,6 +2321,10 @@ static void collect_traps_expr(Compiler *c, Function *fn, Expr *expr) {
         case EX_ARRAY_LITERAL:
             for (i = 0; i < expr->as.array.item_count; ++i)
                 collect_traps_expr(c, fn, expr->as.array.items[i]);
+            break;
+        case EX_STRUCT_LITERAL:
+            for (i = 0; i < expr->as.aggregate.item_count; ++i)
+                collect_traps_expr(c, fn, expr->as.aggregate.items[i].value);
             break;
         case EX_INDEX:
             collect_traps_expr(c, fn, expr->as.index.base);
@@ -2021,10 +2451,10 @@ static void emit_address_store(FILE *out, Type type, TokenKind op) {
     }
 }
 
-static void assign_offsets(Function *fn) {
+static void assign_offsets(Compiler *c, Function *fn) {
     int i, offset = 0;
     for (i = 0; i < fn->local_count; ++i) {
-        size_t bytes = type_size(fn->locals[i].type);
+        size_t bytes = type_size(c, fn->locals[i].type);
         size_t storage = (bytes + 7) & ~(size_t)7;
         if (storage == 0) storage = 8;
         offset += (int)storage;
@@ -2081,6 +2511,18 @@ static int emit_index_address(Emitter *e, Expr *index) {
     return address_slot;
 }
 
+static void emit_name_address(Emitter *e, Expr *name) {
+    Local *local = &e->fn->locals[name->local_index];
+    int i;
+    fprintf(e->out, "    lea r10, [rbp-%d]\n", local->offset);
+    for (i = 0; i < name->field_path_count; ++i) {
+        if (name->field_dereferences[i])
+            fputs("    mov r10, QWORD PTR [r10]\n", e->out);
+        if (name->field_offsets[i])
+            fprintf(e->out, "    add r10, %d\n", name->field_offsets[i]);
+    }
+}
+
 static void emit_call(Emitter *e, Expr *x) {
     static const char *win_regs[] = {"rcx", "rdx", "r8", "r9"};
     static const char *sysv_regs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
@@ -2127,20 +2569,25 @@ static void emit_expr(Emitter *e, Expr *x) {
             {
                 int index = x->local_index;
                 Local *local = &e->fn->locals[index];
-                char base[160];
-                int is_len = split_len_member(x->as.name, base, sizeof(base));
-                if (local->type.kind == TY_ARRAY) {
-                    if (is_len) fprintf(e->out, "    mov rax, %llu\n",
-                                        (unsigned long long)local->type.array_length);
+                if (x->is_len) {
+                    if (x->place_type.kind == TY_ARRAY)
+                        fprintf(e->out, "    mov rax, %llu\n",
+                                (unsigned long long)x->place_type.array_length);
                     else {
-                        fprintf(e->out, "    lea rax, [rbp-%d]\n", local->offset);
-                        fprintf(e->out, "    mov rdx, %llu\n",
-                                (unsigned long long)local->type.array_length);
+                        emit_name_address(e, x);
+                        fputs("    mov rax, QWORD PTR [r10+8]\n", e->out);
                     }
+                } else if (x->type.kind == TY_ARRAY) {
+                    emit_name_address(e, x);
+                    fputs("    mov rax, r10\n", e->out);
+                    fprintf(e->out, "    mov rdx, %llu\n",
+                            (unsigned long long)x->type.array_length);
+                } else if (x->field_path_count || local->type.kind == TY_NAMED) {
+                    emit_name_address(e, x);
+                    emit_address_load(e->out, x->type);
                 } else {
-                    if (is_len) fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", local->offset - 8);
-                    else fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", local->offset);
-                    if (!is_len && type_lanes(local->type) == 2)
+                    fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", local->offset);
+                    if (type_lanes(local->type) == 2)
                         fprintf(e->out, "    mov rdx, QWORD PTR [rbp-%d]\n", local->offset - 8);
                 }
             }
@@ -2192,13 +2639,28 @@ static void emit_expr(Emitter *e, Expr *x) {
             fprintf(e->out, "    sub rdx, QWORD PTR [rbp-%d]\n", lower_slot);
             break;
         }
-        case EX_ARRAY_LITERAL: case EX_ZERO: case EX_UNDEF:
+        case EX_ARRAY_LITERAL: case EX_STRUCT_LITERAL: case EX_ZERO: case EX_UNDEF:
             fputs("    xor eax, eax\n", e->out);
             break;
         case EX_UNARY:
-            emit_expr(e, x->as.unary.value);
-            if (x->as.unary.op == TK_MINUS) fputs("    neg rax\n", e->out);
-            else { fputs("    test rax, rax\n    sete al\n    movzx rax, al\n", e->out); }
+            if (x->as.unary.op == TK_AMP) {
+                Expr *place = x->as.unary.value;
+                if (place->kind == EX_NAME) {
+                    emit_name_address(e, place);
+                    fputs("    mov rax, r10\n", e->out);
+                } else if (place->kind == EX_INDEX) {
+                    int address_slot = emit_index_address(e, place);
+                    fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", address_slot);
+                } else emit_expr(e, place->as.unary.value);
+            } else if (x->as.unary.op == TK_STAR) {
+                emit_expr(e, x->as.unary.value);
+                fputs("    mov r10, rax\n", e->out);
+                emit_address_load(e->out, x->type);
+            } else {
+                emit_expr(e, x->as.unary.value);
+                if (x->as.unary.op == TK_MINUS) fputs("    neg rax\n", e->out);
+                else fputs("    test rax, rax\n    sete al\n    movzx rax, al\n", e->out);
+            }
             break;
         case EX_BINARY: {
             if (x->as.binary.op == TK_AND || x->as.binary.op == TK_OR) {
@@ -2252,6 +2714,37 @@ static void emit_expr(Emitter *e, Expr *x) {
     }
 }
 
+static void emit_zero_stack(Emitter *e, int displacement, size_t bytes) {
+    size_t at;
+    for (at = 0; at + 8 <= bytes; at += 8)
+        fprintf(e->out, "    mov QWORD PTR [rbp-%d], 0\n", displacement - (int)at);
+    for (; at < bytes; ++at)
+        fprintf(e->out, "    mov BYTE PTR [rbp-%d], 0\n", displacement - (int)at);
+}
+
+static void emit_value_to_stack(Emitter *e, Expr *value, Type type, int displacement) {
+    if (value->kind == EX_UNDEF) return;
+    if (value->kind == EX_ZERO) {
+        emit_zero_stack(e, displacement, type_size(e->compiler, type));
+        return;
+    }
+    if (type.kind == TY_NAMED && value->kind == EX_STRUCT_LITERAL) {
+        StructDecl *decl = find_struct(e->compiler, type.name);
+        int i;
+        if (!decl) return;
+        for (i = 0; i < value->as.aggregate.item_count; ++i) {
+            StructInit *item = &value->as.aggregate.items[i];
+            FieldDecl *field = &decl->fields[item->field_index];
+            emit_value_to_stack(e, item->value, field->type,
+                                displacement - (int)field->offset);
+        }
+        return;
+    }
+    e->temp_offset = e->call_base;
+    emit_expr(e, value);
+    emit_stack_store(e->out, displacement, type);
+}
+
 static void emit_statements(Emitter *e, Stmt *s) {
     for (; s; s = s->next) {
         if (!e->windows) fprintf(e->out, "    .loc 1 %d %d\n", s->token.line, s->token.column);
@@ -2266,7 +2759,7 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 if (local->type.kind == TY_ARRAY) {
                     Type element = array_element_type(local->type);
                     size_t element_size = scalar_byte_size(element);
-                    size_t bytes = type_size(local->type);
+                    size_t bytes = type_size(e->compiler, local->type);
                     size_t at;
                     if (s->as.bind.value->kind == EX_ARRAY_LITERAL) {
                         int i;
@@ -2284,6 +2777,9 @@ static void emit_statements(Emitter *e, Stmt *s) {
                             fprintf(e->out, "    mov BYTE PTR [rbp-%d], 0\n",
                                     local->offset - (int)at);
                     }
+                } else if (local->type.kind == TY_NAMED) {
+                    StructDecl *decl = find_struct(e->compiler, local->type.name);
+                    if (decl) emit_value_to_stack(e, s->as.bind.value, local->type, local->offset);
                 } else if (s->as.bind.value->kind != EX_UNDEF) {
                     emit_expr(e, s->as.bind.value);
                     fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", local->offset);
@@ -2292,20 +2788,25 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 break;
             }
             case ST_ASSIGN: {
-                Local *local = &e->fn->locals[s->as.assign.local_index];
+                int address_slot;
+                emit_name_address(e, s->as.assign.target);
+                address_slot = alloc_temp(e, 1);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], r10\n", address_slot);
                 emit_expr(e, s->as.assign.value);
-                if (s->as.assign.op == TK_ADD_ASSIGN) {
-                    fprintf(e->out, "    add QWORD PTR [rbp-%d], rax\n", local->offset);
-                } else {
-                    fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", local->offset);
-                    if (type_lanes(local->type) == 2) fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", local->offset - 8);
-                }
+                fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", address_slot);
+                emit_address_store(e->out, s->as.assign.target->type, s->as.assign.op);
                 break;
             }
             case ST_INDEX_ASSIGN: {
                 Expr *target = s->as.index_assign.target;
-                Type element = index_element_type(target->as.index.base->type);
-                int address_slot = emit_index_address(e, target);
+                Type element = target->type;
+                int address_slot;
+                if (target->kind == EX_INDEX) address_slot = emit_index_address(e, target);
+                else {
+                    emit_expr(e, target->as.unary.value);
+                    address_slot = alloc_temp(e, 1);
+                    fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", address_slot);
+                }
                 emit_expr(e, s->as.index_assign.value);
                 fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", address_slot);
                 emit_address_store(e->out, element, s->as.index_assign.op);
@@ -2419,7 +2920,7 @@ static void emit_function(Emitter *e, Function *fn) {
     static const char *win_regs[] = {"rcx", "rdx", "r8", "r9"};
     static const char *sysv_regs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
     int i, lane = 0;
-    assign_offsets(fn);
+    assign_offsets(e->compiler, fn);
     e->fn = fn; e->return_label = e->label++;
     e->call_base = fn->local_count ? fn->locals[fn->local_count - 1].offset + 16 : 16;
     if (e->windows) {

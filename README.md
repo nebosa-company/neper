@@ -54,7 +54,12 @@ Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
 assignment, array/slice `for` iteration, and bounds traps are implemented. Array
 and slice range construction now covers omitted bounds and mutability propagation.
-Array value ABI passing and protocol iteration are not implemented yet.
+Named structs now have deterministic declaration-order layout, exact padding,
+source-ordered named-field literals (including nested structs), `zero`/`undef`
+storage, field places, and chained pointer auto-dereference. Address-of and explicit
+dereference support mutable pointer writes, enforce pointee `const`, and permit the
+one-way `*T` to `*const T` conversion. Aggregate value ABI passing and protocol
+iteration are not implemented yet.
 
 On Windows with the Visual Studio C++ tools installed:
 

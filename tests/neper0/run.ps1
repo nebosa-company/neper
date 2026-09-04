@@ -21,6 +21,9 @@ if ($LASTEXITCODE -ne 0 -or $iteration -ne 'slice iteration ok') { throw 'slice 
 $slicing = & $neper run (Join-Path $PSScriptRoot 'slice.e') --output (Join-Path $testBuild 'slice.exe')
 if ($LASTEXITCODE -ne 0 -or $slicing -ne 'slice ok') { throw 'slice construction failed' }
 
+$struct = & $neper run (Join-Path $PSScriptRoot 'struct.e') --output (Join-Path $testBuild 'struct.exe')
+if ($LASTEXITCODE -ne 0 -or $struct -ne 'struct ok') { throw 'struct and pointer behavior failed' }
+
 $sliceBounds = & $neper run (Join-Path $PSScriptRoot 'slice-bounds.e') --output (Join-Path $testBuild 'slice-bounds.exe') 2>&1
 if ($LASTEXITCODE -ne 134 -or ($sliceBounds -join "`n") -notmatch 'trap\[bounds\]') {
     throw 'slice bounds trap failed'
@@ -59,6 +62,21 @@ if ($LASTEXITCODE -ne 1 -or ($scopeError -join "`n") -notmatch '7:23: error\[E-N
 $breakError = & $neper build (Join-Path $PSScriptRoot 'break-error.e') --output (Join-Path $testBuild 'break-error.exe') 2>&1
 if ($LASTEXITCODE -ne 1 -or ($breakError -join "`n") -notmatch '4:5: error\[E-TYPE-9999\]') {
     throw 'out-of-loop break rejection failed'
+}
+
+$pointerConstError = & $neper build (Join-Path $PSScriptRoot 'pointer-const-error.e') --output (Join-Path $testBuild 'pointer-const-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($pointerConstError -join "`n") -notmatch '10:5: error\[E-TYPE-9999\]') {
+    throw 'const pointer mutation rejection failed'
+}
+
+$recursiveStructError = & $neper build (Join-Path $PSScriptRoot 'recursive-struct-error.e') --output (Join-Path $testBuild 'recursive-struct-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($recursiveStructError -join "`n") -notmatch '3:1: error\[E-TYPE-9999\]') {
+    throw 'recursive struct rejection failed'
+}
+
+$aggregateAbiError = & $neper build (Join-Path $PSScriptRoot 'aggregate-abi-error.e') --output (Join-Path $testBuild 'aggregate-abi-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($aggregateAbiError -join "`n") -notmatch '7:12: error\[E-TYPE-9999\]') {
+    throw 'aggregate ABI gating failed'
 }
 
 'neper-0 Windows tests passed'
