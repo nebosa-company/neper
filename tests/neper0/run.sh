@@ -186,4 +186,20 @@ set -e
 test "$multiple_return_mutable_status" -eq 1
 printf '%s' "$multiple_return_mutable" | grep -q 'multiple assignment target is immutable'
 
+test "$("$neper" run "$repo/tests/neper0/constant-folding.e" --output "$test_build/constant-folding")" = 'constant folding ok'
+
+set +e
+constant_cycle=$("$neper" build "$repo/tests/neper0/constant-cycle-error.e" --output "$test_build/constant-cycle-error" 2>&1)
+constant_cycle_status=$?
+set -e
+test "$constant_cycle_status" -eq 1
+printf '%s' "$constant_cycle" | grep -q 'constant dependency cycle'
+
+set +e
+array_length_type=$("$neper" build "$repo/tests/neper0/array-length-type-error.e" --output "$test_build/array-length-type-error" 2>&1)
+array_length_type_status=$?
+set -e
+test "$array_length_type_status" -eq 1
+printf '%s' "$array_length_type" | grep -q 'array length must have type usize'
+
 printf '%s\n' 'neper-0 Linux tests passed'

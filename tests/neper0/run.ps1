@@ -155,4 +155,17 @@ if ($LASTEXITCODE -ne 1 -or ($multipleReturnMutable -join "`n") -notmatch 'multi
     throw 'immutable multiple assignment rejection failed'
 }
 
+$constantFolding = & $neper run (Join-Path $PSScriptRoot 'constant-folding.e') --output (Join-Path $testBuild 'constant-folding.exe')
+if ($LASTEXITCODE -ne 0 -or $constantFolding -ne 'constant folding ok') { throw 'constant folding behavior failed' }
+
+$constantCycle = & $neper build (Join-Path $PSScriptRoot 'constant-cycle-error.e') --output (Join-Path $testBuild 'constant-cycle-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($constantCycle -join "`n") -notmatch 'constant dependency cycle') {
+    throw 'constant cycle rejection failed'
+}
+
+$arrayLengthType = & $neper build (Join-Path $PSScriptRoot 'array-length-type-error.e') --output (Join-Path $testBuild 'array-length-type-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($arrayLengthType -join "`n") -notmatch 'array length must have type usize') {
+    throw 'array length type rejection failed'
+}
+
 'neper-0 Windows tests passed'

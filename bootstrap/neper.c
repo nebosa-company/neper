@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.8-neper0"
+#define NEPER_VERSION "0.0.9-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -145,6 +145,8 @@ typedef enum TypeKind {
     TY_NAMED
 } TypeKind;
 
+typedef struct Expr Expr;
+
 typedef struct Type {
     TypeKind kind;
     char name[96];
@@ -153,6 +155,7 @@ typedef struct Type {
     char element_name[96];
     int element_is_const;
     size_t array_length;
+    Expr *array_length_expr;
     struct Type *element;
 } Type;
 
@@ -173,8 +176,6 @@ typedef enum ExprKind {
     EX_UNARY
 } ExprKind;
 
-typedef struct Expr Expr;
-
 struct Expr {
     ExprKind kind;
     Token token;
@@ -182,6 +183,7 @@ struct Expr {
     int local_index;
     int trap_id;
     int error_code;
+    int is_constant;
     int64_t constant_value;
     int field_offsets[MAX_FIELD_PATH];
     unsigned char field_dereferences[MAX_FIELD_PATH];
@@ -415,6 +417,15 @@ typedef struct ErrorDecl {
     int code;
 } ErrorDecl;
 
+typedef struct ConstDecl {
+    char name[96];
+    Token token;
+    Type type;
+    Expr *value;
+    int64_t integer_value;
+    int evaluation_state;
+} ConstDecl;
+
 typedef struct FieldDecl {
     char name[96];
     Token token;
@@ -456,6 +467,8 @@ typedef struct Program {
     int use_count;
     ErrorDecl errors[MAX_DECLS];
     int error_count;
+    ConstDecl constants[MAX_DECLS];
+    int constant_count;
     StructDecl structs[MAX_DECLS];
     int struct_count;
     Function functions[MAX_DECLS];
@@ -846,47 +859,7 @@ static Type sequence_element_type(Type sequence) {
     }
 }
 
-static int parse_array_length(Compiler *c, Token *token, size_t *out) {
-    static const char *suffixes[] = {
-        "usize", "isize", "u64", "u32", "u16", "u8", "i64", "i32", "i16", "i8"
-    };
-    char text[128];
-    size_t length = (size_t)token->length, suffix_length = 0, i, at = 0;
-    unsigned base = 10;
-    size_t value = 0;
-    copy_text(text, sizeof(text), token->start, length);
-    for (i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); ++i) {
-        size_t candidate = strlen(suffixes[i]);
-        if (length > candidate && strcmp(text + length - candidate, suffixes[i]) == 0) {
-            suffix_length = candidate;
-            if (strcmp(suffixes[i], "usize") != 0)
-                diagnostic_at(c, token, "E-TYPE-0002", "array length must have type usize");
-            break;
-        }
-    }
-    length -= suffix_length;
-    if (length >= 2 && text[0] == '0') {
-        if (text[1] == 'x' || text[1] == 'X') { base = 16; at = 2; }
-        else if (text[1] == 'o' || text[1] == 'O') { base = 8; at = 2; }
-        else if (text[1] == 'b' || text[1] == 'B') { base = 2; at = 2; }
-    }
-    for (; at < length; ++at) {
-        unsigned digit;
-        unsigned char ch = (unsigned char)text[at];
-        if (ch == '_') continue;
-        if (ch >= '0' && ch <= '9') digit = (unsigned)(ch - '0');
-        else if (ch >= 'a' && ch <= 'f') digit = (unsigned)(ch - 'a' + 10);
-        else if (ch >= 'A' && ch <= 'F') digit = (unsigned)(ch - 'A' + 10);
-        else { diagnostic_at(c, token, "E-SYNTAX-9999", "array length must be an integer literal in this neper-0 increment"); return 0; }
-        if (digit >= base || value > (SIZE_MAX - digit) / base) {
-            diagnostic_at(c, token, "E-TYPE-0004", "array length is not representable as usize");
-            return 0;
-        }
-        value = value * base + digit;
-    }
-    *out = value;
-    return 1;
-}
+static Expr *parse_expression(Compiler *c);
 
 static Type parse_type(Compiler *c) {
     Type t;
@@ -910,12 +883,13 @@ static Type parse_type(Compiler *c) {
                 return slice;
             }
         } else {
-            Token *length = expect(c, TK_INTEGER, "array length must be an integer literal in this neper-0 increment");
-            size_t count = 0;
-            parse_array_length(c, length, &count);
+            Expr *length_expr = parse_expression(c);
+            Type array;
             expect(c, TK_RBRACKET, "expected `]` after array length");
             t = parse_type(c);
-            return type_array(t, count);
+            array = type_array(t, 0);
+            array.array_length_expr = length_expr;
+            return array;
         }
     }
     {
@@ -1123,13 +1097,12 @@ static Expr *parse_primary(Compiler *c) {
         Expr *e = new_expr(EX_ARRAY_LITERAL, *token);
         Type element;
         size_t length = 0;
+        Expr *length_expr = 0;
         if (check(c, TK_IDENT) && peek(c)->length == 1 && peek(c)->start[0] == '_') {
             e->as.array.infer_length = 1;
             c->current++;
         } else {
-            Token *length_token = expect(c, TK_INTEGER,
-                "array literal length must be an integer literal or `_`");
-            parse_array_length(c, length_token, &length);
+            length_expr = parse_expression(c);
         }
         expect(c, TK_RBRACKET, "expected `]` after array literal length");
         element = parse_type(c);
@@ -1148,6 +1121,7 @@ static Expr *parse_primary(Compiler *c) {
         expect(c, TK_RBRACE, "expected `}` after array literal");
         if (e->as.array.infer_length) length = (size_t)e->as.array.item_count;
         e->type = type_array(element, length);
+        e->type.array_length_expr = length_expr;
         return e;
     }
     if (match(c, TK_LPAREN)) {
@@ -1592,6 +1566,23 @@ static void parse_error(Compiler *c, Token token) {
     c->program.error_count++;
 }
 
+static void parse_constant(Compiler *c, Token token) {
+    ConstDecl *constant;
+    Token *name = expect(c, TK_IDENT, "expected constant name");
+    if (c->program.constant_count >= MAX_DECLS) {
+        diagnostic_at(c, &token, "E-TOOL-9999", "too many constant declarations");
+        return;
+    }
+    constant = &c->program.constants[c->program.constant_count++];
+    memset(constant, 0, sizeof(*constant));
+    copy_text(constant->name, sizeof(constant->name), name->start, (size_t)name->length);
+    constant->token = token;
+    expect(c, TK_COLON, "expected `:` after constant name");
+    constant->type = parse_type(c);
+    expect(c, TK_ASSIGN, "expected `=` in constant declaration");
+    constant->value = parse_expression(c);
+}
+
 static void parse_type_declaration(Compiler *c, Token token) {
     StructDecl *decl;
     Token *name = expect(c, TK_IDENT, "expected type name");
@@ -1726,10 +1717,11 @@ static void parse_program(Compiler *c) {
         if (match(c, TK_USE)) parse_use(c, token);
         else if (match(c, TK_TYPE)) parse_type_declaration(c, token);
         else if (match(c, TK_ERROR)) parse_error(c, token);
+        else if (match(c, TK_CONST)) parse_constant(c, token);
         else if (match(c, TK_FN)) parse_function(c, token);
         else {
             diagnostic_at(c, peek(c), "E-SYNTAX-9999",
-                          "the bootstrap currently supports top-level `use`, `type`, `error`, and `fn`");
+                          "the bootstrap currently supports top-level `use`, `type`, `error`, `const`, and `fn`");
             while (!check(c, TK_NEWLINE) && !check(c, TK_EOF)) c->current++;
         }
         if (!check(c, TK_EOF)) expect(c, TK_NEWLINE, "expected newline after declaration");
@@ -1790,6 +1782,14 @@ static Function *find_function(Compiler *c, const char *name) {
     int i;
     for (i = 0; i < c->program.function_count; ++i)
         if (strcmp(c->program.functions[i].name, name) == 0) return &c->program.functions[i];
+    return 0;
+}
+
+static ConstDecl *find_constant(Compiler *c, const char *name) {
+    int i;
+    for (i = 0; i < c->program.constant_count; ++i)
+        if (strcmp(c->program.constants[i].name, name) == 0)
+            return &c->program.constants[i];
     return 0;
 }
 
@@ -2186,6 +2186,8 @@ static Type resolve_name_place(Compiler *c, Function *fn, Expr *e) {
 }
 
 static Type check_expr(Compiler *c, Function *fn, Expr *e);
+static int evaluate_constant(Compiler *c, ConstDecl *constant);
+static void resolve_type_constants(Compiler *c, Type *type, Token *token);
 
 static Function *check_declared_call(Compiler *c, Function *fn, Expr *e) {
     Function *callee = find_function(c, e->as.call.callee);
@@ -2226,6 +2228,7 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
         case EX_STRING: return e->type;
         case EX_ZERO: case EX_UNDEF: return e->type;
         case EX_ARRAY_LITERAL: {
+            resolve_type_constants(c, &e->type, &e->token);
             Type element = array_element_type(e->type);
             if ((size_t)e->as.array.item_count != e->type.array_length)
                 diagnostic_at(c, &e->token, "E-TYPE-9999", "array literal element count does not match its length");
@@ -2308,6 +2311,15 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                 ErrorDecl *error = find_error(c, e->as.name);
                 if (error) {
                     e->type = type_make(TY_ERR, "err"); e->error_code = error->code; return e->type;
+                }
+            }
+            {
+                ConstDecl *constant = find_constant(c, e->as.name);
+                if (constant && evaluate_constant(c, constant)) {
+                    e->type = constant->type;
+                    e->constant_value = constant->integer_value;
+                    e->is_constant = 1;
+                    return e->type;
                 }
             }
             e->type = resolve_name_place(c, fn, e);
@@ -2582,6 +2594,8 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
         switch (s->kind) {
             case ST_BIND: {
                 Type actual;
+                if (s->as.bind.declared_type.kind != TY_INVALID)
+                    resolve_type_constants(c, &s->as.bind.declared_type, &s->token);
                 if (s->as.bind.declared_type.kind != TY_INVALID &&
                     s->as.bind.value->kind == EX_ENUM_MEMBER)
                     resolve_contextual_member(c, s->as.bind.value, s->as.bind.declared_type);
@@ -3178,6 +3192,178 @@ static void check_known_type(Compiler *c, Type type, Token *token) {
     check_known_type(c, element, token);
 }
 
+static int evaluate_integer_expression(Compiler *c, Expr *expr, int64_t *out,
+                                       Type *out_type);
+
+static int evaluate_constant(Compiler *c, ConstDecl *constant) {
+    Type actual;
+    int64_t value;
+    if (constant->evaluation_state == 2) return 1;
+    if (constant->evaluation_state == 3) return 0;
+    if (constant->evaluation_state == 1) {
+        diagnostic_at(c, &constant->token, "E-TYPE-9999", "constant dependency cycle");
+        constant->evaluation_state = 3;
+        return 0;
+    }
+    constant->evaluation_state = 1;
+    if (constant->type.kind != TY_INT) {
+        diagnostic_at(c, &constant->token, "E-TYPE-9999",
+                      "neper-0 constants currently require an integer type");
+        constant->evaluation_state = 3;
+        return 0;
+    }
+    if (!evaluate_integer_expression(c, constant->value, &value, &actual)) {
+        constant->evaluation_state = 3;
+        return 0;
+    }
+    if (actual.kind != TY_UNTYPED_INT && !type_equal(actual, constant->type)) {
+        diagnostic_at(c, &constant->value->token, "E-TYPE-0002",
+                      "constant initializer type does not match its declaration");
+        constant->evaluation_state = 3;
+        return 0;
+    }
+    if (strcmp(constant->type.name, "usize") == 0 && value < 0) {
+        diagnostic_at(c, &constant->value->token, "E-TYPE-0004",
+                      "constant value is not representable as usize");
+        constant->evaluation_state = 3;
+        return 0;
+    }
+    constant->integer_value = value;
+    constant->value->constant_value = value;
+    constant->value->is_constant = 1;
+    constant->value->type = constant->type;
+    constant->evaluation_state = 2;
+    return 1;
+}
+
+static int checked_integer_binary(Compiler *c, Expr *expr, int64_t left,
+                                  int64_t right, int64_t *out) {
+    switch (expr->as.binary.op) {
+        case TK_PLUS:
+            if ((right > 0 && left > INT64_MAX - right) ||
+                (right < 0 && left < INT64_MIN - right)) break;
+            *out = left + right; return 1;
+        case TK_MINUS:
+            if ((right < 0 && left > INT64_MAX + right) ||
+                (right > 0 && left < INT64_MIN + right)) break;
+            *out = left - right; return 1;
+        case TK_STAR:
+            if (left == 0 || right == 0) { *out = 0; return 1; }
+            if (left == -1 && right == INT64_MIN) break;
+            if (right == -1 && left == INT64_MIN) break;
+            if (left > 0) {
+                if ((right > 0 && left > INT64_MAX / right) ||
+                    (right < 0 && right < INT64_MIN / left)) break;
+            } else {
+                if ((right > 0 && left < INT64_MIN / right) ||
+                    (right < 0 && left < INT64_MAX / right)) break;
+            }
+            *out = left * right; return 1;
+        case TK_SLASH:
+            if (right == 0) {
+                diagnostic_at(c, &expr->token, "E-TYPE-9999",
+                              "division by zero in constant expression");
+                return 0;
+            }
+            if (left == INT64_MIN && right == -1) break;
+            *out = left / right; return 1;
+        case TK_PERCENT:
+            if (right == 0) {
+                diagnostic_at(c, &expr->token, "E-TYPE-9999",
+                              "remainder by zero in constant expression");
+                return 0;
+            }
+            if (left == INT64_MIN && right == -1) { *out = 0; return 1; }
+            *out = left % right; return 1;
+        default:
+            diagnostic_at(c, &expr->token, "E-TYPE-9999",
+                          "constant expression requires integer arithmetic");
+            return 0;
+    }
+    diagnostic_at(c, &expr->token, "E-TYPE-0004", "constant integer overflow");
+    return 0;
+}
+
+static int evaluate_integer_expression(Compiler *c, Expr *expr, int64_t *out,
+                                       Type *out_type) {
+    if (expr->kind == EX_INTEGER && expr->type.kind != TY_BOOL) {
+        *out = expr->as.integer;
+        *out_type = expr->type;
+        return 1;
+    }
+    if (expr->kind == EX_NAME) {
+        ConstDecl *constant = find_constant(c, expr->as.name);
+        if (!constant) {
+            diagnostic_at(c, &expr->token, "E-NAME-9999",
+                          "constant expression references an unknown constant");
+            return 0;
+        }
+        if (!evaluate_constant(c, constant)) return 0;
+        *out = constant->integer_value;
+        *out_type = constant->type;
+        expr->constant_value = *out;
+        expr->is_constant = 1;
+        expr->type = *out_type;
+        return 1;
+    }
+    if (expr->kind == EX_UNARY && expr->as.unary.op == TK_MINUS) {
+        if (!evaluate_integer_expression(c, expr->as.unary.value, out, out_type)) return 0;
+        if (*out == INT64_MIN) {
+            diagnostic_at(c, &expr->token, "E-TYPE-0004", "constant integer overflow");
+            return 0;
+        }
+        *out = -*out;
+        expr->constant_value = *out;
+        expr->is_constant = 1;
+        expr->type = *out_type;
+        return 1;
+    }
+    if (expr->kind == EX_BINARY) {
+        int64_t left, right;
+        Type left_type, right_type;
+        if (!evaluate_integer_expression(c, expr->as.binary.left, &left, &left_type) ||
+            !evaluate_integer_expression(c, expr->as.binary.right, &right, &right_type)) return 0;
+        if (left_type.kind == TY_UNTYPED_INT) *out_type = right_type;
+        else if (right_type.kind == TY_UNTYPED_INT) *out_type = left_type;
+        else if (type_equal(left_type, right_type)) *out_type = left_type;
+        else {
+            diagnostic_at(c, &expr->token, "E-TYPE-0002",
+                          "constant expression operands have different types");
+            return 0;
+        }
+        if (!checked_integer_binary(c, expr, left, right, out)) return 0;
+        expr->constant_value = *out;
+        expr->is_constant = 1;
+        expr->type = *out_type;
+        return 1;
+    }
+    diagnostic_at(c, &expr->token, "E-TYPE-9999",
+                  "neper-0 constant expressions allow integer literals, constants, and arithmetic only");
+    return 0;
+}
+
+static void resolve_type_constants(Compiler *c, Type *type, Token *token) {
+    if (type->kind == TY_ARRAY) {
+        if (type->array_length_expr) {
+            int64_t value;
+            Type actual;
+            if (evaluate_integer_expression(c, type->array_length_expr, &value, &actual)) {
+                if (actual.kind != TY_UNTYPED_INT &&
+                    !(actual.kind == TY_INT && strcmp(actual.name, "usize") == 0))
+                    diagnostic_at(c, &type->array_length_expr->token, "E-TYPE-0002",
+                                  "array length must have type usize");
+                if (value < 0)
+                    diagnostic_at(c, &type->array_length_expr->token, "E-TYPE-0004",
+                                  "array length is not representable as usize");
+                else type->array_length = (size_t)value;
+            }
+        }
+        if (type->element) resolve_type_constants(c, type->element, token);
+    } else if ((type->kind == TY_POINTER || type->kind == TY_SLICE) && type->element) {
+        resolve_type_constants(c, type->element, token);
+    }
+}
+
 static int return_type_uses_integer_register(Compiler *c, Type type) {
     if (type.kind == TY_BOOL || type.kind == TY_ERR || type.kind == TY_INT ||
         type.kind == TY_POINTER || type.kind == TY_ARENA) return 1;
@@ -3243,16 +3429,28 @@ static void check_program(Compiler *c) {
         for (j = 0; j < i; ++j)
             if (strcmp(c->program.errors[i].name, c->program.errors[j].name) == 0)
                 diagnostic_at(c, &c->program.errors[i].token, "E-NAME-0001", "duplicate error declaration");
+    for (i = 0; i < c->program.constant_count; ++i) {
+        ConstDecl *constant = &c->program.constants[i];
+        for (j = 0; j < i; ++j)
+            if (strcmp(constant->name, c->program.constants[j].name) == 0)
+                diagnostic_at(c, &constant->token, "E-NAME-0001", "duplicate constant declaration");
+        resolve_type_constants(c, &constant->type, &constant->token);
+        evaluate_constant(c, constant);
+    }
     for (i = 0; i < c->program.struct_count; ++i) {
         StructDecl *decl = &c->program.structs[i];
         for (j = 0; j < i; ++j)
             if (strcmp(decl->name, c->program.structs[j].name) == 0)
                 diagnostic_at(c, &decl->token, "E-NAME-0001", "duplicate type declaration");
-        if (decl->kind == ND_ENUM || decl->kind == ND_TAGGED_UNION)
+        if (decl->kind == ND_ENUM || decl->kind == ND_TAGGED_UNION) {
+            resolve_type_constants(c, &decl->backing_type, &decl->token);
             check_known_type(c, decl->backing_type, &decl->token);
+        }
         for (j = 0; j < decl->field_count; ++j)
-            if (decl->fields[j].has_payload || decl->kind == ND_STRUCT || decl->kind == ND_UNION)
+            if (decl->fields[j].has_payload || decl->kind == ND_STRUCT || decl->kind == ND_UNION) {
+                resolve_type_constants(c, &decl->fields[j].type, &decl->fields[j].token);
                 check_known_type(c, decl->fields[j].type, &decl->fields[j].token);
+            }
         layout_struct(c, decl);
         if (decl->kind == ND_TAGGED_UNION) {
             char tag_name[128];
@@ -3269,9 +3467,13 @@ static void check_program(Compiler *c) {
         Function *fn = &c->program.functions[i];
         for (j = 0; j < i; ++j) if (strcmp(fn->name, c->program.functions[j].name) == 0)
             diagnostic_at(c, &fn->token, "E-NAME-0001", "duplicate function declaration");
+        for (j = 0; j < fn->return_count; ++j)
+            resolve_type_constants(c, &fn->return_types[j], &fn->token);
+        if (fn->return_count) fn->return_type = fn->return_types[0];
         prepare_return_convention(c, fn);
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
+            resolve_type_constants(c, &fn->params[j].type, &fn->params[j].token);
             check_known_type(c, fn->params[j].type, &fn->params[j].token);
             memset(local, 0, sizeof(*local)); strcpy(local->name, fn->params[j].name);
             local->type = fn->params[j].type; local->is_mutable = 0; local->active = 1;
@@ -3730,6 +3932,10 @@ static void emit_expr(Emitter *e, Expr *x) {
         case EX_NAME: {
             if (strcmp(x->as.name, "ok") == 0) { fputs("    xor eax, eax\n", e->out); break; }
             if (x->error_code) { fprintf(e->out, "    mov eax, %d\n", x->error_code); break; }
+            if (x->is_constant) {
+                fprintf(e->out, "    mov rax, %lld\n", (long long)x->constant_value);
+                break;
+            }
             {
                 int index = x->local_index;
                 Local *local = &e->fn->locals[index];

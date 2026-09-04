@@ -69,6 +69,8 @@ Protocol-style `for value in iterator` resolves the declaring type's
 `<type>_next(*Type) -> (T, bool)`, requires a mutable iterator, and supports scalar
 and aggregate yielded values. Multiple-return calls can be consumed with
 `let (a, b) = call()` or assigned with `(a, b) = call()`, including `_` discards.
+Integer `const` declarations are folded with checked arithmetic and can drive array
+lengths in declarations, annotations, and literals.
 Explicit-backing enums, unchecked bare unions,
 tagged `union enum` values, exact tag/payload layout, tag-checked payload access,
 contextual and qualified member names, and non-fallthrough `switch` are implemented.

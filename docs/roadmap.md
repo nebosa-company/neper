@@ -155,8 +155,11 @@ compiler-generated `<type>_next(*Type) -> (T, bool)` lookup used by `for value i
 iterator`, requires a mutable variable or mutable pointer subject, and implements
 the two-result x64 ABI needed for scalar and aggregate yields. Direct source-level
 destructuring now supports `let`/`var` bindings, `_` discards, and assignment to
-mutable locals for register- and caller-slot-returned result sets. Compile-time
-parameters, constant folding, the full intrinsic set, and debug locals remain open.
+mutable locals for register- and caller-slot-returned result sets. The constant
+increment adds order-independent integer `const` declarations, dependency-cycle and
+overflow diagnostics, runtime constant references, and integer folding for array
+lengths. Compile-time parameters, the full intrinsic set, and debug locals remain
+open.
 This callout does not
 mark the `neper-0` milestone complete.
 
