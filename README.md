@@ -38,14 +38,17 @@ every iteration.
 
 ## Status
 
-Design draft with the M0 bootstrap walking skeleton implemented. The throwaway C99
+Design draft with the M0 bootstrap walking skeleton implemented and `neper-0`
+implementation in progress. The throwaway C99
 compiler lexes and parses the M0 procedural subset, resolves the bundled bootstrap
 modules, checks the fixed program-entry signature, emits x86-64 assembly and object
 files, links with the system linker, and runs `examples/hello.e` on Windows and
-Linux. Startup constructs the root arena and UTF-8 `args`; `try` propagates named
-errors; bounds and invalid-division checks exit through the trap path; and emitted
+Linux. The first `neper-0` increment adds typed integer range `for`, `break`,
+`continue`, integer local `+=`, and lexical block scopes. Startup constructs the
+root arena and UTF-8 `args`; `try` propagates named errors; bounds and invalid-division checks exit
+through the trap path; and emitted
 objects carry line, symbol, unwind and compact `.nepersym`/`.nepsym` data. The
-self-hosted compiler and later milestones have not started.
+self-hosted compiler has not started.
 
 On Windows with the Visual Studio C++ tools installed:
 
@@ -53,6 +56,7 @@ On Windows with the Visual Studio C++ tools installed:
 ./scripts/build-bootstrap.ps1
 ./build/neper.exe run ./examples/hello.e
 ./tests/m0/run.ps1
+./tests/neper0/run.ps1
 ```
 
 On Linux:
@@ -61,6 +65,7 @@ On Linux:
 ./scripts/build-bootstrap.sh
 ./build-linux/neper run ./examples/hello.e
 ./tests/m0/run.sh
+./tests/neper0/run.sh
 ```
 
 - [`docs/spec.md`](docs/spec.md) — the language specification

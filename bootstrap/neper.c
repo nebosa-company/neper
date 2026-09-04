@@ -46,6 +46,7 @@
 #define MAX_DIAGNOSTICS 4096
 #define MAX_TRAP_SITES 4096
 #define MAX_PATH_LEN 4096
+#define MAX_LOOP_DEPTH 64
 
 typedef enum TokenKind {
     TK_EOF,
@@ -64,6 +65,10 @@ typedef enum TokenKind {
     TK_IF,
     TK_ELSE,
     TK_WHILE,
+    TK_FOR,
+    TK_IN,
+    TK_BREAK,
+    TK_CONTINUE,
     TK_TRY,
     TK_OK,
     TK_TRUE,
@@ -78,9 +83,11 @@ typedef enum TokenKind {
     TK_COLON,
     TK_COMMA,
     TK_DOT,
+    TK_RANGE,
     TK_STAR,
     TK_ARROW,
     TK_ASSIGN,
+    TK_ADD_ASSIGN,
     TK_PLUS,
     TK_MINUS,
     TK_SLASH,
@@ -185,7 +192,10 @@ typedef enum StmtKind {
     ST_TRY,
     ST_RETURN,
     ST_IF,
-    ST_WHILE
+    ST_WHILE,
+    ST_FOR_RANGE,
+    ST_BREAK,
+    ST_CONTINUE
 } StmtKind;
 
 typedef struct Stmt Stmt;
@@ -207,6 +217,7 @@ struct Stmt {
             char name[96];
             Expr *value;
             int local_index;
+            TokenKind op;
         } assign;
         Expr *expr;
         struct {
@@ -221,6 +232,14 @@ struct Stmt {
             Expr *condition;
             Stmt *body;
         } while_stmt;
+        struct {
+            char name[96];
+            Expr *start;
+            Expr *end;
+            Stmt *body;
+            int local_index;
+            int end_local_index;
+        } for_range;
     } as;
 };
 
@@ -235,6 +254,7 @@ typedef struct Local {
     char name[96];
     Type type;
     int is_mutable;
+    int active;
     int offset;
 } Local;
 
@@ -368,7 +388,9 @@ static TokenKind keyword_kind(const char *s, int n) {
         {"use", TK_USE}, {"type", TK_TYPE}, {"struct", TK_STRUCT}, {"error", TK_ERROR},
         {"fn", TK_FN}, {"let", TK_LET}, {"var", TK_VAR},
         {"ret", TK_RET}, {"if", TK_IF}, {"else", TK_ELSE},
-        {"while", TK_WHILE}, {"try", TK_TRY}, {"ok", TK_OK},
+        {"while", TK_WHILE}, {"for", TK_FOR}, {"in", TK_IN},
+        {"break", TK_BREAK}, {"continue", TK_CONTINUE},
+        {"try", TK_TRY}, {"ok", TK_OK},
         {"true", TK_TRUE}, {"false", TK_FALSE}, {"const", TK_CONST}
     };
     size_t i;
@@ -560,6 +582,8 @@ static void lex(Compiler *c) {
                 else if (a == '>' && b == '=') { kind = TK_GE; width = 2; }
                 else if (a == '&' && b == '&') { kind = TK_AND; width = 2; }
                 else if (a == '|' && b == '|') { kind = TK_OR; width = 2; }
+                else if (a == '.' && b == '.') { kind = TK_RANGE; width = 2; }
+                else if (a == '+' && b == '=') { kind = TK_ADD_ASSIGN; width = 2; }
             }
             if (kind == TK_EOF) {
                 switch (ch) {
@@ -905,12 +929,32 @@ static Stmt *parse_statement(Compiler *c) {
         s->as.while_stmt.body = parse_block(c);
         return s;
     }
+    if (match(c, TK_FOR)) {
+        Stmt *s = new_stmt(ST_FOR_RANGE, *token);
+        Token *name = expect(c, TK_IDENT, "expected range binding after `for`");
+        copy_text(s->as.for_range.name, sizeof(s->as.for_range.name),
+                  name->start, (size_t)name->length);
+        s->as.for_range.local_index = -1;
+        s->as.for_range.end_local_index = -1;
+        expect(c, TK_IN, "expected `in` after range binding");
+        s->as.for_range.start = parse_expression(c);
+        expect(c, TK_RANGE, "neper-0 currently requires a range in `for`");
+        s->as.for_range.end = parse_expression(c);
+        s->as.for_range.body = parse_block(c);
+        return s;
+    }
+    if (match(c, TK_BREAK)) return new_stmt(ST_BREAK, *token);
+    if (match(c, TK_CONTINUE)) return new_stmt(ST_CONTINUE, *token);
     if (check(c, TK_IDENT) && c->current + 1 < c->token_count &&
-        c->tokens[c->current + 1].kind == TK_ASSIGN) {
-        Token *name = peek(c); c->current += 2;
+        (c->tokens[c->current + 1].kind == TK_ASSIGN ||
+         c->tokens[c->current + 1].kind == TK_ADD_ASSIGN)) {
+        Token *name = peek(c);
+        TokenKind op = c->tokens[c->current + 1].kind;
+        c->current += 2;
         { Stmt *s = new_stmt(ST_ASSIGN, *name);
           copy_text(s->as.assign.name, sizeof(s->as.assign.name), name->start, (size_t)name->length);
-          s->as.assign.value = parse_expression(c); s->as.assign.local_index = -1; return s; }
+          s->as.assign.value = parse_expression(c); s->as.assign.local_index = -1;
+          s->as.assign.op = op; return s; }
     }
     {
         Stmt *s = new_stmt(ST_EXPR, *token); s->as.expr = parse_expression(c); return s;
@@ -1041,7 +1085,8 @@ static ErrorDecl *find_error(Compiler *c, const char *name) {
 
 static int find_local(Function *fn, const char *name) {
     int i;
-    for (i = fn->local_count - 1; i >= 0; --i) if (strcmp(fn->locals[i].name, name) == 0) return i;
+    for (i = fn->local_count - 1; i >= 0; --i)
+        if (fn->locals[i].active && strcmp(fn->locals[i].name, name) == 0) return i;
     return -1;
 }
 
@@ -1181,7 +1226,9 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
     return type_make(TY_INVALID, 0);
 }
 
-static void check_statements(Compiler *c, Function *fn, Stmt *s) {
+static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
+                                      int loop_depth, int close_scope) {
+    int scope_start = fn->local_count;
     for (; s; s = s->next) {
         switch (s->kind) {
             case ST_BIND: {
@@ -1200,6 +1247,7 @@ static void check_statements(Compiler *c, Function *fn, Stmt *s) {
                     Local *local = &fn->locals[fn->local_count];
                     memset(local, 0, sizeof(*local)); strcpy(local->name, s->as.bind.name);
                     local->type = chosen; local->is_mutable = s->as.bind.is_mutable;
+                    local->active = 1;
                     s->as.bind.local_index = fn->local_count++;
                 }
                 break;
@@ -1216,6 +1264,9 @@ static void check_statements(Compiler *c, Function *fn, Stmt *s) {
                     }
                     if (!fn->locals[index].is_mutable) diagnostic_at(c, &s->token, "E-TYPE-9999", "cannot assign to let binding");
                     if (!type_equal(fn->locals[index].type, actual)) diagnostic_at(c, &s->token, "E-TYPE-0002", "assignment type mismatch");
+                    if (s->as.assign.op == TK_ADD_ASSIGN &&
+                        (fn->locals[index].type.kind != TY_INT || actual.kind != TY_INT))
+                        diagnostic_at(c, &s->token, "E-TYPE-9999", "`+=` requires integer operands");
                 }
                 break;
             }
@@ -1235,16 +1286,77 @@ static void check_statements(Compiler *c, Function *fn, Stmt *s) {
             case ST_IF:
                 if (check_expr(c, fn, s->as.if_stmt.condition).kind != TY_BOOL)
                     diagnostic_at(c, &s->token, "E-TYPE-9999", "if condition must be bool");
-                check_statements(c, fn, s->as.if_stmt.then_body);
-                check_statements(c, fn, s->as.if_stmt.else_body);
+                check_statements_in_scope(c, fn, s->as.if_stmt.then_body, loop_depth, 1);
+                check_statements_in_scope(c, fn, s->as.if_stmt.else_body, loop_depth, 1);
                 break;
             case ST_WHILE:
                 if (check_expr(c, fn, s->as.while_stmt.condition).kind != TY_BOOL)
                     diagnostic_at(c, &s->token, "E-TYPE-9999", "while condition must be bool");
-                check_statements(c, fn, s->as.while_stmt.body);
+                if (loop_depth >= MAX_LOOP_DEPTH)
+                    diagnostic_at(c, &s->token, "E-TOOL-9999", "loop nesting limit exceeded");
+                else
+                    check_statements_in_scope(c, fn, s->as.while_stmt.body, loop_depth + 1, 1);
+                break;
+            case ST_FOR_RANGE: {
+                Type start = check_expr(c, fn, s->as.for_range.start);
+                Type end = check_expr(c, fn, s->as.for_range.end);
+                int range_start;
+                if (start.kind == TY_UNTYPED_INT && end.kind == TY_INT) {
+                    coerce_untyped_integer(s->as.for_range.start, end); start = end;
+                } else if (end.kind == TY_UNTYPED_INT && start.kind == TY_INT) {
+                    coerce_untyped_integer(s->as.for_range.end, start); end = start;
+                }
+                if (start.kind == TY_UNTYPED_INT && end.kind == TY_UNTYPED_INT)
+                    diagnostic_at(c, &s->token, "E-TYPE-0001", "range bounds have no typing context");
+                else if (start.kind != TY_INT || end.kind != TY_INT)
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "range bounds must be integers");
+                else if (!type_equal(start, end))
+                    diagnostic_at(c, &s->token, "E-TYPE-0002", "range bounds have different types");
+                if (find_local(fn, s->as.for_range.name) >= 0) {
+                    diagnostic_at(c, &s->token, "E-NAME-0003", "range binding shadows an active name");
+                    break;
+                }
+                range_start = fn->local_count;
+                if (fn->local_count + 2 <= MAX_LOCALS) {
+                    Local *index = &fn->locals[fn->local_count];
+                    Local *limit = &fn->locals[fn->local_count + 1];
+                    memset(index, 0, sizeof(*index));
+                    memset(limit, 0, sizeof(*limit));
+                    strcpy(index->name, s->as.for_range.name);
+                    snprintf(limit->name, sizeof(limit->name), "$range_end_%d", fn->local_count);
+                    index->type = start; index->is_mutable = 0; index->active = 1;
+                    limit->type = start; limit->is_mutable = 0; limit->active = 1;
+                    s->as.for_range.local_index = fn->local_count++;
+                    s->as.for_range.end_local_index = fn->local_count++;
+                    if (loop_depth >= MAX_LOOP_DEPTH)
+                        diagnostic_at(c, &s->token, "E-TOOL-9999", "loop nesting limit exceeded");
+                    else
+                        check_statements_in_scope(c, fn, s->as.for_range.body, loop_depth + 1, 1);
+                    fn->locals[range_start].active = 0;
+                    fn->locals[range_start + 1].active = 0;
+                } else {
+                    diagnostic_at(c, &s->token, "E-TOOL-9999", "local limit exceeded");
+                }
+                break;
+            }
+            case ST_BREAK:
+                if (loop_depth == 0)
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "break requires an enclosing loop");
+                break;
+            case ST_CONTINUE:
+                if (loop_depth == 0)
+                    diagnostic_at(c, &s->token, "E-TYPE-9999", "continue requires an enclosing loop");
                 break;
         }
     }
+    if (close_scope) {
+        int i;
+        for (i = scope_start; i < fn->local_count; ++i) fn->locals[i].active = 0;
+    }
+}
+
+static void check_statements(Compiler *c, Function *fn, Stmt *s) {
+    check_statements_in_scope(c, fn, s, 0, 0);
 }
 
 static int path_exists(const char *path) {
@@ -1300,7 +1412,7 @@ static void check_program(Compiler *c) {
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
             memset(local, 0, sizeof(*local)); strcpy(local->name, fn->params[j].name);
-            local->type = fn->params[j].type; local->is_mutable = 0;
+            local->type = fn->params[j].type; local->is_mutable = 0; local->active = 1;
             fn->params[j].local_index = fn->local_count++;
         }
         check_statements(c, fn, fn->body);
@@ -1372,6 +1484,12 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
                 collect_traps_expr(c, fn, statement->as.while_stmt.condition);
                 collect_traps_statements(c, fn, statement->as.while_stmt.body);
                 break;
+            case ST_FOR_RANGE:
+                collect_traps_expr(c, fn, statement->as.for_range.start);
+                collect_traps_expr(c, fn, statement->as.for_range.end);
+                collect_traps_statements(c, fn, statement->as.for_range.body);
+                break;
+            case ST_BREAK: case ST_CONTINUE: break;
         }
     }
 }
@@ -1392,11 +1510,19 @@ typedef struct Emitter {
     int call_base;
     int return_label;
     int debug_label;
+    int loop_break[MAX_LOOP_DEPTH];
+    int loop_continue[MAX_LOOP_DEPTH];
+    int loop_depth;
 } Emitter;
 
 static const char *symbol_name(Function *fn) { return fn->symbol; }
 
 static int align16(int value) { return (value + 15) & ~15; }
+
+static int type_is_unsigned(Type type) {
+    return type.kind == TY_INT &&
+           (type.name[0] == 'u' || strcmp(type.name, "usize") == 0);
+}
 
 static void assign_offsets(Function *fn) {
     int i, offset = 0;
@@ -1581,8 +1707,12 @@ static void emit_statements(Emitter *e, Stmt *s) {
             case ST_ASSIGN: {
                 Local *local = &e->fn->locals[s->as.assign.local_index];
                 emit_expr(e, s->as.assign.value);
-                fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", local->offset);
-                if (type_lanes(local->type) == 2) fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", local->offset + 8);
+                if (s->as.assign.op == TK_ADD_ASSIGN) {
+                    fprintf(e->out, "    add QWORD PTR [rbp-%d], rax\n", local->offset);
+                } else {
+                    fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", local->offset);
+                    if (type_lanes(local->type) == 2) fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", local->offset + 8);
+                }
                 break;
             }
             case ST_EXPR: emit_expr(e, s->as.expr); break;
@@ -1612,10 +1742,43 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 emit_expr(e, s->as.while_stmt.condition);
                 fputs("    test rax, rax\n", e->out);
                 fprintf(e->out, "    je np_label_%d\n", done);
+                e->loop_break[e->loop_depth] = done;
+                e->loop_continue[e->loop_depth] = start;
+                e->loop_depth++;
                 emit_statements(e, s->as.while_stmt.body);
+                e->loop_depth--;
                 fprintf(e->out, "    jmp np_label_%d\nnp_label_%d:\n", start, done);
                 break;
             }
+            case ST_FOR_RANGE: {
+                Local *index = &e->fn->locals[s->as.for_range.local_index];
+                Local *limit = &e->fn->locals[s->as.for_range.end_local_index];
+                int start = e->label++, step = e->label++, done = e->label++;
+                emit_expr(e, s->as.for_range.start);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", index->offset);
+                emit_expr(e, s->as.for_range.end);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", limit->offset);
+                fprintf(e->out, "np_label_%d:\n", start);
+                fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", index->offset);
+                fprintf(e->out, "    cmp rax, QWORD PTR [rbp-%d]\n", limit->offset);
+                fprintf(e->out, type_is_unsigned(index->type) ?
+                        "    jae np_label_%d\n" : "    jge np_label_%d\n", done);
+                e->loop_break[e->loop_depth] = done;
+                e->loop_continue[e->loop_depth] = step;
+                e->loop_depth++;
+                emit_statements(e, s->as.for_range.body);
+                e->loop_depth--;
+                fprintf(e->out, "np_label_%d:\n", step);
+                fprintf(e->out, "    add QWORD PTR [rbp-%d], 1\n", index->offset);
+                fprintf(e->out, "    jmp np_label_%d\nnp_label_%d:\n", start, done);
+                break;
+            }
+            case ST_BREAK:
+                fprintf(e->out, "    jmp np_label_%d\n", e->loop_break[e->loop_depth - 1]);
+                break;
+            case ST_CONTINUE:
+                fprintf(e->out, "    jmp np_label_%d\n", e->loop_continue[e->loop_depth - 1]);
+                break;
         }
     }
 }
@@ -1737,6 +1900,7 @@ static int statement_line_count(Stmt *statement) {
             count += statement_line_count(statement->as.if_stmt.then_body);
             count += statement_line_count(statement->as.if_stmt.else_body);
         } else if (statement->kind == ST_WHILE) count += statement_line_count(statement->as.while_stmt.body);
+        else if (statement->kind == ST_FOR_RANGE) count += statement_line_count(statement->as.for_range.body);
     }
     return count;
 }
@@ -1750,6 +1914,8 @@ static void emit_codeview_statement_lines(FILE *out, Function *fn, Stmt *stateme
             emit_codeview_statement_lines(out, fn, statement->as.if_stmt.else_body);
         } else if (statement->kind == ST_WHILE)
             emit_codeview_statement_lines(out, fn, statement->as.while_stmt.body);
+        else if (statement->kind == ST_FOR_RANGE)
+            emit_codeview_statement_lines(out, fn, statement->as.for_range.body);
     }
 }
 

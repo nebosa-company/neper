@@ -1,6 +1,7 @@
 # The neper language — specification (draft 0.1)
 
-Status: design draft. Nothing here is implemented yet.
+Status: design draft. Implementation coverage is tracked milestone by milestone in
+[`roadmap.md`](roadmap.md); implemented subsets do not imply full conformance.
 
 Neper is a compact, ahead-of-time general-purpose language for model-generated
 software, with explicit memory, deterministic semantics, inexpensive abstraction,

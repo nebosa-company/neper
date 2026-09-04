@@ -119,6 +119,14 @@ The throwaway C99 compiler (D4) implements exactly this subset and nothing beyon
 it, and the self-hosted compiler is written in it. `neper-0` is the language a
 compiler needs — `list.e` is `neper-0` code — and no more.
 
+**In progress (started 2026-09-04).** The first executable increment implements
+typed integer range `for`, `break`, `continue`, integer local `+=`, and lexical block
+scopes in the C99 bootstrap. `tests/neper0/run.*` cover signed ascending and empty ranges, early loop
+exits, sibling-scope name reuse, out-of-scope rejection, and invalid loop control on
+Windows and Linux. Slice/array/protocol iteration, aggregates, `defer`, `switch`,
+compile-time parameters, constant folding, the full intrinsic set, and debug locals
+remain open; this callout does not mark the `neper-0` milestone complete.
+
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
   `for`
