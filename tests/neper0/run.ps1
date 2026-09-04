@@ -124,4 +124,22 @@ if ($LASTEXITCODE -ne 1 -or ($deferRetError -join "`n") -notmatch 'ret is not le
     throw 'ret-inside-defer rejection failed'
 }
 
+$protocol = & $neper run (Join-Path $PSScriptRoot 'protocol-iteration.e') --output (Join-Path $testBuild 'protocol-iteration.exe')
+if ($LASTEXITCODE -ne 0 -or $protocol -ne 'protocol iteration ok') { throw 'protocol iteration behavior failed' }
+
+$protocolImmutable = & $neper build (Join-Path $PSScriptRoot 'protocol-immutable-error.e') --output (Join-Path $testBuild 'protocol-immutable-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($protocolImmutable -join "`n") -notmatch 'iterator subject must be a mutable variable or a mutable pointer') {
+    throw 'immutable iterator rejection failed'
+}
+
+$protocolSignature = & $neper build (Join-Path $PSScriptRoot 'protocol-signature-error.e') --output (Join-Path $testBuild 'protocol-signature-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($protocolSignature -join "`n") -notmatch 'iterator next function must have signature') {
+    throw 'iterator signature rejection failed'
+}
+
+$protocolMissing = & $neper build (Join-Path $PSScriptRoot 'protocol-missing-error.e') --output (Join-Path $testBuild 'protocol-missing-error.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($protocolMissing -join "`n") -notmatch 'protocol iteration needs `fn counter_next') {
+    throw 'missing iterator protocol rejection failed'
+}
+
 'neper-0 Windows tests passed'

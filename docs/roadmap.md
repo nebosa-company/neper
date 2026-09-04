@@ -150,7 +150,11 @@ scopes, and `break`/`continue` targeting on both x64 ABIs. The cleanup increment
 both forms of lexical `defer`, immediate left-to-right
 argument capture for deferred calls, place capture for deferred blocks, reverse-order
 cleanup on normal and structured exits, per-iteration cleanup, deliberate discarded
-fallible calls, and return-value preservation. Protocol iteration, compile-time
+fallible calls, and return-value preservation. The iterator increment adds the
+compiler-generated `<type>_next(*Type) -> (T, bool)` lookup used by `for value in
+iterator`, requires a mutable variable or mutable pointer subject, and implements
+the two-result x64 ABI needed for scalar and aggregate yields. Direct source-level
+destructuring of arbitrary multiple-return calls remains open. Compile-time
 parameters, constant folding, the full intrinsic set, and debug locals remain open.
 This callout does not
 mark the `neper-0` milestone complete.
@@ -180,8 +184,10 @@ Not in `neper-0`, and therefore not written in C: argument packs and
 `str.push_*`), the general compile-time interpreter, threads and atomics, function
   pointers and the `K: fn` comptime kind, `@test` and `neper test`, `neper fmt`,
   `neper tokens`, `neper parse`, `neper index` and `neper info`, general `extern`
-and `e.os`, `Vec[T, N]`/`simd`, `when`/`target`, `@gpu`, protocols and `e.meta`
-(the bootstrap's own containers are written per element type, by hand). Each is implemented
+and `e.os`, `Vec[T, N]`/`simd`, `when`/`target`, `@gpu`, generic protocol dispatch
+and `e.meta` (the compiler-generated iterator `next` lookup is the sole protocol
+exception; the bootstrap's own containers are otherwise written per element type,
+by hand). Each is implemented
 once, in the self-hosted compiler, after it compiles itself.
 
 **Size, recorded against D4.** `neper-0` in C99 is roughly 15k lines: lexer 1k,

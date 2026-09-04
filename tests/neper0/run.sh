@@ -147,4 +147,27 @@ set -e
 test "$defer_ret_status" -eq 1
 printf '%s' "$defer_ret_error" | grep -q 'ret is not legal inside defer'
 
+test "$("$neper" run "$repo/tests/neper0/protocol-iteration.e" --output "$test_build/protocol-iteration")" = 'protocol iteration ok'
+
+set +e
+protocol_immutable=$("$neper" build "$repo/tests/neper0/protocol-immutable-error.e" --output "$test_build/protocol-immutable-error" 2>&1)
+protocol_immutable_status=$?
+set -e
+test "$protocol_immutable_status" -eq 1
+printf '%s' "$protocol_immutable" | grep -q 'iterator subject must be a mutable variable or a mutable pointer'
+
+set +e
+protocol_signature=$("$neper" build "$repo/tests/neper0/protocol-signature-error.e" --output "$test_build/protocol-signature-error" 2>&1)
+protocol_signature_status=$?
+set -e
+test "$protocol_signature_status" -eq 1
+printf '%s' "$protocol_signature" | grep -q 'iterator next function must have signature'
+
+set +e
+protocol_missing=$("$neper" build "$repo/tests/neper0/protocol-missing-error.e" --output "$test_build/protocol-missing-error" 2>&1)
+protocol_missing_status=$?
+set -e
+test "$protocol_missing_status" -eq 1
+printf '%s' "$protocol_missing" | grep -q 'protocol iteration needs `fn counter_next'
+
 printf '%s\n' 'neper-0 Linux tests passed'

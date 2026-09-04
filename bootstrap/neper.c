@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.6-neper0"
+#define NEPER_VERSION "0.0.7-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -306,6 +306,8 @@ struct Stmt {
         Expr *expr;
         struct {
             Expr *value;
+            Expr *values[MAX_ARGS];
+            int value_count;
         } ret;
         struct {
             Expr *condition;
@@ -334,6 +336,11 @@ struct Stmt {
             int length_local_index;
             int index_local_index;
             int value_local_index;
+            int is_protocol;
+            int iterator_subject_is_pointer;
+            int iterator_pointer_local_index;
+            int iterator_has_local_index;
+            char next_function[96];
         } for_each;
         struct {
             Expr *subject;
@@ -374,12 +381,18 @@ typedef struct Function {
     Param params[MAX_PARAMS];
     int param_count;
     Type return_type;
+    Type return_types[MAX_ARGS];
+    int return_count;
+    int returns_via_slot;
+    size_t return_offsets[MAX_ARGS];
+    size_t return_storage_size;
     Stmt *body;
     Local locals[MAX_LOCALS];
     int local_count;
     int frame_size;
     int return_slot_local_index;
     int scalar_return_local_index;
+    int return_value_locals[MAX_ARGS];
 } Function;
 
 typedef struct UseDecl {
@@ -1297,7 +1310,19 @@ static Stmt *parse_statement(Compiler *c) {
     }
     if (match(c, TK_RET)) {
         Stmt *s = new_stmt(ST_RETURN, *token);
-        if (!check(c, TK_NEWLINE) && !check(c, TK_RBRACE)) s->as.ret.value = parse_expression(c);
+        if (!check(c, TK_NEWLINE) && !check(c, TK_RBRACE)) {
+            if (match(c, TK_LPAREN)) {
+                do {
+                    if (s->as.ret.value_count >= MAX_ARGS) {
+                        diagnostic_at(c, peek(c), "E-TOOL-9999", "return value limit exceeded");
+                        break;
+                    }
+                    s->as.ret.values[s->as.ret.value_count++] = parse_expression(c);
+                } while (match(c, TK_COMMA) && !check(c, TK_RPAREN));
+                expect(c, TK_RPAREN, "expected `)` after return values");
+            } else s->as.ret.values[s->as.ret.value_count++] = parse_expression(c);
+            if (s->as.ret.value_count) s->as.ret.value = s->as.ret.values[0];
+        }
         return s;
     }
     if (match(c, TK_TRY)) {
@@ -1360,6 +1385,8 @@ static Stmt *parse_statement(Compiler *c) {
             s->as.for_each.length_local_index = -1;
             s->as.for_each.index_local_index = -1;
             s->as.for_each.value_local_index = -1;
+            s->as.for_each.iterator_pointer_local_index = -1;
+            s->as.for_each.iterator_has_local_index = -1;
             s->as.for_each.has_index = second != 0;
             if (second) {
                 copy_text(s->as.for_each.index_name, sizeof(s->as.for_each.index_name),
@@ -1587,6 +1614,7 @@ static void parse_function(Compiler *c, Token token) {
     memset(fn, 0, sizeof(*fn)); fn->token = token;
     fn->return_slot_local_index = -1;
     fn->scalar_return_local_index = -1;
+    { int i; for (i = 0; i < MAX_ARGS; ++i) fn->return_value_locals[i] = -1; }
     name = expect(c, TK_IDENT, "expected function name");
     copy_text(fn->name, sizeof(fn->name), name->start, (size_t)name->length);
     if (strcmp(fn->name, "main") == 0) strcpy(fn->symbol, "neper_main");
@@ -1608,8 +1636,25 @@ static void parse_function(Compiler *c, Token token) {
         } while (match(c, TK_COMMA));
     }
     expect(c, TK_RPAREN, "expected `)` after parameters");
-    if (match(c, TK_ARROW)) fn->return_type = parse_type(c);
-    else fn->return_type = type_make(TY_VOID, "void");
+    if (match(c, TK_ARROW)) {
+        if (match(c, TK_LPAREN)) {
+            do {
+                if (fn->return_count >= MAX_ARGS) {
+                    diagnostic_at(c, peek(c), "E-TOOL-9999", "return type limit exceeded");
+                    break;
+                }
+                fn->return_types[fn->return_count++] = parse_type(c);
+            } while (match(c, TK_COMMA) && !check(c, TK_RPAREN));
+            expect(c, TK_RPAREN, "expected `)` after return types");
+            if (fn->return_count < 2)
+                diagnostic_at(c, &token, "E-SYNTAX-9999", "parenthesized return signature requires at least two types");
+            fn->return_type = fn->return_count ? fn->return_types[0] : type_make(TY_INVALID, 0);
+        } else {
+            fn->return_type = parse_type(c);
+            fn->return_types[0] = fn->return_type;
+            fn->return_count = 1;
+        }
+    } else fn->return_type = type_make(TY_VOID, "void");
     fn->body = parse_block(c);
 }
 
@@ -1685,6 +1730,23 @@ static Function *find_function(Compiler *c, const char *name) {
     for (i = 0; i < c->program.function_count; ++i)
         if (strcmp(c->program.functions[i].name, name) == 0) return &c->program.functions[i];
     return 0;
+}
+
+static void iterator_next_name(Type type, char *out, size_t capacity) {
+    const char *name = strrchr(type.name, '.');
+    size_t i, n, used = 0;
+    name = name ? name + 1 : type.name;
+    n = strlen(name);
+    for (i = 0; i < n && used + 6 < capacity; ++i) {
+        unsigned char ch = (unsigned char)name[i];
+        int upper = ch >= 'A' && ch <= 'Z';
+        int previous_lower = i > 0 && ((name[i - 1] >= 'a' && name[i - 1] <= 'z') ||
+                                      (name[i - 1] >= '0' && name[i - 1] <= '9'));
+        int next_lower = i + 1 < n && name[i + 1] >= 'a' && name[i + 1] <= 'z';
+        if (upper && i > 0 && (previous_lower || next_lower)) out[used++] = '_';
+        out[used++] = (char)(upper ? ch - 'A' + 'a' : ch);
+    }
+    copy_text(out + used, capacity - used, "_next", 5);
 }
 
 static ErrorDecl *find_error(Compiler *c, const char *name) {
@@ -2306,7 +2368,11 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                         if (!type_assignable(actual, callee->params[i].type))
                             diagnostic_at(c, &e->as.call.args[i]->token, "E-TYPE-0003", "argument type does not match parameter");
                     }
-                    result = callee->return_type;
+                    if (callee->return_count > 1) {
+                        diagnostic_at(c, &e->token, "E-TYPE-9999",
+                                      "a multiple-return call requires destructuring or protocol iteration");
+                        result = type_make(TY_INVALID, 0);
+                    } else result = callee->return_type;
                 }
             }
             e->type = result; return result;
@@ -2566,18 +2632,27 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     diagnostic_at(c, &s->token, "E-ERROR-9999", "try requires an err expression in an err-returning function");
                 break;
             case ST_RETURN: {
+                int return_index;
                 if (c->checking_defer)
                     diagnostic_at(c, &s->token, "E-TYPE-9999", "ret is not legal inside defer");
-                if (s->as.ret.value && (s->as.ret.value->kind == EX_ZERO || s->as.ret.value->kind == EX_UNDEF))
-                    s->as.ret.value->type = fn->return_type;
-                if (s->as.ret.value && s->as.ret.value->kind == EX_ENUM_MEMBER)
-                    resolve_contextual_member(c, s->as.ret.value, fn->return_type);
-                Type actual = s->as.ret.value ? check_expr(c, fn, s->as.ret.value) : type_make(TY_VOID, "void");
-                check_zeroable(c, s->as.ret.value, fn->return_type);
-                if (s->as.ret.value && actual.kind == TY_UNTYPED_INT && fn->return_type.kind == TY_INT) {
-                    coerce_untyped_integer(s->as.ret.value, fn->return_type); actual = fn->return_type;
+                if (s->as.ret.value_count != fn->return_count) {
+                    if (!(s->as.ret.value_count == 0 && fn->return_count == 0))
+                        diagnostic_at(c, &s->token, "E-TYPE-9999", "return value count does not match function signature");
                 }
-                if (!type_assignable(actual, fn->return_type)) diagnostic_at(c, &s->token, "E-TYPE-9999", "return type mismatch");
+                for (return_index = 0; return_index < s->as.ret.value_count && return_index < fn->return_count; ++return_index) {
+                    Expr *value = s->as.ret.values[return_index];
+                    Type expected = fn->return_types[return_index];
+                    Type actual;
+                    if (value->kind == EX_ZERO || value->kind == EX_UNDEF) value->type = expected;
+                    if (value->kind == EX_ENUM_MEMBER) resolve_contextual_member(c, value, expected);
+                    actual = check_expr(c, fn, value);
+                    check_zeroable(c, value, expected);
+                    if (actual.kind == TY_UNTYPED_INT && expected.kind == TY_INT) {
+                        coerce_untyped_integer(value, expected); actual = expected;
+                    }
+                    if (!type_assignable(actual, expected))
+                        diagnostic_at(c, &value->token, "E-TYPE-9999", "return type mismatch");
+                }
                 break;
             }
             case ST_IF:
@@ -2641,8 +2716,77 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 Type element;
                 int local_start, i;
                 if (!(sequence.kind == TY_ARRAY || sequence.kind == TY_SLICE || sequence.kind == TY_STR)) {
-                    diagnostic_at(c, &s->token, "E-TYPE-9999",
-                                  "for subject must be a range, array, or slice in this neper-0 increment");
+                    Type iterator_type = sequence;
+                    Function *next;
+                    Type pointer_type;
+                    int subject_is_pointer = sequence.kind == TY_POINTER;
+                    if (s->as.for_each.has_index) {
+                        diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                      "protocol iteration has one value binding; index/value form is only for arrays and slices");
+                        break;
+                    }
+                    if (subject_is_pointer) {
+                        if (sequence.is_const) {
+                            diagnostic_at(c, &s->token, "E-TYPE-9999", "iterator pointer must be mutable");
+                            break;
+                        }
+                        iterator_type = pointer_element_type(sequence);
+                    } else if (s->as.for_each.subject->kind != EX_NAME ||
+                               s->as.for_each.subject->field_path_count != 0 ||
+                               !s->as.for_each.subject->place_mutable) {
+                        diagnostic_at(c, &s->token, "E-TYPE-9999",
+                                      "iterator subject must be a mutable variable or a mutable pointer");
+                        break;
+                    }
+                    if (iterator_type.kind != TY_NAMED) {
+                        diagnostic_at(c, &s->token, "E-TYPE-9999", "iterator subject has no declaring type");
+                        break;
+                    }
+                    iterator_next_name(iterator_type, s->as.for_each.next_function,
+                                       sizeof(s->as.for_each.next_function));
+                    next = find_function(c, s->as.for_each.next_function);
+                    if (!next) {
+                        char message[256];
+                        snprintf(message, sizeof(message), "protocol iteration needs `fn %s(it: *%s) -> (T, bool)`",
+                                 s->as.for_each.next_function, iterator_type.name);
+                        diagnostic_at(c, &s->token, "E-NAME-9999", message);
+                        break;
+                    }
+                    pointer_type = type_make(TY_POINTER, iterator_type.name);
+                    type_set_element(&pointer_type, iterator_type);
+                    if (next->param_count != 1 || !type_equal(next->params[0].type, pointer_type) ||
+                        next->return_count != 2 || next->return_types[1].kind != TY_BOOL) {
+                        diagnostic_at(c, &s->token, "E-TYPE-0003",
+                                      "iterator next function must have signature `fn <type>_next(it: *I) -> (T, bool)`");
+                        break;
+                    }
+                    element = next->return_types[0];
+                    if (find_local(fn, s->as.for_each.value_name) >= 0) {
+                        diagnostic_at(c, &s->token, "E-NAME-0003", "for binding shadows an active name");
+                        break;
+                    }
+                    local_start = fn->local_count;
+                    if (fn->local_count + 3 <= MAX_LOCALS) {
+                        Local *pointer = &fn->locals[fn->local_count];
+                        Local *has = &fn->locals[fn->local_count + 1];
+                        Local *value = &fn->locals[fn->local_count + 2];
+                        memset(pointer, 0, sizeof(*pointer)); memset(has, 0, sizeof(*has)); memset(value, 0, sizeof(*value));
+                        snprintf(pointer->name, sizeof(pointer->name), "$iter_ptr_%d", local_start);
+                        snprintf(has->name, sizeof(has->name), "$iter_has_%d", local_start);
+                        strcpy(value->name, s->as.for_each.value_name);
+                        pointer->type = pointer_type; has->type = type_make(TY_BOOL, "bool"); value->type = element;
+                        pointer->active = has->active = value->active = 1;
+                        s->as.for_each.is_protocol = 1;
+                        s->as.for_each.iterator_subject_is_pointer = subject_is_pointer;
+                        s->as.for_each.iterator_pointer_local_index = fn->local_count++;
+                        s->as.for_each.iterator_has_local_index = fn->local_count++;
+                        s->as.for_each.value_local_index = fn->local_count++;
+                        if (loop_depth >= MAX_LOOP_DEPTH)
+                            diagnostic_at(c, &s->token, "E-TOOL-9999", "loop nesting limit exceeded");
+                        else check_statements_in_scope(c, fn, s->as.for_each.body,
+                                                       loop_depth + 1, break_depth + 1, 1);
+                        for (i = local_start; i < local_start + 3; ++i) fn->locals[i].active = 0;
+                    } else diagnostic_at(c, &s->token, "E-TOOL-9999", "local limit exceeded");
                     break;
                 }
                 element = sequence_element_type(sequence);
@@ -2884,6 +3028,64 @@ static void check_known_type(Compiler *c, Type type, Token *token) {
     check_known_type(c, element, token);
 }
 
+static int return_type_uses_integer_register(Compiler *c, Type type) {
+    if (type.kind == TY_BOOL || type.kind == TY_ERR || type.kind == TY_INT ||
+        type.kind == TY_POINTER || type.kind == TY_ARENA) return 1;
+    if (type.kind == TY_NAMED) {
+        StructDecl *decl = enum_decl_for_type(c, type);
+        return decl && (decl->kind == ND_ENUM || find_tag_owner(c, type.name));
+    }
+    return 0;
+}
+
+static void prepare_return_convention(Compiler *c, Function *fn) {
+    size_t offset = 0, maximum_alignment = 1;
+    int i;
+    fn->returns_via_slot = 0;
+    if (fn->return_count > 2) fn->returns_via_slot = 1;
+    for (i = 0; i < fn->return_count; ++i) {
+        size_t size = 0, alignment = 1;
+        check_known_type(c, fn->return_types[i], &fn->token);
+        if (!return_type_uses_integer_register(c, fn->return_types[i]))
+            fn->returns_via_slot = 1;
+        if (!type_layout(c, fn->return_types[i], &size, &alignment)) continue;
+        offset = align_up_size(offset, alignment);
+        fn->return_offsets[i] = offset;
+        offset += size;
+        if (alignment > maximum_alignment) maximum_alignment = alignment;
+    }
+    fn->return_storage_size = align_up_size(offset, maximum_alignment);
+    if (fn->returns_via_slot && fn->return_count) {
+        Local *slot;
+        Type pointer;
+        if (fn->local_count >= MAX_LOCALS) {
+            diagnostic_at(c, &fn->token, "E-TOOL-9999", "local limit exceeded by return storage");
+            return;
+        }
+        slot = &fn->locals[fn->local_count];
+        pointer = type_make(TY_POINTER, fn->return_types[0].name);
+        type_set_element(&pointer, fn->return_types[0]);
+        memset(slot, 0, sizeof(*slot));
+        strcpy(slot->name, "$return_slot");
+        slot->type = pointer; slot->active = 1;
+        fn->return_slot_local_index = fn->local_count++;
+    } else {
+        for (i = 0; i < fn->return_count; ++i) {
+            Local *slot;
+            if (fn->local_count >= MAX_LOCALS) {
+                diagnostic_at(c, &fn->token, "E-TOOL-9999", "local limit exceeded by return values");
+                break;
+            }
+            slot = &fn->locals[fn->local_count];
+            memset(slot, 0, sizeof(*slot));
+            snprintf(slot->name, sizeof(slot->name), "$return_value_%d", i);
+            slot->type = fn->return_types[i]; slot->active = 1;
+            fn->return_value_locals[i] = fn->local_count++;
+        }
+        if (fn->return_count) fn->scalar_return_local_index = fn->return_value_locals[0];
+    }
+}
+
 static void check_program(Compiler *c) {
     int i, j;
     Function *main_fn = 0;
@@ -2917,22 +3119,7 @@ static void check_program(Compiler *c) {
         Function *fn = &c->program.functions[i];
         for (j = 0; j < i; ++j) if (strcmp(fn->name, c->program.functions[j].name) == 0)
             diagnostic_at(c, &fn->token, "E-NAME-0001", "duplicate function declaration");
-        check_known_type(c, fn->return_type, &fn->token);
-        if (type_is_value_aggregate(c, fn->return_type)) {
-            Local *slot = &fn->locals[fn->local_count];
-            Type pointer = type_make(TY_POINTER, fn->return_type.name);
-            type_set_element(&pointer, fn->return_type);
-            memset(slot, 0, sizeof(*slot));
-            strcpy(slot->name, "$return_slot");
-            slot->type = pointer; slot->active = 1;
-            fn->return_slot_local_index = fn->local_count++;
-        } else if (fn->return_type.kind != TY_VOID && fn->local_count < MAX_LOCALS) {
-            Local *slot = &fn->locals[fn->local_count];
-            memset(slot, 0, sizeof(*slot));
-            strcpy(slot->name, "$return_value");
-            slot->type = fn->return_type; slot->active = 1;
-            fn->scalar_return_local_index = fn->local_count++;
-        }
+        prepare_return_convention(c, fn);
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
             check_known_type(c, fn->params[j].type, &fn->params[j].token);
@@ -2950,7 +3137,7 @@ static void check_program(Compiler *c) {
     } else if (main_fn->param_count != 2 || main_fn->params[0].type.kind != TY_POINTER ||
                strcmp(main_fn->params[0].type.name, "mem.Arena") != 0 ||
                main_fn->params[1].type.kind != TY_SLICE || strcmp(main_fn->params[1].type.name, "str") != 0 ||
-               main_fn->return_type.kind != TY_ERR) {
+               main_fn->return_count != 1 || main_fn->return_type.kind != TY_ERR) {
         diagnostic_at(c, &main_fn->token, "E-TYPE-9999",
                       "program entry must be fn main(a: *mem.Arena, args: []str) -> err");
     }
@@ -3030,7 +3217,12 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
                 collect_traps_expr(c, fn, statement->as.index_assign.value);
                 break;
             case ST_EXPR: case ST_TRY: collect_traps_expr(c, fn, statement->as.expr); break;
-            case ST_RETURN: collect_traps_expr(c, fn, statement->as.ret.value); break;
+            case ST_RETURN: {
+                int value_index;
+                for (value_index = 0; value_index < statement->as.ret.value_count; ++value_index)
+                    collect_traps_expr(c, fn, statement->as.ret.values[value_index]);
+                break;
+            }
             case ST_IF:
                 collect_traps_expr(c, fn, statement->as.if_stmt.condition);
                 collect_traps_statements(c, fn, statement->as.if_stmt.then_body);
@@ -3302,7 +3494,9 @@ static void emit_argument_lane(Emitter *e, int lane, const char *source) {
 
 static void emit_call(Emitter *e, Expr *x, int aggregate_destination) {
     int slots[MAX_ARGS], lanes[MAX_ARGS], indirect[MAX_ARGS], aggregate[MAX_ARGS], i;
-    int returns_aggregate = type_is_value_aggregate(e->compiler, x->type);
+    Function *callee = strcmp(x->as.call.callee, "io.print") == 0 ? 0 :
+                       find_function(e->compiler, x->as.call.callee);
+    int returns_aggregate = callee && callee->returns_via_slot;
     int result_slot = aggregate_destination;
     int lane = returns_aggregate ? 1 : 0;
     if (returns_aggregate && !result_slot) {
@@ -3359,10 +3553,16 @@ static void emit_call(Emitter *e, Expr *x, int aggregate_destination) {
     }
     if (strcmp(x->as.call.callee, "io.print") == 0) fprintf(e->out, "    call neper_io_print\n");
     else {
-        Function *callee = find_function(e->compiler, x->as.call.callee);
         fprintf(e->out, "    call %s\n", callee ? symbol_name(callee) : x->as.call.callee);
     }
-    if (returns_aggregate) fprintf(e->out, "    lea rax, [rbp-%d]\n", result_slot);
+    if (returns_aggregate) {
+        if (type_is_value_aggregate(e->compiler, x->type))
+            fprintf(e->out, "    lea rax, [rbp-%d]\n", result_slot);
+        else {
+            fprintf(e->out, "    lea r10, [rbp-%d]\n", result_slot);
+            emit_address_load(e, x->type);
+        }
+    }
 }
 
 static void emit_expr(Emitter *e, Expr *x) {
@@ -3570,6 +3770,13 @@ static void emit_copy_addresses(FILE *out, size_t bytes) {
 }
 
 static void emit_value_to_stack(Emitter *e, Expr *value, Type type, int displacement) {
+    if (value->kind == EX_CALL) {
+        Function *callee = find_function(e->compiler, value->as.call.callee);
+        if (callee && callee->returns_via_slot) {
+            emit_call(e, value, displacement);
+            return;
+        }
+    }
     if (value->kind == EX_UNDEF) return;
     if (value->kind == EX_ZERO) {
         emit_zero_stack(e, displacement, type_size(e->compiler, type));
@@ -3611,10 +3818,6 @@ static void emit_value_to_stack(Emitter *e, Expr *value, Type type, int displace
         for (i = 0; i < value->as.array.item_count; ++i)
             emit_value_to_stack(e, value->as.array.items[i], element,
                                 displacement - (int)((size_t)i * stride));
-        return;
-    }
-    if (type_is_value_aggregate(e->compiler, type) && value->kind == EX_CALL) {
-        emit_call(e, value, displacement);
         return;
     }
     if (type_is_value_aggregate(e->compiler, type) && expr_is_place(value)) {
@@ -3732,30 +3935,49 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 fprintf(e->out, "    jmp np_ret_%d\nnp_label_%d:\n", e->return_label, success);
                 break;
             }
-            case ST_RETURN:
-                if (s->as.ret.value && type_is_value_aggregate(e->compiler, e->fn->return_type)) {
-                    size_t bytes = type_size(e->compiler, e->fn->return_type);
-                    int source_slot = alloc_aggregate_temp(e, bytes);
+            case ST_RETURN: {
+                int return_index;
+                if (e->fn->returns_via_slot) {
                     Local *return_slot = &e->fn->locals[e->fn->return_slot_local_index];
-                    emit_value_to_stack(e, s->as.ret.value, e->fn->return_type, source_slot);
-                    fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", return_slot->offset);
-                    fprintf(e->out, "    lea r11, [rbp-%d]\n", source_slot);
-                    emit_copy_addresses(e->out, bytes);
+                    for (return_index = 0; return_index < s->as.ret.value_count; ++return_index) {
+                        Type type = e->fn->return_types[return_index];
+                        size_t bytes = type_size(e->compiler, type);
+                        int source_slot = alloc_aggregate_temp(e, bytes);
+                        emit_value_to_stack(e, s->as.ret.values[return_index], type, source_slot);
+                        fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", return_slot->offset);
+                        if (e->fn->return_offsets[return_index])
+                            fprintf(e->out, "    add r10, %llu\n",
+                                    (unsigned long long)e->fn->return_offsets[return_index]);
+                        fprintf(e->out, "    lea r11, [rbp-%d]\n", source_slot);
+                        emit_copy_addresses(e->out, bytes);
+                    }
                     emit_defers_to_depth(e, 0);
                     fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", return_slot->offset);
-                } else if (s->as.ret.value) {
-                    Local *return_value = &e->fn->locals[e->fn->scalar_return_local_index];
-                    emit_expr(e, s->as.ret.value);
-                    emit_stack_store(e, return_value->offset, return_value->type);
+                } else if (s->as.ret.value_count) {
+                    for (return_index = 0; return_index < s->as.ret.value_count; ++return_index) {
+                        Local *return_value = &e->fn->locals[e->fn->return_value_locals[return_index]];
+                        emit_expr(e, s->as.ret.values[return_index]);
+                        emit_stack_store(e, return_value->offset, return_value->type);
+                    }
                     emit_defers_to_depth(e, 0);
-                    fprintf(e->out, "    lea r10, [rbp-%d]\n", return_value->offset);
-                    emit_address_load(e, return_value->type);
+                    if (s->as.ret.value_count > 1) {
+                        Local *second = &e->fn->locals[e->fn->return_value_locals[1]];
+                        fprintf(e->out, "    lea r10, [rbp-%d]\n", second->offset);
+                        emit_address_load(e, second->type);
+                        fputs("    mov rdx, rax\n", e->out);
+                    }
+                    {
+                        Local *first = &e->fn->locals[e->fn->return_value_locals[0]];
+                        fprintf(e->out, "    lea r10, [rbp-%d]\n", first->offset);
+                        emit_address_load(e, first->type);
+                    }
                 } else {
                     emit_defers_to_depth(e, 0);
                     fputs("    xor eax, eax\n", e->out);
                 }
                 fprintf(e->out, "    jmp np_ret_%d\n", e->return_label);
                 break;
+            }
             case ST_IF: {
                 int other = e->label++, done = e->label++;
                 emit_expr(e, s->as.if_stmt.condition);
@@ -3809,6 +4031,68 @@ static void emit_statements(Emitter *e, Stmt *s) {
                 break;
             }
             case ST_FOR_EACH: {
+                if (s->as.for_each.is_protocol) {
+                    Local *pointer = &e->fn->locals[s->as.for_each.iterator_pointer_local_index];
+                    Local *has = &e->fn->locals[s->as.for_each.iterator_has_local_index];
+                    Local *value = &e->fn->locals[s->as.for_each.value_local_index];
+                    Function *next = find_function(e->compiler, s->as.for_each.next_function);
+                    Type element = value->type;
+                    size_t bytes = type_size(e->compiler, element);
+                    int start = e->label++, done = e->label++;
+                    int result_slot = 0;
+                    if (s->as.for_each.iterator_subject_is_pointer) {
+                        emit_expr(e, s->as.for_each.subject);
+                    } else {
+                        emit_place_address(e, s->as.for_each.subject);
+                        fputs("    mov rax, r10\n", e->out);
+                    }
+                    fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", pointer->offset);
+                    if (next && next->returns_via_slot)
+                        result_slot = alloc_aggregate_temp(e, next->return_storage_size);
+                    fprintf(e->out, "np_label_%d:\n", start);
+                    if (next && next->returns_via_slot) {
+                        fprintf(e->out, "    lea rax, [rbp-%d]\n", result_slot);
+                        emit_argument_lane(e, 0, "rax");
+                        {
+                            char source[64];
+                            snprintf(source, sizeof(source), "QWORD PTR [rbp-%d]", pointer->offset);
+                            emit_argument_lane(e, 1, source);
+                        }
+                        fprintf(e->out, "    call %s\n", symbol_name(next));
+                        fprintf(e->out, "    lea r10, [rbp-%d]\n", result_slot);
+                        if (next->return_offsets[1])
+                            fprintf(e->out, "    add r10, %llu\n",
+                                    (unsigned long long)next->return_offsets[1]);
+                        emit_address_load(e, next->return_types[1]);
+                        emit_stack_store(e, has->offset, has->type);
+                        fputs("    test rax, rax\n", e->out);
+                        fprintf(e->out, "    je np_label_%d\n", done);
+                        fprintf(e->out, "    lea r11, [rbp-%d]\n", result_slot);
+                        if (next->return_offsets[0])
+                            fprintf(e->out, "    add r11, %llu\n",
+                                    (unsigned long long)next->return_offsets[0]);
+                        fprintf(e->out, "    lea r10, [rbp-%d]\n", value->offset);
+                        emit_copy_addresses(e->out, bytes);
+                    } else {
+                        char source[64];
+                        snprintf(source, sizeof(source), "QWORD PTR [rbp-%d]", pointer->offset);
+                        emit_argument_lane(e, 0, source);
+                        fprintf(e->out, "    call %s\n", next ? symbol_name(next) : s->as.for_each.next_function);
+                        fprintf(e->out, "    mov BYTE PTR [rbp-%d], dl\n", has->offset);
+                        fputs("    test rdx, rdx\n", e->out);
+                        fprintf(e->out, "    je np_label_%d\n", done);
+                        emit_stack_store(e, value->offset, element);
+                    }
+                    e->loop_break[e->loop_depth] = done;
+                    e->loop_continue[e->loop_depth] = start;
+                    e->loop_break_scope[e->loop_depth] = e->defer_scope_depth;
+                    e->loop_continue_scope[e->loop_depth] = e->defer_scope_depth;
+                    e->loop_depth++;
+                    emit_statements(e, s->as.for_each.body);
+                    e->loop_depth--;
+                    fprintf(e->out, "    jmp np_label_%d\nnp_label_%d:\n", start, done);
+                    break;
+                }
                 Local *pointer = &e->fn->locals[s->as.for_each.pointer_local_index];
                 Local *length = &e->fn->locals[s->as.for_each.length_local_index];
                 Local *index = &e->fn->locals[s->as.for_each.index_local_index];
