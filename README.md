@@ -53,7 +53,8 @@ not started.
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
 assignment, array/slice `for` iteration, and bounds traps are implemented. Array
-value ABI passing, slicing, and protocol iteration are not implemented yet.
+and slice range construction now covers omitted bounds and mutability propagation.
+Array value ABI passing and protocol iteration are not implemented yet.
 
 On Windows with the Visual Studio C++ tools installed:
 

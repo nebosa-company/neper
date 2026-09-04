@@ -151,6 +151,7 @@ typedef enum ExprKind {
     EX_NAME,
     EX_CALL,
     EX_INDEX,
+    EX_SLICE,
     EX_ARRAY_LITERAL,
     EX_ZERO,
     EX_UNDEF,
@@ -184,6 +185,11 @@ struct Expr {
             Expr *base;
             Expr *index;
         } index;
+        struct {
+            Expr *base;
+            Expr *start;
+            Expr *end;
+        } slice;
         struct {
             Expr **items;
             int item_count;
@@ -979,11 +985,22 @@ static Expr *parse_primary(Compiler *c) {
             e = new_expr(EX_NAME, *token); strcpy(e->as.name, name);
         }
         while (match(c, TK_LBRACKET)) {
-            Expr *indexed = new_expr(EX_INDEX, *token);
-            indexed->as.index.base = e;
-            indexed->as.index.index = parse_expression(c);
-            expect(c, TK_RBRACKET, "expected `]` after index");
-            e = indexed;
+            Expr *first = 0;
+            if (!check(c, TK_RANGE)) first = parse_expression(c);
+            if (match(c, TK_RANGE)) {
+                Expr *sliced = new_expr(EX_SLICE, *token);
+                sliced->as.slice.base = e;
+                sliced->as.slice.start = first;
+                if (!check(c, TK_RBRACKET)) sliced->as.slice.end = parse_expression(c);
+                expect(c, TK_RBRACKET, "expected `]` after slice");
+                e = sliced;
+            } else {
+                Expr *indexed = new_expr(EX_INDEX, *token);
+                indexed->as.index.base = e;
+                indexed->as.index.index = first;
+                expect(c, TK_RBRACKET, "expected `]` after index");
+                e = indexed;
+            }
         }
         return e;
     }
@@ -1404,6 +1421,53 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             }
             return e->type;
         }
+        case EX_SLICE: {
+            Type base = check_expr(c, fn, e->as.slice.base);
+            Type usize_type = type_make(TY_INT, "usize");
+            Type element;
+            int is_const = 0;
+            if (e->as.slice.start) {
+                Type start = check_expr(c, fn, e->as.slice.start);
+                if (start.kind == TY_UNTYPED_INT) {
+                    coerce_untyped_integer(e->as.slice.start, usize_type); start = usize_type;
+                }
+                if (!type_equal(start, usize_type))
+                    diagnostic_at(c, &e->as.slice.start->token, "E-TYPE-9999",
+                                  "slice lower bound must be usize");
+            }
+            if (e->as.slice.end) {
+                Type end = check_expr(c, fn, e->as.slice.end);
+                if (end.kind == TY_UNTYPED_INT) {
+                    coerce_untyped_integer(e->as.slice.end, usize_type); end = usize_type;
+                }
+                if (!type_equal(end, usize_type))
+                    diagnostic_at(c, &e->as.slice.end->token, "E-TYPE-9999",
+                                  "slice upper bound must be usize");
+            }
+            if (!(base.kind == TY_ARRAY || base.kind == TY_SLICE || base.kind == TY_STR)) {
+                diagnostic_at(c, &e->token, "E-TYPE-9999", "slicing requires an array or slice");
+                e->type = type_make(TY_INVALID, 0);
+                return e->type;
+            }
+            element = sequence_element_type(base);
+            if (base.kind == TY_STR) is_const = 1;
+            else if (base.kind == TY_SLICE) is_const = base.is_const;
+            else {
+                is_const = 1;
+                if (e->as.slice.base->kind == EX_NAME && e->as.slice.base->local_index >= 0)
+                    is_const = !fn->locals[e->as.slice.base->local_index].is_mutable;
+            }
+            if (is_const && element.kind == TY_INT && strcmp(element.name, "u8") == 0)
+                e->type = type_make(TY_STR, "str");
+            else {
+                e->type = type_make(TY_SLICE, element.name);
+                e->type.element_kind = element.kind;
+                copy_text(e->type.element_name, sizeof(e->type.element_name),
+                          element.name, strlen(element.name));
+                e->type.is_const = is_const;
+            }
+            return e->type;
+        }
         case EX_CALL: {
             Type result;
             if (strcmp(e->as.call.callee, "io.print") == 0) {
@@ -1807,6 +1871,7 @@ static void collect_traps_expr(Compiler *c, Function *fn, Expr *expr) {
     const char *kind = 0, *detail = 0;
     if (!expr) return;
     if (expr->kind == EX_INDEX) { kind = "bounds"; detail = "index out of bounds"; }
+    else if (expr->kind == EX_SLICE) { kind = "bounds"; detail = "slice bounds out of range"; }
     else if (expr->kind == EX_BINARY && (expr->as.binary.op == TK_SLASH || expr->as.binary.op == TK_PERCENT)) {
         kind = "divide"; detail = "invalid integer division";
     }
@@ -1834,6 +1899,11 @@ static void collect_traps_expr(Compiler *c, Function *fn, Expr *expr) {
         case EX_INDEX:
             collect_traps_expr(c, fn, expr->as.index.base);
             collect_traps_expr(c, fn, expr->as.index.index);
+            break;
+        case EX_SLICE:
+            collect_traps_expr(c, fn, expr->as.slice.base);
+            collect_traps_expr(c, fn, expr->as.slice.start);
+            collect_traps_expr(c, fn, expr->as.slice.end);
             break;
         case EX_BINARY:
             collect_traps_expr(c, fn, expr->as.binary.left);
@@ -2082,6 +2152,44 @@ static void emit_expr(Emitter *e, Expr *x) {
             int address_slot = emit_index_address(e, x);
             fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", address_slot);
             emit_address_load(e->out, element);
+            break;
+        }
+        case EX_SLICE: {
+            Type element = sequence_element_type(x->as.slice.base->type);
+            size_t size = scalar_byte_size(element);
+            int base_slot = alloc_temp(e, 2);
+            int lower_slot = alloc_temp(e, 1);
+            int upper_slot = alloc_temp(e, 1);
+            int trap_label = e->label++, ok_label = e->label++;
+            emit_expr(e, x->as.slice.base);
+            fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", base_slot);
+            fprintf(e->out, "    mov QWORD PTR [rbp-%d], rdx\n", base_slot + 8);
+            if (x->as.slice.start) emit_expr(e, x->as.slice.start);
+            else fputs("    xor eax, eax\n", e->out);
+            fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", lower_slot);
+            if (x->as.slice.end) emit_expr(e, x->as.slice.end);
+            else fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", base_slot + 8);
+            fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", upper_slot);
+            fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", lower_slot);
+            fprintf(e->out, "    cmp r10, QWORD PTR [rbp-%d]\n", base_slot + 8);
+            fprintf(e->out, "    ja np_slice_trap_%d\n", trap_label);
+            fprintf(e->out, "    mov r11, QWORD PTR [rbp-%d]\n", upper_slot);
+            fprintf(e->out, "    cmp r11, QWORD PTR [rbp-%d]\n", base_slot + 8);
+            fprintf(e->out, "    ja np_slice_trap_%d\n    cmp r10, r11\n", trap_label);
+            fprintf(e->out, "    ja np_slice_trap_%d\n    jmp np_slice_ok_%d\n", trap_label, ok_label);
+            fprintf(e->out, "np_slice_trap_%d:\n", trap_label);
+            emit_trap_call(e, x);
+            fprintf(e->out, "np_slice_ok_%d:\n", ok_label);
+            fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", lower_slot);
+            fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", base_slot);
+            if (size == 16) fputs("    shl rax, 4\n    add r10, rax\n", e->out);
+            else if (size == 8) fputs("    lea r10, [r10+rax*8]\n", e->out);
+            else if (size == 4) fputs("    lea r10, [r10+rax*4]\n", e->out);
+            else if (size == 2) fputs("    lea r10, [r10+rax*2]\n", e->out);
+            else fputs("    add r10, rax\n", e->out);
+            fputs("    mov rax, r10\n", e->out);
+            fprintf(e->out, "    mov rdx, QWORD PTR [rbp-%d]\n", upper_slot);
+            fprintf(e->out, "    sub rdx, QWORD PTR [rbp-%d]\n", lower_slot);
             break;
         }
         case EX_ARRAY_LITERAL: case EX_ZERO: case EX_UNDEF:

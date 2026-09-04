@@ -129,8 +129,9 @@ reads and writes, mutable slice-element assignment, and bounds traps. The same s
 covers adjacent narrow elements, signed loads, checked mutation, immutability, count
 mismatches, bounds failures, and non-overlapping slice/local frame slots. A third
 increment adds one-binding and index/value `for` iteration over arrays and slices,
-with iteration values held as immutable copies. Array value ABI passing, slicing,
-protocol iteration,
+with iteration values held as immutable copies. A fourth increment adds checked
+`[lo..hi]`, `[lo..]`, and `[..hi]` slicing with array-to-slice mutability propagation.
+Array value ABI passing, protocol iteration,
 aggregate declarations, `defer`, `switch`, compile-time parameters, constant
 folding, the full intrinsic set, and debug locals remain open; this callout does not
 mark the `neper-0` milestone complete.

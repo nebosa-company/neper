@@ -11,6 +11,14 @@ test "$("$neper" run "$repo/tests/neper0/range.e" --output "$test_build/range")"
 test "$("$neper" run "$repo/tests/neper0/array.e" --output "$test_build/array")" = 'array ok'
 test "$("$neper" run "$repo/tests/neper0/slice-mutate.e" --output "$test_build/slice-mutate" -- original)" = 'slice mutation ok'
 test "$("$neper" run "$repo/tests/neper0/slice-iterate.e" --output "$test_build/slice-iterate" -- 'slice iteration ok')" = 'slice iteration ok'
+test "$("$neper" run "$repo/tests/neper0/slice.e" --output "$test_build/slice")" = 'slice ok'
+
+set +e
+slice_bounds=$("$neper" run "$repo/tests/neper0/slice-bounds.e" --output "$test_build/slice-bounds" 2>&1)
+slice_bounds_status=$?
+set -e
+test "$slice_bounds_status" -eq 134
+printf '%s' "$slice_bounds" | grep -q 'trap\[bounds\]'
 
 set +e
 array_bounds=$("$neper" run "$repo/tests/neper0/array-bounds.e" --output "$test_build/array-bounds" 2>&1)
@@ -39,6 +47,13 @@ binding_status=$?
 set -e
 test "$binding_status" -eq 1
 printf '%s' "$binding_error" | grep -q '6:9: error\[E-TYPE-9999\]'
+
+set +e
+slice_mutation_error=$("$neper" build "$repo/tests/neper0/slice-mutation-error.e" --output "$test_build/slice-mutation-error" 2>&1)
+slice_mutation_status=$?
+set -e
+test "$slice_mutation_status" -eq 1
+printf '%s' "$slice_mutation_error" | grep -q '6:5: error\[E-TYPE-9999\]'
 
 set +e
 scope_error=$("$neper" build "$repo/tests/neper0/scope-error.e" --output "$test_build/scope-error" 2>&1)
