@@ -151,9 +151,13 @@ A token span covers its lexeme and excludes leading trivia. `EOF` has an empty
 lexeme and a zero-width span at the original byte length. String lexemes retain the
 original decoded source spelling: a `NEWLINE` lexeme is `"\n"`, `"\r\n"`, or `"\r"`
 according to the input, even though the parser sees normalized LF; a leading BOM is
-retained as `bom` trivia even though the parser ignores it. Concatenating each trivia
-text and token lexeme in index order reconstructs every original byte (using decoded
-base64 for an object lexeme). A syntax-node span runs from its first token's
+retained as `bom` trivia even though the parser ignores it. Leading trivia is ordered
+by byte offset: the BOM is one item, every maximal non-empty run of ASCII spaces is
+one `space` item, and each `//` comment through but excluding its physical line ending
+is one `comment` item. Because every physical line ending is a `NEWLINE` token, no
+trivia item crosses a normalized line boundary. Concatenating each trivia text and
+token lexeme in index order reconstructs every original byte (using decoded base64
+for an object lexeme). A syntax-node span runs from its first token's
 `byte_start` through its last token's `byte_end`, excluding that first token's trivia;
 a recovery node with no token is zero-width at the recovery point.
 

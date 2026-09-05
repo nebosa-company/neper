@@ -97,9 +97,31 @@ type Kind = enum u8 {
     PunctUnderscore,
 }
 
+type TriviaKind = enum u8 {
+    End,
+    Bom,
+    Space,
+    Comment,
+}
+
+type Trivia = struct {
+    kind: TriviaKind,
+    start: usize,
+    end: usize,
+    line: usize,
+    column: usize,
+    end_line: usize,
+    end_column: usize,
+    column_utf16: usize,
+    end_column_utf16: usize,
+}
+
 type Token = struct {
     kind: Kind,
     leading_start: usize,
+    leading_line: usize,
+    leading_column: usize,
+    leading_column_utf16: usize,
     start: usize,
     end: usize,
     line: usize,
@@ -114,6 +136,18 @@ type Scanner = struct {
     source: str,
     off: usize,
     leading_start: usize,
+    leading_line: usize,
+    leading_column: usize,
+    leading_column_utf16: usize,
+    line: usize,
+    column: usize,
+    column_utf16: usize,
+}
+
+type TriviaScanner = struct {
+    source: str,
+    off: usize,
+    end: usize,
     line: usize,
     column: usize,
     column_utf16: usize,
@@ -126,7 +160,17 @@ fn init(source: str) -> Scanner {
     if source.len >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 {
         off = 3usize
     }
-    ret Scanner{ source: source, off: off, leading_start: 0usize, line: 1usize, column: 1usize, column_utf16: 1usize }
+    ret Scanner{
+        source: source,
+        off: off,
+        leading_start: 0usize,
+        leading_line: 1usize,
+        leading_column: 1usize,
+        leading_column_utf16: 1usize,
+        line: 1usize,
+        column: 1usize,
+        column_utf16: 1usize,
+    }
 }
 
 fn is_alpha(c: u8) -> bool {
@@ -320,6 +364,9 @@ fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, colu
     let result = Token{
         kind: kind,
         leading_start: s.leading_start,
+        leading_line: s.leading_line,
+        leading_column: s.leading_column,
+        leading_column_utf16: s.leading_column_utf16,
         start: start,
         end: s.off,
         line: line,
@@ -330,6 +377,9 @@ fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, colu
         end_column_utf16: s.column_utf16,
     }
     s.leading_start = s.off
+    s.leading_line = s.line
+    s.leading_column = s.column
+    s.leading_column_utf16 = s.column_utf16
     ret result
 }
 
@@ -361,6 +411,72 @@ fn take_invalid_utf8(s: *Scanner) {
     s.off += invalid_utf8_width(s.source, s.off)
     s.column += 1usize
     s.column_utf16 += 1usize
+}
+
+fn trivia_init(source: str, token: Token) -> TriviaScanner {
+    ret TriviaScanner{
+        source: source,
+        off: token.leading_start,
+        end: token.start,
+        line: token.leading_line,
+        column: token.leading_column,
+        column_utf16: token.leading_column_utf16,
+    }
+}
+
+fn trivia_token(t: *TriviaScanner, kind: TriviaKind, start: usize, line: usize, column: usize, column_utf16: usize) -> Trivia {
+    ret Trivia{
+        kind: kind,
+        start: start,
+        end: t.off,
+        line: line,
+        column: column,
+        end_line: t.line,
+        end_column: t.column,
+        column_utf16: column_utf16,
+        end_column_utf16: t.column_utf16,
+    }
+}
+
+fn trivia_take(t: *TriviaScanner, n: usize) {
+    t.off += n
+    t.column += n
+    t.column_utf16 += n
+}
+
+fn trivia_take_scalar(t: *TriviaScanner, width: usize) {
+    t.off += width
+    t.column += 1usize
+    if width == 4usize {
+        t.column_utf16 += 2usize
+    } else {
+        t.column_utf16 += 1usize
+    }
+}
+
+fn next_trivia(t: *TriviaScanner) -> Trivia {
+    let start = t.off
+    let line = t.line
+    let column = t.column
+    let column_utf16 = t.column_utf16
+    if t.off == t.end { ret trivia_token(t, .End, start, line, column, column_utf16) }
+    if t.off == 0usize && t.end >= 3usize && t.source[0usize] == 239u8 && t.source[1usize] == 187u8 && t.source[2usize] == 191u8 {
+        t.off += 3usize
+        ret trivia_token(t, .Bom, start, line, column, column_utf16)
+    }
+    if t.source[t.off] == 32u8 {
+        while t.off < t.end && t.source[t.off] == 32u8 { trivia_take(t, 1usize) }
+        ret trivia_token(t, .Space, start, line, column, column_utf16)
+    }
+    while t.off < t.end {
+        let c = t.source[t.off]
+        if c >= 128u8 {
+            trivia_take_scalar(t, utf8_width(t.source, t.off))
+        } else {
+            trivia_take(t, 1usize)
+        }
+    }
+    ret trivia_token(t, .Comment, start, line, column, column_utf16)
 }
 
 fn next(s: *Scanner) -> Token {

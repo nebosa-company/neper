@@ -109,10 +109,26 @@ fn self_test() -> err {
     var trivia = lex.init("\xEF\xBB\xBF // c\r\nx ")
     let trivia_newline = lex.next(&trivia)
     if trivia_newline.kind != .Newline || trivia_newline.leading_start != 0usize || trivia_newline.start != 8usize || trivia_newline.end != 10usize { ret lex.InvalidSource }
+    var leading = lex.trivia_init(trivia.source, trivia_newline)
+    let leading_bom = lex.next_trivia(&leading)
+    if leading_bom.kind != .Bom || leading_bom.start != 0usize || leading_bom.end != 3usize || leading_bom.column != 1usize || leading_bom.end_column != 1usize { ret lex.InvalidSource }
+    let leading_space = lex.next_trivia(&leading)
+    if leading_space.kind != .Space || leading_space.start != 3usize || leading_space.end != 4usize || leading_space.column != 1usize || leading_space.end_column != 2usize { ret lex.InvalidSource }
+    let leading_comment = lex.next_trivia(&leading)
+    if leading_comment.kind != .Comment || leading_comment.start != 4usize || leading_comment.end != 8usize || leading_comment.column != 2usize || leading_comment.end_column != 6usize { ret lex.InvalidSource }
+    if lex.next_trivia(&leading).kind != .End { ret lex.InvalidSource }
     let trivia_name = lex.next(&trivia)
     if trivia_name.kind != .Identifier || trivia_name.leading_start != 10usize || trivia_name.start != 10usize || trivia_name.end != 11usize { ret lex.InvalidSource }
     let trivia_eof = lex.next(&trivia)
     if trivia_eof.kind != .Eof || trivia_eof.leading_start != 11usize || trivia_eof.start != 12usize || trivia_eof.end != 12usize { ret lex.InvalidSource }
+    var trailing = lex.trivia_init(trivia.source, trivia_eof)
+    let trailing_space = lex.next_trivia(&trailing)
+    if trailing_space.kind != .Space || trailing_space.start != 11usize || trailing_space.end != 12usize || trailing_space.column != 2usize || trailing_space.end_column != 3usize { ret lex.InvalidSource }
+    var unicode_trivia = lex.init("// 😀\nx")
+    let unicode_newline = lex.next(&unicode_trivia)
+    var unicode_leading = lex.trivia_init(unicode_trivia.source, unicode_newline)
+    let unicode_comment = lex.next_trivia(&unicode_leading)
+    if unicode_comment.kind != .Comment || unicode_comment.start != 0usize || unicode_comment.end != 7usize || unicode_comment.end_column != 5usize || unicode_comment.end_column_utf16 != 6usize { ret lex.InvalidSource }
     let valid_utf8 = lex.validate("\"héllo\" // π\nr\"λ\tvalue\"")
     if valid_utf8 != ok { ret lex.InvalidSource }
     let valid_comment_tab = lex.validate("//\tcomment\nerror Good\n")
