@@ -349,8 +349,7 @@ fn named_aggregate_follows(p: *Parser) -> bool {
             while token.kind == .Newline { token = lex.next(&look) }
         }
         if token.kind != .Identifier { ret false }
-        let first = look.source[token.start]
-        pascal = first >= 65u8 && first <= 90u8
+        pascal = token_is_pascal(p, token)
         token = lex.next(&look)
         if p.soft_depth != 0usize {
             while token.kind == .Newline { token = lex.next(&look) }
@@ -373,8 +372,23 @@ fn named_aggregate_follows(p: *Parser) -> bool {
 }
 
 fn identifier_is_pascal(p: *Parser) -> bool {
-    let first = p.scanner.source[p.current.start]
-    ret first >= 65u8 && first <= 90u8
+    ret token_is_pascal(p, p.current)
+}
+
+fn token_is_pascal(p: *Parser, token: lex.Token) -> bool {
+    if token.kind != .Identifier { ret false }
+    let first = p.scanner.source[token.start]
+    if first < 65u8 || first > 90u8 { ret false }
+    if token.end == token.start + 1usize { ret true }
+    var has_lower = false
+    var i = token.start + 1usize
+    while i < token.end {
+        let byte = p.scanner.source[i]
+        if byte == 95u8 { ret false }
+        if byte >= 97u8 && byte <= 122u8 { has_lower = true }
+        i += 1usize
+    }
+    ret has_lower
 }
 
 fn parse_literal_item_node(p: *Parser) -> err {

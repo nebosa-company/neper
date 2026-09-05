@@ -505,6 +505,10 @@ fn self_test() -> err {
     if !tree.children[array_children + 4usize].node || tree.children[array_children + 4usize].index != 13usize { ret lex.InvalidSource }
     let inferred_aggregate_error = parse.validate("fn inferred() {\n    let values = [_]u8{ 1u8, 2u8, }\n}\n")
     if inferred_aggregate_error != ok { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let constant_item_error = parse.parse(&tree, "fn constants() {\n    let values = [_]usize{ MAX_NODES, }\n}\n")
+    if constant_item_error != ok || tree.count != 10usize { ret lex.InvalidSource }
+    if tree.nodes[4usize].kind != .NameExpr || tree.nodes[5usize].kind != .LiteralItem { ret lex.InvalidSource }
     let slice_aggregate_error = parse.validate("fn invalid() {\n    let values = []u8{ 1u8, }\n}\n")
     if slice_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
@@ -523,6 +527,8 @@ fn self_test() -> err {
     if tree.nodes[11usize].kind != .Block || tree.nodes[12usize].kind != .FnDecl { ret lex.InvalidSource }
     let empty_aggregate_error = parse.validate("fn invalid() -> Point {\n    ret Point{}\n}\n")
     if empty_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let constant_condition_error = parse.validate("fn flags() {\n    if ENABLED { ret }\n}\n")
+    if constant_condition_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let control_error = parse.parse(&tree, "fn control() {\n    if true { call() }\n    while true { break }\n    for item in items { call() }\n    when true { call() } else { cleanup() }\n    switch item {\n        case 1i32:\n            ret\n    }\n    @nocheck { call() }\n    shared var value: i32 = 0i32\n}\n")
     if control_error != ok || tree.count != 42usize { ret lex.InvalidSource }

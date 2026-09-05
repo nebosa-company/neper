@@ -101,8 +101,9 @@ ordinary parameters and single- or multiple-type return specifications. Type
 aliases, aggregate fields and union payloads now recurse through those type nodes;
 enum discriminants retain expressions, and tagged types retain their backing type.
 `if`/`else if`/`else`, `while` and `when` now retain condition expressions and
-recursively parsed branch/body blocks. PascalCase lookahead distinguishes named
-aggregate literals from block-introducing lowercase condition names. `for` now
+recursively parsed branch/body blocks. Canonical-casing lookahead distinguishes
+PascalCase aggregate literals from lowercase and SCREAMING_SNAKE values before a
+block; all-uppercase aggregate items remain `NameExpr`s. `for` now
 retains iterable or bounded-range expressions and a recursively parsed body while
 preserving one- or two-name iterator bindings as source tokens. `defer` owns its
 structured simple statement or block, `@nocheck` owns a validated directive block,
