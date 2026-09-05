@@ -1245,7 +1245,14 @@ fn parse_switch_arm_node(p: *Parser) -> err {
     }
     try require(p, .PunctColon)
     if p.current.kind != .Newline { ret InvalidSyntax }
-    try skip_separators(p)
+    var leading_separators = 0usize
+    while p.current.kind == .Newline {
+        try advance(p)
+        leading_separators += 1usize
+    }
+    if leading_separators < 2usize && (p.current.kind == .KwCase || p.current.kind == .KwDefault || p.current.kind == .PunctRBrace) {
+        ret InvalidSyntax
+    }
     while p.current.kind != .KwCase && p.current.kind != .KwDefault && p.current.kind != .PunctRBrace {
         if p.current.kind == .Eof { ret InvalidSyntax }
         let statement_start = p.token_index
