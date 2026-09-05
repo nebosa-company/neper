@@ -386,11 +386,15 @@ instances, and check each instantiated body, including forwarded, fallible and q
 calls. Array, slice and `str` indices and slice bounds take `usize` context; `.len`, open
 ranges, pointee-aware slice mutability, indexed address-of, element assignment and
 explicit-dereference assignment use the same place rules. Typed `zero`/`undef`
-initializers inherit their declared context. Wider intermediate arithmetic, bitwise,
-shift and wrapping constant operators and aggregate literals remain outside the
+initializers inherit their declared context. Non-generic struct, union, tagged-union
+and fixed/inferred-array literals now validate complete field or element sets, including
+nested and qualified forms. Named field access auto-dereferences pointers; field
+address-of and assignment share the same pointee-aware place mutability rules. Wider
+intermediate arithmetic, bitwise and shift expressions, wrapping constant operators,
+generic aggregate specialization and tagged-union tag checks remain outside the
 `check-file` checkpoint. Unsupported expression and statement
 forms fail explicitly rather than being accepted unchecked. The next type-checking
-increments replace those boundaries with remaining control flow, aggregate literals and
+increments replace those boundaries with remaining control flow, generic aggregates and
 declaration-time generic checks.
 
 - Everything in M0

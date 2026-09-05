@@ -195,6 +195,8 @@ $genericMultiChecked = & $compiler check-file (Join-Path $checkRoot 'generic_mul
 if ($LASTEXITCODE -ne 0 -or $genericMultiChecked -ne 'module check ok') { throw 'fallible generic source functions did not type-check' }
 $indexChecked = & $compiler check-file (Join-Path $checkRoot 'index_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $indexChecked -ne 'module check ok') { throw 'index and slice expressions did not type-check' }
+$aggregateChecked = & $compiler check-file (Join-Path $checkRoot 'aggregate_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $aggregateChecked -ne 'module check ok') { throw 'aggregate literals and field places did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -294,7 +296,18 @@ $checkFailures = @(
     @('pointer_index', 'InvalidOperator'),
     @('len_non_indexable', 'InvalidOperator'),
     @('const_pointer_assignment', 'ImmutableAssignment'),
-    @('array_slice_mutability', 'TypeMismatch')
+    @('array_slice_mutability', 'TypeMismatch'),
+    @('aggregate_missing_field', 'ArgumentCount'),
+    @('aggregate_duplicate_field', 'ArgumentCount'),
+    @('aggregate_unknown_field', 'InvalidType'),
+    @('aggregate_field_mismatch', 'InvalidReturn'),
+    @('array_literal_count', 'InvalidReturn'),
+    @('array_literal_type', 'InvalidReturn'),
+    @('immutable_field_assignment', 'ImmutableAssignment'),
+    @('union_literal_count', 'ArgumentCount'),
+    @('tagged_payload_missing', 'InvalidReturn'),
+    @('tagged_void_payload', 'InvalidReturn'),
+    @('unknown_field_access', 'InvalidType')
 )
 foreach ($case in $checkFailures) {
     $checkOutput = & $compiler check-file (Join-Path $checkRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1

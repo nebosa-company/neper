@@ -96,6 +96,26 @@ type FunctionGeneric = struct {
     checked: bool,
 }
 
+type AggregateKind = enum u8 {
+    Struct,
+    Union,
+    TaggedUnion,
+}
+
+type Aggregate = struct {
+    name: str,
+    module_index: usize,
+    kind: AggregateKind,
+    first_field: usize,
+    field_count: usize,
+    generic: bool,
+}
+
+type AggregateField = struct {
+    name: str,
+    ty: Type,
+}
+
 type Local = struct {
     name: str,
     ty: Type,
@@ -152,6 +172,8 @@ type Checker = struct {
     return_types: []Type,
     comptime_parameters: []ComptimeParameter,
     generic_arguments: []GenericArgument,
+    aggregates: []Aggregate,
+    aggregate_fields: []AggregateField,
     tokens: []lex.Token,
     locals: []Local,
     types: []Type,
@@ -164,6 +186,8 @@ type Checker = struct {
     comptime_parameter_count: usize,
     generic_argument_count: usize,
     signature_function_count: usize,
+    aggregate_count: usize,
+    aggregate_field_count: usize,
     token_count: usize,
     local_count: usize,
     type_count: usize,
@@ -195,6 +219,8 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.comptime_parameter_count = 0usize
     c.generic_argument_count = 0usize
     c.signature_function_count = 0usize
+    c.aggregate_count = 0usize
+    c.aggregate_field_count = 0usize
     c.token_count = 0usize
     c.local_count = 0usize
     c.type_count = 0usize
@@ -215,6 +241,13 @@ fn init_generics(c: *Checker, functions: []FunctionGeneric, parameters: []Compti
     c.function_generics = functions
     c.comptime_parameters = parameters
     c.generic_arguments = arguments
+    ret ok
+}
+
+fn init_aggregates(c: *Checker, aggregates: []Aggregate, fields: []AggregateField) -> err {
+    if aggregates.len == 0usize || fields.len == 0usize { ret Capacity }
+    c.aggregates = aggregates
+    c.aggregate_fields = fields
     ret ok
 }
 
@@ -809,6 +842,128 @@ fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_def
             c.aliases[alias_index].state = 2u8
         }
         alias_index += 1usize
+    }
+    ret ok
+}
+
+fn find_aggregate(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < c.aggregate_count {
+        if c.aggregates[at].module_index == module_index && same(c.aggregates[at].name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn find_aggregate_field(c: *Checker, ty: Type, name: str) -> (usize, bool) {
+    var subject = ty
+    while subject.kind == .Pointer {
+        if !subject.has_element || subject.element >= c.type_count { ret (0usize, false) }
+        subject = c.types[subject.element]
+    }
+    if subject.kind != .Named { ret (0usize, false) }
+    let (aggregate_index, found) = find_aggregate(c, subject.module_index, subject.name)
+    if !found || c.aggregates[aggregate_index].generic { ret (0usize, false) }
+    let aggregate = c.aggregates[aggregate_index]
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index < c.aggregate_field_count && same(c.aggregate_fields[field_index].name, name) { ret (field_index, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn field_expression_name(c: *Checker, text: str, tree: *parse.Tree, node: syntax.Node) -> (str, bool) {
+    let (base_index, has_base) = first_node_child(tree, node)
+    if !has_base { ret ("", false) }
+    let base = tree.nodes[base_index]
+    var name = ""
+    var at = base.token_end
+    while at < node.token_end {
+        let token = c.tokens[at]
+        if token.kind == .Identifier { name = text[token.start..token.end] }
+        at += 1usize
+    }
+    ret (name, name.len != 0usize)
+}
+
+fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    var body_index = 0usize
+    var has_body = false
+    var generic = false
+    var kind: AggregateKind = .Struct
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            let child = tree.nodes[child_index]
+            if child.kind == .ComptimeParam { generic = true }
+            if child.kind == .StructType || child.kind == .UnionType || child.kind == .UnionEnumType {
+                body_index = child_index
+                has_body = true
+                if child.kind == .UnionType { kind = .Union }
+                if child.kind == .UnionEnumType { kind = .TaggedUnion }
+            }
+        }
+        at += 1usize
+    }
+    if !has_body { ret ok }
+    if c.aggregate_count == c.aggregates.len { ret Capacity }
+    let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
+    if name_error != ok { ret name_error }
+    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: c.aggregate_field_count, field_count: 0usize, generic: generic }
+    if !generic {
+        let body = tree.nodes[body_index]
+        let body_end = body.first_child + body.child_count
+        at = body.first_child
+        while at < body_end {
+            if tree.children[at].node {
+                let field_node = tree.nodes[tree.children[at].index]
+                if field_node.kind == .FieldDecl || field_node.kind == .UnionMember {
+                    if c.aggregate_field_count == c.aggregate_fields.len { ret Capacity }
+                    let (field_name, has_name) = first_name(c, g.modules[module_index].text, field_node)
+                    if !has_name { ret parse.InvalidSyntax }
+                    var field_type = make_type(.Void, "void", module_index)
+                    let (type_index, has_type) = first_node_child(tree, field_node)
+                    if has_type {
+                        let (resolved, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+                        if type_error != ok { ret type_error }
+                        field_type = resolved
+                    } else {
+                        if kind != .TaggedUnion { ret parse.InvalidSyntax }
+                    }
+                    if field_type.kind == .Void && kind != .TaggedUnion { ret InvalidType }
+                    c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: field_name, ty: field_type }
+                    c.aggregate_field_count += 1usize
+                    aggregate.field_count += 1usize
+                }
+            }
+            at += 1usize
+        }
+    }
+    c.aggregates[c.aggregate_count] = aggregate
+    c.aggregate_count += 1usize
+    ret ok
+}
+
+fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    c.aggregate_count = 0usize
+    c.aggregate_field_count = 0usize
+    var module_index = 0usize
+    while module_index < g.count {
+        var tree: parse.Tree = zero
+        try parse.init_tree(&tree, g.nodes, g.children)
+        try parse.parse(&tree, g.modules[module_index].text)
+        try tokenize(c, g.modules[module_index].text)
+        var node_index = 1usize
+        while node_index < tree.count {
+            let node = tree.nodes[node_index]
+            if node.top_level && node.kind == .TypeDecl { try collect_aggregate_declaration(c, r, g, &tree, module_index, node) }
+            node_index += 1usize
+        }
+        module_index += 1usize
     }
     ret ok
 }
@@ -2188,6 +2343,179 @@ fn index_element_type(c: *Checker, base: Type, module_index: usize) -> (Type, er
     ret (c.types[base.element], ok)
 }
 
+fn literal_item_name(c: *Checker, text: str, item: syntax.Node) -> (str, bool) {
+    var at = item.token_start
+    while at < item.token_end {
+        let token = c.tokens[at]
+        if token.kind == .PunctColon { break }
+        if token.kind == .Identifier { ret (text[token.start..token.end], true) }
+        at += 1usize
+    }
+    ret ("", false)
+}
+
+fn literal_item_expression(tree: *parse.Tree, item: syntax.Node) -> (usize, bool) {
+    let (expression, found) = first_node_child(tree, item)
+    ret (expression, found)
+}
+
+fn aggregate_literal_header(tree: *parse.Tree, node: syntax.Node) -> (usize, usize, err) {
+    var header = 0usize
+    var has_header = false
+    var item_count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if tree.nodes[child_index].kind == .LiteralItem {
+                item_count += 1usize
+            } else {
+                if has_header { ret (0usize, 0usize, parse.InvalidSyntax) }
+                header = child_index
+                has_header = true
+            }
+        }
+        at += 1usize
+    }
+    if !has_header || item_count == 0usize { ret (0usize, 0usize, parse.InvalidSyntax) }
+    ret (header, item_count, ok)
+}
+
+fn check_array_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, header_index: usize, item_count: usize, expected: Type) -> (Type, err) {
+    let header = tree.nodes[header_index]
+    if header.kind != .ArrayType { ret (invalid_type(), InvalidType) }
+    var element_index = 0usize
+    var has_element = false
+    let header_end = header.first_child + header.child_count
+    var at = header.first_child
+    while at < header_end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if is_type_node(tree.nodes[child_index].kind) {
+                element_index = child_index
+                has_element = true
+            }
+        }
+        at += 1usize
+    }
+    if !has_element { ret (invalid_type(), parse.InvalidSyntax) }
+    let (element, element_error) = type_from_node(c, c.resolver, g, tree, module_index, tree.nodes[element_index])
+    if element_error != ok { ret (invalid_type(), element_error) }
+    if element.kind == .Void { ret (invalid_type(), InvalidType) }
+    let inferred = contains_token(c, header.token_start, header.token_end, .PunctUnderscore)
+    var array = invalid_type()
+    if inferred {
+        let (stored_element, store_error) = store_type(c, element)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        array = make_type(.Array, "", module_index)
+        array.element = stored_element
+        array.has_element = true
+        array.array_length = item_count
+        array.has_length = true
+    } else {
+        let (declared, declared_error) = type_from_node(c, c.resolver, g, tree, module_index, header)
+        if declared_error != ok { ret (invalid_type(), declared_error) }
+        if !declared.has_length || declared.array_length != item_count { ret (invalid_type(), TypeMismatch) }
+        array = declared
+    }
+    let end = node.first_child + node.child_count
+    at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let item = tree.nodes[tree.children[at].index]
+            if item.kind == .LiteralItem {
+                if contains_token(c, item.token_start, item.token_end, .PunctColon) { ret (invalid_type(), InvalidType) }
+                let (expression, has_expression) = literal_item_expression(tree, item)
+                if !has_expression { ret (invalid_type(), parse.InvalidSyntax) }
+                let (_, expression_error) = check_expr(c, g, tree, module_index, expression, element)
+                if expression_error != ok { ret (invalid_type(), expression_error) }
+            }
+        }
+        at += 1usize
+    }
+    let (contextual, context_error) = apply_context(c, array, expected)
+    ret (contextual, context_error)
+}
+
+fn aggregate_field_for_name(c: *Checker, aggregate: Aggregate, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index < c.aggregate_field_count && same(c.aggregate_fields[field_index].name, name) { ret (field_index, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn literal_name_seen(c: *Checker, text: str, tree: *parse.Tree, node: syntax.Node, before_child: usize, name: str) -> bool {
+    var at = node.first_child
+    while at < before_child {
+        if tree.children[at].node {
+            let item = tree.nodes[tree.children[at].index]
+            if item.kind == .LiteralItem {
+                let (previous, found) = literal_item_name(c, text, item)
+                if found && same(previous, name) { ret true }
+            }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+fn check_named_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, header_index: usize, item_count: usize, expected: Type) -> (Type, err) {
+    let header = tree.nodes[header_index]
+    if header.kind != .NamedType { ret (invalid_type(), InvalidType) }
+    let (constructed_type, type_error) = type_from_node(c, c.resolver, g, tree, module_index, header)
+    if type_error != ok { ret (invalid_type(), type_error) }
+    if constructed_type.kind != .Named { ret (invalid_type(), InvalidType) }
+    let (aggregate_index, found_aggregate) = find_aggregate(c, constructed_type.module_index, constructed_type.name)
+    if !found_aggregate { ret (invalid_type(), InvalidType) }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.generic { ret (invalid_type(), Unsupported) }
+    if aggregate.kind == .Struct && item_count != aggregate.field_count { ret (invalid_type(), ArgumentCount) }
+    if aggregate.kind != .Struct && item_count != 1usize { ret (invalid_type(), ArgumentCount) }
+    let text = g.modules[module_index].text
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let item = tree.nodes[tree.children[at].index]
+            if item.kind == .LiteralItem {
+                let (name, has_name) = literal_item_name(c, text, item)
+                if !has_name { ret (invalid_type(), InvalidType) }
+                if literal_name_seen(c, text, tree, node, at, name) { ret (invalid_type(), ArgumentCount) }
+                let (field_index, found_field) = aggregate_field_for_name(c, aggregate, name)
+                if !found_field { ret (invalid_type(), InvalidType) }
+                let field = c.aggregate_fields[field_index]
+                let (expression, has_expression) = literal_item_expression(tree, item)
+                let named = contains_token(c, item.token_start, item.token_end, .PunctColon)
+                if aggregate.kind == .TaggedUnion && field.ty.kind == .Void {
+                    if named || has_expression { ret (invalid_type(), TypeMismatch) }
+                } else {
+                    if !named || !has_expression { ret (invalid_type(), TypeMismatch) }
+                    let (_, expression_error) = check_expr(c, g, tree, module_index, expression, field.ty)
+                    if expression_error != ok { ret (invalid_type(), expression_error) }
+                }
+            }
+        }
+        at += 1usize
+    }
+    let (contextual, context_error) = apply_context(c, constructed_type, expected)
+    ret (contextual, context_error)
+}
+
+fn check_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, expected: Type) -> (Type, err) {
+    let (header_index, item_count, header_error) = aggregate_literal_header(tree, node)
+    if header_error != ok { ret (invalid_type(), header_error) }
+    if tree.nodes[header_index].kind == .ArrayType {
+        let (array, array_error) = check_array_literal(c, g, tree, module_index, node, header_index, item_count, expected)
+        ret (array, array_error)
+    }
+    let (aggregate, aggregate_error) = check_named_aggregate_literal(c, g, tree, module_index, node, header_index, item_count, expected)
+    ret (aggregate, aggregate_error)
+}
+
 fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
     let node = tree.nodes[node_index]
     if node.kind == .NameExpr {
@@ -2218,6 +2546,24 @@ fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
         if base.kind != .Array { ret (false, InvalidOperator) }
         let (mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, bracket.base)
         ret (mutable, mutable_error)
+    }
+    if node.kind == .FieldExpr {
+        let (base_index, has_base) = first_node_child(tree, node)
+        if !has_base { ret (false, parse.InvalidSyntax) }
+        let (base, base_error) = check_expr(c, g, tree, module_index, base_index, invalid_type())
+        if base_error != ok { ret (false, base_error) }
+        var subject = base
+        var through_pointer = false
+        var mutable = false
+        while subject.kind == .Pointer {
+            if !subject.has_element || subject.element >= c.type_count { ret (false, InvalidType) }
+            through_pointer = true
+            mutable = !subject.is_const
+            subject = c.types[subject.element]
+        }
+        if through_pointer { ret (mutable, ok) }
+        let (base_mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, base_index)
+        ret (base_mutable, mutable_error)
     }
     ret (false, Unsupported)
 }
@@ -2321,20 +2667,19 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         }
         let (base_index, has_base) = first_node_child(tree, node)
         if !has_base { ret (invalid_type(), parse.InvalidSyntax) }
-        let base_node = tree.nodes[base_index]
-        var field = ""
-        var field_at = base_node.token_end
-        while field_at < node.token_end {
-            let field_token = c.tokens[field_at]
-            if field_token.kind == .Identifier { field = text[field_token.start..field_token.end] }
-            field_at += 1usize
-        }
-        if !same(field, "len") { ret (invalid_type(), Unsupported) }
+        let (field, has_field) = field_expression_name(c, text, tree, node)
+        if !has_field { ret (invalid_type(), parse.InvalidSyntax) }
         let (base, base_error) = check_expr(c, g, tree, module_index, base_index, invalid_type())
         if base_error != ok { ret (invalid_type(), base_error) }
-        if base.kind != .Array && base.kind != .Slice && base.kind != .String { ret (invalid_type(), InvalidOperator) }
-        let (length_type, context_error) = apply_context(c, make_type(.Integer, "usize", module_index), expected)
-        ret (length_type, context_error)
+        if same(field, "len") {
+            if base.kind != .Array && base.kind != .Slice && base.kind != .String { ret (invalid_type(), InvalidOperator) }
+            let (length_type, context_error) = apply_context(c, make_type(.Integer, "usize", module_index), expected)
+            ret (length_type, context_error)
+        }
+        let (field_index, found_field) = find_aggregate_field(c, base, field)
+        if !found_field { ret (invalid_type(), InvalidType) }
+        let (field_type, context_error) = apply_context(c, c.aggregate_fields[field_index].ty, expected)
+        ret (field_type, context_error)
     }
     if node.kind == .GroupExpr {
         let (child_index, found) = first_node_child(tree, node)
@@ -2344,6 +2689,10 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     }
     if node.kind == .BracketPostfix {
         let (result, result_error) = check_bracket_expr(c, g, tree, module_index, node, expected)
+        ret (result, result_error)
+    }
+    if node.kind == .AggregateLiteral {
+        let (result, result_error) = check_aggregate_literal(c, g, tree, module_index, node, expected)
         ret (result, result_error)
     }
     if node.kind == .UnaryExpr {
@@ -2369,7 +2718,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                 place_type = c.locals[local_index].ty
                 mutable = c.locals[local_index].mutable
             } else {
-                if place.kind != .BracketPostfix && !(place.kind == .UnaryExpr && c.tokens[place.token_start].kind == .PunctStar) { ret (invalid_type(), Unsupported) }
+                if place.kind != .BracketPostfix && place.kind != .FieldExpr && !(place.kind == .UnaryExpr && c.tokens[place.token_start].kind == .PunctStar) { ret (invalid_type(), Unsupported) }
                 let (resolved_place, place_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                 if place_error != ok { ret (invalid_type(), place_error) }
                 place_type = resolved_place
@@ -2754,6 +3103,14 @@ fn assignment_place_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         if !mutable { ret (invalid_type(), ImmutableAssignment) }
         ret (element, ok)
     }
+    if place.kind == .FieldExpr {
+        let (field_type, field_error) = check_expr(c, g, tree, module_index, node_index, invalid_type())
+        if field_error != ok { ret (invalid_type(), field_error) }
+        let (mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, node_index)
+        if mutable_error != ok { ret (invalid_type(), mutable_error) }
+        if !mutable { ret (invalid_type(), ImmutableAssignment) }
+        ret (field_type, ok)
+    }
     ret (invalid_type(), Unsupported)
 }
 
@@ -2968,11 +3325,12 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 }
 
 fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
-    if c.function_generics.len < c.functions.len || c.comptime_parameters.len == 0usize || c.generic_arguments.len == 0usize { ret Capacity }
+    if c.function_generics.len < c.functions.len || c.comptime_parameters.len == 0usize || c.generic_arguments.len == 0usize || c.aggregates.len == 0usize || c.aggregate_fields.len == 0usize { ret Capacity }
     c.resolver = r
     try collect_aliases(c, r, g, true)
     try collect_constants(c, r, g)
     try collect_aliases(c, r, g, false)
+    try collect_aggregates(c, r, g)
     try collect_signatures(c, r, g)
     ret check_bodies(c, r, g)
 }
