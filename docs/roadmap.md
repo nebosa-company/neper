@@ -163,7 +163,13 @@ from explicit arguments or structural value-argument inference, cache duplicate
 instances, and substitute parameters through signatures, bodies, and array layouts.
 Generic aggregate types now share that canonical specialization cache, substitute
 field types and array lengths, compute concrete layouts, and support specialized
-aggregate literals. The full intrinsic set and debug locals remain open.
+aggregate literals. The fixed bootstrap host increment adds the complete
+`os.open`/`read`/`write`/`close`, standard-handle, directory, process,
+argument, virtual-memory and clock surface through a small C99 runtime object.
+Intrinsic signatures are compiler-owned, fallible calls use one deterministic
+caller-owned result layout on both x64 ABIs, host failures map to stable qualified
+`os.*` errors, and the Windows/Linux suite exercises success, failure and process
+exit paths. Debug locals remain open.
 This callout does not
 mark the `neper-0` milestone complete.
 

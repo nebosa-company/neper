@@ -75,6 +75,11 @@ Generic functions accept explicit or inferred `[T: type]` and `[N: usize]`
 parameters, with cached concrete specializations emitted per argument set.
 Generic structs use the same concrete identity and substitution rules, including
 specialized field layout and literals such as `Buffer[i64, 4]{ ... }`.
+The fixed `neper-0` host surface is implemented on Windows and Linux: files,
+standard handles, directory enumeration, child processes, startup arguments,
+virtual-memory reserve/commit, process exit, and wall/monotonic clocks. Generated
+programs link a small platform runtime object, and native failures retain stable
+qualified `os.*` error identities across both x64 ABIs.
 Explicit-backing enums, unchecked bare unions,
 tagged `union enum` values, exact tag/payload layout, tag-checked payload access,
 contextual and qualified member names, and non-fallthrough `switch` are implemented.

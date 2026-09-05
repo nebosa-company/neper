@@ -184,4 +184,19 @@ if ($LASTEXITCODE -ne 1 -or ($genericAggregateArity -join "`n") -notmatch 'compi
     throw 'generic aggregate arity rejection failed'
 }
 
+$osHelper = Join-Path $testBuild 'os-spawn-helper.exe'
+& $neper build (Join-Path $PSScriptRoot 'os-spawn-helper.e') --output $osHelper | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'OS spawn helper build failed' }
+$osOutput = Join-Path $testBuild 'os-output.txt'
+$osIntrinsic = & $neper run (Join-Path $PSScriptRoot 'os-intrinsics.e') --output (Join-Path $testBuild 'os-intrinsics.exe') -- $osOutput $PSScriptRoot $osHelper
+if ($LASTEXITCODE -ne 0 -or $osIntrinsic -ne 'intrinsic ok') { throw 'fixed OS intrinsic behavior failed' }
+if ([Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($osOutput)) -ne 'neper os!') { throw 'OS file round trip failed' }
+
+$missingPath = Join-Path $testBuild 'does-not-exist.neper0'
+$osError = & $neper run (Join-Path $PSScriptRoot 'os-error.e') --output (Join-Path $testBuild 'os-error.exe') -- $missingPath 2>&1
+if ($LASTEXITCODE -ne 1 -or ($osError -join "`n") -notmatch 'error: os\.NotFound') { throw 'OS error mapping failed' }
+
+& $neper run (Join-Path $PSScriptRoot 'os-exit.e') --output (Join-Path $testBuild 'os-exit.exe') | Out-Null
+if ($LASTEXITCODE -ne 23) { throw 'OS exit intrinsic failed' }
+
 'neper-0 Windows tests passed'

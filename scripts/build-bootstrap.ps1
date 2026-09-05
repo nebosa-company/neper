@@ -3,6 +3,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $build = Join-Path $repo 'build'
 $source = Join-Path $repo 'bootstrap\neper.c'
+$runtimeSource = Join-Path $repo 'bootstrap\runtime.c'
 $vsDevCmd = $env:NEPER_VSDEVCMD
 
 if (-not $vsDevCmd) {
@@ -24,7 +25,7 @@ if (-not $vsDevCmd -or -not (Test-Path -LiteralPath $vsDevCmd)) {
 }
 
 New-Item -ItemType Directory -Force -Path $build | Out-Null
-$command = 'call "{0}" -arch=x64 -host_arch=x64 >nul && cl /nologo /std:c11 /W4 /O2 /Fo:"{1}" /Fe:"{2}" "{3}"' -f $vsDevCmd, (Join-Path $build 'neper.obj'), (Join-Path $build 'neper.exe'), $source
+$command = 'call "{0}" -arch=x64 -host_arch=x64 >nul && cl /nologo /std:c11 /W4 /O2 /Oi- /GS- /Zl /c /Fo:"{1}" "{2}" && cl /nologo /std:c11 /W4 /O2 /Fo:"{3}" /Fe:"{4}" "{5}"' -f $vsDevCmd, (Join-Path $build 'neper_runtime.obj'), $runtimeSource, (Join-Path $build 'neper.obj'), (Join-Path $build 'neper.exe'), $source
 cmd.exe /d /s /c $command
 if ($LASTEXITCODE -ne 0) { throw "bootstrap compilation failed with exit code $LASTEXITCODE" }
 
@@ -32,5 +33,6 @@ $libraryTarget = Join-Path $build 'lib\e'
 New-Item -ItemType Directory -Force -Path $libraryTarget | Out-Null
 Copy-Item -LiteralPath (Join-Path $repo 'lib\e\mem.e') -Destination $libraryTarget -Force
 Copy-Item -LiteralPath (Join-Path $repo 'lib\e\io.e') -Destination $libraryTarget -Force
+Copy-Item -LiteralPath (Join-Path $repo 'lib\e\os.e') -Destination $libraryTarget -Force
 
 Write-Output (Join-Path $build 'neper.exe')

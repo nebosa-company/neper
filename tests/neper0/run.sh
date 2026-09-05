@@ -220,4 +220,23 @@ set -e
 test "$generic_aggregate_arity_status" -eq 1
 printf '%s' "$generic_aggregate_arity" | grep -q 'compile-time argument count does not match generic type'
 
+os_helper="$test_build/os-spawn-helper"
+"$neper" build "$repo/tests/neper0/os-spawn-helper.e" --output "$os_helper" >/dev/null
+os_output="$test_build/os-output.txt"
+test "$("$neper" run "$repo/tests/neper0/os-intrinsics.e" --output "$test_build/os-intrinsics" -- "$os_output" "$repo/tests/neper0" "$os_helper")" = 'intrinsic ok'
+test "$(cat "$os_output")" = 'neper os!'
+
+set +e
+os_error=$("$neper" run "$repo/tests/neper0/os-error.e" --output "$test_build/os-error" -- "$test_build/does-not-exist.neper0" 2>&1)
+os_error_status=$?
+set -e
+test "$os_error_status" -eq 1
+printf '%s' "$os_error" | grep -q 'error: os\.NotFound'
+
+set +e
+"$neper" run "$repo/tests/neper0/os-exit.e" --output "$test_build/os-exit" >/dev/null
+os_exit_status=$?
+set -e
+test "$os_exit_status" -eq 23
+
 printf '%s\n' 'neper-0 Linux tests passed'

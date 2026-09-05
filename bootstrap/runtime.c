@@ -1,0 +1,460 @@
+/* Fixed neper-0 host intrinsics. Keep this file independent of the C runtime on
+ * Windows; generated programs link it with the platform libraries directly. */
+#ifndef _WIN32
+#define _GNU_SOURCE
+#endif
+
+#include <stddef.h>
+#include <stdint.h>
+
+typedef struct { unsigned char *base; size_t cap; size_t off; } NpArena;
+typedef struct { const unsigned char *ptr; size_t len; } NpStr;
+typedef struct { uintptr_t raw; } NpFile;
+typedef struct { uintptr_t raw; } NpProc;
+typedef struct { NpStr name; unsigned char kind; unsigned char pad[7]; } NpDirEntry;
+typedef struct { NpFile in, out, err; struct { const uintptr_t *ptr; size_t len; } inherit; } NpStdio;
+
+enum {
+    NP_OK = 0, NP_NOT_FOUND = 2, NP_DENIED = 3, NP_EXISTS = 4,
+    NP_INTERRUPTED = 5, NP_OUT_OF_MEMORY = 6, NP_FAILED = 7,
+    NP_TIMEOUT = 8, NP_WOULD_BLOCK = 9, NP_UNSUPPORTED = 10
+};
+
+static const NpStr *np_args_ptr;
+static size_t np_args_len;
+
+static void *np_arena_alloc(NpArena *a, size_t n, size_t alignment) {
+    size_t at;
+    if (!a || !alignment || (alignment & (alignment - 1))) return 0;
+    if (a->off > SIZE_MAX - (alignment - 1)) return 0;
+    at = (a->off + alignment - 1) & ~(alignment - 1);
+    if (at > a->cap || n > a->cap - at) return 0;
+    a->off = at + n;
+    return a->base + at;
+}
+
+static void np_copy(void *destination, const void *source, size_t n) {
+    unsigned char *d = (unsigned char *)destination;
+    const unsigned char *s = (const unsigned char *)source;
+    while (n--) *d++ = *s++;
+}
+
+void neper_os_set_args(const NpStr *args, size_t count) {
+    np_args_ptr = args;
+    np_args_len = count;
+}
+
+void neper_os_args(void *result, NpArena *arena) {
+    unsigned char *out = (unsigned char *)result;
+    NpStr *copy;
+    size_t saved = arena ? arena->off : 0, i;
+    *(NpStr *)out = (NpStr){0, 0};
+    *(uint32_t *)(out + 16) = NP_OK;
+    copy = (NpStr *)np_arena_alloc(arena, np_args_len * sizeof(NpStr), 8);
+    if (!copy && np_args_len) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    for (i = 0; i < np_args_len; ++i) {
+        unsigned char *bytes = (unsigned char *)np_arena_alloc(arena, np_args_ptr[i].len, 1);
+        if (!bytes && np_args_ptr[i].len) {
+            arena->off = saved;
+            *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY;
+            return;
+        }
+        np_copy(bytes, np_args_ptr[i].ptr, np_args_ptr[i].len);
+        copy[i].ptr = bytes;
+        copy[i].len = np_args_ptr[i].len;
+    }
+    *(NpStr *)out = (NpStr){(const unsigned char *)copy, np_args_len};
+}
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+#pragma function(memset)
+void *memset(void *destination, int value, size_t count) {
+    volatile unsigned char *at = (volatile unsigned char *)destination;
+    while (count--) *at++ = (unsigned char)value;
+    return destination;
+}
+
+static uint32_t np_error(DWORD value) {
+    switch (value) {
+        case ERROR_FILE_NOT_FOUND: case ERROR_PATH_NOT_FOUND: case ERROR_INVALID_DRIVE: return NP_NOT_FOUND;
+        case ERROR_ACCESS_DENIED: case ERROR_SHARING_VIOLATION: return NP_DENIED;
+        case ERROR_FILE_EXISTS: case ERROR_ALREADY_EXISTS: return NP_EXISTS;
+        case ERROR_OPERATION_ABORTED: return NP_INTERRUPTED;
+        case ERROR_NOT_ENOUGH_MEMORY: case ERROR_OUTOFMEMORY: return NP_OUT_OF_MEMORY;
+        case ERROR_TIMEOUT: case WAIT_TIMEOUT: return NP_TIMEOUT;
+        case ERROR_NOT_SUPPORTED: case ERROR_CALL_NOT_IMPLEMENTED: return NP_UNSUPPORTED;
+        default: return NP_FAILED;
+    }
+}
+
+static wchar_t *np_wide(NpStr text) {
+    int count;
+    wchar_t *out;
+    HANDLE heap = GetProcessHeap();
+    if (text.len > 0x7ffffffeu) return 0;
+    count = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)text.ptr,
+                                (int)text.len, 0, 0);
+    if (!count && text.len) return 0;
+    out = (wchar_t *)HeapAlloc(heap, 0, ((size_t)count + 1) * sizeof(wchar_t));
+    if (!out) return 0;
+    if (count) MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, (const char *)text.ptr,
+                                   (int)text.len, out, count);
+    out[count] = 0;
+    return out;
+}
+
+static unsigned char *np_utf8_arena(NpArena *arena, const wchar_t *text, size_t *length) {
+    int wide_length = 0, count;
+    unsigned char *out;
+    while (text[wide_length]) ++wide_length;
+    count = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, wide_length, 0, 0, 0, 0);
+    if (count <= 0 && wide_length) return 0;
+    out = (unsigned char *)np_arena_alloc(arena, (size_t)count, 1);
+    if (!out && count) return 0;
+    if (count && WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text, wide_length,
+                                     (char *)out, count, 0, 0) <= 0) return 0;
+    *length = (size_t)count;
+    return out;
+}
+
+void neper_os_open(void *result, NpArena *arena, const unsigned char *path, size_t path_len,
+                   uintptr_t packed_flags) {
+    unsigned char *out = (unsigned char *)result;
+    NpStr text = {path, path_len};
+    wchar_t *wide = np_wide(text);
+    DWORD access = 0, disposition = OPEN_EXISTING;
+    HANDLE handle;
+    int read_flag = (packed_flags & 0xffu) != 0;
+    int write_flag = ((packed_flags >> 8) & 0xffu) != 0;
+    int create_flag = ((packed_flags >> 16) & 0xffu) != 0;
+    int truncate_flag = ((packed_flags >> 24) & 0xffu) != 0;
+    int append_flag = ((packed_flags >> 32) & 0xffu) != 0;
+    (void)arena;
+    *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (!wide) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
+    if (read_flag) access |= GENERIC_READ;
+    if (write_flag) access |= append_flag ? FILE_APPEND_DATA : GENERIC_WRITE;
+    if (create_flag && truncate_flag) disposition = CREATE_ALWAYS;
+    else if (create_flag) disposition = OPEN_ALWAYS;
+    else if (truncate_flag) disposition = TRUNCATE_EXISTING;
+    handle = CreateFileW(wide, access, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                         0, disposition, FILE_ATTRIBUTE_NORMAL, 0);
+    HeapFree(GetProcessHeap(), 0, wide);
+    if (handle == INVALID_HANDLE_VALUE) { *(uint32_t *)(out + 8) = np_error(GetLastError()); return; }
+    *(uintptr_t *)out = (uintptr_t)handle;
+}
+
+void neper_os_read(void *result, uintptr_t raw, unsigned char *buffer, size_t length) {
+    unsigned char *out = (unsigned char *)result;
+    DWORD got = 0, request = length > 0xffffffffu ? 0xffffffffu : (DWORD)length;
+    *(size_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (!ReadFile((HANDLE)raw, buffer, request, &got, 0)) { *(uint32_t *)(out + 8) = np_error(GetLastError()); return; }
+    *(size_t *)out = got;
+}
+
+void neper_os_write(void *result, uintptr_t raw, const unsigned char *buffer, size_t length) {
+    unsigned char *out = (unsigned char *)result;
+    DWORD put = 0, request = length > 0xffffffffu ? 0xffffffffu : (DWORD)length;
+    *(size_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (!WriteFile((HANDLE)raw, buffer, request, &put, 0)) { *(uint32_t *)(out + 8) = np_error(GetLastError()); return; }
+    *(size_t *)out = put;
+}
+
+uint32_t neper_os_close(uintptr_t raw) {
+    return CloseHandle((HANDLE)raw) ? NP_OK : np_error(GetLastError());
+}
+
+void neper_os_stdout(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_OUTPUT_HANDLE); }
+void neper_os_stderr(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_ERROR_HANDLE); }
+
+void neper_os_readdir(void *result, NpArena *arena, const unsigned char *path, size_t path_len) {
+    unsigned char *out = (unsigned char *)result;
+    NpStr text = {path, path_len};
+    wchar_t *wide = np_wide(text), *pattern;
+    WIN32_FIND_DATAW item;
+    HANDLE find;
+    size_t count = 0, capacity = 16, saved = arena ? arena->off : 0, n;
+    NpDirEntry *entries;
+    *(NpStr *)out = (NpStr){0, 0}; *(uint32_t *)(out + 16) = NP_OK;
+    if (!wide) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    n = 0; while (wide[n]) ++n;
+    pattern = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, (n + 3) * sizeof(wchar_t));
+    if (!pattern) { HeapFree(GetProcessHeap(), 0, wide); *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    np_copy(pattern, wide, n * sizeof(wchar_t));
+    if (n && pattern[n - 1] != L'\\' && pattern[n - 1] != L'/') pattern[n++] = L'\\';
+    pattern[n++] = L'*'; pattern[n] = 0;
+    HeapFree(GetProcessHeap(), 0, wide);
+    entries = (NpDirEntry *)np_arena_alloc(arena, capacity * sizeof(NpDirEntry), 8);
+    if (!entries) { HeapFree(GetProcessHeap(), 0, pattern); *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    find = FindFirstFileW(pattern, &item);
+    HeapFree(GetProcessHeap(), 0, pattern);
+    if (find == INVALID_HANDLE_VALUE) { arena->off = saved; *(uint32_t *)(out + 16) = np_error(GetLastError()); return; }
+    do {
+        size_t len;
+        unsigned char *name;
+        if ((item.cFileName[0] == L'.' && item.cFileName[1] == 0) ||
+            (item.cFileName[0] == L'.' && item.cFileName[1] == L'.' && item.cFileName[2] == 0)) continue;
+        if (count == capacity) {
+            NpDirEntry *grown;
+            capacity *= 2;
+            grown = (NpDirEntry *)np_arena_alloc(arena, capacity * sizeof(NpDirEntry), 8);
+            if (!grown) goto oom;
+            np_copy(grown, entries, count * sizeof(NpDirEntry)); entries = grown;
+        }
+        name = np_utf8_arena(arena, item.cFileName, &len);
+        if (!name && item.cFileName[0]) goto oom;
+        entries[count].name = (NpStr){name, len};
+        entries[count].kind = (item.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) ? 1 :
+                              (item.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) ? 2 : 0;
+        ++count;
+    } while (FindNextFileW(find, &item));
+    if (GetLastError() != ERROR_NO_MORE_FILES) { uint32_t error = np_error(GetLastError()); FindClose(find); arena->off = saved; *(uint32_t *)(out + 16) = error; return; }
+    FindClose(find); *(NpStr *)out = (NpStr){(const unsigned char *)entries, count}; return;
+oom:
+    FindClose(find); arena->off = saved; *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY;
+}
+
+static size_t np_quoted_size(NpStr arg) {
+    size_t i, n = 2, slashes = 0;
+    for (i = 0; i < arg.len; ++i) {
+        if (arg.ptr[i] == '\\') { ++slashes; ++n; }
+        else if (arg.ptr[i] == '"') { n += slashes + 2; slashes = 0; }
+        else { ++n; slashes = 0; }
+    }
+    return n + slashes;
+}
+
+static unsigned char *np_quote(unsigned char *out, NpStr arg) {
+    size_t i, slashes = 0, k;
+    *out++ = '"';
+    for (i = 0; i < arg.len; ++i) {
+        if (arg.ptr[i] == '\\') { *out++ = '\\'; ++slashes; continue; }
+        if (arg.ptr[i] == '"') { for (k = 0; k < slashes + 1; ++k) *out++ = '\\'; *out++ = '"'; }
+        else *out++ = arg.ptr[i];
+        slashes = 0;
+    }
+    for (k = 0; k < slashes; ++k) *out++ = '\\';
+    *out++ = '"'; return out;
+}
+
+void neper_os_spawn(void *result, NpArena *arena, const NpStr *argv, size_t argc, const NpStdio *stdio) {
+    unsigned char *out = (unsigned char *)result, *command, *at;
+    size_t i, bytes = 1;
+    wchar_t *wide;
+    STARTUPINFOW startup;
+    PROCESS_INFORMATION process;
+    BOOL ok;
+    (void)arena;
+    *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (!argc) { *(uint32_t *)(out + 8) = NP_NOT_FOUND; return; }
+    for (i = 0; i < argc; ++i) bytes += np_quoted_size(argv[i]) + (i != 0);
+    command = (unsigned char *)HeapAlloc(GetProcessHeap(), 0, bytes);
+    if (!command) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
+    at = command;
+    for (i = 0; i < argc; ++i) { if (i) *at++ = ' '; at = np_quote(at, argv[i]); }
+    *at = 0;
+    wide = np_wide((NpStr){command, (size_t)(at - command)});
+    HeapFree(GetProcessHeap(), 0, command);
+    if (!wide) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
+    for (i = 0; i < sizeof(startup); ++i) ((unsigned char *)&startup)[i] = 0;
+    for (i = 0; i < sizeof(process); ++i) ((unsigned char *)&process)[i] = 0;
+    startup.cb = sizeof(startup); startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdInput = (HANDLE)stdio->in.raw; startup.hStdOutput = (HANDLE)stdio->out.raw;
+    startup.hStdError = (HANDLE)stdio->err.raw;
+    SetHandleInformation(startup.hStdInput, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    SetHandleInformation(startup.hStdOutput, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    SetHandleInformation(startup.hStdError, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    for (i = 0; i < stdio->inherit.len; ++i)
+        SetHandleInformation((HANDLE)stdio->inherit.ptr[i], HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+    ok = CreateProcessW(0, wide, 0, 0, TRUE, 0, 0, 0, &startup, &process);
+    for (i = 0; i < stdio->inherit.len; ++i)
+        SetHandleInformation((HANDLE)stdio->inherit.ptr[i], HANDLE_FLAG_INHERIT, 0);
+    HeapFree(GetProcessHeap(), 0, wide);
+    if (!ok) { *(uint32_t *)(out + 8) = np_error(GetLastError()); return; }
+    CloseHandle(process.hThread); *(uintptr_t *)out = (uintptr_t)process.hProcess;
+}
+
+void neper_os_wait(void *result, uintptr_t raw) {
+    unsigned char *out = (unsigned char *)result; DWORD status, code;
+    *(int32_t *)out = -1; *(uint32_t *)(out + 4) = NP_OK;
+    status = WaitForSingleObject((HANDLE)raw, INFINITE);
+    if (status != WAIT_OBJECT_0 || !GetExitCodeProcess((HANDLE)raw, &code)) {
+        *(uint32_t *)(out + 4) = status == WAIT_TIMEOUT ? NP_TIMEOUT : np_error(GetLastError()); return;
+    }
+    CloseHandle((HANDLE)raw); *(int32_t *)out = (int32_t)code;
+}
+
+void neper_os_exit(int32_t code) { ExitProcess((UINT)code); }
+
+void neper_os_reserve(void *result, size_t n) {
+    unsigned char *out = (unsigned char *)result;
+    void *p = VirtualAlloc(0, n, MEM_RESERVE, PAGE_NOACCESS);
+    *(void **)out = p; *(uint32_t *)(out + 8) = p ? NP_OK : np_error(GetLastError());
+}
+
+uint32_t neper_os_commit(unsigned char *p, size_t n) {
+    return VirtualAlloc(p, n, MEM_COMMIT, PAGE_READWRITE) ? NP_OK : np_error(GetLastError());
+}
+
+void neper_os_clock(void *result, unsigned char clock_kind) {
+    unsigned char *out = (unsigned char *)result;
+    *(int64_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (clock_kind == 0) {
+        FILETIME ft; ULARGE_INTEGER value;
+        GetSystemTimeAsFileTime(&ft); value.LowPart = ft.dwLowDateTime; value.HighPart = ft.dwHighDateTime;
+        *(int64_t *)out = (int64_t)((value.QuadPart - UINT64_C(116444736000000000)) * 100);
+    } else if (clock_kind == 1) {
+        LARGE_INTEGER now, frequency;
+        if (!QueryPerformanceCounter(&now) || !QueryPerformanceFrequency(&frequency)) { *(uint32_t *)(out + 8) = NP_FAILED; return; }
+        *(int64_t *)out = (now.QuadPart / frequency.QuadPart) * INT64_C(1000000000) +
+                          (now.QuadPart % frequency.QuadPart) * INT64_C(1000000000) / frequency.QuadPart;
+    } else *(uint32_t *)(out + 8) = NP_UNSUPPORTED;
+}
+
+#else
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <time.h>
+#include <unistd.h>
+
+static uint32_t np_error(int value) {
+    switch (value) {
+        case ENOENT: case ENOTDIR: return NP_NOT_FOUND;
+        case EACCES: case EPERM: return NP_DENIED;
+        case EEXIST: return NP_EXISTS;
+        case EINTR: return NP_INTERRUPTED;
+        case ENOMEM: return NP_OUT_OF_MEMORY;
+        case ETIMEDOUT: return NP_TIMEOUT;
+        case EAGAIN: return NP_WOULD_BLOCK;
+        case ENOSYS: case ENOTSUP: return NP_UNSUPPORTED;
+        default: return NP_FAILED;
+    }
+}
+
+static char *np_c_string_arena(NpArena *arena, NpStr value) {
+    char *out = (char *)np_arena_alloc(arena, value.len + 1, 1);
+    if (!out) return 0;
+    np_copy(out, value.ptr, value.len); out[value.len] = 0; return out;
+}
+
+void neper_os_open(void *result, NpArena *arena, const unsigned char *path, size_t path_len,
+                   uintptr_t packed_flags) {
+    unsigned char *out = (unsigned char *)result;
+    size_t saved = arena ? arena->off : 0;
+    char *name = np_c_string_arena(arena, (NpStr){path, path_len});
+    int flags = 0, fd;
+    int r = (packed_flags & 0xffu) != 0, w = ((packed_flags >> 8) & 0xffu) != 0;
+    *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (!name) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
+    flags |= r && w ? O_RDWR : w ? O_WRONLY : O_RDONLY;
+    if ((packed_flags >> 16) & 0xffu) flags |= O_CREAT;
+    if ((packed_flags >> 24) & 0xffu) flags |= O_TRUNC;
+    if ((packed_flags >> 32) & 0xffu) flags |= O_APPEND;
+    fd = open(name, flags, 0666); arena->off = saved;
+    if (fd < 0) { *(uint32_t *)(out + 8) = np_error(errno); return; }
+    *(uintptr_t *)out = (uintptr_t)fd;
+}
+
+void neper_os_read(void *result, uintptr_t raw, unsigned char *buffer, size_t length) {
+    unsigned char *out = (unsigned char *)result; ssize_t got = read((int)raw, buffer, length);
+    *(size_t *)out = 0; *(uint32_t *)(out + 8) = got < 0 ? np_error(errno) : NP_OK;
+    if (got >= 0) *(size_t *)out = (size_t)got;
+}
+
+void neper_os_write(void *result, uintptr_t raw, const unsigned char *buffer, size_t length) {
+    unsigned char *out = (unsigned char *)result; ssize_t put = write((int)raw, buffer, length);
+    *(size_t *)out = 0; *(uint32_t *)(out + 8) = put < 0 ? np_error(errno) : NP_OK;
+    if (put >= 0) *(size_t *)out = (size_t)put;
+}
+
+uint32_t neper_os_close(uintptr_t raw) { return close((int)raw) == 0 ? NP_OK : np_error(errno); }
+void neper_os_stdout(void *result) { *(uintptr_t *)result = 1; }
+void neper_os_stderr(void *result) { *(uintptr_t *)result = 2; }
+
+void neper_os_readdir(void *result, NpArena *arena, const unsigned char *path, size_t path_len) {
+    unsigned char *out = (unsigned char *)result;
+    size_t saved = arena ? arena->off : 0, count = 0, capacity = 16;
+    char *name = np_c_string_arena(arena, (NpStr){path, path_len});
+    NpDirEntry *entries;
+    DIR *dir; struct dirent *item;
+    *(NpStr *)out = (NpStr){0, 0}; *(uint32_t *)(out + 16) = NP_OK;
+    if (!name) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    dir = opendir(name); arena->off = saved;
+    if (!dir) { *(uint32_t *)(out + 16) = np_error(errno); return; }
+    entries = (NpDirEntry *)np_arena_alloc(arena, capacity * sizeof(NpDirEntry), 8);
+    if (!entries) goto oom;
+    errno = 0;
+    while ((item = readdir(dir)) != 0) {
+        size_t len = 0; unsigned char *bytes; NpDirEntry *grown;
+        if ((item->d_name[0] == '.' && item->d_name[1] == 0) ||
+            (item->d_name[0] == '.' && item->d_name[1] == '.' && item->d_name[2] == 0)) continue;
+        while (item->d_name[len]) ++len;
+        if (count == capacity) {
+            capacity *= 2; grown = (NpDirEntry *)np_arena_alloc(arena, capacity * sizeof(NpDirEntry), 8);
+            if (!grown) goto oom;
+            np_copy(grown, entries, count * sizeof(NpDirEntry)); entries = grown;
+        }
+        bytes = (unsigned char *)np_arena_alloc(arena, len, 1); if (!bytes && len) goto oom;
+        np_copy(bytes, item->d_name, len); entries[count].name = (NpStr){bytes, len};
+        entries[count].kind = item->d_type == DT_REG ? 0 : item->d_type == DT_DIR ? 1 : item->d_type == DT_LNK ? 2 : 3;
+        ++count;
+    }
+    if (errno) { uint32_t error = np_error(errno); closedir(dir); arena->off = saved; *(uint32_t *)(out + 16) = error; return; }
+    closedir(dir); *(NpStr *)out = (NpStr){(const unsigned char *)entries, count}; return;
+oom:
+    closedir(dir); arena->off = saved; *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY;
+}
+
+void neper_os_spawn(void *result, NpArena *arena, const NpStr *argv, size_t argc, const NpStdio *stdio) {
+    unsigned char *out = (unsigned char *)result;
+    size_t saved = arena ? arena->off : 0, i;
+    char **native; pid_t pid;
+    *(uintptr_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (!argc) { *(uint32_t *)(out + 8) = NP_NOT_FOUND; return; }
+    native = (char **)np_arena_alloc(arena, (argc + 1) * sizeof(char *), 8);
+    if (!native) { *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
+    for (i = 0; i < argc; ++i) if (!(native[i] = np_c_string_arena(arena, argv[i]))) { arena->off = saved; *(uint32_t *)(out + 8) = NP_OUT_OF_MEMORY; return; }
+    native[argc] = 0; pid = fork();
+    if (pid == 0) {
+        if ((int)stdio->in.raw != 0) dup2((int)stdio->in.raw, 0);
+        if ((int)stdio->out.raw != 1) dup2((int)stdio->out.raw, 1);
+        if ((int)stdio->err.raw != 2) dup2((int)stdio->err.raw, 2);
+        execvp(native[0], native); _exit(127);
+    }
+    arena->off = saved;
+    if (pid < 0) { *(uint32_t *)(out + 8) = np_error(errno); return; }
+    *(uintptr_t *)out = (uintptr_t)pid;
+}
+
+void neper_os_wait(void *result, uintptr_t raw) {
+    unsigned char *out = (unsigned char *)result; int status;
+    *(int32_t *)out = -1; *(uint32_t *)(out + 4) = NP_OK;
+    if (waitpid((pid_t)raw, &status, 0) < 0) { *(uint32_t *)(out + 4) = np_error(errno); return; }
+    *(int32_t *)out = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+}
+
+void neper_os_exit(int32_t code) { _exit(code); }
+
+void neper_os_reserve(void *result, size_t n) {
+    unsigned char *out = (unsigned char *)result; void *p = mmap(0, n, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    *(void **)out = p == MAP_FAILED ? 0 : p; *(uint32_t *)(out + 8) = p == MAP_FAILED ? np_error(errno) : NP_OK;
+}
+
+uint32_t neper_os_commit(unsigned char *p, size_t n) { return mprotect(p, n, PROT_READ | PROT_WRITE) == 0 ? NP_OK : np_error(errno); }
+
+void neper_os_clock(void *result, unsigned char clock_kind) {
+    unsigned char *out = (unsigned char *)result; struct timespec value; clockid_t id;
+    *(int64_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (clock_kind == 0) id = CLOCK_REALTIME; else if (clock_kind == 1) id = CLOCK_MONOTONIC;
+    else { *(uint32_t *)(out + 8) = NP_UNSUPPORTED; return; }
+    if (clock_gettime(id, &value) != 0) { *(uint32_t *)(out + 8) = np_error(errno); return; }
+    *(int64_t *)out = (int64_t)value.tv_sec * INT64_C(1000000000) + value.tv_nsec;
+}
+#endif

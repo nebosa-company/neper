@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.11-neper0"
+#define NEPER_VERSION "0.0.12-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -409,6 +409,7 @@ typedef struct Function {
     ComptimeParam comptime_params[MAX_ARGS];
     int comptime_param_count;
     int is_template;
+    int is_intrinsic;
     Type return_type;
     Type return_types[MAX_ARGS];
     int return_count;
@@ -431,6 +432,7 @@ typedef struct UseDecl {
 
 typedef struct ErrorDecl {
     char name[96];
+    char module[96];
     Token token;
     int code;
 } ErrorDecl;
@@ -860,6 +862,140 @@ static Type type_array(Type element, size_t length) {
     type_set_element(&type, element);
     type.array_length = length;
     return type;
+}
+
+static Type intrinsic_pointer(Type element, int is_const) {
+    Type type = type_make(TY_POINTER, element.name);
+    type_set_element(&type, element);
+    type.is_const = is_const;
+    return type;
+}
+
+static Type intrinsic_slice(Type element, int is_const) {
+    Type type = type_make(TY_SLICE, element.name);
+    type_set_element(&type, element);
+    type.is_const = is_const;
+    return type;
+}
+
+static StructDecl *intrinsic_type(Compiler *c, Token token, const char *name,
+                                  NamedDeclKind kind, Type backing) {
+    StructDecl *decl = &c->program.structs[c->program.struct_count++];
+    memset(decl, 0, sizeof(*decl));
+    copy_text(decl->name, sizeof(decl->name), name, strlen(name));
+    decl->token = token; decl->kind = kind; decl->backing_type = backing;
+    return decl;
+}
+
+static void intrinsic_field(StructDecl *decl, Token token, const char *name, Type type,
+                            int has_payload, int64_t value) {
+    FieldDecl *field = &decl->fields[decl->field_count++];
+    memset(field, 0, sizeof(*field));
+    copy_text(field->name, sizeof(field->name), name, strlen(name));
+    field->token = token; field->type = type; field->has_payload = has_payload; field->value = value;
+}
+
+static Function *intrinsic_function(Compiler *c, Token token, const char *name,
+                                    const char *symbol) {
+    Function *fn = &c->program.functions[c->program.function_count++];
+    int i;
+    memset(fn, 0, sizeof(*fn));
+    copy_text(fn->name, sizeof(fn->name), name, strlen(name));
+    copy_text(fn->symbol, sizeof(fn->symbol), symbol, strlen(symbol));
+    fn->token = token; fn->is_intrinsic = 1;
+    fn->return_slot_local_index = -1; fn->scalar_return_local_index = -1;
+    for (i = 0; i < MAX_ARGS; ++i) fn->return_value_locals[i] = -1;
+    return fn;
+}
+
+static void intrinsic_param(Function *fn, Token token, const char *name, Type type) {
+    Param *param = &fn->params[fn->param_count++];
+    memset(param, 0, sizeof(*param));
+    copy_text(param->name, sizeof(param->name), name, strlen(name));
+    param->token = token; param->type = type;
+}
+
+static void intrinsic_returns(Function *fn, int count, Type first, Type second) {
+    fn->return_count = count;
+    if (count > 0) fn->return_types[0] = first;
+    if (count > 1) fn->return_types[1] = second;
+    fn->return_type = count ? first : type_make(TY_VOID, "void");
+}
+
+static void install_os_intrinsics(Compiler *c) {
+    static const char *error_names[] = {
+        "NotFound", "Denied", "Exists", "Interrupted", "OutOfMemory",
+        "Failed", "Timeout", "WouldBlock", "Unsupported"
+    };
+    Token token = c->tokens[0];
+    Type u8 = type_make(TY_INT, "u8"), i32 = type_make(TY_INT, "i32");
+    Type i64 = type_make(TY_INT, "i64"), usize = type_make(TY_INT, "usize");
+    Type error = type_make(TY_ERR, "err"), arena = type_make(TY_ARENA, "mem.Arena");
+    Type string = type_make(TY_STR, "str"), byte_pointer = intrinsic_pointer(u8, 0);
+    Type file = type_make(TY_NAMED, "os.File"), proc = type_make(TY_NAMED, "os.Proc");
+    Type clock = type_make(TY_NAMED, "os.Clock"), flags = type_make(TY_NAMED, "os.OpenFlags");
+    Type handle = type_make(TY_NAMED, "os.Handle"), stdio_type = type_make(TY_NAMED, "os.Stdio");
+    Type entry = type_make(TY_NAMED, "os.DirEntry");
+    Type arena_pointer = intrinsic_pointer(arena, 0);
+    Type bytes = intrinsic_slice(u8, 0), const_bytes = string;
+    Type strings = intrinsic_slice(string, 0), const_strings = intrinsic_slice(string, 1);
+    Type entries = intrinsic_slice(entry, 0), handles = intrinsic_slice(handle, 1);
+    StructDecl *decl;
+    Function *fn;
+    int i;
+
+    for (i = 0; i < (int)(sizeof(error_names) / sizeof(error_names[0])); ++i) {
+        ErrorDecl *decl_error = &c->program.errors[c->program.error_count++];
+        memset(decl_error, 0, sizeof(*decl_error));
+        copy_text(decl_error->name, sizeof(decl_error->name), error_names[i], strlen(error_names[i]));
+        strcpy(decl_error->module, "os"); decl_error->token = token; decl_error->code = i + 2;
+    }
+
+    decl = intrinsic_type(c, token, "os.File", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "raw", usize, 1, 0);
+    decl = intrinsic_type(c, token, "os.Proc", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "raw", usize, 1, 0);
+    decl = intrinsic_type(c, token, "os.Handle", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "raw", usize, 1, 0);
+    decl = intrinsic_type(c, token, "os.Clock", ND_ENUM, u8);
+    intrinsic_field(decl, token, "Wall", type_make(TY_VOID, "void"), 0, 0);
+    intrinsic_field(decl, token, "Monotonic", type_make(TY_VOID, "void"), 0, 1);
+    decl = intrinsic_type(c, token, "os.EntryKind", ND_ENUM, u8);
+    intrinsic_field(decl, token, "File", type_make(TY_VOID, "void"), 0, 0);
+    intrinsic_field(decl, token, "Dir", type_make(TY_VOID, "void"), 0, 1);
+    intrinsic_field(decl, token, "Symlink", type_make(TY_VOID, "void"), 0, 2);
+    intrinsic_field(decl, token, "Other", type_make(TY_VOID, "void"), 0, 3);
+    decl = intrinsic_type(c, token, "os.DirEntry", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "name", string, 1, 0);
+    intrinsic_field(decl, token, "kind", type_make(TY_NAMED, "os.EntryKind"), 1, 0);
+    decl = intrinsic_type(c, token, "os.OpenFlags", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "read", type_make(TY_BOOL, "bool"), 1, 0);
+    intrinsic_field(decl, token, "write", type_make(TY_BOOL, "bool"), 1, 0);
+    intrinsic_field(decl, token, "create", type_make(TY_BOOL, "bool"), 1, 0);
+    intrinsic_field(decl, token, "truncate", type_make(TY_BOOL, "bool"), 1, 0);
+    intrinsic_field(decl, token, "append", type_make(TY_BOOL, "bool"), 1, 0);
+    decl = intrinsic_type(c, token, "os.Stdio", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "stdin", file, 1, 0);
+    intrinsic_field(decl, token, "stdout", file, 1, 0);
+    intrinsic_field(decl, token, "stderr", file, 1, 0);
+    intrinsic_field(decl, token, "inherit", handles, 1, 0);
+
+#define OS_FN(source_name, native_name) fn = intrinsic_function(c, token, source_name, native_name)
+    OS_FN("os.open", "neper_os_open"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "flags", flags); intrinsic_returns(fn, 2, file, error);
+    OS_FN("os.read", "neper_os_read"); intrinsic_param(fn, token, "f", file); intrinsic_param(fn, token, "buf", bytes); intrinsic_returns(fn, 2, usize, error);
+    OS_FN("os.write", "neper_os_write"); intrinsic_param(fn, token, "f", file); intrinsic_param(fn, token, "buf", const_bytes); intrinsic_returns(fn, 2, usize, error);
+    OS_FN("os.close", "neper_os_close"); intrinsic_param(fn, token, "f", file); intrinsic_returns(fn, 1, error, error);
+    OS_FN("os.stdout", "neper_os_stdout"); intrinsic_returns(fn, 1, file, error);
+    OS_FN("os.stderr", "neper_os_stderr"); intrinsic_returns(fn, 1, file, error);
+    OS_FN("os.readdir", "neper_os_readdir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, entries, error);
+    OS_FN("os.spawn", "neper_os_spawn"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "argv", const_strings); intrinsic_param(fn, token, "stdio", stdio_type); intrinsic_returns(fn, 2, proc, error);
+    OS_FN("os.wait", "neper_os_wait"); intrinsic_param(fn, token, "p", proc); intrinsic_returns(fn, 2, i32, error);
+    OS_FN("os.exit", "neper_os_exit"); intrinsic_param(fn, token, "code", i32); intrinsic_returns(fn, 0, error, error);
+    OS_FN("os.args", "neper_os_args"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_returns(fn, 2, strings, error);
+    OS_FN("os.reserve", "neper_os_reserve"); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 2, byte_pointer, error);
+    OS_FN("os.commit", "neper_os_commit"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
+    OS_FN("os.clock", "neper_os_clock"); intrinsic_param(fn, token, "c", clock); intrinsic_returns(fn, 2, i64, error);
+#undef OS_FN
 }
 
 static Type array_element_type(Type array) {
@@ -1989,8 +2125,15 @@ static void iterator_next_name(Type type, char *out, size_t capacity) {
 
 static ErrorDecl *find_error(Compiler *c, const char *name) {
     int i;
-    for (i = 0; i < c->program.error_count; ++i)
-        if (strcmp(c->program.errors[i].name, name) == 0) return &c->program.errors[i];
+    for (i = 0; i < c->program.error_count; ++i) {
+        ErrorDecl *error = &c->program.errors[i];
+        if (!error->module[0] && strcmp(error->name, name) == 0) return error;
+        if (error->module[0]) {
+            char qualified[196];
+            snprintf(qualified, sizeof(qualified), "%s.%s", error->module, error->name);
+            if (strcmp(qualified, name) == 0) return error;
+        }
+    }
     return 0;
 }
 
@@ -4108,6 +4251,7 @@ static void prepare_return_convention(Compiler *c, Function *fn) {
     size_t offset = 0, maximum_alignment = 1;
     int i;
     fn->returns_via_slot = 0;
+    if (fn->is_intrinsic && fn->return_count > 1) fn->returns_via_slot = 1;
     if (fn->return_count > 2) fn->returns_via_slot = 1;
     for (i = 0; i < fn->return_count; ++i) {
         size_t size = 0, alignment = 1;
@@ -4157,7 +4301,8 @@ static void check_program(Compiler *c) {
     Function *main_fn = 0;
     for (i = 0; i < c->program.error_count; ++i)
         for (j = 0; j < i; ++j)
-            if (strcmp(c->program.errors[i].name, c->program.errors[j].name) == 0)
+            if (strcmp(c->program.errors[i].module, c->program.errors[j].module) == 0 &&
+                strcmp(c->program.errors[i].name, c->program.errors[j].name) == 0)
                 diagnostic_at(c, &c->program.errors[i].token, "E-NAME-0001", "duplicate error declaration");
     for (i = 0; i < c->program.constant_count; ++i) {
         ConstDecl *constant = &c->program.constants[i];
@@ -4203,6 +4348,7 @@ static void check_program(Compiler *c) {
             resolve_type_constants(c, &fn->return_types[j], &fn->token);
         if (fn->return_count) fn->return_type = fn->return_types[0];
         prepare_return_convention(c, fn);
+        if (fn->is_intrinsic) continue;
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
             resolve_type_constants(c, &fn->params[j].type, &fn->params[j].token);
@@ -4355,7 +4501,7 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
 static void collect_traps(Compiler *c) {
     int i;
     for (i = 0; i < c->program.function_count; ++i)
-        if (!c->program.functions[i].is_template)
+        if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
             collect_traps_statements(c, &c->program.functions[i], c->program.functions[i].body);
 }
 
@@ -4689,9 +4835,13 @@ static void emit_expr(Emitter *e, Expr *x) {
                     emit_name_address(e, x);
                     emit_address_load(e, x->type);
                 } else {
-                    fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", local->offset);
-                    if (type_lanes(local->type) == 2)
+                    if (type_lanes(local->type) == 2) {
+                        fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", local->offset);
                         fprintf(e->out, "    mov rdx, QWORD PTR [rbp-%d]\n", local->offset - 8);
+                    } else {
+                        emit_name_address(e, x);
+                        emit_address_load(e, local->type);
+                    }
                 }
             }
             break;
@@ -5429,20 +5579,21 @@ static void error_message(Compiler *c, ErrorDecl *error, char *out, size_t capac
     if (base) base++; else base = c->source_path;
     dot = strrchr(base, '.');
     module_length = dot ? (size_t)(dot - base) : strlen(base);
-    snprintf(out, capacity, "error: %.*s.%s\n", (int)module_length, base, error->name);
+    if (error->module[0]) snprintf(out, capacity, "error: %s.%s\n", error->module, error->name);
+    else snprintf(out, capacity, "error: %.*s.%s\n", (int)module_length, base, error->name);
 }
 
 static void emit_nepersym(Compiler *c, FILE *out, int windows) {
     int i, concrete_count = 0, record_index = 0;
     for (i = 0; i < c->program.function_count; ++i)
-        if (!c->program.functions[i].is_template) concrete_count++;
+        if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic) concrete_count++;
     if (windows) {
         fputs("\n.nepsym SEGMENT READ\nPUBLIC np_nepersym\nnp_nepersym LABEL BYTE\n"
               "DB 'N','E','P','S'\nDW 1,0\n", out);
         fprintf(out, "DD %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i) {
             Function *fn = &c->program.functions[i];
-            if (fn->is_template) continue;
+            if (fn->is_template || fn->is_intrinsic) continue;
             fprintf(out, "DQ %s, np_end_%s\nDD %d, %d, %d\n",
                     symbol_name(fn), symbol_name(fn), record_index, concrete_count, record_index);
             record_index++;
@@ -5450,7 +5601,7 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         fprintf(out, "DD %d\n", concrete_count + 1);
         for (i = 0; i < c->program.function_count; ++i) {
             Function *fn = &c->program.functions[i];
-            if (fn->is_template) continue;
+            if (fn->is_template || fn->is_intrinsic) continue;
             fprintf(out, "DD %u\n", (unsigned)strlen(fn->name));
             emit_bytes(out, (const unsigned char *)fn->name, strlen(fn->name), 1);
         }
@@ -5458,7 +5609,7 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         emit_bytes(out, (const unsigned char *)c->source_path, strlen(c->source_path), 1);
         fprintf(out, "DD %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i)
-            if (!c->program.functions[i].is_template)
+            if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
                 fprintf(out, "DD 8, %d, %d\n", c->program.functions[i].token.line, c->program.functions[i].token.column);
         fputs(".nepsym ENDS\n\n.code\n", out);
     } else {
@@ -5467,7 +5618,7 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         fprintf(out, ".long %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i) {
             Function *fn = &c->program.functions[i];
-            if (fn->is_template) continue;
+            if (fn->is_template || fn->is_intrinsic) continue;
             fprintf(out, ".quad %s, np_end_%s\n.long %d, %d, %d\n",
                     symbol_name(fn), symbol_name(fn), record_index, concrete_count, record_index);
             record_index++;
@@ -5475,7 +5626,7 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         fprintf(out, ".long %d\n", concrete_count + 1);
         for (i = 0; i < c->program.function_count; ++i) {
             Function *fn = &c->program.functions[i];
-            if (fn->is_template) continue;
+            if (fn->is_template || fn->is_intrinsic) continue;
             fprintf(out, ".long %u\n", (unsigned)strlen(fn->name));
             emit_bytes(out, (const unsigned char *)fn->name, strlen(fn->name), 0);
         }
@@ -5483,7 +5634,7 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         emit_bytes(out, (const unsigned char *)c->source_path, strlen(c->source_path), 0);
         fprintf(out, ".long %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i)
-            if (!c->program.functions[i].is_template)
+            if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
                 fprintf(out, ".long 8, %d, %d\n", c->program.functions[i].token.line, c->program.functions[i].token.column);
         fputs("\n.text\n", out);
     }
@@ -5527,7 +5678,7 @@ static void emit_windows_codeview(Compiler *c, FILE *out) {
     fputs(".debug_s_neper SEGMENT BYTE READ DISCARD ALIAS('.debug$S')\nDD 4\n", out);
     for (i = 0; i < c->program.function_count; ++i) {
         Function *fn = &c->program.functions[i];
-        if (fn->is_template) continue;
+        if (fn->is_template || fn->is_intrinsic) continue;
         int line_count = 1 + statement_line_count(fn->body);
         int block_size = 12 + line_count * 8;
         int subsection_size = 12 + block_size;
@@ -5551,7 +5702,12 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
     fputs(
         "EXTERN GetStdHandle:PROC\nEXTERN WriteFile:PROC\nEXTERN VirtualAlloc:PROC\nEXTERN ExitProcess:PROC\n"
         "EXTERN GetCommandLineW:PROC\nEXTERN WideCharToMultiByte:PROC\nEXTERN LocalFree:PROC\n"
-        "EXTERN CommandLineToArgvW:PROC\n\n"
+        "EXTERN CommandLineToArgvW:PROC\n"
+        "EXTERN neper_os_set_args:PROC\nEXTERN neper_os_open:PROC\nEXTERN neper_os_read:PROC\n"
+        "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdout:PROC\n"
+        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_spawn:PROC\n"
+        "EXTERN neper_os_wait:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\n"
+        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n\n"
         "neper_io_print PROC FRAME\n"
         "    sub rsp, 88\n    .allocstack 88\n    .endprolog\n"
         "    mov QWORD PTR [rsp+48], rcx\n    mov QWORD PTR [rsp+56], rdx\n"
@@ -5605,6 +5761,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "np_win_args_done:\n    mov rcx, QWORD PTR [rsp+96]\n    call LocalFree\n"
         "    mov rax, QWORD PTR [rsp+80]\n    mov QWORD PTR [rsp+120], rax\n    mov QWORD PTR [rsp+128], 67108864\n"
         "    mov rax, QWORD PTR [rsp+104]\n    mov QWORD PTR [rsp+136], rax\n"
+        "    mov rcx, QWORD PTR [rsp+80]\n    mov edx, DWORD PTR [rsp+88]\n    call neper_os_set_args\n"
         "    lea rcx, [rsp+120]\n    mov rdx, QWORD PTR [rsp+80]\n    mov r8d, DWORD PTR [rsp+88]\n    call neper_main\n"
         "    test eax, eax\n    jne np_main_error\n    xor ecx, ecx\n    call ExitProcess\n"
         "np_main_error:\n    mov ecx, eax\n    call neper_report_error\n"
@@ -5649,7 +5806,7 @@ static void emit_linux_runtime(Compiler *c, FILE *out) {
         "np_arg_len_done:\n    lea r9, [r13+rbx]\n    mov r10, r15\n    shl r10, 4\n"
         "    mov QWORD PTR [r13+r10], r9\n    mov QWORD PTR [r13+r10+8], rcx\n"
         "    mov rdx, rcx\n    mov rsi, r8\n    mov rdi, r9\n    rep movsb\n    add rbx, rdx\n    inc r15\n    jmp np_arg_loop\n"
-        "np_args_done:\n    sub rsp, 32\n"
+        "np_args_done:\n    mov rdi, r13\n    mov rsi, r14\n    call neper_os_set_args\n    sub rsp, 32\n"
         "    mov QWORD PTR [rsp], r13\n    mov QWORD PTR [rsp+8], 67108864\n    mov QWORD PTR [rsp+16], rbx\n"
         "    mov rdi, rsp\n    mov rsi, r13\n    mov rdx, r14\n    call neper_main\n"
         "    test eax, eax\n    jne np_main_error\n    xor edi, edi\n    jmp np_exit\n"
@@ -5701,7 +5858,8 @@ static int emit_assembly(Compiler *c, const char *path, int windows) {
     }
     emit_nepersym(c, out, windows);
     for (i = 0; i < c->program.function_count; ++i)
-        if (!c->program.functions[i].is_template) emit_function(&e, &c->program.functions[i]);
+        if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
+            emit_function(&e, &c->program.functions[i]);
     if (windows) { emit_windows_runtime(c, out); emit_windows_codeview(c, out); fputs("END\n", out); }
     else { emit_linux_runtime(c, out); fputs(".section .note.GNU-stack,\"\",@progbits\n", out); }
     fclose(out);
@@ -5844,9 +6002,27 @@ static int patch_codeview_section_relocations(const char *path) {
 #endif
 }
 
-static int assemble_and_link(const char *asm_path, const char *obj_path, const char *exe_path, int windows) {
-    char qa[MAX_PATH_LEN * 2], qo[MAX_PATH_LEN * 2], qe[MAX_PATH_LEN * 2], command[MAX_PATH_LEN * 12];
+static int assemble_and_link(Compiler *c, const char *asm_path, const char *obj_path,
+                             const char *exe_path, int windows) {
+    char qa[MAX_PATH_LEN * 2], qo[MAX_PATH_LEN * 2], qe[MAX_PATH_LEN * 2];
+    char runtime[MAX_PATH_LEN], qr[MAX_PATH_LEN * 2], command[MAX_PATH_LEN * 12];
     quote_arg(qa, sizeof(qa), asm_path); quote_arg(qo, sizeof(qo), obj_path); quote_arg(qe, sizeof(qe), exe_path);
+    if (strlen(c->executable_dir) + 20 >= sizeof(runtime)) {
+        fputs("neper: error[E-LINK-9999]: compiler path is too long for the intrinsic runtime\n", stderr);
+        return 0;
+    }
+    strcpy(runtime, c->executable_dir);
+    {
+        size_t used = strlen(runtime);
+        runtime[used++] = PATH_SEP;
+        strcpy(runtime + used, windows ? "neper_runtime.obj" : "neper_runtime.o");
+    }
+    slash_path(runtime);
+    if (!path_exists(runtime)) {
+        fprintf(stderr, "neper: error[E-LINK-9999]: intrinsic runtime object not found at `%s`\n", runtime);
+        return 0;
+    }
+    quote_arg(qr, sizeof(qr), runtime);
     if (windows) {
         const char *devcmd = getenv("NEPER_VSDEVCMD");
         char qd[MAX_PATH_LEN * 2], batch[MAX_PATH_LEN], qb[MAX_PATH_LEN * 2];
@@ -5873,14 +6049,15 @@ static int assemble_and_link(const char *asm_path, const char *obj_path, const c
         f = fopen(batch, "wb");
         if (!f) return 0;
         fprintf(f, "@echo off\r\ncall %s -arch=x64 -host_arch=x64 >nul\r\n", qd);
-        fprintf(f, "link /nologo /debug:full /include:np_nepersym /subsystem:console /entry:mainCRTStartup /out:%s %s kernel32.lib shell32.lib >nul || exit /b 1\r\n", qe, qo);
+        fprintf(f, "link /nologo /debug:full /include:np_nepersym /subsystem:console /entry:mainCRTStartup /out:%s %s %s kernel32.lib shell32.lib >nul || exit /b 1\r\n", qe, qo, qr);
         fclose(f);
         if (command_status(command) != 0) return 0;
         remove(batch);
     } else {
         char *as_args[] = {"as", "--64", "-o", (char *)obj_path, (char *)asm_path, 0};
-        char *ld_args[] = {"ld", "-o", (char *)exe_path, (char *)obj_path, 0};
-        if (run_argv(as_args) != 0 || run_argv(ld_args) != 0) return 0;
+        char *link_args[] = {"cc", "-nostartfiles", "-no-pie", "-o", (char *)exe_path,
+                             (char *)obj_path, runtime, 0};
+        if (run_argv(as_args) != 0 || run_argv(link_args) != 0) return 0;
     }
     return 1;
 }
@@ -5955,6 +6132,7 @@ int main(int argc, char **argv) {
     if (!c.source) { fprintf(stderr, "neper: error[E-CLI-9999]: cannot read `%s`\n", source_path); return 2; }
     executable_directory(c.executable_dir, sizeof(c.executable_dir), argv[0]);
     lex(&c);
+    if (!c.errors) install_os_intrinsics(&c);
     if (!c.errors) parse_program(&c);
     if (!c.errors) check_program(&c);
     if (c.errors) { print_diagnostics(&c); return 1; }
@@ -5970,7 +6148,7 @@ int main(int argc, char **argv) {
     replace_extension(obj_path, sizeof(obj_path), exe_path, windows ? ".obj" : ".o");
     slash_path(asm_path); slash_path(obj_path); slash_path(exe_path);
     if (!emit_assembly(&c, asm_path, windows)) return 2;
-    if (!assemble_and_link(asm_path, obj_path, exe_path, windows)) {
+    if (!assemble_and_link(&c, asm_path, obj_path, exe_path, windows)) {
         fprintf(stderr, "neper: error[E-LINK-9999]: assembler or system linker failed\n");
         return 1;
     }
