@@ -81,6 +81,9 @@ Function declarations now reuse the same trees for typed comptime parameters,
 ordinary parameters and single- or multiple-type return specifications. Type
 aliases, aggregate fields and union payloads now recurse through those type nodes;
 enum discriminants retain expressions, and tagged types retain their backing type.
+`if`/`else if`/`else`, `while` and `when` now retain condition expressions and
+recursively parsed branch/body blocks. PascalCase lookahead distinguishes named
+aggregate literals from block-introducing lowercase condition names.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
