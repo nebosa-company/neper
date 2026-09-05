@@ -36,6 +36,8 @@ type Parser = struct {
     error_soft_checkpoint: usize,
     soft_depth: usize,
     soft_top_barrier: bool,
+    block_expression: bool,
+    block_expression_soft_depth: usize,
     last_node: usize,
     tree: *Tree,
 }
@@ -336,6 +338,17 @@ fn parse_expression_node(p: *Parser) -> err {
     ret parse_binary_node(p, 1usize)
 }
 
+fn parse_block_expression_node(p: *Parser) -> err {
+    let previous = p.block_expression
+    let previous_depth = p.block_expression_soft_depth
+    p.block_expression = true
+    p.block_expression_soft_depth = p.soft_depth
+    let result = parse_expression_node(p)
+    p.block_expression = previous
+    p.block_expression_soft_depth = previous_depth
+    ret result
+}
+
 fn named_aggregate_follows(p: *Parser) -> bool {
     var look = p.scanner
     var pascal = identifier_is_pascal(p)
@@ -367,6 +380,9 @@ fn named_aggregate_follows(p: *Parser) -> bool {
         if p.soft_depth != 0usize {
             while token.kind == .Newline { token = lex.next(&look) }
         }
+    }
+    if p.block_expression && p.soft_depth == p.block_expression_soft_depth && token.kind == .PunctLBrace {
+        ret false
     }
     ret pascal && token.kind == .PunctLBrace
 }
@@ -1056,7 +1072,7 @@ fn parse_if_statement(p: *Parser) -> err {
     var nested: [3]usize = zero
     var nested_count = 0usize
     try require(p, .KwIf)
-    try parse_expression_node(p)
+    try parse_block_expression_node(p)
     nested[nested_count] = p.last_node
     nested_count += 1usize
     try parse_block_node(p)
@@ -1081,7 +1097,7 @@ fn parse_while_statement(p: *Parser) -> err {
     let token_start = p.token_index
     var nested: [2]usize = zero
     try require(p, .KwWhile)
-    try parse_expression_node(p)
+    try parse_block_expression_node(p)
     nested[0usize] = p.last_node
     try parse_block_node(p)
     nested[1usize] = p.last_node
@@ -1095,7 +1111,7 @@ fn parse_when_statement(p: *Parser) -> err {
     var nested: [3]usize = zero
     var nested_count = 2usize
     try require(p, .KwWhen)
-    try parse_expression_node(p)
+    try parse_block_expression_node(p)
     nested[0usize] = p.last_node
     try parse_block_node(p)
     nested[1usize] = p.last_node
@@ -1260,7 +1276,7 @@ fn parse_switch_statement(p: *Parser) -> err {
     let node_start = p.tree.count
     var arm_count = 0usize
     try require(p, .KwSwitch)
-    try parse_expression_node(p)
+    try parse_block_expression_node(p)
     try require(p, .PunctLBrace)
     try skip_separators(p)
     while p.current.kind != .PunctRBrace {

@@ -253,8 +253,9 @@ nodes; and enums and tagged unions retain their backing type. `if`/`else if`/`el
 canonical-casing lookahead disambiguates PascalCase aggregate literals from lowercase
 and SCREAMING_SNAKE values followed by a block. Array literal items, including
 one-letter comptime values such as `N`, remain `NameExpr`s; bare PascalCase members
-are recognized only in named aggregates. `for` now retains iterable or bounded-range
-expressions
+are recognized only in named aggregates. Block-introducing `if`, `while`, `when`, and
+`switch` expressions retain one-letter values at their outer depth while allowing
+aggregates in nested calls. `for` now retains iterable or bounded-range expressions
 and a recursively parsed body while preserving one- or two-name iterator bindings
 as source tokens. `defer` now owns its structured simple statement or recursive
 block, `@nocheck` owns a validated directive block, `shared var` owns its type and

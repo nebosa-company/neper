@@ -536,8 +536,10 @@ fn self_test() -> err {
     if tree.nodes[11usize].kind != .Block || tree.nodes[12usize].kind != .FnDecl { ret lex.InvalidSource }
     let empty_aggregate_error = validate_test_parse("fn invalid() -> Point {\n    ret Point{}\n}\n")
     if empty_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let constant_condition_error = validate_test_parse("fn flags() {\n    if ENABLED { ret }\n}\n")
+    let constant_condition_error = validate_test_parse("fn flags() {\n    if N { ret }\n    while N { break }\n    when N { ret } else { ret }\n    switch N {\n    case 1usize:\n        ret\n    }\n}\n")
     if constant_condition_error != ok { ret lex.InvalidSource }
+    let nested_condition_aggregate_error = validate_test_parse("fn nested_flag() {\n    if predicate(Flag{ value: true }) { ret }\n}\n")
+    if nested_condition_aggregate_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let control_error = parse.parse(&tree, "fn control() {\n    if true { call() }\n    while true { break }\n    for item in items { call() }\n    when true { call() } else { cleanup() }\n    switch item {\n        case 1i32:\n            ret\n    }\n    @nocheck { call() }\n    shared var value: i32 = 0i32\n}\n")
     if control_error != ok || tree.count != 42usize { ret lex.InvalidSource }
