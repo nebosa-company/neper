@@ -63,7 +63,8 @@ Each token also owns the exact leading byte range since the preceding token, so 
 spaces, comments and trailing trivia through EOF partition the original input without
 loss. The lexer enumerates that range as exact-span `Bom`, maximal-run `Space`, and
 whole-line `Comment` trivia, including scalar and UTF-16 coordinates. The bootstrap
-now loads
+preserves comment context across an `Invalid` token, so the remaining line cannot be
+mis-tokenized as code. The bootstrap now loads
 transitive project modules,
 resolves explicit import aliases and qualified declarations, rejects import cycles
 and duplicate qualifiers, and reports diagnostics against the originating file.

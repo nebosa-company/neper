@@ -129,6 +129,19 @@ fn self_test() -> err {
     var unicode_leading = lex.trivia_init(unicode_trivia.source, unicode_newline)
     let unicode_comment = lex.next_trivia(&unicode_leading)
     if unicode_comment.kind != .Comment || unicode_comment.start != 0usize || unicode_comment.end != 7usize || unicode_comment.end_column != 5usize || unicode_comment.end_column_utf16 != 6usize { ret lex.InvalidSource }
+    var broken_comment = lex.init("// a\xF0\x9F\x92 rest\nerror Good")
+    let broken_comment_byte = lex.next(&broken_comment)
+    if broken_comment_byte.kind != .Invalid || broken_comment_byte.start != 4usize || broken_comment_byte.end != 7usize { ret lex.InvalidSource }
+    var broken_prefix = lex.trivia_init(broken_comment.source, broken_comment_byte)
+    let broken_prefix_comment = lex.next_trivia(&broken_prefix)
+    if broken_prefix_comment.kind != .Comment || broken_prefix_comment.start != 0usize || broken_prefix_comment.end != 4usize { ret lex.InvalidSource }
+    let after_broken_comment = lex.next(&broken_comment)
+    if after_broken_comment.kind != .Newline || after_broken_comment.leading_start != 7usize || after_broken_comment.start != 12usize { ret lex.InvalidSource }
+    var broken_suffix = lex.trivia_init(broken_comment.source, after_broken_comment)
+    let broken_suffix_comment = lex.next_trivia(&broken_suffix)
+    if broken_suffix_comment.kind != .Comment || broken_suffix_comment.start != 7usize || broken_suffix_comment.end != 12usize { ret lex.InvalidSource }
+    let after_broken_line = lex.next(&broken_comment)
+    if after_broken_line.kind != .KwError || after_broken_line.start != 13usize { ret lex.InvalidSource }
     let valid_utf8 = lex.validate("\"héllo\" // π\nr\"λ\tvalue\"")
     if valid_utf8 != ok { ret lex.InvalidSource }
     let valid_comment_tab = lex.validate("//\tcomment\nerror Good\n")

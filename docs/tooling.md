@@ -155,9 +155,11 @@ retained as `bom` trivia even though the parser ignores it. Leading trivia is or
 by byte offset: the BOM is one item, every maximal non-empty run of ASCII spaces is
 one `space` item, and each `//` comment through but excluding its physical line ending
 is one `comment` item. Because every physical line ending is a `NEWLINE` token, no
-trivia item crosses a normalized line boundary. Concatenating each trivia text and
-token lexeme in index order reconstructs every original byte (using decoded base64
-for an object lexeme). A syntax-node span runs from its first token's
+trivia item crosses a normalized line boundary. If an `INVALID` token interrupts a
+comment, its valid prefix and suffix become separate `comment` items on the adjacent
+tokens; a suffix item therefore need not begin with `//`. Concatenating each trivia
+text and token lexeme in index order reconstructs every original byte (using decoded
+base64 for an object lexeme). A syntax-node span runs from its first token's
 `byte_start` through its last token's `byte_end`, excluding that first token's trivia;
 a recovery node with no token is zero-width at the recovery point.
 

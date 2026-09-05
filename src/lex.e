@@ -122,6 +122,7 @@ type Token = struct {
     leading_line: usize,
     leading_column: usize,
     leading_column_utf16: usize,
+    leading_comment: bool,
     start: usize,
     end: usize,
     line: usize,
@@ -139,6 +140,8 @@ type Scanner = struct {
     leading_line: usize,
     leading_column: usize,
     leading_column_utf16: usize,
+    leading_comment: bool,
+    in_comment: bool,
     line: usize,
     column: usize,
     column_utf16: usize,
@@ -151,6 +154,7 @@ type TriviaScanner = struct {
     line: usize,
     column: usize,
     column_utf16: usize,
+    comment_continuation: bool,
 }
 
 error InvalidSource
@@ -167,6 +171,8 @@ fn init(source: str) -> Scanner {
         leading_line: 1usize,
         leading_column: 1usize,
         leading_column_utf16: 1usize,
+        leading_comment: false,
+        in_comment: false,
         line: 1usize,
         column: 1usize,
         column_utf16: 1usize,
@@ -367,6 +373,7 @@ fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, colu
         leading_line: s.leading_line,
         leading_column: s.leading_column,
         leading_column_utf16: s.leading_column_utf16,
+        leading_comment: s.leading_comment,
         start: start,
         end: s.off,
         line: line,
@@ -380,6 +387,7 @@ fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, colu
     s.leading_line = s.line
     s.leading_column = s.column
     s.leading_column_utf16 = s.column_utf16
+    s.leading_comment = s.in_comment
     ret result
 }
 
@@ -421,6 +429,7 @@ fn trivia_init(source: str, token: Token) -> TriviaScanner {
         line: token.leading_line,
         column: token.leading_column,
         column_utf16: token.leading_column_utf16,
+        comment_continuation: token.leading_comment,
     }
 }
 
@@ -464,10 +473,11 @@ fn next_trivia(t: *TriviaScanner) -> Trivia {
         t.off += 3usize
         ret trivia_token(t, .Bom, start, line, column, column_utf16)
     }
-    if t.source[t.off] == 32u8 {
+    if !t.comment_continuation && t.source[t.off] == 32u8 {
         while t.off < t.end && t.source[t.off] == 32u8 { trivia_take(t, 1usize) }
         ret trivia_token(t, .Space, start, line, column, column_utf16)
     }
+    t.comment_continuation = false
     while t.off < t.end {
         let c = t.source[t.off]
         if c >= 128u8 {
@@ -481,41 +491,49 @@ fn next_trivia(t: *TriviaScanner) -> Trivia {
 
 fn next(s: *Scanner) -> Token {
     while s.off < s.source.len {
-        let c = s.source[s.off]
-        if c == 32u8 {
-            take(s, 1usize)
-            continue
-        }
-        if has(s, 47u8, 47u8) {
+        if !s.in_comment {
+            let c = s.source[s.off]
+            if c == 32u8 {
+                take(s, 1usize)
+                continue
+            }
+            if !has(s, 47u8, 47u8) { break }
             take(s, 2usize)
-            while s.off < s.source.len && s.source[s.off] != 10u8 && s.source[s.off] != 13u8 {
-                let comment_byte = s.source[s.off]
-                if comment_byte == 0u8 || (comment_byte < 32u8 && comment_byte != 9u8) {
+            s.in_comment = true
+        }
+        while s.off < s.source.len && s.source[s.off] != 10u8 && s.source[s.off] != 13u8 {
+            let comment_byte = s.source[s.off]
+            if comment_byte == 0u8 || (comment_byte < 32u8 && comment_byte != 9u8) {
+                let invalid_start = s.off
+                let invalid_line = s.line
+                let invalid_column = s.column
+                let invalid_column_utf16 = s.column_utf16
+                take(s, 1usize)
+                ret token(s, .Invalid, invalid_start, invalid_line, invalid_column, invalid_column_utf16)
+            }
+            if comment_byte >= 128u8 {
+                let width = utf8_width(s.source, s.off)
+                if width == 0usize {
                     let invalid_start = s.off
                     let invalid_line = s.line
                     let invalid_column = s.column
                     let invalid_column_utf16 = s.column_utf16
-                    take(s, 1usize)
+                    take_invalid_utf8(s)
                     ret token(s, .Invalid, invalid_start, invalid_line, invalid_column, invalid_column_utf16)
                 }
-                if comment_byte >= 128u8 {
-                    let width = utf8_width(s.source, s.off)
-                    if width == 0usize {
-                        let invalid_start = s.off
-                        let invalid_line = s.line
-                        let invalid_column = s.column
-                        let invalid_column_utf16 = s.column_utf16
-                        take_invalid_utf8(s)
-                        ret token(s, .Invalid, invalid_start, invalid_line, invalid_column, invalid_column_utf16)
-                    }
-                    take_scalar(s, width)
-                } else {
-                    take(s, 1usize)
-                }
+                take_scalar(s, width)
+            } else {
+                take(s, 1usize)
             }
-            continue
         }
-        break
+        if s.off < s.source.len {
+            s.in_comment = false
+        } else {
+            if s.in_comment {
+                s.in_comment = false
+                continue
+            }
+        }
     }
 
     let start = s.off

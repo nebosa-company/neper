@@ -200,6 +200,8 @@ one position unit; valid non-ASCII scalars in ASCII-only token positions remain 
 leading byte range, including the BOM and trailing trivia on EOF, so the stream
 partitions the original source without gaps. That range is now enumerable as exact-
 span BOM, maximal space-run and whole-comment trivia with scalar and UTF-16 columns.
+Comment recovery survives an invalid-byte token and keeps the rest of that physical
+line in comment trivia rather than reinterpreting it as code.
 The C99 bootstrap now loads transitive modules from the nearest project's `lib/` and
 `src/`, resolves default and explicit import qualifiers, canonicalizes cross-module
 functions, types, constants and errors, rejects duplicate qualifiers and import
