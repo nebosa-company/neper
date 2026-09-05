@@ -61,4 +61,10 @@ type Node = struct {
     kind: Kind,
     token_start: usize,
     token_end: usize,
+    first_child: usize,
+    child_count: usize,
+}
+
+fn node(kind: Kind, token_start: usize, token_end: usize, first_child: usize, child_count: usize) -> Node {
+    ret Node { kind: kind, token_start: token_start, token_end: token_end, first_child: first_child, child_count: child_count }
 }

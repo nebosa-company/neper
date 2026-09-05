@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.15-neper0"
+#define NEPER_VERSION "0.0.16-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -3628,8 +3628,10 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
         switch (s->kind) {
             case ST_BIND: {
                 Type actual;
-                if (s->as.bind.declared_type.kind != TY_INVALID)
+                if (s->as.bind.declared_type.kind != TY_INVALID) {
+                    qualify_type_for_module(c, &s->as.bind.declared_type, fn->module);
                     resolve_type_constants(c, &s->as.bind.declared_type, &s->token);
+                }
                 if (s->as.bind.declared_type.kind != TY_INVALID &&
                     s->as.bind.value->kind == EX_ENUM_MEMBER)
                     resolve_contextual_member(c, s->as.bind.value, s->as.bind.declared_type);
@@ -4726,6 +4728,23 @@ static void check_program(Compiler *c) {
         qualify_type_for_module(c, &constant->type, constant->module);
         resolve_type_constants(c, &constant->type, &constant->token);
         evaluate_constant(c, constant);
+    }
+    /* Canonicalize all aggregate field types before computing any layout. An
+       earlier-loaded module may embed a type from a dependency parsed later. */
+    for (i = 0; i < c->program.struct_count; ++i) {
+        StructDecl *decl = &c->program.structs[i];
+        if (decl->is_template) continue;
+        copy_text(c->resolution_module, sizeof(c->resolution_module), decl->module,
+                  strlen(decl->module));
+        if (decl->kind == ND_ENUM || decl->kind == ND_TAGGED_UNION) {
+            qualify_type_for_module(c, &decl->backing_type, decl->module);
+            resolve_type_constants(c, &decl->backing_type, &decl->token);
+        }
+        for (j = 0; j < decl->field_count; ++j)
+            if (decl->fields[j].has_payload || decl->kind == ND_STRUCT || decl->kind == ND_UNION) {
+                qualify_type_for_module(c, &decl->fields[j].type, decl->module);
+                resolve_type_constants(c, &decl->fields[j].type, &decl->fields[j].token);
+            }
     }
     for (i = 0; i < c->program.struct_count; ++i) {
         StructDecl *decl = &c->program.structs[i];
