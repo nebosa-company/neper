@@ -70,7 +70,7 @@ fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
             if child_position > 0usize {
                 if argument_count == arguments.len || argument_count >= call.function.parameter_count { ret (empty, 0usize, check.ArgumentCount) }
                 let parameter = c.parameters[call.function.first_parameter + argument_count]
-                let (value, value_error) = literal(c, g.modules[module_index].text, tree.nodes[tree.children[at].index], parameter.ty, builder)
+                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, parameter.ty, builder)
                 if value_error != ok { ret (empty, 0usize, value_error) }
                 arguments[argument_count] = value
                 argument_count += 1usize
@@ -96,6 +96,99 @@ fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         at += 1usize
     }
     ret (call, result, ok)
+}
+
+fn binary_opcode(kind: lex.Kind) -> nir.Opcode {
+    if kind == .PunctPlus { ret .Add }
+    if kind == .PunctMinus { ret .Subtract }
+    if kind == .PunctStar { ret .Multiply }
+    if kind == .PunctSlash { ret .Divide }
+    if kind == .PunctPercent { ret .Remainder }
+    if kind == .PunctAddWrap { ret .AddWrap }
+    if kind == .PunctSubWrap { ret .SubtractWrap }
+    if kind == .PunctMulWrap { ret .MultiplyWrap }
+    if kind == .PunctShiftLeft { ret .ShiftLeft }
+    if kind == .PunctShiftRight { ret .ShiftRight }
+    if kind == .PunctAmp { ret .BitAnd }
+    if kind == .PunctCaret { ret .BitXor }
+    if kind == .PunctPipe { ret .BitOr }
+    if kind == .PunctEqEq { ret .Equal }
+    if kind == .PunctBangEq { ret .NotEqual }
+    if kind == .PunctLt { ret .Less }
+    if kind == .PunctLtEq { ret .LessEqual }
+    if kind == .PunctGt { ret .Greater }
+    if kind == .PunctGtEq { ret .GreaterEqual }
+    ret .Invalid
+}
+
+fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder) -> (usize, check.Type, err) {
+    let node = tree.nodes[node_index]
+    if node.kind == .LiteralExpr {
+        let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+        if type_error != ok { ret (0usize, result_type, type_error) }
+        let (value, value_error) = literal(c, g.modules[module_index].text, node, result_type, builder)
+        ret (value, result_type, value_error)
+    }
+    if node.kind == .GroupExpr {
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                let (group_value, group_type, group_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder)
+                ret (group_value, group_type, group_error)
+            }
+            at += 1usize
+        }
+        ret (0usize, zero, parse.InvalidSyntax)
+    }
+    if node.kind == .CallExpr {
+        let (call, value, call_error) = lower_call(c, g, tree, module_index, node, builder)
+        if call_error != ok { ret (0usize, zero, call_error) }
+        if call.function.return_count != 1usize { ret (0usize, zero, check.ArgumentCount) }
+        let (result_type, result_error) = check.call_return(c, call, 0usize)
+        ret (value, result_type, result_error)
+    }
+    if node.kind == .BinaryExpr {
+        var children: [2]usize = zero
+        var child_count = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if child_count == children.len { ret (0usize, zero, parse.InvalidSyntax) }
+                children[child_count] = tree.children[at].index
+                child_count += 1usize
+            }
+            at += 1usize
+        }
+        if child_count != 2usize { ret (0usize, zero, parse.InvalidSyntax) }
+        let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+        if result_type_error != ok { ret (0usize, result_type, result_type_error) }
+        let operator = check.binary_operator(c, tree, node)
+        if operator == .PunctAndAnd || operator == .PunctOrOr { ret (0usize, zero, check.Unsupported) }
+        let opcode = binary_opcode(operator)
+        if opcode == .Invalid { ret (0usize, zero, check.InvalidOperator) }
+        var operand_expected = result_type
+        if check.is_comparison(operator) { operand_expected = check.invalid_type() }
+        let (left_type, left_type_error) = check.check_expr(c, g, tree, module_index, children[0usize], operand_expected)
+        if left_type_error != ok { ret (0usize, left_type, left_type_error) }
+        let (left, lowered_left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], left_type, builder)
+        if left_error != ok { ret (0usize, lowered_left_type, left_error) }
+        var right_expected = left_type
+        if operator == .PunctShiftLeft || operator == .PunctShiftRight { right_expected = check.make_type(.Integer, "u32", module_index) }
+        let (right_type, right_type_error) = check.check_expr(c, g, tree, module_index, children[1usize], right_expected)
+        if right_type_error != ok { ret (0usize, right_type, right_type_error) }
+        let (right, lowered_right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], right_type, builder)
+        if right_error != ok { ret (0usize, lowered_right_type, right_error) }
+        let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, c.tokens[node.token_start])
+        if emit_error != ok { ret (0usize, result_type, emit_error) }
+        let left_operand_error = nir.add_operand(builder, instruction, left)
+        if left_operand_error != ok { ret (0usize, result_type, left_operand_error) }
+        let right_operand_error = nir.add_operand(builder, instruction, right)
+        if right_operand_error != ok { ret (0usize, result_type, right_operand_error) }
+        ret (result, result_type, ok)
+    }
+    ret (0usize, zero, check.Unsupported)
 }
 
 fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder) -> err {
@@ -143,7 +236,7 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     ret ok
 }
 
-fn lower_return(c: *check.Checker, text: str, tree: *parse.Tree, function: check.Function, node: syntax.Node, builder: *nir.Builder) -> err {
+fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder) -> err {
     var values: [2]usize = zero
     var count = 0usize
     let end = node.first_child + node.child_count
@@ -153,7 +246,7 @@ fn lower_return(c: *check.Checker, text: str, tree: *parse.Tree, function: check
             if count == values.len || count >= function.return_count { ret check.InvalidReturn }
             let (expected, type_error) = check.function_return(c, function, count)
             if type_error != ok { ret type_error }
-            let (value, value_error) = literal(c, text, tree.nodes[tree.children[at].index], expected, builder)
+            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder)
             if value_error != ok { ret value_error }
             values[count] = value
             count += 1usize
@@ -206,7 +299,7 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
                     if tree.children[body_at].node {
                         let statement = tree.nodes[tree.children[body_at].index]
                         if statement.kind == .ReturnStmt {
-                            try lower_return(c, text, tree, function, statement, builder)
+                            try lower_return(c, g, tree, module_index, function, statement, builder)
                         } else {
                             if statement.kind == .TryStmt {
                                 try lower_try(c, g, tree, module_index, function, statement, builder)
