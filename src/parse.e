@@ -1553,25 +1553,30 @@ fn parse_value_declaration(p: *Parser, is_const: bool) -> err {
 
 fn parse_attribute(p: *Parser) -> err {
     let token_start = p.token_index
+    var nested: [32]usize = zero
+    var nested_count = 0usize
     try require(p, .PunctAt)
     try require(p, .Identifier)
     if p.current.kind == .PunctLParen {
-        var depth = 0usize
-        while true {
-            if p.current.kind == .Invalid || p.current.kind == .Eof || p.current.kind == .Newline {
-                ret InvalidSyntax
+        try advance(p)
+        try skip_separators(p)
+        while p.current.kind != .PunctRParen {
+            try parse_expression_node(p)
+            if nested_count == nested.len { ret InvalidSyntax }
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+            try skip_separators(p)
+            if p.current.kind == .PunctComma {
+                try advance(p)
+                try skip_separators(p)
+            } else {
+                if p.current.kind != .PunctRParen { ret InvalidSyntax }
             }
-            if p.current.kind == .PunctLParen { depth += 1usize }
-            if p.current.kind == .PunctRParen {
-                if depth == 0usize { ret InvalidSyntax }
-                depth = depth - 1usize
-            }
-            try advance(p)
-            if depth == 0usize { break }
         }
+        try advance(p)
     }
     if p.current.kind != .Newline { ret InvalidSyntax }
-    try add_top_node(p, .Attribute, token_start, p.token_index)
+    try add_top_parent(p, .Attribute, token_start, p.token_index, nested[..nested_count])
     try skip_separators(p)
     ret ok
 }

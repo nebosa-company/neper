@@ -123,6 +123,27 @@ fn self_test() -> err {
     let invalid_try_initializer_error = parse.validate("var value = try not_a_call\n")
     if invalid_try_initializer_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
+    let attribute_error = parse.parse(&tree, "@gpu(\n    8usize * 4usize,\n    config.size,\n)\n@align(64usize)\nfn kernel() {}\n")
+    if attribute_error != ok || tree.count != 11usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .LiteralExpr || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .BinaryExpr || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
+    if tree.nodes[5usize].kind != .FieldExpr || tree.nodes[6usize].kind != .Attribute { ret lex.InvalidSource }
+    if tree.nodes[7usize].kind != .LiteralExpr || tree.nodes[8usize].kind != .Attribute { ret lex.InvalidSource }
+    if tree.nodes[9usize].kind != .Block || tree.nodes[10usize].kind != .FnDecl { ret lex.InvalidSource }
+    if tree.nodes[0usize].child_count != 7usize || tree.nodes[6usize].child_count != 11usize { ret lex.InvalidSource }
+    let attribute_children = tree.nodes[6usize].first_child
+    if !tree.children[attribute_children + 4usize].node || tree.children[attribute_children + 4usize].index != 3usize { ret lex.InvalidSource }
+    if !tree.children[attribute_children + 7usize].node || tree.children[attribute_children + 7usize].index != 5usize { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let malformed_attribute_error = parse.parse(&tree, "@gpu(1usize +)\nerror Good\n")
+    if malformed_attribute_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 3usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let attributed_recovery_error = parse.parse(&tree, "@test\nfn broken(value i32) {}\nerror Good\n")
+    if attributed_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 4usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .Attribute || tree.nodes[2usize].kind != .ErrorNode { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
     let signature_tree_error = parse.parse(&tree, "fn signature[T: type, N: usize, F: fn](value: *const T, bytes: []u8, matrix: [N]T) -> (*T, []const u8) {}\n")
     if signature_tree_error != ok || tree.count != 22usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .ComptimeParam || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }

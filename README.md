@@ -91,7 +91,9 @@ structured simple statement or block, `@nocheck` owns a validated directive bloc
 `switch` now owns its subject and ordered `SwitchArm` children; arms retain multiple
 case expressions, optional captures, recursive statements, and local error recovery.
 Module `const`/`var` declarations now retain type and initializer trees, and failed
-top-level parses transactionally discard partial nodes before recovery.
+top-level parses transactionally discard partial nodes before recovery. Attributes
+now retain ordered expression arguments, including multiline lists, and recovery
+distinguishes a malformed attribute from a valid attribute on a malformed declaration.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

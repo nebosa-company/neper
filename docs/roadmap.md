@@ -239,9 +239,11 @@ owns its subject and ordered `SwitchArm` children; arms retain multiple case
 expressions, optional captures, recursive statements and local error recovery.
 Module `const`/`var` declarations now retain type and initializer trees, including
 the special variable initializer forms, and failed top-level parses transactionally
-discard partial nodes before recovery. Structured attribute arguments remain the
-next declaration-parser increment; this callout does not mark the `neper-0`
-milestone complete.
+discard partial nodes before recovery. Attributes now retain ordered expression
+arguments, including multiline lists, and recovery distinguishes a malformed
+attribute from a valid attribute on a malformed declaration. Tuple assignment and
+soft-newline expression edge cases remain parser-hardening increments; this callout
+does not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
