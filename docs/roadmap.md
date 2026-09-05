@@ -190,7 +190,9 @@ Windows and Linux. Its grammar revision 1 lexer now lives in `src/lex.e`;
 scans keywords, comments, CR/LF/CRLF, original-byte spans, strict numeric and quoted/raw
 literal boundaries, invalid bytes and the complete longest-match punctuation set.
 Numeric lexing validates base digits, separator placement, exponents, and the closed
-integer/float suffix sets.
+integer/float suffix sets. Strings, raw strings and comments validate UTF-8 scalars
+and their context-specific control bytes; character literals decode to exactly one
+byte, and non-ASCII columns advance once per scalar.
 The C99 bootstrap now loads transitive modules from the nearest project's `lib/` and
 `src/`, resolves default and explicit import qualifiers, canonicalizes cross-module
 functions, types, constants and errors, rejects duplicate qualifiers and import

@@ -76,6 +76,23 @@ fn self_test() -> err {
     if lex.validate("1.0bf32") != lex.InvalidSource { ret lex.InvalidSource }
     if lex.validate("1.0f128") != lex.InvalidSource { ret lex.InvalidSource }
 
+    var unicode = lex.init("\"é\" name")
+    try expect(&unicode, .String, 0usize, 4usize, 1usize, 1usize)
+    try expect(&unicode, .Identifier, 5usize, 9usize, 1usize, 5usize)
+    let valid_utf8 = lex.validate("\"héllo\" // π\nr\"λ\tvalue\"")
+    if valid_utf8 != ok { ret lex.InvalidSource }
+    let valid_comment_tab = lex.validate("//\tcomment\nerror Good\n")
+    if valid_comment_tab != ok { ret lex.InvalidSource }
+    if lex.validate("''") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("'ab'") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("'é'") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("\"\t\"") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("//\0\n") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("r\"\0\"") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("\"\xFF\"") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("//\xFF\n") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("r\"\xFF\"") != lex.InvalidSource { ret lex.InvalidSource }
+
     let invalid = lex.validate("fn #")
     if invalid != lex.InvalidSource { ret lex.InvalidSource }
     let invalid_escape = lex.validate("\"\\q\"")

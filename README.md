@@ -53,7 +53,10 @@ slice now builds and runs under the bootstrap on both hosts. Its lexer lives in
 The lexer declares the frozen 94-kind grammar vocabulary and scans original-byte
 spans, normalized newlines, comments, keywords, strict numeric and string forms, and
 longest-match punctuation. Numeric lexing validates base digits, separator placement,
-exponents, and the closed integer/float suffix sets. The bootstrap now loads
+exponents, and the closed integer/float suffix sets. Quoted source, raw strings and
+comments validate UTF-8 scalars and their context-specific control bytes; character
+literals decode to exactly one byte, while non-ASCII scanner columns advance once per
+scalar. The bootstrap now loads
 transitive project modules,
 resolves explicit import aliases and qualified declarations, rejects import cycles
 and duplicate qualifiers, and reports diagnostics against the originating file.
