@@ -80,9 +80,43 @@ fn add_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize)
     ret ok
 }
 
+fn add_parent_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize, nested: []usize) -> err {
+    if p.tree.count == p.tree.nodes.len { ret InvalidSyntax }
+    let child_start = p.tree.child_count
+    var token = token_start
+    var child = 0usize
+    while child < nested.len {
+        let node_index = nested[child]
+        if p.tree.nodes[node_index].token_start < token { ret InvalidSyntax }
+        while token < p.tree.nodes[node_index].token_start {
+            try add_child(p, syntax.token_child(token))
+            token += 1usize
+        }
+        try add_child(p, syntax.node_child(node_index))
+        token = p.tree.nodes[node_index].token_end
+        child += 1usize
+    }
+    while token < token_end {
+        try add_child(p, syntax.token_child(token))
+        token += 1usize
+    }
+    p.last_node = p.tree.count
+    p.tree.nodes[p.tree.count] = syntax.node(kind, token_start, token_end, child_start, p.tree.child_count - child_start)
+    p.tree.count += 1usize
+    ret ok
+}
+
 fn add_top_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize) -> err {
     if p.top_count == p.top_nodes.len { ret InvalidSyntax }
     try add_node(p, kind, token_start, token_end)
+    p.top_nodes[p.top_count] = p.last_node
+    p.top_count += 1usize
+    ret ok
+}
+
+fn add_top_parent(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize, nested: []usize) -> err {
+    if p.top_count == p.top_nodes.len { ret InvalidSyntax }
+    try add_parent_node(p, kind, token_start, token_end, nested)
     p.top_nodes[p.top_count] = p.last_node
     p.top_count += 1usize
     ret ok
@@ -135,15 +169,174 @@ fn parse_error(p: *Parser) -> err {
     ret ok
 }
 
+fn scan_item_tail(p: *Parser, end_kind: lex.Kind, item_start: usize) -> err {
+    var parens = 0usize
+    var brackets = 0usize
+    while true {
+        let kind = p.current.kind
+        if kind == .Invalid || kind == .Eof { ret InvalidSyntax }
+        if parens == 0usize && brackets == 0usize && (kind == .PunctComma || kind == end_kind) {
+            if p.token_index == item_start { ret InvalidSyntax }
+            ret ok
+        }
+        if kind == .PunctLParen { parens += 1usize }
+        if kind == .PunctRParen {
+            if parens == 0usize { ret InvalidSyntax }
+            parens = parens - 1usize
+        }
+        if kind == .PunctLBracket { brackets += 1usize }
+        if kind == .PunctRBracket {
+            if brackets == 0usize { ret InvalidSyntax }
+            brackets = brackets - 1usize
+        }
+        if kind == .PunctLBrace || kind == .PunctRBrace { ret InvalidSyntax }
+        try advance(p)
+    }
+}
+
+fn parse_parameter_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    if p.current.kind == .PunctEllipsis {
+        try advance(p)
+    } else {
+        try require(p, .Identifier)
+        try require(p, .PunctColon)
+        if p.current.kind == .PunctEllipsis {
+            try advance(p)
+        } else {
+            try scan_item_tail(p, .PunctRParen, p.token_index)
+        }
+    }
+    try add_node(p, .Parameter, token_start, p.token_index)
+    ret ok
+}
+
+fn parse_comptime_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    try require(p, .Identifier)
+    try require(p, .PunctColon)
+    try scan_item_tail(p, .PunctRBracket, p.token_index)
+    try add_node(p, .ComptimeParam, token_start, p.token_index)
+    ret ok
+}
+
+fn scan_return_spec(p: *Parser, is_extern: bool) -> err {
+    let token_start = p.token_index
+    var parens = 0usize
+    var brackets = 0usize
+    while true {
+        let kind = p.current.kind
+        if kind == .Invalid { ret InvalidSyntax }
+        if parens == 0usize && brackets == 0usize {
+            if kind == .PunctLBrace && !is_extern { break }
+            if kind == .Newline || kind == .Eof { break }
+        }
+        if kind == .Eof || kind == .PunctLBrace || kind == .PunctRBrace { ret InvalidSyntax }
+        if kind == .PunctLParen { parens += 1usize }
+        if kind == .PunctRParen {
+            if parens == 0usize { ret InvalidSyntax }
+            parens = parens - 1usize
+        }
+        if kind == .PunctLBracket { brackets += 1usize }
+        if kind == .PunctRBracket {
+            if brackets == 0usize { ret InvalidSyntax }
+            brackets = brackets - 1usize
+        }
+        try advance(p)
+    }
+    if p.token_index == token_start || parens != 0usize || brackets != 0usize { ret InvalidSyntax }
+    try add_node(p, .ReturnSpec, token_start, p.token_index)
+    ret ok
+}
+
+fn parse_block_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var depth = 0usize
+    if p.current.kind != .PunctLBrace { ret InvalidSyntax }
+    while true {
+        if p.current.kind == .Invalid || p.current.kind == .Eof { ret InvalidSyntax }
+        if p.current.kind == .PunctLBrace { depth += 1usize }
+        if p.current.kind == .PunctRBrace {
+            if depth == 0usize { ret InvalidSyntax }
+            depth = depth - 1usize
+        }
+        try advance(p)
+        if depth == 0usize { break }
+    }
+    try add_node(p, .Block, token_start, p.token_index)
+    ret ok
+}
+
+fn parse_function(p: *Parser, is_extern: bool) -> err {
+    let token_start = p.token_index
+    var nested: [64]usize = zero
+    var nested_count = 0usize
+    if is_extern { try require(p, .KwExtern) }
+    try require(p, .KwFn)
+    try require(p, .Identifier)
+    if p.current.kind == .PunctLBracket {
+        try advance(p)
+        try skip_separators(p)
+        if p.current.kind == .PunctRBracket { ret InvalidSyntax }
+        while p.current.kind != .PunctRBracket {
+            try parse_comptime_node(p)
+            if nested_count == nested.len { ret InvalidSyntax }
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+            if p.current.kind == .PunctComma {
+                try advance(p)
+                try skip_separators(p)
+            } else {
+                if p.current.kind != .PunctRBracket { ret InvalidSyntax }
+            }
+        }
+        try advance(p)
+    }
+    try require(p, .PunctLParen)
+    try skip_separators(p)
+    while p.current.kind != .PunctRParen {
+        try parse_parameter_node(p)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+        if p.current.kind == .PunctComma {
+            try advance(p)
+            try skip_separators(p)
+        } else {
+            if p.current.kind != .PunctRParen { ret InvalidSyntax }
+        }
+    }
+    try advance(p)
+    if p.current.kind == .PunctArrow {
+        try advance(p)
+        try scan_return_spec(p, is_extern)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    if is_extern {
+        if p.current.kind == .PunctLBrace { ret InvalidSyntax }
+    } else {
+        try parse_block_node(p)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    let token_end = p.token_index
+    if is_extern {
+        try add_top_parent(p, .ExternDecl, token_start, token_end, nested[..nested_count])
+    } else {
+        try add_top_parent(p, .FnDecl, token_start, token_end, nested[..nested_count])
+    }
+    try finish_line(p)
+    ret ok
+}
+
 fn scan_delimited_decl(p: *Parser, decl_kind: lex.Kind, node_kind: syntax.Kind, token_start: usize) -> err {
     var parens = 0usize
     var brackets = 0usize
     var braces = 0usize
     var saw_assign = false
-    var saw_brace = false
-    if decl_kind == .KwExtern {
-        try require(p, .KwFn)
-    }
     try require(p, .Identifier)
     while true {
         let kind = p.current.kind
@@ -151,13 +344,11 @@ fn scan_delimited_decl(p: *Parser, decl_kind: lex.Kind, node_kind: syntax.Kind, 
         if kind == .Eof {
             if parens != 0usize || brackets != 0usize || braces != 0usize { ret InvalidSyntax }
             if (decl_kind == .KwType || decl_kind == .KwConst) && !saw_assign { ret InvalidSyntax }
-            if decl_kind == .KwFn && !saw_brace { ret InvalidSyntax }
             try add_top_node(p, node_kind, token_start, p.token_index)
             ret ok
         }
         if kind == .Newline && parens == 0usize && brackets == 0usize && braces == 0usize {
             if (decl_kind == .KwType || decl_kind == .KwConst) && !saw_assign { ret InvalidSyntax }
-            if decl_kind == .KwFn && !saw_brace { ret InvalidSyntax }
             try add_top_node(p, node_kind, token_start, p.token_index)
             try skip_separators(p)
             ret ok
@@ -175,7 +366,6 @@ fn scan_delimited_decl(p: *Parser, decl_kind: lex.Kind, node_kind: syntax.Kind, 
         }
         if kind == .PunctLBrace {
             braces += 1usize
-            saw_brace = true
         }
         if kind == .PunctRBrace {
             if braces == 0usize { ret InvalidSyntax }
@@ -211,15 +401,14 @@ fn parse_attribute(p: *Parser) -> err {
 }
 
 fn is_scanned_decl(kind: lex.Kind) -> bool {
-    ret kind == .KwType || kind == .KwConst || kind == .KwVar || kind == .KwFn || kind == .KwExtern
+    ret kind == .KwType || kind == .KwConst || kind == .KwVar
 }
 
 fn node_kind_for_decl(kind: lex.Kind) -> syntax.Kind {
     if kind == .KwType { ret .TypeDecl }
     if kind == .KwConst { ret .ConstDecl }
     if kind == .KwVar { ret .VarDecl }
-    if kind == .KwFn { ret .FnDecl }
-    ret .ExternDecl
+    ret .VarDecl
 }
 
 fn parse_one(p: *Parser) -> err {
@@ -231,14 +420,22 @@ fn parse_one(p: *Parser) -> err {
         if p.current.kind == .KwError {
             try parse_error(p)
         } else {
-            if is_scanned_decl(p.current.kind) {
-                let token_start = p.token_index
-                let decl_kind = p.current.kind
-                let node_kind = node_kind_for_decl(decl_kind)
-                try advance(p)
-                try scan_delimited_decl(p, decl_kind, node_kind, token_start)
+            if p.current.kind == .KwFn {
+                try parse_function(p, false)
             } else {
-                ret InvalidSyntax
+                if p.current.kind == .KwExtern {
+                    try parse_function(p, true)
+                } else {
+                    if is_scanned_decl(p.current.kind) {
+                        let token_start = p.token_index
+                        let decl_kind = p.current.kind
+                        let node_kind = node_kind_for_decl(decl_kind)
+                        try advance(p)
+                        try scan_delimited_decl(p, decl_kind, node_kind, token_start)
+                    } else {
+                        ret InvalidSyntax
+                    }
+                }
             }
         }
     }

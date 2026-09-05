@@ -59,7 +59,9 @@ The self-hosted front end also declares the frozen 54-kind syntax-node registry 
 `src/syntax.e`. `src/parse.e` writes into caller-supplied node and child slices. Each
 declaration owns its exact token children; the `File` root interleaves those nodes
 with original separator and EOF tokens, while malformed input produces recoverable
-`ErrorNode`s. The first `parse` command path exercises this lossless ordering.
+`ErrorNode`s. Function declarations now expose nested compile-time parameters,
+parameters, return specifications, and blocks. The first `parse` command path
+exercises this lossless ordering and signature-level recovery.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

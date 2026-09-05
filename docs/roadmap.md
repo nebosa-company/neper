@@ -202,9 +202,11 @@ declarations and attributes own their exact token children; the `File` root
 interleaves those nodes with original separator and EOF tokens. Ranges are exclusive,
 delimiter errors produce `ErrorNode`s, and recovery resumes at top-level newline
 barriers. The first self-hosted `parse` command uses that lossless ordering and tests
-bounded-capacity failure. Production-specific child nodes and nested recovery
-barriers remain the next parser increments; this callout does not mark the
-`neper-0` milestone complete.
+bounded-capacity failure. Function declarations now parse compile-time parameters,
+ordinary and variadic parameters, return specifications and their body into nested
+nodes; a malformed signature recovers at the next top-level newline barrier. Type,
+statement and expression productions and their inner recovery barriers remain the
+next parser increments; this callout does not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
