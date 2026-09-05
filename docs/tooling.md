@@ -151,7 +151,11 @@ A token span covers its lexeme and excludes leading trivia. `EOF` has an empty
 lexeme and a zero-width span at the original byte length. String lexemes retain the
 original decoded source spelling: a `NEWLINE` lexeme is `"\n"`, `"\r\n"`, or `"\r"`
 according to the input, even though the parser sees normalized LF; a leading BOM is
-retained as `bom` trivia even though the parser ignores it. Leading trivia is ordered
+retained as `bom` trivia even though the parser ignores it. A malformed string,
+character or raw-string token that reaches its matching closing delimiter is one
+`INVALID` token through that delimiter. Without a closing delimiter, an ordinary
+string or character stops before the next physical line ending or at EOF, while a raw
+string extends through EOF. Leading trivia is ordered
 by byte offset: the BOM is one item, every maximal non-empty run of ASCII spaces is
 one `space` item, and each `//` comment through but excluding its physical line ending
 is one `comment` item. Because every physical line ending is a `NEWLINE` token, no

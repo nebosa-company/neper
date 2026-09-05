@@ -64,7 +64,9 @@ spaces, comments and trailing trivia through EOF partition the original input wi
 loss. The lexer enumerates that range as exact-span `Bom`, maximal-run `Space`, and
 whole-line `Comment` trivia, including scalar and UTF-16 coordinates. The bootstrap
 preserves comment context across an `Invalid` token, so the remaining line cannot be
-mis-tokenized as code. The bootstrap now loads
+mis-tokenized as code. Malformed quoted and raw-string tokens consume through their
+matching delimiter before recovery; unterminated ordinary quotes stop before the next
+physical newline. The bootstrap now loads
 transitive project modules,
 resolves explicit import aliases and qualified declarations, rejects import cycles
 and duplicate qualifiers, and reports diagnostics against the originating file.

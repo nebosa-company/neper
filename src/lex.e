@@ -573,6 +573,7 @@ fn next(s: *Scanner) -> Token {
             hashes += 1usize
         }
         if hashes <= 8usize && delimiter < s.source.len && s.source[delimiter] == 34u8 {
+            var valid = true
             take(s, delimiter - s.off + 1usize)
             while s.off < s.source.len {
                 if s.source[s.off] == 34u8 {
@@ -584,6 +585,7 @@ fn next(s: *Scanner) -> Token {
                     }
                     if closes {
                         take(s, 1usize + hashes)
+                        if !valid { ret token(s, .Invalid, start, line, column, column_utf16) }
                         ret token(s, .RawString, start, line, column, column_utf16)
                     }
                 }
@@ -599,18 +601,20 @@ fn next(s: *Scanner) -> Token {
                 } else {
                     let raw_byte = s.source[s.off]
                     if raw_byte == 0u8 || (raw_byte < 32u8 && raw_byte != 9u8) {
+                        valid = false
                         take(s, 1usize)
-                        ret token(s, .Invalid, start, line, column, column_utf16)
-                    }
-                    if raw_byte >= 128u8 {
-                        let width = utf8_width(s.source, s.off)
-                        if width == 0usize {
-                            take_invalid_utf8(s)
-                            ret token(s, .Invalid, start, line, column, column_utf16)
-                        }
-                        take_scalar(s, width)
                     } else {
-                        take(s, 1usize)
+                        if raw_byte >= 128u8 {
+                            let width = utf8_width(s.source, s.off)
+                            if width == 0usize {
+                                valid = false
+                                take_invalid_utf8(s)
+                            } else {
+                                take_scalar(s, width)
+                            }
+                        } else {
+                            take(s, 1usize)
+                        }
                     }
                 }
             }
@@ -694,36 +698,38 @@ fn next(s: *Scanner) -> Token {
         let quote = c
         var kind = Kind.Character
         var character_bytes = 0usize
+        var valid = true
         if quote == 34u8 { kind = .String }
         take(s, 1usize)
         while s.off < s.source.len && s.source[s.off] != quote && s.source[s.off] != 10u8 && s.source[s.off] != 13u8 {
             let quoted_byte = s.source[s.off]
             if quoted_byte == 0u8 || quoted_byte < 32u8 {
+                valid = false
                 take(s, 1usize)
-                ret token(s, .Invalid, start, line, column, column_utf16)
+                continue
             }
             if s.source[s.off] == 92u8 {
                 take(s, 1usize)
                 if s.off == s.source.len { ret token(s, .Invalid, start, line, column, column_utf16) }
                 let escaped = s.source[s.off]
                 if escaped != 110u8 && escaped != 116u8 && escaped != 114u8 && escaped != 92u8 && escaped != 34u8 && escaped != 39u8 && escaped != 48u8 && escaped != 120u8 {
-                    take(s, 1usize)
-                    ret token(s, .Invalid, start, line, column, column_utf16)
+                    valid = false
                 }
                 if escaped == 120u8 {
                     if s.off + 2usize >= s.source.len || !is_hex(s.source[s.off + 1usize]) || !is_hex(s.source[s.off + 2usize]) {
-                        take(s, 1usize)
-                        ret token(s, .Invalid, start, line, column, column_utf16)
+                        valid = false
+                    } else {
+                        take(s, 2usize)
                     }
-                    take(s, 2usize)
                 }
                 if kind == .Character { character_bytes += 1usize }
             } else {
                 if quoted_byte >= 128u8 {
                     let width = utf8_width(s.source, s.off)
                     if width == 0usize {
+                        valid = false
                         take_invalid_utf8(s)
-                        ret token(s, .Invalid, start, line, column, column_utf16)
+                        continue
                     }
                     if kind == .Character { character_bytes += width }
                     take_scalar(s, width)
@@ -735,7 +741,7 @@ fn next(s: *Scanner) -> Token {
         }
         if s.off == s.source.len || s.source[s.off] != quote { ret token(s, .Invalid, start, line, column, column_utf16) }
         take(s, 1usize)
-        if kind == .Character && character_bytes != 1usize { ret token(s, .Invalid, start, line, column, column_utf16) }
+        if !valid || (kind == .Character && character_bytes != 1usize) { ret token(s, .Invalid, start, line, column, column_utf16) }
         ret token(s, kind, start, line, column, column_utf16)
     }
 

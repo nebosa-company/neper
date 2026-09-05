@@ -155,6 +155,24 @@ fn self_test() -> err {
     if lex.validate("\"\xFF\"") != lex.InvalidSource { ret lex.InvalidSource }
     if lex.validate("//\xFF\n") != lex.InvalidSource { ret lex.InvalidSource }
     if lex.validate("r\"\xFF\"") != lex.InvalidSource { ret lex.InvalidSource }
+    var recovered_string = lex.init("\"a\\qz\" error Good")
+    let invalid_string_token = lex.next(&recovered_string)
+    if invalid_string_token.kind != .Invalid || invalid_string_token.start != 0usize || invalid_string_token.end != 6usize { ret lex.InvalidSource }
+    let after_invalid_string = lex.next(&recovered_string)
+    if after_invalid_string.kind != .KwError || after_invalid_string.start != 7usize { ret lex.InvalidSource }
+    var recovered_raw = lex.init("r\"a\xF0\x9F\x92z\" error Good")
+    let invalid_raw_token = lex.next(&recovered_raw)
+    if invalid_raw_token.kind != .Invalid || invalid_raw_token.start != 0usize || invalid_raw_token.end != 8usize { ret lex.InvalidSource }
+    let after_invalid_raw = lex.next(&recovered_raw)
+    if after_invalid_raw.kind != .KwError || after_invalid_raw.start != 9usize { ret lex.InvalidSource }
+    var recovered_character = lex.init("'ab' error Good")
+    let invalid_character_token = lex.next(&recovered_character)
+    if invalid_character_token.kind != .Invalid || invalid_character_token.start != 0usize || invalid_character_token.end != 4usize { ret lex.InvalidSource }
+    if lex.next(&recovered_character).kind != .KwError { ret lex.InvalidSource }
+    var unterminated_string = lex.init("\"a\nerror Good")
+    let unterminated_string_token = lex.next(&unterminated_string)
+    if unterminated_string_token.kind != .Invalid || unterminated_string_token.start != 0usize || unterminated_string_token.end != 2usize { ret lex.InvalidSource }
+    if lex.next(&unterminated_string).kind != .Newline { ret lex.InvalidSource }
 
     let invalid = lex.validate("fn #")
     if invalid != lex.InvalidSource { ret lex.InvalidSource }
