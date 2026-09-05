@@ -187,8 +187,10 @@ and DIA verification confirms the linked PDB reconstructs locals and recursive
 types. The first self-hosted compiler checkpoint is built by the bootstrap on
 Windows and Linux. Its grammar revision 1 lexer now lives in `src/lex.e`;
 `src/main.e` imports and exercises that module. The lexer owns all 94 token kinds and
-scans keywords, comments, CR/LF/CRLF, original-byte spans, numeric and quoted/raw
+scans keywords, comments, CR/LF/CRLF, original-byte spans, strict numeric and quoted/raw
 literal boundaries, invalid bytes and the complete longest-match punctuation set.
+Numeric lexing validates base digits, separator placement, exponents, and the closed
+integer/float suffix sets.
 The C99 bootstrap now loads transitive modules from the nearest project's `lib/` and
 `src/`, resolves default and explicit import qualifiers, canonicalizes cross-module
 functions, types, constants and errors, rejects duplicate qualifiers and import
@@ -213,8 +215,8 @@ classified binding, assignment, call, `try`, `defer`, control-flow, return,
 `ErrorNode`, resumes at the next block newline and preserves both its enclosing
 `Block`/`FnDecl` and following statements. Every statement now uses its grammar
 production; the legacy raw token-balancing fallback has been removed. Return values
-now produce primary,
-prefix, precedence-aware binary, call, field and bracket-postfix expression nodes,
+now produce primary, prefix, precedence-aware binary, call, field and bracket-postfix
+expression nodes,
 including grouped and member-shorthand primaries. Binding and assignment statements
 now retain their binding/target and initializer subtrees; call and `try` statements
 retain their call trees; `zero` and `undef` remain lossless initializer tokens; and
@@ -224,8 +226,7 @@ multiple-return list while preserving ordinary single-expression grouping.
 Named, generic and fixed/inferred-array aggregate literals now retain a structured
 `NamedType` or `ArrayType` header and ordered `LiteralItem` children, including nested
 literals, named payloads, positional values and bare PascalCase members. Local type
-annotations now
-recursively retain named, pointer, slice, array and function-type nodes, including
+annotations now recursively retain named, pointer, slice, array and function-type nodes, including
 array-length expressions, parameters and return specifications. Function
 declarations now reuse the same trees for typed comptime parameters, ordinary
 parameters and single- or multiple-type returns. Type aliases, aggregate fields and

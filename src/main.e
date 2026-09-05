@@ -60,6 +60,22 @@ fn self_test() -> err {
     try expect(&advanced, .RawString, 8usize, 15usize, 1usize, 9usize)
     try expect(&advanced, .Eof, 15usize, 15usize, 2usize, 3usize)
 
+    let valid_numbers = lex.validate("0 1_000i64 0xFFu8 0o777usize 0b1010 1.25f16 2e+3f32 3.0f64 4.0bf16")
+    if valid_numbers != ok { ret lex.InvalidSource }
+    if lex.validate("0x") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("0xG") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("0b2") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("0o8") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1__2") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1_") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1e") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1e+") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1e_2") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1.0u8") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1f32") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1.0bf32") != lex.InvalidSource { ret lex.InvalidSource }
+    if lex.validate("1.0f128") != lex.InvalidSource { ret lex.InvalidSource }
+
     let invalid = lex.validate("fn #")
     if invalid != lex.InvalidSource { ret lex.InvalidSource }
     let invalid_escape = lex.validate("\"\\q\"")

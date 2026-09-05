@@ -51,8 +51,10 @@ symbol, unwind and compact `.nepersym`/`.nepsym` data. The first self-hosted com
 slice now builds and runs under the bootstrap on both hosts. Its lexer lives in
 `src/lex.e`; `src/main.e` imports it through the ordinary project-module resolver.
 The lexer declares the frozen 94-kind grammar vocabulary and scans original-byte
-spans, normalized newlines, comments, keywords, numeric and string forms, and
-longest-match punctuation. The bootstrap now loads transitive project modules,
+spans, normalized newlines, comments, keywords, strict numeric and string forms, and
+longest-match punctuation. Numeric lexing validates base digits, separator placement,
+exponents, and the closed integer/float suffix sets. The bootstrap now loads
+transitive project modules,
 resolves explicit import aliases and qualified declarations, rejects import cycles
 and duplicate qualifiers, and reports diagnostics against the originating file.
 The self-hosted front end also declares the frozen 54-kind syntax-node registry in
@@ -68,17 +70,16 @@ blocks now own classified binding, assignment, call, propagation, cleanup, contr
 return and compiler-directive statement nodes, with recovery contained inside the
 surrounding block. Every statement now uses its grammar production; the legacy raw
 token-balancing fallback has been removed. Return values now form primary, prefix,
-precedence-aware binary,
-call, field and bracket-postfix expression trees while preserving their source
-tokens in the lossless child stream. Bindings, assignments, call statements and
-`try` statements now retain those expression subtrees too, including tuple-binding
-syntax, typed bindings and the special `zero`/`undef` initializer forms. Return
-statements accept multiline, trailing-comma multiple-return lists and retain each
-value as an ordered expression child. Named, generic and fixed/inferred-array
+precedence-aware binary, call, field and bracket-postfix expression trees while
+preserving their source tokens in the lossless child stream. Bindings, assignments,
+call statements and `try` statements now retain those expression subtrees too,
+including tuple-binding syntax, typed bindings and the special `zero`/`undef`
+initializer forms. Return statements accept multiline, trailing-comma multiple-return
+lists and retain each value as an ordered expression child. Named, generic and fixed/inferred-array
 aggregate literals now expose a structured `NamedType` or `ArrayType` header and
 ordered `LiteralItem` children, including nested literals, named payloads, positional
-values and bare PascalCase members. Local type
-annotations now recursively expose named, pointer, slice, array and function-type
+values and bare PascalCase members. Local type annotations now recursively expose
+named, pointer, slice, array and function-type
 nodes, including array-length expressions, parameters and return specifications.
 Function declarations now reuse the same trees for typed comptime parameters,
 ordinary parameters and single- or multiple-type return specifications. Type

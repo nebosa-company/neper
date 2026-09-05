@@ -138,6 +138,13 @@ fn is_hex(c: u8) -> bool {
     ret c >= 97u8 && c <= 102u8
 }
 
+fn is_base_digit(c: u8, base: u8) -> bool {
+    if base == 2u8 { ret c == 48u8 || c == 49u8 }
+    if base == 8u8 { ret c >= 48u8 && c <= 55u8 }
+    if base == 10u8 { ret is_digit(c) }
+    ret is_hex(c)
+}
+
 fn is_alnum(c: u8) -> bool {
     ret is_alpha(c) || is_digit(c)
 }
@@ -150,6 +157,54 @@ fn text_is(source: str, start: usize, end: usize, expected: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+fn digits_are_valid(source: str, start: usize, end: usize, base: u8) -> bool {
+    if start == end { ret false }
+    var i = start
+    var need_digit = true
+    while i < end {
+        let c = source[i]
+        if is_base_digit(c, base) {
+            need_digit = false
+        } else {
+            if c != 95u8 || need_digit { ret false }
+            need_digit = true
+        }
+        i += 1usize
+    }
+    ret !need_digit
+}
+
+fn integer_suffix_is_valid(source: str, start: usize, end: usize) -> bool {
+    if start == end { ret true }
+    let length = end - start
+    if source[start] != 105u8 && source[start] != 117u8 { ret false }
+    if length == 2usize { ret source[start + 1usize] == 56u8 }
+    if length == 3usize {
+        if source[start + 1usize] == 49u8 && source[start + 2usize] == 54u8 { ret true }
+        if source[start + 1usize] == 51u8 && source[start + 2usize] == 50u8 { ret true }
+        ret source[start + 1usize] == 54u8 && source[start + 2usize] == 52u8
+    }
+    if length != 5usize { ret false }
+    ret source[start + 1usize] == 115u8 && source[start + 2usize] == 105u8 && source[start + 3usize] == 122u8 && source[start + 4usize] == 101u8
+}
+
+fn float_suffix_is_valid(source: str, start: usize, end: usize) -> bool {
+    if start == end { ret true }
+    let length = end - start
+    var offset = start
+    if length == 4usize {
+        if source[start] != 98u8 { ret false }
+        offset += 1usize
+        ret source[offset] == 102u8 && source[offset + 1usize] == 49u8 && source[offset + 2usize] == 54u8
+    } else {
+        if length != 3usize { ret false }
+    }
+    if source[offset] != 102u8 { ret false }
+    if source[offset + 1usize] == 49u8 && source[offset + 2usize] == 54u8 { ret true }
+    if source[offset + 1usize] == 51u8 && source[offset + 2usize] == 50u8 { ret true }
+    ret source[offset + 1usize] == 54u8 && source[offset + 2usize] == 52u8
 }
 
 fn keyword(source: str, start: usize, end: usize) -> Kind {
@@ -290,31 +345,65 @@ fn next(s: *Scanner) -> Token {
         var kind = Kind.Integer
         take(s, 1usize)
         if c == 48u8 && s.off < s.source.len && (s.source[s.off] == 120u8 || s.source[s.off] == 111u8 || s.source[s.off] == 98u8) {
+            let prefix = s.source[s.off]
             take(s, 1usize)
+            let digits_start = s.off
+            var base = 2u8
+            if prefix == 111u8 { base = 8u8 }
+            if prefix == 120u8 { base = 16u8 }
+            while s.off < s.source.len && (is_base_digit(s.source[s.off], base) || s.source[s.off] == 95u8) {
+                take(s, 1usize)
+            }
+            let digits_end = s.off
             while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) {
                 take(s, 1usize)
             }
+            if !digits_are_valid(s.source, digits_start, digits_end, base) || !integer_suffix_is_valid(s.source, digits_end, s.off) {
+                ret token(s, .Invalid, start, line, column)
+            }
             ret token(s, kind, start, line, column)
         }
+        let integer_start = start
         while s.off < s.source.len && (is_digit(s.source[s.off]) || s.source[s.off] == 95u8) {
             take(s, 1usize)
+        }
+        let integer_end = s.off
+        if !digits_are_valid(s.source, integer_start, integer_end, 10u8) {
+            while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
+            ret token(s, .Invalid, start, line, column)
         }
         if s.off + 1usize < s.source.len && s.source[s.off] == 46u8 && s.source[s.off + 1usize] != 46u8 && is_digit(s.source[s.off + 1usize]) {
             kind = .Float
             take(s, 1usize)
+            let fraction_start = s.off
             while s.off < s.source.len && (is_digit(s.source[s.off]) || s.source[s.off] == 95u8) {
                 take(s, 1usize)
+            }
+            if !digits_are_valid(s.source, fraction_start, s.off, 10u8) {
+                while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
+                ret token(s, .Invalid, start, line, column)
             }
         }
         if s.off < s.source.len && (s.source[s.off] == 101u8 || s.source[s.off] == 69u8) {
             kind = .Float
             take(s, 1usize)
             if s.off < s.source.len && (s.source[s.off] == 43u8 || s.source[s.off] == 45u8) { take(s, 1usize) }
+            let exponent_start = s.off
             while s.off < s.source.len && (is_digit(s.source[s.off]) || s.source[s.off] == 95u8) {
                 take(s, 1usize)
             }
+            if !digits_are_valid(s.source, exponent_start, s.off, 10u8) {
+                while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
+                ret token(s, .Invalid, start, line, column)
+            }
         }
-        while s.off < s.source.len && is_alnum(s.source[s.off]) { take(s, 1usize) }
+        let suffix_start = s.off
+        while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
+        if kind == .Float {
+            if !float_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start, line, column) }
+        } else {
+            if !integer_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start, line, column) }
+        }
         ret token(s, kind, start, line, column)
     }
 
