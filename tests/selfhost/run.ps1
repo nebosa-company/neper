@@ -177,6 +177,8 @@ $constantChecked = & $compiler check-file (Join-Path $checkRoot 'constant_valid\
 if ($LASTEXITCODE -ne 0 -or $constantChecked -ne 'module check ok') { throw 'integer constants did not evaluate' }
 $constantAliasChecked = & $compiler check-file (Join-Path $checkRoot 'constant_alias_array_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $constantAliasChecked -ne 'module check ok') { throw 'constant-backed array aliases did not resolve' }
+$intrinsicChecked = & $compiler check-file (Join-Path $checkRoot 'intrinsic_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $intrinsicChecked -ne 'module check ok') { throw 'fixed intrinsic signatures did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -229,6 +231,13 @@ $checkFailures = @(
     @('constant_invalid_reference', 'InvalidConstant'),
     @('constant_division_zero', 'InvalidConstant'),
     @('array_length_constant_type', 'TypeMismatch'),
+    @('intrinsic_argument_count', 'ArgumentCount'),
+    @('intrinsic_argument_mismatch', 'TypeMismatch'),
+    @('intrinsic_pointer_mismatch', 'TypeMismatch'),
+    @('intrinsic_result_mismatch', 'TypeMismatch'),
+    @('intrinsic_multi_argument_mismatch', 'TypeMismatch'),
+    @('intrinsic_multi_unsupported', 'Unsupported'),
+    @('intrinsic_generic_unsupported', 'Unsupported'),
     @('unsupported', 'Unsupported')
 )
 foreach ($case in $checkFailures) {

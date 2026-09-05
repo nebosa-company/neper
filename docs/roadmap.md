@@ -368,12 +368,16 @@ arithmetic overflow are covered. Evaluated constants type-check in function bodi
 drive array lengths in function, local and alias type positions; a preliminary/final
 alias pass makes local and qualified constants available to aliases independent of
 declaration order. Unary minus and `+`, `-`, `*`, `/`, `%` are the current folding
-subset. Wider intermediate arithmetic, bitwise, shift and wrapping constant operators,
-generic types and calls, compiler-owned intrinsics, indexing and aggregate literals
+subset. The checker now installs all fixed `os` signatures plus `mem.mark`, `mem.reset`
+and `mem.stats` as compiler-owned declarations, then checks their arity, structural
+pointer/slice arguments and single-result contexts. Multi-result intrinsic arguments are
+checked before result consumption reaches its explicit boundary. Wider intermediate
+arithmetic, bitwise, shift and wrapping constant operators, generic `mem.alloc`, `try`
+and tuple result consumption, generic source calls, indexing and aggregate literals
 remain outside the `check-file` checkpoint. Unsupported expression and statement forms
 fail explicitly rather than being accepted unchecked. The next type-checking increments
-replace those boundaries with intrinsic signatures, remaining control flow and full
-generic checking.
+replace those boundaries with generic intrinsic specialization, remaining control flow
+and full generic checking.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

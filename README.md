@@ -199,11 +199,16 @@ from bodies and every current array type position. A preliminary/final alias pas
 local and qualified constants available inside alias right-hand sides without
 declaration-order dependence. This checkpoint folds unary minus and `+`, `-`, `*`, `/`,
 `%` over values whose magnitude fits the bootstrap word. Wider intermediate arithmetic,
-bitwise, shift and wrapping constant operators, generic types and calls, compiler-owned
-intrinsics, indexing and aggregate literals remain outside this checkpoint. Unsupported
-expression and statement forms fail explicitly instead of being silently accepted;
-cross-platform fixtures freeze both the implemented behavior and those temporary
-boundaries. The bootstrap emitter also selects unsigned x64
+bitwise, shift and wrapping constant operators remain outside this checkpoint. The
+checker now installs the fixed `os` signatures plus `mem.mark`, `mem.reset` and
+`mem.stats` without source declarations, structurally checks their pointer and slice
+arguments, and validates their arity and single-result contexts. Arguments to
+multi-result intrinsics are checked before their still-explicit consumption boundary.
+Generic `mem.alloc`, `try` and tuple result consumption, generic source calls, indexing
+and aggregate literals remain outside this checkpoint. Unsupported expression and
+statement forms fail explicitly instead of being silently accepted; cross-platform
+fixtures freeze both the implemented behavior and those temporary boundaries. The
+bootstrap emitter also selects unsigned x64
 division, remainder and relational instructions from operand types, including values
 above `isize`'s maximum.
 

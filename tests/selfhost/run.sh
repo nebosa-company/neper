@@ -258,6 +258,8 @@ constant_checked=$($test_build/neper-self check-file "$check_root/constant_valid
 [ "$constant_checked" = 'module check ok' ]
 constant_alias_checked=$($test_build/neper-self check-file "$check_root/constant_alias_array_valid/src/main.e" "$repo" x64 linux)
 [ "$constant_alias_checked" = 'module check ok' ]
+intrinsic_checked=$($test_build/neper-self check-file "$check_root/intrinsic_valid/src/main.e" "$repo" x64 linux)
+[ "$intrinsic_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -321,6 +323,13 @@ expect_check_error constant_unsigned_operator InvalidOperator
 expect_check_error constant_invalid_reference InvalidConstant
 expect_check_error constant_division_zero InvalidConstant
 expect_check_error array_length_constant_type TypeMismatch
+expect_check_error intrinsic_argument_count ArgumentCount
+expect_check_error intrinsic_argument_mismatch TypeMismatch
+expect_check_error intrinsic_pointer_mismatch TypeMismatch
+expect_check_error intrinsic_result_mismatch TypeMismatch
+expect_check_error intrinsic_multi_argument_mismatch TypeMismatch
+expect_check_error intrinsic_multi_unsupported Unsupported
+expect_check_error intrinsic_generic_unsupported Unsupported
 expect_check_error unsupported Unsupported
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)

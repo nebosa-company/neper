@@ -758,9 +758,144 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     ret ok
 }
 
+fn seeded_composite_type(c: *Checker, kind: Kind, element: Type, is_const: bool, module_index: usize) -> (Type, err) {
+    let (element_index, store_error) = store_type(c, element)
+    if store_error != ok { ret (invalid_type(), store_error) }
+    var result = make_type(kind, "", module_index)
+    result.element = element_index
+    result.has_element = true
+    result.is_const = is_const
+    ret (result, ok)
+}
+
+fn add_seeded_function(c: *Checker, module_index: usize, name: str, return_type: Type, return_count: usize) -> (usize, err) {
+    if c.function_count == c.functions.len { ret (0usize, Capacity) }
+    let index = c.function_count
+    c.functions[index] = Function { name: name, module_index: module_index, first_parameter: c.parameter_count, parameter_count: 0usize, return_type: return_type, return_count: return_count, generic: false }
+    c.function_count += 1usize
+    ret (index, ok)
+}
+
+fn add_seeded_parameter(c: *Checker, function_index: usize, name: str, ty: Type) -> err {
+    if function_index >= c.function_count || c.parameter_count == c.parameters.len { ret Capacity }
+    c.parameters[c.parameter_count] = Parameter { name: name, ty: ty }
+    c.parameter_count += 1usize
+    c.functions[function_index].parameter_count += 1usize
+    ret ok
+}
+
+fn seed_memory_signatures(c: *Checker, module_index: usize) -> err {
+    let arena = make_type(.Named, "Arena", module_index)
+    let stats = make_type(.Named, "Stats", module_index)
+    let usize_type = make_type(.Integer, "usize", module_index)
+    let (arena_pointer, pointer_error) = seeded_composite_type(c, .Pointer, arena, false, module_index)
+    if pointer_error != ok { ret pointer_error }
+    let (mark_index, mark_error) = add_seeded_function(c, module_index, "mark", usize_type, 1usize)
+    if mark_error != ok { ret mark_error }
+    try add_seeded_parameter(c, mark_index, "a", arena_pointer)
+    let (reset_index, reset_error) = add_seeded_function(c, module_index, "reset", make_type(.Void, "void", module_index), 0usize)
+    if reset_error != ok { ret reset_error }
+    try add_seeded_parameter(c, reset_index, "a", arena_pointer)
+    try add_seeded_parameter(c, reset_index, "m", usize_type)
+    let (stats_index, stats_error) = add_seeded_function(c, module_index, "stats", stats, 1usize)
+    if stats_error != ok { ret stats_error }
+    try add_seeded_parameter(c, stats_index, "a", arena_pointer)
+    ret ok
+}
+
+fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool) -> err {
+    let file = make_type(.Named, "File", os_module)
+    let process = make_type(.Named, "Proc", os_module)
+    let clock = make_type(.Named, "Clock", os_module)
+    let entry = make_type(.Named, "DirEntry", os_module)
+    let flags = make_type(.Named, "OpenFlags", os_module)
+    let stdio = make_type(.Named, "Stdio", os_module)
+    let u8_type = make_type(.Integer, "u8", os_module)
+    let usize_type = make_type(.Integer, "usize", os_module)
+    let i32_type = make_type(.Integer, "i32", os_module)
+    let i64_type = make_type(.Integer, "i64", os_module)
+    let string_type = make_type(.String, "str", os_module)
+    let error_type = make_type(.Err, "err", os_module)
+    let (bytes, bytes_error) = seeded_composite_type(c, .Slice, u8_type, false, os_module)
+    if bytes_error != ok { ret bytes_error }
+    let (entries, entries_error) = seeded_composite_type(c, .Slice, entry, false, os_module)
+    if entries_error != ok { ret entries_error }
+    let (strings, strings_error) = seeded_composite_type(c, .Slice, string_type, false, os_module)
+    if strings_error != ok { ret strings_error }
+    let (const_strings, const_strings_error) = seeded_composite_type(c, .Slice, string_type, true, os_module)
+    if const_strings_error != ok { ret const_strings_error }
+    let (byte_pointer, byte_pointer_error) = seeded_composite_type(c, .Pointer, u8_type, false, os_module)
+    if byte_pointer_error != ok { ret byte_pointer_error }
+
+    let (read_index, read_error) = add_seeded_function(c, os_module, "read", usize_type, 2usize)
+    if read_error != ok { ret read_error }
+    try add_seeded_parameter(c, read_index, "f", file)
+    try add_seeded_parameter(c, read_index, "buf", bytes)
+    let (write_index, write_error) = add_seeded_function(c, os_module, "write", usize_type, 2usize)
+    if write_error != ok { ret write_error }
+    try add_seeded_parameter(c, write_index, "f", file)
+    try add_seeded_parameter(c, write_index, "buf", string_type)
+    let (close_index, close_error) = add_seeded_function(c, os_module, "close", error_type, 1usize)
+    if close_error != ok { ret close_error }
+    try add_seeded_parameter(c, close_index, "f", file)
+    let (stdout_index, stdout_error) = add_seeded_function(c, os_module, "stdout", file, 1usize)
+    if stdout_error != ok { ret stdout_error }
+    let (stderr_index, stderr_error) = add_seeded_function(c, os_module, "stderr", file, 1usize)
+    if stderr_error != ok { ret stderr_error }
+    let (wait_index, wait_error) = add_seeded_function(c, os_module, "wait", i32_type, 2usize)
+    if wait_error != ok { ret wait_error }
+    try add_seeded_parameter(c, wait_index, "p", process)
+    let (exit_index, exit_error) = add_seeded_function(c, os_module, "exit", make_type(.Void, "void", os_module), 0usize)
+    if exit_error != ok { ret exit_error }
+    try add_seeded_parameter(c, exit_index, "code", i32_type)
+    let (reserve_index, reserve_error) = add_seeded_function(c, os_module, "reserve", byte_pointer, 2usize)
+    if reserve_error != ok { ret reserve_error }
+    try add_seeded_parameter(c, reserve_index, "n", usize_type)
+    let (commit_index, commit_error) = add_seeded_function(c, os_module, "commit", error_type, 1usize)
+    if commit_error != ok { ret commit_error }
+    try add_seeded_parameter(c, commit_index, "p", byte_pointer)
+    try add_seeded_parameter(c, commit_index, "n", usize_type)
+    let (clock_index, clock_error) = add_seeded_function(c, os_module, "clock", i64_type, 2usize)
+    if clock_error != ok { ret clock_error }
+    try add_seeded_parameter(c, clock_index, "c", clock)
+
+    if has_memory {
+        let arena = make_type(.Named, "Arena", mem_module)
+        let (arena_pointer, arena_pointer_error) = seeded_composite_type(c, .Pointer, arena, false, os_module)
+        if arena_pointer_error != ok { ret arena_pointer_error }
+        let (open_index, open_error) = add_seeded_function(c, os_module, "open", file, 2usize)
+        if open_error != ok { ret open_error }
+        try add_seeded_parameter(c, open_index, "a", arena_pointer)
+        try add_seeded_parameter(c, open_index, "path", string_type)
+        try add_seeded_parameter(c, open_index, "flags", flags)
+        let (readdir_index, readdir_error) = add_seeded_function(c, os_module, "readdir", entries, 2usize)
+        if readdir_error != ok { ret readdir_error }
+        try add_seeded_parameter(c, readdir_index, "a", arena_pointer)
+        try add_seeded_parameter(c, readdir_index, "path", string_type)
+        let (spawn_index, spawn_error) = add_seeded_function(c, os_module, "spawn", process, 2usize)
+        if spawn_error != ok { ret spawn_error }
+        try add_seeded_parameter(c, spawn_index, "a", arena_pointer)
+        try add_seeded_parameter(c, spawn_index, "argv", const_strings)
+        try add_seeded_parameter(c, spawn_index, "stdio", stdio)
+        let (args_index, args_error) = add_seeded_function(c, os_module, "args", strings, 2usize)
+        if args_error != ok { ret args_error }
+        try add_seeded_parameter(c, args_index, "a", arena_pointer)
+    }
+    ret ok
+}
+
+fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
+    let (mem_module, has_memory) = graph.find_module(g, "e.mem")
+    if has_memory { try seed_memory_signatures(c, mem_module) }
+    let (os_module, has_os) = graph.find_module(g, "e.os")
+    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory) }
+    ret ok
+}
+
 fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.function_count = 0usize
     c.parameter_count = 0usize
+    try seed_intrinsic_signatures(c, g)
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
