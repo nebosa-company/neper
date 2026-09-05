@@ -230,9 +230,11 @@ union payloads now recurse through those nodes; enum discriminants retain expres
 nodes; and enums and tagged unions retain their backing type. `if`/`else if`/`else`,
 `while` and `when` now retain condition expressions and recursively parsed blocks;
 PascalCase lookahead disambiguates named aggregate literals from lowercase condition
-names followed by a block. `for`, switch arms, `defer`, `@nocheck` and `shared var`
-remain the next statement-parser increments; this callout does not mark the
-`neper-0` milestone complete.
+names followed by a block. `for` now retains iterable or bounded-range expressions
+and a recursively parsed body while preserving one- or two-name iterator bindings
+as source tokens. Switch arms, `defer`, `@nocheck` and `shared var` remain the next
+statement-parser increments; this callout does not mark the `neper-0` milestone
+complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

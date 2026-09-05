@@ -992,6 +992,36 @@ fn parse_when_statement(p: *Parser) -> err {
     ret ok
 }
 
+fn parse_for_statement(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [3]usize = zero
+    var nested_count = 0usize
+    try require(p, .KwFor)
+    if p.current.kind != .Identifier && p.current.kind != .PunctUnderscore { ret InvalidSyntax }
+    try advance(p)
+    if p.current.kind == .PunctComma {
+        try advance(p)
+        if p.current.kind != .Identifier && p.current.kind != .PunctUnderscore { ret InvalidSyntax }
+        try advance(p)
+    }
+    try require(p, .KwIn)
+    try parse_expression_node(p)
+    nested[nested_count] = p.last_node
+    nested_count += 1usize
+    if p.current.kind == .PunctRange {
+        try advance(p)
+        try parse_expression_node(p)
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    try parse_block_node(p)
+    nested[nested_count] = p.last_node
+    nested_count += 1usize
+    if !at_statement_end(p) { ret InvalidSyntax }
+    try add_parent_node(p, .ForStmt, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
 fn is_assignment_op(kind: lex.Kind) -> bool {
     ret kind == .PunctAssign || kind == .PunctAddAssign || kind == .PunctSubAssign || kind == .PunctMulAssign || kind == .PunctDivAssign || kind == .PunctRemAssign || kind == .PunctAddWrapAssign || kind == .PunctSubWrapAssign || kind == .PunctMulWrapAssign || kind == .PunctShiftLeftAssign || kind == .PunctShiftRightAssign || kind == .PunctBitAndAssign || kind == .PunctBitXorAssign || kind == .PunctBitOrAssign
 }
@@ -1033,6 +1063,7 @@ fn parse_statement_node(p: *Parser) -> err {
     if node_kind == .IfStmt { ret parse_if_statement(p) }
     if node_kind == .WhileStmt { ret parse_while_statement(p) }
     if node_kind == .WhenStmt { ret parse_when_statement(p) }
+    if node_kind == .ForStmt { ret parse_for_statement(p) }
     while true {
         let kind = p.current.kind
         if kind == .Invalid || kind == .Eof { ret InvalidSyntax }
