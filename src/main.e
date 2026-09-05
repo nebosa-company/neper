@@ -2,6 +2,7 @@ use e.io
 use e.mem
 use lex
 use parse
+use syntax
 
 fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize, column: usize) -> err {
     let current = lex.next(s)
@@ -67,21 +68,38 @@ fn self_test() -> err {
     if invalid_tab != lex.InvalidSource { ret lex.InvalidSource }
 
     let parser_source = "use e.mem\nuse util.math as calc\nerror Failed\ntype Item = struct { value: i32, }\nfn read(item: Item) -> i32 {\n    ret item.value\n}\n"
+    var nodes: [16]syntax.Node = zero
+    var children: [64]syntax.Child = zero
     var tree: parse.Tree = zero
+    try parse.init_tree(&tree, nodes[..], children[..])
     let parser_error = parse.parse(&tree, parser_source)
     if parser_error != ok { ret lex.InvalidSource }
     if tree.nodes[0usize].kind != .File || tree.count != 6usize { ret lex.InvalidSource }
-    if tree.nodes[0usize].child_count != 5usize { ret lex.InvalidSource }
+    if tree.nodes[0usize].child_count != 11usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .UseDecl || tree.nodes[2usize].kind != .UseDecl { ret lex.InvalidSource }
     if tree.nodes[3usize].kind != .ErrorDecl || tree.nodes[4usize].kind != .TypeDecl { ret lex.InvalidSource }
     if tree.nodes[5usize].kind != .FnDecl { ret lex.InvalidSource }
+    if tree.nodes[1usize].child_count != 4usize { ret lex.InvalidSource }
+    let file_children = tree.nodes[0usize].first_child
+    if !tree.children[file_children].node || tree.children[file_children].index != 1usize { ret lex.InvalidSource }
+    if tree.children[file_children + 1usize].node || tree.children[file_children + 1usize].index != 4usize { ret lex.InvalidSource }
+    if !tree.children[file_children + 2usize].node || tree.children[file_children + 2usize].index != 2usize { ret lex.InvalidSource }
     let syntax_error = parse.validate("fn broken() -> err {\n    ret ok\n")
     if syntax_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    var recovery_nodes: [4]syntax.Node = zero
+    var recovery_children: [8]syntax.Child = zero
     var recovered: parse.Tree = zero
+    try parse.init_tree(&recovered, recovery_nodes[..], recovery_children[..])
     let recovery_error = parse.parse(&recovered, "@\nerror Good\n")
     if recovery_error != parse.InvalidSyntax || recovered.errors != 1usize { ret lex.InvalidSource }
     if recovered.count != 3usize || recovered.nodes[1usize].kind != .ErrorNode { ret lex.InvalidSource }
     if recovered.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    var tiny_nodes: [1]syntax.Node = zero
+    var tiny_children: [1]syntax.Child = zero
+    var tiny: parse.Tree = zero
+    try parse.init_tree(&tiny, tiny_nodes[..], tiny_children[..])
+    let capacity_error = parse.parse(&tiny, "error Full\n")
+    if capacity_error != parse.InvalidSyntax { ret lex.InvalidSource }
     ret ok
 }
 

@@ -7,9 +7,21 @@ use syntax
 error InvalidSyntax
 
 type Tree = struct {
-    nodes: [256]syntax.Node,
+    nodes: []syntax.Node,
+    children: []syntax.Child,
     count: usize,
+    child_count: usize,
     errors: usize,
+}
+
+fn init_tree(tree: *Tree, nodes: []syntax.Node, children: []syntax.Child) -> err {
+    if nodes.len == 0usize || children.len == 0usize { ret InvalidSyntax }
+    tree.nodes = nodes
+    tree.children = children
+    tree.count = 0usize
+    tree.child_count = 0usize
+    tree.errors = 0usize
+    ret ok
 }
 
 type Parser = struct {
@@ -17,6 +29,10 @@ type Parser = struct {
     current: lex.Token,
     token_index: usize,
     declarations: usize,
+    error_start: usize,
+    last_node: usize,
+    top_nodes: [256]usize,
+    top_count: usize,
     tree: *Tree,
 }
 
@@ -27,6 +43,7 @@ fn init(tree: *Tree, source: str) -> Parser {
     p.current = lex.next(&p.scanner)
     p.tree = tree
     p.tree.count = 1usize
+    p.tree.child_count = 0usize
     p.tree.errors = 0usize
     p.tree.nodes[0usize] = syntax.node(.File, 0usize, 0usize, 1usize, 0usize)
     ret p
@@ -42,10 +59,32 @@ fn advance(p: *Parser) -> err {
     ret ok
 }
 
+fn add_child(p: *Parser, child: syntax.Child) -> err {
+    if p.tree.child_count == p.tree.children.len { ret InvalidSyntax }
+    p.tree.children[p.tree.child_count] = child
+    p.tree.child_count += 1usize
+    ret ok
+}
+
 fn add_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize) -> err {
     if p.tree.count == p.tree.nodes.len { ret InvalidSyntax }
-    p.tree.nodes[p.tree.count] = syntax.node(kind, token_start, token_end, 0usize, 0usize)
+    let child_start = p.tree.child_count
+    var token = token_start
+    while token < token_end {
+        try add_child(p, syntax.token_child(token))
+        token += 1usize
+    }
+    p.last_node = p.tree.count
+    p.tree.nodes[p.tree.count] = syntax.node(kind, token_start, token_end, child_start, token_end - token_start)
     p.tree.count += 1usize
+    ret ok
+}
+
+fn add_top_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize) -> err {
+    if p.top_count == p.top_nodes.len { ret InvalidSyntax }
+    try add_node(p, kind, token_start, token_end)
+    p.top_nodes[p.top_count] = p.last_node
+    p.top_count += 1usize
     ret ok
 }
 
@@ -82,7 +121,7 @@ fn parse_use(p: *Parser) -> err {
         try advance(p)
         try require(p, .Identifier)
     }
-    try add_node(p, .UseDecl, token_start, p.token_index)
+    try add_top_node(p, .UseDecl, token_start, p.token_index)
     try finish_line(p)
     ret ok
 }
@@ -91,7 +130,7 @@ fn parse_error(p: *Parser) -> err {
     let token_start = p.token_index
     try require(p, .KwError)
     try require(p, .Identifier)
-    try add_node(p, .ErrorDecl, token_start, p.token_index)
+    try add_top_node(p, .ErrorDecl, token_start, p.token_index)
     try finish_line(p)
     ret ok
 }
@@ -113,13 +152,13 @@ fn scan_delimited_decl(p: *Parser, decl_kind: lex.Kind, node_kind: syntax.Kind, 
             if parens != 0usize || brackets != 0usize || braces != 0usize { ret InvalidSyntax }
             if (decl_kind == .KwType || decl_kind == .KwConst) && !saw_assign { ret InvalidSyntax }
             if decl_kind == .KwFn && !saw_brace { ret InvalidSyntax }
-            try add_node(p, node_kind, token_start, p.token_index)
+            try add_top_node(p, node_kind, token_start, p.token_index)
             ret ok
         }
         if kind == .Newline && parens == 0usize && brackets == 0usize && braces == 0usize {
             if (decl_kind == .KwType || decl_kind == .KwConst) && !saw_assign { ret InvalidSyntax }
             if decl_kind == .KwFn && !saw_brace { ret InvalidSyntax }
-            try add_node(p, node_kind, token_start, p.token_index)
+            try add_top_node(p, node_kind, token_start, p.token_index)
             try skip_separators(p)
             ret ok
         }
@@ -166,7 +205,7 @@ fn parse_attribute(p: *Parser) -> err {
         }
     }
     if p.current.kind != .Newline { ret InvalidSyntax }
-    try add_node(p, .Attribute, token_start, p.token_index)
+    try add_top_node(p, .Attribute, token_start, p.token_index)
     try skip_separators(p)
     ret ok
 }
@@ -185,6 +224,7 @@ fn node_kind_for_decl(kind: lex.Kind) -> syntax.Kind {
 
 fn parse_one(p: *Parser) -> err {
     while p.current.kind == .PunctAt { try parse_attribute(p) }
+    p.error_start = p.token_index
     if p.current.kind == .KwUse {
         try parse_use(p)
     } else {
@@ -221,31 +261,52 @@ fn recover_top(p: *Parser) -> err {
 fn parse_file(p: *Parser) -> err {
     try skip_separators(p)
     while p.current.kind != .Eof {
-        let token_start = p.token_index
+        p.error_start = p.token_index
         let item_error = parse_one(p)
         if item_error != ok {
             p.tree.errors += 1usize
-            let node_error = add_node(p, .ErrorNode, token_start, p.token_index + 1usize)
+            let node_error = add_top_node(p, .ErrorNode, p.error_start, p.token_index + 1usize)
             if node_error != ok { ret node_error }
             try recover_top(p)
         }
     }
     if p.declarations == 0usize && p.tree.errors == 0usize {
         p.tree.errors = 1usize
-        try add_node(p, .ErrorNode, p.token_index, p.token_index)
+        try add_top_node(p, .ErrorNode, p.token_index, p.token_index)
     }
     p.tree.nodes[0usize].token_end = p.token_index + 1usize
-    p.tree.nodes[0usize].child_count = p.tree.count - 1usize
+    p.tree.nodes[0usize].first_child = p.tree.child_count
+    var token = 0usize
+    var top = 0usize
+    while top < p.top_count {
+        let node_index = p.top_nodes[top]
+        while token < p.tree.nodes[node_index].token_start {
+            try add_child(p, syntax.token_child(token))
+            token += 1usize
+        }
+        try add_child(p, syntax.node_child(node_index))
+        token = p.tree.nodes[node_index].token_end
+        top += 1usize
+    }
+    while token <= p.token_index {
+        try add_child(p, syntax.token_child(token))
+        token += 1usize
+    }
+    p.tree.nodes[0usize].child_count = p.tree.child_count - p.tree.nodes[0usize].first_child
     if p.tree.errors != 0usize { ret InvalidSyntax }
     ret ok
 }
 
 fn parse(tree: *Tree, source: str) -> err {
+    if tree.nodes.len == 0usize || tree.children.len == 0usize { ret InvalidSyntax }
     var p = init(tree, source)
     ret parse_file(&p)
 }
 
 fn validate(source: str) -> err {
+    var nodes: [16]syntax.Node = zero
+    var children: [64]syntax.Child = zero
     var tree: Tree = zero
+    try init_tree(&tree, nodes[..], children[..])
     ret parse(&tree, source)
 }
