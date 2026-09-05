@@ -698,11 +698,6 @@ fn parse_type_parameter_node(p: *Parser) -> err {
                 try skip_soft(p)
                 try require(p, .PunctColon)
                 try skip_soft(p)
-                if p.current.kind == .PunctEllipsis {
-                    try advance(p)
-                    try add_node(p, .Parameter, token_start, p.token_index)
-                    ret ok
-                }
             }
         }
         var has_type_node = false
@@ -1064,7 +1059,8 @@ fn parse_tuple_assignment_statement(p: *Parser) -> err {
     try advance(p)
     if !is_assignment_op(p.current.kind) { ret InvalidSyntax }
     try advance(p)
-    let initializer_has_node = p.current.kind != .KwZero && p.current.kind != .KwUndef
+    if p.current.kind == .KwUndef { ret InvalidSyntax }
+    let initializer_has_node = p.current.kind != .KwZero
     try parse_initializer_node(p)
     if initializer_has_node {
         if nested_count == nested.len { ret InvalidSyntax }
@@ -1088,7 +1084,8 @@ fn parse_expression_statement(p: *Parser) -> err {
     if is_assignment_op(p.current.kind) {
         if !is_assignment_target_kind(p.tree.nodes[p.last_node].kind) { ret InvalidSyntax }
         try advance(p)
-        let initializer_has_node = p.current.kind != .KwZero && p.current.kind != .KwUndef
+        if p.current.kind == .KwUndef { ret InvalidSyntax }
+        let initializer_has_node = p.current.kind != .KwZero
         try parse_initializer_node(p)
         if initializer_has_node {
             nested[nested_count] = p.last_node

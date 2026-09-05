@@ -198,6 +198,8 @@ fn self_test() -> err {
     if tree.nodes[11usize].kind != .NamedType || tree.nodes[12usize].kind != .Parameter { ret lex.InvalidSource }
     if tree.nodes[13usize].kind != .NamedType || tree.nodes[14usize].kind != .ReturnSpec { ret lex.InvalidSource }
     if tree.nodes[15usize].kind != .FunctionType || tree.nodes[16usize].kind != .TypeDecl { ret lex.InvalidSource }
+    let named_function_type_variadic_error = parse.validate("type Bad = fn(args: ...)\n")
+    if named_function_type_variadic_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let soft_type_error = parse.parse(&tree, "type Soft = struct {\n    value\n    :\n    i32,\n}\n")
     if soft_type_error != ok || tree.count != 5usize { ret lex.InvalidSource }
@@ -240,7 +242,7 @@ fn self_test() -> err {
     if tree.nodes[25usize].kind != .ReturnStmt || tree.nodes[26usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[27usize].kind != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
-    let initializer_error = parse.parse(&tree, "fn initializers() {\n    let (\n        a,\n        _,\n    ): Pair = make(\n    )\n    var bytes: []u8 = zero\n    a = try next()\n    bytes = undef\n}\n")
+    let initializer_error = parse.parse(&tree, "fn initializers() {\n    let (\n        a,\n        _,\n    ): Pair = make(\n    )\n    var bytes: []u8 = zero\n    a = try next()\n    bytes = zero\n}\n")
     if initializer_error != ok || tree.count != 18usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .Binding || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }
     if tree.nodes[3usize].kind != .NameExpr || tree.nodes[4usize].kind != .CallExpr { ret lex.InvalidSource }
@@ -251,6 +253,10 @@ fn self_test() -> err {
     if tree.nodes[13usize].kind != .AssignmentStmt || tree.nodes[14usize].kind != .NameExpr { ret lex.InvalidSource }
     if tree.nodes[15usize].kind != .AssignmentStmt || tree.nodes[16usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[17usize].kind != .FnDecl { ret lex.InvalidSource }
+    let undef_assignment_error = parse.validate("fn invalid() {\n    value = undef\n}\n")
+    if undef_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let undef_tuple_assignment_error = parse.validate("fn invalid() {\n    (left, right) = undef\n}\n")
+    if undef_tuple_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let local_type_error = parse.parse(&tree, "fn local_types() {\n    let pointer: *const []shared u8 = zero\n    let array: [size + 1usize]Point = zero\n    let callback: extern fn(\n        ctx: *Ctx,\n        ...,\n    ) -> (i32, err) = zero\n}\n")
     if local_type_error != ok || tree.count != 25usize { ret lex.InvalidSource }

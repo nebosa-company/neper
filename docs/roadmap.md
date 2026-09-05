@@ -244,7 +244,8 @@ arguments, including multiline lists, and recovery distinguishes a malformed
 attribute from a valid attribute on a malformed declaration. Attribute blocks now
 reject blank or comment-only gaps and cannot attach to `use`. Assignment parsing
 retains ordered multi-place targets, accepts multiline and trailing-comma forms, and
-rejects one-place pseudo-tuples and binary-expression targets. Soft newlines are now
+rejects one-place pseudo-tuples, binary-expression targets and storage-only `undef`
+values. Function types reject declaration-only named variadics. Soft newlines are now
 consumed only inside grammar-approved parentheses, brackets, literal bodies and type
 bodies; the lossless token stream retains them, block newlines stay hard, and parser
 recovery restores delimiter state after malformed nested syntax. The remaining
