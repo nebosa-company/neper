@@ -193,6 +193,8 @@ $qualifiedGenericChecked = & $compiler check-file (Join-Path $checkRoot 'generic
 if ($LASTEXITCODE -ne 0 -or $qualifiedGenericChecked -ne 'module check ok') { throw 'qualified generic source functions did not type-check' }
 $genericMultiChecked = & $compiler check-file (Join-Path $checkRoot 'generic_multi_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $genericMultiChecked -ne 'module check ok') { throw 'fallible generic source functions did not type-check' }
+$indexChecked = & $compiler check-file (Join-Path $checkRoot 'index_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $indexChecked -ne 'module check ok') { throw 'index and slice expressions did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -280,7 +282,19 @@ $checkFailures = @(
     @('generic_argument_kind', 'InvalidType'),
     @('generic_body_mismatch', 'InvalidReturn'),
     @('generic_integer_conflict', 'TypeMismatch'),
-    @('generic_partial_missing', 'MissingContext')
+    @('generic_partial_missing', 'MissingContext'),
+    @('index_type', 'TypeMismatch'),
+    @('index_non_indexable', 'InvalidOperator'),
+    @('index_count', 'ArgumentCount'),
+    @('index_empty', 'ArgumentCount'),
+    @('slice_bound_type', 'TypeMismatch'),
+    @('const_slice_assignment', 'ImmutableAssignment'),
+    @('array_parameter_assignment', 'ImmutableAssignment'),
+    @('string_assignment', 'ImmutableAssignment'),
+    @('pointer_index', 'InvalidOperator'),
+    @('len_non_indexable', 'InvalidOperator'),
+    @('const_pointer_assignment', 'ImmutableAssignment'),
+    @('array_slice_mutability', 'TypeMismatch')
 )
 foreach ($case in $checkFailures) {
     $checkOutput = & $compiler check-file (Join-Path $checkRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1

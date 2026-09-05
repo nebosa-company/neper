@@ -383,11 +383,15 @@ covering every `neper-0` allocation element form. Generic source functions now c
 `[T: type]` and `[N: usize]` parameters, bind explicit or structurally inferred trailing
 arguments, substitute composite signatures and symbolic array lengths, cache concrete
 instances, and check each instantiated body, including forwarded, fallible and qualified
-calls. Wider intermediate arithmetic, bitwise, shift and wrapping constant operators,
-indexing and aggregate literals remain outside the `check-file` checkpoint. Unsupported
-expression and statement
+calls. Array, slice and `str` indices and slice bounds take `usize` context; `.len`, open
+ranges, pointee-aware slice mutability, indexed address-of, element assignment and
+explicit-dereference assignment use the same place rules. Typed `zero`/`undef`
+initializers inherit their declared context. Wider intermediate arithmetic, bitwise,
+shift and wrapping constant operators and aggregate literals remain outside the
+`check-file` checkpoint. Unsupported expression and statement
 forms fail explicitly rather than being accepted unchecked. The next type-checking
-increments replace those boundaries with remaining control flow and full generic checking.
+increments replace those boundaries with remaining control flow, aggregate literals and
+declaration-time generic checks.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

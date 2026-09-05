@@ -2144,6 +2144,129 @@ fn call_is_fallible(c: *Checker, call: CallInfo) -> bool {
     ret last.kind == .Err
 }
 
+type BracketInfo = struct {
+    base: usize,
+    first: usize,
+    second: usize,
+    child_count: usize,
+    range: bool,
+}
+
+fn read_bracket(c: *Checker, tree: *parse.Tree, node: syntax.Node, info: *BracketInfo) -> err {
+    if node.kind != .BracketPostfix { ret parse.InvalidSyntax }
+    info.base = 0usize
+    info.first = 0usize
+    info.second = 0usize
+    info.child_count = 0usize
+    info.range = false
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if info.child_count == 0usize { info.base = child_index }
+            if info.child_count == 1usize { info.first = child_index }
+            if info.child_count == 2usize { info.second = child_index }
+            info.child_count += 1usize
+        }
+        at += 1usize
+    }
+    if info.child_count == 0usize { ret parse.InvalidSyntax }
+    let base = tree.nodes[info.base]
+    at = base.token_end
+    while at < node.token_end {
+        if c.tokens[at].kind == .PunctRange { info.range = true }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn index_element_type(c: *Checker, base: Type, module_index: usize) -> (Type, err) {
+    if base.kind == .String { ret (make_type(.Integer, "u8", module_index), ok) }
+    if base.kind != .Array && base.kind != .Slice { ret (invalid_type(), InvalidOperator) }
+    if !base.has_element || base.element >= c.type_count { ret (invalid_type(), InvalidType) }
+    ret (c.types[base.element], ok)
+}
+
+fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
+    let node = tree.nodes[node_index]
+    if node.kind == .NameExpr {
+        let token = c.tokens[node.token_start]
+        if token.kind != .Identifier { ret (false, Unsupported) }
+        let name = g.modules[module_index].text[token.start..token.end]
+        let (local_index, found) = find_local(c, name)
+        if !found { ret (false, Unsupported) }
+        ret (c.locals[local_index].mutable, ok)
+    }
+    if node.kind == .UnaryExpr && c.tokens[node.token_start].kind == .PunctStar {
+        let (child_index, found) = first_node_child(tree, node)
+        if !found { ret (false, parse.InvalidSyntax) }
+        let (pointer, pointer_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+        if pointer_error != ok { ret (false, pointer_error) }
+        if pointer.kind != .Pointer { ret (false, InvalidOperator) }
+        ret (!pointer.is_const, ok)
+    }
+    if node.kind == .BracketPostfix {
+        var bracket: BracketInfo = zero
+        let bracket_error = read_bracket(c, tree, node, &bracket)
+        if bracket_error != ok { ret (false, bracket_error) }
+        if bracket.range || bracket.child_count != 2usize { ret (false, Unsupported) }
+        let (base, base_error) = check_expr(c, g, tree, module_index, bracket.base, invalid_type())
+        if base_error != ok { ret (false, base_error) }
+        if base.kind == .Slice { ret (!base.is_const, ok) }
+        if base.kind == .String { ret (false, ok) }
+        if base.kind != .Array { ret (false, InvalidOperator) }
+        let (mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, bracket.base)
+        ret (mutable, mutable_error)
+    }
+    ret (false, Unsupported)
+}
+
+fn check_bracket_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, expected: Type) -> (Type, err) {
+    var bracket: BracketInfo = zero
+    let bracket_error = read_bracket(c, tree, node, &bracket)
+    if bracket_error != ok { ret (invalid_type(), bracket_error) }
+    let (base, base_error) = check_expr(c, g, tree, module_index, bracket.base, invalid_type())
+    if base_error != ok { ret (invalid_type(), base_error) }
+    let (element, element_error) = index_element_type(c, base, module_index)
+    if element_error != ok { ret (invalid_type(), element_error) }
+    let index_type = make_type(.Integer, "usize", module_index)
+    if bracket.range {
+        if bracket.child_count > 3usize { ret (invalid_type(), ArgumentCount) }
+        if bracket.child_count >= 2usize {
+            let (_, first_error) = check_expr(c, g, tree, module_index, bracket.first, index_type)
+            if first_error != ok { ret (invalid_type(), first_error) }
+        }
+        if bracket.child_count == 3usize {
+            let (_, second_error) = check_expr(c, g, tree, module_index, bracket.second, index_type)
+            if second_error != ok { ret (invalid_type(), second_error) }
+        }
+        let (stored_element, store_error) = store_type(c, element)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        var result = make_type(.Slice, "", module_index)
+        result.element = stored_element
+        result.has_element = true
+        if base.kind == .String {
+            result.is_const = true
+        } else {
+            if base.kind == .Slice {
+                result.is_const = base.is_const
+            } else {
+                let (mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, bracket.base)
+                if mutable_error != ok { ret (invalid_type(), mutable_error) }
+                result.is_const = !mutable
+            }
+        }
+        let (contextual, context_error) = apply_context(c, result, expected)
+        ret (contextual, context_error)
+    }
+    if bracket.child_count != 2usize { ret (invalid_type(), ArgumentCount) }
+    let (_, index_error) = check_expr(c, g, tree, module_index, bracket.first, index_type)
+    if index_error != ok { ret (invalid_type(), index_error) }
+    let (contextual, context_error) = apply_context(c, element, expected)
+    ret (contextual, context_error)
+}
+
 fn is_fallible(c: *Checker, function: Function) -> bool {
     if function.return_count == 0usize { ret false }
     let last = c.return_types[function.first_return + function.return_count - 1usize]
@@ -2155,6 +2278,10 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     let text = g.modules[module_index].text
     if node.kind == .LiteralExpr {
         let token = c.tokens[node.token_start]
+        if token.kind == .KwZero || token.kind == .KwUndef {
+            if expected.kind == .Invalid { ret (invalid_type(), MissingContext) }
+            ret (expected, ok)
+        }
         if token.kind == .KwNil {
             if expected.kind == .Pointer || expected.kind == .Slice { ret (expected, ok) }
             ret (invalid_type(), MissingContext)
@@ -2186,17 +2313,38 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     }
     if node.kind == .FieldExpr {
         let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
-        if !found_member { ret (invalid_type(), Unsupported) }
-        let (constant_index, constant_found) = find_constant(c, target_module, member)
-        if !constant_found || c.constants[constant_index].state != 2u8 { ret (invalid_type(), Unsupported) }
-        let (constant_type, context_error) = apply_context(c, c.constants[constant_index].ty, expected)
-        ret (constant_type, context_error)
+        if found_member {
+            let (constant_index, constant_found) = find_constant(c, target_module, member)
+            if !constant_found || c.constants[constant_index].state != 2u8 { ret (invalid_type(), Unsupported) }
+            let (constant_type, context_error) = apply_context(c, c.constants[constant_index].ty, expected)
+            ret (constant_type, context_error)
+        }
+        let (base_index, has_base) = first_node_child(tree, node)
+        if !has_base { ret (invalid_type(), parse.InvalidSyntax) }
+        let base_node = tree.nodes[base_index]
+        var field = ""
+        var field_at = base_node.token_end
+        while field_at < node.token_end {
+            let field_token = c.tokens[field_at]
+            if field_token.kind == .Identifier { field = text[field_token.start..field_token.end] }
+            field_at += 1usize
+        }
+        if !same(field, "len") { ret (invalid_type(), Unsupported) }
+        let (base, base_error) = check_expr(c, g, tree, module_index, base_index, invalid_type())
+        if base_error != ok { ret (invalid_type(), base_error) }
+        if base.kind != .Array && base.kind != .Slice && base.kind != .String { ret (invalid_type(), InvalidOperator) }
+        let (length_type, context_error) = apply_context(c, make_type(.Integer, "usize", module_index), expected)
+        ret (length_type, context_error)
     }
     if node.kind == .GroupExpr {
         let (child_index, found) = first_node_child(tree, node)
         if !found { ret (invalid_type(), parse.InvalidSyntax) }
         let (group_type, group_error) = check_expr(c, g, tree, module_index, child_index, expected)
         ret (group_type, group_error)
+    }
+    if node.kind == .BracketPostfix {
+        let (result, result_error) = check_bracket_expr(c, g, tree, module_index, node, expected)
+        ret (result, result_error)
     }
     if node.kind == .UnaryExpr {
         let (child_index, found) = first_node_child(tree, node)
@@ -2211,17 +2359,30 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         }
         if op == .PunctAmp {
             let place = tree.nodes[child_index]
-            if place.kind != .NameExpr { ret (invalid_type(), Unsupported) }
-            let token = c.tokens[place.token_start]
-            let name = text[token.start..token.end]
-            let (local_index, local_found) = find_local(c, name)
-            if !local_found { ret (invalid_type(), Unsupported) }
-            let (element_index, store_error) = store_type(c, c.locals[local_index].ty)
+            var place_type = invalid_type()
+            var mutable = false
+            if place.kind == .NameExpr {
+                let token = c.tokens[place.token_start]
+                let name = text[token.start..token.end]
+                let (local_index, local_found) = find_local(c, name)
+                if !local_found { ret (invalid_type(), Unsupported) }
+                place_type = c.locals[local_index].ty
+                mutable = c.locals[local_index].mutable
+            } else {
+                if place.kind != .BracketPostfix && !(place.kind == .UnaryExpr && c.tokens[place.token_start].kind == .PunctStar) { ret (invalid_type(), Unsupported) }
+                let (resolved_place, place_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                if place_error != ok { ret (invalid_type(), place_error) }
+                place_type = resolved_place
+                let (place_mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, child_index)
+                if mutable_error != ok { ret (invalid_type(), mutable_error) }
+                mutable = place_mutable
+            }
+            let (element_index, store_error) = store_type(c, place_type)
             if store_error != ok { ret (invalid_type(), store_error) }
             var pointer = make_type(.Pointer, "", module_index)
             pointer.element = element_index
             pointer.has_element = true
-            pointer.is_const = !c.locals[local_index].mutable
+            pointer.is_const = !mutable
             let (result_type, context_error) = apply_context(c, pointer, expected)
             ret (result_type, context_error)
         }
@@ -2554,13 +2715,46 @@ fn check_try_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
 
 fn assignment_place_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
     let place = tree.nodes[node_index]
-    if place.kind != .NameExpr { ret (invalid_type(), Unsupported) }
-    let token = c.tokens[place.token_start]
-    let name = g.modules[module_index].text[token.start..token.end]
-    let (local_index, found) = find_local(c, name)
-    if !found { ret (invalid_type(), Unsupported) }
-    if !c.locals[local_index].mutable { ret (invalid_type(), ImmutableAssignment) }
-    ret (c.locals[local_index].ty, ok)
+    if place.kind == .NameExpr {
+        let token = c.tokens[place.token_start]
+        let name = g.modules[module_index].text[token.start..token.end]
+        let (local_index, found) = find_local(c, name)
+        if !found { ret (invalid_type(), Unsupported) }
+        if !c.locals[local_index].mutable { ret (invalid_type(), ImmutableAssignment) }
+        ret (c.locals[local_index].ty, ok)
+    }
+    if place.kind == .UnaryExpr && c.tokens[place.token_start].kind == .PunctStar {
+        let (child_index, found) = first_node_child(tree, place)
+        if !found { ret (invalid_type(), parse.InvalidSyntax) }
+        let (pointer, pointer_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+        if pointer_error != ok { ret (invalid_type(), pointer_error) }
+        if pointer.kind != .Pointer || pointer.is_const || !pointer.has_element || pointer.element >= c.type_count { ret (invalid_type(), ImmutableAssignment) }
+        let element = c.types[pointer.element]
+        if element.kind == .Void { ret (invalid_type(), InvalidOperator) }
+        ret (element, ok)
+    }
+    if place.kind == .BracketPostfix {
+        var bracket: BracketInfo = zero
+        let bracket_error = read_bracket(c, tree, place, &bracket)
+        if bracket_error != ok { ret (invalid_type(), bracket_error) }
+        if bracket.range || bracket.child_count != 2usize { ret (invalid_type(), Unsupported) }
+        let (base, base_error) = check_expr(c, g, tree, module_index, bracket.base, invalid_type())
+        if base_error != ok { ret (invalid_type(), base_error) }
+        let (element, element_error) = index_element_type(c, base, module_index)
+        if element_error != ok { ret (invalid_type(), element_error) }
+        let (_, index_error) = check_expr(c, g, tree, module_index, bracket.first, make_type(.Integer, "usize", module_index))
+        if index_error != ok { ret (invalid_type(), index_error) }
+        var mutable = false
+        if base.kind == .Slice { mutable = !base.is_const }
+        if base.kind == .Array {
+            let (place_mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, bracket.base)
+            if mutable_error != ok { ret (invalid_type(), mutable_error) }
+            mutable = place_mutable
+        }
+        if !mutable { ret (invalid_type(), ImmutableAssignment) }
+        ret (element, ok)
+    }
+    ret (invalid_type(), Unsupported)
 }
 
 fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {

@@ -217,8 +217,11 @@ functions now collect `[T: type]` and `[N: usize]` parameters, infer omitted tra
 arguments structurally, substitute through composite signatures and symbolic array
 lengths, cache concrete instances, and check each instantiated body. Explicit,
 inferred, partially inferred, forwarded, fallible and cross-module calls share the
-ordinary result paths. Indexing and aggregate literals remain outside this checkpoint.
-Unsupported expression
+ordinary result paths. Array, slice and `str` indices and slice bounds take `usize`
+context; `.len`, open ranges, pointee-aware slice mutability, indexed address-of, element
+assignment and explicit-dereference assignment are checked from the same place rules.
+Typed `zero`/`undef` initializers share their declared context. Aggregate literals remain
+outside this checkpoint. Unsupported expression
 and statement forms fail explicitly instead of being silently accepted; cross-platform
 fixtures freeze both the implemented behavior and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64

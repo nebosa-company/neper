@@ -22,6 +22,10 @@ fn choose[T: type, N: usize](value: T, values: [N]u8) -> T {
     ret value
 }
 
+fn first[T: type, N: usize](values: [N]T) -> T {
+    ret values[0]
+}
+
 fn from_slice[T: type](values: []T, fallback: T) -> T {
     ret fallback
 }
@@ -45,5 +49,6 @@ fn run(values: [4]u8, doubled: [8]u8, words: []u16, bytes: []u8, pointer: *u8, l
     let slice_type = identity[[]u8](bytes)
     let pointer_type = identity[*u8](pointer)
     let named_type = identity[Local](local)
+    let generic_index = first(values)
     ret explicit_length + inferred_length + expression_length
 }

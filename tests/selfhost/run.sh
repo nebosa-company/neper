@@ -274,6 +274,8 @@ qualified_generic_checked=$($test_build/neper-self check-file "$check_root/gener
 [ "$qualified_generic_checked" = 'module check ok' ]
 generic_multi_checked=$($test_build/neper-self check-file "$check_root/generic_multi_valid/src/main.e" "$repo" x64 linux)
 [ "$generic_multi_checked" = 'module check ok' ]
+index_checked=$($test_build/neper-self check-file "$check_root/index_valid/src/main.e" "$repo" x64 linux)
+[ "$index_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -373,6 +375,18 @@ expect_check_error generic_argument_kind InvalidType
 expect_check_error generic_body_mismatch InvalidReturn
 expect_check_error generic_integer_conflict TypeMismatch
 expect_check_error generic_partial_missing MissingContext
+expect_check_error index_type TypeMismatch
+expect_check_error index_non_indexable InvalidOperator
+expect_check_error index_count ArgumentCount
+expect_check_error index_empty ArgumentCount
+expect_check_error slice_bound_type TypeMismatch
+expect_check_error const_slice_assignment ImmutableAssignment
+expect_check_error array_parameter_assignment ImmutableAssignment
+expect_check_error string_assignment ImmutableAssignment
+expect_check_error pointer_index InvalidOperator
+expect_check_error len_non_indexable InvalidOperator
+expect_check_error const_pointer_assignment ImmutableAssignment
+expect_check_error array_slice_mutability TypeMismatch
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
 [ "$valid_scopes" = 'module resolve ok' ]
