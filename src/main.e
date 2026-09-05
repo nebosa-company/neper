@@ -1,5 +1,6 @@
 use e.io
 use e.mem
+use check
 use graph
 use lex
 use parse
@@ -740,6 +741,18 @@ fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
     ret resolve.init(resolver, symbols, tokens, locals)
 }
 
+fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
+    let (functions, functions_error) = mem.alloc[check.Function](a, 4096usize)
+    if functions_error != ok { ret functions_error }
+    let (parameters, parameters_error) = mem.alloc[check.Parameter](a, 32768usize)
+    if parameters_error != ok { ret parameters_error }
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
+    if tokens_error != ok { ret tokens_error }
+    let (locals, locals_error) = mem.alloc[check.Local](a, 16384usize)
+    if locals_error != ok { ret locals_error }
+    ret check.init(checker, functions, parameters, tokens, locals)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 2usize && same(args[1usize], "self-test") {
         try self_test()
@@ -813,6 +826,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module resolve ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file PATH TOOLCHAIN_ROOT ARCH OS\n")
+    if args.len == 6usize && same(args[1usize], "check-file") {
+        var loaded: graph.Graph = zero
+        try init_cli_graph(a, &loaded)
+        try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        var resolver: resolve.Resolver = zero
+        try init_cli_resolver(a, &resolver)
+        try resolve.collect(&resolver, &loaded)
+        var checker: check.Checker = zero
+        try init_cli_checker(a, &checker)
+        try check.run(&checker, &resolver, &loaded)
+        try io.print("module check ok\n")
+        ret ok
+    }
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file PATH TOOLCHAIN_ROOT ARCH OS\n")
     ret ok
 }

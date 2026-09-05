@@ -343,7 +343,15 @@ expression and type names, including forward module declarations, generic type a
 value parameters, binding initializers, loop bodies, switch cases and captures,
 top-level initializers and implicit deferred-statement scopes. It rejects unknown
 names and types, use before binding and references after a lexical scope ends on both
-hosts. Type checking is the next compiler increment.
+hosts. The first `src/check.e` increment now builds caller-owned function, parameter,
+token and local tables and checks scalar literal context, bindings, lexical inference,
+exact-type arithmetic and comparisons, conditions, return statements and guaranteed
+scalar returns through `if`, forward direct calls, argument arity and types,
+numeric casts, mutability and explicit `void`. Its
+`check-file` checkpoint rejects composite types, generic calls and unimplemented
+statement forms with `check.Unsupported` rather than accepting unchecked code. The
+next type-checking increments replace that explicit boundary with composite types,
+qualified calls, constants, remaining control flow and full generic checking.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

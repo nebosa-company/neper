@@ -164,6 +164,35 @@ $unknownTopLevel = & $compiler resolve-file (Join-Path $resolveRoot 'unknown_top
 if ($LASTEXITCODE -ne 1 -or ($unknownTopLevel -join "`n") -notmatch 'error: resolve\.UnknownName') { throw 'unknown top-level initializer name was not rejected' }
 $deferBindingScope = & $compiler resolve-file (Join-Path $resolveRoot 'defer_binding_scope\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($deferBindingScope -join "`n") -notmatch 'error: resolve\.UnknownName') { throw 'deferred single-statement binding escaped its implicit scope' }
+$checkRoot = Join-Path $PSScriptRoot 'fixtures\check'
+$checked = & $compiler check-file (Join-Path $checkRoot 'valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $checked -ne 'module check ok') { throw 'valid scalar program did not type-check' }
+$checkFailures = @(
+    @('missing_context', 'MissingContext'),
+    @('binding_mismatch', 'TypeMismatch'),
+    @('return_mismatch', 'InvalidReturn'),
+    @('condition_mismatch', 'InvalidCondition'),
+    @('argument_mismatch', 'TypeMismatch'),
+    @('argument_count', 'ArgumentCount'),
+    @('invalid_operator', 'InvalidOperator'),
+    @('numeric_mismatch', 'TypeMismatch'),
+    @('immutable_assignment', 'ImmutableAssignment'),
+    @('void_value', 'TypeMismatch'),
+    @('cast_untyped', 'MissingContext'),
+    @('cast_mismatch', 'TypeMismatch'),
+    @('bool_ordering', 'InvalidOperator'),
+    @('void_parameter', 'InvalidType'),
+    @('missing_return_value', 'InvalidReturn'),
+    @('missing_return', 'MissingReturn'),
+    @('compound_unsupported', 'Unsupported'),
+    @('unsupported', 'Unsupported')
+)
+foreach ($case in $checkFailures) {
+    $checkOutput = & $compiler check-file (Join-Path $checkRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($checkOutput -join "`n") -notmatch "error: check\.$($case[1])") {
+        throw "scalar type-check fixture $($case[0]) returned the wrong result"
+    }
+}
 $scopeRoot = Join-Path $PSScriptRoot 'fixtures\scope'
 $validScopes = & $compiler resolve-file (Join-Path $scopeRoot 'valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $validScopes -ne 'module resolve ok') { throw 'disjoint lexical scope reuse failed' }

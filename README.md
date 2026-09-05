@@ -179,6 +179,14 @@ expression and type name against its exact active scope, module declarations and
 builtin types. It rejects unknown names and types, use before binding and references
 after scope exit; generic type and value parameters, forward module declarations,
 switch captures and implicit deferred-statement scopes are covered on both hosts.
+`src/check.e` adds the first self-hosted type-checking checkpoint over caller-owned
+function, parameter, token and local storage. It checks scalar literal context,
+bindings, lexical inference, exact-type arithmetic and comparisons, conditions,
+return statements and guaranteed scalar returns through `if`, forward direct
+calls, argument arity and types, numeric casts, mutability and explicit `void`.
+Composite types, generic calls and the remaining statement forms
+return `check.Unsupported` instead of being silently accepted; cross-platform fixtures
+freeze both the implemented behavior and that temporary boundary.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

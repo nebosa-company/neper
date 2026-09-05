@@ -245,6 +245,39 @@ if unknown_top_level=$($test_build/neper-self resolve-file "$resolve_root/unknow
 case "$unknown_top_level" in *'error: resolve.UnknownName'*) ;; *) printf '%s\n' 'top-level initializer returned the wrong error' >&2; exit 1 ;; esac
 if defer_binding_scope=$($test_build/neper-self resolve-file "$resolve_root/defer_binding_scope/src/main.e" "$repo" x64 linux 2>&1); then printf '%s\n' 'deferred binding escaped its implicit scope' >&2; exit 1; fi
 case "$defer_binding_scope" in *'error: resolve.UnknownName'*) ;; *) printf '%s\n' 'deferred binding scope returned the wrong error' >&2; exit 1 ;; esac
+check_root="$repo/tests/selfhost/fixtures/check"
+checked=$($test_build/neper-self check-file "$check_root/valid/src/main.e" "$repo" x64 linux)
+[ "$checked" = 'module check ok' ]
+expect_check_error() {
+    fixture=$1
+    expected=$2
+    if check_output=$($test_build/neper-self check-file "$check_root/$fixture/src/main.e" "$repo" x64 linux 2>&1); then
+        printf '%s\n' "scalar type-check fixture $fixture unexpectedly succeeded" >&2
+        exit 1
+    fi
+    case "$check_output" in
+        *"error: check.$expected"*) ;;
+        *) printf '%s\n' "scalar type-check fixture $fixture returned the wrong result" >&2; exit 1 ;;
+    esac
+}
+expect_check_error missing_context MissingContext
+expect_check_error binding_mismatch TypeMismatch
+expect_check_error return_mismatch InvalidReturn
+expect_check_error condition_mismatch InvalidCondition
+expect_check_error argument_mismatch TypeMismatch
+expect_check_error argument_count ArgumentCount
+expect_check_error invalid_operator InvalidOperator
+expect_check_error numeric_mismatch TypeMismatch
+expect_check_error immutable_assignment ImmutableAssignment
+expect_check_error void_value TypeMismatch
+expect_check_error cast_untyped MissingContext
+expect_check_error cast_mismatch TypeMismatch
+expect_check_error bool_ordering InvalidOperator
+expect_check_error void_parameter InvalidType
+expect_check_error missing_return_value InvalidReturn
+expect_check_error missing_return MissingReturn
+expect_check_error compound_unsupported Unsupported
+expect_check_error unsupported Unsupported
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
 [ "$valid_scopes" = 'module resolve ok' ]
