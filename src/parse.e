@@ -249,21 +249,101 @@ fn scan_return_spec(p: *Parser, is_extern: bool) -> err {
     ret ok
 }
 
-fn parse_block_node(p: *Parser) -> err {
+fn is_assignment_op(kind: lex.Kind) -> bool {
+    ret kind == .PunctAssign || kind == .PunctAddAssign || kind == .PunctSubAssign || kind == .PunctMulAssign || kind == .PunctDivAssign || kind == .PunctRemAssign || kind == .PunctAddWrapAssign || kind == .PunctSubWrapAssign || kind == .PunctMulWrapAssign || kind == .PunctShiftLeftAssign || kind == .PunctShiftRightAssign || kind == .PunctBitAndAssign || kind == .PunctBitXorAssign || kind == .PunctBitOrAssign
+}
+
+fn statement_kind(p: *Parser) -> syntax.Kind {
+    let kind = p.current.kind
+    if kind == .KwLet || kind == .KwVar { ret .BindingStmt }
+    if kind == .KwRet { ret .ReturnStmt }
+    if kind == .KwTry { ret .TryStmt }
+    if kind == .KwDefer { ret .DeferStmt }
+    if kind == .KwBreak { ret .BreakStmt }
+    if kind == .KwContinue { ret .ContinueStmt }
+    if kind == .KwIf { ret .IfStmt }
+    if kind == .KwWhile { ret .WhileStmt }
+    if kind == .KwFor { ret .ForStmt }
+    if kind == .KwWhen { ret .WhenStmt }
+    if kind == .KwSwitch { ret .SwitchStmt }
+    if kind == .KwShared { ret .SharedVarStmt }
+    if kind == .PunctAt { ret .NocheckStmt }
+    if kind == .Identifier || kind == .KwUnreachable || kind == .PunctLParen || kind == .PunctStar { ret .CallStmt }
+    ret .ErrorNode
+}
+
+fn parse_statement_node(p: *Parser) -> err {
     let token_start = p.token_index
-    var depth = 0usize
-    if p.current.kind != .PunctLBrace { ret InvalidSyntax }
+    var node_kind = statement_kind(p)
+    var parens = 0usize
+    var brackets = 0usize
+    var braces = 0usize
+    if node_kind == .ErrorNode { ret InvalidSyntax }
     while true {
-        if p.current.kind == .Invalid || p.current.kind == .Eof { ret InvalidSyntax }
-        if p.current.kind == .PunctLBrace { depth += 1usize }
-        if p.current.kind == .PunctRBrace {
-            if depth == 0usize { ret InvalidSyntax }
-            depth = depth - 1usize
+        let kind = p.current.kind
+        if kind == .Invalid || kind == .Eof { ret InvalidSyntax }
+        if kind == .PunctRBrace && braces == 0usize {
+            if parens != 0usize || brackets != 0usize { ret InvalidSyntax }
+            break
+        }
+        if kind == .Newline && parens == 0usize && brackets == 0usize && braces == 0usize { break }
+        if is_assignment_op(kind) && node_kind == .CallStmt { node_kind = .AssignmentStmt }
+        if kind == .PunctLParen { parens += 1usize }
+        if kind == .PunctRParen {
+            if parens == 0usize { ret InvalidSyntax }
+            parens = parens - 1usize
+        }
+        if kind == .PunctLBracket { brackets += 1usize }
+        if kind == .PunctRBracket {
+            if brackets == 0usize { ret InvalidSyntax }
+            brackets = brackets - 1usize
+        }
+        if kind == .PunctLBrace { braces += 1usize }
+        if kind == .PunctRBrace {
+            if braces == 0usize { ret InvalidSyntax }
+            braces = braces - 1usize
         }
         try advance(p)
-        if depth == 0usize { break }
     }
-    try add_node(p, .Block, token_start, p.token_index)
+    if p.token_index == token_start { ret InvalidSyntax }
+    try add_node(p, node_kind, token_start, p.token_index)
+    ret ok
+}
+
+fn recover_statement(p: *Parser) -> err {
+    while p.current.kind != .Newline && p.current.kind != .PunctRBrace && p.current.kind != .Eof {
+        p.current = lex.next(&p.scanner)
+        p.token_index += 1usize
+    }
+    try skip_separators(p)
+    ret ok
+}
+
+fn parse_block_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [128]usize = zero
+    var nested_count = 0usize
+    try require(p, .PunctLBrace)
+    try skip_separators(p)
+    while p.current.kind != .PunctRBrace {
+        if p.current.kind == .Eof { ret InvalidSyntax }
+        let statement_start = p.token_index
+        let statement_error = parse_statement_node(p)
+        if statement_error != ok {
+            p.tree.errors += 1usize
+            var error_end = p.token_index
+            if p.current.kind == .Invalid || error_end == statement_start { error_end += 1usize }
+            try add_node(p, .ErrorNode, statement_start, error_end)
+            try recover_statement(p)
+        } else {
+            try skip_separators(p)
+        }
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    try advance(p)
+    try add_parent_node(p, .Block, token_start, p.token_index, nested[..nested_count])
     ret ok
 }
 

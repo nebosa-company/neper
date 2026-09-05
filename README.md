@@ -63,7 +63,10 @@ with original separator and EOF tokens, while malformed input produces recoverab
 parameters, return specifications, and blocks. The first `parse` command path
 exercises this lossless ordering and signature-level recovery. Type declarations
 now expose generic parameters, named/pointer/slice/array/function aliases, aggregate
-type nodes, struct/union fields, enum members, and tagged-union members.
+type nodes, struct/union fields, enum members, and tagged-union members. Function
+blocks now own classified binding, assignment, call, propagation, cleanup, control,
+return and compiler-directive statement nodes, with recovery contained inside the
+surrounding block.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

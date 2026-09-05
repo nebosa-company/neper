@@ -207,9 +207,13 @@ ordinary and variadic parameters, return specifications and their body into nest
 nodes; a malformed signature recovers at the next top-level newline barrier. Type
 declarations now parse generic parameters, aliases, struct and bare-union fields,
 enum members and tagged-union members into the corresponding frozen node kinds;
-empty enum bodies recover to the following declaration. Statement and expression
-productions and their inner recovery barriers remain the next parser increments;
-this callout does not mark the `neper-0` milestone complete.
+empty enum bodies recover to the following declaration. Function blocks now own
+classified binding, assignment, call, `try`, `defer`, control-flow, return,
+`@nocheck` and `shared var` statement nodes. A malformed statement becomes a nested
+`ErrorNode`, resumes at the next block newline and preserves both its enclosing
+`Block`/`FnDecl` and following statements. Expression nodes, bindings, switch arms
+and recursively parsed control-flow bodies remain the next parser increments; this
+callout does not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
