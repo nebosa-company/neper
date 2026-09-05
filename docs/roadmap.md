@@ -323,8 +323,10 @@ loaded fixture and verify stable missing-file propagation. This is a source-load
 checkpoint. The next discovery increment adds `src/project.e`: it finds the nearest
 ancestor containing `lib/` or `src/`, handles relative, POSIX and Windows path roots,
 and derives canonical dotted names for files below either source root while retaining
-the bare-name rule for an explicitly named file outside them. Target-variant selection
-and transitive import traversal remain to complete the project/module pipeline.
+the bare-name rule for an explicitly named file outside them. It now selects a matching
+OS or architecture variant ahead of the plain module, rejects simultaneous matches and
+handles nested module paths. Transitive import traversal remains to complete the
+project/module pipeline.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

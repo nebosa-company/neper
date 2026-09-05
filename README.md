@@ -157,7 +157,9 @@ while moving between allocations, closes the file on every result path, and supp
 `scan-file` and `parse-file` CLI checkpoints without a compiler-side source-size cap.
 `src/project.e` now finds the nearest ancestor containing `lib/` or `src/` and derives
 canonical module names for project-root and explicitly named outside-root files,
-including mixed Windows/POSIX separators and relative paths.
+including mixed Windows/POSIX separators and relative paths. It also selects complete
+OS- or architecture-specific module files ahead of their plain fallback and rejects
+a target for which both variants match.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

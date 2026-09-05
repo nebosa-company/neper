@@ -4,6 +4,9 @@ use e.mem
 use e.os
 
 error InvalidPath
+error InvalidTarget
+error ModuleNotFound
+error AmbiguousVariant
 
 type Project = struct {
     root: str,
@@ -27,6 +30,16 @@ fn same(a: str, b: str) -> bool {
 fn path_byte_equal(a: u8, b: u8) -> bool {
     if is_separator(a) && is_separator(b) { ret true }
     ret a == b
+}
+
+fn path_equal(a: str, b: str) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if !path_byte_equal(a[i], b[i]) { ret false }
+        i += 1usize
+    }
+    ret true
 }
 
 fn parent(path: str) -> str {
@@ -109,6 +122,22 @@ fn without_extension(path: str) -> (str, err) {
     ret (path[..path.len - 2usize], ok)
 }
 
+fn target_suffix(value: str) -> bool {
+    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none") || same(value, "x64") || same(value, "x86") || same(value, "aarch64") || same(value, "spv") || same(value, "ptx")
+}
+
+fn without_target_suffix(stem: str) -> str {
+    var at = stem.len
+    while at > 0usize {
+        at = at - 1usize
+        if stem[at] == 46u8 {
+            if target_suffix(stem[at + 1usize..]) { ret stem[..at] }
+            ret stem
+        }
+    }
+    ret stem
+}
+
 fn basename(path: str) -> str {
     var at = path.len
     while at > 0usize && !is_separator(path[at - 1usize]) {
@@ -133,8 +162,11 @@ fn module_name(a: *mem.Arena, project: Project, named_file: str) -> (str, err) {
             }
         }
     }
-    let (stem, extension_error) = without_extension(relative)
+    let (raw_stem, extension_error) = without_extension(relative)
     if extension_error != ok { ret ("", extension_error) }
+    let stem = without_target_suffix(raw_stem)
+    if without_target_suffix(stem).len != stem.len { ret ("", InvalidPath) }
+    if target_suffix(basename(stem)) { ret ("", InvalidPath) }
     if !under_source_root { ret (stem, ok) }
     let (name, allocation_error) = mem.alloc[u8](a, stem.len)
     if allocation_error != ok { ret ("", allocation_error) }
@@ -148,4 +180,198 @@ fn module_name(a: *mem.Arena, project: Project, named_file: str) -> (str, err) {
         i += 1usize
     }
     ret (name, ok)
+}
+
+fn valid_arch(arch: str) -> bool {
+    ret same(arch, "x64") || same(arch, "x86") || same(arch, "aarch64") || same(arch, "spv") || same(arch, "ptx")
+}
+
+fn valid_os(os: str) -> bool {
+    ret same(os, "windows") || same(os, "linux") || same(os, "macos") || same(os, "none")
+}
+
+fn valid_target(arch: str, os: str) -> bool {
+    if same(arch, "spv") || same(arch, "ptx") { ret same(os, "none") }
+    if same(os, "none") { ret false }
+    if same(arch, "x86") && same(os, "macos") { ret false }
+    ret true
+}
+
+fn module_parts(module: str) -> (str, str, err) {
+    if module.len == 0usize { ret ("", "", InvalidPath) }
+    var last_dot = module.len
+    var i = 0usize
+    var segment_start = 0usize
+    while i < module.len {
+        if module[i] == 46u8 {
+            if i == segment_start { ret ("", "", InvalidPath) }
+            last_dot = i
+            segment_start = i + 1usize
+        }
+        i += 1usize
+    }
+    if segment_start == module.len { ret ("", "", InvalidPath) }
+    if last_dot == module.len {
+        if target_suffix(module) { ret ("", "", InvalidPath) }
+        ret ("", module, ok)
+    }
+    let stem = module[last_dot + 1usize..]
+    if target_suffix(stem) { ret ("", "", InvalidPath) }
+    ret (module[..last_dot], stem, ok)
+}
+
+fn source_directory(a: *mem.Arena, root: str, source_root: str, module_prefix: str) -> (str, err) {
+    if root.len == 0usize || (!same(source_root, "lib") && !same(source_root, "src")) { ret ("", InvalidPath) }
+    var root_separator = 1usize
+    if root.len > 0usize && is_separator(root[root.len - 1usize]) { root_separator = 0usize }
+    var prefix_separator = 0usize
+    if module_prefix.len > 0usize { prefix_separator = 1usize }
+    let length = root.len + root_separator + source_root.len + prefix_separator + module_prefix.len
+    let (directory, allocation_error) = mem.alloc[u8](a, length)
+    if allocation_error != ok { ret ("", allocation_error) }
+    var at = 0usize
+    var i = 0usize
+    while i < root.len {
+        directory[at] = root[i]
+        at += 1usize
+        i += 1usize
+    }
+    if root_separator == 1usize {
+        directory[at] = 47u8
+        at += 1usize
+    }
+    i = 0usize
+    while i < source_root.len {
+        if is_separator(source_root[i]) || source_root[i] == 46u8 { ret ("", InvalidPath) }
+        directory[at] = source_root[i]
+        at += 1usize
+        i += 1usize
+    }
+    if prefix_separator == 1usize {
+        directory[at] = 47u8
+        at += 1usize
+    }
+    i = 0usize
+    while i < module_prefix.len {
+        if module_prefix[i] == 46u8 {
+            directory[at] = 47u8
+        } else {
+            directory[at] = module_prefix[i]
+        }
+        at += 1usize
+        i += 1usize
+    }
+    ret (directory, ok)
+}
+
+fn plain_source(name: str, stem: str) -> bool {
+    if name.len != stem.len + 2usize { ret false }
+    var i = 0usize
+    while i < stem.len {
+        if name[i] != stem[i] { ret false }
+        i += 1usize
+    }
+    ret name[stem.len] == 46u8 && name[stem.len + 1usize] == 101u8
+}
+
+fn variant_source(name: str, stem: str, suffix: str) -> bool {
+    if name.len != stem.len + suffix.len + 3usize { ret false }
+    var i = 0usize
+    while i < stem.len {
+        if name[i] != stem[i] { ret false }
+        i += 1usize
+    }
+    if name[stem.len] != 46u8 { ret false }
+    i = 0usize
+    while i < suffix.len {
+        if name[stem.len + 1usize + i] != suffix[i] { ret false }
+        i += 1usize
+    }
+    ret name[name.len - 2usize] == 46u8 && name[name.len - 1usize] == 101u8
+}
+
+fn source_path(a: *mem.Arena, directory: str, stem: str, suffix: str) -> (str, err) {
+    var suffix_length = 0usize
+    if suffix.len > 0usize { suffix_length = suffix.len + 1usize }
+    let length = directory.len + stem.len + suffix_length + 3usize
+    let (path, allocation_error) = mem.alloc[u8](a, length)
+    if allocation_error != ok { ret ("", allocation_error) }
+    var at = 0usize
+    var i = 0usize
+    while i < directory.len {
+        path[at] = directory[i]
+        at += 1usize
+        i += 1usize
+    }
+    path[at] = 47u8
+    at += 1usize
+    i = 0usize
+    while i < stem.len {
+        path[at] = stem[i]
+        at += 1usize
+        i += 1usize
+    }
+    if suffix.len > 0usize {
+        path[at] = 46u8
+        at += 1usize
+        i = 0usize
+        while i < suffix.len {
+            path[at] = suffix[i]
+            at += 1usize
+            i += 1usize
+        }
+    }
+    path[at] = 46u8
+    path[at + 1usize] = 101u8
+    ret (path, ok)
+}
+
+fn select_source(a: *mem.Arena, root: str, source_root: str, module: str, arch: str, os: str) -> (str, err) {
+    if !valid_arch(arch) || !valid_os(os) || !valid_target(arch, os) { ret ("", InvalidTarget) }
+    let checkpoint = mem.mark(a)
+    let (prefix, stem, parts_error) = module_parts(module)
+    if parts_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", parts_error)
+    }
+    let (directory, path_error) = source_directory(a, root, source_root, prefix)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", path_error)
+    }
+    let (entries, directory_error) = os.readdir(a, directory)
+    if directory_error != ok {
+        mem.reset(a, checkpoint)
+        if directory_error == os.NotFound { ret ("", ModuleNotFound) }
+        ret ("", directory_error)
+    }
+    var has_plain = false
+    var has_arch = false
+    var has_os = false
+    for entry in entries {
+        if entry.kind == .File || entry.kind == .Symlink {
+            if plain_source(entry.name, stem) { has_plain = true }
+            if variant_source(entry.name, stem, arch) { has_arch = true }
+            if variant_source(entry.name, stem, os) { has_os = true }
+        }
+    }
+    mem.reset(a, checkpoint)
+    if has_arch && has_os { ret ("", AmbiguousVariant) }
+    let (stable_prefix, stable_stem, stable_parts_error) = module_parts(module)
+    if stable_parts_error != ok { ret ("", stable_parts_error) }
+    let (stable_directory, stable_path_error) = source_directory(a, root, source_root, stable_prefix)
+    if stable_path_error != ok { ret ("", stable_path_error) }
+    if has_arch {
+        let (selected, selected_error) = source_path(a, stable_directory, stable_stem, arch)
+        ret (selected, selected_error)
+    }
+    if has_os {
+        let (selected, selected_error) = source_path(a, stable_directory, stable_stem, os)
+        ret (selected, selected_error)
+    }
+    if has_plain {
+        let (selected, selected_error) = source_path(a, stable_directory, stable_stem, "")
+        ret (selected, selected_error)
+    }
+    ret ("", ModuleNotFound)
 }

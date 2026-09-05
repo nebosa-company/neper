@@ -759,6 +759,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("project file ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE\n")
+    if args.len == 8usize && same(args[1usize], "select-file") {
+        let (selected, selection_error) = project.select_source(a, args[2usize], args[3usize], args[4usize], args[5usize], args[6usize])
+        if selection_error != ok { ret selection_error }
+        if !project.path_equal(selected, args[7usize]) { ret project.InvalidPath }
+        try io.print("source variant ok\n")
+        ret ok
+    }
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH\n")
     ret ok
 }

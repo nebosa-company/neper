@@ -45,6 +45,79 @@ case "$invalid_module" in
     *'error: project.InvalidPath'*) ;;
     *) printf '%s\n' 'non-source module path returned the wrong error' >&2; exit 1 ;;
 esac
+variant_root="$repo/tests/selfhost/fixtures/variants"
+variant_module=$($test_build/neper-self project-file "$variant_root/src/system.windows.e" "$variant_root" system)
+[ "$variant_module" = 'project file ok' ]
+nested_variant_module=$($test_build/neper-self project-file "$variant_root/src/nested/codec.aarch64.e" "$variant_root" nested.codec)
+[ "$nested_variant_module" = 'project file ok' ]
+windows_variant=$($test_build/neper-self select-file "$variant_root" src system x64 windows "$variant_root/src/system.windows.e")
+[ "$windows_variant" = 'source variant ok' ]
+linux_variant=$($test_build/neper-self select-file "$variant_root" src system x86 linux "$variant_root/src/system.linux.e")
+[ "$linux_variant" = 'source variant ok' ]
+plain_fallback=$($test_build/neper-self select-file "$variant_root" src system x64 macos "$variant_root/src/system.e")
+[ "$plain_fallback" = 'source variant ok' ]
+arch_variant=$($test_build/neper-self select-file "$variant_root" src architecture x64 linux "$variant_root/src/architecture.x64.e")
+[ "$arch_variant" = 'source variant ok' ]
+nested_variant=$($test_build/neper-self select-file "$variant_root" src nested.codec aarch64 macos "$variant_root/src/nested/codec.aarch64.e")
+[ "$nested_variant" = 'source variant ok' ]
+device_variant=$($test_build/neper-self select-file "$variant_root" src device spv none "$variant_root/src/device.none.e")
+[ "$device_variant" = 'source variant ok' ]
+if ambiguous_variant=$($test_build/neper-self select-file "$variant_root" src ambiguous x64 windows '' 2>&1); then
+    printf '%s\n' 'ambiguous target source variants unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$ambiguous_variant" in
+    *'error: project.AmbiguousVariant'*) ;;
+    *) printf '%s\n' 'ambiguous target source variants returned the wrong error' >&2; exit 1 ;;
+esac
+if missing_variant=$($test_build/neper-self select-file "$variant_root" src missing x64 windows '' 2>&1); then
+    printf '%s\n' 'missing target source module unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$missing_variant" in
+    *'error: project.ModuleNotFound'*) ;;
+    *) printf '%s\n' 'missing target source module returned the wrong error' >&2; exit 1 ;;
+esac
+if invalid_target=$($test_build/neper-self select-file "$variant_root" src system riscv64 linux '' 2>&1); then
+    printf '%s\n' 'invalid source target unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$invalid_target" in
+    *'error: project.InvalidTarget'*) ;;
+    *) printf '%s\n' 'invalid source target returned the wrong error' >&2; exit 1 ;;
+esac
+if invalid_target_pair=$($test_build/neper-self select-file "$variant_root" src system x86 macos '' 2>&1); then
+    printf '%s\n' 'invalid architecture/OS pair unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$invalid_target_pair" in
+    *'error: project.InvalidTarget'*) ;;
+    *) printf '%s\n' 'invalid architecture/OS pair returned the wrong error' >&2; exit 1 ;;
+esac
+if invalid_source_root=$($test_build/neper-self select-file "$variant_root" source system x64 windows '' 2>&1); then
+    printf '%s\n' 'invalid source-root name unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$invalid_source_root" in
+    *'error: project.InvalidPath'*) ;;
+    *) printf '%s\n' 'invalid source-root name returned the wrong error' >&2; exit 1 ;;
+esac
+if reserved_module=$($test_build/neper-self project-file "$variant_root/src/windows.e" "$variant_root" '' 2>&1); then
+    printf '%s\n' 'reserved target module name unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$reserved_module" in
+    *'error: project.InvalidPath'*) ;;
+    *) printf '%s\n' 'reserved target module name returned the wrong error' >&2; exit 1 ;;
+esac
+if compound_variant=$($test_build/neper-self project-file "$variant_root/src/system.x64.windows.e" "$variant_root" '' 2>&1); then
+    printf '%s\n' 'compound target source suffix unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$compound_variant" in
+    *'error: project.InvalidPath'*) ;;
+    *) printf '%s\n' 'compound target source suffix returned the wrong error' >&2; exit 1 ;;
+esac
 capacity_source=''
 i=0
 while [ "$i" -lt 260 ]; do
