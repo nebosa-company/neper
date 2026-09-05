@@ -642,6 +642,8 @@ fn self_test() -> err {
     if empty_switch_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let inline_switch_arm_error = validate_test_parse("fn invalid() {\n    switch value {\n    default: ret\n    }\n}\n")
     if inline_switch_arm_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let inline_switch_close_error = validate_test_parse("fn invalid() {\n    switch value {\n    default:\n        ret }\n}\n")
+    if inline_switch_close_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let block_error = parse.parse(&tree, "fn recover() {\n    use bad\n    ret\n}\nerror Good\n")
     if block_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 6usize { ret lex.InvalidSource }

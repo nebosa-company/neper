@@ -1264,6 +1264,7 @@ fn parse_switch_arm_node(p: *Parser) -> err {
             try add_node(p, .ErrorNode, statement_start, error_end)
             try recover_statement(p)
         } else {
+            if p.current.kind != .Newline { ret InvalidSyntax }
             try skip_separators(p)
         }
     }

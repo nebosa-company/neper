@@ -266,6 +266,8 @@ block, `@nocheck` owns a validated directive block, `shared var` owns its type a
 optional initializer, and `break`/`continue` reject trailing syntax. `switch` now
 owns its subject and ordered `SwitchArm` children; arms retain multiple case
 expressions, optional captures, recursive statements and local error recovery.
+Both the colon and the final successful arm statement require their grammar-mandated
+physical newline; the closing brace cannot share the statement line.
 Module `const`/`var` declarations now retain type and initializer trees, including
 the special variable initializer forms, and failed top-level parses transactionally
 discard partial nodes before recovery. Attributes now retain ordered expression
