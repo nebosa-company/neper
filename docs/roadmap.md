@@ -194,8 +194,13 @@ The C99 bootstrap now loads transitive modules from the nearest project's `lib/`
 functions, types, constants and errors, rejects duplicate qualifiers and import
 cycles, and attributes diagnostics to their source file. `tests/selfhost/run.*`
 covers that module boundary, including a nested aliased module and an invalid
-imported module, on Windows and Linux. The next self-hosted front-end increment is
-the parser; this callout does not mark the `neper-0` milestone complete.
+imported module, on Windows and Linux. The parser foundation now lives in
+`src/parse.e` alongside the exact 54-kind grammar revision 1 registry in
+`src/syntax.e`. It owns the reusable token cursor, frames imports, attributes and
+top-level declarations, validates balanced declaration delimiters, and exposes the
+first self-hosted `parse` command. Production-specific syntax trees and recovery
+nodes remain the next parser increments; this callout does not mark the `neper-0`
+milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

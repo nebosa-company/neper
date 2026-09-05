@@ -12,6 +12,8 @@ lexer=$($test_build/neper-self self-test)
 [ "$lexer" = 'selfhost lexer ok' ]
 scan=$($test_build/neper-self scan 'fn main() -> err { ret ok }')
 [ "$scan" = 'scan ok' ]
+parse=$($test_build/neper-self parse 'fn main() -> err { ret ok }')
+[ "$parse" = 'parse ok' ]
 if invalid=$($test_build/neper-self scan '#' 2>&1); then
     printf '%s\n' 'invalid source unexpectedly succeeded' >&2
     exit 1
@@ -19,6 +21,14 @@ fi
 case "$invalid" in
     *lex.InvalidSource*) ;;
     *) printf '%s\n' 'invalid source returned the wrong error' >&2; exit 1 ;;
+esac
+if invalid_parse=$($test_build/neper-self parse 'fn broken() -> err {' 2>&1); then
+    printf '%s\n' 'invalid syntax unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$invalid_parse" in
+    *parse.InvalidSyntax*) ;;
+    *) printf '%s\n' 'invalid syntax returned the wrong error' >&2; exit 1 ;;
 esac
 
 module_output=$($neper run "$repo/tests/selfhost/fixtures/modules/src/main.e" \

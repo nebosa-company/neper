@@ -13,9 +13,15 @@ $lexer = & $compiler self-test
 if ($LASTEXITCODE -ne 0 -or $lexer -ne 'selfhost lexer ok') { throw 'self-hosted lexer behavior failed' }
 $scan = & $compiler scan 'fn main() -> err { ret ok }'
 if ($LASTEXITCODE -ne 0 -or $scan -ne 'scan ok') { throw 'self-hosted compiler scan command failed' }
+$parse = & $compiler parse 'fn main() -> err { ret ok }'
+if ($LASTEXITCODE -ne 0 -or $parse -ne 'parse ok') { throw 'self-hosted compiler parse command failed' }
 $invalid = & $compiler scan '#' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($invalid -join "`n") -notmatch 'lex.InvalidSource') {
     throw 'self-hosted compiler invalid-source result failed'
+}
+$invalidParse = & $compiler parse 'fn broken() -> err {' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($invalidParse -join "`n") -notmatch 'parse.InvalidSyntax') {
+    throw 'self-hosted compiler invalid-syntax result failed'
 }
 
 $moduleFixture = Join-Path $PSScriptRoot 'fixtures\modules\src\main.e'

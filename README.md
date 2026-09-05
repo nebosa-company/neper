@@ -55,6 +55,9 @@ spans, normalized newlines, comments, keywords, numeric and string forms, and
 longest-match punctuation. The bootstrap now loads transitive project modules,
 resolves explicit import aliases and qualified declarations, rejects import cycles
 and duplicate qualifiers, and reports diagnostics against the originating file.
+The self-hosted front end also declares the frozen 54-kind syntax-node registry in
+`src/syntax.e`; `src/parse.e` provides the shared token cursor, top-level declaration
+and attribute framing, delimiter validation, and the first `parse` command path.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

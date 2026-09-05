@@ -1,6 +1,7 @@
 use e.io
 use e.mem
 use lex
+use parse
 
 fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize, column: usize) -> err {
     let current = lex.next(s)
@@ -64,6 +65,14 @@ fn self_test() -> err {
     if invalid_escape != lex.InvalidSource { ret lex.InvalidSource }
     let invalid_tab = lex.validate("fn\tmain")
     if invalid_tab != lex.InvalidSource { ret lex.InvalidSource }
+
+    let parser_source = "use e.mem\nuse util.math as calc\nerror Failed\ntype Item = struct { value: i32, }\nfn read(item: Item) -> i32 {\n    ret item.value\n}\n"
+    let (summary, parser_error) = parse.parse(parser_source)
+    if parser_error != ok || summary.root != .File || summary.declarations != 5usize {
+        ret lex.InvalidSource
+    }
+    let syntax_error = parse.validate("fn broken() -> err {\n    ret ok\n")
+    if syntax_error != parse.InvalidSyntax { ret lex.InvalidSource }
     ret ok
 }
 
@@ -89,6 +98,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("scan ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan SOURCE\n")
+    if args.len == 3usize && same(args[1usize], "parse") {
+        let parse_error = parse.validate(args[2usize])
+        if parse_error != ok { ret parse_error }
+        try io.print("parse ok\n")
+        ret ok
+    }
+    try io.print("usage: neper-self scan|parse SOURCE\n")
     ret ok
 }
