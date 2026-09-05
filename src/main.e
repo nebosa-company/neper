@@ -4,6 +4,8 @@ use e.os
 use check
 use graph
 use lex
+use lower
+use nir
 use parse
 use project
 use resolve
@@ -717,6 +719,7 @@ fn self_test() -> err {
     try parse.init_tree(&tiny, tiny_nodes[..], tiny_children[..])
     let capacity_error = parse.parse(&tiny, "error Full\n")
     if capacity_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    try nir.self_test()
     ret ok
 }
 
@@ -798,6 +801,18 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     try check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
     try check.init_aggregates(checker, aggregates, aggregate_fields)
     ret check.init_control(checker, checked_switches)
+}
+
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder) -> err {
+    let (functions, functions_error) = mem.alloc[nir.Function](a, 1024usize)
+    if functions_error != ok { ret functions_error }
+    let (blocks, blocks_error) = mem.alloc[nir.Block](a, 8192usize)
+    if blocks_error != ok { ret blocks_error }
+    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, 32768usize)
+    if instructions_error != ok { ret instructions_error }
+    let (operands, operands_error) = mem.alloc[usize](a, 131072usize)
+    if operands_error != ok { ret operands_error }
+    ret nir.init(builder, functions, blocks, instructions, operands)
 }
 
 fn write_all(file: os.File, text: str) -> err {
@@ -1089,6 +1104,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module check ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file PATH TOOLCHAIN_ROOT ARCH OS\n")
+    if args.len == 6usize && same(args[1usize], "nir-file") {
+        var loaded: graph.Graph = zero
+        try init_cli_graph(a, &loaded)
+        try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        var resolver: resolve.Resolver = zero
+        try init_cli_resolver(a, &resolver)
+        let resolve_error = resolve.collect(&resolver, &loaded)
+        if resolve_error != ok {
+            try print_resolve_diagnostic(&loaded, &resolver, resolve_error)
+            os.exit(1i32)
+            ret ok
+        }
+        var checker: check.Checker = zero
+        try init_cli_checker(a, &checker)
+        let check_error = check.run(&checker, &resolver, &loaded)
+        if check_error != ok {
+            if checker.diagnostic_count == 0usize {
+                try print_check_diagnostic(&loaded, &checker)
+            } else {
+                var diagnostic_at = 0usize
+                while diagnostic_at < checker.diagnostic_count {
+                    select_check_diagnostic(&checker, checker.diagnostics[diagnostic_at])
+                    try print_check_diagnostic(&loaded, &checker)
+                    diagnostic_at += 1usize
+                }
+            }
+            os.exit(1i32)
+            ret ok
+        }
+        var builder: nir.Builder = zero
+        try init_cli_nir(a, &builder)
+        try lower.module(&checker, &loaded, 0usize, &builder)
+        try io.print("module nir ok\n")
+        ret ok
+    }
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file PATH TOOLCHAIN_ROOT ARCH OS\n")
     ret ok
 }

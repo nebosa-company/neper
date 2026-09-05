@@ -248,6 +248,8 @@ case "$defer_binding_scope" in *'error: resolve.UnknownName'*) ;; *) printf '%s\
 check_root="$repo/tests/selfhost/fixtures/check"
 checked=$($test_build/neper-self check-file "$check_root/valid/src/main.e" "$repo" x64 linux)
 [ "$checked" = 'module check ok' ]
+lowered=$($test_build/neper-self nir-file "$repo/lib/e/io.e" "$repo" x64 linux)
+[ "$lowered" = 'module nir ok' ]
 composite_checked=$($test_build/neper-self check-file "$check_root/composite_valid/src/main.e" "$repo" x64 linux)
 [ "$composite_checked" = 'module check ok' ]
 qualified_checked=$($test_build/neper-self check-file "$check_root/qualified_valid/src/main.e" "$repo" x64 linux)
