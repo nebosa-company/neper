@@ -145,6 +145,7 @@ before proposing a language change.
 | GP-12 | Multi-package application | Reproducible vendoring, checksums, transitive resolution, namespace composition, licences and clean-room rebuilds |
 | GP-13 | Binary format reader/writer | Endianness, packed/external layout, bounds checks, zero-copy slices, malformed files and round trips |
 | GP-14 | Image or audio transform pipeline | Large buffers, staged arenas, native library interop, parallel work and sustained memory bounds |
+| GP-15 | Declarative GPU desktop application | Embedded asset and DPI/theme/locale variants, frame-arena widgets, keyed state reconciliation, constraint layout, shaped text, ordered input, accessibility, deterministic animation, GPU presentation and headless snapshots |
 
 Each workload must have a written design before implementation identifying its arena
 topology, resource ownership, concurrency model, error representation, foreign

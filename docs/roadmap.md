@@ -21,6 +21,11 @@ interfaces, [`diagnostics.md`](diagnostics.md) owns stable diagnostic codes,
 in [`modules.md`](modules.md) explains that machine plan. A change that crosses these
 boundaries updates every affected document and fixture in the same change.
 
+The product commitment follows `modules.json`'s ordered delivery tiers. `core` gates
+the first stable CPU release. `extended` modules are stable only once independently
+delivered and do not delay that release. `experimental` APIs carry no compatibility
+promise. Dependency layers remain an orthogonal implementation constraint.
+
 ## S0 — Specification, API and harness freeze
 
 This is documentation and test-data work only. It precedes compiler implementation
@@ -39,10 +44,11 @@ models.
 - Validate every tooling record and document against
   `schemas/neper-v1.schema.json`. Add sequence, key-order, sorting, lossless-source,
   recovery and cross-record tests for constraints JSON Schema cannot express.
-- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 68
+- Freeze the one-heading/one-`neper`-fence API-extraction contract for all 107
   toolchain modules. Check that `modules.json`, `modules.md` and `module-apis.md`
-  contain the same names; that layers, direct dependencies, blockers, surfaces,
-  schedules and milestones are valid; and that the graph is acyclic. Keep the 30
+  contain the same names; that tiers are ordered, exhaustive and disjoint; that
+  layers, direct dependencies, blockers, surfaces, schedules and milestones are
+  valid; and that the graph is acyclic. Keep the 6
   `x.<owner>.*` entries classified as package reservations, never implicit modules.
 - Design GP-01 through GP-14 before implementation: contracts, expected module
   graphs, failure injection, portability targets, resource budgets, deterministic
@@ -319,8 +325,8 @@ S0 generated-code benchmark has been rerun with no unexplained regression.
   instantiating module's `.em` with module-local linkage; the own linker folds
   copies by content hash
 - M2 library set from the machine plan: `e.data.deque`, `e.data.ring`,
-  `e.data.heap`, `e.data.tree`, `algo.rand`, `algo.uuid`, `algo.hash`, `e.fs`,
-  `e.proc`, `e.sync`, `e.channel`, `e.debug`, `e.metrics`, `e.log`, `e.cli`,
+  `e.data.heap`, `algo.rand`, `algo.uuid`, `algo.hash`, `algo.bitset`, `e.fs`,
+  `e.proc`, `e.sync`, `e.channel`,
   `fmt.json`, `fmt.csv` and `fmt.ini`, with the exact frozen APIs and only their
   declared direct dependencies
 - Module-plan validation in CI: source imports are a subset of each module's
@@ -416,7 +422,7 @@ GP-09/GP-10 have been rerun for every new applicable backend.
 
 ## Later toolchain-library waves — unnumbered
 
-The 32 entries with `schedule:"later"` and `milestone:null` in `modules.json` are
+The 75 entries with `schedule:"later"` and `milestone:null` in `modules.json` are
 real proposed toolchain modules, but this roadmap does not disguise them as part of
 M4, M5 or M6. They may begin when their declared dependencies exist. Before each
 wave starts, its `surface:"planned"` API is frozen; delivery requires tests, extracted
@@ -424,35 +430,56 @@ source/API equality and a same-change transition to `surface:"source"`.
 Their position here does not order them before M5 or M6; independent waves may run
 in parallel once their prerequisites and specifications are ready.
 
-- **Pure algorithms, text and cryptography:** `algo.stat`, `algo.bitset`,
-  `algo.complex`, `algo.bignum`,
+- **Extended containers and graph algorithms:** `e.data.tree`,
+  `e.data.disjoint_set`, `e.data.graph`, `e.data.slot_map` and `algo.graph`. Existing
+  collections gain deterministic non-mutating iterators; `e.data.heap` also gains
+  comparator/context and linear-time bulk construction. Graph delivery covers BFS,
+  DFS, deterministic topological sorting, weak/strong components and Dijkstra over
+  immutable CSR views.
+- **Extended pure algorithms, text and cryptography:** `algo.stat`, `algo.complex`,
+  `algo.decimal`, `algo.bignum`, `algo.deflate`,
   `algo.linalg.matrix`, `algo.linalg.tensor`, `text.utf8`, `text.unicode`,
-  `text.encoding`, `text.normalize`, `text.collate`, `text.regex`, `crypto.hash`, `crypto.aead`,
+  `text.encoding`, `text.normalize`, `text.collate`, `text.regex`, `text.locale`,
+  `crypto.hash`, `crypto.aead`,
   `crypto.sign`, `crypto.kx` and `crypto.random`. Preserve caller-owned allocation,
   caller-supplied entropy and the declared dependency edges. Cryptographic delivery
   requires published standard vectors, malformed-input cases and verification of
   every API that explicitly promises constant-time behavior.
-- **Host services and networking:** `text.io`, `e.task`, `e.time.calendar`, `e.tz`,
-  `e.async`, `e.net`, `e.net.http` and `e.net.ws`.
+- **Extended host and application services:** `text.io`, `e.task`, `e.time.calendar`, `e.tz`,
+  `e.fs.mmap`, `e.fs.watch`, `e.concurrent.queue`, `e.concurrent.map`, `e.debug`,
+  `e.metrics`, `e.log`, `e.cli`, `e.async`, `e.async.io`, `e.net`, `e.net.tls`,
+  `e.net.http` and `e.net.ws`.
   These build over the M1/M2 platform boundary and must demonstrate cancellation,
   backpressure, bounded buffers, partial I/O, deterministic shutdown and no hidden
   allocation or entropy. They unlock the GP-04 service workload.
-- **Interchange formats:** `fmt.yaml`, `fmt.xml`, `fmt.html`, `fmt.bson`, `fmt.msgpack`
-  and `fmt.protobuf`. These consume caller-provided slices/readers and writers, never
+- **Interchange formats:** `fmt.uri`, `fmt.mime`, `fmt.gzip`, `fmt.zstd`, `fmt.zip`,
+  `fmt.tar`, `fmt.yaml`, `fmt.xml`, `fmt.html`, `fmt.bson`, `fmt.msgpack` and
+  `fmt.protobuf`. These consume caller-provided slices/readers and writers, never
   open resources themselves, and require malformed, streaming, bounds and round-trip
   corpora in addition to API equality. `fmt.html` additionally runs the pinned
   html5lib tokenizer and tree-construction fixtures for the WHATWG behavior frozen by
   that toolchain release.
-- **GPU composition:** `e.gpu.tensor` follows both M3 `e.gpu` and
-  `algo.linalg.tensor`; every operation remains an explicit queue submission and is
-  added to the applicable GP-10 matrix.
+- **Experimental collection conveniences:** `e.data.stack`, `e.data.queue` and
+  `e.data.linked` remain available for workload evaluation but have no compatibility
+  promise. `e.gpu.tensor` is likewise experimental, follows both M3 `e.gpu` and
+  extended `algo.linalg.tensor`, and keeps every operation as an explicit queue
+  submission. Promotion requires an applicable general-purpose workload and a
+  recorded compatibility decision.
+- **Experimental declarative GPU UI:** pure `gfx.geometry`, `gfx.paint`, `gfx.image`,
+  `text.shape`, `text.layout`, `ui.style` and `ui.layout` support `gfx.scene`,
+  `e.asset`, `ui.asset`, `ui.window`, `ui.input`, `ui.widget`, `ui.animation`,
+  `ui.accessibility`, `ui.testing` and `ui.app`. Delivery follows the staged vertical slice and exact
+  lifetime/reconciliation contracts in `ui-framework.md`; implementation remains
+  blocked on reviewed embedded-asset linking, native-window, GPU-presentation and
+  accessibility primitives.
+  GP-15 must pass before any module in this family is promoted.
 
-The 30 owner-qualified `x.*` reservations are versioned external packages, not a
+The 6 owner-qualified `x.*` reservations are actual vendor packages, not a
 fifth wave. Each gets a separate package specification only after its upstream API
 version, supported targets, ownership rules and licensing boundary are selected.
-`x.neper.locale` and the URI/MIME foundation of `x.neper.web` already have proposed
-package specifications; delivery still waits for pinned CLDR data and normal package
-verification. `e.tz` instead pins its IANA data to the toolchain version.
+`x.neper.*` is forbidden: Neper-owned locale, URI/MIME, TLS, compression, archive and
+time-zone facilities use toolchain namespaces and pin their standards/data snapshots
+to the toolchain version.
 
 ## M5 — Native Metal
 
@@ -476,11 +503,13 @@ M5's independent Metal backend. It is bundled as the portable `neper pacman` com
 the package manager remains outside compilation, and the compiler never accesses the
 network. The normative design is [`pacman.md`](pacman.md).
 
-- **P0, formats and resolution:** strict `project.yaml` subset, canonical
+- **P0, formats and resolution:** strict `project.yaml` subset including normalized
+  root asset declarations, canonical
   `project.lock`, SemVer 2.0 constraints, deterministic PubGrub resolution and
   explanations, module-export collision checks, language-version checks, and golden
   fixtures
-- **P1, local and offline:** path dependencies, global immutable content-addressed
+- **P1, local and offline:** deterministic asset hashing and read-only executable
+  embedding, path dependencies, global immutable content-addressed
   cache, atomic concurrent population, `sync --frozen --offline`, a read-only virtual
   package-module map, reproducible dependency source identities, and compiler build-
   manifest/cache integration. Every vendored root has the canonical
@@ -498,8 +527,8 @@ network. The normative design is [`pacman.md`](pacman.md).
   `task`, `vendor`, `publish`, `cache`, and `info`, all with the toolchain's versioned
   JSON output conventions, shared diagnostic registry, deterministic record ordering
   and schema validation
-- The public namespace policy reserves `e.*`, `algo.*`, `text.*`, `crypto.*`, and
-  `fmt.*` to the toolchain;
+- The public namespace policy reserves `e.*`, `algo.*`, `text.*`, `crypto.*`,
+  `fmt.*`, `gfx.*` and `ui.*` to the toolchain;
   registry packages normally export `x.<owner>.*`
 
 **Done when:** GP-12 passes; the same manifest and signed registry snapshot resolve to
@@ -524,9 +553,10 @@ when a relevant backend, ABI, module, package or protocol changes.
 | GP-05 database client, GP-08 plugin C ABI | M1 FFI, M4 dynamic linking and a selected external package/API |
 | GP-09 SIMD codec | M1 SIMD; rerun for each M4 CPU backend |
 | GP-10 CPU/GPU numerical work | M3; rerun for M4 PTX, M5 Metal and later `e.gpu.tensor` |
-| GP-11 terminal application | platform support plus a separately specified `x.neper.tui` package |
+| GP-11 terminal application | platform support plus a separately specified terminal package owned by its actual provider |
 | GP-12 multi-package application | M6 |
 | GP-14 image/audio pipeline | M2 concurrency, M4 target/FFI coverage and a separately specified media package |
+| GP-15 declarative GPU desktop app | experimental `e.asset`/`gfx.*`/`ui.*` family plus asset linking, native window, presentation and accessibility blockers |
 
 The four named release gates are cumulative:
 

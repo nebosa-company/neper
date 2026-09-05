@@ -1,6 +1,8 @@
 # neper module API catalogue
 
 Status: exact public-surface proposal for the toolchain modules in `modules.md`.
+Delivery commitment and presentation order come from `modules.json`'s `core`,
+`extended` and `experimental` tiers; this file remains dependency-layer ordered.
 Implementation has not started. Semantic details already fixed by `spec.md` remain
 authoritative; this file fixes names, public value shapes and signatures. A module
 implements no additional public declaration unless this file is amended.
@@ -15,7 +17,8 @@ Callback context is always explicit; there are no closures. Read-only slices are
 
 Qualified names in signatures resolve through that module's `direct_dependencies`
 in `modules.json`. They use the dependency's final segment except
-`linalg_tensor`, the explicit alias for `algo.linalg.tensor`; imports themselves are
+`linalg_tensor`, the explicit alias for `algo.linalg.tensor`; `ui.widget` additionally
+uses `layout` for `text.layout` and `ui_layout` for `ui.layout`. Imports themselves are
 not public declarations. The catalogue's declaration fragments intentionally omit
 function bodies and are not standalone modules.
 
@@ -208,8 +211,10 @@ accept unsigned integers only.
 ```neper
 type Sink = struct { ctx: *void, write: fn(ctx: *void, bytes: []const u8) -> err }
 type Builder = struct { arena: *mem.Arena, start: usize, len: usize, reserved: usize, sink: Sink, flushing: bool }
+type Split = struct { source: str, separator: str, off: usize, finished: bool }
 error NotOnTop
 error BadNumber
+error InvalidSeparator
 
 fn builder(a: *mem.Arena, cap: usize) -> (Builder, err)
 fn builder_to(a: *mem.Arena, cap: usize, sink: Sink) -> (Builder, err)
@@ -222,6 +227,33 @@ fn parse_i64(s: str) -> (i64, err)
 fn parse_u64(s: str) -> (u64, err)
 fn parse_f32(s: str) -> (f32, err)
 fn parse_f64(s: str) -> (f64, err)
+fn parse_i64_radix(s: str, radix: u8) -> (i64, err)
+fn parse_u64_radix(s: str, radix: u8) -> (u64, err)
+fn compare(x: str, y: str) -> i32
+fn compare_ascii_fold(x: str, y: str) -> i32
+fn starts_with(s: str, prefix: str) -> bool
+fn ends_with(s: str, suffix: str) -> bool
+fn contains(s: str, needle: str) -> bool
+fn find(s: str, needle: str) -> (usize, bool)
+fn find_from(s: str, needle: str, start: usize) -> (usize, bool)
+fn rfind(s: str, needle: str) -> (usize, bool)
+fn count(s: str, needle: str) -> usize
+fn trim(s: str) -> str
+fn trim_start(s: str) -> str
+fn trim_end(s: str) -> str
+fn trim_bytes(s: str, bytes: str) -> str
+fn split_once(s: str, separator: str) -> (str, str, bool)
+fn split(s: str, separator: str) -> (Split, err)
+fn split_next(it: *Split) -> (str, bool)
+fn lines(s: str) -> Split
+fn replace(a: *mem.Arena, s: str, needle: str, replacement: str) -> (str, err)
+fn repeat(a: *mem.Arena, s: str, count: usize) -> (str, err)
+fn ascii_lower_in_place(s: []u8)
+fn ascii_upper_in_place(s: []u8)
+fn is_ascii_space(b: u8) -> bool
+fn is_ascii_digit(b: u8) -> bool
+fn is_ascii_alpha(b: u8) -> bool
+fn is_ascii_alnum(b: u8) -> bool
 fn push(b: *Builder, s: str) -> err
 fn push_byte(b: *Builder, v: u8) -> err
 fn push_bool(b: *Builder, v: bool) -> err
@@ -245,6 +277,15 @@ fn push_f64(b: *Builder, v: f64) -> err
 fn push_f32_fixed(b: *Builder, v: f32, precision: u8) -> err
 fn push_f64_fixed(b: *Builder, v: f64, precision: u8) -> err
 ```
+
+All search indices and slices are byte offsets. The trim functions without an
+explicit byte set remove ASCII whitespace only; Unicode whitespace and case mapping
+belong to `text.unicode`. An empty `needle` is found at the requested valid starting
+offset, `rfind` returns `s.len`, and `count` returns `s.len + 1`; replacement follows
+the same non-overlapping boundary rule. `split` returns `InvalidSeparator` for an
+empty separator and otherwise preserves empty fields. `lines` recognizes LF and CRLF,
+removes the terminator and does not synthesize a final empty line. Radices are in
+`2..36`.
 
 ### `e.path`
 
@@ -277,6 +318,7 @@ fn replace_extension(a: *mem.Arena, path: str, ext: str, style: Style) -> (str, 
 
 ```neper
 type List[T: type] = struct { items: []T, len: usize, arena: *mem.Arena }
+type Iter[T: type] = struct { items: []const T, index: usize }
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (List[T], err)
 fn from_slice[T: type](a: *mem.Arena, src: []const T) -> (List[T], err)
@@ -288,12 +330,15 @@ fn pop[T: type](l: *List[T]) -> (T, bool)
 fn insert[T: type](l: *List[T], index: usize, v: T) -> err
 fn remove[T: type](l: *List[T], index: usize) -> T
 fn clear[T: type](l: *List[T])
+fn iter[T: type](l: *const List[T]) -> Iter[T]
+fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
 ```
 
 ### `e.data.deque`
 
 ```neper
 type Deque[T: type] = struct { items: []T, head: usize, len: usize, arena: *mem.Arena }
+type Iter[T: type] = struct { deque: *const Deque[T], index: usize }
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Deque[T], err)
 fn len[T: type](d: *const Deque[T]) -> usize
@@ -304,12 +349,84 @@ fn pop_front[T: type](d: *Deque[T]) -> (T, bool)
 fn pop_back[T: type](d: *Deque[T]) -> (T, bool)
 fn get[T: type](d: *const Deque[T], index: usize) -> T
 fn clear[T: type](d: *Deque[T])
+fn iter[T: type](d: *const Deque[T]) -> Iter[T]
+fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
 ```
+
+### `e.data.stack`
+
+```neper
+type Stack[T: type] = struct { items: list.List[T] }
+type Iter[T: type] = struct { stack: *const Stack[T], remaining: usize }
+
+fn init[T: type](a: *mem.Arena, capacity: usize) -> (Stack[T], err)
+fn len[T: type](s: *const Stack[T]) -> usize
+fn reserve[T: type](s: *Stack[T], capacity: usize) -> err
+fn push[T: type](s: *Stack[T], value: T) -> err
+fn peek[T: type](s: *const Stack[T]) -> (T, bool)
+fn pop[T: type](s: *Stack[T]) -> (T, bool)
+fn clear[T: type](s: *Stack[T])
+fn iter[T: type](s: *const Stack[T]) -> Iter[T]
+fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
+```
+
+Iteration is LIFO order and does not mutate the stack.
+
+### `e.data.queue`
+
+```neper
+type Queue[T: type] = struct { items: deque.Deque[T] }
+type Iter[T: type] = struct { queue: *const Queue[T], index: usize }
+
+fn init[T: type](a: *mem.Arena, capacity: usize) -> (Queue[T], err)
+fn len[T: type](q: *const Queue[T]) -> usize
+fn reserve[T: type](q: *Queue[T], capacity: usize) -> err
+fn enqueue[T: type](q: *Queue[T], value: T) -> err
+fn peek[T: type](q: *const Queue[T]) -> (T, bool)
+fn dequeue[T: type](q: *Queue[T]) -> (T, bool)
+fn clear[T: type](q: *Queue[T])
+fn iter[T: type](q: *const Queue[T]) -> Iter[T]
+fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
+```
+
+Iteration is FIFO order and does not mutate the queue.
+
+### `e.data.linked`
+
+```neper
+type NodeId = u32
+const NONE: NodeId = 4294967295
+type Node[T: type] = struct { value: T, previous: NodeId, next: NodeId, live: bool }
+type List[T: type] = struct { nodes: list.List[Node[T]], first: NodeId, last: NodeId, len: usize }
+type Iter[T: type] = struct { list: *const List[T], next: NodeId }
+error InvalidNode
+error TooLarge
+
+fn init[T: type](a: *mem.Arena, capacity: usize) -> (List[T], err)
+fn len[T: type](l: *const List[T]) -> usize
+fn first[T: type](l: *const List[T]) -> (NodeId, bool)
+fn last[T: type](l: *const List[T]) -> (NodeId, bool)
+fn node[T: type](l: *const List[T], id: NodeId) -> (*const Node[T], err)
+fn push_front[T: type](l: *List[T], value: T) -> (NodeId, err)
+fn push_back[T: type](l: *List[T], value: T) -> (NodeId, err)
+fn insert_before[T: type](l: *List[T], at: NodeId, value: T) -> (NodeId, err)
+fn insert_after[T: type](l: *List[T], at: NodeId, value: T) -> (NodeId, err)
+fn remove[T: type](l: *List[T], id: NodeId) -> (T, err)
+fn clear[T: type](l: *List[T])
+fn iter[T: type](l: *const List[T]) -> Iter[T]
+fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
+```
+
+Node identifiers remain stable across insertions and removals because removed slots
+are not reused. A removed identifier and every identifier issued before `clear`
+returns `InvalidNode`. Insertion returns `TooLarge` before a node identifier would
+overflow. The nodes and list borrow the arena for their lifetime.
 
 ### `e.data.ring`
 
 ```neper
 type Ring[T: type] = struct { items: []T, head: usize, len: usize }
+type Iter[T: type] = struct { ring: *const Ring[T], index: usize }
 
 fn init[T: type](storage: []T) -> Ring[T]
 fn len[T: type](r: *const Ring[T]) -> usize
@@ -319,6 +436,8 @@ fn push_overwrite[T: type](r: *Ring[T], v: T) -> (T, bool)
 fn pop[T: type](r: *Ring[T]) -> (T, bool)
 fn peek[T: type](r: *const Ring[T]) -> (T, bool)
 fn clear[T: type](r: *Ring[T])
+fn iter[T: type](r: *const Ring[T]) -> Iter[T]
+fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
 ```
 
 ### `e.data.map`
@@ -326,6 +445,8 @@ fn clear[T: type](r: *Ring[T])
 ```neper
 type Map[K: type, V: type] = struct { state: *void }
 type Set[K: type] = struct { map: Map[K, bool] }
+type Iter[K: type, V: type] = struct { state: *const void, slot: usize }
+type SetIter[K: type] = struct { inner: Iter[K, bool] }
 
 fn init[K: type, V: type](a: *mem.Arena, capacity: usize) -> (Map[K, V], err)
 fn len[K: type, V: type](m: *const Map[K, V]) -> usize
@@ -339,6 +460,10 @@ fn set_init[K: type](a: *mem.Arena, capacity: usize) -> (Set[K], err)
 fn set_add[K: type](s: *Set[K], key: K) -> (bool, err)
 fn set_has[K: type](s: *const Set[K], key: K) -> bool
 fn set_remove[K: type](s: *Set[K], key: K) -> bool
+fn iter[K: type, V: type](m: *const Map[K, V]) -> Iter[K, V]
+fn iter_next[K: type, V: type](it: *Iter[K, V]) -> (K, V, bool)
+fn set_iter[K: type](s: *const Set[K]) -> SetIter[K]
+fn set_iter_next[K: type](it: *SetIter[K]) -> (K, bool)
 ```
 
 ### `e.data.sort`
@@ -357,33 +482,139 @@ fn is_sorted[T: type](items: []const T) -> bool
 
 ```neper
 type Heap[T: type] = struct { items: list.List[T] }
+type HeapBy[T: type, Ctx: type] = struct { items: list.List[T], ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32 }
+type Iter[T: type] = struct { items: []const T, index: usize }
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Heap[T], err)
+fn from_slice[T: type](a: *mem.Arena, source: []const T) -> (Heap[T], err)
 fn len[T: type](h: *const Heap[T]) -> usize
 fn push[T: type](h: *Heap[T], v: T) -> err
 fn peek[T: type](h: *const Heap[T]) -> (T, bool)
 fn pop[T: type](h: *Heap[T]) -> (T, bool)
 fn clear[T: type](h: *Heap[T])
+fn init_by[T: type, Ctx: type](a: *mem.Arena, capacity: usize, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) -> (HeapBy[T, Ctx], err)
+fn from_slice_by[T: type, Ctx: type](a: *mem.Arena, source: []const T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) -> (HeapBy[T, Ctx], err)
+fn len_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> usize
+fn push_by[T: type, Ctx: type](h: *HeapBy[T, Ctx], value: T) -> err
+fn peek_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> (T, bool)
+fn pop_by[T: type, Ctx: type](h: *HeapBy[T, Ctx]) -> (T, bool)
+fn clear_by[T: type, Ctx: type](h: *HeapBy[T, Ctx])
+fn heapify_in_place[T: type](items: []T)
+fn heapify_in_place_by[T: type, Ctx: type](items: []T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32)
+fn iter[T: type](h: *const Heap[T]) -> Iter[T]
+fn iter_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> Iter[T]
+fn iter_next[T: type](it: *Iter[T]) -> (T, bool)
 ```
+
+The default heap is a min-heap under `T.cmp`; `HeapBy` uses `cmp`. Bulk construction
+is linear time. Iteration exposes internal heap order, not sorted order.
 
 ### `e.data.tree`
 
 ```neper
 type Map[K: type, V: type] = struct { state: *void }
 type Set[K: type] = struct { map: Map[K, bool] }
+type Iter[K: type, V: type] = struct { state: *const void }
+type SetIter[K: type] = struct { inner: Iter[K, bool] }
 
 fn init[K: type, V: type](a: *mem.Arena) -> Map[K, V]
 fn len[K: type, V: type](m: *const Map[K, V]) -> usize
 fn put[K: type, V: type](m: *Map[K, V], key: K, value: V) -> (bool, err)
 fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool)
 fn lower_bound[K: type, V: type](m: *const Map[K, V], key: K) -> (K, V, bool)
+fn upper_bound[K: type, V: type](m: *const Map[K, V], key: K) -> (K, V, bool)
 fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool)
 fn clear[K: type, V: type](m: *Map[K, V])
 fn set_init[K: type](a: *mem.Arena) -> Set[K]
 fn set_add[K: type](s: *Set[K], key: K) -> (bool, err)
 fn set_has[K: type](s: *const Set[K], key: K) -> bool
 fn set_remove[K: type](s: *Set[K], key: K) -> bool
+fn iter[K: type, V: type](m: *const Map[K, V]) -> Iter[K, V]
+fn iter_from[K: type, V: type](m: *const Map[K, V], key: K) -> Iter[K, V]
+fn iter_next[K: type, V: type](it: *Iter[K, V]) -> (K, V, bool)
+fn set_iter[K: type](s: *const Set[K]) -> SetIter[K]
+fn set_iter_next[K: type](it: *SetIter[K]) -> (K, bool)
 ```
+
+Tree iteration is ascending by key. `iter_from` begins at the first key not less
+than `key`.
+
+### `e.data.disjoint_set`
+
+```neper
+type DisjointSet = struct { parent: []u32, rank: []u8, sets: usize }
+error TooLarge
+error TooSmall
+
+fn init(parent: []u32, rank: []u8, count: usize) -> (DisjointSet, err)
+fn len(s: *const DisjointSet) -> usize
+fn set_count(s: *const DisjointSet) -> usize
+fn find(s: *DisjointSet, value: u32) -> u32
+fn same(s: *DisjointSet, a: u32, b: u32) -> bool
+fn union(s: *DisjointSet, a: u32, b: u32) -> bool
+fn reset(s: *DisjointSet)
+```
+
+The caller supplies storage. `count` must fit `u32` and both slices. `find` performs
+path compression and `union` uses union by rank; indices outside `count` follow the
+ordinary bounds-trap rule.
+
+### `e.data.graph`
+
+```neper
+type NodeId = u32
+const NONE: NodeId = 4294967295
+type Edge[E: type] = struct { from: NodeId, to: NodeId, value: E }
+type Builder[E: type] = struct { node_count: usize, edges: list.List[Edge[E]] }
+type Graph[E: type] = struct { node_count: usize, offsets: []const usize, edges: []const Edge[E] }
+type Neighbors[E: type] = struct { edges: []const Edge[E], index: usize }
+type Nodes = struct { next: NodeId, end: NodeId }
+error InvalidNode
+error TooLarge
+
+fn builder[E: type](a: *mem.Arena, node_count: usize, edge_capacity: usize) -> (Builder[E], err)
+fn add_directed[E: type](b: *Builder[E], from: NodeId, to: NodeId, value: E) -> err
+fn add_undirected[E: type](b: *Builder[E], a: NodeId, b_node: NodeId, value: E) -> err
+fn finish[E: type](a: *mem.Arena, b: *const Builder[E]) -> (Graph[E], err)
+fn node_count[E: type](g: *const Graph[E]) -> usize
+fn edge_count[E: type](g: *const Graph[E]) -> usize
+fn nodes[E: type](g: *const Graph[E]) -> Nodes
+fn nodes_next(it: *Nodes) -> (NodeId, bool)
+fn neighbors[E: type](g: *const Graph[E], node: NodeId) -> (Neighbors[E], err)
+fn neighbors_next[E: type](it: *Neighbors[E]) -> (Edge[E], bool)
+```
+
+`finish` constructs immutable compressed-sparse-row adjacency, preserving insertion
+order among edges from the same node. An undirected edge is stored as two directed
+edges; it reserves both first and leaves the builder unchanged on error. Nodes are
+dense `0..node_count`; node counts that do not fit `u32` return `TooLarge`.
+Graphs own no resources beyond their caller arena.
+
+### `e.data.slot_map`
+
+```neper
+type Key = struct { slot: u32, generation: u32 }
+type SlotMap[T: type] = struct { state: *void }
+type Iter[T: type] = struct { state: *const void, slot: u32 }
+error Full
+error TooLarge
+
+fn init[T: type](a: *mem.Arena, capacity: usize) -> (SlotMap[T], err)
+fn len[T: type](m: *const SlotMap[T]) -> usize
+fn capacity[T: type](m: *const SlotMap[T]) -> usize
+fn insert[T: type](m: *SlotMap[T], value: T) -> (Key, err)
+fn get[T: type](m: *const SlotMap[T], key: Key) -> (*const T, bool)
+fn get_mut[T: type](m: *SlotMap[T], key: Key) -> (*T, bool)
+fn remove[T: type](m: *SlotMap[T], key: Key) -> (T, bool)
+fn clear[T: type](m: *SlotMap[T])
+fn iter[T: type](m: *const SlotMap[T]) -> Iter[T]
+fn iter_next[T: type](it: *Iter[T]) -> (Key, T, bool)
+```
+
+Capacity is fixed and caller-funded. Removal increments the slot generation before
+reuse; a generation never wraps, and a slot whose next generation would wrap is
+retired permanently. `clear` invalidates every key. This is the standard facility
+for independently retired arena values and stable externally stored handles.
 
 ### `e.data.iter`
 
@@ -393,6 +624,9 @@ type MapCtx[I: type, T: type, U: type, Ctx: type] = struct { it: I, ctx: *Ctx, f
 type Filter[I: type, T: type] = struct { it: I, pred: fn(T) -> bool }
 type FilterCtx[I: type, T: type, Ctx: type] = struct { it: I, ctx: *Ctx, pred: fn(*Ctx, T) -> bool }
 type Take[T: type, I: type] = struct { it: I, remaining: usize }
+type Skip[T: type, I: type] = struct { it: I, remaining: usize }
+type Enumerate[T: type, I: type] = struct { it: I, index: usize }
+type Chain[T: type, A: type, B: type] = struct { left: A, right: B, left_done: bool }
 type Zip[X: type, Y: type, A: type, B: type] = struct { left: A, right: B }
 
 fn map[I: type, T: type, U: type](it: I, f: fn(T) -> U) -> Map[I, T, U]
@@ -409,11 +643,33 @@ fn zip[X: type, Y: type, A: type, B: type](left: A, right: B) -> Zip[X, Y, A, B]
 fn zip_next[X: type, Y: type, A: type, B: type](it: *Zip[X, Y, A, B]) -> (X, Y, bool)
 fn reduce[I: type, T: type, U: type](it: *I, initial: U, f: fn(U, T) -> U) -> U
 fn reduce_ctx[I: type, T: type, U: type, Ctx: type](it: *I, initial: U, ctx: *Ctx, f: fn(*Ctx, U, T) -> U) -> U
+fn skip[T: type, I: type](it: I, n: usize) -> Skip[T, I]
+fn skip_next[T: type, I: type](it: *Skip[T, I]) -> (T, bool)
+fn enumerate[T: type, I: type](it: I) -> Enumerate[T, I]
+fn enumerate_next[T: type, I: type](it: *Enumerate[T, I]) -> (usize, T, bool)
+fn chain[T: type, A: type, B: type](left: A, right: B) -> Chain[T, A, B]
+fn chain_next[T: type, A: type, B: type](it: *Chain[T, A, B]) -> (T, bool)
+fn find[I: type, T: type](it: *I, pred: fn(T) -> bool) -> (T, bool)
+fn position[I: type, T: type](it: *I, pred: fn(T) -> bool) -> (usize, bool)
+fn any[I: type, T: type](it: *I, pred: fn(T) -> bool) -> bool
+fn all[I: type, T: type](it: *I, pred: fn(T) -> bool) -> bool
+fn count[I: type, T: type](it: *I) -> usize
+fn min[I: type, T: type](it: *I) -> (T, bool)
+fn max[I: type, T: type](it: *I) -> (T, bool)
+fn collect[I: type, T: type](a: *mem.Arena, it: *I) -> (list.List[T], err)
+fn partition[I: type, T: type](a: *mem.Arena, it: *I, pred: fn(T) -> bool) -> (list.List[T], list.List[T], err)
 ```
 
 `take[T](it, n)` and `zip[X, Y](left, right)` write the item type(s) explicitly;
 their trailing iterator types are structurally inferred. Other adapters infer their
 item types from the callback signatures. No return-context inference is required.
+
+Every collection iterator borrows its source until exhaustion. Any mutation of that
+source invalidates all of its live iterators; using an invalid iterator is a debug
+`invalid` trap and release undefined behavior. Iteration never allocates or mutates
+the collection. Lists, deques, rings and queues use logical element order; stacks use
+LIFO order; hash maps use deterministic table-slot order; trees use ascending key
+order; heaps expose heap storage order. Set iterators expose only keys.
 
 ---
 
@@ -480,6 +736,54 @@ fn crc32_done(h: *const Crc32) -> u32
 fn adler32(data: []const u8) -> u32
 ```
 
+### `algo.deflate`
+
+```neper
+type Encoder = struct { state: *void }
+type Decoder = struct { state: *void }
+type Level = enum u8 { Fast, Balanced, Best }
+type Status = enum u8 { NeedInput, NeedOutput, Finished }
+error Invalid
+error TooLarge
+
+fn encoder(storage: []u8, level: Level) -> (Encoder, err)
+fn decoder(storage: []u8, window_limit: usize) -> (Decoder, err)
+fn encode(e: *Encoder, input: []const u8, output: []u8, finish: bool) -> (usize, usize, Status, err)
+fn decode(d: *Decoder, input: []const u8, output: []u8, finish: bool) -> (usize, usize, Status, err)
+fn encoder_storage(level: Level) -> usize
+fn decoder_storage(window_limit: usize) -> (usize, err)
+```
+
+The calls return consumed input and written output. State uses caller storage and
+performs no allocation. This module implements raw RFC 1951 DEFLATE only; gzip and
+ZIP framing belong to `fmt.gzip` and `fmt.zip`.
+
+### `algo.graph`
+
+```neper
+type Traversal = struct { order: []const graph.NodeId, parent: []const graph.NodeId }
+type Components = struct { component: []const u32, count: u32 }
+type Paths = struct { distance: []const f64, previous: []const graph.NodeId }
+error Cycle
+error InvalidWeight
+error TooLarge
+
+fn bfs[E: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId) -> (Traversal, err)
+fn dfs[E: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId) -> (Traversal, err)
+fn topological[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> ([]const graph.NodeId, err)
+fn weak_components[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (Components, err)
+fn strong_components[E: type](a: *mem.Arena, g: *const graph.Graph[E]) -> (Components, err)
+fn dijkstra[E: type, Ctx: type](a: *mem.Arena, g: *const graph.Graph[E], start: graph.NodeId, ctx: *Ctx, weight: fn(*Ctx, graph.Edge[E]) -> f64) -> (Paths, err)
+```
+
+Traversal order is deterministic from node order and each adjacency list's insertion
+order. An unreachable node has parent `graph.NONE`; the start is its own parent.
+Topological sorting returns the lexicographically smallest available node first and
+returns `Cycle` without a partial order. Component identifiers are assigned by the
+smallest node in each component. Dijkstra rejects negative, NaN and infinite weights
+as `InvalidWeight`; unreachable distance is positive infinity and its predecessor is
+`graph.NONE`. All returned slices are arena-owned.
+
 ### `algo.stat`
 
 ```neper
@@ -499,6 +803,89 @@ fn regression_slope(s: *const Regression) -> (f64, bool)
 fn regression_intercept(s: *const Regression) -> (f64, bool)
 fn correlation(s: *const Regression) -> (f64, bool)
 ```
+
+### `algo.bitset`
+
+```neper
+type BitSet = struct { words: []u64, len: usize }
+error TooSmall
+
+fn init(storage: []u64, len: usize) -> (BitSet, err)
+fn len(s: *const BitSet) -> usize
+fn clear_all(s: *BitSet)
+fn fill_all(s: *BitSet)
+fn get(s: *const BitSet, index: usize) -> bool
+fn set(s: *BitSet, index: usize)
+fn unset(s: *BitSet, index: usize)
+fn toggle(s: *BitSet, index: usize)
+fn count(s: *const BitSet) -> usize
+fn first_set(s: *const BitSet) -> (usize, bool)
+fn next_set(s: *const BitSet, after: usize) -> (usize, bool)
+fn union_in_place(dst: *BitSet, src: *const BitSet)
+fn intersect_in_place(dst: *BitSet, src: *const BitSet)
+fn difference_in_place(dst: *BitSet, src: *const BitSet)
+fn complement_in_place(s: *BitSet)
+fn is_subset(a: *const BitSet, b: *const BitSet) -> bool
+fn eq(a: *const BitSet, b: *const BitSet) -> bool
+```
+
+Bits at indices `len..storage.len*64` are always zero. Operations requiring two
+sets require equal logical lengths; a mismatch is a debug bounds trap and release
+undefined behavior, like incompatible slice bounds in other pure primitives.
+
+### `algo.complex`
+
+```neper
+type Complex[F: type] = struct { re: F, im: F }
+
+fn make[F: type](re: F, im: F) -> Complex[F]
+fn add[F: type](a: Complex[F], b: Complex[F]) -> Complex[F]
+fn sub[F: type](a: Complex[F], b: Complex[F]) -> Complex[F]
+fn mul[F: type](a: Complex[F], b: Complex[F]) -> Complex[F]
+fn div[F: type](a: Complex[F], b: Complex[F]) -> Complex[F]
+fn neg[F: type](z: Complex[F]) -> Complex[F]
+fn conj[F: type](z: Complex[F]) -> Complex[F]
+fn abs[F: type](z: Complex[F]) -> F
+fn arg[F: type](z: Complex[F]) -> F
+fn exp[F: type](z: Complex[F]) -> Complex[F]
+fn log[F: type](z: Complex[F]) -> Complex[F]
+fn sqrt[F: type](z: Complex[F]) -> Complex[F]
+fn pow[F: type](z: Complex[F], w: Complex[F]) -> Complex[F]
+fn sin[F: type](z: Complex[F]) -> Complex[F]
+fn cos[F: type](z: Complex[F]) -> Complex[F]
+fn tan[F: type](z: Complex[F]) -> Complex[F]
+```
+
+`F` is `f32` or `f64`. Branch cuts and signed-zero behavior follow C99 Annex G;
+operations inherit `e.math`'s NaN canonicalization and no-contraction rules.
+
+### `algo.decimal`
+
+```neper
+type Coefficient = struct { low: u64, high: i64 }
+type Decimal = struct { coefficient: Coefficient, scale: u8 }
+type Rounding = enum u8 { ToEven, AwayFromZero, TowardZero, Floor, Ceiling }
+error Invalid
+error Overflow
+error Inexact
+
+fn make(coefficient: Coefficient, scale: u8) -> (Decimal, err)
+fn normalize(value: Decimal) -> Decimal
+fn add(a: Decimal, b: Decimal) -> (Decimal, err)
+fn sub(a: Decimal, b: Decimal) -> (Decimal, err)
+fn mul(a: Decimal, b: Decimal) -> (Decimal, err)
+fn div(a: Decimal, b: Decimal, scale: u8, rounding: Rounding) -> (Decimal, err)
+fn quantize(value: Decimal, scale: u8, rounding: Rounding) -> (Decimal, err)
+fn compare(a: Decimal, b: Decimal) -> i32
+fn parse(source: str) -> (Decimal, err)
+fn format(value: Decimal, b: *str.Builder) -> err
+fn to_i64(value: Decimal, rounding: Rounding) -> (i64, err)
+fn from_i64(value: i64, scale: u8) -> (Decimal, err)
+```
+
+`scale` is `0..38`; value is `coefficient * 10^-scale`. Arithmetic never silently
+rounds: only operations carrying a `Rounding` argument may discard decimal digits.
+Parsing is locale-free and consumes the complete ordinary or scientific decimal.
 
 ### `algo.bignum`
 
@@ -567,6 +954,34 @@ fn copy[T: type](dst: Tensor[T], src: ConstTensor[T]) -> err
 fn add[T: type](dst: Tensor[T], x: ConstTensor[T], y: ConstTensor[T]) -> err
 ```
 
+### `text.encoding`
+
+```neper
+type Encoding = enum u8 { Utf8, Utf16Le, Utf16Be, Utf32Le, Utf32Be }
+type InvalidPolicy = enum u8 { Reject, Replace }
+type Decoder = struct { encoding: Encoding, policy: InvalidPolicy, pending: [4]u8, pending_len: u8, bom_seen: bool }
+type Encoder = struct { encoding: Encoding, emit_bom: bool, started: bool }
+error Invalid
+error Incomplete
+error TooSmall
+
+fn detect_bom(src: []const u8) -> (Encoding, usize, bool)
+fn decoder(encoding: Encoding, policy: InvalidPolicy, consume_bom: bool) -> Decoder
+fn encoder(encoding: Encoding, emit_bom: bool) -> Encoder
+fn decode(d: *Decoder, src: []const u8, dst_utf8: []u8, final: bool) -> (usize, usize, err)
+fn encode(e: *Encoder, src_utf8: str, dst: []u8, final: bool) -> (usize, usize, err)
+fn decoded_len(encoding: Encoding, src: []const u8, policy: InvalidPolicy) -> (usize, err)
+fn encoded_len(encoding: Encoding, src_utf8: str, emit_bom: bool) -> (usize, err)
+fn to_utf8(a: *mem.Arena, encoding: Encoding, src: []const u8, policy: InvalidPolicy) -> (str, err)
+fn from_utf8(a: *mem.Arena, encoding: Encoding, src: str, emit_bom: bool) -> ([]u8, err)
+```
+
+The streaming calls return consumed source bytes followed by written destination
+bytes. `TooSmall` is resumable and consumes only complete scalar values. `final`
+reports a trailing partial sequence as `Incomplete`; `Replace` emits U+FFFD for each
+maximal invalid subsequence. This toolchain module intentionally excludes locale and
+legacy code pages.
+
 ### `text.utf8`
 
 ```neper
@@ -622,7 +1037,39 @@ fn codepoint_cmp(a: str, b: str) -> i32
 fn natural_cmp(a: str, b: str, options: Options) -> i32
 ```
 
-Locale-aware collation is deliberately absent and belongs to `x.neper.locale`.
+Locale-aware collation is exposed by `text.locale`; this module remains the
+locale-independent Unicode collation mechanism beneath it.
+
+### `text.locale`
+
+```neper
+type Database = struct { state: *void }
+type Locale = struct { state: *const void }
+type NumberOptions = struct { minimum_fraction: u8, maximum_fraction: u8, grouping: bool, sign_always: bool }
+type CurrencyOptions = struct { code: str, accounting: bool }
+type DateStyle = enum u8 { Short, Medium, Long, Full }
+error InvalidData
+error NotFound
+error Invalid
+
+fn load(a: *mem.Arena, source: []const u8) -> (Database, err)
+fn builtin(a: *mem.Arena) -> (Database, err)
+fn version(db: *const Database) -> str
+fn locale(db: *const Database, tag: str) -> (Locale, err)
+fn canonical_tag(a: *mem.Arena, tag: str) -> (str, err)
+fn format_i64(a: *mem.Arena, locale: Locale, value: i64, options: NumberOptions) -> (str, err)
+fn format_f64(a: *mem.Arena, locale: Locale, value: f64, options: NumberOptions) -> (str, err)
+fn parse_f64(locale: Locale, value: str) -> (f64, err)
+fn format_currency(a: *mem.Arena, locale: Locale, value: decimal.Decimal, options: CurrencyOptions) -> (str, err)
+fn format_date(a: *mem.Arena, locale: Locale, value: calendar.DateTime, style: DateStyle) -> (str, err)
+fn compare(locale: Locale, a: str, b: str) -> i32
+fn lower(a: *mem.Arena, locale: Locale, value: str) -> (str, err)
+fn upper(a: *mem.Arena, locale: Locale, value: str) -> (str, err)
+```
+
+`builtin` uses the CLDR release pinned to the toolchain and reported by `version`;
+`load` accepts explicit compatible data. Parsing consumes the whole input. Currency
+codes are caller-supplied ISO 4217 identifiers. No process-global locale exists.
 
 ### `text.regex`
 
@@ -642,6 +1089,177 @@ fn replace_all(a: *mem.Arena, r: *const Regex, text: str, replacement: str) -> (
 ```
 
 The accepted syntax is regular only: no backreferences, recursion or lookbehind.
+
+### `gfx.geometry`
+
+```neper
+type Point = struct { x: f32, y: f32 }
+type Size = struct { width: f32, height: f32 }
+type Rect = struct { x: f32, y: f32, width: f32, height: f32 }
+type Insets = struct { left: f32, top: f32, right: f32, bottom: f32 }
+type Radius = struct { x: f32, y: f32 }
+type RRect = struct { rect: Rect, top_left: Radius, top_right: Radius, bottom_right: Radius, bottom_left: Radius }
+type Transform = struct { m00: f32, m01: f32, m02: f32, m10: f32, m11: f32, m12: f32 }
+type PathVerb = enum u8 { Move, Line, Quad, Cubic, Close }
+type Path = struct { verbs: []const PathVerb, points: []const Point }
+type PathBuilder = struct { state: *void }
+error Invalid
+error TooLarge
+
+fn rect(x: f32, y: f32, width: f32, height: f32) -> Rect
+fn contains(r: Rect, p: Point) -> bool
+fn intersect(a: Rect, b: Rect) -> Rect
+fn union_rect(a: Rect, b: Rect) -> Rect
+fn transform_identity() -> Transform
+fn transform_translate(x: f32, y: f32) -> Transform
+fn transform_scale(x: f32, y: f32) -> Transform
+fn transform_rotate(radians: f32) -> Transform
+fn transform_multiply(a: Transform, b: Transform) -> Transform
+fn transform_point(t: Transform, p: Point) -> Point
+fn path_builder(a: *mem.Arena, max_verbs: usize, max_points: usize) -> (PathBuilder, err)
+fn move_to(b: *PathBuilder, p: Point) -> err
+fn line_to(b: *PathBuilder, p: Point) -> err
+fn quad_to(b: *PathBuilder, control: Point, end: Point) -> err
+fn cubic_to(b: *PathBuilder, first: Point, second: Point, end: Point) -> err
+fn close_path(b: *PathBuilder) -> err
+fn finish(b: *PathBuilder) -> Path
+```
+
+Coordinates are logical pixels. Values must be finite; rectangles and sizes have
+non-negative dimensions. Paths and transforms allocate nothing after builder
+creation and are independent of any rendering backend.
+
+### `gfx.paint`
+
+```neper
+type Color = struct { red: f32, green: f32, blue: f32, alpha: f32 }
+type Blend = enum u8 { SourceOver, Source, DestinationOver, Multiply, Screen, Overlay, Darken, Lighten }
+type StrokeCap = enum u8 { Butt, Round, Square }
+type StrokeJoin = enum u8 { Miter, Round, Bevel }
+type Stroke = struct { width: f32, cap: StrokeCap, join: StrokeJoin, miter_limit: f32 }
+type Stop = struct { offset: f32, color: Color }
+type Brush = union enum u8 { Solid: Color, Linear: LinearGradient, Radial: RadialGradient }
+type LinearGradient = struct { start: geometry.Point, end: geometry.Point, stops: []const Stop }
+type RadialGradient = struct { center: geometry.Point, radius: f32, stops: []const Stop }
+error Invalid
+
+fn rgba(red: f32, green: f32, blue: f32, alpha: f32) -> Color
+fn srgb8(red: u8, green: u8, blue: u8, alpha: u8) -> Color
+fn premultiply(color: Color) -> Color
+fn validate(brush: *const Brush) -> err
+```
+
+Colors are linear-light floating-point RGBA; `srgb8` performs the defined sRGB
+transfer. Gradient stops are borrowed, ordered and bounded to `0..1`.
+
+### `gfx.image`
+
+```neper
+type Format = enum u8 { R8, Rgba8, Bgra8, Rgba16Float }
+type Alpha = enum u8 { Opaque, Straight, Premultiplied }
+type Image = struct { pixels: []u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha }
+type ConstImage = struct { pixels: []const u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha }
+error Invalid
+error TooLarge
+
+fn required_bytes(width: u32, height: u32, format: Format, stride: usize) -> (usize, err)
+fn make(pixels: []u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha) -> (Image, err)
+fn make_const(pixels: []const u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha) -> (ConstImage, err)
+fn allocate(a: *mem.Arena, width: u32, height: u32, format: Format, alpha: Alpha) -> (Image, err)
+fn clear(image: Image, color: paint.Color)
+fn copy(dst: Image, src: ConstImage, dst_origin: geometry.Point) -> err
+```
+
+Images are pixel views, not codecs or GPU resources. Encoders and decoders belong in
+`fmt.*`; upload and caching belong in `gfx.scene`.
+
+### `text.shape`
+
+```neper
+type FontId = u32
+type Direction = enum u8 { LeftToRight, RightToLeft }
+type Font = struct { id: FontId, data: []const u8, face_index: u32 }
+type Feature = struct { tag: u32, value: u32, start: usize, end: usize }
+type Glyph = struct { id: u32, cluster: usize, advance_x: f32, advance_y: f32, offset_x: f32, offset_y: f32 }
+type Run = struct { font: FontId, direction: Direction, script: u32, language: str, glyphs: []const Glyph }
+type Options = struct { direction: Direction, script: u32, language: str, features: []const Feature }
+error InvalidFont
+error InvalidText
+error Unsupported
+error TooLarge
+
+fn validate_font(font: Font) -> err
+fn shape(a: *mem.Arena, font: Font, source: str, options: Options) -> (Run, err)
+```
+
+Shaping is deterministic over caller-provided OpenType font bytes and the toolchain's
+pinned Unicode tables. It performs substitutions and positioning but no line
+breaking, font discovery, fallback, rasterization or hidden file access.
+
+### `text.layout`
+
+```neper
+type Align = enum u8 { Start, End, Center, Justify }
+type Wrap = enum u8 { None, Word, Character }
+type FontChoice = struct { font: shape.Font, size: f32 }
+type Style = struct { fonts: []const FontChoice, language: str, line_height: f32 }
+type GlyphRun = struct { run: shape.Run, origin: geometry.Point, size: f32 }
+type Line = struct { runs: []const GlyphRun, bounds: geometry.Rect, baseline: f32, start: usize, end: usize }
+type Layout = struct { source: str, lines: []const Line, bounds: geometry.Rect }
+type Options = struct { width: f32, max_lines: u32, align: Align, wrap: Wrap, ellipsis: str }
+error MissingGlyph
+error Invalid
+error TooLarge
+
+fn layout(a: *mem.Arena, source: str, style: Style, options: Options) -> (Layout, err)
+fn hit_test(value: *const Layout, point: geometry.Point) -> usize
+fn caret(value: *const Layout, byte_offset: usize) -> geometry.Rect
+fn selection(a: *mem.Arena, value: *const Layout, start: usize, end: usize) -> ([]geometry.Rect, err)
+```
+
+The module performs Unicode bidi resolution, line breaking, fallback and visual
+placement. Byte offsets always identify UTF-8 boundaries in `source`.
+
+### `ui.style`
+
+```neper
+type Length = union enum u8 { Auto, Px: f32, Percent: f32, Flex: f32 }
+type EdgeLengths = struct { left: Length, top: Length, right: Length, bottom: Length }
+type Display = enum u8 { Flex, Grid, Stack, None }
+type Position = enum u8 { Flow, Absolute }
+type Overflow = enum u8 { Visible, Clip, Scroll }
+type Style = struct { display: Display, position: Position, width: Length, height: Length, min_width: Length, min_height: Length, max_width: Length, max_height: Length, margin: EdgeLengths, padding: EdgeLengths, background: paint.Brush, opacity: f32, overflow: Overflow }
+error Invalid
+
+fn defaults() -> Style
+fn validate(value: *const Style) -> err
+```
+
+Styles are ordinary immutable values. There is no selector engine, cascading global
+sheet or reflective property lookup in version 1.
+
+### `ui.layout`
+
+```neper
+type Axis = enum u8 { Horizontal, Vertical }
+type MainAlign = enum u8 { Start, End, Center, SpaceBetween, SpaceAround, SpaceEvenly }
+type CrossAlign = enum u8 { Start, End, Center, Stretch, Baseline }
+type Constraints = struct { min_width: f32, max_width: f32, min_height: f32, max_height: f32 }
+type Flex = struct { axis: Axis, main: MainAlign, cross: CrossAlign, gap: f32 }
+type GridTrack = union enum u8 { Px: f32, Flex: f32, Auto }
+type Grid = struct { columns: []const GridTrack, rows: []const GridTrack, column_gap: f32, row_gap: f32 }
+type Child = struct { desired: geometry.Size, flex: f32 }
+type Result = struct { size: geometry.Size, children: []const geometry.Rect }
+error Invalid
+error Overflow
+
+fn constrain(value: geometry.Size, limits: Constraints) -> geometry.Size
+fn flex(a: *mem.Arena, spec: Flex, limits: Constraints, children: []const Child) -> (Result, err)
+fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child) -> (Result, err)
+```
+
+Layout is a deterministic pure constraint solver. Scroll state, widget measurement
+and render-tree traversal remain in `ui.widget`.
 
 ### `crypto.hash`
 
@@ -751,6 +1369,10 @@ type Lib = struct { raw: usize }
 type Handle = struct { raw: usize }
 type Socket = struct { raw: usize }
 type Poller = struct { raw: usize }
+type Mapping = struct { raw: usize, address: *u8, len: usize }
+type Watch = struct { raw: usize }
+type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
+type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
 type Clock = enum u8 { Wall, Monotonic }
 type SeekWhence = enum u8 { Start, Current, End }
 type EntryKind = enum u8 { File, Dir, Symlink, Other }
@@ -765,6 +1387,8 @@ type SocketShutdown = enum u8 { Read, Write, Both }
 type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, port: u16 }
 type PollInterest = struct { readable: bool, writable: bool }
 type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
+type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
+type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 error NotFound
 error Denied
 error Exists
@@ -833,10 +1457,19 @@ fn poller_unregister(p: Poller, handle: Handle) -> err
 fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err)
 fn poller_wake(p: Poller) -> err
 fn poller_close(p: Poller) -> err
+fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err)
+fn mapping_bytes(m: Mapping) -> []const u8
+fn mapping_bytes_mut(m: Mapping) -> ([]u8, err)
+fn mapping_flush(m: Mapping) -> err
+fn mapping_close(m: Mapping) -> err
+fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err)
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err)
+fn watch_close(w: Watch) -> err
 fn dlopen(a: *mem.Arena, name: str) -> (Lib, err)
 fn dlsym[F: type](a: *mem.Arena, l: Lib, sym: str) -> (F, err)
 fn dlclose(l: Lib) -> err
-fn last_error() -> i32
+fn last_error_detail(operation: str, subject: str) -> ErrorDetail
+fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)
 ```
 
 All path strings use the host convention. `SpawnOptions.cwd == ""` inherits the
@@ -847,6 +1480,13 @@ polls once when it is zero. In `SocketAddress`, IPv4 uses the first four bytes a
 zeros the remaining twelve. Pollers retain handles, interests and numeric tokens,
 never callbacks; callers unregister a handle before closing it.
 
+Every failing `e.os` call records the native code and portable classification in
+thread-local runtime state. `last_error_detail` copies that state into an explicit
+value and must be called before another `e.os` operation on that thread. Higher-level
+APIs may expose a detail snapshot while ordinary callers retain cheap `err`/`try`.
+`operation` and `subject` are borrowed caller strings, never inferred global state;
+`error_message` is the only locale-dependent rendering operation in `e.os`.
+
 ### `e.io`
 
 ```neper
@@ -856,6 +1496,11 @@ type SliceReader = struct { data: []const u8, off: usize }
 type SliceWriter = struct { data: []u8, off: usize }
 type BufferedReader = struct { state: *void }
 type BufferedWriter = struct { state: *void }
+type Seeker = struct { ctx: *void, seek: fn(*void, i64, os.SeekWhence) -> (u64, err) }
+type LimitedReader = struct { source: Reader, remaining: u64 }
+type CountingWriter = struct { sink: Writer, count: u64 }
+type TeeWriter = struct { left: Writer, right: Writer }
+type MemoryWriter = struct { arena: *mem.Arena, start: usize, len: usize }
 error End
 error TooSmall
 error NoProgress
@@ -868,6 +1513,12 @@ fn slice_reader(state: *SliceReader) -> Reader
 fn slice_writer(state: *SliceWriter) -> Writer
 fn buffered_reader(a: *mem.Arena, source: Reader, capacity: usize) -> (BufferedReader, err)
 fn buffered_writer(a: *mem.Arena, sink: Writer, capacity: usize) -> (BufferedWriter, err)
+fn file_seeker(file: *os.File) -> Seeker
+fn limited_reader(state: *LimitedReader, source: Reader, limit: u64) -> Reader
+fn counting_writer(state: *CountingWriter, sink: Writer) -> Writer
+fn tee_writer(state: *TeeWriter, left: Writer, right: Writer) -> Writer
+fn memory_writer(a: *mem.Arena, capacity: usize) -> (MemoryWriter, Writer, err)
+fn memory_bytes(w: *const MemoryWriter) -> []const u8
 fn read(r: *Reader, dst: []u8) -> (usize, err)
 fn read_exact(r: *Reader, dst: []u8) -> err
 fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> ([]u8, err)
@@ -875,6 +1526,7 @@ fn read_until(a: *mem.Arena, r: *Reader, delimiter: u8, limit: usize) -> ([]u8, 
 fn write(w: *Writer, src: []const u8) -> (usize, err)
 fn write_all(w: *Writer, src: []const u8) -> err
 fn flush(w: *Writer) -> err
+fn seek(s: *Seeker, off: i64, whence: os.SeekWhence) -> (u64, err)
 fn copy(dst: *Writer, src: *Reader, scratch: []u8) -> (u64, err)
 fn print(s: str) -> err
 fn printf[FMT: str](args: ...) -> err
@@ -882,14 +1534,43 @@ fn printf[FMT: str](args: ...) -> err
 
 `limit` is a hard maximum; crossing it returns `TooSmall` without retaining a partial
 result. A callback returning `(0, ok)` for a non-empty request returns `NoProgress`.
+`tee_writer` writes each input to the left sink before the right sink and stops on
+the first error; it therefore does not promise transactional duplication.
+
+### `text.io`
+
+```neper
+type Reader = struct { state: *void }
+type Writer = struct { state: *void }
+type Newline = enum u8 { Lf, CrLf, Native }
+error End
+error TooLarge
+error Invalid
+
+fn reader(a: *mem.Arena, source: io.Reader, encoding: encoding.Encoding, policy: encoding.InvalidPolicy, capacity: usize) -> (Reader, err)
+fn reader_bom(a: *mem.Arena, source: io.Reader, fallback: encoding.Encoding, policy: encoding.InvalidPolicy, capacity: usize) -> (Reader, err)
+fn read_line(a: *mem.Arena, r: *Reader, limit: usize) -> (str, err)
+fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> (str, err)
+fn writer(a: *mem.Arena, sink: io.Writer, encoding: encoding.Encoding, emit_bom: bool, newline: Newline, capacity: usize) -> (Writer, err)
+fn write(w: *Writer, text: str) -> err
+fn write_line(w: *Writer, text: str) -> err
+fn flush(w: *Writer) -> err
+```
+
+Returned text is UTF-8. `read_line` accepts LF, CRLF, or a final unterminated line
+and excludes its terminator; a bare CR is content. `Newline.Native` is resolved when
+the writer is constructed. Reader and writer state is arena-owned and non-copyable.
 
 ### `e.fs`
 
 ```neper
 type EntryKind = enum u8 { File, Directory, Symlink, Other }
 type Entry = struct { path: str, kind: EntryKind, size: u64 }
+type Permissions = struct { owner_read: bool, owner_write: bool, owner_exec: bool, group_read: bool, group_write: bool, group_exec: bool, other_read: bool, other_write: bool, other_exec: bool }
+type Metadata = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, permissions: Permissions, file_id: u64, link_count: u64 }
 type Walk = struct { state: *void }
 type WalkOptions = struct { recursive: bool, follow_symlinks: bool }
+type ReplaceOptions = struct { overwrite: bool, durable: bool }
 error NotFound
 error Exists
 error Denied
@@ -898,17 +1579,74 @@ error Io
 
 fn exists(a: *mem.Arena, path: str) -> (bool, err)
 fn stat(a: *mem.Arena, path: str) -> (Entry, err)
+fn metadata(a: *mem.Arena, path: str, follow_symlinks: bool) -> (Metadata, err)
+fn set_permissions(a: *mem.Arena, path: str, permissions: Permissions) -> err
+fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn make_dir(a: *mem.Arena, path: str) -> err
 fn make_dirs(a: *mem.Arena, path: str) -> err
 fn remove_file(a: *mem.Arena, path: str) -> err
 fn remove_dir(a: *mem.Arena, path: str) -> err
 fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err
 fn move(a: *mem.Arena, src: str, dst: str) -> err
+fn replace(a: *mem.Arena, src: str, dst: str, options: ReplaceOptions) -> err
+fn symlink(a: *mem.Arena, target: str, link: str) -> err
+fn read_link(a: *mem.Arena, path: str) -> (str, err)
+fn canonical(a: *mem.Arena, path: str) -> (str, err)
+fn current_dir(a: *mem.Arena) -> (str, err)
+fn set_current_dir(a: *mem.Arena, path: str) -> err
+fn executable_path(a: *mem.Arena) -> (str, err)
+fn temp_dir(a: *mem.Arena) -> (str, err)
+fn temp_file(a: *mem.Arena, dir: str, prefix: str) -> (str, os.File, err)
+fn home_dir(a: *mem.Arena) -> (str, err)
 fn read_file(a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
 fn write_file(a: *mem.Arena, path: str, data: []const u8) -> err
 fn walk(a: *mem.Arena, root: str, options: WalkOptions) -> (Walk, err)
 fn walk_next_err(it: *Walk) -> (Entry, bool, err)
+fn last_error_detail(operation: str, subject: str) -> os.ErrorDetail
 ```
+
+Unavailable creation times are `-1`; timestamps are Unix-epoch nanoseconds. Windows
+permissions map only the portable read-only/executable subset and unsupported changes
+return `os.Unsupported`. `temp_file` creates a new file atomically with exclusive
+access and never returns a predictable uncreated name. `replace` is atomic within one
+filesystem or returns `Invalid`; `durable` requests file and parent-directory
+persistence. `last_error_detail` snapshots the underlying failure without another
+host operation and is called before any cleanup that could replace it.
+
+### `e.fs.mmap`
+
+```neper
+type Mapping = struct { raw: os.Mapping }
+error Empty
+error Invalid
+
+fn open(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (Mapping, err)
+fn bytes(m: Mapping) -> []u8
+fn flush(m: Mapping) -> err
+fn close(m: Mapping) -> err
+```
+
+Offset and length are byte values; the implementation performs page alignment
+without changing the returned slice. Zero length returns `Empty`. `close` consumes
+the mapping and invalidates every derived pointer or slice.
+
+### `e.fs.watch`
+
+```neper
+type Watch = struct { raw: os.Watch }
+type Action = enum u8 { Added, Removed, Modified, Renamed, Overflow }
+type Event = struct { action: Action, path: str, old_path: str }
+error Closed
+error Unsupported
+
+fn open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err)
+fn read(a: *mem.Arena, watch: Watch, events: []Event) -> (usize, err)
+fn close(watch: Watch) -> err
+```
+
+Paths are relative to the watched root. `Renamed` supplies both paths when the host
+can pair them and otherwise appears as remove/add. `Overflow` means callers must
+rescan. Events may coalesce and no operation assumes one event per host change.
 
 ### `e.proc`
 
@@ -947,31 +1685,53 @@ type Mutex = struct { state: Atomic[u32] }
 type RwLock = struct { state: Atomic[u32] }
 type Condition = struct { state: Atomic[u32] }
 type Semaphore = struct { state: Atomic[u32] }
+type Event = struct { state: Atomic[u32], manual_reset: bool }
+type Once = struct { state: Atomic[u32] }
+type Barrier = struct { state: *void }
 error Invalid
 
 fn mutex() -> Mutex
 fn mutex_lock(m: *Mutex)
 fn mutex_try_lock(m: *Mutex) -> bool
+fn mutex_lock_for(m: *Mutex, timeout: time.Duration) -> bool
 fn mutex_unlock(m: *Mutex)
 fn rwlock() -> RwLock
 fn rwlock_read_lock(l: *RwLock)
 fn rwlock_try_read_lock(l: *RwLock) -> bool
+fn rwlock_read_lock_for(l: *RwLock, timeout: time.Duration) -> bool
 fn rwlock_read_unlock(l: *RwLock)
 fn rwlock_write_lock(l: *RwLock)
 fn rwlock_try_write_lock(l: *RwLock) -> bool
+fn rwlock_write_lock_for(l: *RwLock, timeout: time.Duration) -> bool
 fn rwlock_write_unlock(l: *RwLock)
 fn condition() -> Condition
 fn condition_wait(c: *Condition, m: *Mutex)
+fn condition_wait_for(c: *Condition, m: *Mutex, timeout: time.Duration) -> bool
 fn condition_signal(c: *Condition)
 fn condition_broadcast(c: *Condition)
 fn semaphore(initial: u32) -> Semaphore
 fn semaphore_wait(s: *Semaphore)
 fn semaphore_try_wait(s: *Semaphore) -> bool
+fn semaphore_wait_for(s: *Semaphore, timeout: time.Duration) -> bool
 fn semaphore_post(s: *Semaphore, count: u32) -> err
+fn event(manual_reset: bool, signaled: bool) -> Event
+fn event_set(e: *Event)
+fn event_reset(e: *Event)
+fn event_wait(e: *Event)
+fn event_wait_for(e: *Event, timeout: time.Duration) -> bool
+fn once() -> Once
+fn once_call[Ctx: type](o: *Once, ctx: *Ctx, f: fn(*Ctx) -> err) -> err
+fn barrier(a: *mem.Arena, parties: u32) -> (Barrier, err)
+fn barrier_wait(b: *Barrier) -> bool
+fn barrier_close(b: *Barrier)
 ```
 
 All waits recheck their state after `os.wait_u32`, so spurious wakes are invisible to
 callers. `semaphore_post` returns `Invalid` instead of wrapping the count.
+Timed waits return `false` only on timeout. A negative duration is invalid and zero
+polls once. `once_call` publishes completion only after `f` returns `ok`; an error
+permits a later caller to retry. Exactly one participant receives `true` from each
+barrier generation.
 
 ### `e.channel`
 
@@ -991,6 +1751,89 @@ fn capacity[T: type](c: *const Channel[T]) -> usize
 
 A capacity of zero is invalid. Closing wakes all waiters; buffered values remain
 receivable before `Closed` is returned.
+
+### `e.concurrent.queue`
+
+```neper
+type Queue[T: type] = struct { state: *void }
+error Closed
+error Invalid
+
+fn init[T: type](a: *mem.Arena, capacity: usize) -> (Queue[T], err)
+fn try_push[T: type](q: *Queue[T], value: T) -> (bool, err)
+fn push[T: type](q: *Queue[T], value: T) -> err
+fn push_for[T: type](q: *Queue[T], value: T, timeout: time.Duration) -> (bool, err)
+fn try_pop[T: type](q: *Queue[T]) -> (T, bool, err)
+fn pop[T: type](q: *Queue[T]) -> (T, err)
+fn pop_for[T: type](q: *Queue[T], timeout: time.Duration) -> (T, bool, err)
+fn close[T: type](q: *Queue[T]) -> err
+fn len[T: type](q: *const Queue[T]) -> usize
+fn capacity[T: type](q: *const Queue[T]) -> usize
+```
+
+This is a bounded multi-producer/multi-consumer FIFO. Closing wakes every waiter;
+buffered values remain readable before `Closed`. Timed calls return `false` only on
+timeout. Capacity is fixed and all state is allocated during `init`.
+
+### `e.concurrent.map`
+
+```neper
+type Map[K: type, V: type] = struct { state: *void }
+error Closed
+error Full
+error Invalid
+
+fn init[K: type, V: type](a: *mem.Arena, capacity: usize, shards: u16) -> (Map[K, V], err)
+fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool, err)
+fn put[K: type, V: type](m: *Map[K, V], key: K, value: V) -> (bool, err)
+fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool, err)
+fn len[K: type, V: type](m: *const Map[K, V]) -> (usize, err)
+fn close[K: type, V: type](m: *Map[K, V]) -> err
+```
+
+The map is fixed-capacity and sharded. Individual operations are linearizable;
+`len` is a point-in-time sum and not a transaction with surrounding operations.
+User hash/equality protocol functions must be thread-safe. Iteration and borrowed
+value pointers are deliberately absent because concurrent mutation would invalidate
+them. `init` returns `Invalid` for zero capacity or shards; insertion of a new key
+into a full map returns `Full`, while replacing an existing key still succeeds.
+
+### `e.task`
+
+```neper
+type Pool = struct { state: *void }
+type Task = struct { state: *void }
+type Future[T: type] = struct { state: *void }
+type Cancel = struct { state: Atomic[u32] }
+type Status = enum u8 { Pending, Running, Succeeded, Failed, Cancelled }
+type Options = struct { workers: u32, queue_capacity: usize, stack_size: usize }
+error Cancelled
+error Closed
+error Invalid
+
+fn pool(a: *mem.Arena, options: Options) -> (Pool, err)
+fn cancellation() -> Cancel
+fn cancel(c: *Cancel)
+fn is_cancelled(c: *const Cancel) -> bool
+fn submit[Ctx: type](p: *Pool, cancel: *Cancel, ctx: *Ctx, f: fn(*Ctx, *const Cancel) -> err) -> (Task, err)
+fn future[T: type, Ctx: type](p: *Pool, cancel: *Cancel, ctx: *Ctx, f: fn(*Ctx, *const Cancel) -> (T, err)) -> (Future[T], err)
+fn status(t: *const Task) -> Status
+fn wait(t: *Task) -> err
+fn wait_for(t: *Task, timeout: time.Duration) -> (bool, err)
+fn future_get[T: type](f: *Future[T]) -> (T, err)
+fn wait_any(tasks: []*Task, timeout: time.Duration) -> (usize, bool, err)
+fn wait_all(tasks: []*Task) -> err
+fn parallel_for[Ctx: type](p: *Pool, cancel: *Cancel, begin: usize, end: usize, grain: usize, ctx: *Ctx, body: fn(*Ctx, usize, usize, *const Cancel) -> err) -> err
+fn close(p: *Pool) -> err
+```
+
+The pool and all task records borrow their arena for the pool lifetime. Submission is
+bounded and never allocates secretly. Cancellation is cooperative: queued work may
+become `Cancelled`, while running work observes the token. `close` rejects new work,
+cancels queued work and joins every worker. `wait_all` returns the first error in
+input order, not completion order. `parallel_for` partitions `[begin..end)` into
+deterministic ranges no smaller than `grain` except the last; scheduling order is not
+observable and callers synchronize shared state explicitly.
 
 ### `e.time`
 
@@ -1042,9 +1885,90 @@ fn format_iso8601(t: Timestamp, buf: []u8) -> str
 fn parse_iso8601(s: str) -> (Timestamp, err)
 ```
 
+### `e.time.calendar`
+
+```neper
+type DateTime = struct { date: time.Date, time: time.Time }
+type Weekday = enum u8 { Monday, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
+type IsoWeek = struct { year: i32, week: u8 }
+type Components = struct { year: i32, month: u8, day: u8, hour: u8, minute: u8, second: u8, nanos: u32, weekday: Weekday, day_of_year: u16 }
+error Invalid
+
+fn is_leap_year(year: i32) -> bool
+fn days_in_month(year: i32, month: u8) -> (u8, err)
+fn valid_date(date: time.Date) -> bool
+fn valid_time(value: time.Time) -> bool
+fn weekday(date: time.Date) -> (Weekday, err)
+fn day_of_year(date: time.Date) -> (u16, err)
+fn iso_week(date: time.Date) -> (IsoWeek, err)
+fn compare(a: DateTime, b: DateTime) -> i32
+fn add_days(value: DateTime, days: i64) -> (DateTime, err)
+fn add_months(value: DateTime, months: i64) -> (DateTime, err)
+fn add_years(value: DateTime, years: i64) -> (DateTime, err)
+fn difference_days(a: DateTime, b: DateTime) -> i64
+fn components(value: DateTime) -> (Components, err)
+fn from_components(value: Components) -> (DateTime, err)
+fn format[PATTERN: str](value: DateTime, dst: []u8) -> (str, err)
+fn parse[PATTERN: str](source: str) -> (DateTime, err)
+```
+
+This is proleptic Gregorian calendar arithmetic with ISO-8601 weekdays and weeks.
+Adding months or years clamps the day to the last valid day of the target month.
+Patterns are compile-time strings over the closed verbs `yyyy MM dd HH mm ss SSSSSSSSS`;
+punctuation is literal and locale names are deliberately absent. Named zones and
+daylight-saving ambiguity belong to `e.tz`.
+
+### `e.tz`
+
+```neper
+type Database = struct { state: *void }
+type Zone = struct { state: *const void }
+type Local = struct { date: time.Date, time: time.Time }
+type Offset = struct { seconds: i32, daylight: bool, abbreviation: str }
+type Resolve = union enum u8 { Unique: time.Timestamp, Ambiguous: [2]time.Timestamp, Missing: [2]time.Timestamp }
+error InvalidData
+error NotFound
+error TooLarge
+
+fn load(a: *mem.Arena, source: []const u8) -> (Database, err)
+fn builtin(a: *mem.Arena) -> (Database, err)
+fn version(db: *const Database) -> str
+fn zone(db: *const Database, name: str) -> (Zone, err)
+fn offset_at(zone: Zone, instant: time.Timestamp) -> Offset
+fn to_local(zone: Zone, instant: time.Timestamp) -> Local
+fn resolve(zone: Zone, local: Local) -> (Resolve, err)
+fn names(db: *const Database) -> []const str
+```
+
+`builtin` exposes the IANA Time Zone Database release pinned by the toolchain and
+reported by `version`; therefore a toolchain upgrade is the only implicit data
+upgrade. `load` permits an explicitly supplied compatible database for reproducible
+historical work. `Ambiguous` timestamps are ascending. `Missing` contains the
+timestamps immediately before and after the local-time gap. Neither function consults
+mutable host time-zone state.
+
 ---
 
 ## 6. Language-owned runtimes
+
+### `e.asset`
+
+```neper
+type Attribute = struct { name: str, value: str }
+type Asset = struct { name: str, media_type: str, bytes: []const u8, sha256: [32]u8, attributes: []const Attribute }
+
+fn count() -> usize
+fn at(index: usize) -> (Asset, bool)
+fn get(name: str) -> (Asset, bool)
+fn attribute(value: Asset, name: str) -> (str, bool)
+```
+
+The linker generates one immutable registry from the current target's `project.yaml`
+asset declarations. Entries are sorted by UTF-8 logical name; lookup is allocation-free
+and returns executable-backed slices valid for the process lifetime. Asset contents,
+names, media types, attributes and SHA-256 values are part of the executable and build
+identity. A build with no assets exposes an empty registry. This module never opens a
+file and provides no mutation, decompression or global cache.
 
 ### `e.gpu`
 
@@ -1224,6 +2148,37 @@ fn close(loop: *Loop) -> err
 This is readiness/completion polling only. It introduces no futures, coroutines,
 scheduler, callback registry or hidden state-machine transformation.
 
+### `e.async.io`
+
+```neper
+type Op[T: type] = struct { state: *void }
+type AnyOp = struct { state: *void }
+type State = enum u8 { Pending, Succeeded, Failed, Cancelled, TimedOut }
+error Cancelled
+error Timeout
+error Closed
+
+fn read(a: *mem.Arena, loop: *async.Loop, source: io.Reader, dst: []u8, deadline: time.Instant, cancel: *task.Cancel) -> (Op[usize], err)
+fn write(a: *mem.Arena, loop: *async.Loop, sink: io.Writer, src: []const u8, deadline: time.Instant, cancel: *task.Cancel) -> (Op[usize], err)
+fn accept(a: *mem.Arena, loop: *async.Loop, listener: os.Socket, deadline: time.Instant, cancel: *task.Cancel) -> (Op[os.Socket], err)
+fn connect(a: *mem.Arena, loop: *async.Loop, socket: os.Socket, address: os.SocketAddress, deadline: time.Instant, cancel: *task.Cancel) -> (Op[bool], err)
+fn state[T: type](op: *const Op[T]) -> State
+fn erase[T: type](op: *Op[T]) -> AnyOp
+fn take[T: type](op: *Op[T]) -> (T, err)
+fn wait[T: type](loop: *async.Loop, op: *Op[T]) -> (T, err)
+fn wait_any(loop: *async.Loop, ops: []AnyOp, timeout: time.Duration) -> (usize, bool, err)
+fn cancel[T: type](op: *Op[T])
+```
+
+Submission never blocks and every operation completes exactly once. Buffers, handles,
+contexts and cancellation tokens must outlive completion. A deadline with
+`nanos == 0` means no deadline. Cancellation is cooperative but completion after a
+successful cancel request reports `Cancelled`, never a partial success. `wait` drives
+the supplied loop; applications may instead poll it directly. `take` consumes a
+completed operation and returns its exact I/O error. `erase` is a non-owning typed
+conversion used only to build a heterogeneous `wait_any` slice; the original `Op[T]`
+must remain live.
+
 ### `e.net`
 
 ```neper
@@ -1259,6 +2214,35 @@ fn reader(socket: *Socket) -> io.Reader
 fn writer(socket: *Socket) -> io.Writer
 ```
 
+### `e.net.tls`
+
+```neper
+type Version = enum u8 { Tls13 }
+type ClientConfig = struct { server_name: str, trust_roots: []const u8, alpn: []const str, entropy: []const u8, now: time.Timestamp }
+type ServerConfig = struct { certificate_chain: []const u8, private_key: []const u8, alpn: []const str, entropy: []const u8 }
+type Stream = struct { state: *void }
+error InvalidCertificate
+error Handshake
+error Protocol
+error Closed
+error Unsupported
+
+fn client(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ClientConfig) -> (Stream, err)
+fn server(a: *mem.Arena, source: io.Reader, sink: io.Writer, config: ServerConfig) -> (Stream, err)
+fn handshake(stream: *Stream) -> err
+fn reader(stream: *Stream) -> io.Reader
+fn writer(stream: *Stream) -> io.Writer
+fn protocol(stream: *const Stream) -> Version
+fn negotiated_alpn(stream: *const Stream) -> str
+fn close(stream: *Stream) -> err
+```
+
+Version 1 implements TLS 1.3 only. Trust roots, certificate time and entropy are
+explicit inputs; the module never reads host trust state, clocks or randomness.
+Certificate and key inputs are bounded DER encodings. The cryptographic algorithms
+and validation profiles supported by a toolchain release are reported by `neper info`
+and tested against published protocol and malformed-peer vectors.
+
 ### `e.net.http`
 
 ```neper
@@ -1281,12 +2265,14 @@ fn read_response(a: *mem.Arena, r: *Reader) -> (Response, err)
 fn write_request(w: *Writer, req: *const Request) -> err
 fn write_response(w: *Writer, response: *const Response) -> err
 fn request(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: Limits) -> (Response, err)
+fn request_tls(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientConfig, req: *const Request, limits: Limits) -> (Response, err)
 fn header(headers: []const Header, name: str) -> (str, bool)
 fn reason(status: u16) -> str
 ```
 
-Chunked transfer encoding is supported. Automatic redirects, cookies, compression,
-TLS and connection pooling are deliberately outside this module.
+Chunked transfer encoding is supported. `request_tls` performs and verifies one TLS
+connection using the explicit configuration. Automatic redirects, cookies,
+compression and connection pooling remain outside the version-1 surface.
 
 ### `e.net.ws`
 
@@ -1313,7 +2299,276 @@ reads OS randomness implicitly.
 
 ---
 
-## 8. Interchange formats
+## 8. Declarative GPU UI
+
+### `gfx.scene`
+
+```neper
+type TextureId = struct { slot: u32, generation: u32 }
+type SceneId = struct { slot: u32, generation: u32 }
+type Clip = union enum u8 { Rect: geometry.Rect, Rounded: geometry.RRect, Path: geometry.Path }
+type Command = union enum u8 { Save, Restore, Transform: geometry.Transform, Clip: Clip, FillRect: FillRect, FillPath: FillPath, StrokePath: StrokePath, Image: DrawImage, Text: DrawText, OpacityLayer: OpacityLayer }
+type FillRect = struct { rect: geometry.Rect, brush: paint.Brush }
+type FillPath = struct { path: geometry.Path, brush: paint.Brush }
+type StrokePath = struct { path: geometry.Path, brush: paint.Brush, stroke: paint.Stroke }
+type DrawImage = struct { texture: TextureId, source: geometry.Rect, destination: geometry.Rect, opacity: f32 }
+type DrawText = struct { layout: *const layout.Layout, origin: geometry.Point, brush: paint.Brush }
+type OpacityLayer = struct { bounds: geometry.Rect, opacity: f32 }
+type DisplayList = struct { commands: []const Command }
+type Builder = struct { state: *void }
+type Renderer = struct { state: *void }
+type Target = struct { state: *void }
+error Invalid
+error TooLarge
+error OutOfMemory
+error Lost
+
+fn builder(a: *mem.Arena, max_commands: usize) -> (Builder, err)
+fn push(b: *Builder, command: Command) -> err
+fn finish(b: *Builder) -> DisplayList
+fn renderer(a: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, max_scenes: u32, max_textures: u32) -> (Renderer, err)
+fn upload_image(r: *Renderer, image: image.ConstImage) -> (TextureId, err)
+fn update_image(r: *Renderer, texture: TextureId, image: image.ConstImage) -> err
+fn release_image(r: *Renderer, texture: TextureId) -> err
+fn compile(r: *Renderer, list: DisplayList) -> (SceneId, err)
+fn render(r: *Renderer, scene: SceneId, target: Target, size: geometry.Size) -> err
+fn release_scene(r: *Renderer, scene: SceneId) -> err
+fn close(r: *Renderer) -> err
+```
+
+Display lists borrow their paths, gradients and text layouts until `compile`
+returns. A renderer owns bounded generation-checked GPU caches. Compilation may
+retain tessellation and glyph data but never application widget pointers. Rendering
+is explicit queue work followed by presentation through the target surface.
+
+### `ui.asset`
+
+```neper
+type Theme = enum u8 { Any, Light, Dark }
+type Request = struct { scale: f32, locale: str, theme: Theme }
+type ImageDecoder = struct { ctx: *void, decode: fn(*void, *mem.Arena, []const u8) -> (image.Image, err) }
+type Cache = struct { state: *void }
+error Missing
+error InvalidVariant
+error Decode
+error Full
+
+fn select(base: str, request: Request) -> (asset.Asset, err)
+fn font(base: str, request: Request, face_index: u32) -> (shape.Font, err)
+fn cache(a: *mem.Arena, renderer: *scene.Renderer, capacity: usize) -> (Cache, err)
+fn texture(cache: *Cache, scratch: *mem.Arena, base: str, request: Request, decoder: ImageDecoder) -> (scene.TextureId, err)
+fn evict(cache: *Cache, renderer: *scene.Renderer, base: str) -> err
+fn clear(cache: *Cache, renderer: *scene.Renderer) -> err
+fn close(cache: *Cache, renderer: *scene.Renderer) -> err
+```
+
+Variants share a manifest `base` attribute. Selection first filters by base, then
+chooses exact locale (falling back by removing subtags and finally to
+an empty locale), exact theme before `Any`, and the smallest scale not below the
+request or otherwise the largest scale. UTF-8 asset name breaks any remaining tie.
+The algorithm reads only `e.asset` metadata and is deterministic on every host.
+
+`font` returns executable-backed OpenType bytes without copying. `texture` invokes
+the caller-supplied decoder into `scratch`, uploads before returning, and keys the
+bounded cache by selected asset SHA-256 plus decoder identity. The cache owns its
+texture entries but not the renderer; eviction and closure explicitly release them.
+No image codec, filesystem lookup or unbounded global cache is hidden here.
+
+### `ui.window`
+
+```neper
+type Id = struct { slot: u32, generation: u32 }
+type Window = struct { state: *void, id: Id }
+type Mode = enum u8 { Windowed, Maximized, Fullscreen }
+type Cursor = enum u8 { Arrow, Text, Hand, Crosshair, ResizeHorizontal, ResizeVertical, Hidden }
+type Options = struct { title: str, width: u32, height: u32, min_width: u32, min_height: u32, resizable: bool, transparent: bool, mode: Mode }
+type Metrics = struct { logical_size: geometry.Size, framebuffer_width: u32, framebuffer_height: u32, scale: f32, focused: bool, visible: bool }
+error Unsupported
+error Invalid
+error Closed
+
+fn open(a: *mem.Arena, device: *gpu.Device, options: Options) -> (Window, err)
+fn metrics(window: *const Window) -> (Metrics, err)
+fn target(window: *const Window) -> (scene.Target, err)
+fn title(window: *Window, value: str) -> err
+fn cursor(window: *Window, value: Cursor) -> err
+fn visible(window: *Window, value: bool) -> err
+fn request_frame(window: *Window) -> err
+fn clipboard_get(a: *mem.Arena, window: *Window) -> (str, err)
+fn clipboard_set(window: *Window, value: str) -> err
+fn close(window: *Window) -> err
+```
+
+Windows are logically linear handles backed only by reviewed `e.os` primitives.
+Coordinates exposed above the module are logical pixels; framebuffer dimensions are
+physical pixels. `target` is non-owning and becomes invalid when the window closes.
+
+### `ui.input`
+
+```neper
+type DeviceId = u32
+type PointerId = u32
+type Key = struct { physical: u32, logical: u32 }
+type Modifiers = struct { shift: bool, control: bool, alt: bool, meta: bool, caps_lock: bool, num_lock: bool }
+type PointerButton = enum u8 { Primary, Secondary, Middle, Back, Forward }
+type PointerKind = enum u8 { Mouse, Touch, Pen }
+type Pointer = struct { window: window.Id, device: DeviceId, pointer: PointerId, kind: PointerKind, position: geometry.Point, buttons: u32, changed: PointerButton }
+type KeyEvent = struct { window: window.Id, key: Key, modifiers: Modifiers, repeat: bool }
+type TextEvent = struct { window: window.Id, text: str }
+type Composition = struct { window: window.Id, text: str, selection_start: usize, selection_end: usize }
+type Event = union enum u8 { Frame: window.Id, Close: window.Id, Resize: window.Metrics, Focus: window.Id, Blur: window.Id, PointerDown: Pointer, PointerUp: Pointer, PointerMove: Pointer, Scroll: Pointer, KeyDown: KeyEvent, KeyUp: KeyEvent, Text: TextEvent, Composition: Composition }
+type Queue = struct { state: *void }
+error Closed
+error TooLarge
+
+fn queue(a: *mem.Arena, capacity: usize) -> (Queue, err)
+fn poll(q: *Queue, timeout: time.Duration) -> (Event, bool, err)
+fn capture(q: *Queue, window: window.Id, pointer: PointerId) -> err
+fn release_capture(q: *Queue, window: window.Id, pointer: PointerId) -> err
+fn composition_rect(q: *Queue, window: window.Id, rect: geometry.Rect) -> err
+fn close(q: *Queue) -> err
+```
+
+Events preserve native ordering and borrow transient text until the next `poll`.
+Platform key codes are normalized into stable physical and Unicode-oriented logical
+values. Gesture recognition is built by widgets from pointer streams rather than
+being hidden in the OS boundary.
+
+### `ui.widget`
+
+```neper
+type Key = u64
+type ElementId = struct { slot: u32, generation: u32 }
+type StateId = struct { slot: u32, generation: u32 }
+type Action = struct { ctx: *void, invoke: fn(*void, input.Event) -> err }
+type Text = struct { value: str, style: layout.Style, color: paint.Color }
+type Button = struct { action: Action, enabled: bool }
+type Image = struct { texture: scene.TextureId, fit: Fit }
+type Scroll = struct { axis: ui_layout.Axis, offset: f32 }
+type Custom = struct { ctx: *void, measure: fn(*void, ui_layout.Constraints) -> geometry.Size, paint: fn(*void, *scene.Builder, geometry.Rect) -> err }
+type Kind = union enum u8 { Box, Flex: ui_layout.Flex, Grid: ui_layout.Grid, Stack, Text: Text, Button: Button, Image: Image, Scroll: Scroll, Custom: Custom }
+type Node = struct { key: Key, kind: Kind, style: style.Style, children: []const Node }
+type Fit = enum u8 { Fill, Contain, Cover, None }
+type BuildContext = struct { runtime: *Runtime, element: ElementId, frame: u64 }
+type Runtime = struct { state: *void }
+type Limits = struct { max_elements: usize, max_states: usize, state_bytes: usize, state_classes: u16, max_depth: u16, max_commands: usize }
+error DuplicateKey
+error InvalidTree
+error TooDeep
+error TooLarge
+error StateType
+
+fn runtime(a: *mem.Arena, renderer: *scene.Renderer, limits: Limits) -> (Runtime, err)
+fn box(key: Key, value_style: style.Style, children: []const Node) -> Node
+fn flex(key: Key, spec: ui_layout.Flex, value_style: style.Style, children: []const Node) -> Node
+fn grid(key: Key, spec: ui_layout.Grid, value_style: style.Style, children: []const Node) -> Node
+fn stack(key: Key, value_style: style.Style, children: []const Node) -> Node
+fn text(key: Key, value: Text, value_style: style.Style) -> Node
+fn button(key: Key, value: Button, value_style: style.Style, children: []const Node) -> Node
+fn image(key: Key, value: Image, value_style: style.Style) -> Node
+fn scroll(key: Key, value: Scroll, value_style: style.Style, children: []const Node) -> Node
+fn state[T: type](ctx: *BuildContext, key: Key, initial: T) -> (*T, StateId, err)
+fn invalidate(runtime: *Runtime, element: ElementId)
+fn reconcile(runtime: *Runtime, frame_arena: *mem.Arena, root: Node, constraints: ui_layout.Constraints) -> (scene.SceneId, err)
+fn dispatch(runtime: *Runtime, event: input.Event) -> err
+fn focus(runtime: *Runtime, element: ElementId) -> err
+fn close(runtime: *Runtime) -> err
+```
+
+`Node` is the declarative syntax: ordinary literals and the allocation-free convenience
+constructors create
+an immutable tree in a resettable frame arena. Reconciliation matches siblings by
+nonzero key and kind, otherwise by position and kind. Persistent elements and typed
+state occupy bounded generation-checked slots owned by `Runtime`; widgets themselves
+are never retained. Removed state is destroyed logically at the reconciliation
+boundary and its size/alignment cell enters a bounded runtime free list. A reused
+`Action.ctx` must outlive the element that retains it; passing frame-arena context is
+`InvalidTree` in debug validation and undefined in release.
+
+### `ui.animation`
+
+```neper
+type Curve = enum u8 { Linear, EaseIn, EaseOut, EaseInOut }
+type Controller = struct { start: time.Instant, duration: time.Duration, curve: Curve, repeating: bool, reverse: bool }
+
+fn controller(now: time.Instant, duration: time.Duration, curve: Curve) -> Controller
+fn value(c: *const Controller, now: time.Instant) -> f32
+fn finished(c: *const Controller, now: time.Instant) -> bool
+fn restart(c: *Controller, now: time.Instant)
+fn request(runtime: *widget.Runtime, element: widget.ElementId)
+```
+
+Animation state is explicit. Sampling never reads a clock; the application supplies
+`now`, making animation deterministic in tests.
+
+### `ui.accessibility`
+
+```neper
+type Id = widget.ElementId
+type Role = enum u8 { Application, Window, Group, Button, Checkbox, Radio, Text, TextField, Image, Link, List, ListItem, Table, Row, Cell, Slider, Progress, Scrollbar }
+type State = struct { disabled: bool, focused: bool, selected: bool, checked: bool, expanded: bool, hidden: bool }
+type Action = enum u8 { Focus, Press, Increment, Decrement, SetValue, Scroll }
+type Node = struct { id: Id, role: Role, label: str, value: str, hint: str, state: State, bounds: geometry.Rect, actions: []const Action, children: []const Id }
+type Tree = struct { root: Id, nodes: []const Node }
+error Unsupported
+error Invalid
+
+fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err)
+fn publish(window: window.Id, tree: *const Tree) -> err
+fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err
+```
+
+The semantics tree is separate from paint order but uses the same stable element
+identities. Publication crosses a reviewed `e.os` accessibility bridge and retains
+no caller strings after returning.
+
+### `ui.testing`
+
+```neper
+type Harness = struct { state: *void }
+type Match = struct { element: widget.ElementId, count: usize }
+error NotFound
+error Ambiguous
+error GoldenMismatch
+
+fn harness(a: *mem.Arena, runtime: *widget.Runtime, width: u32, height: u32, scale: f32) -> (Harness, err)
+fn pump(h: *Harness, root: widget.Node, now: time.Instant) -> err
+fn send(h: *Harness, event: input.Event) -> err
+fn by_key(h: *const Harness, key: widget.Key) -> Match
+fn by_text(h: *const Harness, text: str) -> Match
+fn snapshot(h: *Harness, a: *mem.Arena) -> (image.Image, err)
+fn compare(actual: image.ConstImage, expected: image.ConstImage, tolerance: u8) -> err
+fn close(h: *Harness) -> err
+```
+
+The harness uses the deterministic CPU rendering backend and a synthetic window. It
+does not require a display server and never sleeps; tests supply frame time.
+
+### `ui.app`
+
+```neper
+type App = struct { state: *void }
+type Builder[Ctx: type] = struct { ctx: *Ctx, build: fn(*Ctx, *widget.BuildContext) -> (widget.Node, err) }
+type Options = struct { window: window.Options, widget_limits: widget.Limits, frame_arena_bytes: usize, event_capacity: usize, backend: gpu.Backend }
+error Closed
+error Failed
+
+fn init[Ctx: type](a: *mem.Arena, options: Options, builder: Builder[Ctx]) -> (App, err)
+fn step(app: *App, timeout: time.Duration) -> (bool, err)
+fn run(app: *App) -> err
+fn stop(app: *App)
+fn close(app: *App) -> err
+```
+
+`step` drains ordered input, rebuilds only invalidated subtrees, reconciles, lays out,
+compiles a scene and presents when a frame is due. It returns `false` after the last
+window closes or `stop` is called. `run` is exactly a loop over `step`; applications
+retain control by calling `step` themselves. All memory comes from the application
+arena plus a bounded frame arena reset after presentation.
+
+---
+
+## 9. Interchange formats
 
 All document decoders allocate retained strings and nodes in the arena passed to the
 call. Streaming readers retain only their documented scratch state. Every writer uses
@@ -1385,6 +2640,124 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err
 The accepted syntax is sections, `key=value`, `;`/`#` line comments, quoted values,
 and backslash escapes. It deliberately excludes interpolation and includes.
 
+### `fmt.uri`
+
+```neper
+type Uri = struct { scheme: str, authority: str, userinfo: str, host: str, port: str, path: str, query: str, fragment: str }
+type EncodeSet = enum u8 { Path, PathSegment, Query, QueryComponent, Fragment, UserInfo }
+error Invalid
+
+fn parse(source: str) -> (Uri, err)
+fn resolve(a: *mem.Arena, base: Uri, reference: Uri) -> (Uri, err)
+fn normalize(a: *mem.Arena, value: Uri) -> (Uri, err)
+fn format(a: *mem.Arena, value: Uri) -> (str, err)
+fn percent_encode(a: *mem.Arena, source: []const u8, set: EncodeSet) -> (str, err)
+fn percent_decode(a: *mem.Arena, source: str) -> ([]u8, err)
+fn query_get(query: str, name: str) -> (str, bool, err)
+```
+
+Parsing follows RFC 3986 and returns borrowed slices. Percent decoding never treats
+`+` as space; HTML form encoding is a separate concern.
+
+### `fmt.mime`
+
+```neper
+type Parameter = struct { name: str, value: str }
+type MediaType = struct { major: str, subtype: str, parameters: []const Parameter }
+type Header = struct { name: str, value: str }
+error Invalid
+error TooLarge
+
+fn parse_media_type(a: *mem.Arena, source: str, limit: usize) -> (MediaType, err)
+fn format_media_type(a: *mem.Arena, value: MediaType) -> (str, err)
+fn extension_type(extension: str) -> (str, bool)
+fn parse_headers(a: *mem.Arena, source: io.Reader, byte_limit: usize, count_limit: usize) -> ([]Header, err)
+fn header(headers: []const Header, name: str) -> (str, bool)
+```
+
+Header names compare by ASCII case folding. Obsolete line folding is rejected.
+
+### `fmt.gzip`
+
+```neper
+type Reader = struct { state: *void }
+type Writer = struct { state: *void }
+error Invalid
+error Checksum
+
+fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err)
+fn read(r: *Reader, dst: []u8) -> (usize, err)
+fn writer(storage: []u8, sink: io.Writer, level: deflate.Level) -> (Writer, err)
+fn write(w: *Writer, src: []const u8) -> (usize, err)
+fn finish(w: *Writer) -> err
+fn storage_required(level: deflate.Level) -> usize
+```
+
+The reader validates RFC 1952 headers, trailer size and CRC32. The output limit is
+checked before exposing bytes. `finish` writes the final DEFLATE blocks and trailer.
+
+### `fmt.zstd`
+
+```neper
+type Reader = struct { state: *void }
+type Writer = struct { state: *void }
+type Level = enum u8 { Fast, Balanced, Best }
+error Invalid
+error Checksum
+error Unsupported
+
+fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err)
+fn read(r: *Reader, dst: []u8) -> (usize, err)
+fn writer(storage: []u8, sink: io.Writer, level: Level) -> (Writer, err)
+fn write(w: *Writer, src: []const u8) -> (usize, err)
+fn finish(w: *Writer) -> err
+fn reader_storage(window_limit: usize) -> (usize, err)
+fn writer_storage(level: Level) -> usize
+```
+
+Version 1 supports standard frames without dictionaries. Window and decompressed
+output limits are mandatory; unsupported skippable or dictionary frames return
+`Unsupported`.
+
+### `fmt.zip`
+
+```neper
+type Archive = struct { state: *void }
+type Entry = struct { name: str, compressed_size: u64, size: u64, method: u16, crc32: u32, directory: bool }
+type Limits = struct { entries: usize, name_bytes: usize, entry_bytes: u64, total_bytes: u64 }
+error Invalid
+error Unsupported
+error Checksum
+error TooLarge
+
+fn open(a: *mem.Arena, source: io.Reader, seeker: io.Seeker, limits: Limits) -> (Archive, err)
+fn entries(archive: *const Archive) -> []const Entry
+fn entry_reader(storage: []u8, archive: *Archive, index: usize) -> (io.Reader, err)
+fn extract(a: *mem.Arena, archive: *Archive, index: usize) -> ([]u8, err)
+```
+
+Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It rejects
+encrypted entries, absolute paths and names containing a `..` segment. CRC and all
+per-entry/aggregate limits are checked before successful extraction.
+
+### `fmt.tar`
+
+```neper
+type Reader = struct { state: *void }
+type Entry = struct { name: str, size: u64, kind: u8, mode: u32, modified: i64, link: str }
+error Invalid
+error Unsupported
+error TooLarge
+
+fn reader(a: *mem.Arena, source: io.Reader, entry_limit: usize, byte_limit: u64) -> (Reader, err)
+fn next(r: *Reader) -> (Entry, bool, err)
+fn content(r: *Reader) -> io.Reader
+fn skip(r: *Reader) -> err
+```
+
+The reader supports POSIX ustar and PAX path/size records. Each entry's content must
+be consumed or skipped before `next`. Absolute paths and `..` segments are rejected.
+
 ### `fmt.yaml`
 
 ```neper
@@ -1431,6 +2804,56 @@ fn end(w: *Writer, name: str) -> err
 
 XML 1.0 names, namespaces and entity escaping are supported. External entities and
 DTDs are always `Unsupported`; the module never performs hidden I/O.
+
+### `fmt.html`
+
+```neper
+type NodeId = u32
+const NONE: NodeId = 4294967295
+type NodeKind = enum u8 { Document, Doctype, Element, Text, Comment }
+type Namespace = enum u8 { Html, Svg, MathMl }
+type Attribute = struct { namespace: Namespace, name: str, value: str }
+type Node = struct { kind: NodeKind, namespace: Namespace, name: str, value: str, attributes: []const Attribute, parent: NodeId, first_child: NodeId, last_child: NodeId, previous_sibling: NodeId, next_sibling: NodeId }
+type Document = struct { nodes: []const Node, root: NodeId }
+type Children = struct { document: *const Document, next: NodeId }
+type Options = struct { max_bytes: usize, max_nodes: usize, max_attributes: usize, max_depth: u16, preserve_comments: bool }
+error InvalidEncoding
+error TooDeep
+error TooLarge
+
+fn parse(a: *mem.Arena, source: str, options: Options) -> (Document, err)
+fn parse_reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Document, err)
+fn node(document: *const Document, id: NodeId) -> *const Node
+fn children(document: *const Document, parent: NodeId) -> Children
+fn children_next(it: *Children) -> (NodeId, bool)
+fn attribute(node: *const Node, name: str) -> (str, bool)
+fn text_content(a: *mem.Arena, document: *const Document, root: NodeId) -> (str, err)
+fn write(writer: *io.Writer, document: *const Document) -> err
+```
+
+The input is UTF-8 with an optional UTF-8 BOM; invalid UTF-8 returns
+`InvalidEncoding`. `parse_reader` reads no more than `max_bytes`, and `parse` rejects
+an input longer than that limit before allocating nodes. Ordinary malformed HTML is
+recovered rather than returned as an error. Tokenization, character-reference
+decoding, insertion modes, implied elements, foster parenting, raw-text elements and
+HTML/SVG/MathML namespace transitions follow the WHATWG HTML parsing algorithm as
+frozen by the toolchain version. The conformance snapshot and html5lib
+tree-construction fixtures used by a release are recorded in its build manifest.
+
+`Document.nodes` is arena-owned and read-only. `NodeId` values are indices into that
+slice; `NONE` denotes a missing relation. The document node is `root`, has
+`namespace == .Html`, and has no name or value. Element names are ASCII-lowercase in
+the HTML namespace and preserve adjusted foreign names elsewhere. Text, comments,
+names and decoded attribute values are arena-owned. Attributes and children preserve
+source/tree-construction order. `attribute` uses ASCII-insensitive comparison for
+HTML elements and exact comparison for foreign elements. `text_content` concatenates
+descendant text nodes in tree order. `write` implements the matching HTML fragment
+serialization rules and performs no pretty-print rewrite.
+
+The module does not open files, fetch subresources, execute scripts, apply CSS,
+construct a browser DOM or expose mutable tree operations. A caller loads a file
+through `e.fs` or supplies an `e.io.Reader`. Legacy encoding sniffing and conversion
+must occur before parsing and are outside the version-1 surface.
 
 ### `fmt.bson`
 
@@ -1511,10 +2934,12 @@ not invent field numbers from reflection and contains no descriptor runtime.
 
 ---
 
-## 9. External packages
+## 10. External packages
 
-The `x.*` rows in `modules.md` are package reservations, not modules with invented
-surfaces. Each package must publish its own file in `docs/packages/<owner>/<package>.md`
-before implementation. That specification pins the upstream ABI/data version and
-lists every public declaration using the same format as this catalogue. Until such a
-file exists, the package has exactly zero promised functions and structures.
+The `x.*` rows in `modules.md` are package reservations, not implicit toolchain
+modules. Each package publishes `docs/packages/<owner>/<package>.md` before
+implementation. That specification pins the upstream ABI/data version and lists
+every public declaration using the same format as this catalogue. `x.neper.*` is not
+a legal package namespace: Neper-owned facilities live in `e.*`, `algo.*`, `text.*`,
+`crypto.*`, `fmt.*`, `gfx.*` or `ui.*`. A remaining vendor reservation without a package specification
+promises zero functions and structures.

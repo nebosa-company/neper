@@ -806,8 +806,10 @@ on a `u8` is decimal through `push_u8`. The rest of the surface:
 ```
 type Sink    = struct { ctx: *void, write: fn(ctx: *void, bytes: []const u8) -> err }
 type Builder = struct { arena: *mem.Arena, start: usize, len: usize, reserved: usize, sink: Sink, flushing: bool }
+type Split   = struct { source: str, separator: str, off: usize, finished: bool }
 error NotOnTop // something else has allocated from the arena since builder
 error BadNumber // a parse function's input is malformed or out of range
+error InvalidSeparator // split separator is empty
 ```
 
 `Sink` is a context pointer and one ordinary neper function pointer (§5) — never an
@@ -829,6 +831,13 @@ callers do not replace them.
 | `fn eq(x: []const u8, y: []const u8) -> bool` | byte equality |
 | `fn parse_f32(s: []const u8) -> (f32, err)`, `fn parse_f64(s: []const u8) -> (f64, err)` | the whole of `s` as a float, in the notation `push_f32` writes; `str.BadNumber` on anything malformed or out of range |
 | `fn parse_i64(s: []const u8) -> (i64, err)`, `fn parse_u64(s: []const u8) -> (u64, err)` | the whole of `s` as a decimal integer, an optional `-` on the signed form; `str.BadNumber` on anything malformed or out of range. Narrower widths go through a cast (§4), which is where a value that does not fit is reported |
+| `fn parse_i64_radix(s: str, radix: u8) -> (i64, err)`, `fn parse_u64_radix(s: str, radix: u8) -> (u64, err)` | whole-input parsing for radix `2..36`; ASCII letters are case-insensitive and no prefix is recognized |
+| `compare`, `compare_ascii_fold` | three-way byte-lexicographic comparison; the latter folds ASCII letters only |
+| `starts_with`, `ends_with`, `contains`, `find`, `find_from`, `rfind`, `count` | byte-substring operations with `(index, found)` results; an empty needle matches every boundary |
+| `trim`, `trim_start`, `trim_end`, `trim_bytes` | borrowed subslices; the first three remove ASCII whitespace |
+| `split_once`, `split`, `split_next`, `lines` | borrowed, non-copyable traversal preserving empty fields; empty explicit separators return `InvalidSeparator`; lines accept LF and CRLF and omit terminators |
+| `replace`, `repeat` | checked arena allocation and non-overlapping replacement |
+| `ascii_lower_in_place`, `ascii_upper_in_place`, `is_ascii_space`, `is_ascii_digit`, `is_ascii_alpha`, `is_ascii_alnum` | locale-free ASCII operations; Unicode equivalents remain in `text.*` |
 
 Fixed precision `N` is in `0..=99`; a larger runtime `prec` returns `BadNumber`, and
 a larger format-literal precision is a compile error. Fixed conversion rounds ties to
@@ -1256,6 +1265,8 @@ type Thread    = struct { raw: usize }
 type Lib       = struct { raw: usize }
 type Socket    = struct { raw: usize }
 type Poller    = struct { raw: usize }
+type Mapping   = struct { raw: usize, address: *u8, len: usize }
+type Watch     = struct { raw: usize }
 type Clock     = enum u8 { Wall, Monotonic }
 type SeekWhence = enum u8 { Start, Current, End }
 type EntryKind = enum u8 { File, Dir, Symlink, Other }
@@ -1271,6 +1282,10 @@ type SocketShutdown = enum u8 { Read, Write, Both }
 type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, port: u16 }
 type PollInterest = struct { readable: bool, writable: bool }
 type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
+type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
+type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
+type ErrorKind = enum u8 { NotFound, Denied, Exists, Interrupted, OutOfMemory, Timeout, WouldBlock, Unsupported, Invalid, Other }
+type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 
 error NotFound
 error Denied
@@ -1331,25 +1346,34 @@ error Unsupported
 | `fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err`, `fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err`, `fn poller_unregister(p: Poller, handle: Handle) -> err` | one registration per handle; tokens are returned unchanged |
 | `fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err)` | fills a prefix of `events`; negative timeout means infinite and zero means poll once |
 | `fn poller_wake(p: Poller) -> err`, `fn poller_close(p: Poller) -> err` | wake interrupts a current or next wait; close consumes the poller |
+| `fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err)` | maps a non-empty file range; internal page alignment does not change the exposed bytes |
+| `fn mapping_bytes(m: Mapping) -> []const u8` | the exact requested range as a read-only view |
+| `fn mapping_bytes_mut(m: Mapping) -> ([]u8, err)` | the exact requested range; returns `Denied` unless the mapping was opened writable |
+| `fn mapping_flush(m: Mapping) -> err`, `fn mapping_close(m: Mapping) -> err` | flush requests host persistence; close consumes the mapping and invalidates derived pointers |
+| `fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err)` | opens the native directory-change source; `Unsupported` when recursive watching cannot be implemented faithfully |
+| `fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err)` | fills a prefix with root-relative paths; `Overflow` requires a rescan |
+| `fn watch_close(w: Watch) -> err` | consumes the watch and wakes a blocked read |
 | `fn dlopen(a: *mem.Arena, name: str) -> (Lib, err)` | `name` as in `@import`: no prefix, no suffix |
 | `fn dlsym[F: type](a: *mem.Arena, l: Lib, sym: str) -> (F, err)` | `F` must be an `extern fn` type |
 | `fn dlclose(l: Lib) -> err` | |
-| `fn last_error() -> i32` | `errno` / `GetLastError` after the calling thread's most recent failed `os.*` call |
+| `fn last_error_detail(operation: str, subject: str) -> ErrorDetail` | copies the classified `errno` / `GetLastError` after this thread's most recent failed `os.*` call and borrows the two caller strings |
+| `fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)` | renders the platform message for `native_code` into `a` |
 
 Every failing call returns one of the nine errors above after mapping the platform
-code; `Failed` is the catch-all, and `last_error` gives the raw code when the mapping
-is not enough. This list is the v1 surface. A future standard module that needs more
+code; `Failed` is the catch-all, and `last_error_detail` gives an explicit portable
+classification plus the raw code when the mapping is not enough. This list is the v1
+surface. A future standard module that needs more
 host functionality first adds a reviewed primitive here and a per-target
 implementation; it does not declare its own platform `extern`. Direct optional API
-bindings, including signals before such a primitive exists, belong in
-`x.neper.os.<platform>`.
+bindings, including signals before such a primitive exists, belong in a package
+named for its actual external owner; Neper-owned additions extend `e.os`.
 
 `OpenFlags` must request `read`, `write` or both. `truncate` and `append` require
 `write` and are mutually exclusive. `create` creates a missing file and otherwise
 opens the existing one; newly created files use user read/write permissions subject
 to the process umask on POSIX and the ordinary inherited ACL on Windows. `append`
 makes each individual `write` append atomically as the platform defines it. An invalid
-flag combination returns `Failed` before opening anything and sets `last_error` to
+flag combination returns `Failed` before opening anything and sets the detail code to
 the platform's invalid-argument code.
 
 Paths are UTF-8. On Windows an invalid UTF-8 path returns `Failed`; valid input is
@@ -1379,20 +1403,25 @@ handle must be unregistered before its owning file or socket is closed. A wake i
 level-like: at least one current or subsequent `poller_wait` returns, and redundant
 wakes may coalesce.
 
-`File`, `Proc`, `Thread`, `Lib`, `Socket` and `Poller` are logically linear handles
+`File`, `Proc`, `Thread`, `Lib`, `Socket`, `Poller`, `Mapping` and `Watch` are logically linear handles
 even though their raw bits can be copied. `close`, successful `wait`, `thread_join`,
-`thread_detach`, `dlclose`, `socket_close` and `poller_close` consume all copies;
+`thread_detach`, `dlclose`, `socket_close`, `poller_close`, `mapping_close` and
+`watch_close` consume all copies;
 another operation through any consumed copy is undefined
 behavior, because the OS may already have reused the raw value and neper keeps no
 hidden handle registry. `kill` after successful `wait` and a second `wait` are the
 same programmer error. Dropping a live process does not wait for it. On POSIX a signal termination is
 reported as `128 + signal`; an ordinary exit code with the same number is
 intentionally indistinguishable. Windows exceptions map to `128 +` the low seven
-bits of the exception code and leave the full code in `last_error`.
+bits of the exception code and leave the full code in the error detail.
 
-`last_error` is per OS thread. A failed `os.*` call sets it before returning; a
-successful call leaves it unchanged. A wrapper preserves the raw error from the
-primitive that determines its returned `err`.
+Error detail state is per OS thread. A failed `os.*` call sets it before returning; a
+successful call leaves it unchanged. `last_error_detail` must be called before the
+next failing OS operation on that thread and copies the state into an ordinary value.
+A wrapper preserves the detail from the primitive that determines its returned
+`err`; it does not perform cleanup first. `operation` and `subject` are explicit
+borrowed labels, so neither exceptions nor a process-global message payload are
+introduced. `error_message` is the only locale-dependent rendering step.
 
 `reserve`, `commit` and `release` accept page-aligned addresses and page-rounded
 lengths after the documented rounding of `reserve`; zero length is `Failed`.
@@ -2437,7 +2466,7 @@ not. And `f.ty.format(...)` is a protocol call whose receiver is a comptime type
 value, which is exactly what rule 1 admits and what §14 invariant 4 excepts.
 
 `fmt.json`, `e.cli` filling a config struct from `argv`, `e.log` writing structured
-fields and an `x.neper.db.*` driver mapping a row are the same shape. Without this each of them needs
+fields and an `x.<owner>.db.*` driver mapping a row are the same shape. Without this each of them needs
 hand-written marshalling per type, which is the boilerplate generated code gets wrong
 most often.
 

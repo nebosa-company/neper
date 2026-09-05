@@ -241,9 +241,11 @@ channel. `dis --json` emits one `disassembly` record per function with `symbol`,
 Every build writes `.neper/<mode>/build-manifest.json`. It is one canonical JSON
 object with `schema:"neper-build-manifest"`, `version:1`, `tool_version`,
 `language_version`, `grammar_revision`, `target`, `mode`, `root_module`, `inputs`,
-`dependencies`, `libraries`, `artifacts`, and `options`. Inputs and dependencies carry
+`dependencies`, `libraries`, `assets`, `artifacts`, and `options`. Inputs and dependencies carry
 source identifiers and SHA-256 hashes; libraries carry the requested name, ordered
 search roots, resolved source identifier or absolute external path, and SHA-256;
+assets carry logical name, source identifier, media type, sorted attributes, byte
+size and SHA-256;
 artifacts carry project-relative paths, kind, target and SHA-256. Arrays use the
 deterministic order in which their corresponding compiler operation is specified,
 and object keys use the order listed here.

@@ -124,6 +124,7 @@ On Linux:
 - [`docs/module-apis.md`](docs/module-apis.md) — exact proposed APIs for toolchain modules
 - [`docs/modules.json`](docs/modules.json) — machine-readable module catalogue
 - [`docs/general-purpose-verification.md`](docs/general-purpose-verification.md) — workload and LLM-generation acceptance plan
+- [`docs/ui-framework.md`](docs/ui-framework.md) — experimental declarative GPU UI architecture
 - [`docs/pacman.md`](docs/pacman.md) — the M6 package manager architecture
 - [`examples/sample.e`](examples/sample.e) — every construct in the language, once, in one program
 - [`examples/`](examples/) — what the language is meant to look like

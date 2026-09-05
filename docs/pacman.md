@@ -2,7 +2,7 @@
 
 Status: approved architecture for roadmap M6. This document fixes the package
 manager contract before implementation. It does not change neper v1 source semantics:
-`e.*`, `algo.*`, `text.*`, `crypto.*`, and `fmt.*` still ship with the toolchain,
+`e.*`, `algo.*`, `text.*`, `crypto.*`, `fmt.*`, `gfx.*` and `ui.*` still ship with the toolchain,
 while pacman primarily acquires external `x.*` source.
 
 ## 1. Boundary and principles
@@ -36,13 +36,13 @@ launcher that forwards to the same command group.
 
 - `e.*` is inseparable from a specific neper toolchain version. Pacman must reject a
   package that exports or replaces an `e.*` module.
-- The toolchain's `algo.*`, `text.*`, `crypto.*`, and `fmt.*` modules follow the same
+- The toolchain's `algo.*`, `text.*`, `crypto.*`, `fmt.*`, `gfx.*` and `ui.*` modules follow the same
   rule. Their version is the language/toolchain version, not an independently
   resolved package version.
 - Public third-party packages export modules beneath `x.<owner>.*`. The public
   registry verifies that the authenticated owner controls that prefix. Ownerless
   short names are invalid; curated packages use an explicit owner such as
-  `x.neper.os.win` or `x.khronos.vulkan`.
+  `x.microsoft.win32` or `x.khronos.vulkan`.
 - A private registry may allocate its own owners, but two locked packages may not
   export the same fully qualified module name. Import aliases solve local qualifier
   collisions; they do not make duplicate module definitions legal.
@@ -85,6 +85,20 @@ dependencies:
     git: https://gitlab.example.test/acme/custom_tool.git
     ref: v1.0.4
 
+assets:
+  images/logo@1x:
+    path: assets/logo.png
+    media_type: image/png
+    attributes: {base: images/logo, scale: "1", theme: any, locale: ""}
+  images/logo@2x-dark:
+    path: assets/logo@2x-dark.png
+    media_type: image/png
+    attributes: {base: images/logo, scale: "2", theme: dark, locale: ""}
+  fonts/inter-regular:
+    path: assets/Inter-Regular.ttf
+    media_type: font/ttf
+    attributes: {base: fonts/inter, scale: "1", theme: any, locale: ""}
+
 tasks:
   generate_grpc:
     command: [tools/protoc, --neper_out, .neper/generated, api.proto]
@@ -94,7 +108,7 @@ tasks:
 ```
 
 Required keys are `schema`, `name`, `version`, and `language`. Optional keys are
-`targets`, `registries`, `dependencies`, `dev_dependencies`, `tools`, and `tasks`.
+`targets`, `registries`, `dependencies`, `dev_dependencies`, `tools`, `assets`, and `tasks`.
 Unknown keys are errors, so a typo cannot silently change resolution. Pacman locates
 the project at the nearest ancestor containing `project.yaml`; that directory must
 also be the compiler project root containing `src/` or `lib/`.
@@ -125,6 +139,22 @@ metadata, not a new entry-point rule. `neper pacman build agent` runs only those
 root-declared tasks, resolves the root to `src/main.e`, and invokes
 `neper build src/main.e` with the locked module map. Direct `neper build <file.e>`
 remains valid and runs no task.
+
+`assets` maps a unique normalized logical name to `path`, an ASCII-lowercase
+`media_type`, and an optional string-to-string `attributes` mapping. Paths are
+project-relative, may not escape the root after symlink resolution and must identify
+regular files. Logical names use `/` separators, contain no empty, `.` or `..`
+segment, and are sorted by UTF-8 bytes before linking. The raw file bytes are embedded
+unchanged; executable-section compression is deliberately outside version 1 so
+`e.asset.Asset.bytes` is always a zero-copy process-lifetime slice.
+
+The conventional UI attributes are `base`, positive finite decimal `scale`, `theme`
+(`any`, `light` or `dark`) and a canonical BCP 47 `locale` or the empty fallback.
+`ui.asset` ignores unknown attributes but rejects malformed conventional ones.
+Ordinary `e.asset` callers may define other attributes. Asset names, metadata, sizes
+and SHA-256 values enter incremental and final link identity. Direct `neper build`
+outside a project embeds no assets. Dependency-package assets and external runtime
+assets are deferred; version 1 embeds only declarations in the root project.
 
 ### Package manifests
 
