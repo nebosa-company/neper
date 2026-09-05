@@ -14,6 +14,18 @@ scan=$($test_build/neper-self scan 'fn main() -> err { ret ok }')
 [ "$scan" = 'scan ok' ]
 parse=$($test_build/neper-self parse 'fn main() -> err { ret ok }')
 [ "$parse" = 'parse ok' ]
+scan_file=$($test_build/neper-self scan-file "$repo/src/main.e")
+[ "$scan_file" = 'scan file ok' ]
+parse_file=$($test_build/neper-self parse-file "$repo/tests/selfhost/fixtures/source-load.e")
+[ "$parse_file" = 'parse file ok' ]
+if missing_file=$($test_build/neper-self scan-file "$test_build/missing-source.e" 2>&1); then
+    printf '%s\n' 'missing source unexpectedly loaded' >&2
+    exit 1
+fi
+case "$missing_file" in
+    *'error: os.NotFound'*) ;;
+    *) printf '%s\n' 'source loader returned the wrong missing-file error' >&2; exit 1 ;;
+esac
 capacity_source=''
 i=0
 while [ "$i" -lt 260 ]; do

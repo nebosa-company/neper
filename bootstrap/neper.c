@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.67-neper0"
+#define NEPER_VERSION "0.0.68-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -2231,6 +2231,10 @@ static int type_equal(Type a, Type b) {
 
 static int type_assignable(Type actual, Type expected) {
     if (type_equal(actual, expected)) return 1;
+    if (actual.kind == TY_SLICE && expected.kind == TY_STR) {
+        Type element = sequence_element_type(actual);
+        return element.kind == TY_INT && strcmp(element.name, "u8") == 0;
+    }
     if ((actual.kind == TY_POINTER || actual.kind == TY_SLICE) &&
         actual.kind == expected.kind && !actual.is_const && expected.is_const) {
         if (actual.element && expected.element)

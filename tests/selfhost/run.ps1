@@ -15,6 +15,14 @@ $scan = & $compiler scan 'fn main() -> err { ret ok }'
 if ($LASTEXITCODE -ne 0 -or $scan -ne 'scan ok') { throw 'self-hosted compiler scan command failed' }
 $parse = & $compiler parse 'fn main() -> err { ret ok }'
 if ($LASTEXITCODE -ne 0 -or $parse -ne 'parse ok') { throw 'self-hosted compiler parse command failed' }
+$scanFile = & $compiler scan-file (Join-Path $repo 'src\main.e')
+if ($LASTEXITCODE -ne 0 -or $scanFile -ne 'scan file ok') { throw 'arena-backed source scan failed' }
+$parseFile = & $compiler parse-file (Join-Path $PSScriptRoot 'fixtures\source-load.e')
+if ($LASTEXITCODE -ne 0 -or $parseFile -ne 'parse file ok') { throw 'arena-backed source parse failed' }
+$missingFile = & $compiler scan-file (Join-Path $testBuild 'missing-source.e') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($missingFile -join "`n") -notmatch 'error: os\.NotFound') {
+    throw 'source loader missing-file propagation failed'
+}
 $capacityDeclarations = 0..259 | ForEach-Object { "error Capacity$_" }
 $capacityItems = 0..129 | ForEach-Object { '0u8' }
 $capacitySource = ($capacityDeclarations -join "`n") + "`nfn capacity() {`n    let values = [_]u8{ " + ($capacityItems -join ', ') + " }`n}`n"

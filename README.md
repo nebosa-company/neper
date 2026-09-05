@@ -151,6 +151,10 @@ local child-ID arrays. The cross-platform self-host regression parses 261 top-le
 declarations and a 130-item aggregate in one source, exceeding both former limits.
 The parser exposes no fixed-capacity validation shortcut: CLI and test callers pass
 their node and child storage explicitly.
+The self-hosted compiler now loads source paths through `src/source.e` and the fixed
+`e.os` file surface. Its arena-backed buffer grows as needed, preserves all bytes
+while moving between allocations, closes the file on every result path, and supplies
+`scan-file` and `parse-file` CLI checkpoints without a compiler-side source-size cap.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

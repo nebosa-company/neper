@@ -2,6 +2,7 @@ use e.io
 use e.mem
 use lex
 use parse
+use source
 use syntax
 
 fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize, column: usize) -> err {
@@ -732,6 +733,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("parse ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE\n")
+    if args.len == 3usize && same(args[1usize], "scan-file") {
+        let (text, load_error) = source.load(a, args[2usize])
+        if load_error != ok { ret load_error }
+        let scan_error = lex.validate(text)
+        if scan_error != ok { ret scan_error }
+        try io.print("scan file ok\n")
+        ret ok
+    }
+    if args.len == 3usize && same(args[1usize], "parse-file") {
+        let (text, load_error) = source.load(a, args[2usize])
+        if load_error != ok { ret load_error }
+        let parse_error = validate_cli_parse(text)
+        if parse_error != ok { ret parse_error }
+        try io.print("parse file ok\n")
+        ret ok
+    }
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH\n")
     ret ok
 }

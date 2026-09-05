@@ -315,6 +315,12 @@ validation shortcut is removed; CLI and test callers now declare their storage
 budgets explicitly. The
 remaining grammar productions and their conformance coverage are the next
 parser-front-end increments; this callout does not mark the `neper-0` milestone complete.
+The first arena-backed source loader now lives in `src/source.e`. The self-hosted CLI
+uses the fixed `e.os` file surface to grow a byte buffer through `mem.alloc[u8]`,
+preserve exact source bytes across growth, close every opened file, and drive
+`scan-file`/`parse-file`; cross-platform tests scan the compiler's own source, parse a
+loaded fixture and verify stable missing-file propagation. This is a source-loading
+checkpoint, not yet the project/module discovery pipeline.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
