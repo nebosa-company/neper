@@ -241,9 +241,11 @@ Module `const`/`var` declarations now retain type and initializer trees, includi
 the special variable initializer forms, and failed top-level parses transactionally
 discard partial nodes before recovery. Attributes now retain ordered expression
 arguments, including multiline lists, and recovery distinguishes a malformed
-attribute from a valid attribute on a malformed declaration. Tuple assignment and
-soft-newline expression edge cases remain parser-hardening increments; this callout
-does not mark the `neper-0` milestone complete.
+attribute from a valid attribute on a malformed declaration. Assignment parsing now
+retains ordered multi-place targets, accepts multiline and trailing-comma forms, and
+rejects one-place pseudo-tuples and binary-expression targets. Soft-newline
+expression edge cases remain the next parser-hardening increment; this callout does
+not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

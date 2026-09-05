@@ -94,6 +94,8 @@ Module `const`/`var` declarations now retain type and initializer trees, and fai
 top-level parses transactionally discard partial nodes before recovery. Attributes
 now retain ordered expression arguments, including multiline lists, and recovery
 distinguishes a malformed attribute from a valid attribute on a malformed declaration.
+Assignment parsing now retains ordered multi-place targets, accepts multiline and
+trailing-comma forms, and rejects one-place pseudo-tuples and binary-expression targets.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

@@ -914,13 +914,85 @@ fn parse_try_statement(p: *Parser) -> err {
     ret ok
 }
 
+fn tuple_assignment_follows(p: *Parser) -> bool {
+    var look = p.scanner
+    var parens = 1usize
+    var brackets = 0usize
+    var braces = 0usize
+    var saw_comma = false
+    while parens != 0usize {
+        let token = lex.next(&look)
+        if token.kind == .Invalid || token.kind == .Eof { ret false }
+        if token.kind == .PunctLParen { parens += 1usize }
+        if token.kind == .PunctRParen { parens = parens - 1usize }
+        if token.kind == .PunctLBracket { brackets += 1usize }
+        if token.kind == .PunctRBracket {
+            if brackets == 0usize { ret false }
+            brackets = brackets - 1usize
+        }
+        if token.kind == .PunctLBrace { braces += 1usize }
+        if token.kind == .PunctRBrace {
+            if braces == 0usize { ret false }
+            braces = braces - 1usize
+        }
+        if token.kind == .PunctComma && parens == 1usize && brackets == 0usize && braces == 0usize { saw_comma = true }
+    }
+    if !saw_comma { ret false }
+    let following = lex.next(&look)
+    ret is_assignment_op(following.kind)
+}
+
+fn is_assignment_target_kind(kind: syntax.Kind) -> bool {
+    ret kind == .NameExpr || kind == .FieldExpr || kind == .BracketPostfix || kind == .GroupExpr || kind == .UnaryExpr
+}
+
+fn parse_tuple_assignment_statement(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [34]usize = zero
+    var nested_count = 0usize
+    try require(p, .PunctLParen)
+    try skip_separators(p)
+    while p.current.kind != .PunctRParen {
+        try parse_prefix_node(p)
+        if !is_assignment_target_kind(p.tree.nodes[p.last_node].kind) { ret InvalidSyntax }
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+        try skip_separators(p)
+        if p.current.kind == .PunctComma {
+            try advance(p)
+            try skip_separators(p)
+        } else {
+            if p.current.kind != .PunctRParen { ret InvalidSyntax }
+        }
+    }
+    if nested_count < 2usize { ret InvalidSyntax }
+    try advance(p)
+    if !is_assignment_op(p.current.kind) { ret InvalidSyntax }
+    try advance(p)
+    let initializer_has_node = p.current.kind != .KwZero && p.current.kind != .KwUndef
+    try parse_initializer_node(p)
+    if initializer_has_node {
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    if !at_statement_end(p) { ret InvalidSyntax }
+    try add_parent_node(p, .AssignmentStmt, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
 fn parse_expression_statement(p: *Parser) -> err {
+    if p.current.kind == .PunctLParen && tuple_assignment_follows(p) {
+        ret parse_tuple_assignment_statement(p)
+    }
     let token_start = p.token_index
     var nested: [2]usize = zero
     var nested_count = 1usize
     try parse_expression_node(p)
     nested[0usize] = p.last_node
     if is_assignment_op(p.current.kind) {
+        if !is_assignment_target_kind(p.tree.nodes[p.last_node].kind) { ret InvalidSyntax }
         try advance(p)
         let initializer_has_node = p.current.kind != .KwZero && p.current.kind != .KwUndef
         try parse_initializer_node(p)

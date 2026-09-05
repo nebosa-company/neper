@@ -123,6 +123,19 @@ fn self_test() -> err {
     let invalid_try_initializer_error = parse.validate("var value = try not_a_call\n")
     if invalid_try_initializer_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
+    let tuple_assignment_error = parse.parse(&tree, "fn assign() {\n    (\n        left,\n        values[index],\n        *pointer,\n    ) = try split()\n}\n")
+    if tuple_assignment_error != ok || tree.count != 12usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .NameExpr { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .NameExpr || tree.nodes[4usize].kind != .BracketPostfix { ret lex.InvalidSource }
+    if tree.nodes[5usize].kind != .NameExpr || tree.nodes[6usize].kind != .UnaryExpr { ret lex.InvalidSource }
+    if tree.nodes[7usize].kind != .NameExpr || tree.nodes[8usize].kind != .CallExpr { ret lex.InvalidSource }
+    if tree.nodes[9usize].kind != .AssignmentStmt || tree.nodes[10usize].kind != .Block { ret lex.InvalidSource }
+    if tree.nodes[11usize].kind != .FnDecl { ret lex.InvalidSource }
+    let one_item_assignment_error = parse.validate("fn invalid() {\n    (only,) = zero\n}\n")
+    if one_item_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let binary_target_error = parse.validate("fn invalid() {\n    left + right = zero\n}\n")
+    if binary_target_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
     let attribute_error = parse.parse(&tree, "@gpu(\n    8usize * 4usize,\n    config.size,\n)\n@align(64usize)\nfn kernel() {}\n")
     if attribute_error != ok || tree.count != 11usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .LiteralExpr || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
