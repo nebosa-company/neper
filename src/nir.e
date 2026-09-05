@@ -198,7 +198,7 @@ fn add_operand(builder: *Builder, instruction_index: usize, value: usize) -> err
 }
 
 fn set_branch_targets(builder: *Builder, instruction_index: usize, destination: usize, destination2: usize) -> err {
-    if instruction_index >= builder.instruction_count || instruction_index + 1usize != builder.instruction_count { ret InvalidControlFlow }
+    if !builder.function_active || instruction_index < builder.functions[builder.current_function].first_instruction || instruction_index >= builder.instruction_count { ret InvalidControlFlow }
     let opcode = builder.instructions[instruction_index].opcode
     if opcode != .Branch && opcode != .BranchIf { ret InvalidControlFlow }
     builder.instructions[instruction_index].target = destination

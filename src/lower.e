@@ -385,6 +385,101 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     ret ok
 }
 
+fn emit_branch(builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (instruction, ignored, emit_error) = nir.emit(builder, .Branch, zero, false, 0usize, token)
+    ret (instruction, emit_error)
+}
+
+fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+    var condition_index = 0usize
+    var found_condition = false
+    var branches: [2]usize = zero
+    var branch_count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            let child = tree.nodes[child_index]
+            if !found_condition {
+                condition_index = child_index
+                found_condition = true
+            } else {
+                if child.kind != .Block || branch_count == branches.len { ret check.Unsupported }
+                branches[branch_count] = child_index
+                branch_count += 1usize
+            }
+        }
+        at += 1usize
+    }
+    if !found_condition || branch_count == 0usize { ret parse.InvalidSyntax }
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (condition, condition_type, condition_error) = lower_expression(c, g, tree, module_index, condition_index, boolean, builder, bindings, *binding_count)
+    if condition_error != ok { ret condition_error }
+    let (decision, ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, c.tokens[node.token_start])
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, condition)
+
+    let true_block = builder.block_count
+    let (true_index, true_error) = nir.begin_block(builder)
+    if true_error != ok || true_index != true_block { ret nir.InvalidControlFlow }
+    try lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count)
+    var true_exit = 0usize
+    let true_falls_through = !builder.blocks[builder.current_block].terminated
+    if true_falls_through {
+        let (branch, branch_error) = emit_branch(builder, c.tokens[node.token_start])
+        if branch_error != ok { ret branch_error }
+        true_exit = branch
+    }
+
+    let false_block = builder.block_count
+    let (false_index, false_error) = nir.begin_block(builder)
+    if false_error != ok || false_index != false_block { ret nir.InvalidControlFlow }
+    if branch_count == 2usize { try lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count) }
+    var false_exit = 0usize
+    let false_falls_through = !builder.blocks[builder.current_block].terminated
+    if false_falls_through {
+        let (branch, branch_error) = emit_branch(builder, c.tokens[node.token_start])
+        if branch_error != ok { ret branch_error }
+        false_exit = branch
+    }
+
+    try nir.set_branch_targets(builder, decision, true_block, false_block)
+    if true_falls_through || false_falls_through {
+        let merge_block = builder.block_count
+        let (merge_index, merge_error) = nir.begin_block(builder)
+        if merge_error != ok || merge_index != merge_block { ret nir.InvalidControlFlow }
+        if true_falls_through { try nir.set_branch_targets(builder, true_exit, merge_block, 0usize) }
+        if false_falls_through { try nir.set_branch_targets(builder, false_exit, merge_block, 0usize) }
+    }
+    ret ok
+}
+
+fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+    if node.kind == .ReturnStmt { ret lower_return(c, g, tree, module_index, function, node, builder, bindings, *binding_count) }
+    if node.kind == .TryStmt { ret lower_try(c, g, tree, module_index, function, node, builder, bindings, *binding_count) }
+    if node.kind == .BindingStmt { ret lower_binding(c, g, tree, module_index, node, builder, bindings, binding_count) }
+    if node.kind == .AssignmentStmt { ret lower_assignment(c, g, tree, module_index, node, builder, bindings, *binding_count) }
+    if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
+    ret check.Unsupported
+}
+
+fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+    if node.kind != .Block { ret parse.InvalidSyntax }
+    let local_checkpoint = c.local_count
+    let binding_checkpoint = *binding_count
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if builder.blocks[builder.current_block].terminated { break }
+        if tree.children[at].node { try lower_statement(c, g, tree, module_index, function, tree.nodes[tree.children[at].index], builder, bindings, binding_count) }
+        at += 1usize
+    }
+    c.local_count = local_checkpoint
+    *binding_count = binding_checkpoint
+    ret ok
+}
+
 fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding) -> err {
     let text = g.modules[module_index].text
     let (name, name_error) = declaration_name(c, text, node)
@@ -416,31 +511,7 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
             let child = tree.nodes[tree.children[at].index]
             if child.kind == .Block {
                 found_body = true
-                let body_end = child.first_child + child.child_count
-                var body_at = child.first_child
-                while body_at < body_end {
-                    if tree.children[body_at].node {
-                        let statement = tree.nodes[tree.children[body_at].index]
-                        if statement.kind == .ReturnStmt {
-                            try lower_return(c, g, tree, module_index, function, statement, builder, bindings, binding_count)
-                        } else {
-                            if statement.kind == .TryStmt {
-                                try lower_try(c, g, tree, module_index, function, statement, builder, bindings, binding_count)
-                            } else {
-                                if statement.kind == .BindingStmt {
-                                    try lower_binding(c, g, tree, module_index, statement, builder, bindings, &binding_count)
-                                } else {
-                                    if statement.kind == .AssignmentStmt {
-                                        try lower_assignment(c, g, tree, module_index, statement, builder, bindings, binding_count)
-                                    } else {
-                                        ret check.Unsupported
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    body_at += 1usize
-                }
+                try lower_block(c, g, tree, module_index, function, child, builder, bindings, &binding_count)
             }
         }
         at += 1usize
