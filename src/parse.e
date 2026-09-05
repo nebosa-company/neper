@@ -1196,17 +1196,13 @@ fn parse_keyword_statement(p: *Parser, kind: syntax.Kind) -> err {
 
 fn parse_switch_arm_node(p: *Parser) -> err {
     let token_start = p.token_index
-    var nested: [128]usize = zero
-    var nested_count = 0usize
+    let node_start = p.tree.count
     if p.current.kind == .KwDefault {
         try advance(p)
     } else {
         try require(p, .KwCase)
         while true {
             try parse_expression_node(p)
-            if nested_count == nested.len { ret InvalidSyntax }
-            nested[nested_count] = p.last_node
-            nested_count += 1usize
             if p.current.kind != .PunctComma { break }
             try advance(p)
         }
@@ -1238,35 +1234,28 @@ fn parse_switch_arm_node(p: *Parser) -> err {
         } else {
             try skip_separators(p)
         }
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
     }
-    try add_parent_node(p, .SwitchArm, token_start, p.token_index, nested[..nested_count])
+    try add_parent_since(p, .SwitchArm, token_start, p.token_index, node_start)
     ret ok
 }
 
 fn parse_switch_statement(p: *Parser) -> err {
     let token_start = p.token_index
-    var nested: [128]usize = zero
-    var nested_count = 0usize
+    let node_start = p.tree.count
+    var arm_count = 0usize
     try require(p, .KwSwitch)
     try parse_expression_node(p)
-    nested[nested_count] = p.last_node
-    nested_count += 1usize
     try require(p, .PunctLBrace)
     try skip_separators(p)
     while p.current.kind != .PunctRBrace {
         if p.current.kind != .KwCase && p.current.kind != .KwDefault { ret InvalidSyntax }
         try parse_switch_arm_node(p)
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
+        arm_count += 1usize
     }
-    if nested_count == 1usize { ret InvalidSyntax }
+    if arm_count == 0usize { ret InvalidSyntax }
     try advance(p)
     if !at_statement_end(p) { ret InvalidSyntax }
-    try add_parent_node(p, .SwitchStmt, token_start, p.token_index, nested[..nested_count])
+    try add_parent_since(p, .SwitchStmt, token_start, p.token_index, node_start)
     ret ok
 }
 
@@ -1327,8 +1316,7 @@ fn recover_statement(p: *Parser) -> err {
 
 fn parse_block_node(p: *Parser) -> err {
     let token_start = p.token_index
-    var nested: [128]usize = zero
-    var nested_count = 0usize
+    let node_start = p.tree.count
     try require(p, .PunctLBrace)
     try skip_separators(p)
     while p.current.kind != .PunctRBrace {
@@ -1351,19 +1339,15 @@ fn parse_block_node(p: *Parser) -> err {
         } else {
             try skip_separators(p)
         }
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
     }
     try advance(p)
-    try add_parent_node(p, .Block, token_start, p.token_index, nested[..nested_count])
+    try add_parent_since(p, .Block, token_start, p.token_index, node_start)
     ret ok
 }
 
 fn parse_function(p: *Parser, is_extern: bool) -> err {
     let token_start = p.token_index
-    var nested: [64]usize = zero
-    var nested_count = 0usize
+    let node_start = p.tree.count
     if is_extern { try require(p, .KwExtern) }
     try require(p, .KwFn)
     try require(p, .Identifier)
@@ -1374,9 +1358,6 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
         if p.current.kind == .PunctRBracket { ret InvalidSyntax }
         while p.current.kind != .PunctRBracket {
             try parse_comptime_node(p)
-            if nested_count == nested.len { ret InvalidSyntax }
-            nested[nested_count] = p.last_node
-            nested_count += 1usize
             try skip_soft(p)
             if p.current.kind == .PunctComma {
                 try advance(p)
@@ -1393,9 +1374,6 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     try skip_separators(p)
     while p.current.kind != .PunctRParen {
         try parse_parameter_node(p)
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
         try skip_soft(p)
         if p.current.kind == .PunctComma {
             try advance(p)
@@ -1411,23 +1389,17 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
         try advance(p)
         try skip_soft(p)
         try parse_return_spec(p, is_extern)
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
     }
     if is_extern {
         if p.current.kind == .PunctLBrace { ret InvalidSyntax }
     } else {
         try parse_block_node(p)
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
     }
     let token_end = p.token_index
     if is_extern {
-        try add_top_parent(p, .ExternDecl, token_start, token_end, nested[..nested_count])
+        try add_top_parent_since(p, .ExternDecl, token_start, token_end, node_start)
     } else {
-        try add_top_parent(p, .FnDecl, token_start, token_end, nested[..nested_count])
+        try add_top_parent_since(p, .FnDecl, token_start, token_end, node_start)
     }
     try finish_line(p)
     ret ok
@@ -1478,24 +1450,17 @@ fn parse_type_member(p: *Parser, member_kind: syntax.Kind) -> err {
 }
 
 fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize, prefix_node: usize, has_prefix: bool) -> err {
-    var nested: [128]usize = zero
-    var nested_count = 0usize
+    var node_start = p.tree.count
     var member_count = 0usize
     var member_kind = syntax.Kind.FieldDecl
     if rhs_kind == .EnumType { member_kind = .EnumMember }
     if rhs_kind == .UnionEnumType { member_kind = .UnionMember }
-    if has_prefix {
-        nested[0usize] = prefix_node
-        nested_count = 1usize
-    }
+    if has_prefix { node_start = prefix_node }
     try require(p, .PunctLBrace)
     enter_soft(p)
     try skip_separators(p)
     while p.current.kind != .PunctRBrace {
         try parse_type_member(p, member_kind)
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
         member_count += 1usize
         if p.current.kind == .PunctComma {
             try advance(p)
@@ -1509,14 +1474,13 @@ fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize, prefix
     }
     try leave_soft(p)
     try advance(p)
-    try add_parent_node(p, rhs_kind, token_start, p.token_index, nested[..nested_count])
+    try add_parent_since(p, rhs_kind, token_start, p.token_index, node_start)
     ret ok
 }
 
 fn parse_type_declaration(p: *Parser) -> err {
     let token_start = p.token_index
-    var nested: [64]usize = zero
-    var nested_count = 0usize
+    let node_start = p.tree.count
     var has_rhs_node = false
     try require(p, .KwType)
     try require(p, .Identifier)
@@ -1527,9 +1491,6 @@ fn parse_type_declaration(p: *Parser) -> err {
         if p.current.kind == .PunctRBracket { ret InvalidSyntax }
         while p.current.kind != .PunctRBracket {
             try parse_comptime_node(p)
-            if nested_count == nested.len { ret InvalidSyntax }
-            nested[nested_count] = p.last_node
-            nested_count += 1usize
             try skip_soft(p)
             if p.current.kind == .PunctComma {
                 try advance(p)
@@ -1582,13 +1543,8 @@ fn parse_type_declaration(p: *Parser) -> err {
             }
         }
     }
-    if has_rhs_node {
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
-    }
     let token_end = p.token_index
-    try add_top_parent(p, .TypeDecl, token_start, token_end, nested[..nested_count])
+    try add_top_parent_since(p, .TypeDecl, token_start, token_end, node_start)
     try finish_line(p)
     ret ok
 }

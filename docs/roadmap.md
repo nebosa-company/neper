@@ -276,7 +276,10 @@ their direct children from that stream, removing their embedded 127-item ceiling
 favor of the caller's explicit node and child capacities. Call/bracket arguments,
 generic type arguments, return-type/value lists, function-type parameters, tuple
 assignments and attributes now use the same capacity-transparent path rather than
-embedded 32/64-entry child-ID arrays. The
+embedded 32/64-entry child-ID arrays. Blocks, switch arms/cases, function signatures,
+type bodies and generic type declarations now use it as well. Every unbounded grammar
+list is therefore limited only by explicit caller node/child capacity; the remaining
+local child-ID arrays correspond to fixed-arity productions. The
 remaining grammar productions and their conformance coverage are the next
 parser-front-end increments; this callout does not mark the `neper-0` milestone complete.
 
