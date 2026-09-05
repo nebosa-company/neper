@@ -213,10 +213,13 @@ classified binding, assignment, call, `try`, `defer`, control-flow, return,
 `ErrorNode`, resumes at the next block newline and preserves both its enclosing
 `Block`/`FnDecl` and following statements. Return values now produce primary,
 prefix, precedence-aware binary, call, field and bracket-postfix expression nodes,
-including grouped and member-shorthand primaries. Wiring expressions into the
-remaining statement forms, aggregate literals, structured bindings, switch arms
-and recursively parsed control-flow bodies remain the next parser increments; this
-callout does not mark the `neper-0` milestone complete.
+including grouped and member-shorthand primaries. Binding and assignment statements
+now retain their binding/target and initializer subtrees; call and `try` statements
+retain their call trees; `zero` and `undef` remain lossless initializer tokens; and
+failed statement parses roll back partial nodes before inserting an `ErrorNode`.
+Return tuples, aggregate literals, type subtrees inside local declarations, switch
+arms and recursively parsed control-flow bodies remain the next parser increments;
+this callout does not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
