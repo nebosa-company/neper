@@ -328,8 +328,14 @@ OS or architecture variant ahead of the plain module, rejects simultaneous match
 handles nested module paths. `src/graph.e` completes the discovery pipeline by reading
 the parser's `UseDecl` nodes, loading every reachable module with project-root
 precedence and toolchain fallback, and rejecting missing or multiply rooted modules,
-duplicate local qualifiers, malformed reached sources and import cycles. Declaration
-collection and semantic resolution across that graph are the next compiler increment.
+duplicate local qualifiers, malformed reached sources and import cycles. The first
+semantic pass in `src/resolve.e` collects every module-scope type and value declaration
+before resolving references, keeps the type and qualifier/value namespaces separate,
+enforces builtin-name and duplicate rules, and validates qualified type and value
+members through local import aliases. It resolves the self-hosted compiler's own
+reachable source graph on both hosts, with the fixed compiler-owned `e.mem`/`e.os`
+names seeded explicitly rather than invented as source declarations. Local scopes,
+unqualified references and type checking are the next compiler increments.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

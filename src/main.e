@@ -4,6 +4,7 @@ use graph
 use lex
 use parse
 use project
+use resolve
 use source
 use syntax
 
@@ -717,6 +718,26 @@ fn validate_cli_parse(source: str) -> err {
     ret parse.parse(&tree, source)
 }
 
+fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
+    let (modules, modules_error) = mem.alloc[graph.Module](a, 128usize)
+    if modules_error != ok { ret modules_error }
+    let (imports, imports_error) = mem.alloc[graph.Import](a, 2048usize)
+    if imports_error != ok { ret imports_error }
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 32768usize)
+    if nodes_error != ok { ret nodes_error }
+    let (children, children_error) = mem.alloc[syntax.Child](a, 262144usize)
+    if children_error != ok { ret children_error }
+    ret graph.init(loaded, modules, imports, nodes, children)
+}
+
+fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
+    let (symbols, symbols_error) = mem.alloc[resolve.Symbol](a, 16384usize)
+    if symbols_error != ok { ret symbols_error }
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
+    if tokens_error != ok { ret tokens_error }
+    ret resolve.init(resolver, symbols, tokens)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 2usize && same(args[1usize], "self-test") {
         try self_test()
@@ -768,12 +789,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if args.len >= 7usize && same(args[1usize], "graph-file") {
-        var modules: [32]graph.Module = zero
-        var imports: [64]graph.Import = zero
-        var graph_nodes: [512]syntax.Node = zero
-        var graph_children: [4096]syntax.Child = zero
         var loaded: graph.Graph = zero
-        try graph.init(&loaded, modules[..], imports[..], graph_nodes[..], graph_children[..])
+        try init_cli_graph(a, &loaded)
         try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         if loaded.count != args.len - 6usize { ret graph.Capacity }
         var expected = 6usize
@@ -784,6 +801,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module graph ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE...\n")
+    if args.len == 6usize && same(args[1usize], "resolve-file") {
+        var loaded: graph.Graph = zero
+        try init_cli_graph(a, &loaded)
+        try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        var resolver: resolve.Resolver = zero
+        try init_cli_resolver(a, &resolver)
+        try resolve.collect(&resolver, &loaded)
+        try io.print("module resolve ok\n")
+        ret ok
+    }
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file PATH TOOLCHAIN_ROOT ARCH OS\n")
     ret ok
 }

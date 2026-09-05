@@ -175,6 +175,58 @@ case "$invalid_graph_target" in
     *'error: project.InvalidTarget'*) ;;
     *) printf '%s\n' 'invalid graph target returned the wrong error' >&2; exit 1 ;;
 esac
+resolve_root="$repo/tests/selfhost/fixtures/resolve"
+resolved=$($test_build/neper-self resolve-file "$resolve_root/valid/src/main.e" "$repo" x64 linux)
+[ "$resolved" = 'module resolve ok' ]
+compiler_resolved=$($test_build/neper-self resolve-file "$repo/src/main.e" "$repo" x64 linux)
+[ "$compiler_resolved" = 'module resolve ok' ]
+builtin_qualifier=$($test_build/neper-self resolve-file "$resolve_root/builtin_qualifier/src/main.e" "$repo" x64 linux)
+[ "$builtin_qualifier" = 'module resolve ok' ]
+if duplicate_value=$($test_build/neper-self resolve-file "$resolve_root/duplicate_value/src/main.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'duplicate value declaration unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$duplicate_value" in *'error: resolve.DuplicateName'*) ;; *) printf '%s\n' 'duplicate value returned the wrong error' >&2; exit 1 ;; esac
+if duplicate_type=$($test_build/neper-self resolve-file "$resolve_root/duplicate_type/src/main.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'duplicate type declaration unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$duplicate_type" in *'error: resolve.DuplicateName'*) ;; *) printf '%s\n' 'duplicate type returned the wrong error' >&2; exit 1 ;; esac
+if qualifier_collision=$($test_build/neper-self resolve-file "$resolve_root/qualifier_collision/src/main.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'qualifier/value collision unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$qualifier_collision" in *'error: resolve.QualifierCollision'*) ;; *) printf '%s\n' 'qualifier collision returned the wrong error' >&2; exit 1 ;; esac
+if reserved_value=$($test_build/neper-self resolve-file "$resolve_root/reserved_value/src/main.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'reserved value declaration unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$reserved_value" in *'error: resolve.ReservedName'*) ;; *) printf '%s\n' 'reserved value returned the wrong error' >&2; exit 1 ;; esac
+if reserved_type=$($test_build/neper-self resolve-file "$resolve_root/reserved_type/src/main.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'reserved type declaration unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$reserved_type" in *'error: resolve.ReservedName'*) ;; *) printf '%s\n' 'reserved type returned the wrong error' >&2; exit 1 ;; esac
+if reserved_module=$($test_build/neper-self resolve-file "$resolve_root/reserved_module/src/u8.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'reserved module name unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$reserved_module" in *'error: resolve.ReservedName'*) ;; *) printf '%s\n' 'reserved module returned the wrong error' >&2; exit 1 ;; esac
+if reserved_qualifier=$($test_build/neper-self resolve-file "$resolve_root/reserved_qualifier/src/main.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'reserved target qualifier unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$reserved_qualifier" in *'error: resolve.ReservedName'*) ;; *) printf '%s\n' 'reserved qualifier returned the wrong error' >&2; exit 1 ;; esac
+if unknown_value=$($test_build/neper-self resolve-file "$resolve_root/unknown_value/src/main.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'unknown qualified value unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$unknown_value" in *'error: resolve.UnknownMember'*) ;; *) printf '%s\n' 'unknown qualified value returned the wrong error' >&2; exit 1 ;; esac
+if unknown_type=$($test_build/neper-self resolve-file "$resolve_root/unknown_type/src/main.e" "$repo" x64 linux 2>&1); then
+    printf '%s\n' 'unknown qualified type unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$unknown_type" in *'error: resolve.UnknownMember'*) ;; *) printf '%s\n' 'unknown qualified type returned the wrong error' >&2; exit 1 ;; esac
 capacity_source=''
 i=0
 while [ "$i" -lt 260 ]; do

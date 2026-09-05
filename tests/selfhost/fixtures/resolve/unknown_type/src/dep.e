@@ -1,0 +1,1 @@
+type Present = struct {}

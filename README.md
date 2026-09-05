@@ -165,6 +165,12 @@ module DAG. It applies `lib/`/`src/` precedence and toolchain fallback, reuses m
 imported under multiple aliases, and rejects duplicate qualifiers, duplicate roots,
 missing modules, malformed reached sources and import cycles with caller-sized graph
 and parser storage.
+`src/resolve.e` now performs order-independent declaration collection over every
+loaded module. It keeps type and qualifier/value namespaces separate, enforces
+builtin reservations and duplicate rules, and resolves imported types, functions,
+externs, constants, globals and errors through each module's local qualifier table.
+The same pass now resolves the self-hosted compiler's own complete source graph on
+Windows and Linux, including the compiler-owned `e.mem` and `e.os` bootstrap surface.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

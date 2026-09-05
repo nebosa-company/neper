@@ -1,0 +1,1 @@
+type Vec = struct {}
