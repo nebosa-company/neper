@@ -117,6 +117,7 @@ type Constant = struct {
 }
 
 type Checker = struct {
+    resolver: *resolve.Resolver,
     functions: []Function,
     parameters: []Parameter,
     return_types: []Type,
@@ -1395,13 +1396,112 @@ fn is_integer_operator(kind: lex.Kind) -> bool {
 }
 
 type CallInfo = struct {
-    function_index: usize,
+    function: Function,
     cast: Type,
     is_cast: bool,
+    alloc_return: Type,
+    alloc_arena: Type,
+    mem_alloc: bool,
+}
+
+type AllocInfo = struct {
+    matched: bool,
+    function: Function,
+    return_type: Type,
+    arena_type: Type,
+}
+
+fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
+    let node = tree.nodes[node_index]
+    let text = g.modules[module_index].text
+    if node.kind == .NameExpr {
+        let token = c.tokens[node.token_start]
+        if token.kind != .Identifier { ret (invalid_type(), InvalidType) }
+        let name = text[token.start..token.end]
+        let scalar = scalar_type(name, module_index)
+        if scalar.kind != .Invalid { ret (scalar, ok) }
+        let (_, found) = resolve.find(c.resolver, module_index, name, .Type)
+        if !found { ret (invalid_type(), InvalidType) }
+        let named = make_type(.Named, name, module_index)
+        let (canonical, canonical_error) = canonical_type(c, named)
+        ret (canonical, canonical_error)
+    }
+    if node.kind == .FieldExpr {
+        let (target_module, name, found) = qualified_member(c, g, tree, module_index, node)
+        if !found { ret (invalid_type(), InvalidType) }
+        let (_, has_type) = resolve.find(c.resolver, target_module, name, .Type)
+        if !has_type { ret (invalid_type(), InvalidType) }
+        let named = make_type(.Named, name, target_module)
+        let (canonical, canonical_error) = canonical_type(c, named)
+        ret (canonical, canonical_error)
+    }
+    if node.kind == .UnaryExpr && c.tokens[node.token_start].kind == .PunctStar {
+        let (child_index, found) = first_node_child(tree, node)
+        if !found { ret (invalid_type(), parse.InvalidSyntax) }
+        let (element, element_error) = comptime_type(c, g, tree, module_index, child_index)
+        if element_error != ok { ret (invalid_type(), element_error) }
+        let (stored_element, store_error) = store_type(c, element)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        var pointer = make_type(.Pointer, "", module_index)
+        pointer.element = stored_element
+        pointer.has_element = true
+        pointer.is_const = contains_token(c, node.token_start, tree.nodes[child_index].token_start, .KwConst)
+        ret (pointer, ok)
+    }
+    ret (invalid_type(), InvalidType)
+}
+
+fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (AllocInfo, err) {
+    var info: AllocInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.mem") || !same(member, "alloc") { ret (info, ok) }
+    info.matched = true
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let (element, element_error) = comptime_type(c, g, tree, module_index, type_index)
+    if element_error != ok { ret (info, element_error) }
+    if element.kind == .Void || element.kind == .Other || element.kind == .Invalid { ret (info, InvalidType) }
+    let (stored_element, store_error) = store_type(c, element)
+    if store_error != ok { ret (info, store_error) }
+    var result = make_type(.Slice, "", target_module)
+    result.element = stored_element
+    result.has_element = true
+    let arena = make_type(.Named, "Arena", target_module)
+    let (stored_arena, arena_error) = store_type(c, arena)
+    if arena_error != ok { ret (info, arena_error) }
+    var arena_pointer = make_type(.Pointer, "", target_module)
+    arena_pointer.element = stored_arena
+    arena_pointer.has_element = true
+    info.function = Function { name: "alloc", module_index: target_module, first_parameter: 0usize, parameter_count: 2usize, first_return: 0usize, return_count: 2usize, generic: false, external: false }
+    info.return_type = result
+    info.arena_type = arena_pointer
+    ret (info, ok)
 }
 
 fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
-    var info = CallInfo { function_index: 0usize, cast: invalid_type(), is_cast: false }
+    var info: CallInfo = zero
+    info.cast = invalid_type()
+    info.alloc_return = invalid_type()
+    info.alloc_arena = invalid_type()
     if node.kind != .CallExpr { ret (info, parse.InvalidSyntax) }
     let text = g.modules[module_index].text
     let end = node.first_child + node.child_count
@@ -1423,15 +1523,26 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     } else {
                         let (found_index, found) = find_function(c, module_index, name)
                         if !found { ret (info, UnknownCallable) }
-                        info.function_index = found_index
+                        info.function = c.functions[found_index]
                         has_function = true
                     }
                 } else {
-                    if receiver.kind != .FieldExpr { ret (info, Unsupported) }
-                    let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
-                    if !found { ret (info, UnknownCallable) }
-                    info.function_index = found_index
-                    has_function = true
+                    if receiver.kind == .BracketPostfix {
+                        let (allocation, allocation_error) = alloc_info(c, g, tree, module_index, receiver)
+                        if allocation_error != ok { ret (info, allocation_error) }
+                        if !allocation.matched { ret (info, Unsupported) }
+                        info.function = allocation.function
+                        info.alloc_return = allocation.return_type
+                        info.alloc_arena = allocation.arena_type
+                        info.mem_alloc = true
+                        has_function = true
+                    } else {
+                        if receiver.kind != .FieldExpr { ret (info, Unsupported) }
+                        let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
+                        if !found { ret (info, UnknownCallable) }
+                        info.function = c.functions[found_index]
+                        has_function = true
+                    }
                 }
             } else {
                 if info.is_cast {
@@ -1442,10 +1553,19 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     if !is_numeric(argument_type) { ret (info, TypeMismatch) }
                 } else {
                     if !has_function { ret (info, UnknownCallable) }
-                    let function = c.functions[info.function_index]
+                    let function = info.function
                     if child_position > function.parameter_count { ret (info, ArgumentCount) }
-                    let parameter = c.parameters[function.first_parameter + child_position - 1usize]
-                    let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, parameter.ty)
+                    var parameter_type = invalid_type()
+                    if info.mem_alloc {
+                        if child_position == 1usize {
+                            parameter_type = info.alloc_arena
+                        } else {
+                            parameter_type = make_type(.Integer, "usize", function.module_index)
+                        }
+                    } else {
+                        parameter_type = c.parameters[function.first_parameter + child_position - 1usize].ty
+                    }
+                    let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
                     if argument_error != ok { ret (info, argument_error) }
                 }
             }
@@ -1458,7 +1578,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         ret (info, ok)
     }
     if !has_function { ret (info, UnknownCallable) }
-    let function = c.functions[info.function_index]
+    let function = info.function
     if child_position == 0usize || child_position - 1usize != function.parameter_count { ret (info, ArgumentCount) }
     if function.generic { ret (info, Unsupported) }
     ret (info, ok)
@@ -1467,6 +1587,24 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
 fn function_return(c: *Checker, function: Function, index: usize) -> (Type, err) {
     if index >= function.return_count || function.first_return + index >= c.return_type_count { ret (invalid_type(), InvalidType) }
     ret (c.return_types[function.first_return + index], ok)
+}
+
+fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
+    if index >= call.function.return_count { ret (invalid_type(), InvalidType) }
+    if call.mem_alloc {
+        if index == 0usize { ret (call.alloc_return, ok) }
+        if index == 1usize { ret (make_type(.Err, "err", call.function.module_index), ok) }
+        ret (invalid_type(), InvalidType)
+    }
+    let (result, result_error) = function_return(c, call.function, index)
+    ret (result, result_error)
+}
+
+fn call_is_fallible(c: *Checker, call: CallInfo) -> bool {
+    if call.function.return_count == 0usize { ret false }
+    let (last, last_error) = call_return(c, call, call.function.return_count - 1usize)
+    if last_error != ok { ret false }
+    ret last.kind == .Err
 }
 
 fn is_fallible(c: *Checker, function: Function) -> bool {
@@ -1625,13 +1763,13 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let (result_type, context_error) = apply_context(c, call.cast, expected)
             ret (result_type, context_error)
         }
-        let function = c.functions[call.function_index]
+        let function = call.function
         if function.return_count > 1usize { ret (invalid_type(), ArgumentCount) }
         if function.return_count == 0usize {
             let (result_type, context_error) = apply_context(c, make_type(.Void, "void", module_index), expected)
             ret (result_type, context_error)
         }
-        let (return_type, return_error) = function_return(c, function, 0usize)
+        let (return_type, return_error) = call_return(c, call, 0usize)
         if return_error != ok { ret (invalid_type(), return_error) }
         let (result_type, context_error) = apply_context(c, return_type, expected)
         ret (result_type, context_error)
@@ -1659,12 +1797,12 @@ fn binding_item_count(c: *Checker, binding: syntax.Node) -> usize {
     ret count
 }
 
-fn check_try_results(c: *Checker, callee: Function, caller: Function) -> (usize, err) {
-    if callee.external || !is_fallible(c, callee) || !is_fallible(c, caller) { ret (0usize, InvalidTry) }
-    ret (callee.return_count - 1usize, ok)
+fn check_try_results(c: *Checker, call: CallInfo, caller: Function) -> (usize, err) {
+    if call.function.external || !call_is_fallible(c, call) || !is_fallible(c, caller) { ret (0usize, InvalidTry) }
+    ret (call.function.return_count - 1usize, ok)
 }
 
-fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, binding: syntax.Node, first_return: usize, return_count: usize, declared: Type, mutable: bool) -> err {
+fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, binding: syntax.Node, call: CallInfo, return_count: usize, declared: Type, mutable: bool) -> err {
     let tuple = c.tokens[binding.token_start].kind == .PunctLParen
     let item_count = binding_item_count(c, binding)
     if item_count != return_count { ret ArgumentCount }
@@ -1674,7 +1812,9 @@ fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, binding:
     while at < binding.token_end {
         let token = c.tokens[at]
         if token.kind == .Identifier || token.kind == .PunctUnderscore {
-            var result = c.return_types[first_return + result_index]
+            let (return_type, return_error) = call_return(c, call, result_index)
+            if return_error != ok { ret return_error }
+            var result = return_type
             if !tuple {
                 let (contextual, context_error) = apply_context(c, result, declared)
                 if context_error != ok { ret context_error }
@@ -1741,15 +1881,15 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
             if has_name { try add_local(c, name, actual, mutable) }
             ret ok
         }
-        let callee = c.functions[call.function_index]
+        let callee = call.function
         var result_count = callee.return_count
         if tried {
-            let (remaining, try_error) = check_try_results(c, callee, function)
+            let (remaining, try_error) = check_try_results(c, call, function)
             if try_error != ok { ret try_error }
             result_count = remaining
         }
         if !tuple && result_count == 0usize { ret TypeMismatch }
-        ret bind_return_types(c, g, module_index, binding, callee.first_return, result_count, declared, mutable)
+        ret bind_return_types(c, g, module_index, binding, call, result_count, declared, mutable)
     }
     if tuple { ret ArgumentCount }
     var result = declared
@@ -1850,7 +1990,7 @@ fn check_call_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
     let (call, call_error) = check_call(c, g, tree, module_index, tree.nodes[child_index])
     if call_error != ok { ret call_error }
     if call.is_cast { ret ArgumentCount }
-    if c.functions[call.function_index].return_count != 0usize { ret ArgumentCount }
+    if call.function.return_count != 0usize { ret ArgumentCount }
     ret ok
 }
 
@@ -1861,7 +2001,7 @@ fn check_try_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     let (call, call_error) = check_call(c, g, tree, module_index, call_node)
     if call_error != ok { ret call_error }
     if call.is_cast { ret InvalidTry }
-    let (remaining, try_error) = check_try_results(c, c.functions[call.function_index], function)
+    let (remaining, try_error) = check_try_results(c, call, function)
     if try_error != ok { ret try_error }
     if remaining != 0usize { ret ArgumentCount }
     ret ok
@@ -1909,10 +2049,10 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         if tried { ret InvalidTry }
         ret ArgumentCount
     }
-    let callee = c.functions[call.function_index]
+    let callee = call.function
     var result_count = callee.return_count
     if tried {
-        let (remaining, try_error) = check_try_results(c, callee, function)
+        let (remaining, try_error) = check_try_results(c, call, function)
         if try_error != ok { ret try_error }
         result_count = remaining
     }
@@ -1923,7 +2063,8 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         if tree.children[at].node && result_index < result_count {
             let (place_type, place_error) = assignment_place_type(c, g, tree, module_index, tree.children[at].index)
             if place_error != ok { ret place_error }
-            let result_type = c.return_types[callee.first_return + result_index]
+            let (result_type, return_error) = call_return(c, call, result_index)
+            if return_error != ok { ret return_error }
             let (contextual, context_error) = apply_context(c, result_type, place_type)
             if context_error != ok { ret context_error }
             result_index += 1usize
@@ -2040,6 +2181,7 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 }
 
 fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    c.resolver = r
     try collect_aliases(c, r, g, true)
     try collect_constants(c, r, g)
     try collect_aliases(c, r, g, false)

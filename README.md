@@ -207,11 +207,14 @@ source and intrinsic result sets are checked through ordered tuple bindings and
 assignments, including `_` discards, while multi-value function bodies validate each
 returned expression. Statement-level `try` now consumes the trailing `err` in bindings,
 assignments and error-only call statements, and verifies both the callee and enclosing
-function propagation contracts. Calls with ignored results are rejected. Generic
-`mem.alloc`, generic source calls, indexing and aggregate literals remain outside this
-checkpoint. Unsupported expression and statement forms fail explicitly instead of
-being silently accepted; cross-platform fixtures freeze both the implemented behavior
-and those temporary boundaries. The
+function propagation contracts. Calls with ignored results are rejected. Compiler-
+owned `mem.alloc[T]` specializes its `(*mem.Arena, usize) -> ([]T, err)` signature for
+primitive, local or qualified named, aliased-composite and pointer element types, then
+uses the same explicit/`try` result paths. Direct compound-type arguments still await
+type-aware comptime-argument parsing; generic source calls, indexing and aggregate
+literals remain outside this checkpoint. Unsupported expression and statement forms
+fail explicitly instead of being silently accepted; cross-platform fixtures freeze
+both the implemented behavior and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64
 division, remainder and relational instructions from operand types, including values
 above `isize`'s maximum.

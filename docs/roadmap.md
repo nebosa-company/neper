@@ -375,12 +375,14 @@ intrinsic result sets are consumed through tuple bindings or assignments with `_
 discards, and multi-value function bodies check every returned expression. Statement-
 level `try` consumes a trailing `err` in a whole binding initializer, assignment RHS or
 error-only call statement, while enforcing fallible caller/callee signatures. Returned
-values cannot be silently ignored. Wider intermediate arithmetic, bitwise, shift and
-wrapping constant operators, generic `mem.alloc`, generic source calls, indexing and
-aggregate literals remain outside the `check-file` checkpoint. Unsupported expression
-and statement forms fail explicitly rather than being accepted unchecked. The next
-type-checking increments replace those boundaries with generic intrinsic specialization,
-remaining control flow and full generic checking.
+values cannot be silently ignored. Compiler-owned `mem.alloc[T]` now specializes its
+arena/count arguments and `([]T, err)` results for primitive, local or qualified named,
+aliased-composite and pointer `T`. Direct compound-type arguments await type-aware
+comptime-argument parsing. Wider intermediate arithmetic, bitwise, shift and wrapping
+constant operators, generic source calls, indexing and aggregate literals remain outside
+the `check-file` checkpoint. Unsupported expression and statement forms fail explicitly
+rather than being accepted unchecked. The next type-checking increments replace those
+boundaries with remaining control flow and full generic checking.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

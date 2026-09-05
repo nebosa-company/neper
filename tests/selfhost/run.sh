@@ -266,6 +266,8 @@ try_checked=$($test_build/neper-self check-file "$check_root/try_valid/src/main.
 [ "$try_checked" = 'module check ok' ]
 intrinsic_multi_checked=$($test_build/neper-self check-file "$check_root/intrinsic_multi_valid/src/main.e" "$repo" x64 linux)
 [ "$intrinsic_multi_checked" = 'module check ok' ]
+alloc_checked=$($test_build/neper-self check-file "$check_root/alloc_valid/src/main.e" "$repo" x64 linux)
+[ "$alloc_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -349,7 +351,15 @@ expect_check_error multi_return_void InvalidType
 expect_check_error error_return_not_last InvalidType
 expect_check_error extern_error_return InvalidType
 expect_check_error extern_multi_return InvalidType
-expect_check_error intrinsic_generic_unsupported Unsupported
+expect_check_error intrinsic_generic_unsupported ArgumentCount
+expect_check_error alloc_argument_type TypeMismatch
+expect_check_error alloc_arena_type TypeMismatch
+expect_check_error alloc_argument_count ArgumentCount
+expect_check_error alloc_missing_type_argument ArgumentCount
+expect_check_error alloc_type_argument_count ArgumentCount
+expect_check_error alloc_value_type_argument InvalidType
+expect_check_error alloc_void InvalidType
+expect_check_error alloc_result_type TypeMismatch
 expect_check_error unsupported Unsupported
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)

@@ -185,6 +185,8 @@ $tryChecked = & $compiler check-file (Join-Path $checkRoot 'try_valid\src\main.e
 if ($LASTEXITCODE -ne 0 -or $tryChecked -ne 'module check ok') { throw 'try result consumption did not type-check' }
 $intrinsicMultiChecked = & $compiler check-file (Join-Path $checkRoot 'intrinsic_multi_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $intrinsicMultiChecked -ne 'module check ok') { throw 'fallible intrinsic results did not type-check' }
+$allocChecked = & $compiler check-file (Join-Path $checkRoot 'alloc_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $allocChecked -ne 'module check ok') { throw 'generic mem.alloc specialization did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -257,7 +259,15 @@ $checkFailures = @(
     @('error_return_not_last', 'InvalidType'),
     @('extern_error_return', 'InvalidType'),
     @('extern_multi_return', 'InvalidType'),
-    @('intrinsic_generic_unsupported', 'Unsupported'),
+    @('intrinsic_generic_unsupported', 'ArgumentCount'),
+    @('alloc_argument_type', 'TypeMismatch'),
+    @('alloc_arena_type', 'TypeMismatch'),
+    @('alloc_argument_count', 'ArgumentCount'),
+    @('alloc_missing_type_argument', 'ArgumentCount'),
+    @('alloc_type_argument_count', 'ArgumentCount'),
+    @('alloc_value_type_argument', 'InvalidType'),
+    @('alloc_void', 'InvalidType'),
+    @('alloc_result_type', 'TypeMismatch'),
     @('unsupported', 'Unsupported')
 )
 foreach ($case in $checkFailures) {
