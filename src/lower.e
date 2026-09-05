@@ -53,6 +53,96 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
     ret (result, ok)
 }
 
+fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder) -> (check.CallInfo, usize, err) {
+    var empty: check.CallInfo = zero
+    let (call, call_error) = check.check_call(c, g, tree, module_index, node)
+    if call_error != ok { ret (empty, 0usize, call_error) }
+    if call.is_cast || call.mem_alloc || call.function.generic || call.function.return_count > 1usize { ret (empty, 0usize, check.Unsupported) }
+    let (function_index, found) = check.find_function(c, call.function.module_index, call.function.name)
+    if !found { ret (empty, 0usize, FunctionNotFound) }
+    var arguments: [16]usize = zero
+    var argument_count = 0usize
+    let end = node.first_child + node.child_count
+    var child_position = 0usize
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if child_position > 0usize {
+                if argument_count == arguments.len || argument_count >= call.function.parameter_count { ret (empty, 0usize, check.ArgumentCount) }
+                let parameter = c.parameters[call.function.first_parameter + argument_count]
+                let (value, value_error) = literal(c, g.modules[module_index].text, tree.nodes[tree.children[at].index], parameter.ty, builder)
+                if value_error != ok { ret (empty, 0usize, value_error) }
+                arguments[argument_count] = value
+                argument_count += 1usize
+            }
+            child_position += 1usize
+        }
+        at += 1usize
+    }
+    if argument_count != call.function.parameter_count { ret (empty, 0usize, check.ArgumentCount) }
+    var return_type: check.Type = zero
+    let has_result = call.function.return_count == 1usize
+    if has_result {
+        let (result_type, result_type_error) = check.call_return(c, call, 0usize)
+        if result_type_error != ok { ret (empty, 0usize, result_type_error) }
+        return_type = result_type
+    }
+    let (instruction, result, emit_error) = nir.emit(builder, .Call, return_type, has_result, function_index, c.tokens[node.token_start])
+    if emit_error != ok { ret (empty, 0usize, emit_error) }
+    at = 0usize
+    while at < argument_count {
+        let operand_error = nir.add_operand(builder, instruction, arguments[at])
+        if operand_error != ok { ret (empty, 0usize, operand_error) }
+        at += 1usize
+    }
+    ret (call, result, ok)
+}
+
+fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder) -> err {
+    if function.return_count != 1usize { ret check.Unsupported }
+    let end = node.first_child + node.child_count
+    var call_index = 0usize
+    var found_call = false
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            call_index = tree.children[at].index
+            found_call = true
+            break
+        }
+        at += 1usize
+    }
+    if !found_call { ret parse.InvalidSyntax }
+    let call_node = tree.nodes[call_index]
+    let (call, call_result, call_error) = lower_call(c, g, tree, module_index, call_node, builder)
+    if call_error != ok { ret call_error }
+    if call.function.return_count != 1usize || !check.call_is_fallible(c, call) { ret check.InvalidTry }
+    let (caller_error_type, caller_type_error) = check.function_return(c, function, 0usize)
+    if caller_type_error != ok { ret caller_type_error }
+    if caller_error_type.kind != .Err { ret check.InvalidTry }
+    let (ok_instruction, ok_value, ok_error) = nir.emit(builder, .ConstError, caller_error_type, true, 0usize, c.tokens[node.token_start])
+    if ok_error != ok { ret ok_error }
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (compare_instruction, failed, compare_error) = nir.emit(builder, .NotEqual, boolean, true, 0usize, c.tokens[node.token_start])
+    if compare_error != ok { ret compare_error }
+    try nir.add_operand(builder, compare_instruction, call_result)
+    try nir.add_operand(builder, compare_instruction, ok_value)
+    let error_block = builder.block_count
+    let continue_block = builder.block_count + 1usize
+    let (branch_instruction, ignored, branch_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, c.tokens[node.token_start])
+    if branch_error != ok { ret branch_error }
+    try nir.add_operand(builder, branch_instruction, failed)
+    try nir.set_branch_targets(builder, branch_instruction, error_block, continue_block)
+    let (error_block_index, error_block_error) = nir.begin_block(builder)
+    if error_block_error != ok || error_block_index != error_block { ret nir.InvalidControlFlow }
+    let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, caller_error_type, false, 0usize, c.tokens[node.token_start])
+    if return_error != ok { ret return_error }
+    try nir.add_operand(builder, return_instruction, call_result)
+    let (continue_block_index, continue_block_error) = nir.begin_block(builder)
+    if continue_block_error != ok || continue_block_index != continue_block { ret nir.InvalidControlFlow }
+    ret ok
+}
+
 fn lower_return(c: *check.Checker, text: str, tree: *parse.Tree, function: check.Function, node: syntax.Node, builder: *nir.Builder) -> err {
     var values: [2]usize = zero
     var count = 0usize
@@ -115,8 +205,15 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
                 while body_at < body_end {
                     if tree.children[body_at].node {
                         let statement = tree.nodes[tree.children[body_at].index]
-                        if statement.kind != .ReturnStmt { ret check.Unsupported }
-                        try lower_return(c, text, tree, function, statement, builder)
+                        if statement.kind == .ReturnStmt {
+                            try lower_return(c, text, tree, function, statement, builder)
+                        } else {
+                            if statement.kind == .TryStmt {
+                                try lower_try(c, g, tree, module_index, function, statement, builder)
+                            } else {
+                                ret check.Unsupported
+                            }
+                        }
                     }
                     body_at += 1usize
                 }

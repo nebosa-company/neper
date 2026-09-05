@@ -64,6 +64,8 @@ type Instruction = struct {
     first_operand: usize,
     operand_count: usize,
     immediate: usize,
+    target: usize,
+    target2: usize,
     token: lex.Token,
 }
 
@@ -172,6 +174,8 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         first_operand: builder.operand_count,
         operand_count: 0usize,
         immediate: immediate,
+        target: 0usize,
+        target2: 0usize,
         token: token,
     }
     builder.instruction_count += 1usize
@@ -193,9 +197,43 @@ fn add_operand(builder: *Builder, instruction_index: usize, value: usize) -> err
     ret ok
 }
 
+fn set_branch_targets(builder: *Builder, instruction_index: usize, destination: usize, destination2: usize) -> err {
+    if instruction_index >= builder.instruction_count || instruction_index + 1usize != builder.instruction_count { ret InvalidControlFlow }
+    let opcode = builder.instructions[instruction_index].opcode
+    if opcode != .Branch && opcode != .BranchIf { ret InvalidControlFlow }
+    builder.instructions[instruction_index].target = destination
+    if opcode == .BranchIf { builder.instructions[instruction_index].target2 = destination2 }
+    ret ok
+}
+
+fn validate_target(function: Function, destination: usize) -> bool {
+    ret destination >= function.first_block && destination < function.first_block + function.block_count
+}
+
+fn validate_function(builder: *Builder, function: Function) -> err {
+    let block_end = function.first_block + function.block_count
+    var block_at = function.first_block
+    while block_at < block_end {
+        let block = builder.blocks[block_at]
+        if !block.terminated || block.instruction_count == 0usize { ret InvalidControlFlow }
+        let terminator_index = block.first_instruction + block.instruction_count - 1usize
+        let terminator = builder.instructions[terminator_index]
+        if terminator.opcode == .Branch {
+            if !validate_target(function, terminator.target) { ret InvalidControlFlow }
+        } else {
+            if terminator.opcode == .BranchIf {
+                if !validate_target(function, terminator.target) || !validate_target(function, terminator.target2) { ret InvalidControlFlow }
+            }
+        }
+        block_at += 1usize
+    }
+    ret ok
+}
+
 fn end_function(builder: *Builder) -> err {
     if !builder.function_active || !builder.block_active || !builder.blocks[builder.current_block].terminated { ret InvalidControlFlow }
     builder.functions[builder.current_function].value_count = builder.next_value
+    try validate_function(builder, builder.functions[builder.current_function])
     builder.function_active = false
     builder.block_active = false
     ret ok
