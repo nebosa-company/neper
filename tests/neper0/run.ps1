@@ -190,6 +190,14 @@ if ($LASTEXITCODE -ne 1 -or ($genericAggregateArity -join "`n") -notmatch 'compi
     throw 'generic aggregate arity rejection failed'
 }
 
+$arenaAlloc = & $neper run (Join-Path $PSScriptRoot 'arena-alloc.e') --output (Join-Path $testBuild 'arena-alloc.exe')
+if ($LASTEXITCODE -ne 0 -or $arenaAlloc -ne 'arena alloc ok') { throw 'generic arena allocation failed' }
+
+$arenaExhausted = & $neper run (Join-Path $PSScriptRoot 'arena-exhausted.e') --output (Join-Path $testBuild 'arena-exhausted.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($arenaExhausted -join "`n") -notmatch 'error: mem\.Exhausted') {
+    throw 'arena exhaustion propagation failed'
+}
+
 $osHelper = Join-Path $testBuild 'os-spawn-helper.exe'
 & $neper build (Join-Path $PSScriptRoot 'os-spawn-helper.e') --output $osHelper | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'OS spawn helper build failed' }

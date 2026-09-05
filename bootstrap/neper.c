@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.65-neper0"
+#define NEPER_VERSION "0.0.66-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -1056,6 +1056,42 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.commit", "neper_os_commit"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.clock", "neper_os_clock"); intrinsic_param(fn, token, "c", clock); intrinsic_returns(fn, 2, i64, error);
 #undef OS_FN
+}
+
+static void install_mem_intrinsics(Compiler *c) {
+    Token token = c->tokens[0];
+    Type u8 = type_make(TY_INT, "u8");
+    Type arena = type_make(TY_ARENA, "mem.Arena");
+    Type arena_pointer = intrinsic_pointer(arena, 0);
+    Type bytes = intrinsic_slice(u8, 0);
+    Type usize = type_make(TY_INT, "usize");
+    Type error = type_make(TY_ERR, "err");
+    Type parameter = type_make(TY_NAMED, "T");
+    Type values = intrinsic_slice(parameter, 0);
+    ErrorDecl *exhausted;
+    Function *fn;
+
+    exhausted = &c->program.errors[c->program.error_count];
+    memset(exhausted, 0, sizeof(*exhausted));
+    strcpy(exhausted->name, "Exhausted");
+    strcpy(exhausted->module, "mem");
+    exhausted->token = token;
+    exhausted->code = c->program.error_count + 2;
+    c->program.error_count++;
+
+    fn = intrinsic_function(c, token, "mem.arena_from", "neper_mem_arena_from");
+    intrinsic_param(fn, token, "buf", bytes);
+    intrinsic_returns(fn, 1, arena, error);
+
+    fn = intrinsic_function(c, token, "mem.alloc", "neper_mem_alloc");
+    fn->is_template = 1;
+    strcpy(fn->comptime_params[0].name, "T");
+    fn->comptime_params[0].token = token;
+    fn->comptime_params[0].is_type = 1;
+    fn->comptime_param_count = 1;
+    intrinsic_param(fn, token, "a", arena_pointer);
+    intrinsic_param(fn, token, "n", usize);
+    intrinsic_returns(fn, 2, values, error);
 }
 
 static Type array_element_type(Type array) {
@@ -2366,7 +2402,7 @@ static StructDecl *find_tag_owner(Compiler *c, const char *name) {
 
 static int type_is_value_aggregate(Compiler *c, Type t) {
     StructDecl *decl;
-    if (t.kind == TY_ARRAY) return 1;
+    if (t.kind == TY_ARRAY || t.kind == TY_ARENA) return 1;
     if (t.kind != TY_NAMED) return 0;
     decl = find_struct(c, t.name);
     return decl && decl->kind != ND_ENUM;
@@ -2387,9 +2423,10 @@ static int type_layout(Compiler *c, Type type, size_t *size, size_t *alignment) 
     if (type.kind == TY_INT) {
         *size = scalar_byte_size(type); *alignment = *size; return 1;
     }
-    if (type.kind == TY_POINTER || type.kind == TY_ARENA) {
+    if (type.kind == TY_POINTER) {
         *size = 8; *alignment = 8; return 1;
     }
+    if (type.kind == TY_ARENA) { *size = 24; *alignment = 8; return 1; }
     if (type.kind == TY_STR || type.kind == TY_SLICE) {
         *size = 16; *alignment = 8; return 1;
     }
@@ -2691,6 +2728,29 @@ static Type resolve_name_place(Compiler *c, Function *fn, Expr *e) {
             e->place_mutable = !current.is_const;
             current = pointer_element_type(current);
             dereference = 1;
+        }
+        if (current.kind == TY_ARENA) {
+            if (e->field_path_count >= MAX_FIELD_PATH) {
+                diagnostic_at(c, &e->token, "E-TOOL-9999", "field access path limit exceeded");
+                return type_make(TY_INVALID, 0);
+            }
+            if (strcmp(part, "base") == 0) {
+                Type u8 = type_make(TY_INT, "u8");
+                current = intrinsic_pointer(u8, 0);
+                e->field_offsets[e->field_path_count] = 0;
+            } else if (strcmp(part, "cap") == 0) {
+                current = type_make(TY_INT, "usize");
+                e->field_offsets[e->field_path_count] = 8;
+            } else if (strcmp(part, "off") == 0) {
+                current = type_make(TY_INT, "usize");
+                e->field_offsets[e->field_path_count] = 16;
+            } else {
+                diagnostic_at(c, &e->token, "E-NAME-9999", "unknown aggregate field or member");
+                return type_make(TY_INVALID, 0);
+            }
+            e->field_dereferences[e->field_path_count] = (unsigned char)dereference;
+            e->field_path_count++;
+            continue;
         }
         if (current.kind != TY_NAMED || !(decl = find_struct(c, current.name)) || decl->kind == ND_ENUM) {
             diagnostic_at(c, &e->token, "E-TYPE-9999", "field access requires an aggregate value or pointer");
@@ -3041,11 +3101,32 @@ static Stmt *clone_specialized_statements(Compiler *c, Function *template_fn,
     return head;
 }
 
+static int append_type_instance_key(char *out, size_t capacity, Type type) {
+    char part[128];
+    Type element;
+    if (type.kind == TY_POINTER || type.kind == TY_SLICE) {
+        snprintf(part, sizeof(part), "%c%c_", type.kind == TY_POINTER ? 'p' : 's',
+                 type.is_const ? 'c' : 'm');
+        if (!append_text(out, capacity, part)) return 0;
+        element = type.element ? *type.element :
+                  type_make(type.element_kind, type.element_name);
+        element.is_const = type.element_is_const;
+        return append_type_instance_key(out, capacity, element);
+    }
+    if (type.kind == TY_ARRAY) {
+        snprintf(part, sizeof(part), "a%llu_", (unsigned long long)type.array_length);
+        if (!append_text(out, capacity, part)) return 0;
+        return append_type_instance_key(out, capacity, array_element_type(type));
+    }
+    snprintf(part, sizeof(part), "k%d_%u_%s", (int)type.kind,
+             (unsigned)strlen(type.name), type.name);
+    return append_text(out, capacity, part);
+}
+
 static Function *instantiate_function(Compiler *c, Function *template_fn, Expr *call) {
     Type type_args[MAX_ARGS];
     int64_t integer_args[MAX_ARGS] = {0};
     char instance_name[96];
-    size_t used;
     Function *instance;
     int i;
     if (call->as.call.generic_arg_count != template_fn->comptime_param_count) {
@@ -3055,7 +3136,6 @@ static Function *instantiate_function(Compiler *c, Function *template_fn, Expr *
     }
     memset(type_args, 0, sizeof(type_args));
     copy_text(instance_name, sizeof(instance_name), template_fn->name, strlen(template_fn->name));
-    used = strlen(instance_name);
     for (i = 0; i < template_fn->comptime_param_count; ++i) {
         ComptimeParam *parameter = &template_fn->comptime_params[i];
         char part[112];
@@ -3065,7 +3145,12 @@ static Function *instantiate_function(Compiler *c, Function *template_fn, Expr *
                 return 0;
             }
             type_args[i] = call->as.call.generic_types[i];
-            snprintf(part, sizeof(part), "$%s", type_args[i].name);
+            resolve_type_constants(c, &type_args[i], &call->token);
+            strcpy(part, "$");
+            if (!append_type_instance_key(part, sizeof(part), type_args[i])) {
+                diagnostic_at(c, &call->token, "E-TOOL-9999", "function instance name is too long");
+                return 0;
+            }
         } else {
             Type actual;
             if (call->as.call.generic_is_type[i] ||
@@ -3078,8 +3163,10 @@ static Function *instantiate_function(Compiler *c, Function *template_fn, Expr *
             }
             snprintf(part, sizeof(part), "$%lld", (long long)integer_args[i]);
         }
-        copy_text(instance_name + used, sizeof(instance_name) - used, part, strlen(part));
-        used = strlen(instance_name);
+        if (!append_text(instance_name, sizeof(instance_name), part)) {
+            diagnostic_at(c, &call->token, "E-TOOL-9999", "function instance name is too long");
+            return 0;
+        }
     }
     instance = find_function(c, instance_name);
     if (instance) return instance;
@@ -3090,12 +3177,18 @@ static Function *instantiate_function(Compiler *c, Function *template_fn, Expr *
     instance = &c->program.functions[c->program.function_count++];
     memset(instance, 0, sizeof(*instance));
     copy_text(instance->name, sizeof(instance->name), instance_name, strlen(instance_name));
-    strcpy(instance->symbol, "neper_fn_");
-    for (i = 0; instance_name[i] && strlen(instance->symbol) + 2 < sizeof(instance->symbol); ++i) {
-        size_t at = strlen(instance->symbol);
-        char ch = instance_name[i];
-        instance->symbol[at] = (ch == '$' || ch == '.' || ch == '*') ? '_' : ch;
-        instance->symbol[at + 1] = 0;
+    instance->is_intrinsic = template_fn->is_intrinsic;
+    if (template_fn->is_intrinsic) {
+        copy_text(instance->symbol, sizeof(instance->symbol), template_fn->symbol,
+                  strlen(template_fn->symbol));
+    } else {
+        strcpy(instance->symbol, "neper_fn_");
+        for (i = 0; instance_name[i] && strlen(instance->symbol) + 2 < sizeof(instance->symbol); ++i) {
+            size_t at = strlen(instance->symbol);
+            char ch = instance_name[i];
+            instance->symbol[at] = (ch == '$' || ch == '.' || ch == '*') ? '_' : ch;
+            instance->symbol[at + 1] = 0;
+        }
     }
     instance->token = template_fn->token;
     copy_text(instance->module, sizeof(instance->module), template_fn->module,
@@ -3195,6 +3288,12 @@ static Function *check_declared_call(Compiler *c, Function *fn, Expr *e) {
     if (callee && strcmp(e->as.call.callee, callee->name) != 0)
         copy_text(e->as.call.callee, sizeof(e->as.call.callee), callee->name,
                   strlen(callee->name));
+    if (callee && callee->is_template)
+        for (i = 0; i < e->as.call.generic_arg_count; ++i)
+            if (e->as.call.generic_is_type[i]) {
+                qualify_type_for_module(c, &e->as.call.generic_types[i], fn->module);
+                resolve_type_constants(c, &e->as.call.generic_types[i], &e->token);
+            }
     if (callee && callee->is_template && !e->as.call.generic_arg_count) {
         if (!infer_function_arguments(c, fn, callee, e)) return 0;
         callee = instantiate_function(c, callee, e);
@@ -3378,6 +3477,23 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                 base = pointer_element_type(base);
             } else {
                 e->place_mutable = e->as.field.base->place_mutable;
+            }
+            if (base.kind == TY_ARENA) {
+                if (strcmp(e->as.field.name, "base") == 0) {
+                    Type u8 = type_make(TY_INT, "u8");
+                    e->as.field.offset = 0;
+                    e->type = intrinsic_pointer(u8, 0);
+                } else if (strcmp(e->as.field.name, "cap") == 0) {
+                    e->as.field.offset = 8;
+                    e->type = type_make(TY_INT, "usize");
+                } else if (strcmp(e->as.field.name, "off") == 0) {
+                    e->as.field.offset = 16;
+                    e->type = type_make(TY_INT, "usize");
+                } else {
+                    diagnostic_at(c, &e->token, "E-NAME-9999", "unknown aggregate field or member");
+                    e->type = type_make(TY_INVALID, 0);
+                }
+                return e->type;
             }
             if (base.kind != TY_NAMED || !(decl = find_struct(c, base.name)) || decl->kind == ND_ENUM) {
                 diagnostic_at(c, &e->token, "E-TYPE-9999", "field access requires an aggregate value or pointer");
@@ -4267,7 +4383,10 @@ static void parse_source_file(Compiler *c, int source_id, int root) {
     lex(c);
     if (root && c->token_count) {
         c->root_token = c->tokens[0];
-        if (c->errors == errors_before) install_os_intrinsics(c);
+        if (c->errors == errors_before) {
+            install_os_intrinsics(c);
+            install_mem_intrinsics(c);
+        }
     }
     if (c->errors == errors_before) parse_program(c);
 }
@@ -4653,7 +4772,7 @@ static void resolve_type_constants(Compiler *c, Type *type, Token *token) {
 
 static int return_type_uses_integer_register(Compiler *c, Type type) {
     if (type.kind == TY_BOOL || type.kind == TY_ERR || type.kind == TY_INT ||
-        type.kind == TY_POINTER || type.kind == TY_ARENA) return 1;
+        type.kind == TY_POINTER) return 1;
     if (type.kind == TY_NAMED) {
         StructDecl *decl = enum_decl_for_type(c, type);
         return decl && (decl->kind == ND_ENUM || find_tag_owner(c, type.name));
@@ -5242,6 +5361,16 @@ static void emit_call(Emitter *e, Expr *x, int aggregate_destination) {
                             aggregate[i] ? slots[i] - k * 8 : slots[i] + k * 8);
             emit_argument_lane(e, lane, source);
         }
+    }
+    if (callee && strcmp(symbol_name(callee), "neper_mem_alloc") == 0) {
+        Type element = sequence_element_type(callee->return_types[0]);
+        size_t size = 0, alignment = 1;
+        char source[64];
+        type_layout(e->compiler, element, &size, &alignment);
+        snprintf(source, sizeof(source), "%llu", (unsigned long long)size);
+        emit_argument_lane(e, lane++, source);
+        snprintf(source, sizeof(source), "%llu", (unsigned long long)alignment);
+        emit_argument_lane(e, lane++, source);
     }
     if (strcmp(x->as.call.callee, "io.print") == 0) fprintf(e->out, "    call neper_io_print\n");
     else {
@@ -6871,7 +7000,8 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdout:PROC\n"
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\n"
-        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n\n"
+        "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
+        "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\n\n"
         "np_stack_probe PROC\n"
         "    lea r10, [rsp+8]\n    mov r11, rax\n"
         "np_stack_probe_page:\n    cmp r11, 4096\n    jbe np_stack_probe_last\n"

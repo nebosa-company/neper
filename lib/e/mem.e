@@ -1,5 +1,5 @@
-// M0 bootstrap surface. The bootstrap recognizes arena_from as a fixed intrinsic;
-// this source fixes the names and shapes used by program entry.
+// neper-0 memory surface. The compiler owns arena_from, alloc, and Exhausted as
+// fixed bootstrap intrinsics. This source fixes the public Arena representation.
 type Arena = struct {
     base: *u8,
     cap: usize,

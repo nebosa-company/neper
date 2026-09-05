@@ -182,6 +182,12 @@ standard handles, directory enumeration, child processes, startup arguments,
 virtual-memory reserve/commit, process exit, and wall/monotonic clocks. Generated
 programs link a small platform runtime object, and native failures retain stable
 qualified `os.*` error identities across both x64 ABIs.
+The first arena increment gives `mem.Arena` its frozen 24-byte value layout and
+field places, then supplies compiler-owned `mem.arena_from` and generic
+`mem.alloc[T]` bootstrap intrinsics. Concrete allocation calls pass the compiler's
+element size and alignment to one runtime entry point; zero-count requests preserve
+the cursor, capacity and multiplication failures preserve it and return
+`mem.Exhausted`, and compound type arguments have distinct specialization keys.
 Default builds now also emit the fixed debug subset on both hosts. ELF executables
 carry DWARF 4 compile units, functions, parameters, locals, types, and frame-base
 locations without location or range lists. COFF objects carry matching CodeView

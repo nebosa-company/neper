@@ -176,7 +176,14 @@ argument, virtual-memory and clock surface through a small C99 runtime object.
 Intrinsic signatures are compiler-owned, fallible calls use one deterministic
 caller-owned result layout on both x64 ABIs, host failures map to stable qualified
 `os.*` errors, and the Windows/Linux suite exercises success, failure and process
-exit paths. The debug-info increment adds DWARF 4 DIEs on ELF and CodeView type and
+exit paths. The first memory increment gives `mem.Arena` its specified 24-byte value
+layout and field places, and adds compiler-owned `mem.arena_from` and generic
+`mem.alloc[T]` bootstrap intrinsics. Allocation lowers every concrete element type
+to one runtime entry point with hidden size/alignment constants; zero-count,
+alignment, capacity, multiplication-overflow, cursor-stability and qualified
+`mem.Exhausted` behavior are covered on both x64 ABIs. Compound type arguments use
+structural specialization keys rather than colliding with their element types. The
+debug-info increment adds DWARF 4 DIEs on ELF and CodeView type and
 symbol records on COFF for functions, parameters, named locals, primitives,
 structures, bare and tagged unions, enums, pointers with pointee constness, slices,
 arenas, and arrays. Every source local has one stable frame slot and one `rbp`-based

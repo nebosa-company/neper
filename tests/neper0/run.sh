@@ -239,6 +239,15 @@ set -e
 test "$generic_aggregate_arity_status" -eq 1
 printf '%s' "$generic_aggregate_arity" | grep -q 'compile-time argument count does not match generic type'
 
+test "$("$neper" run "$repo/tests/neper0/arena-alloc.e" --output "$test_build/arena-alloc")" = 'arena alloc ok'
+
+set +e
+arena_exhausted=$("$neper" run "$repo/tests/neper0/arena-exhausted.e" --output "$test_build/arena-exhausted" 2>&1)
+arena_exhausted_status=$?
+set -e
+test "$arena_exhausted_status" -eq 1
+printf '%s' "$arena_exhausted" | grep -q 'error: mem\.Exhausted'
+
 os_helper="$test_build/os-spawn-helper"
 "$neper" build "$repo/tests/neper0/os-spawn-helper.e" --output "$os_helper" >/dev/null
 os_output="$test_build/os-output.txt"

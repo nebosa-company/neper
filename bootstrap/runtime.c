@@ -17,7 +17,8 @@ typedef struct { NpFile in, out, err; struct { const uintptr_t *ptr; size_t len;
 enum {
     NP_OK = 0, NP_NOT_FOUND = 2, NP_DENIED = 3, NP_EXISTS = 4,
     NP_INTERRUPTED = 5, NP_OUT_OF_MEMORY = 6, NP_FAILED = 7,
-    NP_TIMEOUT = 8, NP_WOULD_BLOCK = 9, NP_UNSUPPORTED = 10
+    NP_TIMEOUT = 8, NP_WOULD_BLOCK = 9, NP_UNSUPPORTED = 10,
+    NP_EXHAUSTED = 11
 };
 
 static const NpStr *np_args_ptr;
@@ -30,13 +31,51 @@ static void *np_arena_alloc(NpArena *a, size_t n, size_t alignment) {
     at = (a->off + alignment - 1) & ~(alignment - 1);
     if (at > a->cap || n > a->cap - at) return 0;
     a->off = at + n;
-    return a->base + at;
+    return a->base ? a->base + at : 0;
+}
+
+void neper_mem_alloc(void *result, NpArena *arena, size_t count,
+                     size_t element_size, size_t alignment) {
+    unsigned char *out = (unsigned char *)result;
+    void *allocation;
+    size_t bytes;
+    *(void **)out = 0;
+    *(size_t *)(out + 8) = 0;
+    *(uint32_t *)(out + 16) = NP_OK;
+    if (!arena || arena->off > arena->cap || (!arena->base && arena->cap) ||
+        !alignment || (alignment & (alignment - 1))) {
+        *(uint32_t *)(out + 16) = NP_EXHAUSTED;
+        return;
+    }
+    if (count == 0) {
+        *(void **)out = arena->base ? arena->base + arena->off : 0;
+        return;
+    }
+    if (element_size && count > SIZE_MAX / element_size) {
+        *(uint32_t *)(out + 16) = NP_EXHAUSTED;
+        return;
+    }
+    bytes = count * element_size;
+    allocation = np_arena_alloc(arena, bytes, alignment);
+    if (!allocation && bytes) {
+        *(uint32_t *)(out + 16) = NP_EXHAUSTED;
+        return;
+    }
+    *(void **)out = allocation;
+    *(size_t *)(out + 8) = count;
 }
 
 static void np_copy(void *destination, const void *source, size_t n) {
     unsigned char *d = (unsigned char *)destination;
     const unsigned char *s = (const unsigned char *)source;
     while (n--) *d++ = *s++;
+}
+
+void neper_mem_arena_from(void *result, unsigned char *buffer, size_t length) {
+    NpArena *arena = (NpArena *)result;
+    arena->base = buffer;
+    arena->cap = length;
+    arena->off = 0;
 }
 
 void neper_os_set_args(const NpStr *args, size_t count) {
