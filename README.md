@@ -174,7 +174,11 @@ Windows and Linux, including the compiler-owned `e.mem` and `e.os` bootstrap sur
 Its lexical-scope walk enforces parameter and local non-shadowing across ordinary,
 tuple, loop, switch-capture and `shared var` bindings while allowing reuse after a
 sibling scope ends. Applying that rule to the compiler also removed three existing
-source/import or builtin collisions.
+source/import or builtin collisions. The same walk now resolves every unqualified
+expression and type name against its exact active scope, module declarations and
+builtin types. It rejects unknown names and types, use before binding and references
+after scope exit; generic type and value parameters, forward module declarations,
+switch captures and implicit deferred-statement scopes are covered on both hosts.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

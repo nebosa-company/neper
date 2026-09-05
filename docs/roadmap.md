@@ -338,8 +338,12 @@ names seeded explicitly rather than invented as source declarations. Its lexical
 scope pass now covers parameters, ordinary and tuple bindings, loop bindings, switch
 captures and `shared var`; active or module-level shadowing is rejected while names
 may be reused in disjoint sibling scopes. Running that pass over the compiler removed
-three pre-existing collisions. Unqualified reference resolution and type checking are
-the next compiler increments.
+three pre-existing collisions. The same scope-aware pass now resolves unqualified
+expression and type names, including forward module declarations, generic type and
+value parameters, binding initializers, loop bodies, switch cases and captures,
+top-level initializers and implicit deferred-statement scopes. It rejects unknown
+names and types, use before binding and references after a lexical scope ends on both
+hosts. Type checking is the next compiler increment.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
