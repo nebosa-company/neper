@@ -13,5 +13,8 @@ fn run(a: *mem.Arena) -> err {
     let qualified = try mem.alloc[item.Item](a, 1usize)
     let pointers = try mem.alloc[*u8](a, 3usize)
     let nested = try mem.alloc[Bytes](a, 2usize)
+    let direct_slices = try mem.alloc[[]u8](a, 2usize)
+    let direct_arrays = try mem.alloc[[3]u16](a, 2usize)
+    let const_pointers = try mem.alloc[*const u8](a, 2usize)
     ret local_error
 }

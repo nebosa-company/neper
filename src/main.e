@@ -478,6 +478,23 @@ fn self_test() -> err {
     if tree.nodes[8usize].kind != .BracketPostfix || tree.nodes[11usize].kind != .BracketPostfix { ret lex.InvalidSource }
     if tree.nodes[14usize].kind != .BracketPostfix || tree.nodes[18usize].kind != .BracketPostfix { ret lex.InvalidSource }
     if tree.nodes[22usize].kind != .BracketPostfix || tree.nodes[23usize].kind != .CallExpr { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let bracket_type_error = parse.parse(&tree, "fn bracket_types() {\n    mem.alloc[[]u8](a, 1usize)\n    mem.alloc[[3]u16](a, 1usize)\n    mem.alloc[*const u8](a, 1usize)\n    generic[[3]u8{ 1u8, 2u8, 3u8 }]()\n}\n")
+    if bracket_type_error != ok { ret lex.InvalidSource }
+    var saw_slice_type = false
+    var saw_array_type = false
+    var saw_const_pointer_type = false
+    var saw_array_literal = false
+    var bracket_type_index = 1usize
+    while bracket_type_index < tree.count {
+        let bracket_node = tree.nodes[bracket_type_index]
+        if bracket_node.kind == .SliceType { saw_slice_type = true }
+        if bracket_node.kind == .ArrayType { saw_array_type = true }
+        if bracket_node.kind == .PointerType { saw_const_pointer_type = true }
+        if bracket_node.kind == .AggregateLiteral { saw_array_literal = true }
+        bracket_type_index += 1usize
+    }
+    if !saw_slice_type || !saw_array_type || !saw_const_pointer_type || !saw_array_literal { ret lex.InvalidSource }
     let mixed_range_error = validate_test_parse("fn invalid() {\n    call(values[start..end, next])\n}\n")
     if mixed_range_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let trailing_range_error = validate_test_parse("fn invalid() {\n    call(values[..end,])\n}\n")

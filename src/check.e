@@ -1414,6 +1414,10 @@ type AllocInfo = struct {
 fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
     let node = tree.nodes[node_index]
     let text = g.modules[module_index].text
+    if is_type_node(node.kind) {
+        let (parsed, parsed_error) = type_from_node(c, c.resolver, g, tree, module_index, node)
+        ret (parsed, parsed_error)
+    }
     if node.kind == .NameExpr {
         let token = c.tokens[node.token_start]
         if token.kind != .Identifier { ret (invalid_type(), InvalidType) }

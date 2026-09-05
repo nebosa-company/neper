@@ -210,11 +210,12 @@ assignments and error-only call statements, and verifies both the callee and enc
 function propagation contracts. Calls with ignored results are rejected. Compiler-
 owned `mem.alloc[T]` specializes its `(*mem.Arena, usize) -> ([]T, err)` signature for
 primitive, local or qualified named, aliased-composite and pointer element types, then
-uses the same explicit/`try` result paths. Direct compound-type arguments still await
-type-aware comptime-argument parsing; generic source calls, indexing and aggregate
-literals remain outside this checkpoint. Unsupported expression and statement forms
-fail explicitly instead of being silently accepted; cross-platform fixtures freeze
-both the implemented behavior and those temporary boundaries. The
+uses the same explicit/`try` result paths. Bracket arguments now retain directly written
+pointer, slice and fixed-array types as type nodes while preserving array literals as
+expressions, completing the `neper-0` `mem.alloc` element forms. Generic source calls,
+indexing and aggregate literals remain outside this checkpoint. Unsupported expression
+and statement forms fail explicitly instead of being silently accepted; cross-platform
+fixtures freeze both the implemented behavior and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64
 division, remainder and relational instructions from operand types, including values
 above `isize`'s maximum.

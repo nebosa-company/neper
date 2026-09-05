@@ -531,6 +531,46 @@ fn parse_call_postfix(p: *Parser, receiver: usize) -> err {
     ret ok
 }
 
+fn bracket_argument_is_type(p: *Parser) -> bool {
+    if p.current.kind == .KwFn || p.current.kind == .KwExtern { ret true }
+    if p.current.kind == .PunctStar {
+        var pointer_look = p.scanner
+        var pointer_token = lex.next(&pointer_look)
+        while pointer_token.kind == .Newline { pointer_token = lex.next(&pointer_look) }
+        ret pointer_token.kind == .KwConst || pointer_token.kind == .KwShared
+    }
+    if p.current.kind != .PunctLBracket { ret false }
+    var look = p.scanner
+    var brackets = 1usize
+    var parens = 0usize
+    while true {
+        let token = lex.next(&look)
+        if token.kind == .Invalid || token.kind == .Eof { ret false }
+        if token.kind == .PunctLBracket { brackets += 1usize }
+        if token.kind == .PunctRBracket {
+            if brackets == 0usize { ret true }
+            brackets = brackets - 1usize
+        }
+        if token.kind == .PunctLParen { parens += 1usize }
+        if token.kind == .PunctRParen && parens != 0usize { parens = parens - 1usize }
+        if brackets == 0usize && parens == 0usize {
+            if token.kind == .PunctLBrace { ret false }
+            if token.kind == .PunctComma { ret true }
+        }
+    }
+    ret false
+}
+
+fn parse_bracket_argument_node(p: *Parser) -> err {
+    if bracket_argument_is_type(p) {
+        var has_type_node = false
+        try parse_type_node(p, &has_type_node)
+        if !has_type_node { ret InvalidSyntax }
+        ret ok
+    }
+    ret parse_expression_node(p)
+}
+
 fn parse_bracket_postfix(p: *Parser, receiver: usize) -> err {
     let token_start = p.tree.nodes[receiver].token_start
     let node_start = receiver
@@ -541,18 +581,18 @@ fn parse_bracket_postfix(p: *Parser, receiver: usize) -> err {
         try advance(p)
         try skip_separators(p)
         if p.current.kind != .PunctRBracket {
-            try parse_expression_node(p)
+            try parse_bracket_argument_node(p)
             try skip_separators(p)
         }
     } else {
         if p.current.kind != .PunctRBracket {
-            try parse_expression_node(p)
+            try parse_bracket_argument_node(p)
             try skip_separators(p)
             if p.current.kind == .PunctRange {
                 try advance(p)
                 try skip_separators(p)
                 if p.current.kind != .PunctRBracket {
-                    try parse_expression_node(p)
+                    try parse_bracket_argument_node(p)
                     try skip_separators(p)
                 }
             } else {
@@ -560,7 +600,7 @@ fn parse_bracket_postfix(p: *Parser, receiver: usize) -> err {
                     try advance(p)
                     try skip_separators(p)
                     if p.current.kind == .PunctRBracket { break }
-                    try parse_expression_node(p)
+                    try parse_bracket_argument_node(p)
                     try skip_separators(p)
                 }
             }

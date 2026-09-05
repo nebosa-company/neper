@@ -377,12 +377,13 @@ level `try` consumes a trailing `err` in a whole binding initializer, assignment
 error-only call statement, while enforcing fallible caller/callee signatures. Returned
 values cannot be silently ignored. Compiler-owned `mem.alloc[T]` now specializes its
 arena/count arguments and `([]T, err)` results for primitive, local or qualified named,
-aliased-composite and pointer `T`. Direct compound-type arguments await type-aware
-comptime-argument parsing. Wider intermediate arithmetic, bitwise, shift and wrapping
-constant operators, generic source calls, indexing and aggregate literals remain outside
-the `check-file` checkpoint. Unsupported expression and statement forms fail explicitly
-rather than being accepted unchecked. The next type-checking increments replace those
-boundaries with remaining control flow and full generic checking.
+aliased-composite and pointer `T`. Bracket arguments retain directly written pointer,
+slice and fixed-array types as type nodes without misclassifying array-literal arguments,
+covering every `neper-0` allocation element form. Wider intermediate arithmetic, bitwise,
+shift and wrapping constant operators, generic source calls, indexing and aggregate
+literals remain outside the `check-file` checkpoint. Unsupported expression and statement
+forms fail explicitly rather than being accepted unchecked. The next type-checking
+increments replace those boundaries with remaining control flow and full generic checking.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
