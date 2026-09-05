@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.75-neper0"
+#define NEPER_VERSION "0.0.76-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -5563,6 +5563,7 @@ static void emit_expr(Emitter *e, Expr *x) {
             fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", slot);
             emit_expr(e, x->as.binary.right);
             fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", slot);
+            int is_unsigned = type_is_unsigned(e->compiler, x->as.binary.left->type);
             switch (x->as.binary.op) {
                 case TK_PLUS: fputs("    add r10, rax\n    mov rax, r10\n", e->out); break;
                 case TK_MINUS: fputs("    sub r10, rax\n    mov rax, r10\n", e->out); break;
@@ -5571,25 +5572,30 @@ static void emit_expr(Emitter *e, Expr *x) {
                     {
                         int trap_label = e->label++, safe_label = e->label++;
                         fputs("    test rax, rax\n", e->out);
-                        fprintf(e->out, "    je np_div_trap_%d\n    cmp rax, -1\n    jne np_div_safe_%d\n", trap_label, safe_label);
-                        fputs(e->windows ? "    mov r11, 8000000000000000h\n" :
-                                          "    mov r11, 0x8000000000000000\n", e->out);
-                        fprintf(e->out, "    cmp r10, r11\n    je np_div_trap_%d\n    jmp np_div_safe_%d\nnp_div_trap_%d:\n",
-                                trap_label, safe_label, trap_label);
+                        if (is_unsigned) {
+                            fprintf(e->out, "    jne np_div_safe_%d\n", safe_label);
+                        } else {
+                            fprintf(e->out, "    je np_div_trap_%d\n    cmp rax, -1\n    jne np_div_safe_%d\n", trap_label, safe_label);
+                            fputs(e->windows ? "    mov r11, 8000000000000000h\n" :
+                                              "    mov r11, 0x8000000000000000\n", e->out);
+                            fprintf(e->out, "    cmp r10, r11\n    je np_div_trap_%d\n    jmp np_div_safe_%d\n", trap_label, safe_label);
+                        }
+                        fprintf(e->out, "np_div_trap_%d:\n", trap_label);
                         emit_trap_call(e, x);
                         fprintf(e->out, "np_div_safe_%d:\n", safe_label);
+                        fputs("    mov r11, rax\n    mov rax, r10\n", e->out);
+                        fputs(is_unsigned ? "    xor edx, edx\n    div r11\n" : "    cqo\n    idiv r11\n", e->out);
                     }
-                    fputs("    mov r11, rax\n    mov rax, r10\n    cqo\n    idiv r11\n", e->out);
                     if (x->as.binary.op == TK_PERCENT) fputs("    mov rax, rdx\n", e->out);
                     break;
                 default:
                     fputs("    cmp r10, rax\n", e->out);
                     if (x->as.binary.op == TK_EQ) fputs("    sete al\n", e->out);
                     else if (x->as.binary.op == TK_NE) fputs("    setne al\n", e->out);
-                    else if (x->as.binary.op == TK_LT) fputs("    setl al\n", e->out);
-                    else if (x->as.binary.op == TK_LE) fputs("    setle al\n", e->out);
-                    else if (x->as.binary.op == TK_GT) fputs("    setg al\n", e->out);
-                    else fputs("    setge al\n", e->out);
+                    else if (x->as.binary.op == TK_LT) fputs(is_unsigned ? "    setb al\n" : "    setl al\n", e->out);
+                    else if (x->as.binary.op == TK_LE) fputs(is_unsigned ? "    setbe al\n" : "    setle al\n", e->out);
+                    else if (x->as.binary.op == TK_GT) fputs(is_unsigned ? "    seta al\n" : "    setg al\n", e->out);
+                    else fputs(is_unsigned ? "    setae al\n" : "    setge al\n", e->out);
                     fputs("    movzx rax, al\n", e->out);
                     break;
             }

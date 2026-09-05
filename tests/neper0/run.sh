@@ -8,6 +8,13 @@ test_build="$repo/build-linux/tests/neper0"
 mkdir -p "$test_build"
 
 test "$("$neper" run "$repo/tests/neper0/range.e" --output "$test_build/range")" = 'range ok'
+test "$("$neper" run "$repo/tests/neper0/unsigned-ops.e" --output "$test_build/unsigned-ops")" = 'unsigned ops ok'
+set +e
+unsigned_divide=$("$neper" run "$repo/tests/neper0/unsigned-divide-trap.e" --output "$test_build/unsigned-divide-trap" 2>&1)
+unsigned_divide_status=$?
+set -e
+test "$unsigned_divide_status" -eq 134
+printf '%s' "$unsigned_divide" | grep -q 'trap\[divide\]'
 test "$("$neper" run "$repo/tests/neper0/array.e" --output "$test_build/array")" = 'array ok'
 test "$("$neper" run "$repo/tests/neper0/slice-mutate.e" --output "$test_build/slice-mutate" -- original)" = 'slice mutation ok'
 test "$("$neper" run "$repo/tests/neper0/slice-iterate.e" --output "$test_build/slice-iterate" -- 'slice iteration ok')" = 'slice iteration ok'

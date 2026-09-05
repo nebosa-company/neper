@@ -1,4 +1,4 @@
-// Scalar type-checking foundation. Unsupported forms fail explicitly.
+// Type-checking foundation. Unsupported forms fail explicitly.
 
 use graph
 use lex
@@ -28,6 +28,9 @@ type Kind = enum u8 {
     Float,
     String,
     Named,
+    Pointer,
+    Slice,
+    Array,
     UntypedInteger,
     UntypedFloat,
     Other,
@@ -37,6 +40,11 @@ type Type = struct {
     kind: Kind,
     name: str,
     module_index: usize,
+    element: usize,
+    has_element: bool,
+    is_const: bool,
+    array_length: usize,
+    has_length: bool,
 }
 
 type Parameter = struct {
@@ -65,22 +73,26 @@ type Checker = struct {
     parameters: []Parameter,
     tokens: []lex.Token,
     locals: []Local,
+    types: []Type,
     function_count: usize,
     parameter_count: usize,
     token_count: usize,
     local_count: usize,
+    type_count: usize,
 }
 
-fn init(c: *Checker, functions: []Function, parameters: []Parameter, tokens: []lex.Token, locals: []Local) -> err {
-    if functions.len == 0usize || parameters.len == 0usize || tokens.len == 0usize || locals.len == 0usize { ret Capacity }
+fn init(c: *Checker, functions: []Function, parameters: []Parameter, tokens: []lex.Token, locals: []Local, types: []Type) -> err {
+    if functions.len == 0usize || parameters.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize { ret Capacity }
     c.functions = functions
     c.parameters = parameters
     c.tokens = tokens
     c.locals = locals
+    c.types = types
     c.function_count = 0usize
     c.parameter_count = 0usize
     c.token_count = 0usize
     c.local_count = 0usize
+    c.type_count = 0usize
     ret ok
 }
 
@@ -100,7 +112,15 @@ fn ends_with(text: str, suffix: str) -> bool {
 }
 
 fn make_type(kind: Kind, name: str, module_index: usize) -> Type {
-    ret Type { kind: kind, name: name, module_index: module_index }
+    ret Type { kind: kind, name: name, module_index: module_index, element: 0usize, has_element: false, is_const: false, array_length: 0usize, has_length: false }
+}
+
+fn store_type(c: *Checker, ty: Type) -> (usize, err) {
+    if c.type_count == c.types.len { ret (0usize, Capacity) }
+    c.types[c.type_count] = ty
+    let index = c.type_count
+    c.type_count += 1usize
+    ret (index, ok)
 }
 
 fn invalid_type() -> Type {
@@ -127,18 +147,51 @@ fn is_untyped(ty: Type) -> bool {
     ret ty.kind == .UntypedInteger || ty.kind == .UntypedFloat
 }
 
-fn type_equal(a: Type, b: Type) -> bool {
+fn is_string_shape(c: *Checker, ty: Type) -> bool {
+    if ty.kind == .String { ret true }
+    if ty.kind != .Slice || !ty.is_const || !ty.has_element || ty.element >= c.type_count { ret false }
+    let element = c.types[ty.element]
+    ret element.kind == .Integer && same(element.name, "u8")
+}
+
+fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
+    if is_string_shape(c, a) || is_string_shape(c, b) { ret is_string_shape(c, a) && is_string_shape(c, b) }
     if a.kind != b.kind { ret false }
     if a.kind == .Named { ret a.module_index == b.module_index && same(a.name, b.name) }
     if a.kind == .Integer || a.kind == .Float { ret same(a.name, b.name) }
+    if a.kind == .Pointer || a.kind == .Slice {
+        if a.is_const != b.is_const || !a.has_element || !b.has_element { ret false }
+        if a.element >= c.type_count || b.element >= c.type_count { ret false }
+        ret type_equal(c, c.types[a.element], c.types[b.element])
+    }
+    if a.kind == .Array {
+        if !a.has_length || !b.has_length || a.array_length != b.array_length || !a.has_element || !b.has_element { ret false }
+        if a.element >= c.type_count || b.element >= c.type_count { ret false }
+        ret type_equal(c, c.types[a.element], c.types[b.element])
+    }
+    if a.kind == .Other || a.kind == .Invalid { ret false }
     ret true
 }
 
-fn apply_context(actual: Type, expected: Type) -> (Type, err) {
+fn type_assignable(c: *Checker, actual: Type, expected: Type) -> bool {
+    if type_equal(c, actual, expected) { ret true }
+    if actual.kind == expected.kind && (actual.kind == .Pointer || actual.kind == .Slice) {
+        if actual.is_const || !expected.is_const || !actual.has_element || !expected.has_element { ret false }
+        if actual.element >= c.type_count || expected.element >= c.type_count { ret false }
+        ret type_equal(c, c.types[actual.element], c.types[expected.element])
+    }
+    if expected.kind == .String && actual.kind == .Slice && !actual.is_const && actual.has_element && actual.element < c.type_count {
+        let element = c.types[actual.element]
+        ret element.kind == .Integer && same(element.name, "u8")
+    }
+    ret false
+}
+
+fn apply_context(c: *Checker, actual: Type, expected: Type) -> (Type, err) {
     if expected.kind == .Invalid { ret (actual, ok) }
     if actual.kind == .UntypedInteger && expected.kind == .Integer { ret (expected, ok) }
     if actual.kind == .UntypedFloat && expected.kind == .Float { ret (expected, ok) }
-    if type_equal(actual, expected) { ret (expected, ok) }
+    if type_assignable(c, actual, expected) { ret (expected, ok) }
     ret (invalid_type(), TypeMismatch)
 }
 
@@ -201,20 +254,217 @@ fn scalar_type(name: str, module_index: usize) -> Type {
     ret invalid_type()
 }
 
-fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_index: usize, node: syntax.Node) -> Type {
-    if node.kind != .NamedType { ret make_type(.Other, "", module_index) }
+fn is_type_node(kind: syntax.Kind) -> bool {
+    ret kind == .NamedType || kind == .PointerType || kind == .SliceType || kind == .ArrayType || kind == .FunctionType
+}
+
+fn composite_const(c: *Checker, node: syntax.Node, child: syntax.Node) -> (bool, err) {
+    var is_const = false
+    var at = node.token_start
+    while at < child.token_start {
+        if c.tokens[at].kind == .KwConst { is_const = true }
+        if c.tokens[at].kind == .KwShared { ret (false, Unsupported) }
+        at += 1usize
+    }
+    ret (is_const, ok)
+}
+
+fn integer_digit(byte: u8) -> (usize, bool) {
+    let digits = "0123456789abcdef"
+    var lower = byte
+    if lower >= 65u8 && lower <= 70u8 { lower += 32u8 }
+    var at = 0usize
+    while at < digits.len {
+        if digits[at] == lower { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn array_length_literal(c: *Checker, text: str, node: syntax.Node) -> (usize, err) {
+    if node.kind != .LiteralExpr { ret (0usize, Unsupported) }
+    let token = c.tokens[node.token_start]
+    if token.kind != .Integer { ret (0usize, TypeMismatch) }
+    let length_type = numeric_literal_type(text, token)
+    if length_type.kind == .Integer && !same(length_type.name, "usize") { ret (0usize, TypeMismatch) }
+    let spelling = text[token.start..token.end]
+    var base = 10usize
+    var at = 0usize
+    if spelling.len >= 2usize && spelling[0usize] == 48u8 {
+        let prefix = spelling[1usize]
+        if prefix == 120u8 || prefix == 88u8 {
+            base = 16usize
+            at = 2usize
+        } else {
+            if prefix == 111u8 || prefix == 79u8 {
+                base = 8usize
+                at = 2usize
+            } else {
+                if prefix == 98u8 || prefix == 66u8 {
+                    base = 2usize
+                    at = 2usize
+                }
+            }
+        }
+    }
+    var value = 0usize
+    var digits = 0usize
+    let max_value = 18446744073709551615usize
+    while at < spelling.len {
+        let byte = spelling[at]
+        if byte == 95u8 {
+            at += 1usize
+        } else {
+            let (digit, is_digit) = integer_digit(byte)
+            if !is_digit || digit >= base { break }
+            digits += 1usize
+            if value > (max_value - digit) / base { ret (0usize, TypeMismatch) }
+            value = value * base + digit
+            at += 1usize
+        }
+    }
+    if digits == 0usize { ret (0usize, Unsupported) }
+    ret (value, ok)
+}
+
+fn array_length_value(c: *Checker, text: str, tree: *parse.Tree, node_index: usize) -> (usize, err) {
+    let node = tree.nodes[node_index]
+    if node.kind == .LiteralExpr {
+        let (value, value_error) = array_length_literal(c, text, node)
+        ret (value, value_error)
+    }
+    if node.kind == .GroupExpr {
+        let (child_index, found) = first_node_child(tree, node)
+        if !found { ret (0usize, parse.InvalidSyntax) }
+        let (value, value_error) = array_length_value(c, text, tree, child_index)
+        ret (value, value_error)
+    }
+    if node.kind == .UnaryExpr {
+        let (child_index, found) = first_node_child(tree, node)
+        if !found { ret (0usize, parse.InvalidSyntax) }
+        let (value, value_error) = array_length_value(c, text, tree, child_index)
+        if value_error != ok { ret (0usize, value_error) }
+        let op = c.tokens[node.token_start].kind
+        if op == .PunctMinus {
+            if value == 0usize { ret (0usize, ok) }
+            ret (0usize, TypeMismatch)
+        }
+        if op == .PunctTilde { ret (18446744073709551615usize - value, ok) }
+        ret (0usize, Unsupported)
+    }
+    if node.kind == .BinaryExpr {
+        var children: [2]usize = zero
+        var count = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if count == 2usize { ret (0usize, parse.InvalidSyntax) }
+                children[count] = tree.children[at].index
+                count += 1usize
+            }
+            at += 1usize
+        }
+        if count != 2usize { ret (0usize, parse.InvalidSyntax) }
+        let (left, left_error) = array_length_value(c, text, tree, children[0usize])
+        if left_error != ok { ret (0usize, left_error) }
+        let (right, right_error) = array_length_value(c, text, tree, children[1usize])
+        if right_error != ok { ret (0usize, right_error) }
+        let op = binary_operator(c, tree, node)
+        let max_value = 18446744073709551615usize
+        if op == .PunctPlus {
+            if left > max_value - right { ret (0usize, TypeMismatch) }
+            ret (left + right, ok)
+        }
+        if op == .PunctMinus {
+            if left < right { ret (0usize, TypeMismatch) }
+            ret (left - right, ok)
+        }
+        if op == .PunctStar {
+            if right != 0usize && left > max_value / right { ret (0usize, TypeMismatch) }
+            ret (left * right, ok)
+        }
+        if op == .PunctSlash {
+            if right == 0usize { ret (0usize, TypeMismatch) }
+            ret (left / right, ok)
+        }
+        if op == .PunctPercent {
+            if right == 0usize { ret (0usize, TypeMismatch) }
+            ret (left % right, ok)
+        }
+        ret (0usize, Unsupported)
+    }
+    ret (0usize, Unsupported)
+}
+
+fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, err) {
+    if node.kind == .PointerType || node.kind == .SliceType {
+        let (child_index, has_child) = first_node_child(tree, node)
+        if !has_child { ret (invalid_type(), parse.InvalidSyntax) }
+        let child = tree.nodes[child_index]
+        let (element_type, element_error) = type_from_node(c, r, g, tree, module_index, child)
+        if element_error != ok { ret (invalid_type(), element_error) }
+        if node.kind == .SliceType && element_type.kind == .Void { ret (invalid_type(), InvalidType) }
+        let (element_index, store_error) = store_type(c, element_type)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        let (is_const, qualifier_error) = composite_const(c, node, child)
+        if qualifier_error != ok { ret (invalid_type(), qualifier_error) }
+        var result = make_type(.Pointer, "", module_index)
+        if node.kind == .SliceType { result.kind = .Slice }
+        result.element = element_index
+        result.has_element = true
+        result.is_const = is_const
+        ret (result, ok)
+    }
+    if node.kind == .ArrayType {
+        let end = node.first_child + node.child_count
+        var element_index = 0usize
+        var has_element = false
+        var length_index = 0usize
+        var has_length = false
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                let child_index = tree.children[at].index
+                if is_type_node(tree.nodes[child_index].kind) {
+                    element_index = child_index
+                    has_element = true
+                } else {
+                    length_index = child_index
+                    has_length = true
+                }
+            }
+            at += 1usize
+        }
+        if !has_element { ret (invalid_type(), parse.InvalidSyntax) }
+        if !has_length { ret (invalid_type(), Unsupported) }
+        let (element_type, element_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[element_index])
+        if element_error != ok { ret (invalid_type(), element_error) }
+        if element_type.kind == .Void { ret (invalid_type(), InvalidType) }
+        let (stored_element, store_error) = store_type(c, element_type)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        let (length, length_error) = array_length_value(c, g.modules[module_index].text, tree, length_index)
+        if length_error != ok { ret (invalid_type(), length_error) }
+        var result = make_type(.Array, "", module_index)
+        result.element = stored_element
+        result.has_element = true
+        result.array_length = length
+        result.has_length = true
+        ret (result, ok)
+    }
+    if node.kind != .NamedType { ret (make_type(.Other, "", module_index), Unsupported) }
     let first = c.tokens[node.token_start]
-    if first.kind != .Identifier { ret make_type(.Other, "", module_index) }
+    if first.kind != .Identifier { ret (make_type(.Other, "", module_index), Unsupported) }
     let base = g.modules[module_index].text[first.start..first.end]
     let scalar = scalar_type(base, module_index)
-    if scalar.kind != .Invalid { ret scalar }
+    if scalar.kind != .Invalid { ret (scalar, ok) }
     var target_module = module_index
     var name = base
     var saw_dot = false
     var at = node.token_start + 1usize
     while at < node.token_end {
         let token = c.tokens[at]
-        if token.kind == .PunctLBracket { ret make_type(.Other, "", module_index) }
+        if token.kind == .PunctLBracket { ret (make_type(.Other, "", module_index), Unsupported) }
         if token.kind == .PunctDot {
             saw_dot = true
         } else {
@@ -224,12 +474,12 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_ind
                     target_module = qualified_module
                     name = g.modules[module_index].text[token.start..token.end]
                 }
-                ret make_type(.Named, name, target_module)
+                ret (make_type(.Named, name, target_module), ok)
             }
         }
         at += 1usize
     }
-    ret make_type(.Named, name, target_module)
+    ret (make_type(.Named, name, target_module), ok)
 }
 
 fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
@@ -238,7 +488,8 @@ fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *
     if !has_name { ret Unsupported }
     let (type_index, has_type) = first_node_child(tree, node)
     if !has_type { ret Unsupported }
-    let ty = type_from_node(c, r, g, module_index, tree.nodes[type_index])
+    let (ty, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+    if type_error != ok { ret type_error }
     if ty.kind == .Void { ret InvalidType }
     c.parameters[c.parameter_count] = Parameter { name: name, ty: ty }
     c.parameter_count += 1usize
@@ -267,7 +518,9 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
                     if tree.children[return_at].node {
                         item.return_count += 1usize
                         if item.return_count == 1usize {
-                            item.return_type = type_from_node(c, r, g, module_index, tree.nodes[tree.children[return_at].index])
+                            let (return_type, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[tree.children[return_at].index])
+                            if type_error != ok { ret type_error }
+                            item.return_type = return_type
                         } else {
                             item.return_type = make_type(.Other, "", module_index)
                         }
@@ -287,6 +540,7 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
 fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.function_count = 0usize
     c.parameter_count = 0usize
+    c.type_count = 0usize
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
@@ -414,7 +668,12 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     let node = tree.nodes[node_index]
     let text = g.modules[module_index].text
     if node.kind == .LiteralExpr {
-        let (literal, context_error) = apply_context(literal_type(c, text, node), expected)
+        let token = c.tokens[node.token_start]
+        if token.kind == .KwNil {
+            if expected.kind == .Pointer || expected.kind == .Slice { ret (expected, ok) }
+            ret (invalid_type(), MissingContext)
+        }
+        let (literal, context_error) = apply_context(c, literal_type(c, text, node), expected)
         ret (literal, context_error)
     }
     if node.kind == .NameExpr {
@@ -423,7 +682,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         let name = text[token.start..token.end]
         let (local_index, found) = find_local(c, name)
         if !found { ret (invalid_type(), Unsupported) }
-        let (local_type, context_error) = apply_context(c.locals[local_index].ty, expected)
+        let (local_type, context_error) = apply_context(c, c.locals[local_index].ty, expected)
         ret (local_type, context_error)
     }
     if node.kind == .GroupExpr {
@@ -440,7 +699,32 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let (value_type, value_error) = check_expr(c, g, tree, module_index, child_index, make_type(.Bool, "bool", module_index))
             if value_error == TypeMismatch { ret (invalid_type(), InvalidOperator) }
             if value_error != ok { ret (invalid_type(), value_error) }
-            let (result_type, context_error) = apply_context(value_type, expected)
+            let (result_type, context_error) = apply_context(c, value_type, expected)
+            ret (result_type, context_error)
+        }
+        if op == .PunctAmp {
+            let place = tree.nodes[child_index]
+            if place.kind != .NameExpr { ret (invalid_type(), Unsupported) }
+            let token = c.tokens[place.token_start]
+            let name = text[token.start..token.end]
+            let (local_index, local_found) = find_local(c, name)
+            if !local_found { ret (invalid_type(), Unsupported) }
+            let (element_index, store_error) = store_type(c, c.locals[local_index].ty)
+            if store_error != ok { ret (invalid_type(), store_error) }
+            var pointer = make_type(.Pointer, "", module_index)
+            pointer.element = element_index
+            pointer.has_element = true
+            pointer.is_const = !c.locals[local_index].mutable
+            let (result_type, context_error) = apply_context(c, pointer, expected)
+            ret (result_type, context_error)
+        }
+        if op == .PunctStar {
+            let (pointer, pointer_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+            if pointer_error != ok { ret (invalid_type(), pointer_error) }
+            if pointer.kind != .Pointer || !pointer.has_element || pointer.element >= c.type_count { ret (invalid_type(), InvalidOperator) }
+            let element = c.types[pointer.element]
+            if element.kind == .Void { ret (invalid_type(), InvalidOperator) }
+            let (result_type, context_error) = apply_context(c, element, expected)
             ret (result_type, context_error)
         }
         let (value_type, value_error) = check_expr(c, g, tree, module_index, child_index, expected)
@@ -473,7 +757,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let (right_type, right_error) = check_expr(c, g, tree, module_index, children[1usize], make_type(.Bool, "bool", module_index))
             if right_error == TypeMismatch { ret (invalid_type(), InvalidOperator) }
             if right_error != ok { ret (invalid_type(), right_error) }
-            let (result_type, context_error) = apply_context(make_type(.Bool, "bool", module_index), expected)
+            let (result_type, context_error) = apply_context(c, make_type(.Bool, "bool", module_index), expected)
             ret (result_type, context_error)
         }
         var operand_context = expected
@@ -487,23 +771,23 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         var final_left = left_type
         var final_right = right_type
         if is_untyped(final_left) && !is_untyped(final_right) {
-            let (contextual_left, contextual_error) = apply_context(final_left, final_right)
+            let (contextual_left, contextual_error) = apply_context(c, final_left, final_right)
             if contextual_error != ok { ret (invalid_type(), contextual_error) }
             final_left = contextual_left
         }
         if is_untyped(final_right) && !is_untyped(final_left) {
-            let (contextual_right, contextual_error) = apply_context(final_right, final_left)
+            let (contextual_right, contextual_error) = apply_context(c, final_right, final_left)
             if contextual_error != ok { ret (invalid_type(), contextual_error) }
             final_right = contextual_right
         }
-        if !type_equal(final_left, final_right) { ret (invalid_type(), TypeMismatch) }
+        if !type_equal(c, final_left, final_right) { ret (invalid_type(), TypeMismatch) }
         if is_comparison(op) {
             if is_untyped(final_left) { ret (invalid_type(), MissingContext) }
             if !is_numeric(final_left) {
                 if !is_equality(op) { ret (invalid_type(), InvalidOperator) }
                 if final_left.kind != .Bool && final_left.kind != .Err { ret (invalid_type(), InvalidOperator) }
             }
-            let (result_type, context_error) = apply_context(make_type(.Bool, "bool", module_index), expected)
+            let (result_type, context_error) = apply_context(c, make_type(.Bool, "bool", module_index), expected)
             ret (result_type, context_error)
         }
         if !is_numeric(final_left) { ret (invalid_type(), InvalidOperator) }
@@ -556,14 +840,14 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         }
         if cast.kind == .Integer || cast.kind == .Float {
             if child_position != 2usize { ret (invalid_type(), ArgumentCount) }
-            let (result_type, context_error) = apply_context(cast, expected)
+            let (result_type, context_error) = apply_context(c, cast, expected)
             ret (result_type, context_error)
         }
         if !has_function { ret (invalid_type(), UnknownCallable) }
         let function = c.functions[function_index]
         if child_position - 1usize != function.parameter_count { ret (invalid_type(), ArgumentCount) }
         if function.generic || function.return_count > 1usize { ret (invalid_type(), Unsupported) }
-        let (result_type, context_error) = apply_context(function.return_type, expected)
+        let (result_type, context_error) = apply_context(c, function.return_type, expected)
         ret (result_type, context_error)
     }
     ret (invalid_type(), Unsupported)
@@ -586,7 +870,9 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
                 has_binding = true
             } else {
                 if child.kind == .NamedType || child.kind == .PointerType || child.kind == .SliceType || child.kind == .ArrayType || child.kind == .FunctionType {
-                    declared = type_from_node(c, r, g, module_index, child)
+                    let (declared_type, type_error) = type_from_node(c, r, g, tree, module_index, child)
+                    if type_error != ok { ret type_error }
+                    declared = declared_type
                 } else {
                     initializer_index = child_index
                     has_initializer = true

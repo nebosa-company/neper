@@ -248,6 +248,8 @@ case "$defer_binding_scope" in *'error: resolve.UnknownName'*) ;; *) printf '%s\
 check_root="$repo/tests/selfhost/fixtures/check"
 checked=$($test_build/neper-self check-file "$check_root/valid/src/main.e" "$repo" x64 linux)
 [ "$checked" = 'module check ok' ]
+composite_checked=$($test_build/neper-self check-file "$check_root/composite_valid/src/main.e" "$repo" x64 linux)
+[ "$composite_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -276,6 +278,17 @@ expect_check_error bool_ordering InvalidOperator
 expect_check_error void_parameter InvalidType
 expect_check_error missing_return_value InvalidReturn
 expect_check_error missing_return MissingReturn
+expect_check_error const_slice_to_mutable TypeMismatch
+expect_check_error const_pointer_to_mutable TypeMismatch
+expect_check_error array_length_mismatch TypeMismatch
+expect_check_error array_element_mismatch TypeMismatch
+expect_check_error array_length_type TypeMismatch
+expect_check_error array_length_overflow TypeMismatch
+expect_check_error array_length_division_zero TypeMismatch
+expect_check_error inferred_array_type Unsupported
+expect_check_error void_slice InvalidType
+expect_check_error void_pointer_deref InvalidOperator
+expect_check_error nil_without_context MissingContext
 expect_check_error compound_unsupported Unsupported
 expect_check_error unsupported Unsupported
 scope_root="$repo/tests/selfhost/fixtures/scope"

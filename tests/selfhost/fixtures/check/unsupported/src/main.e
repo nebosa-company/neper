@@ -1,3 +1,3 @@
-fn run(values: []i32) {
-    ret
+fn run[T: type](value: T) -> T {
+    ret value
 }

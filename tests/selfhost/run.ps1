@@ -167,6 +167,8 @@ if ($LASTEXITCODE -ne 1 -or ($deferBindingScope -join "`n") -notmatch 'error: re
 $checkRoot = Join-Path $PSScriptRoot 'fixtures\check'
 $checked = & $compiler check-file (Join-Path $checkRoot 'valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $checked -ne 'module check ok') { throw 'valid scalar program did not type-check' }
+$compositeChecked = & $compiler check-file (Join-Path $checkRoot 'composite_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $compositeChecked -ne 'module check ok') { throw 'valid composite types did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -184,6 +186,17 @@ $checkFailures = @(
     @('void_parameter', 'InvalidType'),
     @('missing_return_value', 'InvalidReturn'),
     @('missing_return', 'MissingReturn'),
+    @('const_slice_to_mutable', 'TypeMismatch'),
+    @('const_pointer_to_mutable', 'TypeMismatch'),
+    @('array_length_mismatch', 'TypeMismatch'),
+    @('array_element_mismatch', 'TypeMismatch'),
+    @('array_length_type', 'TypeMismatch'),
+    @('array_length_overflow', 'TypeMismatch'),
+    @('array_length_division_zero', 'TypeMismatch'),
+    @('inferred_array_type', 'Unsupported'),
+    @('void_slice', 'InvalidType'),
+    @('void_pointer_deref', 'InvalidOperator'),
+    @('nil_without_context', 'MissingContext'),
     @('compound_unsupported', 'Unsupported'),
     @('unsupported', 'Unsupported')
 )

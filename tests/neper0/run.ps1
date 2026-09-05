@@ -9,6 +9,14 @@ New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 $range = & $neper run (Join-Path $PSScriptRoot 'range.e') --output (Join-Path $testBuild 'range.exe')
 if ($LASTEXITCODE -ne 0 -or $range -ne 'range ok') { throw 'range control flow failed' }
 
+$unsignedOps = & $neper run (Join-Path $PSScriptRoot 'unsigned-ops.e') --output (Join-Path $testBuild 'unsigned-ops.exe')
+if ($LASTEXITCODE -ne 0 -or $unsignedOps -ne 'unsigned ops ok') { throw 'unsigned arithmetic and comparison failed' }
+
+$unsignedDivide = & $neper run (Join-Path $PSScriptRoot 'unsigned-divide-trap.e') --output (Join-Path $testBuild 'unsigned-divide-trap.exe') 2>&1
+if ($LASTEXITCODE -ne 134 -or ($unsignedDivide -join "`n") -notmatch 'trap\[divide\]') {
+    throw 'unsigned divide trap failed'
+}
+
 $array = & $neper run (Join-Path $PSScriptRoot 'array.e') --output (Join-Path $testBuild 'array.exe')
 if ($LASTEXITCODE -ne 0 -or $array -ne 'array ok') { throw 'fixed array behavior failed' }
 
