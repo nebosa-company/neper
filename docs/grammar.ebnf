@@ -139,7 +139,7 @@ bracket_contents= expression (`..` expression?)?
                 | argument_list ;
 argument_list   = expression (`,` expression)* `,`? ;
 call_expr       = postfix ;
-place           = postfix ;
+place           = `*`* postfix ;
 
 primary         = literal
                 | qualified_name

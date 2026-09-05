@@ -983,6 +983,18 @@ fn is_assignment_target_kind(kind: syntax.Kind) -> bool {
     ret kind == .NameExpr || kind == .FieldExpr || kind == .BracketPostfix || kind == .GroupExpr || kind == .UnaryExpr
 }
 
+fn parse_place_node(p: *Parser) -> err {
+    if p.current.kind != .PunctStar { ret parse_postfix_node(p) }
+    let token_start = p.token_index
+    var nested: [1]usize = zero
+    try advance(p)
+    try skip_soft(p)
+    try parse_place_node(p)
+    nested[0usize] = p.last_node
+    try add_parent_node(p, .UnaryExpr, token_start, p.tree.nodes[p.last_node].token_end, nested[..])
+    ret ok
+}
+
 fn parse_tuple_assignment_statement(p: *Parser) -> err {
     let token_start = p.token_index
     var nested: [34]usize = zero
@@ -991,7 +1003,7 @@ fn parse_tuple_assignment_statement(p: *Parser) -> err {
     enter_soft(p)
     try skip_separators(p)
     while p.current.kind != .PunctRParen {
-        try parse_prefix_node(p)
+        try parse_place_node(p)
         if !is_assignment_target_kind(p.tree.nodes[p.last_node].kind) { ret InvalidSyntax }
         if nested_count == nested.len { ret InvalidSyntax }
         nested[nested_count] = p.last_node
@@ -1029,10 +1041,16 @@ fn parse_expression_statement(p: *Parser) -> err {
     let token_start = p.token_index
     var nested: [2]usize = zero
     var nested_count = 1usize
-    try parse_expression_node(p)
+    let explicit_deref = p.current.kind == .PunctStar
+    if explicit_deref {
+        try parse_place_node(p)
+    } else {
+        try parse_expression_node(p)
+    }
     nested[0usize] = p.last_node
     if is_assignment_op(p.current.kind) {
         if !is_assignment_target_kind(p.tree.nodes[p.last_node].kind) { ret InvalidSyntax }
+        if p.tree.nodes[p.last_node].kind == .UnaryExpr && !explicit_deref { ret InvalidSyntax }
         try advance(p)
         if p.current.kind == .KwUndef { ret InvalidSyntax }
         let initializer_has_node = p.current.kind != .KwZero

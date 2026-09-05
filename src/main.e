@@ -135,6 +135,12 @@ fn self_test() -> err {
     if one_item_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let binary_target_error = parse.validate("fn invalid() {\n    left + right = zero\n}\n")
     if binary_target_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let unary_target_error = parse.validate("fn invalid() {\n    -value = zero\n}\n")
+    if unary_target_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let tuple_unary_target_error = parse.validate("fn invalid() {\n    (-left, right) = zero\n}\n")
+    if tuple_unary_target_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let deref_target_error = parse.validate("fn deref() {\n    **pointer = zero\n    (*left, **right) = zero\n}\n")
+    if deref_target_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let attribute_error = parse.parse(&tree, "@gpu(\n    8usize * 4usize,\n    config.size,\n)\n@align(64usize)\nfn kernel() {}\n")
     if attribute_error != ok || tree.count != 11usize { ret lex.InvalidSource }

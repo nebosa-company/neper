@@ -97,8 +97,9 @@ now retain ordered expression arguments, including multiline lists, and recovery
 distinguishes a malformed attribute from a valid attribute on a malformed declaration.
 Attribute blocks must be contiguous with their declaration, and `use` cannot carry one.
 Assignment parsing now retains ordered multi-place targets, accepts multiline and
-trailing-comma forms, and rejects one-place pseudo-tuples, binary-expression targets,
-and storage-only `undef` values. Function types reject declaration-only named variadics.
+trailing-comma forms, accepts chained explicit-dereference places, and rejects
+one-place pseudo-tuples, non-dereference unary or binary targets, and storage-only
+`undef` values. Function types reject declaration-only named variadics.
 Soft newlines are now consumed only while a grammar-approved `(`, `[`, literal body,
 or type body remains open. They stay in the lossless token stream, block newlines
 remain statement boundaries, and recovery restores delimiter state after an error.
