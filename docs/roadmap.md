@@ -412,9 +412,14 @@ arithmetic, width-specific bitwise complement and binary operators, independentl
 unsigned checked shifts, and width-preserving wrapping arithmetic. One result-sensitive
 corpus exercises ordinary constants, direct array lengths, nested generic aggregate
 bounds and instantiated generic function bounds on both hosts. Unsupported expression
-and statement forms fail explicitly rather than being accepted unchecked. The next
-type-checking increments replace those boundaries with remaining control flow and
-declaration-time generic checks.
+and statement forms fail explicitly rather than being accepted unchecked. Generic
+function declarations now receive a dependency-aware first check: fixed type, shape,
+arity, mutability, control-flow and return rules fail before any call, while operations
+on an unknown type shape are deferred and rechecked in each concrete specialization.
+The cross-host corpus distinguishes valid dependent arithmetic, fields, indexing,
+iteration, switching, mutation, calls and literals from independent declaration errors
+and invalid concrete instances. The next increments close remaining front-end parity
+gaps before the self-hosted NIR and code-generation rewrite.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

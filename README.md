@@ -270,7 +270,9 @@ Integer `const` declarations are folded with checked arithmetic, bitwise operato
 typed shifts and width-preserving wrapping arithmetic. The same evaluator semantics
 drive array lengths and concrete generic function and aggregate bounds.
 Generic functions accept explicit or inferred `[T: type]` and `[N: usize]`
-parameters, with cached concrete specializations emitted per argument set.
+parameters, with cached concrete specializations emitted per argument set. Their
+declarations are checked immediately for parameter-independent rules; operations
+whose validity depends on a comptime argument are checked again after specialization.
 Generic structs use the same concrete identity and substitution rules, including
 specialized field layout and literals such as `Buffer[i64, 4]{ ... }`.
 The fixed `neper-0` host surface is implemented on Windows and Linux: files,

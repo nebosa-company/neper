@@ -272,6 +272,8 @@ alloc_checked=$($test_build/neper-self check-file "$check_root/alloc_valid/src/m
 [ "$alloc_checked" = 'module check ok' ]
 generic_checked=$($test_build/neper-self check-file "$check_root/generic_valid/src/main.e" "$repo" x64 linux)
 [ "$generic_checked" = 'module check ok' ]
+generic_declaration_checked=$($test_build/neper-self check-file "$check_root/generic_declaration_valid/src/main.e" "$repo" x64 linux)
+[ "$generic_declaration_checked" = 'module check ok' ]
 qualified_generic_checked=$($test_build/neper-self check-file "$check_root/generic_qualified_valid/src/main.e" "$repo" x64 linux)
 [ "$qualified_generic_checked" = 'module check ok' ]
 generic_multi_checked=$($test_build/neper-self check-file "$check_root/generic_multi_valid/src/main.e" "$repo" x64 linux)
@@ -398,6 +400,21 @@ expect_check_error generic_argument_kind InvalidType
 expect_check_error generic_body_mismatch InvalidReturn
 expect_check_error generic_integer_conflict TypeMismatch
 expect_check_error generic_partial_missing MissingContext
+expect_check_error generic_declaration_binding TypeMismatch
+expect_check_error generic_declaration_operator InvalidOperator
+expect_check_error generic_declaration_missing_return MissingReturn
+expect_check_error generic_declaration_call_count ArgumentCount
+expect_check_error generic_declaration_index InvalidReturn
+expect_check_error generic_declaration_generic_arity ArgumentCount
+expect_check_error generic_declaration_unknown_field InvalidType
+expect_check_error generic_declaration_invalid_len InvalidOperator
+expect_check_error generic_declaration_pointer_arithmetic InvalidOperator
+expect_check_error generic_declaration_literal_field InvalidType
+expect_check_error generic_declaration_array_count InvalidReturn
+expect_check_error generic_declaration_switch_body TypeMismatch
+expect_check_error generic_declaration_duplicate_default DuplicateCase
+expect_check_error generic_declaration_const_pointer ImmutableAssignment
+expect_check_error generic_declaration_instantiation_operator InvalidOperator
 expect_check_error index_type TypeMismatch
 expect_check_error index_non_indexable InvalidOperator
 expect_check_error index_count ArgumentCount

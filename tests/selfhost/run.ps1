@@ -191,6 +191,8 @@ $allocChecked = & $compiler check-file (Join-Path $checkRoot 'alloc_valid\src\ma
 if ($LASTEXITCODE -ne 0 -or $allocChecked -ne 'module check ok') { throw 'generic mem.alloc specialization did not type-check' }
 $genericChecked = & $compiler check-file (Join-Path $checkRoot 'generic_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $genericChecked -ne 'module check ok') { throw 'generic source functions did not type-check' }
+$genericDeclarationChecked = & $compiler check-file (Join-Path $checkRoot 'generic_declaration_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $genericDeclarationChecked -ne 'module check ok') { throw 'dependent generic declarations did not type-check before instantiation' }
 $qualifiedGenericChecked = & $compiler check-file (Join-Path $checkRoot 'generic_qualified_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $qualifiedGenericChecked -ne 'module check ok') { throw 'qualified generic source functions did not type-check' }
 $genericMultiChecked = & $compiler check-file (Join-Path $checkRoot 'generic_multi_valid\src\main.e') $repo 'x64' 'windows'
@@ -306,6 +308,21 @@ $checkFailures = @(
     @('generic_body_mismatch', 'InvalidReturn'),
     @('generic_integer_conflict', 'TypeMismatch'),
     @('generic_partial_missing', 'MissingContext'),
+    @('generic_declaration_binding', 'TypeMismatch'),
+    @('generic_declaration_operator', 'InvalidOperator'),
+    @('generic_declaration_missing_return', 'MissingReturn'),
+    @('generic_declaration_call_count', 'ArgumentCount'),
+    @('generic_declaration_index', 'InvalidReturn'),
+    @('generic_declaration_generic_arity', 'ArgumentCount'),
+    @('generic_declaration_unknown_field', 'InvalidType'),
+    @('generic_declaration_invalid_len', 'InvalidOperator'),
+    @('generic_declaration_pointer_arithmetic', 'InvalidOperator'),
+    @('generic_declaration_literal_field', 'InvalidType'),
+    @('generic_declaration_array_count', 'InvalidReturn'),
+    @('generic_declaration_switch_body', 'TypeMismatch'),
+    @('generic_declaration_duplicate_default', 'DuplicateCase'),
+    @('generic_declaration_const_pointer', 'ImmutableAssignment'),
+    @('generic_declaration_instantiation_operator', 'InvalidOperator'),
     @('index_type', 'TypeMismatch'),
     @('index_non_indexable', 'InvalidOperator'),
     @('index_count', 'ArgumentCount'),
