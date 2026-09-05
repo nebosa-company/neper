@@ -221,9 +221,12 @@ Return statements now retain every value in a multiline or trailing-comma
 multiple-return list while preserving ordinary single-expression grouping.
 Named, generic and fixed/inferred-array aggregate literals now retain header
 expressions and ordered `LiteralItem` children, including nested literals, named
-payloads, positional values and bare PascalCase members. Type subtrees inside local
-declarations, switch arms and recursively parsed control-flow bodies remain the
-next parser increments; this callout does not mark the `neper-0` milestone complete.
+payloads, positional values and bare PascalCase members. Local type annotations now
+recursively retain named, pointer, slice, array and function-type nodes, including
+array-length expressions, parameters and return specifications. Reusing those type
+subtrees throughout declaration signatures, switch arms and recursively parsed
+control-flow bodies remain the next parser increments; this callout does not mark
+the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

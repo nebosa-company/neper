@@ -588,6 +588,208 @@ fn parse_binary_node(p: *Parser, minimum: usize) -> err {
     ret ok
 }
 
+fn parse_named_type_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [32]usize = zero
+    var nested_count = 0usize
+    try require(p, .Identifier)
+    while p.current.kind == .PunctDot {
+        try advance(p)
+        try require(p, .Identifier)
+    }
+    if p.current.kind == .PunctLBracket {
+        try advance(p)
+        try skip_separators(p)
+        while p.current.kind != .PunctRBracket {
+            try parse_expression_node(p)
+            if nested_count == nested.len { ret InvalidSyntax }
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+            try skip_separators(p)
+            if p.current.kind == .PunctComma {
+                try advance(p)
+                try skip_separators(p)
+            } else {
+                if p.current.kind != .PunctRBracket { ret InvalidSyntax }
+            }
+        }
+        try advance(p)
+    }
+    try add_parent_node(p, .NamedType, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_type_parameter_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [1]usize = zero
+    var nested_count = 0usize
+    if p.current.kind == .PunctEllipsis {
+        try advance(p)
+    } else {
+        if p.current.kind == .Identifier {
+            var look = p.scanner
+            var following = lex.next(&look)
+            while following.kind == .Newline { following = lex.next(&look) }
+            if following.kind == .PunctColon {
+                try advance(p)
+                try skip_separators(p)
+                try require(p, .PunctColon)
+                try skip_separators(p)
+                if p.current.kind == .PunctEllipsis {
+                    try advance(p)
+                    try add_node(p, .Parameter, token_start, p.token_index)
+                    ret ok
+                }
+            }
+        }
+        var has_type_node = false
+        try parse_type_node(p, &has_type_node)
+        if has_type_node {
+            nested[0usize] = p.last_node
+            nested_count = 1usize
+        }
+    }
+    try add_parent_node(p, .Parameter, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_type_return_spec_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [32]usize = zero
+    var nested_count = 0usize
+    var type_count = 0usize
+    if p.current.kind == .PunctLParen {
+        try advance(p)
+        try skip_separators(p)
+        while p.current.kind != .PunctRParen {
+            var has_type_node = false
+            try parse_type_node(p, &has_type_node)
+            type_count += 1usize
+            if has_type_node {
+                if nested_count == nested.len { ret InvalidSyntax }
+                nested[nested_count] = p.last_node
+                nested_count += 1usize
+            }
+            try skip_separators(p)
+            if p.current.kind == .PunctComma {
+                try advance(p)
+                try skip_separators(p)
+            } else {
+                if p.current.kind != .PunctRParen { ret InvalidSyntax }
+            }
+        }
+        if type_count < 2usize { ret InvalidSyntax }
+        try advance(p)
+    } else {
+        var has_type_node = false
+        try parse_type_node(p, &has_type_node)
+        type_count = 1usize
+        if has_type_node {
+            nested[0usize] = p.last_node
+            nested_count = 1usize
+        }
+    }
+    try add_parent_node(p, .ReturnSpec, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_function_type_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [64]usize = zero
+    var nested_count = 0usize
+    if p.current.kind == .KwExtern { try advance(p) }
+    try require(p, .KwFn)
+    try require(p, .PunctLParen)
+    try skip_separators(p)
+    while p.current.kind != .PunctRParen {
+        try parse_type_parameter_node(p)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+        try skip_separators(p)
+        if p.current.kind == .PunctComma {
+            try advance(p)
+            try skip_separators(p)
+        } else {
+            if p.current.kind != .PunctRParen { ret InvalidSyntax }
+        }
+    }
+    try advance(p)
+    if p.current.kind == .PunctArrow {
+        try advance(p)
+        try parse_type_return_spec_node(p)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    try add_parent_node(p, .FunctionType, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_type_node(p: *Parser, has_node: *bool) -> err {
+    let token_start = p.token_index
+    var nested: [2]usize = zero
+    var nested_count = 0usize
+    *has_node = true
+    if p.current.kind == .PunctStar {
+        try advance(p)
+        if p.current.kind == .KwConst { try advance(p) }
+        if p.current.kind == .KwShared { try advance(p) }
+        var has_inner = false
+        try parse_type_node(p, &has_inner)
+        if has_inner {
+            nested[0usize] = p.last_node
+            nested_count = 1usize
+        }
+        try add_parent_node(p, .PointerType, token_start, p.token_index, nested[..nested_count])
+        ret ok
+    }
+    if p.current.kind == .PunctLBracket {
+        try advance(p)
+        try skip_separators(p)
+        if p.current.kind == .PunctRBracket {
+            try advance(p)
+            if p.current.kind == .KwConst { try advance(p) }
+            if p.current.kind == .KwShared { try advance(p) }
+            var has_inner = false
+            try parse_type_node(p, &has_inner)
+            if has_inner {
+                nested[0usize] = p.last_node
+                nested_count = 1usize
+            }
+            try add_parent_node(p, .SliceType, token_start, p.token_index, nested[..nested_count])
+            ret ok
+        }
+        if p.current.kind == .PunctUnderscore {
+            try advance(p)
+        } else {
+            try parse_expression_node(p)
+            nested[0usize] = p.last_node
+            nested_count = 1usize
+        }
+        try skip_separators(p)
+        try require(p, .PunctRBracket)
+        var has_inner = false
+        try parse_type_node(p, &has_inner)
+        if has_inner {
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+        }
+        try add_parent_node(p, .ArrayType, token_start, p.token_index, nested[..nested_count])
+        ret ok
+    }
+    if p.current.kind == .KwExtern || p.current.kind == .KwFn {
+        ret parse_function_type_node(p)
+    }
+    if p.current.kind == .KwType {
+        try advance(p)
+        *has_node = false
+        ret ok
+    }
+    if p.current.kind == .Identifier { ret parse_named_type_node(p) }
+    ret InvalidSyntax
+}
+
 fn parse_return_statement(p: *Parser) -> err {
     let token_start = p.token_index
     var nested: [33]usize = zero
@@ -663,36 +865,6 @@ fn parse_binding_node(p: *Parser) -> err {
     ret ok
 }
 
-fn scan_binding_type(p: *Parser) -> err {
-    let token_start = p.token_index
-    var parens = 0usize
-    var brackets = 0usize
-    if p.current.kind != .PunctStar && p.current.kind != .PunctLBracket && p.current.kind != .KwFn && p.current.kind != .KwExtern && p.current.kind != .KwType && p.current.kind != .Identifier { ret InvalidSyntax }
-    while true {
-        let kind = p.current.kind
-        if kind == .Invalid || kind == .Eof || kind == .PunctLBrace || kind == .PunctRBrace { ret InvalidSyntax }
-        if kind == .Newline {
-            if parens == 0usize && brackets == 0usize { ret InvalidSyntax }
-            try advance(p)
-            continue
-        }
-        if kind == .PunctAssign && parens == 0usize && brackets == 0usize { break }
-        if kind == .PunctLParen { parens += 1usize }
-        if kind == .PunctRParen {
-            if parens == 0usize { ret InvalidSyntax }
-            parens = parens - 1usize
-        }
-        if kind == .PunctLBracket { brackets += 1usize }
-        if kind == .PunctRBracket {
-            if brackets == 0usize { ret InvalidSyntax }
-            brackets = brackets - 1usize
-        }
-        try advance(p)
-    }
-    if p.token_index == token_start || parens != 0usize || brackets != 0usize { ret InvalidSyntax }
-    ret ok
-}
-
 fn parse_initializer_node(p: *Parser) -> err {
     if p.current.kind == .KwZero || p.current.kind == .KwUndef {
         try advance(p)
@@ -709,14 +881,19 @@ fn parse_initializer_node(p: *Parser) -> err {
 
 fn parse_binding_statement(p: *Parser) -> err {
     let token_start = p.token_index
-    var nested: [2]usize = zero
+    var nested: [3]usize = zero
     var nested_count = 1usize
     try advance(p)
     try parse_binding_node(p)
     nested[0usize] = p.last_node
     if p.current.kind == .PunctColon {
         try advance(p)
-        try scan_binding_type(p)
+        var has_type_node = false
+        try parse_type_node(p, &has_type_node)
+        if has_type_node {
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+        }
     }
     try require(p, .PunctAssign)
     let initializer_has_node = p.current.kind != .KwZero && p.current.kind != .KwUndef

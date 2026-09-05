@@ -74,7 +74,9 @@ syntax, typed bindings and the special `zero`/`undef` initializer forms. Return
 statements accept multiline, trailing-comma multiple-return lists and retain each
 value as an ordered expression child. Named, generic and fixed/inferred-array
 aggregate literals now expose ordered `LiteralItem` children, including nested
-literals, named payloads, positional values and bare PascalCase members.
+literals, named payloads, positional values and bare PascalCase members. Local type
+annotations now recursively expose named, pointer, slice, array and function-type
+nodes, including array-length expressions, parameters and return specifications.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
