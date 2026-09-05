@@ -22,6 +22,7 @@ error AliasCycle
 error ConstantCycle
 error ConstantOverflow
 error InvalidConstant
+error InvalidTry
 
 type Kind = enum u8 {
     Invalid,
@@ -61,9 +62,10 @@ type Function = struct {
     module_index: usize,
     first_parameter: usize,
     parameter_count: usize,
-    return_type: Type,
+    first_return: usize,
     return_count: usize,
     generic: bool,
+    external: bool,
 }
 
 type Local = struct {
@@ -117,6 +119,7 @@ type Constant = struct {
 type Checker = struct {
     functions: []Function,
     parameters: []Parameter,
+    return_types: []Type,
     tokens: []lex.Token,
     locals: []Local,
     types: []Type,
@@ -125,6 +128,7 @@ type Checker = struct {
     constant_exprs: []ConstantExpr,
     function_count: usize,
     parameter_count: usize,
+    return_type_count: usize,
     token_count: usize,
     local_count: usize,
     type_count: usize,
@@ -135,10 +139,11 @@ type Checker = struct {
     expand_aliases: bool,
 }
 
-fn init(c: *Checker, functions: []Function, parameters: []Parameter, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias, constants: []Constant, constant_exprs: []ConstantExpr) -> err {
-    if functions.len == 0usize || parameters.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize || constants.len == 0usize || constant_exprs.len == 0usize { ret Capacity }
+fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_types: []Type, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias, constants: []Constant, constant_exprs: []ConstantExpr) -> err {
+    if functions.len == 0usize || parameters.len == 0usize || return_types.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize || constants.len == 0usize || constant_exprs.len == 0usize { ret Capacity }
     c.functions = functions
     c.parameters = parameters
+    c.return_types = return_types
     c.tokens = tokens
     c.locals = locals
     c.types = types
@@ -147,6 +152,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, tokens: []l
     c.constant_exprs = constant_exprs
     c.function_count = 0usize
     c.parameter_count = 0usize
+    c.return_type_count = 0usize
     c.token_count = 0usize
     c.local_count = 0usize
     c.type_count = 0usize
@@ -717,11 +723,18 @@ fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *
     ret ok
 }
 
+fn store_return_type(c: *Checker, ty: Type) -> err {
+    if c.return_type_count == c.return_types.len { ret Capacity }
+    c.return_types[c.return_type_count] = ty
+    c.return_type_count += 1usize
+    ret ok
+}
+
 fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
     if c.function_count == c.functions.len { ret Capacity }
     let (name, name_error) = function_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
-    var item = Function { name: name, module_index: module_index, first_parameter: c.parameter_count, parameter_count: 0usize, return_type: make_type(.Void, "void", module_index), return_count: 0usize, generic: false }
+    var item = Function { name: name, module_index: module_index, first_parameter: c.parameter_count, parameter_count: 0usize, first_return: c.return_type_count, return_count: 0usize, generic: false, external: node.kind == .ExternDecl }
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
@@ -737,14 +750,10 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
                 var return_at = child.first_child
                 while return_at < return_end {
                     if tree.children[return_at].node {
+                        let (return_type, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[tree.children[return_at].index])
+                        if type_error != ok { ret type_error }
+                        try store_return_type(c, return_type)
                         item.return_count += 1usize
-                        if item.return_count == 1usize {
-                            let (return_type, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[tree.children[return_at].index])
-                            if type_error != ok { ret type_error }
-                            item.return_type = return_type
-                        } else {
-                            item.return_type = make_type(.Other, "", module_index)
-                        }
                     }
                     return_at += 1usize
                 }
@@ -752,7 +761,19 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         }
         at += 1usize
     }
-    if item.return_count == 1usize && item.return_type.kind == .Void { item.return_count = 0usize }
+    if item.return_count == 1usize && c.return_types[item.first_return].kind == .Void {
+        item.return_count = 0usize
+        c.return_type_count = c.return_type_count - 1usize
+    }
+    if item.external && item.return_count > 1usize { ret InvalidType }
+    var return_index = 0usize
+    while return_index < item.return_count {
+        let return_type = c.return_types[item.first_return + return_index]
+        if return_type.kind == .Void { ret InvalidType }
+        if item.external && return_type.kind == .Err { ret InvalidType }
+        if return_type.kind == .Err && return_index + 1usize != item.return_count { ret InvalidType }
+        return_index += 1usize
+    }
     c.functions[c.function_count] = item
     c.function_count += 1usize
     ret ok
@@ -768,10 +789,22 @@ fn seeded_composite_type(c: *Checker, kind: Kind, element: Type, is_const: bool,
     ret (result, ok)
 }
 
-fn add_seeded_function(c: *Checker, module_index: usize, name: str, return_type: Type, return_count: usize) -> (usize, err) {
+fn add_seeded_function(c: *Checker, module_index: usize, name: str, return_type: Type, fallible: bool) -> (usize, err) {
     if c.function_count == c.functions.len { ret (0usize, Capacity) }
     let index = c.function_count
-    c.functions[index] = Function { name: name, module_index: module_index, first_parameter: c.parameter_count, parameter_count: 0usize, return_type: return_type, return_count: return_count, generic: false }
+    var return_count = 0usize
+    let first_return = c.return_type_count
+    if return_type.kind != .Void {
+        let store_error = store_return_type(c, return_type)
+        if store_error != ok { ret (0usize, store_error) }
+        return_count = 1usize
+    }
+    if fallible {
+        let store_error = store_return_type(c, make_type(.Err, "err", module_index))
+        if store_error != ok { ret (0usize, store_error) }
+        return_count += 1usize
+    }
+    c.functions[index] = Function { name: name, module_index: module_index, first_parameter: c.parameter_count, parameter_count: 0usize, first_return: first_return, return_count: return_count, generic: false, external: false }
     c.function_count += 1usize
     ret (index, ok)
 }
@@ -790,14 +823,14 @@ fn seed_memory_signatures(c: *Checker, module_index: usize) -> err {
     let usize_type = make_type(.Integer, "usize", module_index)
     let (arena_pointer, pointer_error) = seeded_composite_type(c, .Pointer, arena, false, module_index)
     if pointer_error != ok { ret pointer_error }
-    let (mark_index, mark_error) = add_seeded_function(c, module_index, "mark", usize_type, 1usize)
+    let (mark_index, mark_error) = add_seeded_function(c, module_index, "mark", usize_type, false)
     if mark_error != ok { ret mark_error }
     try add_seeded_parameter(c, mark_index, "a", arena_pointer)
-    let (reset_index, reset_error) = add_seeded_function(c, module_index, "reset", make_type(.Void, "void", module_index), 0usize)
+    let (reset_index, reset_error) = add_seeded_function(c, module_index, "reset", make_type(.Void, "void", module_index), false)
     if reset_error != ok { ret reset_error }
     try add_seeded_parameter(c, reset_index, "a", arena_pointer)
     try add_seeded_parameter(c, reset_index, "m", usize_type)
-    let (stats_index, stats_error) = add_seeded_function(c, module_index, "stats", stats, 1usize)
+    let (stats_index, stats_error) = add_seeded_function(c, module_index, "stats", stats, false)
     if stats_error != ok { ret stats_error }
     try add_seeded_parameter(c, stats_index, "a", arena_pointer)
     ret ok
@@ -827,35 +860,35 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     let (byte_pointer, byte_pointer_error) = seeded_composite_type(c, .Pointer, u8_type, false, os_module)
     if byte_pointer_error != ok { ret byte_pointer_error }
 
-    let (read_index, read_error) = add_seeded_function(c, os_module, "read", usize_type, 2usize)
+    let (read_index, read_error) = add_seeded_function(c, os_module, "read", usize_type, true)
     if read_error != ok { ret read_error }
     try add_seeded_parameter(c, read_index, "f", file)
     try add_seeded_parameter(c, read_index, "buf", bytes)
-    let (write_index, write_error) = add_seeded_function(c, os_module, "write", usize_type, 2usize)
+    let (write_index, write_error) = add_seeded_function(c, os_module, "write", usize_type, true)
     if write_error != ok { ret write_error }
     try add_seeded_parameter(c, write_index, "f", file)
     try add_seeded_parameter(c, write_index, "buf", string_type)
-    let (close_index, close_error) = add_seeded_function(c, os_module, "close", error_type, 1usize)
+    let (close_index, close_error) = add_seeded_function(c, os_module, "close", error_type, false)
     if close_error != ok { ret close_error }
     try add_seeded_parameter(c, close_index, "f", file)
-    let (stdout_index, stdout_error) = add_seeded_function(c, os_module, "stdout", file, 1usize)
+    let (stdout_index, stdout_error) = add_seeded_function(c, os_module, "stdout", file, false)
     if stdout_error != ok { ret stdout_error }
-    let (stderr_index, stderr_error) = add_seeded_function(c, os_module, "stderr", file, 1usize)
+    let (stderr_index, stderr_error) = add_seeded_function(c, os_module, "stderr", file, false)
     if stderr_error != ok { ret stderr_error }
-    let (wait_index, wait_error) = add_seeded_function(c, os_module, "wait", i32_type, 2usize)
+    let (wait_index, wait_error) = add_seeded_function(c, os_module, "wait", i32_type, true)
     if wait_error != ok { ret wait_error }
     try add_seeded_parameter(c, wait_index, "p", process)
-    let (exit_index, exit_error) = add_seeded_function(c, os_module, "exit", make_type(.Void, "void", os_module), 0usize)
+    let (exit_index, exit_error) = add_seeded_function(c, os_module, "exit", make_type(.Void, "void", os_module), false)
     if exit_error != ok { ret exit_error }
     try add_seeded_parameter(c, exit_index, "code", i32_type)
-    let (reserve_index, reserve_error) = add_seeded_function(c, os_module, "reserve", byte_pointer, 2usize)
+    let (reserve_index, reserve_error) = add_seeded_function(c, os_module, "reserve", byte_pointer, true)
     if reserve_error != ok { ret reserve_error }
     try add_seeded_parameter(c, reserve_index, "n", usize_type)
-    let (commit_index, commit_error) = add_seeded_function(c, os_module, "commit", error_type, 1usize)
+    let (commit_index, commit_error) = add_seeded_function(c, os_module, "commit", error_type, false)
     if commit_error != ok { ret commit_error }
     try add_seeded_parameter(c, commit_index, "p", byte_pointer)
     try add_seeded_parameter(c, commit_index, "n", usize_type)
-    let (clock_index, clock_error) = add_seeded_function(c, os_module, "clock", i64_type, 2usize)
+    let (clock_index, clock_error) = add_seeded_function(c, os_module, "clock", i64_type, true)
     if clock_error != ok { ret clock_error }
     try add_seeded_parameter(c, clock_index, "c", clock)
 
@@ -863,21 +896,21 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
         let arena = make_type(.Named, "Arena", mem_module)
         let (arena_pointer, arena_pointer_error) = seeded_composite_type(c, .Pointer, arena, false, os_module)
         if arena_pointer_error != ok { ret arena_pointer_error }
-        let (open_index, open_error) = add_seeded_function(c, os_module, "open", file, 2usize)
+        let (open_index, open_error) = add_seeded_function(c, os_module, "open", file, true)
         if open_error != ok { ret open_error }
         try add_seeded_parameter(c, open_index, "a", arena_pointer)
         try add_seeded_parameter(c, open_index, "path", string_type)
         try add_seeded_parameter(c, open_index, "flags", flags)
-        let (readdir_index, readdir_error) = add_seeded_function(c, os_module, "readdir", entries, 2usize)
+        let (readdir_index, readdir_error) = add_seeded_function(c, os_module, "readdir", entries, true)
         if readdir_error != ok { ret readdir_error }
         try add_seeded_parameter(c, readdir_index, "a", arena_pointer)
         try add_seeded_parameter(c, readdir_index, "path", string_type)
-        let (spawn_index, spawn_error) = add_seeded_function(c, os_module, "spawn", process, 2usize)
+        let (spawn_index, spawn_error) = add_seeded_function(c, os_module, "spawn", process, true)
         if spawn_error != ok { ret spawn_error }
         try add_seeded_parameter(c, spawn_index, "a", arena_pointer)
         try add_seeded_parameter(c, spawn_index, "argv", const_strings)
         try add_seeded_parameter(c, spawn_index, "stdio", stdio)
-        let (args_index, args_error) = add_seeded_function(c, os_module, "args", strings, 2usize)
+        let (args_index, args_error) = add_seeded_function(c, os_module, "args", strings, true)
         if args_error != ok { ret args_error }
         try add_seeded_parameter(c, args_index, "a", arena_pointer)
     }
@@ -895,6 +928,7 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
 fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.function_count = 0usize
     c.parameter_count = 0usize
+    c.return_type_count = 0usize
     try seed_intrinsic_signatures(c, g)
     var module_index = 0usize
     while module_index < g.count {
@@ -1360,6 +1394,87 @@ fn is_integer_operator(kind: lex.Kind) -> bool {
     ret kind == .PunctPercent || kind == .PunctAmp || kind == .PunctCaret || kind == .PunctPipe || kind == .PunctAddWrap || kind == .PunctSubWrap || kind == .PunctMulWrap
 }
 
+type CallInfo = struct {
+    function_index: usize,
+    cast: Type,
+    is_cast: bool,
+}
+
+fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
+    var info = CallInfo { function_index: 0usize, cast: invalid_type(), is_cast: false }
+    if node.kind != .CallExpr { ret (info, parse.InvalidSyntax) }
+    let text = g.modules[module_index].text
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    var child_position = 0usize
+    var has_function = false
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if child_position == 0usize {
+                let receiver = tree.nodes[child_index]
+                if receiver.kind == .NameExpr {
+                    let token = c.tokens[receiver.token_start]
+                    let name = text[token.start..token.end]
+                    let cast = scalar_type(name, module_index)
+                    if cast.kind == .Integer || cast.kind == .Float {
+                        info.cast = cast
+                        info.is_cast = true
+                    } else {
+                        let (found_index, found) = find_function(c, module_index, name)
+                        if !found { ret (info, UnknownCallable) }
+                        info.function_index = found_index
+                        has_function = true
+                    }
+                } else {
+                    if receiver.kind != .FieldExpr { ret (info, Unsupported) }
+                    let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
+                    if !found { ret (info, UnknownCallable) }
+                    info.function_index = found_index
+                    has_function = true
+                }
+            } else {
+                if info.is_cast {
+                    if child_position != 1usize { ret (info, ArgumentCount) }
+                    let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                    if argument_error != ok { ret (info, argument_error) }
+                    if is_untyped(argument_type) { ret (info, MissingContext) }
+                    if !is_numeric(argument_type) { ret (info, TypeMismatch) }
+                } else {
+                    if !has_function { ret (info, UnknownCallable) }
+                    let function = c.functions[info.function_index]
+                    if child_position > function.parameter_count { ret (info, ArgumentCount) }
+                    let parameter = c.parameters[function.first_parameter + child_position - 1usize]
+                    let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, parameter.ty)
+                    if argument_error != ok { ret (info, argument_error) }
+                }
+            }
+            child_position += 1usize
+        }
+        at += 1usize
+    }
+    if info.is_cast {
+        if child_position != 2usize { ret (info, ArgumentCount) }
+        ret (info, ok)
+    }
+    if !has_function { ret (info, UnknownCallable) }
+    let function = c.functions[info.function_index]
+    if child_position == 0usize || child_position - 1usize != function.parameter_count { ret (info, ArgumentCount) }
+    if function.generic { ret (info, Unsupported) }
+    ret (info, ok)
+}
+
+fn function_return(c: *Checker, function: Function, index: usize) -> (Type, err) {
+    if index >= function.return_count || function.first_return + index >= c.return_type_count { ret (invalid_type(), InvalidType) }
+    ret (c.return_types[function.first_return + index], ok)
+}
+
+fn is_fallible(c: *Checker, function: Function) -> bool {
+    if function.return_count == 0usize { ret false }
+    let last = c.return_types[function.first_return + function.return_count - 1usize]
+    ret last.kind == .Err
+}
+
 fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (Type, err) {
     let node = tree.nodes[node_index]
     let text = g.modules[module_index].text
@@ -1504,72 +1619,81 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         ret (final_left, ok)
     }
     if node.kind == .CallExpr {
-        let end = node.first_child + node.child_count
-        var at = node.first_child
-        var child_position = 0usize
-        var function_index = 0usize
-        var has_function = false
-        var cast = invalid_type()
-        while at < end {
-            if tree.children[at].node {
-                let child_index = tree.children[at].index
-                if child_position == 0usize {
-                    let receiver = tree.nodes[child_index]
-                    if receiver.kind == .NameExpr {
-                        let token = c.tokens[receiver.token_start]
-                        let name = text[token.start..token.end]
-                        cast = scalar_type(name, module_index)
-                        if cast.kind == .Integer || cast.kind == .Float {
-                            has_function = false
-                        } else {
-                            let (found_index, found) = find_function(c, module_index, name)
-                            if !found { ret (invalid_type(), UnknownCallable) }
-                            function_index = found_index
-                            has_function = true
-                        }
-                    } else {
-                        if receiver.kind != .FieldExpr { ret (invalid_type(), Unsupported) }
-                        let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
-                        if !found { ret (invalid_type(), UnknownCallable) }
-                        function_index = found_index
-                        has_function = true
-                    }
-                } else {
-                    if cast.kind == .Integer || cast.kind == .Float {
-                        if child_position != 1usize { ret (invalid_type(), ArgumentCount) }
-                        let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
-                        if argument_error != ok { ret (invalid_type(), argument_error) }
-                        if is_untyped(argument_type) { ret (invalid_type(), MissingContext) }
-                        if !is_numeric(argument_type) { ret (invalid_type(), TypeMismatch) }
-                    } else {
-                        if !has_function { ret (invalid_type(), UnknownCallable) }
-                        let function = c.functions[function_index]
-                        if child_position > function.parameter_count { ret (invalid_type(), ArgumentCount) }
-                        let parameter = c.parameters[function.first_parameter + child_position - 1usize]
-                        let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, parameter.ty)
-                        if argument_error != ok { ret (invalid_type(), argument_error) }
-                    }
-                }
-                child_position += 1usize
-            }
-            at += 1usize
-        }
-        if cast.kind == .Integer || cast.kind == .Float {
-            if child_position != 2usize { ret (invalid_type(), ArgumentCount) }
-            let (result_type, context_error) = apply_context(c, cast, expected)
+        let (call, call_error) = check_call(c, g, tree, module_index, node)
+        if call_error != ok { ret (invalid_type(), call_error) }
+        if call.is_cast {
+            let (result_type, context_error) = apply_context(c, call.cast, expected)
             ret (result_type, context_error)
         }
-        if !has_function { ret (invalid_type(), UnknownCallable) }
-        let function = c.functions[function_index]
-        if child_position - 1usize != function.parameter_count { ret (invalid_type(), ArgumentCount) }
-        if function.generic || function.return_count > 1usize { ret (invalid_type(), Unsupported) }
-        let (result_type, context_error) = apply_context(c, function.return_type, expected)
+        let function = c.functions[call.function_index]
+        if function.return_count > 1usize { ret (invalid_type(), ArgumentCount) }
+        if function.return_count == 0usize {
+            let (result_type, context_error) = apply_context(c, make_type(.Void, "void", module_index), expected)
+            ret (result_type, context_error)
+        }
+        let (return_type, return_error) = function_return(c, function, 0usize)
+        if return_error != ok { ret (invalid_type(), return_error) }
+        let (result_type, context_error) = apply_context(c, return_type, expected)
         ret (result_type, context_error)
     }
     ret (invalid_type(), Unsupported)
 }
 
-fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+fn contains_token(c: *Checker, start: usize, end: usize, kind: lex.Kind) -> bool {
+    var at = start
+    while at < end {
+        if c.tokens[at].kind == kind { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn binding_item_count(c: *Checker, binding: syntax.Node) -> usize {
+    var count = 0usize
+    var at = binding.token_start
+    while at < binding.token_end {
+        let kind = c.tokens[at].kind
+        if kind == .Identifier || kind == .PunctUnderscore { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn check_try_results(c: *Checker, callee: Function, caller: Function) -> (usize, err) {
+    if callee.external || !is_fallible(c, callee) || !is_fallible(c, caller) { ret (0usize, InvalidTry) }
+    ret (callee.return_count - 1usize, ok)
+}
+
+fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, binding: syntax.Node, first_return: usize, return_count: usize, declared: Type, mutable: bool) -> err {
+    let tuple = c.tokens[binding.token_start].kind == .PunctLParen
+    let item_count = binding_item_count(c, binding)
+    if item_count != return_count { ret ArgumentCount }
+    if tuple && declared.kind != .Invalid { ret InvalidType }
+    var result_index = 0usize
+    var at = binding.token_start
+    while at < binding.token_end {
+        let token = c.tokens[at]
+        if token.kind == .Identifier || token.kind == .PunctUnderscore {
+            var result = c.return_types[first_return + result_index]
+            if !tuple {
+                let (contextual, context_error) = apply_context(c, result, declared)
+                if context_error != ok { ret context_error }
+                result = contextual
+            }
+            if result.kind == .Void { ret TypeMismatch }
+            if result.kind == .Other { ret Unsupported }
+            if token.kind == .Identifier {
+                let name = g.modules[module_index].text[token.start..token.end]
+                try add_local(c, name, result, mutable)
+            }
+            result_index += 1usize
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     let end = node.first_child + node.child_count
     var binding_index = 0usize
     var has_binding = false
@@ -1598,6 +1722,36 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
         at += 1usize
     }
     if !has_binding { ret parse.InvalidSyntax }
+    let binding = tree.nodes[binding_index]
+    let tuple = c.tokens[binding.token_start].kind == .PunctLParen
+    var mutable = false
+    if c.tokens[node.token_start].kind == .KwVar { mutable = true }
+    if has_initializer && tree.nodes[initializer_index].kind == .CallExpr {
+        let initializer = tree.nodes[initializer_index]
+        let tried = contains_token(c, node.token_start, initializer.token_start, .KwTry)
+        let (call, call_error) = check_call(c, g, tree, module_index, initializer)
+        if call_error != ok { ret call_error }
+        if call.is_cast {
+            if tried { ret InvalidTry }
+            if tuple { ret ArgumentCount }
+            let (actual, context_error) = apply_context(c, call.cast, declared)
+            if context_error != ok { ret context_error }
+            if actual.kind == .Other { ret Unsupported }
+            let (name, has_name) = first_name(c, g.modules[module_index].text, binding)
+            if has_name { try add_local(c, name, actual, mutable) }
+            ret ok
+        }
+        let callee = c.functions[call.function_index]
+        var result_count = callee.return_count
+        if tried {
+            let (remaining, try_error) = check_try_results(c, callee, function)
+            if try_error != ok { ret try_error }
+            result_count = remaining
+        }
+        if !tuple && result_count == 0usize { ret TypeMismatch }
+        ret bind_return_types(c, g, module_index, binding, callee.first_return, result_count, declared, mutable)
+    }
+    if tuple { ret ArgumentCount }
     var result = declared
     if has_initializer {
         let (actual, expression_error) = check_expr(c, g, tree, module_index, initializer_index, declared)
@@ -1609,24 +1763,18 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
     if is_untyped(result) { ret MissingContext }
     if result.kind == .Void { ret TypeMismatch }
     if result.kind == .Other { ret Unsupported }
-    let binding = tree.nodes[binding_index]
-    if c.tokens[binding.token_start].kind == .PunctLParen { ret Unsupported }
     let (name, has_name) = first_name(c, g.modules[module_index].text, binding)
     if !has_name { ret ok }
-    var mutable = false
-    if c.tokens[node.token_start].kind == .KwVar { mutable = true }
     try add_local(c, name, result, mutable)
     ret ok
 }
 
 fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     var count = 0usize
-    var expression_index = 0usize
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
         if tree.children[at].node {
-            expression_index = tree.children[at].index
             count += 1usize
         }
         at += 1usize
@@ -1635,10 +1783,20 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         if count != 0usize { ret InvalidReturn }
         ret ok
     }
-    if function.return_count != 1usize || count != 1usize { ret InvalidReturn }
-    let (actual, expression_error) = check_expr(c, g, tree, module_index, expression_index, function.return_type)
-    if expression_error == TypeMismatch { ret InvalidReturn }
-    if expression_error != ok { ret expression_error }
+    if count != function.return_count { ret InvalidReturn }
+    var return_index = 0usize
+    at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let (expected, return_type_error) = function_return(c, function, return_index)
+            if return_type_error != ok { ret return_type_error }
+            let (actual, expression_error) = check_expr(c, g, tree, module_index, tree.children[at].index, expected)
+            if expression_error == TypeMismatch { ret InvalidReturn }
+            if expression_error != ok { ret expression_error }
+            return_index += 1usize
+        }
+        at += 1usize
+    }
     ret ok
 }
 
@@ -1689,47 +1847,101 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
 fn check_call_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
     let (child_index, found) = first_node_child(tree, node)
     if !found { ret parse.InvalidSyntax }
-    let (result, expression_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
-    ret expression_error
+    let (call, call_error) = check_call(c, g, tree, module_index, tree.nodes[child_index])
+    if call_error != ok { ret call_error }
+    if call.is_cast { ret ArgumentCount }
+    if c.functions[call.function_index].return_count != 0usize { ret ArgumentCount }
+    ret ok
 }
 
-fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
-    var children: [2]usize = zero
+fn check_try_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
+    let (child_index, found) = first_node_child(tree, node)
+    if !found { ret parse.InvalidSyntax }
+    let call_node = tree.nodes[child_index]
+    let (call, call_error) = check_call(c, g, tree, module_index, call_node)
+    if call_error != ok { ret call_error }
+    if call.is_cast { ret InvalidTry }
+    let (remaining, try_error) = check_try_results(c, c.functions[call.function_index], function)
+    if try_error != ok { ret try_error }
+    if remaining != 0usize { ret ArgumentCount }
+    ret ok
+}
+
+fn assignment_place_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
+    let place = tree.nodes[node_index]
+    if place.kind != .NameExpr { ret (invalid_type(), Unsupported) }
+    let token = c.tokens[place.token_start]
+    let name = g.modules[module_index].text[token.start..token.end]
+    let (local_index, found) = find_local(c, name)
+    if !found { ret (invalid_type(), Unsupported) }
+    if !c.locals[local_index].mutable { ret (invalid_type(), ImmutableAssignment) }
+    ret (c.locals[local_index].ty, ok)
+}
+
+fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     var count = 0usize
+    var first_index = 0usize
+    var initializer_index = 0usize
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
         if tree.children[at].node {
-            if count == 2usize { ret Unsupported }
-            children[count] = tree.children[at].index
+            if count == 0usize { first_index = tree.children[at].index }
+            initializer_index = tree.children[at].index
             count += 1usize
         }
         at += 1usize
     }
-    if count != 2usize { ret Unsupported }
-    let place = tree.nodes[children[0usize]]
-    if place.kind != .NameExpr { ret Unsupported }
-    var operator_index = place.token_end
-    let value_start = tree.nodes[children[1usize]].token_start
-    while operator_index < value_start && c.tokens[operator_index].kind == .Newline { operator_index += 1usize }
-    if operator_index == value_start || c.tokens[operator_index].kind != .PunctAssign { ret Unsupported }
-    let token = c.tokens[place.token_start]
-    let name = g.modules[module_index].text[token.start..token.end]
-    let (local_index, found) = find_local(c, name)
-    if !found { ret Unsupported }
-    if !c.locals[local_index].mutable { ret ImmutableAssignment }
-    let (actual, expression_error) = check_expr(c, g, tree, module_index, children[1usize], c.locals[local_index].ty)
-    ret expression_error
+    if count < 2usize { ret Unsupported }
+    let initializer = tree.nodes[initializer_index]
+    if !contains_token(c, tree.nodes[first_index].token_end, initializer.token_start, .PunctAssign) { ret Unsupported }
+    let tried = contains_token(c, node.token_start, initializer.token_start, .KwTry)
+    if count == 2usize && !tried {
+        let (place_type, place_error) = assignment_place_type(c, g, tree, module_index, first_index)
+        if place_error != ok { ret place_error }
+        let (actual, expression_error) = check_expr(c, g, tree, module_index, initializer_index, place_type)
+        ret expression_error
+    }
+    if initializer.kind != .CallExpr { ret ArgumentCount }
+    let (call, call_error) = check_call(c, g, tree, module_index, initializer)
+    if call_error != ok { ret call_error }
+    if call.is_cast {
+        if tried { ret InvalidTry }
+        ret ArgumentCount
+    }
+    let callee = c.functions[call.function_index]
+    var result_count = callee.return_count
+    if tried {
+        let (remaining, try_error) = check_try_results(c, callee, function)
+        if try_error != ok { ret try_error }
+        result_count = remaining
+    }
+    if count - 1usize != result_count { ret ArgumentCount }
+    var result_index = 0usize
+    at = node.first_child
+    while at < end {
+        if tree.children[at].node && result_index < result_count {
+            let (place_type, place_error) = assignment_place_type(c, g, tree, module_index, tree.children[at].index)
+            if place_error != ok { ret place_error }
+            let result_type = c.return_types[callee.first_return + result_index]
+            let (contextual, context_error) = apply_context(c, result_type, place_type)
+            if context_error != ok { ret context_error }
+            result_index += 1usize
+        }
+        at += 1usize
+    }
+    ret ok
 }
 
 fn check_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, function: Function) -> err {
     let node = tree.nodes[node_index]
     if node.kind == .Block { ret check_block(c, r, g, tree, module_index, node, function) }
-    if node.kind == .BindingStmt { ret check_binding(c, r, g, tree, module_index, node) }
+    if node.kind == .BindingStmt { ret check_binding(c, r, g, tree, module_index, node, function) }
     if node.kind == .ReturnStmt { ret check_return(c, g, tree, module_index, node, function) }
     if node.kind == .IfStmt || node.kind == .WhileStmt { ret check_condition_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .CallStmt { ret check_call_statement(c, g, tree, module_index, node) }
-    if node.kind == .AssignmentStmt { ret check_assignment(c, g, tree, module_index, node) }
+    if node.kind == .TryStmt { ret check_try_statement(c, g, tree, module_index, node, function) }
+    if node.kind == .AssignmentStmt { ret check_assignment(c, g, tree, module_index, node, function) }
     if node.kind == .NocheckStmt {
         let checkpoint = c.local_count
         let child_error = check_children(c, r, g, tree, module_index, node, function)
@@ -1779,7 +1991,11 @@ fn check_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     if !found { ret UnknownCallable }
     let function = c.functions[function_index]
     if function.generic { ret Unsupported }
-    if function.return_type.kind == .Other { ret Unsupported }
+    var return_index = 0usize
+    while return_index < function.return_count {
+        if c.return_types[function.first_return + return_index].kind == .Other { ret Unsupported }
+        return_index += 1usize
+    }
     c.local_count = 0usize
     var parameter_index = 0usize
     while parameter_index < function.parameter_count {

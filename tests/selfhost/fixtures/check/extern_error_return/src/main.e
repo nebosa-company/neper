@@ -1,0 +1,1 @@
+extern fn invalid() -> err

@@ -179,6 +179,12 @@ $constantAliasChecked = & $compiler check-file (Join-Path $checkRoot 'constant_a
 if ($LASTEXITCODE -ne 0 -or $constantAliasChecked -ne 'module check ok') { throw 'constant-backed array aliases did not resolve' }
 $intrinsicChecked = & $compiler check-file (Join-Path $checkRoot 'intrinsic_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $intrinsicChecked -ne 'module check ok') { throw 'fixed intrinsic signatures did not type-check' }
+$multiResultChecked = & $compiler check-file (Join-Path $checkRoot 'multi_result_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $multiResultChecked -ne 'module check ok') { throw 'multiple returns did not type-check' }
+$tryChecked = & $compiler check-file (Join-Path $checkRoot 'try_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $tryChecked -ne 'module check ok') { throw 'try result consumption did not type-check' }
+$intrinsicMultiChecked = & $compiler check-file (Join-Path $checkRoot 'intrinsic_multi_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $intrinsicMultiChecked -ne 'module check ok') { throw 'fallible intrinsic results did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -236,7 +242,21 @@ $checkFailures = @(
     @('intrinsic_pointer_mismatch', 'TypeMismatch'),
     @('intrinsic_result_mismatch', 'TypeMismatch'),
     @('intrinsic_multi_argument_mismatch', 'TypeMismatch'),
-    @('intrinsic_multi_unsupported', 'Unsupported'),
+    @('intrinsic_multi_unsupported', 'ArgumentCount'),
+    @('multi_result_count', 'ArgumentCount'),
+    @('multi_result_assignment_type', 'TypeMismatch'),
+    @('multi_result_invalid_return', 'InvalidReturn'),
+    @('multi_result_invalid_type', 'InvalidReturn'),
+    @('tuple_annotation', 'InvalidType'),
+    @('try_invalid_callee', 'InvalidTry'),
+    @('try_invalid_caller', 'InvalidTry'),
+    @('try_statement_results', 'ArgumentCount'),
+    @('try_binding_count', 'ArgumentCount'),
+    @('call_result_ignored', 'ArgumentCount'),
+    @('multi_return_void', 'InvalidType'),
+    @('error_return_not_last', 'InvalidType'),
+    @('extern_error_return', 'InvalidType'),
+    @('extern_multi_return', 'InvalidType'),
     @('intrinsic_generic_unsupported', 'Unsupported'),
     @('unsupported', 'Unsupported')
 )

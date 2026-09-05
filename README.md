@@ -202,12 +202,16 @@ declaration-order dependence. This checkpoint folds unary minus and `+`, `-`, `*
 bitwise, shift and wrapping constant operators remain outside this checkpoint. The
 checker now installs the fixed `os` signatures plus `mem.mark`, `mem.reset` and
 `mem.stats` without source declarations, structurally checks their pointer and slice
-arguments, and validates their arity and single-result contexts. Arguments to
-multi-result intrinsics are checked before their still-explicit consumption boundary.
-Generic `mem.alloc`, `try` and tuple result consumption, generic source calls, indexing
-and aggregate literals remain outside this checkpoint. Unsupported expression and
-statement forms fail explicitly instead of being silently accepted; cross-platform
-fixtures freeze both the implemented behavior and those temporary boundaries. The
+arguments and validates their arity. Function signatures retain every return type;
+source and intrinsic result sets are checked through ordered tuple bindings and
+assignments, including `_` discards, while multi-value function bodies validate each
+returned expression. Statement-level `try` now consumes the trailing `err` in bindings,
+assignments and error-only call statements, and verifies both the callee and enclosing
+function propagation contracts. Calls with ignored results are rejected. Generic
+`mem.alloc`, generic source calls, indexing and aggregate literals remain outside this
+checkpoint. Unsupported expression and statement forms fail explicitly instead of
+being silently accepted; cross-platform fixtures freeze both the implemented behavior
+and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64
 division, remainder and relational instructions from operand types, including values
 above `isize`'s maximum.

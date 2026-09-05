@@ -260,6 +260,12 @@ constant_alias_checked=$($test_build/neper-self check-file "$check_root/constant
 [ "$constant_alias_checked" = 'module check ok' ]
 intrinsic_checked=$($test_build/neper-self check-file "$check_root/intrinsic_valid/src/main.e" "$repo" x64 linux)
 [ "$intrinsic_checked" = 'module check ok' ]
+multi_result_checked=$($test_build/neper-self check-file "$check_root/multi_result_valid/src/main.e" "$repo" x64 linux)
+[ "$multi_result_checked" = 'module check ok' ]
+try_checked=$($test_build/neper-self check-file "$check_root/try_valid/src/main.e" "$repo" x64 linux)
+[ "$try_checked" = 'module check ok' ]
+intrinsic_multi_checked=$($test_build/neper-self check-file "$check_root/intrinsic_multi_valid/src/main.e" "$repo" x64 linux)
+[ "$intrinsic_multi_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -328,7 +334,21 @@ expect_check_error intrinsic_argument_mismatch TypeMismatch
 expect_check_error intrinsic_pointer_mismatch TypeMismatch
 expect_check_error intrinsic_result_mismatch TypeMismatch
 expect_check_error intrinsic_multi_argument_mismatch TypeMismatch
-expect_check_error intrinsic_multi_unsupported Unsupported
+expect_check_error intrinsic_multi_unsupported ArgumentCount
+expect_check_error multi_result_count ArgumentCount
+expect_check_error multi_result_assignment_type TypeMismatch
+expect_check_error multi_result_invalid_return InvalidReturn
+expect_check_error multi_result_invalid_type InvalidReturn
+expect_check_error tuple_annotation InvalidType
+expect_check_error try_invalid_callee InvalidTry
+expect_check_error try_invalid_caller InvalidTry
+expect_check_error try_statement_results ArgumentCount
+expect_check_error try_binding_count ArgumentCount
+expect_check_error call_result_ignored ArgumentCount
+expect_check_error multi_return_void InvalidType
+expect_check_error error_return_not_last InvalidType
+expect_check_error extern_error_return InvalidType
+expect_check_error extern_multi_return InvalidType
 expect_check_error intrinsic_generic_unsupported Unsupported
 expect_check_error unsupported Unsupported
 scope_root="$repo/tests/selfhost/fixtures/scope"

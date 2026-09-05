@@ -746,6 +746,8 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if functions_error != ok { ret functions_error }
     let (parameters, parameters_error) = mem.alloc[check.Parameter](a, 32768usize)
     if parameters_error != ok { ret parameters_error }
+    let (return_types, return_types_error) = mem.alloc[check.Type](a, 32768usize)
+    if return_types_error != ok { ret return_types_error }
     let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
     if tokens_error != ok { ret tokens_error }
     let (locals, locals_error) = mem.alloc[check.Local](a, 16384usize)
@@ -758,7 +760,7 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if constants_error != ok { ret constants_error }
     let (constant_exprs, constant_exprs_error) = mem.alloc[check.ConstantExpr](a, 32768usize)
     if constant_exprs_error != ok { ret constant_exprs_error }
-    ret check.init(checker, functions, parameters, tokens, locals, types, aliases, constants, constant_exprs)
+    ret check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, constant_exprs)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
