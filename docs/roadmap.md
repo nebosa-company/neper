@@ -80,8 +80,8 @@ produce the native bootstrap on Windows and Linux. `tests/m0/run.*` exercise the
 cross-directory program root, both x64 argument paths, UTF-8 startup arguments,
 control flow, calls across register and stack arguments, slices, named-error
 propagation, deterministic rejection diagnostics, traps, and retained debug and
-compact-symbol metadata. The incremental `neper-0` extension is in progress; the
-self-hosted compiler has not started.
+compact-symbol metadata. M0 is complete and the incremental `neper-0` extension,
+including the first self-hosted compiler modules, is in progress.
 
 - Lexer and parser generated or checked against grammar revision 1, including exact
   original-byte/scalar/UTF-16 position tracking, normalized line handling, the closed
@@ -184,16 +184,18 @@ location for the full function; larger by-value parameters are copied out of the
 ABI-indirect input into those slots. Linux validation rejects malformed DIEs and
 location/range-list sections; Windows validation parses the COFF record streams,
 and DIA verification confirms the linked PDB reconstructs locals and recursive
-types. The first self-hosted compiler checkpoint now lives in `src/main.e`, is built
-by the bootstrap on Windows and Linux, and owns the grammar revision 1 vocabulary of
-94 token kinds. It scans keywords, comments, CR/LF/CRLF, original-byte spans, numeric
-and quoted/raw literal boundaries, invalid bytes and the complete longest-match
-punctuation set; `tests/selfhost/run.*` exercises the library entry points through a
-bootstrap-built executable. The checkpoint remains one source file because the
-bootstrap currently validates `use` paths without compiling project modules. Loading,
-qualifying and diagnosing multiple project modules is therefore the next bootstrap
-prerequisite, after which the lexer moves to its own module. This callout does not
-mark the `neper-0` milestone complete.
+types. The first self-hosted compiler checkpoint is built by the bootstrap on
+Windows and Linux. Its grammar revision 1 lexer now lives in `src/lex.e`;
+`src/main.e` imports and exercises that module. The lexer owns all 94 token kinds and
+scans keywords, comments, CR/LF/CRLF, original-byte spans, numeric and quoted/raw
+literal boundaries, invalid bytes and the complete longest-match punctuation set.
+The C99 bootstrap now loads transitive modules from the nearest project's `lib/` and
+`src/`, resolves default and explicit import qualifiers, canonicalizes cross-module
+functions, types, constants and errors, rejects duplicate qualifiers and import
+cycles, and attributes diagnostics to their source file. `tests/selfhost/run.*`
+covers that module boundary, including a nested aliased module and an invalid
+imported module, on Windows and Linux. The next self-hosted front-end increment is
+the parser; this callout does not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

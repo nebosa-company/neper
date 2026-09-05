@@ -14,8 +14,27 @@ if ($LASTEXITCODE -ne 0 -or $lexer -ne 'selfhost lexer ok') { throw 'self-hosted
 $scan = & $compiler scan 'fn main() -> err { ret ok }'
 if ($LASTEXITCODE -ne 0 -or $scan -ne 'scan ok') { throw 'self-hosted compiler scan command failed' }
 $invalid = & $compiler scan '#' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($invalid -join "`n") -notmatch 'main.InvalidSource') {
+if ($LASTEXITCODE -ne 1 -or ($invalid -join "`n") -notmatch 'lex.InvalidSource') {
     throw 'self-hosted compiler invalid-source result failed'
+}
+
+$moduleFixture = Join-Path $PSScriptRoot 'fixtures\modules\src\main.e'
+$moduleOutput = & $neper run $moduleFixture --output (Join-Path $testBuild 'modules.exe')
+if ($LASTEXITCODE -ne 0 -or $moduleOutput -ne 'module loading ok') {
+    throw 'nested module path and alias resolution failed'
+}
+
+$diagnosticFixture = Join-Path $PSScriptRoot 'fixtures\diagnostics\src\main.e'
+$diagnosticOutput = & $neper build $diagnosticFixture --output (Join-Path $testBuild 'diagnostics.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($diagnosticOutput -join "`n") -notmatch 'broken\.e:1:1: error\[E-NAME-9999\]') {
+    throw 'imported-module diagnostic source failed'
+}
+
+$cycleFixture = Join-Path $PSScriptRoot 'fixtures\cycle\src\main.e'
+$cycleOutput = & $neper build $cycleFixture --output (Join-Path $testBuild 'cycle.exe') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
+    'module import cycle: cycle\.a -> cycle\.b -> cycle\.a') {
+    throw 'module import cycle rejection failed'
 }
 
 Write-Output 'selfhost tests passed'

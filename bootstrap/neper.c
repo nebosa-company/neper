@@ -30,12 +30,13 @@
 #define PATH_SEP '\\'
 #define getcwd _getcwd
 #else
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.13-neper0"
+#define NEPER_VERSION "0.0.14-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -50,6 +51,7 @@
 #define MAX_ARRAY_ELEMENTS 4096
 #define MAX_FIELDS 128
 #define MAX_FIELD_PATH 32
+#define MAX_SOURCES 128
 
 typedef enum TokenKind {
     TK_EOF,
@@ -128,6 +130,7 @@ typedef struct Token {
     int end_column_utf16;
     size_t byte_start;
     size_t byte_end;
+    int source_id;
 } Token;
 
 typedef enum TypeKind {
@@ -403,6 +406,7 @@ typedef struct Local {
 
 typedef struct Function {
     char name[96];
+    char module[96];
     char symbol[112];
     Token token;
     Param params[MAX_PARAMS];
@@ -428,7 +432,10 @@ typedef struct Function {
 
 typedef struct UseDecl {
     char name[160];
+    char qualifier[96];
+    char owner_module[96];
     Token token;
+    int loaded;
 } UseDecl;
 
 typedef struct ErrorDecl {
@@ -440,6 +447,7 @@ typedef struct ErrorDecl {
 
 typedef struct ConstDecl {
     char name[96];
+    char module[96];
     Token token;
     Type type;
     Expr *value;
@@ -465,6 +473,7 @@ typedef enum NamedDeclKind {
 
 typedef struct StructDecl {
     char name[96];
+    char module[96];
     Token token;
     NamedDeclKind kind;
     ComptimeParam comptime_params[MAX_ARGS];
@@ -516,6 +525,15 @@ typedef struct Diagnostic {
     int sequence;
 } Diagnostic;
 
+typedef struct SourceFile {
+    char path[MAX_PATH_LEN];
+    char module[96];
+    char *text;
+    size_t length;
+    int parsed;
+    int visit_state;
+} SourceFile;
+
 typedef struct Compiler {
     const char *source_path;
     char *source;
@@ -528,6 +546,14 @@ typedef struct Compiler {
     Diagnostic diagnostics[MAX_DIAGNOSTICS];
     Program program;
     char executable_dir[MAX_PATH_LEN];
+    char project_root[MAX_PATH_LEN];
+    char current_module[96];
+    char resolution_module[96];
+    int current_source_id;
+    int root_source_id;
+    Token root_token;
+    SourceFile sources[MAX_SOURCES];
+    int source_count;
 } Compiler;
 
 static void copy_text(char *dst, size_t capacity, const char *src, size_t length) {
@@ -535,6 +561,29 @@ static void copy_text(char *dst, size_t capacity, const char *src, size_t length
     if (length >= capacity) length = capacity - 1;
     memcpy(dst, src, length);
     dst[length] = 0;
+}
+
+static int append_text(char *dst, size_t capacity, const char *src) {
+    size_t used = strlen(dst), length = strlen(src);
+    if (used + length >= capacity) return 0;
+    memcpy(dst + used, src, length + 1);
+    return 1;
+}
+
+static int append_character(char *dst, size_t capacity, char ch) {
+    size_t used = strlen(dst);
+    if (used + 1 >= capacity) return 0;
+    dst[used] = ch;
+    dst[used + 1] = 0;
+    return 1;
+}
+
+static int join_qualified_name(char *out, size_t capacity,
+                               const char *module, const char *name) {
+    out[0] = 0;
+    return append_text(out, capacity, module) &&
+           append_character(out, capacity, '.') &&
+           append_text(out, capacity, name);
 }
 
 static void diagnostic_at(Compiler *c, Token *token, const char *code, const char *message) {
@@ -549,10 +598,18 @@ static void diagnostic_at(Compiler *c, Token *token, const char *code, const cha
     c->errors++;
 }
 
+static const char *token_source_path(Compiler *c, const Token *token) {
+    if (token->source_id >= 0 && token->source_id < c->source_count)
+        return c->sources[token->source_id].path;
+    return c->source_path;
+}
+
 static int compare_diagnostic(const void *left, const void *right) {
     const Diagnostic *a = (const Diagnostic *)left;
     const Diagnostic *b = (const Diagnostic *)right;
     int order;
+    if (a->token.source_id < b->token.source_id) return -1;
+    if (a->token.source_id > b->token.source_id) return 1;
     if (a->token.byte_start < b->token.byte_start) return -1;
     if (a->token.byte_start > b->token.byte_start) return 1;
     order = strcmp(a->code, b->code);
@@ -567,7 +624,7 @@ static void print_diagnostics(Compiler *c) {
     qsort(c->diagnostics, (size_t)count, sizeof(Diagnostic), compare_diagnostic);
     for (i = 0; i < count; ++i) {
         Diagnostic *diagnostic = &c->diagnostics[i];
-        fprintf(stderr, "%s:%d:%d: error[%s]: %s\n", c->source_path,
+        fprintf(stderr, "%s:%d:%d: error[%s]: %s\n", token_source_path(c, &diagnostic->token),
                 diagnostic->token.line, diagnostic->token.column,
                 diagnostic->code, diagnostic->message);
     }
@@ -588,6 +645,7 @@ static void lexical_error(Compiler *c, size_t byte, int line, int column,
     token.end_column_utf16 = column + 1;
     token.byte_start = byte;
     token.byte_end = byte + 1;
+    token.source_id = c->current_source_id;
     diagnostic_at(c, &token, code, message);
 }
 
@@ -642,6 +700,7 @@ static void add_token(Compiler *c, TokenKind kind, size_t start, size_t end,
     token->column_utf16 = column_utf16;
     token->byte_start = start;
     token->byte_end = end;
+    token->source_id = c->current_source_id;
     for (at = start; at < end;) {
         unsigned char ch = (unsigned char)c->source[at];
         size_t width = 1;
@@ -1807,9 +1866,23 @@ static Stmt *parse_block(Compiler *c) {
     return head;
 }
 
+static void qualify_decl_name(Compiler *c, char *out, size_t capacity,
+                              const char *name, Token *token) {
+    if (!c->current_module[0]) {
+        copy_text(out, capacity, name, strlen(name));
+        return;
+    }
+    if (strlen(c->current_module) + strlen(name) + 2 > capacity) {
+        diagnostic_at(c, token, "E-MODULE-9999", "qualified declaration name is too long");
+        copy_text(out, capacity, name, strlen(name));
+        return;
+    }
+    join_qualified_name(out, capacity, c->current_module, name);
+}
+
 static void parse_use(Compiler *c, Token token) {
     UseDecl *use;
-    char name[160];
+    char name[160], qualifier[96];
     Token *part = expect(c, TK_IDENT, "expected module name after `use`");
     copy_text(name, sizeof(name), part->start, (size_t)part->length);
     while (match(c, TK_DOT)) {
@@ -1818,11 +1891,23 @@ static void parse_use(Compiler *c, Token token) {
         if (used + 1 < sizeof(name)) name[used++] = '.';
         copy_text(name + used, sizeof(name) - used, part->start, (size_t)part->length);
     }
+    {
+        const char *last = strrchr(name, '.');
+        copy_text(qualifier, sizeof(qualifier), last ? last + 1 : name,
+                  strlen(last ? last + 1 : name));
+    }
+    if (match(c, TK_AS)) {
+        Token *alias = expect(c, TK_IDENT, "expected qualifier after `as`");
+        copy_text(qualifier, sizeof(qualifier), alias->start, (size_t)alias->length);
+    }
     if (c->program.use_count >= MAX_USES) {
         diagnostic_at(c, &token, "E-MODULE-9999", "too many imports"); return;
     }
     use = &c->program.uses[c->program.use_count++];
-    memset(use, 0, sizeof(*use)); strcpy(use->name, name); use->token = token;
+    memset(use, 0, sizeof(*use)); strcpy(use->name, name);
+    strcpy(use->qualifier, qualifier); use->token = token;
+    copy_text(use->owner_module, sizeof(use->owner_module), c->current_module,
+              strlen(c->current_module));
 }
 
 static void parse_error(Compiler *c, Token token) {
@@ -1834,6 +1919,8 @@ static void parse_error(Compiler *c, Token token) {
     error = &c->program.errors[c->program.error_count];
     memset(error, 0, sizeof(*error));
     copy_text(error->name, sizeof(error->name), name->start, (size_t)name->length);
+    copy_text(error->module, sizeof(error->module), c->current_module,
+              strlen(c->current_module));
     error->token = token;
     error->code = c->program.error_count + 2;
     c->program.error_count++;
@@ -1848,7 +1935,13 @@ static void parse_constant(Compiler *c, Token token) {
     }
     constant = &c->program.constants[c->program.constant_count++];
     memset(constant, 0, sizeof(*constant));
-    copy_text(constant->name, sizeof(constant->name), name->start, (size_t)name->length);
+    {
+        char short_name[96];
+        copy_text(short_name, sizeof(short_name), name->start, (size_t)name->length);
+        qualify_decl_name(c, constant->name, sizeof(constant->name), short_name, name);
+    }
+    copy_text(constant->module, sizeof(constant->module), c->current_module,
+              strlen(c->current_module));
     constant->token = token;
     expect(c, TK_COLON, "expected `:` after constant name");
     constant->type = parse_type(c);
@@ -1865,7 +1958,13 @@ static void parse_type_declaration(Compiler *c, Token token) {
     }
     decl = &c->program.structs[c->program.struct_count++];
     memset(decl, 0, sizeof(*decl));
-    copy_text(decl->name, sizeof(decl->name), name->start, (size_t)name->length);
+    {
+        char short_name[96];
+        copy_text(short_name, sizeof(short_name), name->start, (size_t)name->length);
+        qualify_decl_name(c, decl->name, sizeof(decl->name), short_name, name);
+    }
+    copy_text(decl->module, sizeof(decl->module), c->current_module,
+              strlen(c->current_module));
     decl->token = token;
     if (match(c, TK_LBRACKET)) {
         decl->is_template = 1;
@@ -1961,9 +2060,24 @@ static void parse_function(Compiler *c, Token token) {
     fn->scalar_return_local_index = -1;
     { int i; for (i = 0; i < MAX_ARGS; ++i) fn->return_value_locals[i] = -1; }
     name = expect(c, TK_IDENT, "expected function name");
-    copy_text(fn->name, sizeof(fn->name), name->start, (size_t)name->length);
-    if (strcmp(fn->name, "main") == 0) strcpy(fn->symbol, "neper_main");
-    else { strcpy(fn->symbol, "neper_fn_"); strcat(fn->symbol, fn->name); }
+    {
+        char short_name[96];
+        size_t at;
+        copy_text(short_name, sizeof(short_name), name->start, (size_t)name->length);
+        qualify_decl_name(c, fn->name, sizeof(fn->name), short_name, name);
+        copy_text(fn->module, sizeof(fn->module), c->current_module,
+                  strlen(c->current_module));
+        if (!c->current_module[0] && strcmp(short_name, "main") == 0) strcpy(fn->symbol, "neper_main");
+        else {
+            strcpy(fn->symbol, "neper_fn_");
+            for (at = 0; fn->name[at] && strlen(fn->symbol) + 2 < sizeof(fn->symbol); ++at) {
+                size_t used = strlen(fn->symbol);
+                char ch = fn->name[at];
+                fn->symbol[used] = ch == '.' ? '_' : ch;
+                fn->symbol[used + 1] = 0;
+            }
+        }
+    }
     if (match(c, TK_LBRACKET)) {
         fn->is_template = 1;
         do {
@@ -2099,12 +2213,63 @@ static Function *find_function(Compiler *c, const char *name) {
     return 0;
 }
 
+static int expand_import_qualifier(Compiler *c, const char *owner_module,
+                                   const char *name, char *out, size_t capacity) {
+    const char *dot = strchr(name, '.');
+    size_t qualifier_length;
+    int i;
+    if (!dot) return 0;
+    qualifier_length = (size_t)(dot - name);
+    for (i = 0; i < c->program.use_count; ++i) {
+        UseDecl *use = &c->program.uses[i];
+        if (strcmp(use->owner_module, owner_module) != 0 ||
+            strlen(use->qualifier) != qualifier_length ||
+            memcmp(use->qualifier, name, qualifier_length) != 0) continue;
+        if (strlen(use->name) + strlen(dot) + 1 > capacity) return 0;
+        out[0] = 0;
+        append_text(out, capacity, use->name);
+        append_text(out, capacity, dot);
+        return 1;
+    }
+    return 0;
+}
+
+static Function *find_function_scoped(Compiler *c, const char *module, const char *name) {
+    char qualified[196], imported[196];
+    Function *found;
+    if (expand_import_qualifier(c, module, name, imported, sizeof(imported))) {
+        found = find_function(c, imported);
+        if (found) return found;
+    }
+    if (module[0] && !strchr(name, '.')) {
+        join_qualified_name(qualified, sizeof(qualified), module, name);
+        found = find_function(c, qualified);
+        if (found) return found;
+    }
+    return find_function(c, name);
+}
+
 static ConstDecl *find_constant(Compiler *c, const char *name) {
     int i;
     for (i = 0; i < c->program.constant_count; ++i)
         if (strcmp(c->program.constants[i].name, name) == 0)
             return &c->program.constants[i];
     return 0;
+}
+
+static ConstDecl *find_constant_scoped(Compiler *c, const char *module, const char *name) {
+    char qualified[196], imported[196];
+    ConstDecl *found;
+    if (expand_import_qualifier(c, module, name, imported, sizeof(imported))) {
+        found = find_constant(c, imported);
+        if (found) return found;
+    }
+    if (module[0] && !strchr(name, '.')) {
+        join_qualified_name(qualified, sizeof(qualified), module, name);
+        found = find_constant(c, qualified);
+        if (found) return found;
+    }
+    return find_constant(c, name);
 }
 
 static void iterator_next_name(Type type, char *out, size_t capacity) {
@@ -2138,11 +2303,53 @@ static ErrorDecl *find_error(Compiler *c, const char *name) {
     return 0;
 }
 
+static ErrorDecl *find_error_scoped(Compiler *c, const char *module, const char *name) {
+    char qualified[196], imported[196];
+    ErrorDecl *found;
+    if (expand_import_qualifier(c, module, name, imported, sizeof(imported))) {
+        found = find_error(c, imported);
+        if (found) return found;
+    }
+    if (module[0] && !strchr(name, '.')) {
+        join_qualified_name(qualified, sizeof(qualified), module, name);
+        found = find_error(c, qualified);
+        if (found) return found;
+    }
+    return find_error(c, name);
+}
+
 static StructDecl *find_struct(Compiler *c, const char *name) {
     int i;
     for (i = 0; i < c->program.struct_count; ++i)
         if (strcmp(c->program.structs[i].name, name) == 0) return &c->program.structs[i];
     return 0;
+}
+
+static StructDecl *find_struct_scoped(Compiler *c, const char *module, const char *name) {
+    char qualified[196], imported[196];
+    StructDecl *found;
+    if (expand_import_qualifier(c, module, name, imported, sizeof(imported))) {
+        found = find_struct(c, imported);
+        if (found) return found;
+    }
+    if (module[0] && !strchr(name, '.')) {
+        join_qualified_name(qualified, sizeof(qualified), module, name);
+        found = find_struct(c, qualified);
+        if (found) return found;
+    }
+    return find_struct(c, name);
+}
+
+static void qualify_type_for_module(Compiler *c, Type *type, const char *module) {
+    int i;
+    if (type->kind == TY_NAMED) {
+        StructDecl *decl = find_struct_scoped(c, module, type->name);
+        if (decl) copy_text(type->name, sizeof(type->name), decl->name, strlen(decl->name));
+    }
+    if (type->element) qualify_type_for_module(c, type->element, module);
+    for (i = 0; i < type->generic_arg_count; ++i)
+        if (type->generic_is_type[i] && type->generic_types[i])
+            qualify_type_for_module(c, type->generic_types[i], module);
 }
 
 static StructDecl *find_tag_owner(Compiler *c, const char *name) {
@@ -2365,17 +2572,31 @@ static int resolve_contextual_member(Compiler *c, Expr *e, Type expected) {
     return 1;
 }
 
-static int resolve_qualified_member(Compiler *c, Expr *e) {
-    char qualified[160], *last;
+static int resolve_qualified_member(Compiler *c, Expr *e, const char *module) {
+    char qualified[160], scoped[196], imported[196], resolved_type[196], *last;
     StructDecl *decl;
     FieldDecl *member;
     copy_text(qualified, sizeof(qualified), e->as.name, strlen(e->as.name));
     last = strrchr(qualified, '.');
     if (!last) return 0;
     *last++ = 0;
-    decl = find_struct(c, qualified);
-    if (!decl) decl = find_tag_owner(c, qualified);
-    if (!decl || (decl->kind != ND_ENUM && !find_tag_owner(c, qualified))) return 0;
+    decl = find_struct_scoped(c, module, qualified);
+    if (decl && decl->kind == ND_ENUM) {
+        copy_text(resolved_type, sizeof(resolved_type), decl->name, strlen(decl->name));
+    } else {
+        StructDecl *owner = 0;
+        if (expand_import_qualifier(c, module, qualified, imported, sizeof(imported)))
+            owner = find_tag_owner(c, imported);
+        if (!owner) owner = find_tag_owner(c, qualified);
+        if (!owner && module[0] && !strchr(qualified, '.')) {
+            join_qualified_name(scoped, sizeof(scoped), module, qualified);
+            owner = find_tag_owner(c, scoped);
+        }
+        if (!owner) return 0;
+        decl = owner;
+        copy_text(resolved_type, sizeof(resolved_type), decl->name, strlen(decl->name));
+        append_text(resolved_type, sizeof(resolved_type), ".Tag");
+    }
     member = find_struct_field(decl, last, 0);
     if (!member) {
         diagnostic_at(c, &e->token, "E-NAME-9999", "unknown enum member");
@@ -2384,7 +2605,7 @@ static int resolve_qualified_member(Compiler *c, Expr *e) {
     }
     e->kind = EX_ENUM_MEMBER;
     e->constant_value = member->value;
-    e->type = type_make(TY_NAMED, qualified);
+    e->type = type_make(TY_NAMED, resolved_type);
     return 1;
 }
 
@@ -2877,6 +3098,8 @@ static Function *instantiate_function(Compiler *c, Function *template_fn, Expr *
         instance->symbol[at + 1] = 0;
     }
     instance->token = template_fn->token;
+    copy_text(instance->module, sizeof(instance->module), template_fn->module,
+              strlen(template_fn->module));
     instance->return_slot_local_index = instance->scalar_return_local_index = -1;
     for (i = 0; i < MAX_ARGS; ++i) instance->return_value_locals[i] = -1;
     instance->param_count = template_fn->param_count;
@@ -2967,8 +3190,11 @@ static int infer_function_arguments(Compiler *c, Function *fn, Function *templat
 }
 
 static Function *check_declared_call(Compiler *c, Function *fn, Expr *e) {
-    Function *callee = find_function(c, e->as.call.callee);
+    Function *callee = find_function_scoped(c, fn->module, e->as.call.callee);
     int i;
+    if (callee && strcmp(e->as.call.callee, callee->name) != 0)
+        copy_text(e->as.call.callee, sizeof(e->as.call.callee), callee->name,
+                  strlen(callee->name));
     if (callee && callee->is_template && !e->as.call.generic_arg_count) {
         if (!infer_function_arguments(c, fn, callee, e)) return 0;
         callee = instantiate_function(c, callee, e);
@@ -3021,6 +3247,7 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
         case EX_STRING: return e->type;
         case EX_ZERO: case EX_UNDEF: return e->type;
         case EX_ARRAY_LITERAL: {
+            qualify_type_for_module(c, &e->type, fn->module);
             resolve_type_constants(c, &e->type, &e->token);
             Type element = array_element_type(e->type);
             if ((size_t)e->as.array.item_count != e->type.array_length)
@@ -3042,6 +3269,14 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
             return e->type;
         }
         case EX_STRUCT_LITERAL: {
+            StructDecl *scoped_decl = find_struct_scoped(c, fn->module,
+                                                         e->as.aggregate.type_name);
+            if (scoped_decl) {
+                copy_text(e->as.aggregate.type_name, sizeof(e->as.aggregate.type_name),
+                          scoped_decl->name, strlen(scoped_decl->name));
+                copy_text(e->type.name, sizeof(e->type.name), scoped_decl->name,
+                          strlen(scoped_decl->name));
+            }
             if (e->type.kind == TY_NAMED && e->type.generic_arg_count) {
                 resolve_type_constants(c, &e->type, &e->token);
                 copy_text(e->as.aggregate.type_name, sizeof(e->as.aggregate.type_name),
@@ -3104,15 +3339,15 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
         }
         case EX_NAME:
             if (strcmp(e->as.name, "ok") == 0) return e->type;
-            if (resolve_qualified_member(c, e)) return e->type;
+            if (resolve_qualified_member(c, e, fn->module)) return e->type;
             {
-                ErrorDecl *error = find_error(c, e->as.name);
+                ErrorDecl *error = find_error_scoped(c, fn->module, e->as.name);
                 if (error) {
                     e->type = type_make(TY_ERR, "err"); e->error_code = error->code; return e->type;
                 }
             }
             {
-                ConstDecl *constant = find_constant(c, e->as.name);
+                ConstDecl *constant = find_constant_scoped(c, fn->module, e->as.name);
                 if (constant && evaluate_constant(c, constant)) {
                     e->type = constant->type;
                     e->constant_value = constant->integer_value;
@@ -3946,6 +4181,17 @@ static int path_exists(const char *path) {
     FILE *f = fopen(path, "rb"); if (!f) return 0; fclose(f); return 1;
 }
 
+static int directory_exists(const char *path) {
+#ifdef _WIN32
+    DWORD attributes = GetFileAttributesA(path);
+    return attributes != INVALID_FILE_ATTRIBUTES &&
+           (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+#else
+    struct stat info;
+    return stat(path, &info) == 0 && S_ISDIR(info.st_mode);
+#endif
+}
+
 static void slash_path(char *path) {
 #ifdef _WIN32
     char *p; for (p = path; *p; ++p) if (*p == '/') *p = '\\';
@@ -3954,30 +4200,187 @@ static void slash_path(char *path) {
 #endif
 }
 
-static void check_imports(Compiler *c) {
+static char *read_file(const char *path, size_t *length);
+
+static void join_module_path(char *out, size_t capacity, const char *root,
+                             const char *source_root, const char *module) {
+    char relative[MAX_PATH_LEN];
+    char *p;
+    copy_text(relative, sizeof(relative), module, strlen(module));
+    for (p = relative; *p; ++p) if (*p == '.') *p = PATH_SEP;
+    out[0] = 0;
+    if (!append_text(out, capacity, root) ||
+        !append_character(out, capacity, PATH_SEP) ||
+        !append_text(out, capacity, source_root) ||
+        !append_character(out, capacity, PATH_SEP) ||
+        !append_text(out, capacity, relative) ||
+        !append_text(out, capacity, ".e")) out[0] = 0;
+    slash_path(out);
+}
+
+static int source_for_module(Compiler *c, const char *module) {
     int i;
-    for (i = 0; i < c->program.use_count; ++i) {
-        char rel[MAX_PATH_LEN], candidate[MAX_PATH_LEN], *p;
-        snprintf(rel, sizeof(rel), "%s", c->program.uses[i].name);
-        for (p = rel; *p; ++p) if (*p == '.') *p = PATH_SEP;
-        if (strlen(c->executable_dir) + strlen(rel) + 9 >= sizeof(candidate)) {
-            diagnostic_at(c, &c->program.uses[i].token, "E-MODULE-9999", "module path is too long");
+    for (i = 0; i < c->source_count; ++i)
+        if (strcmp(c->sources[i].module, module) == 0) return i;
+    return -1;
+}
+
+static int add_source_file(Compiler *c, const char *module, const char *path,
+                           Token *import_token) {
+    SourceFile *source;
+    char *text;
+    size_t length;
+    if (c->source_count >= MAX_SOURCES) {
+        diagnostic_at(c, import_token, "E-MODULE-9999", "source module limit exceeded");
+        return -1;
+    }
+    text = read_file(path, &length);
+    if (!text) {
+        diagnostic_at(c, import_token, "E-MODULE-0001", "module source could not be read");
+        return -1;
+    }
+    source = &c->sources[c->source_count];
+    memset(source, 0, sizeof(*source));
+    copy_text(source->path, sizeof(source->path), path, strlen(path));
+    copy_text(source->module, sizeof(source->module), module, strlen(module));
+    source->text = text;
+    source->length = length;
+    return c->source_count++;
+}
+
+static void parse_source_file(Compiler *c, int source_id, int root) {
+    SourceFile *source = &c->sources[source_id];
+    int errors_before = c->errors;
+    if (source->parsed) return;
+    source->parsed = 1;
+    c->source_path = source->path;
+    c->source = source->text;
+    c->source_length = source->length;
+    c->current_source_id = source_id;
+    c->token_count = 0;
+    c->current = 0;
+    if (root) c->current_module[0] = 0;
+    else copy_text(c->current_module, sizeof(c->current_module), source->module,
+                   strlen(source->module));
+    lex(c);
+    if (root && c->token_count) {
+        c->root_token = c->tokens[0];
+        if (c->errors == errors_before) install_os_intrinsics(c);
+    }
+    if (c->errors == errors_before) parse_program(c);
+}
+
+static void load_imports(Compiler *c) {
+    int at;
+    for (at = 0; at < c->program.use_count; ++at) {
+        UseDecl *use = &c->program.uses[at];
+        char project_lib[MAX_PATH_LEN], project_src[MAX_PATH_LEN];
+        char toolchain_lib[MAX_PATH_LEN], message[512];
+        int project_lib_exists, project_src_exists, source_id;
+        if (use->loaded) continue;
+        if (strcmp(use->name, "e.mem") == 0 || strcmp(use->name, "e.io") == 0 ||
+            strcmp(use->name, "e.os") == 0) {
+            join_module_path(toolchain_lib, sizeof(toolchain_lib), c->executable_dir,
+                             "lib", use->name);
+            if (!path_exists(toolchain_lib)) {
+                snprintf(message, sizeof(message), "module `%s` was not found", use->name);
+                diagnostic_at(c, &use->token, "E-MODULE-0001", message);
+            }
+            use->loaded = 1;
             continue;
         }
-        strcpy(candidate, c->executable_dir);
-        {
-            size_t used = strlen(candidate);
-            candidate[used++] = PATH_SEP;
-            memcpy(candidate + used, "lib", 3); used += 3;
-            candidate[used++] = PATH_SEP;
-            memcpy(candidate + used, rel, strlen(rel)); used += strlen(rel);
-            memcpy(candidate + used, ".e", 3);
+        source_id = source_for_module(c, use->name);
+        if (source_id >= 0) {
+            use->loaded = 1;
+            continue;
         }
-        if (!path_exists(candidate)) {
-            char message[512];
-            snprintf(message, sizeof(message), "module `%s` was not found in the toolchain library", c->program.uses[i].name);
-            diagnostic_at(c, &c->program.uses[i].token, "E-MODULE-0001", message);
+        join_module_path(project_lib, sizeof(project_lib), c->project_root, "lib", use->name);
+        join_module_path(project_src, sizeof(project_src), c->project_root, "src", use->name);
+        project_lib_exists = path_exists(project_lib);
+        project_src_exists = path_exists(project_src);
+        if (project_lib_exists && project_src_exists) {
+            snprintf(message, sizeof(message),
+                     "module `%s` exists at both `%.180s` and `%.180s`",
+                     use->name, project_lib, project_src);
+            diagnostic_at(c, &use->token, "E-MODULE-9999", message);
+            use->loaded = 1;
+            continue;
         }
+        if (project_lib_exists || project_src_exists) {
+            source_id = add_source_file(c, use->name,
+                                        project_lib_exists ? project_lib : project_src,
+                                        &use->token);
+        } else {
+            join_module_path(toolchain_lib, sizeof(toolchain_lib), c->executable_dir,
+                             "lib", use->name);
+            if (path_exists(toolchain_lib))
+                source_id = add_source_file(c, use->name, toolchain_lib, &use->token);
+            else {
+                snprintf(message, sizeof(message), "module `%s` was not found", use->name);
+                diagnostic_at(c, &use->token, "E-MODULE-0001", message);
+                source_id = -1;
+            }
+        }
+        use->loaded = 1;
+        if (source_id >= 0) parse_source_file(c, source_id, 0);
+    }
+}
+
+static void append_cycle_name(char *message, size_t capacity, const char *name) {
+    size_t used = strlen(message);
+    if (used + strlen(name) + 5 >= capacity) return;
+    if (used > strlen("module import cycle: ")) strcat(message, " -> ");
+    strcat(message, name);
+}
+
+static void visit_module_graph(Compiler *c, int source_id, int *stack, int depth) {
+    SourceFile *source = &c->sources[source_id];
+    int i;
+    source->visit_state = 1;
+    stack[depth] = source_id;
+    for (i = 0; i < c->program.use_count; ++i) {
+        UseDecl *use = &c->program.uses[i];
+        int target, start, at;
+        char message[512];
+        if (strcmp(use->owner_module, source->module) != 0) continue;
+        target = source_for_module(c, use->name);
+        if (target < 0) continue;
+        if (c->sources[target].visit_state == 0) {
+            visit_module_graph(c, target, stack, depth + 1);
+            continue;
+        }
+        if (c->sources[target].visit_state != 1) continue;
+        strcpy(message, "module import cycle: ");
+        start = 0;
+        while (start <= depth && stack[start] != target) start++;
+        for (at = start; at <= depth; ++at)
+            append_cycle_name(message, sizeof(message), c->sources[stack[at]].module);
+        append_cycle_name(message, sizeof(message), c->sources[target].module);
+        diagnostic_at(c, &use->token, "E-MODULE-9999", message);
+    }
+    source->visit_state = 2;
+}
+
+static void check_module_cycles(Compiler *c) {
+    int stack[MAX_SOURCES];
+    int i;
+    for (i = 1; i < c->source_count; ++i)
+        if (c->sources[i].visit_state == 0) visit_module_graph(c, i, stack, 0);
+}
+
+static void check_imports(Compiler *c) {
+    int i, j;
+    for (i = 0; i < c->program.use_count; ++i) {
+        if (!c->program.uses[i].loaded)
+            diagnostic_at(c, &c->program.uses[i].token, "E-MODULE-0001",
+                          "module import was not loaded");
+        for (j = 0; j < i; ++j)
+            if (strcmp(c->program.uses[i].owner_module,
+                       c->program.uses[j].owner_module) == 0 &&
+                strcmp(c->program.uses[i].qualifier,
+                       c->program.uses[j].qualifier) == 0)
+                diagnostic_at(c, &c->program.uses[i].token, "E-NAME-0001",
+                              "duplicate module qualifier");
     }
 }
 
@@ -4097,7 +4500,8 @@ static int evaluate_integer_expression(Compiler *c, Expr *expr, int64_t *out,
         return 1;
     }
     if (expr->kind == EX_NAME) {
-        ConstDecl *constant = find_constant(c, expr->as.name);
+        ConstDecl *constant = find_constant_scoped(c, c->resolution_module,
+                                                   expr->as.name);
         if (!constant) {
             diagnostic_at(c, &expr->token, "E-NAME-9999",
                           "constant expression references an unknown constant");
@@ -4314,24 +4718,31 @@ static void check_program(Compiler *c) {
                 diagnostic_at(c, &c->program.errors[i].token, "E-NAME-0001", "duplicate error declaration");
     for (i = 0; i < c->program.constant_count; ++i) {
         ConstDecl *constant = &c->program.constants[i];
+        copy_text(c->resolution_module, sizeof(c->resolution_module), constant->module,
+                  strlen(constant->module));
         for (j = 0; j < i; ++j)
             if (strcmp(constant->name, c->program.constants[j].name) == 0)
                 diagnostic_at(c, &constant->token, "E-NAME-0001", "duplicate constant declaration");
+        qualify_type_for_module(c, &constant->type, constant->module);
         resolve_type_constants(c, &constant->type, &constant->token);
         evaluate_constant(c, constant);
     }
     for (i = 0; i < c->program.struct_count; ++i) {
         StructDecl *decl = &c->program.structs[i];
+        copy_text(c->resolution_module, sizeof(c->resolution_module), decl->module,
+                  strlen(decl->module));
         for (j = 0; j < i; ++j)
             if (strcmp(decl->name, c->program.structs[j].name) == 0)
                 diagnostic_at(c, &decl->token, "E-NAME-0001", "duplicate type declaration");
         if (decl->is_template) continue;
         if (decl->kind == ND_ENUM || decl->kind == ND_TAGGED_UNION) {
+            qualify_type_for_module(c, &decl->backing_type, decl->module);
             resolve_type_constants(c, &decl->backing_type, &decl->token);
             check_known_type(c, decl->backing_type, &decl->token);
         }
         for (j = 0; j < decl->field_count; ++j)
             if (decl->fields[j].has_payload || decl->kind == ND_STRUCT || decl->kind == ND_UNION) {
+                qualify_type_for_module(c, &decl->fields[j].type, decl->module);
                 resolve_type_constants(c, &decl->fields[j].type, &decl->fields[j].token);
                 check_known_type(c, decl->fields[j].type, &decl->fields[j].token);
             }
@@ -4347,18 +4758,40 @@ static void check_program(Compiler *c) {
                     diagnostic_at(c, &decl->fields[j].token, "E-NAME-0001", "tagged union may not declare a member named Tag");
         }
     }
+    /* Canonicalize every callable signature before checking any body. A root
+       module may call an imported function that was parsed later. */
     for (i = 0; i < c->program.function_count; ++i) {
         Function *fn = &c->program.functions[i];
+        if (fn->is_template) continue;
+        copy_text(c->resolution_module, sizeof(c->resolution_module), fn->module,
+                  strlen(fn->module));
+        for (j = 0; j < fn->return_count; ++j) {
+            qualify_type_for_module(c, &fn->return_types[j], fn->module);
+            resolve_type_constants(c, &fn->return_types[j], &fn->token);
+        }
+        if (fn->return_count) fn->return_type = fn->return_types[0];
+        for (j = 0; j < fn->param_count; ++j) {
+            qualify_type_for_module(c, &fn->params[j].type, fn->module);
+            resolve_type_constants(c, &fn->params[j].type, &fn->params[j].token);
+        }
+    }
+    for (i = 0; i < c->program.function_count; ++i) {
+        Function *fn = &c->program.functions[i];
+        copy_text(c->resolution_module, sizeof(c->resolution_module), fn->module,
+                  strlen(fn->module));
         for (j = 0; j < i; ++j) if (strcmp(fn->name, c->program.functions[j].name) == 0)
             diagnostic_at(c, &fn->token, "E-NAME-0001", "duplicate function declaration");
         if (fn->is_template) continue;
-        for (j = 0; j < fn->return_count; ++j)
+        for (j = 0; j < fn->return_count; ++j) {
+            qualify_type_for_module(c, &fn->return_types[j], fn->module);
             resolve_type_constants(c, &fn->return_types[j], &fn->token);
+        }
         if (fn->return_count) fn->return_type = fn->return_types[0];
         prepare_return_convention(c, fn);
         if (fn->is_intrinsic) continue;
         for (j = 0; j < fn->param_count; ++j) {
             Local *local = &fn->locals[fn->local_count];
+            qualify_type_for_module(c, &fn->params[j].type, fn->module);
             resolve_type_constants(c, &fn->params[j].type, &fn->params[j].token);
             check_known_type(c, fn->params[j].type, &fn->params[j].token);
             memset(local, 0, sizeof(*local)); strcpy(local->name, fn->params[j].name);
@@ -4372,7 +4805,7 @@ static void check_program(Compiler *c) {
         if (strcmp(fn->name, "main") == 0) main_fn = fn;
     }
     if (!main_fn) {
-        diagnostic_at(c, &c->tokens[0], "E-NAME-9999", "program root must declare fn main");
+        diagnostic_at(c, &c->root_token, "E-NAME-9999", "program root must declare fn main");
     } else if (main_fn->param_count != 2 || main_fn->params[0].type.kind != TY_POINTER ||
                strcmp(main_fn->params[0].type.name, "mem.Arena") != 0 ||
                main_fn->params[1].type.kind != TY_SLICE || strcmp(main_fn->params[1].type.name, "str") != 0 ||
@@ -6784,6 +7217,52 @@ static char *read_file(const char *path, size_t *length) {
     data[size] = 0; fclose(f); *length = (size_t)size; return data;
 }
 
+static void absolute_source_path(char *out, size_t capacity, const char *path) {
+#ifdef _WIN32
+    if (_fullpath(out, path, capacity)) return;
+#else
+    if (realpath(path, out)) return;
+#endif
+    if (path[0] == '/' || (strlen(path) > 2 && path[1] == ':'))
+        copy_text(out, capacity, path, strlen(path));
+    else {
+        char cwd[MAX_PATH_LEN];
+        if (!getcwd(cwd, sizeof(cwd))) strcpy(cwd, ".");
+        snprintf(out, capacity, "%s%c%s", cwd, PATH_SEP, path);
+    }
+    slash_path(out);
+}
+
+static void parent_directory(char *path) {
+    char *a = strrchr(path, '/'), *b = strrchr(path, '\\');
+    char *slash = a > b ? a : b;
+    if (slash) *slash = 0;
+}
+
+static void find_project_root(Compiler *c, const char *absolute_source) {
+    char directory[MAX_PATH_LEN], lib_path[MAX_PATH_LEN], src_path[MAX_PATH_LEN];
+    copy_text(directory, sizeof(directory), absolute_source, strlen(absolute_source));
+    parent_directory(directory);
+    for (;;) {
+        char previous[MAX_PATH_LEN];
+        copy_text(lib_path, sizeof(lib_path), directory, strlen(directory));
+        append_character(lib_path, sizeof(lib_path), PATH_SEP);
+        append_text(lib_path, sizeof(lib_path), "lib");
+        copy_text(src_path, sizeof(src_path), directory, strlen(directory));
+        append_character(src_path, sizeof(src_path), PATH_SEP);
+        append_text(src_path, sizeof(src_path), "src");
+        if (directory_exists(lib_path) || directory_exists(src_path)) break;
+        copy_text(previous, sizeof(previous), directory, strlen(directory));
+        parent_directory(directory);
+        if (!directory[0] || strcmp(previous, directory) == 0) {
+            copy_text(directory, sizeof(directory), absolute_source, strlen(absolute_source));
+            parent_directory(directory);
+            break;
+        }
+    }
+    copy_text(c->project_root, sizeof(c->project_root), directory, strlen(directory));
+}
+
 static void executable_directory(char *out, size_t cap, const char *argv0) {
     char full[MAX_PATH_LEN];
 #ifdef _WIN32
@@ -6816,6 +7295,7 @@ int main(int argc, char **argv) {
 #endif
     static Compiler c;
     const char *command, *source_path, *output = 0, *asm_output = 0;
+    char absolute_source[MAX_PATH_LEN];
     char asm_path[MAX_PATH_LEN], obj_path[MAX_PATH_LEN], exe_path[MAX_PATH_LEN];
     int i, do_run, windows, run_arg_start = argc;
 #ifdef _WIN32
@@ -6838,13 +7318,26 @@ int main(int argc, char **argv) {
         else if (strcmp(argv[i], "--emit-asm") == 0 && i + 1 < argc) asm_output = argv[++i];
         else { fprintf(stderr, "neper: error[E-CLI-9999]: unknown option `%s`\n", argv[i]); return 2; }
     }
-    c.source_path = source_path;
-    c.source = read_file(source_path, &c.source_length);
+    absolute_source_path(absolute_source, sizeof(absolute_source), source_path);
+    c.source_path = absolute_source;
+    c.source = read_file(absolute_source, &c.source_length);
     if (!c.source) { fprintf(stderr, "neper: error[E-CLI-9999]: cannot read `%s`\n", source_path); return 2; }
     executable_directory(c.executable_dir, sizeof(c.executable_dir), argv[0]);
-    lex(&c);
-    if (!c.errors) install_os_intrinsics(&c);
-    if (!c.errors) parse_program(&c);
+    find_project_root(&c, absolute_source);
+    c.source_count = 1;
+    c.root_source_id = 0;
+    copy_text(c.sources[0].path, sizeof(c.sources[0].path), absolute_source,
+              strlen(absolute_source));
+    strcpy(c.sources[0].module, "<root>");
+    c.sources[0].text = c.source;
+    c.sources[0].length = c.source_length;
+    parse_source_file(&c, 0, 1);
+    if (!c.errors) load_imports(&c);
+    if (!c.errors) check_module_cycles(&c);
+    c.source_path = c.sources[c.root_source_id].path;
+    c.source = c.sources[c.root_source_id].text;
+    c.source_length = c.sources[c.root_source_id].length;
+    c.current_source_id = c.root_source_id;
     if (!c.errors) check_program(&c);
     if (c.errors) { print_diagnostics(&c); return 1; }
 #ifdef _WIN32
