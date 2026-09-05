@@ -13,6 +13,7 @@ test "$("$neper" run "$repo/tests/m0/control.e" --output "$test_build/control")"
 test "$("$neper" run "$repo/tests/m0/args.e" --output "$test_build/args" -- 'héllo 😀')" = 'héllo 😀'
 test "$("$neper" run "$repo/tests/m0/abi.e" --output "$test_build/abi")" = 'abi ok'
 test "$("$neper" run "$repo/tests/m0/large-stack.e" --output "$test_build/large-stack")" = 'large stack ok'
+grep -q 'call np_stack_probe' "$test_build/large-stack.s"
 
 set +e
 bounds=$("$neper" run "$repo/tests/m0/bounds.e" --output "$test_build/bounds" 2>&1)

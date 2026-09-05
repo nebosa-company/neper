@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.54-neper0"
+#define NEPER_VERSION "0.0.55-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -5987,7 +5987,10 @@ static void emit_function(Emitter *e, Function *fn) {
         fprintf(e->out, ".globl %s\n.type %s, @function\n%s:\n", symbol_name(fn), symbol_name(fn), symbol_name(fn));
         fprintf(e->out, "    .loc 1 %d %d\n", fn->token.line, fn->token.column);
         fputs("    .cfi_startproc\n    push rbp\n    .cfi_def_cfa_offset 16\n    .cfi_offset rbp, -16\n    mov rbp, rsp\n    .cfi_def_cfa_register rbp\n", e->out);
-        fprintf(e->out, "    sub rsp, %d\n", fn->frame_size);
+        if (fn->frame_size >= 4096)
+            fprintf(e->out, "    mov eax, %d\n    call np_stack_probe\n    sub rsp, rax\n", fn->frame_size);
+        else
+            fprintf(e->out, "    sub rsp, %d\n", fn->frame_size);
     }
     if (fn->return_slot_local_index >= 0) {
         Local *slot = &fn->locals[fn->return_slot_local_index];
@@ -6953,6 +6956,13 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
 static void emit_linux_runtime(Compiler *c, FILE *out) {
     int i;
     fputs(
+        ".type np_stack_probe, @function\nnp_stack_probe:\n"
+        "    lea r10, [rsp+8]\n    mov r11, rax\n"
+        "np_stack_probe_page:\n    cmp r11, 4096\n    jbe np_stack_probe_last\n"
+        "    sub r10, 4096\n    test BYTE PTR [r10], 0\n    sub r11, 4096\n"
+        "    jmp np_stack_probe_page\n"
+        "np_stack_probe_last:\n    sub r10, r11\n    test BYTE PTR [r10], 0\n    ret\n"
+        ".size np_stack_probe, .-np_stack_probe\n\n"
         ".globl neper_io_print\n.type neper_io_print, @function\nneper_io_print:\n"
         "    mov rdx, rsi\n    mov rsi, rdi\n    mov edi, 1\n    mov eax, 1\n    syscall\n"
         "    test rax, rax\n    js np_print_fail\n    xor eax, eax\n    ret\n"

@@ -184,10 +184,11 @@ location for the full function; larger by-value parameters are copied out of the
 ABI-indirect input into those slots. Linux validation rejects malformed DIEs and
 location/range-list sections; Windows validation parses the COFF record streams,
 and DIA verification confirms the linked PDB reconstructs locals and recursive
-types. Generated Windows functions whose local frame reaches one page now call a
-freestanding page probe before allocation, retaining unwind metadata without adding
-a C-runtime dependency; the M0 suite executes a 16 KiB-frame regression and inspects
-the emitted probe call. The first self-hosted compiler checkpoint is built by the bootstrap on
+types. Generated functions whose local frame reaches one page now call a freestanding
+page probe before allocation on Windows and Linux, retaining Windows unwind metadata
+without adding a C-runtime dependency; both M0 suites execute a 16 KiB-frame
+regression and inspect the emitted probe call. The first self-hosted compiler
+checkpoint is built by the bootstrap on
 Windows and Linux. Its grammar revision 1 lexer now lives in `src/lex.e`;
 `src/main.e` imports and exercises that module. The lexer owns all 94 token kinds and
 scans keywords, comments, CR/LF/CRLF, original-byte spans, strict numeric and quoted/raw
