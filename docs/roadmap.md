@@ -358,11 +358,14 @@ overflow and division-by-zero rejection. The bootstrap's x64 emitter now uses
 unsigned division, remainder and relational instructions for unsigned operand types,
 including the full `usize` range. Qualified calls into loaded source modules now use
 the target function's collected signature for arity, argument and return checking.
-Named constant lengths and aliases, generic calls, compiler-owned intrinsics, indexing
-and aggregate literals remain outside the `check-file` checkpoint. Unsupported
-expression and statement forms fail explicitly rather than being accepted unchecked.
-The next type-checking increments replace those boundaries with constants and aliases,
-intrinsic signatures, remaining control flow and full generic checking.
+Non-generic aliases now canonicalize recursively through imported names, pointers,
+slices and arrays while nominal aggregates retain identity; every alias cycle is
+rejected even when it passes through pointer indirection. Named constant lengths,
+generic types and calls, compiler-owned intrinsics, indexing and aggregate literals
+remain outside the `check-file` checkpoint. Unsupported expression and statement forms fail
+explicitly rather than being accepted unchecked. The next type-checking increments
+replace those boundaries with constants, intrinsic signatures, remaining control flow
+and full generic checking.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

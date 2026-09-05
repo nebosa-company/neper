@@ -189,8 +189,10 @@ Pointer, slice and fixed-array types now have structural identity; `str` canonic
 to `[]const u8`; mutable pointers and slices weaken to their `const` forms only; and
 `nil`, `&` and `*` obey their contextual and pointee rules, including opaque `*void`.
 Fixed lengths accept every integer-literal base and checked `usize` literal arithmetic.
-Named constant lengths and aliases, generic calls, compiler-owned intrinsics, indexing
-and aggregate literals remain outside this checkpoint. Unsupported expression and
+Non-generic type aliases canonicalize recursively across modules and composites while
+nominal aggregates retain their identity; direct and pointer-mediated alias cycles are
+rejected. Named constant lengths, generic types and calls, compiler-owned intrinsics,
+indexing and aggregate literals remain outside this checkpoint. Unsupported expression and
 statement forms fail explicitly instead of being silently accepted; cross-platform
 fixtures freeze both the implemented behavior and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64

@@ -18,6 +18,7 @@ error UnknownCallable
 error ArgumentCount
 error InvalidType
 error ImmutableAssignment
+error AliasCycle
 
 type Kind = enum u8 {
     Invalid,
@@ -68,31 +69,46 @@ type Local = struct {
     mutable: bool,
 }
 
+type Alias = struct {
+    name: str,
+    module_index: usize,
+    generic: bool,
+    rhs: Type,
+    resolved: Type,
+    state: u8,
+}
+
 type Checker = struct {
     functions: []Function,
     parameters: []Parameter,
     tokens: []lex.Token,
     locals: []Local,
     types: []Type,
+    aliases: []Alias,
     function_count: usize,
     parameter_count: usize,
     token_count: usize,
     local_count: usize,
     type_count: usize,
+    alias_count: usize,
+    expand_aliases: bool,
 }
 
-fn init(c: *Checker, functions: []Function, parameters: []Parameter, tokens: []lex.Token, locals: []Local, types: []Type) -> err {
-    if functions.len == 0usize || parameters.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize { ret Capacity }
+fn init(c: *Checker, functions: []Function, parameters: []Parameter, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias) -> err {
+    if functions.len == 0usize || parameters.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize { ret Capacity }
     c.functions = functions
     c.parameters = parameters
     c.tokens = tokens
     c.locals = locals
     c.types = types
+    c.aliases = aliases
     c.function_count = 0usize
     c.parameter_count = 0usize
     c.token_count = 0usize
     c.local_count = 0usize
     c.type_count = 0usize
+    c.alias_count = 0usize
+    c.expand_aliases = false
     ret ok
 }
 
@@ -256,6 +272,43 @@ fn scalar_type(name: str, module_index: usize) -> Type {
 
 fn is_type_node(kind: syntax.Kind) -> bool {
     ret kind == .NamedType || kind == .PointerType || kind == .SliceType || kind == .ArrayType || kind == .FunctionType
+}
+
+fn find_alias(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < c.alias_count {
+        if c.aliases[at].module_index == module_index && same(c.aliases[at].name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn canonical_type(c: *Checker, ty: Type) -> (Type, err) {
+    if ty.kind == .Named {
+        let (alias_index, found) = find_alias(c, ty.module_index, ty.name)
+        if !found { ret (ty, ok) }
+        if c.aliases[alias_index].generic { ret (invalid_type(), Unsupported) }
+        if c.aliases[alias_index].state == 2u8 { ret (c.aliases[alias_index].resolved, ok) }
+        if c.aliases[alias_index].state == 1u8 { ret (invalid_type(), AliasCycle) }
+        c.aliases[alias_index].state = 1u8
+        let (resolved, resolve_error) = canonical_type(c, c.aliases[alias_index].rhs)
+        if resolve_error != ok { ret (invalid_type(), resolve_error) }
+        c.aliases[alias_index].resolved = resolved
+        c.aliases[alias_index].state = 2u8
+        ret (resolved, ok)
+    }
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Array {
+        if !ty.has_element || ty.element >= c.type_count { ret (invalid_type(), InvalidType) }
+        let (element, element_error) = canonical_type(c, c.types[ty.element])
+        if element_error != ok { ret (invalid_type(), element_error) }
+        if (ty.kind == .Slice || ty.kind == .Array) && element.kind == .Void { ret (invalid_type(), InvalidType) }
+        let (element_index, store_error) = store_type(c, element)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        var resolved = ty
+        resolved.element = element_index
+        ret (resolved, ok)
+    }
+    ret (ty, ok)
 }
 
 fn composite_const(c: *Checker, node: syntax.Node, child: syntax.Node) -> (bool, err) {
@@ -474,12 +527,94 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
                     target_module = qualified_module
                     name = g.modules[module_index].text[token.start..token.end]
                 }
-                ret (make_type(.Named, name, target_module), ok)
+                let result = make_type(.Named, name, target_module)
+                if !c.expand_aliases { ret (result, ok) }
+                let (canonical, canonical_error) = canonical_type(c, result)
+                ret (canonical, canonical_error)
             }
         }
         at += 1usize
     }
-    ret (make_type(.Named, name, target_module), ok)
+    let result = make_type(.Named, name, target_module)
+    if !c.expand_aliases { ret (result, ok) }
+    let (canonical, canonical_error) = canonical_type(c, result)
+    ret (canonical, canonical_error)
+}
+
+fn declaration_name(c: *Checker, text: str, node: syntax.Node) -> (str, err) {
+    let name_index = node.token_start + 1usize
+    if name_index >= node.token_end || name_index >= c.token_count { ret ("", parse.InvalidSyntax) }
+    let token = c.tokens[name_index]
+    if token.kind != .Identifier { ret ("", parse.InvalidSyntax) }
+    ret (text[token.start..token.end], ok)
+}
+
+fn collect_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let end = node.first_child + node.child_count
+    var rhs_index = 0usize
+    var has_rhs = false
+    var generic = false
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            let child = tree.nodes[child_index]
+            if child.kind == .ComptimeParam { generic = true }
+            if is_type_node(child.kind) {
+                rhs_index = child_index
+                has_rhs = true
+            }
+        }
+        at += 1usize
+    }
+    let text = g.modules[module_index].text
+    let (name, name_error) = declaration_name(c, text, node)
+    if name_error != ok { ret name_error }
+    if generic {
+        if c.alias_count == c.aliases.len { ret Capacity }
+        c.aliases[c.alias_count] = Alias { name: name, module_index: module_index, generic: true, rhs: invalid_type(), resolved: invalid_type(), state: 0u8 }
+        c.alias_count += 1usize
+        ret ok
+    }
+    if !has_rhs { ret ok }
+    if c.alias_count == c.aliases.len { ret Capacity }
+    let (rhs, rhs_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[rhs_index])
+    if rhs_error != ok { ret rhs_error }
+    c.aliases[c.alias_count] = Alias { name: name, module_index: module_index, generic: false, rhs: rhs, resolved: invalid_type(), state: 0u8 }
+    c.alias_count += 1usize
+    ret ok
+}
+
+fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    c.alias_count = 0usize
+    c.type_count = 0usize
+    c.expand_aliases = false
+    var module_index = 0usize
+    while module_index < g.count {
+        var tree: parse.Tree = zero
+        try parse.init_tree(&tree, g.nodes, g.children)
+        try parse.parse(&tree, g.modules[module_index].text)
+        try tokenize(c, g.modules[module_index].text)
+        var node_index = 1usize
+        while node_index < tree.count {
+            let node = tree.nodes[node_index]
+            if node.top_level && node.kind == .TypeDecl { try collect_alias_declaration(c, r, g, &tree, module_index, node) }
+            node_index += 1usize
+        }
+        module_index += 1usize
+    }
+    c.expand_aliases = true
+    var alias_index = 0usize
+    while alias_index < c.alias_count {
+        if !c.aliases[alias_index].generic {
+            let (resolved, resolve_error) = canonical_type(c, c.aliases[alias_index].rhs)
+            if resolve_error != ok { ret resolve_error }
+            c.aliases[alias_index].resolved = resolved
+            c.aliases[alias_index].state = 2u8
+        }
+        alias_index += 1usize
+    }
+    ret ok
 }
 
 fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
@@ -540,7 +675,6 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
 fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.function_count = 0usize
     c.parameter_count = 0usize
-    c.type_count = 0usize
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
@@ -1148,6 +1282,7 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 }
 
 fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    try collect_aliases(c, r, g)
     try collect_signatures(c, r, g)
     ret check_bodies(c, r, g)
 }

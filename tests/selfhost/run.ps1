@@ -171,6 +171,8 @@ $compositeChecked = & $compiler check-file (Join-Path $checkRoot 'composite_vali
 if ($LASTEXITCODE -ne 0 -or $compositeChecked -ne 'module check ok') { throw 'valid composite types did not type-check' }
 $qualifiedChecked = & $compiler check-file (Join-Path $checkRoot 'qualified_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $qualifiedChecked -ne 'module check ok') { throw 'qualified calls did not type-check' }
+$aliasChecked = & $compiler check-file (Join-Path $checkRoot 'alias_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $aliasChecked -ne 'module check ok') { throw 'type aliases did not canonicalize' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -202,6 +204,14 @@ $checkFailures = @(
     @('qualified_argument_mismatch', 'TypeMismatch'),
     @('qualified_argument_count', 'ArgumentCount'),
     @('qualified_not_callable', 'UnknownCallable'),
+    @('alias_cycle', 'AliasCycle'),
+    @('alias_pointer_cycle', 'AliasCycle'),
+    @('alias_mismatch', 'TypeMismatch'),
+    @('alias_const_to_mutable', 'TypeMismatch'),
+    @('alias_void_parameter', 'InvalidType'),
+    @('alias_void_slice', 'InvalidType'),
+    @('alias_void_array', 'InvalidType'),
+    @('generic_type_bare', 'Unsupported'),
     @('compound_unsupported', 'Unsupported'),
     @('unsupported', 'Unsupported')
 )
