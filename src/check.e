@@ -19,6 +19,9 @@ error ArgumentCount
 error InvalidType
 error ImmutableAssignment
 error AliasCycle
+error ConstantCycle
+error ConstantOverflow
+error InvalidConstant
 
 type Kind = enum u8 {
     Invalid,
@@ -78,6 +81,39 @@ type Alias = struct {
     state: u8,
 }
 
+type IntegerValue = struct {
+    magnitude: usize,
+    negative: bool,
+}
+
+type ConstantExprKind = enum u8 {
+    Literal,
+    Name,
+    Unary,
+    Binary,
+}
+
+type ConstantExpr = struct {
+    kind: ConstantExprKind,
+    module_index: usize,
+    name: str,
+    value: IntegerValue,
+    ty: Type,
+    op: lex.Kind,
+    left: usize,
+    right: usize,
+    has_right: bool,
+}
+
+type Constant = struct {
+    name: str,
+    module_index: usize,
+    ty: Type,
+    expression: usize,
+    value: IntegerValue,
+    state: u8,
+}
+
 type Checker = struct {
     functions: []Function,
     parameters: []Parameter,
@@ -85,29 +121,39 @@ type Checker = struct {
     locals: []Local,
     types: []Type,
     aliases: []Alias,
+    constants: []Constant,
+    constant_exprs: []ConstantExpr,
     function_count: usize,
     parameter_count: usize,
     token_count: usize,
     local_count: usize,
     type_count: usize,
     alias_count: usize,
+    constant_count: usize,
+    constant_expr_count: usize,
+    constants_ready: bool,
     expand_aliases: bool,
 }
 
-fn init(c: *Checker, functions: []Function, parameters: []Parameter, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias) -> err {
-    if functions.len == 0usize || parameters.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize { ret Capacity }
+fn init(c: *Checker, functions: []Function, parameters: []Parameter, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias, constants: []Constant, constant_exprs: []ConstantExpr) -> err {
+    if functions.len == 0usize || parameters.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize || constants.len == 0usize || constant_exprs.len == 0usize { ret Capacity }
     c.functions = functions
     c.parameters = parameters
     c.tokens = tokens
     c.locals = locals
     c.types = types
     c.aliases = aliases
+    c.constants = constants
+    c.constant_exprs = constant_exprs
     c.function_count = 0usize
     c.parameter_count = 0usize
     c.token_count = 0usize
     c.local_count = 0usize
     c.type_count = 0usize
     c.alias_count = 0usize
+    c.constant_count = 0usize
+    c.constant_expr_count = 0usize
+    c.constants_ready = false
     c.expand_aliases = false
     ret ok
 }
@@ -334,12 +380,11 @@ fn integer_digit(byte: u8) -> (usize, bool) {
     ret (0usize, false)
 }
 
-fn array_length_literal(c: *Checker, text: str, node: syntax.Node) -> (usize, err) {
-    if node.kind != .LiteralExpr { ret (0usize, Unsupported) }
+fn integer_literal_value(c: *Checker, text: str, node: syntax.Node) -> (usize, Type, err) {
+    if node.kind != .LiteralExpr { ret (0usize, invalid_type(), Unsupported) }
     let token = c.tokens[node.token_start]
-    if token.kind != .Integer { ret (0usize, TypeMismatch) }
-    let length_type = numeric_literal_type(text, token)
-    if length_type.kind == .Integer && !same(length_type.name, "usize") { ret (0usize, TypeMismatch) }
+    if token.kind != .Integer { ret (0usize, invalid_type(), TypeMismatch) }
+    let parsed_type = numeric_literal_type(text, token)
     let spelling = text[token.start..token.end]
     var base = 10usize
     var at = 0usize
@@ -371,31 +416,68 @@ fn array_length_literal(c: *Checker, text: str, node: syntax.Node) -> (usize, er
             let (digit, is_digit) = integer_digit(byte)
             if !is_digit || digit >= base { break }
             digits += 1usize
-            if value > (max_value - digit) / base { ret (0usize, TypeMismatch) }
+            if value > (max_value - digit) / base { ret (0usize, invalid_type(), ConstantOverflow) }
             value = value * base + digit
             at += 1usize
         }
     }
-    if digits == 0usize { ret (0usize, Unsupported) }
+    if digits == 0usize { ret (0usize, invalid_type(), Unsupported) }
+    ret (value, parsed_type, ok)
+}
+
+fn array_length_literal(c: *Checker, text: str, node: syntax.Node) -> (usize, err) {
+    let (value, length_type, value_error) = integer_literal_value(c, text, node)
+    if value_error == ConstantOverflow { ret (0usize, TypeMismatch) }
+    if value_error != ok { ret (0usize, value_error) }
+    if length_type.kind == .Integer && !same(length_type.name, "usize") { ret (0usize, TypeMismatch) }
     ret (value, ok)
 }
 
-fn array_length_value(c: *Checker, text: str, tree: *parse.Tree, node_index: usize) -> (usize, err) {
+fn constant_array_length(c: *Checker, constant_index: usize) -> (usize, err) {
+    if !c.constants_ready || constant_index >= c.constant_count { ret (0usize, Unsupported) }
+    let item = c.constants[constant_index]
+    if item.state != 2u8 { ret (0usize, InvalidConstant) }
+    if item.ty.kind != .Integer || !same(item.ty.name, "usize") { ret (0usize, TypeMismatch) }
+    if item.value.negative { ret (0usize, TypeMismatch) }
+    ret (item.value.magnitude, ok)
+}
+
+fn array_length_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, err) {
     let node = tree.nodes[node_index]
+    let text = g.modules[module_index].text
     if node.kind == .LiteralExpr {
         let (value, value_error) = array_length_literal(c, text, node)
+        ret (value, value_error)
+    }
+    if node.kind == .NameExpr {
+        if !c.constants_ready { ret (0usize, Unsupported) }
+        let token = c.tokens[node.token_start]
+        if token.kind != .Identifier { ret (0usize, InvalidConstant) }
+        let name = text[token.start..token.end]
+        let (constant_index, found) = find_constant(c, module_index, name)
+        if !found { ret (0usize, InvalidConstant) }
+        let (value, value_error) = constant_array_length(c, constant_index)
+        ret (value, value_error)
+    }
+    if node.kind == .FieldExpr {
+        if !c.constants_ready { ret (0usize, Unsupported) }
+        let (target_module, member, found) = qualified_member(c, g, tree, module_index, node)
+        if !found { ret (0usize, InvalidConstant) }
+        let (constant_index, constant_found) = find_constant(c, target_module, member)
+        if !constant_found { ret (0usize, InvalidConstant) }
+        let (value, value_error) = constant_array_length(c, constant_index)
         ret (value, value_error)
     }
     if node.kind == .GroupExpr {
         let (child_index, found) = first_node_child(tree, node)
         if !found { ret (0usize, parse.InvalidSyntax) }
-        let (value, value_error) = array_length_value(c, text, tree, child_index)
+        let (value, value_error) = array_length_value(c, g, tree, module_index, child_index)
         ret (value, value_error)
     }
     if node.kind == .UnaryExpr {
         let (child_index, found) = first_node_child(tree, node)
         if !found { ret (0usize, parse.InvalidSyntax) }
-        let (value, value_error) = array_length_value(c, text, tree, child_index)
+        let (value, value_error) = array_length_value(c, g, tree, module_index, child_index)
         if value_error != ok { ret (0usize, value_error) }
         let op = c.tokens[node.token_start].kind
         if op == .PunctMinus {
@@ -419,9 +501,9 @@ fn array_length_value(c: *Checker, text: str, tree: *parse.Tree, node_index: usi
             at += 1usize
         }
         if count != 2usize { ret (0usize, parse.InvalidSyntax) }
-        let (left, left_error) = array_length_value(c, text, tree, children[0usize])
+        let (left, left_error) = array_length_value(c, g, tree, module_index, children[0usize])
         if left_error != ok { ret (0usize, left_error) }
-        let (right, right_error) = array_length_value(c, text, tree, children[1usize])
+        let (right, right_error) = array_length_value(c, g, tree, module_index, children[1usize])
         if right_error != ok { ret (0usize, right_error) }
         let op = binary_operator(c, tree, node)
         let max_value = 18446744073709551615usize
@@ -496,7 +578,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         if element_type.kind == .Void { ret (invalid_type(), InvalidType) }
         let (stored_element, store_error) = store_type(c, element_type)
         if store_error != ok { ret (invalid_type(), store_error) }
-        let (length, length_error) = array_length_value(c, g.modules[module_index].text, tree, length_index)
+        let (length, length_error) = array_length_value(c, g, tree, module_index, length_index)
         if length_error != ok { ret (invalid_type(), length_error) }
         var result = make_type(.Array, "", module_index)
         result.element = stored_element
@@ -703,6 +785,15 @@ fn find_function(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     ret (0usize, false)
 }
 
+fn find_constant(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < c.constant_count {
+        if c.constants[at].module_index == module_index && same(c.constants[at].name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn imported_module(g: *graph.Graph, module_index: usize, qualifier: str) -> (usize, bool) {
     let end = g.modules[module_index].first_import + g.modules[module_index].import_count
     var at = g.modules[module_index].first_import
@@ -713,17 +804,17 @@ fn imported_module(g: *graph.Graph, module_index: usize, qualifier: str) -> (usi
     ret (0usize, false)
 }
 
-fn find_qualified_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (usize, bool) {
+fn qualified_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (usize, str, bool) {
     let (base_index, has_base) = first_node_child(tree, node)
-    if !has_base { ret (0usize, false) }
+    if !has_base { ret (0usize, "", false) }
     let base_node = tree.nodes[base_index]
-    if base_node.kind != .NameExpr { ret (0usize, false) }
+    if base_node.kind != .NameExpr { ret (0usize, "", false) }
     let base_token = c.tokens[base_node.token_start]
-    if base_token.kind != .Identifier { ret (0usize, false) }
+    if base_token.kind != .Identifier { ret (0usize, "", false) }
     let text = g.modules[module_index].text
     let qualifier = text[base_token.start..base_token.end]
     let (target_module, imported) = imported_module(g, module_index, qualifier)
-    if !imported { ret (0usize, false) }
+    if !imported { ret (0usize, "", false) }
     var member = ""
     var at = base_node.token_end
     while at < node.token_end {
@@ -731,9 +822,308 @@ fn find_qualified_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modu
         if token.kind == .Identifier { member = text[token.start..token.end] }
         at += 1usize
     }
-    if member.len == 0usize { ret (0usize, false) }
+    if member.len == 0usize { ret (0usize, "", false) }
+    ret (target_module, member, true)
+}
+
+fn find_qualified_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (usize, bool) {
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
+    if !found_member { ret (0usize, false) }
     let (function_index, found) = find_function(c, target_module, member)
     ret (function_index, found)
+}
+
+fn store_constant_expr(c: *Checker, item: ConstantExpr) -> (usize, err) {
+    if c.constant_expr_count == c.constant_exprs.len { ret (0usize, Capacity) }
+    c.constant_exprs[c.constant_expr_count] = item
+    let index = c.constant_expr_count
+    c.constant_expr_count += 1usize
+    ret (index, ok)
+}
+
+fn normalized_integer(magnitude: usize, negative: bool) -> IntegerValue {
+    if magnitude == 0usize { ret IntegerValue { magnitude: 0usize, negative: false } }
+    ret IntegerValue { magnitude: magnitude, negative: negative }
+}
+
+fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, err) {
+    let node = tree.nodes[node_index]
+    let text = g.modules[module_index].text
+    var item: ConstantExpr = zero
+    if node.kind == .LiteralExpr {
+        let (magnitude, parsed_type, literal_error) = integer_literal_value(c, text, node)
+        if literal_error != ok { ret (0usize, literal_error) }
+        item.kind = .Literal
+        item.value = normalized_integer(magnitude, false)
+        item.ty = parsed_type
+        let (stored_index, store_error) = store_constant_expr(c, item)
+        ret (stored_index, store_error)
+    }
+    if node.kind == .NameExpr {
+        let token = c.tokens[node.token_start]
+        if token.kind != .Identifier { ret (0usize, InvalidConstant) }
+        item.kind = .Name
+        item.module_index = module_index
+        item.name = text[token.start..token.end]
+        let (stored_index, store_error) = store_constant_expr(c, item)
+        ret (stored_index, store_error)
+    }
+    if node.kind == .FieldExpr {
+        let (target_module, member, found) = qualified_member(c, g, tree, module_index, node)
+        if !found { ret (0usize, InvalidConstant) }
+        item.kind = .Name
+        item.module_index = target_module
+        item.name = member
+        let (stored_index, store_error) = store_constant_expr(c, item)
+        ret (stored_index, store_error)
+    }
+    if node.kind == .GroupExpr {
+        let (child_index, found) = first_node_child(tree, node)
+        if !found { ret (0usize, parse.InvalidSyntax) }
+        let (copied_index, copy_error) = copy_constant_expr(c, g, tree, module_index, child_index)
+        ret (copied_index, copy_error)
+    }
+    if node.kind == .UnaryExpr {
+        let (child_index, found) = first_node_child(tree, node)
+        if !found { ret (0usize, parse.InvalidSyntax) }
+        let (copied_index, copy_error) = copy_constant_expr(c, g, tree, module_index, child_index)
+        if copy_error != ok { ret (0usize, copy_error) }
+        item.kind = .Unary
+        item.op = c.tokens[node.token_start].kind
+        item.left = copied_index
+        let (stored_index, store_error) = store_constant_expr(c, item)
+        ret (stored_index, store_error)
+    }
+    if node.kind == .BinaryExpr {
+        var children: [2]usize = zero
+        var count = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if count == 2usize { ret (0usize, parse.InvalidSyntax) }
+                children[count] = tree.children[at].index
+                count += 1usize
+            }
+            at += 1usize
+        }
+        if count != 2usize { ret (0usize, parse.InvalidSyntax) }
+        let (left_index, left_error) = copy_constant_expr(c, g, tree, module_index, children[0usize])
+        if left_error != ok { ret (0usize, left_error) }
+        let (right_index, right_error) = copy_constant_expr(c, g, tree, module_index, children[1usize])
+        if right_error != ok { ret (0usize, right_error) }
+        item.kind = .Binary
+        item.op = binary_operator(c, tree, node)
+        item.left = left_index
+        item.right = right_index
+        item.has_right = true
+        let (stored_index, store_error) = store_constant_expr(c, item)
+        ret (stored_index, store_error)
+    }
+    ret (0usize, Unsupported)
+}
+
+fn collect_constant_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    if c.constant_count == c.constants.len { ret Capacity }
+    let text = g.modules[module_index].text
+    let (name, name_error) = declaration_name(c, text, node)
+    if name_error != ok { ret name_error }
+    var declared_type = invalid_type()
+    var expression_index = 0usize
+    var has_expression = false
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            let child = tree.nodes[child_index]
+            if is_type_node(child.kind) {
+                let (resolved_type, type_error) = type_from_node(c, r, g, tree, module_index, child)
+                if type_error != ok { ret type_error }
+                declared_type = resolved_type
+            } else {
+                expression_index = child_index
+                has_expression = true
+            }
+        }
+        at += 1usize
+    }
+    if !has_expression { ret parse.InvalidSyntax }
+    let (copied_expression, expression_error) = copy_constant_expr(c, g, tree, module_index, expression_index)
+    if expression_error != ok { ret expression_error }
+    c.constants[c.constant_count] = Constant { name: name, module_index: module_index, ty: declared_type, expression: copied_expression, value: normalized_integer(0usize, false), state: 0u8 }
+    c.constant_count += 1usize
+    ret ok
+}
+
+fn add_integer_values(left: IntegerValue, right: IntegerValue) -> (IntegerValue, err) {
+    if left.negative == right.negative {
+        let max_value = 18446744073709551615usize
+        if left.magnitude > max_value - right.magnitude { ret (normalized_integer(0usize, false), ConstantOverflow) }
+        ret (normalized_integer(left.magnitude + right.magnitude, left.negative), ok)
+    }
+    if left.magnitude >= right.magnitude { ret (normalized_integer(left.magnitude - right.magnitude, left.negative), ok) }
+    ret (normalized_integer(right.magnitude - left.magnitude, right.negative), ok)
+}
+
+fn subtract_integer_values(left: IntegerValue, right: IntegerValue) -> (IntegerValue, err) {
+    let negated = normalized_integer(right.magnitude, !right.negative)
+    let (result, result_error) = add_integer_values(left, negated)
+    ret (result, result_error)
+}
+
+fn multiply_integer_values(left: IntegerValue, right: IntegerValue) -> (IntegerValue, err) {
+    let max_value = 18446744073709551615usize
+    if right.magnitude != 0usize && left.magnitude > max_value / right.magnitude { ret (normalized_integer(0usize, false), ConstantOverflow) }
+    ret (normalized_integer(left.magnitude * right.magnitude, left.negative != right.negative), ok)
+}
+
+fn divide_integer_values(left: IntegerValue, right: IntegerValue) -> (IntegerValue, err) {
+    if right.magnitude == 0usize { ret (normalized_integer(0usize, false), InvalidConstant) }
+    ret (normalized_integer(left.magnitude / right.magnitude, left.negative != right.negative), ok)
+}
+
+fn remainder_integer_values(left: IntegerValue, right: IntegerValue) -> (IntegerValue, err) {
+    if right.magnitude == 0usize { ret (normalized_integer(0usize, false), InvalidConstant) }
+    ret (normalized_integer(left.magnitude % right.magnitude, left.negative), ok)
+}
+
+fn constant_result_type(c: *Checker, left: Type, right: Type) -> (Type, err) {
+    if !is_integer(left) || !is_integer(right) { ret (invalid_type(), InvalidConstant) }
+    if is_untyped(left) {
+        if is_untyped(right) { ret (left, ok) }
+        ret (right, ok)
+    }
+    if is_untyped(right) { ret (left, ok) }
+    if !type_equal(c, left, right) { ret (invalid_type(), TypeMismatch) }
+    ret (left, ok)
+}
+
+fn integer_representable(value: IntegerValue, ty: Type) -> bool {
+    if ty.kind != .Integer { ret false }
+    if same(ty.name, "u8") { ret !value.negative && value.magnitude <= 255usize }
+    if same(ty.name, "u16") { ret !value.negative && value.magnitude <= 65535usize }
+    if same(ty.name, "u32") { ret !value.negative && value.magnitude <= 4294967295usize }
+    if same(ty.name, "u64") || same(ty.name, "usize") { ret !value.negative }
+    if same(ty.name, "i8") {
+        if value.negative { ret value.magnitude <= 128usize }
+        ret value.magnitude <= 127usize
+    }
+    if same(ty.name, "i16") {
+        if value.negative { ret value.magnitude <= 32768usize }
+        ret value.magnitude <= 32767usize
+    }
+    if same(ty.name, "i32") {
+        if value.negative { ret value.magnitude <= 2147483648usize }
+        ret value.magnitude <= 2147483647usize
+    }
+    if same(ty.name, "i64") || same(ty.name, "isize") {
+        if value.negative { ret value.magnitude <= 9223372036854775808usize }
+        ret value.magnitude <= 9223372036854775807usize
+    }
+    ret false
+}
+
+fn unsigned_integer_type(ty: Type) -> bool {
+    if ty.kind != .Integer { ret false }
+    ret same(ty.name, "u8") || same(ty.name, "u16") || same(ty.name, "u32") || same(ty.name, "u64") || same(ty.name, "usize")
+}
+
+fn evaluate_constant_expr(c: *Checker, expression_index: usize) -> (IntegerValue, Type, err) {
+    if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+    let expression = c.constant_exprs[expression_index]
+    if expression.kind == .Literal { ret (expression.value, expression.ty, ok) }
+    if expression.kind == .Name {
+        let (constant_index, found) = find_constant(c, expression.module_index, expression.name)
+        if !found { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let dependency_error = evaluate_constant(c, constant_index)
+        if dependency_error != ok { ret (normalized_integer(0usize, false), invalid_type(), dependency_error) }
+        ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
+    }
+    if expression.kind == .Unary {
+        let (operand, operand_type, operand_error) = evaluate_constant_expr(c, expression.left)
+        if operand_error != ok { ret (normalized_integer(0usize, false), invalid_type(), operand_error) }
+        if expression.op != .PunctMinus { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
+        if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+        ret (normalized_integer(operand.magnitude, !operand.negative), operand_type, ok)
+    }
+    if expression.kind == .Binary {
+        if !expression.has_right { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        if expression.op != .PunctPlus && expression.op != .PunctMinus && expression.op != .PunctStar && expression.op != .PunctSlash && expression.op != .PunctPercent {
+            ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
+        }
+        let (left, left_type, left_error) = evaluate_constant_expr(c, expression.left)
+        if left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), left_error) }
+        let (right, right_type, right_error) = evaluate_constant_expr(c, expression.right)
+        if right_error != ok { ret (normalized_integer(0usize, false), invalid_type(), right_error) }
+        let (result_type, type_error) = constant_result_type(c, left_type, right_type)
+        if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
+        if result_type.kind == .Integer {
+            if !integer_representable(left, result_type) || !integer_representable(right, result_type) {
+                ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow)
+            }
+        }
+        var result = normalized_integer(0usize, false)
+        var result_error = ok
+        if expression.op == .PunctPlus { (result, result_error) = add_integer_values(left, right) }
+        if expression.op == .PunctMinus { (result, result_error) = subtract_integer_values(left, right) }
+        if expression.op == .PunctStar { (result, result_error) = multiply_integer_values(left, right) }
+        if expression.op == .PunctSlash { (result, result_error) = divide_integer_values(left, right) }
+        if expression.op == .PunctPercent { (result, result_error) = remainder_integer_values(left, right) }
+        if result_error != ok { ret (normalized_integer(0usize, false), invalid_type(), result_error) }
+        ret (result, result_type, ok)
+    }
+    ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant)
+}
+
+fn evaluate_constant(c: *Checker, constant_index: usize) -> err {
+    if constant_index >= c.constant_count { ret InvalidConstant }
+    if c.constants[constant_index].state == 2u8 { ret ok }
+    if c.constants[constant_index].state == 1u8 { ret ConstantCycle }
+    c.constants[constant_index].state = 1u8
+    let (value, actual_type, value_error) = evaluate_constant_expr(c, c.constants[constant_index].expression)
+    if value_error != ok { ret value_error }
+    var final_type = c.constants[constant_index].ty
+    if final_type.kind == .Invalid {
+        if actual_type.kind == .UntypedInteger { ret MissingContext }
+        if actual_type.kind != .Integer { ret InvalidConstant }
+        final_type = actual_type
+    } else {
+        if final_type.kind != .Integer { ret Unsupported }
+        if actual_type.kind != .UntypedInteger && !type_equal(c, actual_type, final_type) { ret TypeMismatch }
+    }
+    if !integer_representable(value, final_type) { ret ConstantOverflow }
+    c.constants[constant_index].ty = final_type
+    c.constants[constant_index].value = value
+    c.constants[constant_index].state = 2u8
+    ret ok
+}
+
+fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    c.constant_count = 0usize
+    c.constant_expr_count = 0usize
+    c.constants_ready = false
+    var module_index = 0usize
+    while module_index < g.count {
+        var tree: parse.Tree = zero
+        try parse.init_tree(&tree, g.nodes, g.children)
+        try parse.parse(&tree, g.modules[module_index].text)
+        try tokenize(c, g.modules[module_index].text)
+        var node_index = 1usize
+        while node_index < tree.count {
+            let node = tree.nodes[node_index]
+            if node.top_level && node.kind == .ConstDecl { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
+            node_index += 1usize
+        }
+        module_index += 1usize
+    }
+    var constant_index = 0usize
+    while constant_index < c.constant_count {
+        try evaluate_constant(c, constant_index)
+        constant_index += 1usize
+    }
+    c.constants_ready = true
+    ret ok
 }
 
 fn find_local(c: *Checker, name: str) -> (usize, bool) {
@@ -848,9 +1238,22 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         if token.kind == .KwUnreachable { ret (make_type(.Void, "void", module_index), ok) }
         let name = text[token.start..token.end]
         let (local_index, found) = find_local(c, name)
-        if !found { ret (invalid_type(), Unsupported) }
-        let (local_type, context_error) = apply_context(c, c.locals[local_index].ty, expected)
-        ret (local_type, context_error)
+        if found {
+            let (local_type, context_error) = apply_context(c, c.locals[local_index].ty, expected)
+            ret (local_type, context_error)
+        }
+        let (constant_index, constant_found) = find_constant(c, module_index, name)
+        if !constant_found || c.constants[constant_index].state != 2u8 { ret (invalid_type(), Unsupported) }
+        let (constant_type, context_error) = apply_context(c, c.constants[constant_index].ty, expected)
+        ret (constant_type, context_error)
+    }
+    if node.kind == .FieldExpr {
+        let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
+        if !found_member { ret (invalid_type(), Unsupported) }
+        let (constant_index, constant_found) = find_constant(c, target_module, member)
+        if !constant_found || c.constants[constant_index].state != 2u8 { ret (invalid_type(), Unsupported) }
+        let (constant_type, context_error) = apply_context(c, c.constants[constant_index].ty, expected)
+        ret (constant_type, context_error)
     }
     if node.kind == .GroupExpr {
         let (child_index, found) = first_node_child(tree, node)
@@ -1283,6 +1686,7 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 
 fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     try collect_aliases(c, r, g)
+    try collect_constants(c, r, g)
     try collect_signatures(c, r, g)
     ret check_bodies(c, r, g)
 }

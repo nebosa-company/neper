@@ -180,8 +180,9 @@ builtin types. It rejects unknown names and types, use before binding and refere
 after scope exit; generic type and value parameters, forward module declarations,
 switch captures and implicit deferred-statement scopes are covered on both hosts.
 `src/check.e` adds the first self-hosted type-checking checkpoints over caller-owned
-function, parameter, token, local and recursive type storage. They check scalar
-literal context, bindings, lexical inference, exact-type arithmetic and comparisons,
+function, parameter, token, local, recursive type, alias and constant-expression
+storage. They check scalar literal context, bindings, lexical inference, exact-type
+arithmetic and comparisons,
 conditions, return statements and guaranteed returns through `if`, forward local and
 source-module-qualified direct calls, argument arity and types, numeric casts,
 mutability and explicit `void`.
@@ -191,11 +192,17 @@ to `[]const u8`; mutable pointers and slices weaken to their `const` forms only;
 Fixed lengths accept every integer-literal base and checked `usize` literal arithmetic.
 Non-generic type aliases canonicalize recursively across modules and composites while
 nominal aggregates retain their identity; direct and pointer-mediated alias cycles are
-rejected. Named constant lengths, generic types and calls, compiler-owned intrinsics,
-indexing and aggregate literals remain outside this checkpoint. Unsupported expression and
-statement forms fail explicitly instead of being silently accepted; cross-platform
-fixtures freeze both the implemented behavior and those temporary boundaries. The
-bootstrap emitter also selects unsigned x64
+rejected. Integer constants now resolve through an order-independent, cross-module
+dependency graph, infer a type only from a suffix, diagnose cycles, invalid runtime
+references, division by zero and range or arithmetic overflow, and can be referenced
+from bodies and from function or local array types. This checkpoint folds unary minus
+and `+`, `-`, `*`, `/`, `%` over values whose magnitude fits the bootstrap word.
+Constant-backed lengths inside alias right-hand sides, wider intermediate arithmetic,
+bitwise, shift and wrapping constant operators, generic types and calls, compiler-owned
+intrinsics, indexing and aggregate literals remain outside this checkpoint. Unsupported
+expression and statement forms fail explicitly instead of being silently accepted;
+cross-platform fixtures freeze both the implemented behavior and those temporary
+boundaries. The bootstrap emitter also selects unsigned x64
 division, remainder and relational instructions from operand types, including values
 above `isize`'s maximum.
 

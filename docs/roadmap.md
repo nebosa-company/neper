@@ -360,12 +360,18 @@ including the full `usize` range. Qualified calls into loaded source modules now
 the target function's collected signature for arity, argument and return checking.
 Non-generic aliases now canonicalize recursively through imported names, pointers,
 slices and arrays while nominal aggregates retain identity; every alias cycle is
-rejected even when it passes through pointer indirection. Named constant lengths,
-generic types and calls, compiler-owned intrinsics, indexing and aggregate literals
-remain outside the `check-file` checkpoint. Unsupported expression and statement forms fail
-explicitly rather than being accepted unchecked. The next type-checking increments
-replace those boundaries with constants, intrinsic signatures, remaining control flow
-and full generic checking.
+rejected even when it passes through pointer indirection. Integer constants now use
+an order-independent dependency graph across loaded modules. Suffixed initialisers may
+infer the constant type; forward and qualified references, cycles, invalid runtime-state
+references, division by zero, type mismatches and checked range or bootstrap-word
+arithmetic overflow are covered. Evaluated constants type-check in function bodies and
+drive function and local array lengths. Unary minus and `+`, `-`, `*`, `/`, `%` are the
+current folding subset. Constant-backed lengths in alias right-hand sides, wider
+intermediate arithmetic, bitwise, shift and wrapping constant operators, generic types
+and calls, compiler-owned intrinsics, indexing and aggregate literals remain outside the
+`check-file` checkpoint. Unsupported expression and statement forms fail explicitly
+rather than being accepted unchecked. The next type-checking increments replace those
+boundaries with intrinsic signatures, remaining control flow and full generic checking.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

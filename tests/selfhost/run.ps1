@@ -173,6 +173,8 @@ $qualifiedChecked = & $compiler check-file (Join-Path $checkRoot 'qualified_vali
 if ($LASTEXITCODE -ne 0 -or $qualifiedChecked -ne 'module check ok') { throw 'qualified calls did not type-check' }
 $aliasChecked = & $compiler check-file (Join-Path $checkRoot 'alias_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $aliasChecked -ne 'module check ok') { throw 'type aliases did not canonicalize' }
+$constantChecked = & $compiler check-file (Join-Path $checkRoot 'constant_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $constantChecked -ne 'module check ok') { throw 'integer constants did not evaluate' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -213,6 +215,19 @@ $checkFailures = @(
     @('alias_void_array', 'InvalidType'),
     @('generic_type_bare', 'Unsupported'),
     @('compound_unsupported', 'Unsupported'),
+    @('constant_cycle', 'ConstantCycle'),
+    @('constant_type_mismatch', 'TypeMismatch'),
+    @('constant_missing_context', 'MissingContext'),
+    @('constant_overflow', 'ConstantOverflow'),
+    @('constant_arithmetic_overflow', 'ConstantOverflow'),
+    @('constant_signed_overflow', 'ConstantOverflow'),
+    @('constant_operand_overflow', 'ConstantOverflow'),
+    @('constant_unsigned_negative', 'ConstantOverflow'),
+    @('constant_unsigned_operator', 'InvalidOperator'),
+    @('constant_invalid_reference', 'InvalidConstant'),
+    @('constant_division_zero', 'InvalidConstant'),
+    @('array_length_constant_type', 'TypeMismatch'),
+    @('constant_alias_array_unsupported', 'Unsupported'),
     @('unsupported', 'Unsupported')
 )
 foreach ($case in $checkFailures) {

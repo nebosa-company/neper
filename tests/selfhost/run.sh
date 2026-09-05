@@ -254,6 +254,8 @@ qualified_checked=$($test_build/neper-self check-file "$check_root/qualified_val
 [ "$qualified_checked" = 'module check ok' ]
 alias_checked=$($test_build/neper-self check-file "$check_root/alias_valid/src/main.e" "$repo" x64 linux)
 [ "$alias_checked" = 'module check ok' ]
+constant_checked=$($test_build/neper-self check-file "$check_root/constant_valid/src/main.e" "$repo" x64 linux)
+[ "$constant_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -305,6 +307,19 @@ expect_check_error alias_void_slice InvalidType
 expect_check_error alias_void_array InvalidType
 expect_check_error generic_type_bare Unsupported
 expect_check_error compound_unsupported Unsupported
+expect_check_error constant_cycle ConstantCycle
+expect_check_error constant_type_mismatch TypeMismatch
+expect_check_error constant_missing_context MissingContext
+expect_check_error constant_overflow ConstantOverflow
+expect_check_error constant_arithmetic_overflow ConstantOverflow
+expect_check_error constant_signed_overflow ConstantOverflow
+expect_check_error constant_operand_overflow ConstantOverflow
+expect_check_error constant_unsigned_negative ConstantOverflow
+expect_check_error constant_unsigned_operator InvalidOperator
+expect_check_error constant_invalid_reference InvalidConstant
+expect_check_error constant_division_zero InvalidConstant
+expect_check_error array_length_constant_type TypeMismatch
+expect_check_error constant_alias_array_unsupported Unsupported
 expect_check_error unsupported Unsupported
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
