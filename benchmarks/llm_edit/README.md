@@ -79,3 +79,14 @@ This creates an `e+card` arm while keeping Rust unchanged.
 
 Pass both `--neper-card --rust-card` for a symmetric language-plus-structured-index
 comparison. The Rust card is [`docs/llm-rust-card.md`](../../docs/llm-rust-card.md).
+
+Use `--languages e,rs,js,ts` with all four card flags to compare Neper, Rust,
+JavaScript, and TypeScript under the same randomized hidden corpus and read limit.
+The JavaScript and TypeScript cards are
+[`docs/llm-javascript-card.md`](../../docs/llm-javascript-card.md) and
+[`docs/llm-typescript-card.md`](../../docs/llm-typescript-card.md).
+
+For semantic tasks intended to test Neper's design claims rather than a symmetric
+index control, see [the semantic-advantage matrix](neper_advantage_matrix.md). It
+requires the real `neper index`, parser, and formatter executables; this repository
+currently documents those contracts but does not include their implementation.

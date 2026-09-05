@@ -81,6 +81,35 @@ class BenchmarkScoringTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
 
+    def test_hard_context_supports_javascript_and_typescript(self):
+        path = Path(__file__).parents[1] / "benchmarks" / "llm_edit" / "hard_context.py"
+        spec = importlib.util.spec_from_file_location("hard_context_web_benchmark", path)
+        hard = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = hard
+        spec.loader.exec_module(hard)
+        for language, signature, body in (
+            ("js", "export function adjust_sensor_", "return reading * gain + offset;"),
+            ("ts", "export function adjust_sensor_", "return reading * gain + offset;"),
+        ):
+            corpus = hard.build_corpus(language, seed=7, read_limit=500)
+            api_path = f"src/calibration.{language}"
+            old = corpus.files[api_path]
+            if language == "js":
+                new = old.replace("(reading, offset)", "(reading, gain, offset)").replace(
+                    "return reading + offset;", body)
+            else:
+                new = old.replace("(reading: number, offset: number): number",
+                                  "(reading: number, gain: number, offset: number): number").replace(
+                    "return reading + offset;", body)
+            corpus.files[api_path] = new
+            for module in corpus.callers:
+                caller_path = f"src/module_{module:04d}.{language}"
+                corpus.files[caller_path] = corpus.files[caller_path].replace(
+                    f"{corpus.api}(41.7, 0.25);", f"{corpus.api}(41.7, 1.0, 0.25);")
+            passed, detail = hard.evaluate(corpus)
+            self.assertTrue(passed, f"{language}: {detail}")
+            self.assertIn(signature, corpus.files[api_path])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -32,6 +32,15 @@ LINES_PER_FILE = 2_000
 ROOT = Path(__file__).resolve().parents[2]
 NEPER_CARD = (ROOT / "docs" / "llm-neper-card.md").read_text(encoding="utf-8")
 RUST_CARD = (ROOT / "docs" / "llm-rust-card.md").read_text(encoding="utf-8")
+JAVASCRIPT_CARD = (ROOT / "docs" / "llm-javascript-card.md").read_text(encoding="utf-8")
+TYPESCRIPT_CARD = (ROOT / "docs" / "llm-typescript-card.md").read_text(encoding="utf-8")
+LANGUAGES = ("e", "rs", "js", "ts")
+CARD_BY_LANGUAGE = {
+    "e": NEPER_CARD,
+    "rs": RUST_CARD,
+    "js": JAVASCRIPT_CARD,
+    "ts": TYPESCRIPT_CARD,
+}
 
 
 def token_count(transcript: str) -> int | None:
@@ -69,12 +78,26 @@ def build_corpus(language: str, seed: int, read_limit: int) -> Corpus:
             "    ret reading + offset",
             "}",
         ]
-    else:
+    elif language == "rs":
         api_lines = [
             f"pub fn {api}(reading: f32, offset: f32) -> f32 {{",
             "    reading + offset",
             "}",
         ]
+    elif language == "js":
+        api_lines = [
+            f"export function {api}(reading, offset) {{",
+            "    return reading + offset;",
+            "}",
+        ]
+    elif language == "ts":
+        api_lines = [
+            f"export function {api}(reading: number, offset: number): number {{",
+            "    return reading + offset;",
+            "}",
+        ]
+    else:
+        raise ValueError(f"unsupported language: {language}")
     files[f"src/calibration.{language}"] = make_file(language, api_lines)
     for module in range(MODULES - 1):
         if module in callers:
@@ -85,15 +108,26 @@ def build_corpus(language: str, seed: int, read_limit: int) -> Corpus:
                     f"    let adjusted = calibration.{api}(41.7, 0.25)",
                     "}",
                 ]
-            else:
+            elif language == "rs":
                 top = [
                     f"use crate::calibration::{api};",
                     f"fn generated_module_{module:04d}() {{",
                     f"    let adjusted = {api}(41.7, 0.25);",
                     "}",
                 ]
+            else:
+                extension = "js" if language == "js" else "ts"
+                top = [
+                    f'import {{ {api} }} from "./calibration.{extension}";',
+                    f"function generated_module_{module:04d}() {{",
+                    f"    const adjusted = {api}(41.7, 0.25);",
+                    "}",
+                ]
         else:
-            top = [f"fn generated_module_{module:04d}() {{", "}"]
+            if language in {"e", "rs"}:
+                top = [f"fn generated_module_{module:04d}() {{", "}"]
+            else:
+                top = [f"function generated_module_{module:04d}() {{", "}"]
         files[f"src/module_{module:04d}.{language}"] = make_file(language, top)
     assert len(files) == MODULES
     assert sum(content.count("\n") for content in files.values()) == MODULES * LINES_PER_FILE
@@ -205,7 +239,7 @@ The one-million-line source corpus is not present on disk. Use only:
 
 ```powershell
 .\\corpus.ps1 search SYMBOL
-.\\corpus.ps1 read src/file.e 1 20
+.\\corpus.ps1 read src/file.ext 1 20
 .\\corpus.ps1 usage
 ```
 
@@ -213,7 +247,7 @@ Search returns paths and line numbers without source text. Reads are permanently
 limited by the server. To submit your edit, create `edits.json` with this schema:
 
 ```json
-{"replacements": [{"path": "src/file.e", "old": "exact old text", "new": "exact new text"}]}
+{"replacements": [{"path": "src/file.ext", "old": "exact old text", "new": "exact new text"}]}
 ```
 
 Use exact text from `read`; include every required replacement. Do not invent files.
@@ -251,10 +285,20 @@ def evaluate(corpus: Corpus) -> tuple[bool, str]:
         signature = f"fn {corpus.api}(reading: f32, gain: f32, offset: f32) -> f32"
         body = "ret reading * gain + offset"
         calls = [f"calibration.{corpus.api}(41.7, 1.0, 0.25)" for _ in corpus.callers]
-    else:
+    elif corpus.language == "rs":
         signature = f"fn {corpus.api}(reading: f32, gain: f32, offset: f32) -> f32"
         body = "reading * gain + offset"
         calls = [f"{corpus.api}(41.7, 1.0, 0.25);" for _ in corpus.callers]
+    elif corpus.language == "js":
+        signature = f"export function {corpus.api}(reading, gain, offset)"
+        body = "return reading * gain + offset;"
+        calls = [f"{corpus.api}(41.7, 1.0, 0.25);" for _ in corpus.callers]
+    elif corpus.language == "ts":
+        signature = f"export function {corpus.api}(reading: number, gain: number, offset: number): number"
+        body = "return reading * gain + offset;"
+        calls = [f"{corpus.api}(41.7, 1.0, 0.25);" for _ in corpus.callers]
+    else:
+        raise ValueError(f"unsupported language: {corpus.language}")
     callers_ok = all(call in corpus.files[f"src/module_{module:04d}.{corpus.language}"]
                      for module, call in zip(corpus.callers, calls))
     old_calls = sum(f"{corpus.api}(41.7, 0.25)" in content for content in corpus.files.values())
@@ -263,7 +307,7 @@ def evaluate(corpus: Corpus) -> tuple[bool, str]:
 
 
 def run_case(command_template: str, language: str, seed: int, read_limit: int,
-             use_neper_card: bool, use_rust_card: bool) -> dict:
+             card_languages: set[str]) -> dict:
     corpus = build_corpus(language, seed, read_limit)
     server = server_for(corpus)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -272,14 +316,13 @@ def run_case(command_template: str, language: str, seed: int, read_limit: int,
         with tempfile.TemporaryDirectory(prefix=f"neper-hard-context-{language}-") as raw:
             workspace = Path(raw)
             write_client(workspace, server)
+            gain_declaration = {"e": "gain: f32", "rs": "gain: f32", "js": "gain", "ts": "gain: number"}[language]
             prompt = (
-                f"Migrate `{corpus.api}` across the hidden 1M-LOC {language} corpus. Add `gain: f32` "
-                "between `reading` and `offset`; make the implementation `reading * gain + offset`; "
+                f"Migrate `{corpus.api}` across the hidden 1M-LOC {language} corpus. Add `{gain_declaration}` "
+                "between `reading` and `offset`; make the implementation return `reading * gain + offset`; "
                 "update every call with `1.0`. Follow INSTRUCTIONS.md exactly and submit edits.json.")
-            if language == "e" and use_neper_card:
-                prompt += "\n\n" + NEPER_CARD + "\nUse `.\\corpus.ps1 index <symbol>` before source reads."
-            if language == "rs" and use_rust_card:
-                prompt += "\n\n" + RUST_CARD + "\nUse `.\\corpus.ps1 index <symbol>` before source reads."
+            if language in card_languages:
+                prompt += "\n\n" + CARD_BY_LANGUAGE[language] + "\nUse `.\\corpus.ps1 index <symbol>` before source reads."
             prompt_file = workspace / "prompt.txt"
             prompt_file.write_text(prompt, encoding="utf-8")
             command = command_template.format(workspace=str(workspace), prompt=prompt, prompt_file=str(prompt_file))
@@ -292,7 +335,7 @@ def run_case(command_template: str, language: str, seed: int, read_limit: int,
             if proc.returncode:
                 passed, evaluation = False, f"agent exited {proc.returncode}: {proc.stderr[-400:]}"
             transcript = proc.stdout + "\n" + proc.stderr
-            arm = "e+card" if language == "e" and use_neper_card else "rs+card" if language == "rs" and use_rust_card else language
+            arm = f"{language}+card" if language in card_languages else language
             return {"language": language, "arm": arm,
                     "seed": seed, "passed": passed,
                     "seconds": round(seconds, 3), "tokens": token_count(transcript),
@@ -313,21 +356,41 @@ def main() -> int:
                         help="Give only Neper runs the compact grammar/index editing card.")
     parser.add_argument("--rust-card", action="store_true",
                         help="Give only Rust runs the equivalent syntax/index editing card.")
+    parser.add_argument("--javascript-card", action="store_true",
+                        help="Give JavaScript runs the equivalent syntax/index editing card.")
+    parser.add_argument("--typescript-card", action="store_true",
+                        help="Give TypeScript runs the equivalent syntax/index editing card.")
+    parser.add_argument("--languages", default="e,rs",
+                        help="Comma-separated language extensions to test (default: e,rs).")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--summary-only", action="store_true",
                         help="When used with --json, omit individual trial records.")
     args = parser.parse_args()
     if args.trials < 1 or args.read_limit < 1:
         parser.error("--trials and --read-limit must be positive")
+    languages = tuple(language.strip() for language in args.languages.split(",") if language.strip())
+    if not languages or len(set(languages)) != len(languages) or any(language not in LANGUAGES for language in languages):
+        parser.error(f"--languages must be a non-empty, unique subset of {','.join(LANGUAGES)}")
+    card_languages = {
+        language for language, enabled in {
+            "e": args.neper_card,
+            "rs": args.rust_card,
+            "js": args.javascript_card,
+            "ts": args.typescript_card,
+        }.items() if enabled
+    }
+    unused_cards = card_languages - set(languages)
+    if unused_cards:
+        parser.error(f"card flag provided for language not selected: {','.join(sorted(unused_cards))}")
     results = []
     for _ in range(args.trials):
         seed = secrets.randbits(63)
-        for language in ("e", "rs"):
+        for language in languages:
             results.append(run_case(args.agent_command, language, seed, args.read_limit,
-                                    args.neper_card, args.rust_card))
+                                    card_languages))
     summary = {}
-    for language in ("e", "rs"):
-        arm = "e+card" if language == "e" and args.neper_card else "rs+card" if language == "rs" and args.rust_card else language
+    for language in languages:
+        arm = f"{language}+card" if language in card_languages else language
         rows = [row for row in results if row["arm"] == arm]
         token_rows = [row["tokens"] for row in rows if row["tokens"] is not None]
         summary[arm] = {
@@ -339,27 +402,33 @@ def main() -> int:
             "mean_read_lines": round(sum(row["retrieval"]["read_lines"] for row in rows) / len(rows), 1),
             "mean_search_requests": round(sum(row["retrieval"]["search_requests"] for row in rows) / len(rows), 1),
         }
-    paired_rows = []
-    for seed in {row["seed"] for row in results}:
-        pair = {row["language"]: row for row in results if row["seed"] == seed}
-        if set(pair) != {"e", "rs"}:
-            continue
-        e, rust = pair["e"], pair["rs"]
-        if e["tokens"] is not None and rust["tokens"] is not None:
-            paired_rows.append({"token_delta_e_minus_rs": e["tokens"] - rust["tokens"],
-                                "seconds_delta_e_minus_rs": round(e["seconds"] - rust["seconds"], 3)})
-    paired = None
-    if paired_rows:
-        token_deltas = [row["token_delta_e_minus_rs"] for row in paired_rows]
-        second_deltas = [row["seconds_delta_e_minus_rs"] for row in paired_rows]
-        paired = {"pairs": len(paired_rows),
-                  "e_used_fewer_tokens": sum(delta < 0 for delta in token_deltas),
-                  "mean_token_delta_e_minus_rs": round(statistics.mean(token_deltas), 1),
-                  "median_token_delta_e_minus_rs": round(statistics.median(token_deltas), 1),
-                  "mean_seconds_delta_e_minus_rs": round(statistics.mean(second_deltas), 3),
-                  "median_seconds_delta_e_minus_rs": round(statistics.median(second_deltas), 3)}
+    paired_against_e = {}
+    if "e" in languages:
+        for comparison_language in languages:
+            if comparison_language == "e":
+                continue
+            paired_rows = []
+            for seed in {row["seed"] for row in results}:
+                pair = {row["language"]: row for row in results if row["seed"] == seed}
+                if not {"e", comparison_language}.issubset(pair):
+                    continue
+                e, comparison = pair["e"], pair[comparison_language]
+                if e["tokens"] is not None and comparison["tokens"] is not None:
+                    paired_rows.append({"token_delta_e_minus_comparison": e["tokens"] - comparison["tokens"],
+                                        "seconds_delta_e_minus_comparison": round(e["seconds"] - comparison["seconds"], 3)})
+            if paired_rows:
+                token_deltas = [row["token_delta_e_minus_comparison"] for row in paired_rows]
+                second_deltas = [row["seconds_delta_e_minus_comparison"] for row in paired_rows]
+                paired_against_e[comparison_language] = {
+                    "pairs": len(paired_rows),
+                    "e_used_fewer_tokens": sum(delta < 0 for delta in token_deltas),
+                    "mean_token_delta_e_minus_comparison": round(statistics.mean(token_deltas), 1),
+                    "median_token_delta_e_minus_comparison": round(statistics.median(token_deltas), 1),
+                    "mean_seconds_delta_e_minus_comparison": round(statistics.mean(second_deltas), 3),
+                    "median_seconds_delta_e_minus_comparison": round(statistics.median(second_deltas), 3),
+                }
     report = {"loc_per_language": MODULES * LINES_PER_FILE, "read_limit": args.read_limit,
-              "summary": summary, "paired": paired, "results": results}
+              "summary": summary, "paired_against_e": paired_against_e, "results": results}
     if args.summary_only:
         report.pop("results")
     print(json.dumps(report, indent=2) if args.json else report)
