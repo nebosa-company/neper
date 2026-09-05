@@ -101,6 +101,8 @@ and storage-only `undef` values. Function types reject declaration-only named va
 Soft newlines are now consumed only while a grammar-approved `(`, `[`, literal body,
 or type body remains open. They stay in the lossless token stream, block newlines
 remain statement boundaries, and recovery restores delimiter state after an error.
+Unterminated continuations stop at declaration, switch-arm, containing-block and EOF
+barriers without consuming recoverable syntax or double-counting rolled-back errors.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

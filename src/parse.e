@@ -32,10 +32,12 @@ type Parser = struct {
     error_start: usize,
     error_node_checkpoint: usize,
     error_child_checkpoint: usize,
+    error_errors_checkpoint: usize,
     error_top_checkpoint: usize,
     error_declarations_checkpoint: usize,
     error_soft_checkpoint: usize,
     soft_depth: usize,
+    soft_top_barrier: bool,
     last_node: usize,
     top_nodes: [256]usize,
     top_count: usize,
@@ -134,8 +136,25 @@ fn require(p: *Parser, expected: lex.Kind) -> err {
     ret ok
 }
 
+fn is_top_barrier(kind: lex.Kind) -> bool {
+    ret kind == .KwUse || kind == .KwType || kind == .KwConst || kind == .KwVar || kind == .KwFn || kind == .KwError || kind == .KwExtern || kind == .PunctAt
+}
+
+fn soft_barrier_follows(p: *Parser) -> bool {
+    var look = p.scanner
+    var following = lex.next(&look)
+    while following.kind == .Newline { following = lex.next(&look) }
+    if following.kind == .Eof || following.kind == .KwCase || following.kind == .KwDefault { ret true }
+    if following.column == 1usize && is_top_barrier(following.kind) {
+        p.soft_top_barrier = true
+        ret true
+    }
+    ret false
+}
+
 fn skip_separators(p: *Parser) -> err {
     while p.current.kind == .Newline {
+        if p.soft_depth != 0usize && soft_barrier_follows(p) { ret InvalidSyntax }
         let scan_error = advance(p)
         if scan_error != ok { ret ok }
     }
@@ -1294,6 +1313,7 @@ fn parse_switch_arm_node(p: *Parser) -> err {
             p.tree.count = node_checkpoint
             p.tree.child_count = child_checkpoint
             p.soft_depth = soft_checkpoint
+            if p.soft_top_barrier { ret InvalidSyntax }
             p.tree.errors += 1usize
             var error_end = p.token_index
             if p.current.kind == .Invalid || error_end == statement_start { error_end += 1usize }
@@ -1438,6 +1458,7 @@ fn parse_block_node(p: *Parser) -> err {
             p.tree.count = node_checkpoint
             p.tree.child_count = child_checkpoint
             p.soft_depth = soft_checkpoint
+            if p.soft_top_barrier { ret InvalidSyntax }
             p.tree.errors += 1usize
             var error_end = p.token_index
             if p.current.kind == .Invalid || error_end == statement_start { error_end += 1usize }
@@ -1772,6 +1793,7 @@ fn parse_one(p: *Parser) -> err {
     p.error_start = p.token_index
     p.error_node_checkpoint = p.tree.count
     p.error_child_checkpoint = p.tree.child_count
+    p.error_errors_checkpoint = p.tree.errors
     p.error_top_checkpoint = p.top_count
     p.error_declarations_checkpoint = p.declarations
     p.error_soft_checkpoint = p.soft_depth
@@ -1824,9 +1846,11 @@ fn recover_top(p: *Parser) -> err {
 fn parse_file(p: *Parser) -> err {
     try skip_separators(p)
     while p.current.kind != .Eof {
+        p.soft_top_barrier = false
         p.error_start = p.token_index
         p.error_node_checkpoint = p.tree.count
         p.error_child_checkpoint = p.tree.child_count
+        p.error_errors_checkpoint = p.tree.errors
         p.error_top_checkpoint = p.top_count
         p.error_declarations_checkpoint = p.declarations
         p.error_soft_checkpoint = p.soft_depth
@@ -1834,9 +1858,11 @@ fn parse_file(p: *Parser) -> err {
         if item_error != ok {
             p.tree.count = p.error_node_checkpoint
             p.tree.child_count = p.error_child_checkpoint
+            p.tree.errors = p.error_errors_checkpoint
             p.top_count = p.error_top_checkpoint
             p.declarations = p.error_declarations_checkpoint
             p.soft_depth = p.error_soft_checkpoint
+            p.soft_top_barrier = false
             p.tree.errors += 1usize
             let node_error = add_top_node(p, .ErrorNode, p.error_start, p.token_index + 1usize)
             if node_error != ok { ret node_error }
