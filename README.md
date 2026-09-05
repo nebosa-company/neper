@@ -103,7 +103,9 @@ enum discriminants retain expressions, and tagged types retain their backing typ
 `if`/`else if`/`else`, `while` and `when` now retain condition expressions and
 recursively parsed branch/body blocks. Canonical-casing lookahead distinguishes
 PascalCase aggregate literals from lowercase and SCREAMING_SNAKE values before a
-block; all-uppercase aggregate items remain `NameExpr`s. `for` now
+block. Array literal items, including one-letter comptime values such as `N`, remain
+`NameExpr`s; bare PascalCase members are recognized only in named aggregates. `for`
+now
 retains iterable or bounded-range expressions and a recursively parsed body while
 preserving one- or two-name iterator bindings as source tokens. `defer` owns its
 structured simple statement or block, `@nocheck` owns a validated directive block,

@@ -391,7 +391,7 @@ fn token_is_pascal(p: *Parser, token: lex.Token) -> bool {
     ret has_lower
 }
 
-fn parse_literal_item_node(p: *Parser) -> err {
+fn parse_literal_item_node(p: *Parser, allow_bare_member: bool) -> err {
     let token_start = p.token_index
     var nested: [1]usize = zero
     if p.current.kind == .Identifier {
@@ -408,7 +408,7 @@ fn parse_literal_item_node(p: *Parser) -> err {
             try add_parent_node(p, .LiteralItem, token_start, p.token_index, nested[..])
             ret ok
         }
-        if identifier_is_pascal(p) {
+        if allow_bare_member && identifier_is_pascal(p) {
             try advance(p)
             try add_node(p, .LiteralItem, token_start, p.token_index)
             ret ok
@@ -423,7 +423,9 @@ fn parse_literal_item_node(p: *Parser) -> err {
 fn parse_aggregate_literal_node(p: *Parser) -> err {
     let token_start = p.token_index
     let node_start = p.tree.count
+    var allow_bare_member = false
     if p.current.kind == .Identifier {
+        allow_bare_member = true
         try parse_named_type_node(p)
     } else {
         var has_type_node = false
@@ -435,7 +437,7 @@ fn parse_aggregate_literal_node(p: *Parser) -> err {
     try skip_separators(p)
     if p.current.kind == .PunctRBrace { ret InvalidSyntax }
     while p.current.kind != .PunctRBrace {
-        try parse_literal_item_node(p)
+        try parse_literal_item_node(p, allow_bare_member)
         try skip_separators(p)
         if p.current.kind == .PunctComma {
             try advance(p)

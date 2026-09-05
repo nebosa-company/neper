@@ -514,9 +514,10 @@ fn self_test() -> err {
     let inferred_aggregate_error = validate_test_parse("fn inferred() {\n    let values = [_]u8{ 1u8, 2u8, }\n}\n")
     if inferred_aggregate_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
-    let constant_item_error = parse.parse(&tree, "fn constants() {\n    let values = [_]usize{ MAX_NODES, }\n}\n")
-    if constant_item_error != ok || tree.count != 10usize { ret lex.InvalidSource }
+    let constant_item_error = parse.parse(&tree, "fn constants() {\n    let values = [_]usize{ MAX_NODES, N, }\n}\n")
+    if constant_item_error != ok || tree.count != 12usize { ret lex.InvalidSource }
     if tree.nodes[4usize].kind != .NameExpr || tree.nodes[5usize].kind != .LiteralItem { ret lex.InvalidSource }
+    if tree.nodes[6usize].kind != .NameExpr || tree.nodes[7usize].kind != .LiteralItem { ret lex.InvalidSource }
     let slice_aggregate_error = validate_test_parse("fn invalid() {\n    let values = []u8{ 1u8, }\n}\n")
     if slice_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])

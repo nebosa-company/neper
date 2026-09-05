@@ -251,8 +251,9 @@ union payloads now recurse through those nodes; enum discriminants retain expres
 nodes; and enums and tagged unions retain their backing type. `if`/`else if`/`else`,
 `while` and `when` now retain condition expressions and recursively parsed blocks;
 canonical-casing lookahead disambiguates PascalCase aggregate literals from lowercase
-and SCREAMING_SNAKE values followed by a block. All-uppercase aggregate items remain
-`NameExpr`s rather than bare union members. `for` now retains iterable or bounded-range
+and SCREAMING_SNAKE values followed by a block. Array literal items, including
+one-letter comptime values such as `N`, remain `NameExpr`s; bare PascalCase members
+are recognized only in named aggregates. `for` now retains iterable or bounded-range
 expressions
 and a recursively parsed body while preserving one- or two-name iterator bindings
 as source tokens. `defer` now owns its structured simple statement or recursive
