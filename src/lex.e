@@ -187,6 +187,36 @@ fn utf8_width(source: str, off: usize) -> usize {
     ret 0usize
 }
 
+fn invalid_utf8_width(source: str, off: usize) -> usize {
+    let first = source[off]
+    if first >= 194u8 && first <= 223u8 {
+        if off + 1usize < source.len && is_continuation(source[off + 1usize]) { ret 2usize }
+        ret 1usize
+    }
+    if first >= 224u8 && first <= 239u8 {
+        if off + 1usize >= source.len { ret 1usize }
+        let second = source[off + 1usize]
+        var second_ok = is_continuation(second)
+        if first == 224u8 { second_ok = second >= 160u8 && second <= 191u8 }
+        if first == 237u8 { second_ok = second >= 128u8 && second <= 159u8 }
+        if !second_ok { ret 1usize }
+        if off + 2usize < source.len && is_continuation(source[off + 2usize]) { ret 3usize }
+        ret 2usize
+    }
+    if first >= 240u8 && first <= 244u8 {
+        if off + 1usize >= source.len { ret 1usize }
+        let second = source[off + 1usize]
+        var second_ok = is_continuation(second)
+        if first == 240u8 { second_ok = second >= 144u8 && second <= 191u8 }
+        if first == 244u8 { second_ok = second >= 128u8 && second <= 143u8 }
+        if !second_ok { ret 1usize }
+        if off + 2usize >= source.len || !is_continuation(source[off + 2usize]) { ret 2usize }
+        if off + 3usize < source.len && is_continuation(source[off + 3usize]) { ret 4usize }
+        ret 3usize
+    }
+    ret 1usize
+}
+
 fn text_is(source: str, start: usize, end: usize, expected: str) -> bool {
     if end - start != expected.len { ret false }
     var i = 0usize
@@ -322,6 +352,12 @@ fn take_scalar(s: *Scanner, width: usize) {
     }
 }
 
+fn take_invalid_utf8(s: *Scanner) {
+    s.off += invalid_utf8_width(s.source, s.off)
+    s.column += 1usize
+    s.column_utf16 += 1usize
+}
+
 fn next(s: *Scanner) -> Token {
     while s.off < s.source.len {
         let c = s.source[s.off]
@@ -348,7 +384,7 @@ fn next(s: *Scanner) -> Token {
                         let invalid_line = s.line
                         let invalid_column = s.column
                         let invalid_column_utf16 = s.column_utf16
-                        take(s, 1usize)
+                        take_invalid_utf8(s)
                         ret token(s, .Invalid, invalid_start, invalid_line, invalid_column, invalid_column_utf16)
                     }
                     take_scalar(s, width)
@@ -378,6 +414,16 @@ fn next(s: *Scanner) -> Token {
         s.column = 1usize
         s.column_utf16 = 1usize
         ret token(s, .Newline, start, line, column, column_utf16)
+    }
+
+    if c >= 128u8 {
+        let width = utf8_width(s.source, s.off)
+        if width == 0usize {
+            take_invalid_utf8(s)
+        } else {
+            take_scalar(s, width)
+        }
+        ret token(s, .Invalid, start, line, column, column_utf16)
     }
 
     if c == 114u8 && s.off + 1usize < s.source.len && (s.source[s.off + 1usize] == 34u8 || s.source[s.off + 1usize] == 35u8) {
@@ -420,7 +466,7 @@ fn next(s: *Scanner) -> Token {
                     if raw_byte >= 128u8 {
                         let width = utf8_width(s.source, s.off)
                         if width == 0usize {
-                            take(s, 1usize)
+                            take_invalid_utf8(s)
                             ret token(s, .Invalid, start, line, column, column_utf16)
                         }
                         take_scalar(s, width)
@@ -537,7 +583,7 @@ fn next(s: *Scanner) -> Token {
                 if quoted_byte >= 128u8 {
                     let width = utf8_width(s.source, s.off)
                     if width == 0usize {
-                        take(s, 1usize)
+                        take_invalid_utf8(s)
                         ret token(s, .Invalid, start, line, column, column_utf16)
                     }
                     if kind == .Character { character_bytes += width }

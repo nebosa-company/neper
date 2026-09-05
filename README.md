@@ -57,7 +57,9 @@ exponents, and the closed integer/float suffix sets. Quoted source, raw strings 
 comments validate UTF-8 scalars and their context-specific control bytes; character
 literals decode to exactly one byte. Every token now carries half-open original-byte
 endpoints plus normalized one-based start/end lines and both scalar and UTF-16
-columns. The bootstrap now loads
+columns. Invalid UTF-8 consumes Unicode maximal subparts as one recovery unit, and a
+valid non-ASCII scalar in an ASCII-only token position remains one `Invalid` token.
+The bootstrap now loads
 transitive project modules,
 resolves explicit import aliases and qualified declarations, rejects import cycles
 and duplicate qualifiers, and reports diagnostics against the originating file.

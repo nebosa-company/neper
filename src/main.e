@@ -92,6 +92,18 @@ fn self_test() -> err {
     if positioned_name.kind != .Identifier || positioned_name.start != 13usize || positioned_name.end != 14usize { ret lex.InvalidSource }
     if positioned_name.line != 2usize || positioned_name.column != 1usize || positioned_name.end_line != 2usize || positioned_name.end_column != 2usize { ret lex.InvalidSource }
     if positioned_name.column_utf16 != 1usize || positioned_name.end_column_utf16 != 2usize { ret lex.InvalidSource }
+    var invalid_scalar = lex.init("😀x")
+    let invalid_scalar_token = lex.next(&invalid_scalar)
+    if invalid_scalar_token.kind != .Invalid || invalid_scalar_token.start != 0usize || invalid_scalar_token.end != 4usize { ret lex.InvalidSource }
+    if invalid_scalar_token.column != 1usize || invalid_scalar_token.end_column != 2usize || invalid_scalar_token.column_utf16 != 1usize || invalid_scalar_token.end_column_utf16 != 3usize { ret lex.InvalidSource }
+    let after_invalid_scalar = lex.next(&invalid_scalar)
+    if after_invalid_scalar.kind != .Identifier || after_invalid_scalar.start != 4usize || after_invalid_scalar.column != 2usize || after_invalid_scalar.column_utf16 != 3usize { ret lex.InvalidSource }
+    var invalid_sequence = lex.init("\xF0\x9F\x92x")
+    let invalid_sequence_token = lex.next(&invalid_sequence)
+    if invalid_sequence_token.kind != .Invalid || invalid_sequence_token.start != 0usize || invalid_sequence_token.end != 3usize { ret lex.InvalidSource }
+    if invalid_sequence_token.end_column != 2usize || invalid_sequence_token.end_column_utf16 != 2usize { ret lex.InvalidSource }
+    let after_invalid_sequence = lex.next(&invalid_sequence)
+    if after_invalid_sequence.kind != .Identifier || after_invalid_sequence.start != 3usize || after_invalid_sequence.column != 2usize || after_invalid_sequence.column_utf16 != 2usize { ret lex.InvalidSource }
     let valid_utf8 = lex.validate("\"héllo\" // π\nr\"λ\tvalue\"")
     if valid_utf8 != ok { ret lex.InvalidSource }
     let valid_comment_tab = lex.validate("//\tcomment\nerror Good\n")

@@ -76,9 +76,11 @@ line and column values address the normalized source of spec §3. Lines and both
 column forms are one-based. `column` counts Unicode scalar values and `column_utf16`
 counts UTF-16 code units. A zero-width location has equal byte offsets. Generated
 locations use the same representation.
-For recovery after invalid UTF-8, each maximal invalid byte sequence occupies one
-logical scalar and one UTF-16 unit; this convention affects locations only, never
-acceptance or decoded source.
+For recovery after invalid UTF-8, each Unicode maximal subpart occupies one logical
+scalar and one UTF-16 unit. A maximal subpart is the longest prefix, from one through
+three bytes, that could begin a valid sequence before the first missing, disallowed
+or non-continuation byte; an illegal lead or continuation byte therefore occupies
+one unit. This convention affects locations only, never acceptance or decoded source.
 
 Captured bytes use one representation everywhere. Valid UTF-8 is a JSON string;
 otherwise the value is `{ "encoding":"base64", "data":"..." }` using canonical

@@ -194,7 +194,9 @@ integer/float suffix sets. Strings, raw strings and comments validate UTF-8 scal
 and their context-specific control bytes; character literals decode to exactly one
 byte. Tokens carry half-open original-byte endpoints and normalized one-based
 start/end lines with both scalar and UTF-16 columns, including BOM, CRLF, BMP and
-astral-scalar fixtures.
+astral-scalar fixtures. Invalid UTF-8 recovery consumes Unicode maximal subparts as
+one position unit; valid non-ASCII scalars in ASCII-only token positions remain one
+`Invalid` token rather than fragmenting by encoded byte.
 The C99 bootstrap now loads transitive modules from the nearest project's `lib/` and
 `src/`, resolves default and explicit import qualifiers, canonicalizes cross-module
 functions, types, constants and errors, rejects duplicate qualifiers and import
