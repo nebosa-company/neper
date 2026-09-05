@@ -196,6 +196,8 @@ fn scan_item_tail(p: *Parser, end_kind: lex.Kind, item_start: usize) -> err {
 
 fn parse_parameter_node(p: *Parser) -> err {
     let token_start = p.token_index
+    var nested: [1]usize = zero
+    var nested_count = 0usize
     if p.current.kind == .PunctEllipsis {
         try advance(p)
     } else {
@@ -204,48 +206,60 @@ fn parse_parameter_node(p: *Parser) -> err {
         if p.current.kind == .PunctEllipsis {
             try advance(p)
         } else {
-            try scan_item_tail(p, .PunctRParen, p.token_index)
+            var has_type_node = false
+            try parse_type_node(p, &has_type_node)
+            if has_type_node {
+                nested[0usize] = p.last_node
+                nested_count = 1usize
+            }
         }
     }
-    try add_node(p, .Parameter, token_start, p.token_index)
+    try add_parent_node(p, .Parameter, token_start, p.token_index, nested[..nested_count])
     ret ok
 }
 
 fn parse_comptime_node(p: *Parser) -> err {
     let token_start = p.token_index
+    var nested: [1]usize = zero
+    var nested_count = 0usize
     try require(p, .Identifier)
     try require(p, .PunctColon)
-    try scan_item_tail(p, .PunctRBracket, p.token_index)
-    try add_node(p, .ComptimeParam, token_start, p.token_index)
+    if p.current.kind == .KwType {
+        try advance(p)
+    } else {
+        if p.current.kind == .KwFn {
+            var look = p.scanner
+            let following = lex.next(&look)
+            if following.kind != .PunctLParen {
+                try advance(p)
+            } else {
+                var has_type_node = false
+                try parse_type_node(p, &has_type_node)
+                if has_type_node {
+                    nested[0usize] = p.last_node
+                    nested_count = 1usize
+                }
+            }
+        } else {
+            var has_type_node = false
+            try parse_type_node(p, &has_type_node)
+            if has_type_node {
+                nested[0usize] = p.last_node
+                nested_count = 1usize
+            }
+        }
+    }
+    try add_parent_node(p, .ComptimeParam, token_start, p.token_index, nested[..nested_count])
     ret ok
 }
 
 fn scan_return_spec(p: *Parser, is_extern: bool) -> err {
-    let token_start = p.token_index
-    var parens = 0usize
-    var brackets = 0usize
-    while true {
-        let kind = p.current.kind
-        if kind == .Invalid { ret InvalidSyntax }
-        if parens == 0usize && brackets == 0usize {
-            if kind == .PunctLBrace && !is_extern { break }
-            if kind == .Newline || kind == .Eof { break }
-        }
-        if kind == .Eof || kind == .PunctLBrace || kind == .PunctRBrace { ret InvalidSyntax }
-        if kind == .PunctLParen { parens += 1usize }
-        if kind == .PunctRParen {
-            if parens == 0usize { ret InvalidSyntax }
-            parens = parens - 1usize
-        }
-        if kind == .PunctLBracket { brackets += 1usize }
-        if kind == .PunctRBracket {
-            if brackets == 0usize { ret InvalidSyntax }
-            brackets = brackets - 1usize
-        }
-        try advance(p)
+    try parse_type_return_spec_node(p)
+    if is_extern {
+        if p.current.kind != .Newline && p.current.kind != .Eof { ret InvalidSyntax }
+    } else {
+        if p.current.kind != .PunctLBrace { ret InvalidSyntax }
     }
-    if p.token_index == token_start || parens != 0usize || brackets != 0usize { ret InvalidSyntax }
-    try add_node(p, .ReturnSpec, token_start, p.token_index)
     ret ok
 }
 

@@ -77,6 +77,8 @@ aggregate literals now expose ordered `LiteralItem` children, including nested
 literals, named payloads, positional values and bare PascalCase members. Local type
 annotations now recursively expose named, pointer, slice, array and function-type
 nodes, including array-length expressions, parameters and return specifications.
+Function declarations now reuse the same trees for typed comptime parameters,
+ordinary parameters and single- or multiple-type return specifications.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
