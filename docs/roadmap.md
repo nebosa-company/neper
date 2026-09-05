@@ -184,8 +184,16 @@ location for the full function; larger by-value parameters are copied out of the
 ABI-indirect input into those slots. Linux validation rejects malformed DIEs and
 location/range-list sections; Windows validation parses the COFF record streams,
 and DIA verification confirms the linked PDB reconstructs locals and recursive
-types. This callout does not mark the `neper-0` milestone complete: the self-hosted
-compiler has not started.
+types. The first self-hosted compiler checkpoint now lives in `src/main.e`, is built
+by the bootstrap on Windows and Linux, and owns the grammar revision 1 vocabulary of
+94 token kinds. It scans keywords, comments, CR/LF/CRLF, original-byte spans, numeric
+and quoted/raw literal boundaries, invalid bytes and the complete longest-match
+punctuation set; `tests/selfhost/run.*` exercises the library entry points through a
+bootstrap-built executable. The checkpoint remains one source file because the
+bootstrap currently validates `use` paths without compiling project modules. Loading,
+qualifying and diagnosing multiple project modules is therefore the next bootstrap
+prerequisite, after which the lexer moves to its own module. This callout does not
+mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

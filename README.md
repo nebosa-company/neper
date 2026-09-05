@@ -47,8 +47,12 @@ Linux. The first `neper-0` increment adds typed integer range `for`, `break`,
 `continue`, integer local `+=`, and lexical block scopes. Startup constructs the
 root arena and UTF-8 `args`; `try` propagates named errors; bounds and
 invalid-division checks exit through the trap path; and emitted objects carry line,
-symbol, unwind and compact `.nepersym`/`.nepsym` data. The self-hosted compiler has
-not started.
+symbol, unwind and compact `.nepersym`/`.nepsym` data. The first self-hosted source
+now builds and runs under the bootstrap on both hosts. Its lexer declares the frozen
+94-kind grammar vocabulary and scans original-byte spans, normalized newlines,
+comments, keywords, numeric and string forms, and longest-match punctuation. Project
+module compilation is the next bootstrap prerequisite before that source is split
+into compiler modules.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
@@ -100,18 +104,22 @@ On Windows with the Visual Studio C++ tools installed:
 
 ```powershell
 ./scripts/build-bootstrap.ps1
+./scripts/build-selfhost.ps1
 ./build/neper.exe run ./examples/hello.e
 ./tests/m0/run.ps1
 ./tests/neper0/run.ps1
+./tests/selfhost/run.ps1
 ```
 
 On Linux:
 
 ```sh
 ./scripts/build-bootstrap.sh
+./scripts/build-selfhost.sh
 ./build-linux/neper run ./examples/hello.e
 ./tests/m0/run.sh
 ./tests/neper0/run.sh
+./tests/selfhost/run.sh
 ```
 
 - [`docs/spec.md`](docs/spec.md) — the language specification
