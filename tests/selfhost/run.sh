@@ -26,6 +26,25 @@ case "$missing_file" in
     *'error: os.NotFound'*) ;;
     *) printf '%s\n' 'source loader returned the wrong missing-file error' >&2; exit 1 ;;
 esac
+project_root=$($test_build/neper-self project-file "$repo/src/main.e" "$repo" main)
+[ "$project_root" = 'project file ok' ]
+library_module=$($test_build/neper-self project-file "$repo/lib/e/mem.e" "$repo" e.mem)
+[ "$library_module" = 'project file ok' ]
+nested_root="$repo/tests/selfhost/fixtures/modules"
+nested_module=$($test_build/neper-self project-file "$nested_root/src/util/math.e" "$nested_root" util.math)
+[ "$nested_module" = 'project file ok' ]
+outside_root=$($test_build/neper-self project-file "$repo/examples/hello.e" "$repo" hello)
+[ "$outside_root" = 'project file ok' ]
+relative_root=$(cd "$repo" && "$test_build/neper-self" project-file src/main.e . main)
+[ "$relative_root" = 'project file ok' ]
+if invalid_module=$($test_build/neper-self project-file "$repo/src/main.txt" "$repo" main 2>&1); then
+    printf '%s\n' 'non-source module path unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$invalid_module" in
+    *'error: project.InvalidPath'*) ;;
+    *) printf '%s\n' 'non-source module path returned the wrong error' >&2; exit 1 ;;
+esac
 capacity_source=''
 i=0
 while [ "$i" -lt 260 ]; do

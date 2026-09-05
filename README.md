@@ -155,6 +155,9 @@ The self-hosted compiler now loads source paths through `src/source.e` and the f
 `e.os` file surface. Its arena-backed buffer grows as needed, preserves all bytes
 while moving between allocations, closes the file on every result path, and supplies
 `scan-file` and `parse-file` CLI checkpoints without a compiler-side source-size cap.
+`src/project.e` now finds the nearest ancestor containing `lib/` or `src/` and derives
+canonical module names for project-root and explicitly named outside-root files,
+including mixed Windows/POSIX separators and relative paths.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

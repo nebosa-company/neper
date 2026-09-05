@@ -23,6 +23,26 @@ $missingFile = & $compiler scan-file (Join-Path $testBuild 'missing-source.e') 2
 if ($LASTEXITCODE -ne 1 -or ($missingFile -join "`n") -notmatch 'error: os\.NotFound') {
     throw 'source loader missing-file propagation failed'
 }
+$projectRoot = & $compiler project-file (Join-Path $repo 'src\main.e') $repo 'main'
+if ($LASTEXITCODE -ne 0 -or $projectRoot -ne 'project file ok') { throw 'project src module discovery failed' }
+$libraryModule = & $compiler project-file (Join-Path $repo 'lib\e\mem.e') $repo 'e.mem'
+if ($LASTEXITCODE -ne 0 -or $libraryModule -ne 'project file ok') { throw 'project lib module discovery failed' }
+$nestedRoot = Join-Path $PSScriptRoot 'fixtures\modules'
+$nestedModule = & $compiler project-file (Join-Path $nestedRoot 'src\util\math.e') $nestedRoot 'util.math'
+if ($LASTEXITCODE -ne 0 -or $nestedModule -ne 'project file ok') { throw 'nested project module discovery failed' }
+$outsideRoot = & $compiler project-file (Join-Path $repo 'examples\hello.e') $repo 'hello'
+if ($LASTEXITCODE -ne 0 -or $outsideRoot -ne 'project file ok') { throw 'named file module discovery failed' }
+Push-Location $repo
+try {
+    $relativeRoot = & $compiler project-file 'src\main.e' '.' 'main'
+    if ($LASTEXITCODE -ne 0 -or $relativeRoot -ne 'project file ok') { throw 'relative project discovery failed' }
+} finally {
+    Pop-Location
+}
+$invalidModule = & $compiler project-file (Join-Path $repo 'src\main.txt') $repo 'main' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($invalidModule -join "`n") -notmatch 'error: project\.InvalidPath') {
+    throw 'non-source module path rejection failed'
+}
 $capacityDeclarations = 0..259 | ForEach-Object { "error Capacity$_" }
 $capacityItems = 0..129 | ForEach-Object { '0u8' }
 $capacitySource = ($capacityDeclarations -join "`n") + "`nfn capacity() {`n    let values = [_]u8{ " + ($capacityItems -join ', ') + " }`n}`n"

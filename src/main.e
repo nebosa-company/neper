@@ -2,6 +2,7 @@ use e.io
 use e.mem
 use lex
 use parse
+use project
 use source
 use syntax
 
@@ -749,6 +750,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("parse file ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH\n")
+    if args.len == 5usize && same(args[1usize], "project-file") {
+        let (discovered, discovery_error) = project.discover(a, args[2usize])
+        if discovery_error != ok { ret discovery_error }
+        let (module, module_error) = project.module_name(a, discovered, args[2usize])
+        if module_error != ok { ret module_error }
+        if !same(discovered.root, args[3usize]) || !same(module, args[4usize]) { ret project.InvalidPath }
+        try io.print("project file ok\n")
+        ret ok
+    }
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE\n")
     ret ok
 }
