@@ -103,6 +103,10 @@ type Token = struct {
     end: usize,
     line: usize,
     column: usize,
+    end_line: usize,
+    end_column: usize,
+    column_utf16: usize,
+    end_column_utf16: usize,
 }
 
 type Scanner = struct {
@@ -110,6 +114,7 @@ type Scanner = struct {
     off: usize,
     line: usize,
     column: usize,
+    column_utf16: usize,
 }
 
 error InvalidSource
@@ -119,7 +124,7 @@ fn init(source: str) -> Scanner {
     if source.len >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 {
         off = 3usize
     }
-    ret Scanner{ source: source, off: off, line: 1usize, column: 1usize }
+    ret Scanner{ source: source, off: off, line: 1usize, column: 1usize, column_utf16: 1usize }
 }
 
 fn is_alpha(c: u8) -> bool {
@@ -279,8 +284,18 @@ fn keyword(source: str, start: usize, end: usize) -> Kind {
     ret .Identifier
 }
 
-fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize) -> Token {
-    ret Token{ kind: kind, start: start, end: s.off, line: line, column: column }
+fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, column_utf16: usize) -> Token {
+    ret Token{
+        kind: kind,
+        start: start,
+        end: s.off,
+        line: line,
+        column: column,
+        end_line: s.line,
+        end_column: s.column,
+        column_utf16: column_utf16,
+        end_column_utf16: s.column_utf16,
+    }
 }
 
 fn has(s: *Scanner, a: u8, b: u8) -> bool {
@@ -294,11 +309,17 @@ fn has3(s: *Scanner, a: u8, b: u8, c: u8) -> bool {
 fn take(s: *Scanner, n: usize) {
     s.off += n
     s.column += n
+    s.column_utf16 += n
 }
 
 fn take_scalar(s: *Scanner, width: usize) {
     s.off += width
     s.column += 1usize
+    if width == 4usize {
+        s.column_utf16 += 2usize
+    } else {
+        s.column_utf16 += 1usize
+    }
 }
 
 fn next(s: *Scanner) -> Token {
@@ -316,8 +337,9 @@ fn next(s: *Scanner) -> Token {
                     let invalid_start = s.off
                     let invalid_line = s.line
                     let invalid_column = s.column
+                    let invalid_column_utf16 = s.column_utf16
                     take(s, 1usize)
-                    ret token(s, .Invalid, invalid_start, invalid_line, invalid_column)
+                    ret token(s, .Invalid, invalid_start, invalid_line, invalid_column, invalid_column_utf16)
                 }
                 if comment_byte >= 128u8 {
                     let width = utf8_width(s.source, s.off)
@@ -325,8 +347,9 @@ fn next(s: *Scanner) -> Token {
                         let invalid_start = s.off
                         let invalid_line = s.line
                         let invalid_column = s.column
+                        let invalid_column_utf16 = s.column_utf16
                         take(s, 1usize)
-                        ret token(s, .Invalid, invalid_start, invalid_line, invalid_column)
+                        ret token(s, .Invalid, invalid_start, invalid_line, invalid_column, invalid_column_utf16)
                     }
                     take_scalar(s, width)
                 } else {
@@ -341,7 +364,8 @@ fn next(s: *Scanner) -> Token {
     let start = s.off
     let line = s.line
     let column = s.column
-    if s.off == s.source.len { ret token(s, .Eof, start, line, column) }
+    let column_utf16 = s.column_utf16
+    if s.off == s.source.len { ret token(s, .Eof, start, line, column, column_utf16) }
     let c = s.source[s.off]
 
     if c == 10u8 || c == 13u8 {
@@ -352,7 +376,8 @@ fn next(s: *Scanner) -> Token {
         }
         s.line += 1usize
         s.column = 1usize
-        ret token(s, .Newline, start, line, column)
+        s.column_utf16 = 1usize
+        ret token(s, .Newline, start, line, column, column_utf16)
     }
 
     if c == 114u8 && s.off + 1usize < s.source.len && (s.source[s.off + 1usize] == 34u8 || s.source[s.off + 1usize] == 35u8) {
@@ -374,7 +399,7 @@ fn next(s: *Scanner) -> Token {
                     }
                     if closes {
                         take(s, 1usize + hashes)
-                        ret token(s, .RawString, start, line, column)
+                        ret token(s, .RawString, start, line, column, column_utf16)
                     }
                 }
                 if s.source[s.off] == 10u8 || s.source[s.off] == 13u8 {
@@ -385,17 +410,18 @@ fn next(s: *Scanner) -> Token {
                     }
                     s.line += 1usize
                     s.column = 1usize
+                    s.column_utf16 = 1usize
                 } else {
                     let raw_byte = s.source[s.off]
                     if raw_byte == 0u8 || (raw_byte < 32u8 && raw_byte != 9u8) {
                         take(s, 1usize)
-                        ret token(s, .Invalid, start, line, column)
+                        ret token(s, .Invalid, start, line, column, column_utf16)
                     }
                     if raw_byte >= 128u8 {
                         let width = utf8_width(s.source, s.off)
                         if width == 0usize {
                             take(s, 1usize)
-                            ret token(s, .Invalid, start, line, column)
+                            ret token(s, .Invalid, start, line, column, column_utf16)
                         }
                         take_scalar(s, width)
                     } else {
@@ -403,14 +429,14 @@ fn next(s: *Scanner) -> Token {
                     }
                 }
             }
-            ret token(s, .Invalid, start, line, column)
+            ret token(s, .Invalid, start, line, column, column_utf16)
         }
     }
 
     if is_alpha(c) {
         take(s, 1usize)
         while s.off < s.source.len && is_alnum(s.source[s.off]) { take(s, 1usize) }
-        ret token(s, keyword(s.source, start, s.off), start, line, column)
+        ret token(s, keyword(s.source, start, s.off), start, line, column, column_utf16)
     }
 
     if is_digit(c) {
@@ -431,9 +457,9 @@ fn next(s: *Scanner) -> Token {
                 take(s, 1usize)
             }
             if !digits_are_valid(s.source, digits_start, digits_end, base) || !integer_suffix_is_valid(s.source, digits_end, s.off) {
-                ret token(s, .Invalid, start, line, column)
+                ret token(s, .Invalid, start, line, column, column_utf16)
             }
-            ret token(s, kind, start, line, column)
+            ret token(s, kind, start, line, column, column_utf16)
         }
         let integer_start = start
         while s.off < s.source.len && (is_digit(s.source[s.off]) || s.source[s.off] == 95u8) {
@@ -442,7 +468,7 @@ fn next(s: *Scanner) -> Token {
         let integer_end = s.off
         if !digits_are_valid(s.source, integer_start, integer_end, 10u8) {
             while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
-            ret token(s, .Invalid, start, line, column)
+            ret token(s, .Invalid, start, line, column, column_utf16)
         }
         if s.off + 1usize < s.source.len && s.source[s.off] == 46u8 && s.source[s.off + 1usize] != 46u8 && is_digit(s.source[s.off + 1usize]) {
             kind = .Float
@@ -453,7 +479,7 @@ fn next(s: *Scanner) -> Token {
             }
             if !digits_are_valid(s.source, fraction_start, s.off, 10u8) {
                 while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
-                ret token(s, .Invalid, start, line, column)
+                ret token(s, .Invalid, start, line, column, column_utf16)
             }
         }
         if s.off < s.source.len && (s.source[s.off] == 101u8 || s.source[s.off] == 69u8) {
@@ -466,17 +492,17 @@ fn next(s: *Scanner) -> Token {
             }
             if !digits_are_valid(s.source, exponent_start, s.off, 10u8) {
                 while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
-                ret token(s, .Invalid, start, line, column)
+                ret token(s, .Invalid, start, line, column, column_utf16)
             }
         }
         let suffix_start = s.off
         while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
         if kind == .Float {
-            if !float_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start, line, column) }
+            if !float_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start, line, column, column_utf16) }
         } else {
-            if !integer_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start, line, column) }
+            if !integer_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start, line, column, column_utf16) }
         }
-        ret token(s, kind, start, line, column)
+        ret token(s, kind, start, line, column, column_utf16)
     }
 
     if c == 34u8 || c == 39u8 {
@@ -489,20 +515,20 @@ fn next(s: *Scanner) -> Token {
             let quoted_byte = s.source[s.off]
             if quoted_byte == 0u8 || quoted_byte < 32u8 {
                 take(s, 1usize)
-                ret token(s, .Invalid, start, line, column)
+                ret token(s, .Invalid, start, line, column, column_utf16)
             }
             if s.source[s.off] == 92u8 {
                 take(s, 1usize)
-                if s.off == s.source.len { ret token(s, .Invalid, start, line, column) }
+                if s.off == s.source.len { ret token(s, .Invalid, start, line, column, column_utf16) }
                 let escaped = s.source[s.off]
                 if escaped != 110u8 && escaped != 116u8 && escaped != 114u8 && escaped != 92u8 && escaped != 34u8 && escaped != 39u8 && escaped != 48u8 && escaped != 120u8 {
                     take(s, 1usize)
-                    ret token(s, .Invalid, start, line, column)
+                    ret token(s, .Invalid, start, line, column, column_utf16)
                 }
                 if escaped == 120u8 {
                     if s.off + 2usize >= s.source.len || !is_hex(s.source[s.off + 1usize]) || !is_hex(s.source[s.off + 2usize]) {
                         take(s, 1usize)
-                        ret token(s, .Invalid, start, line, column)
+                        ret token(s, .Invalid, start, line, column, column_utf16)
                     }
                     take(s, 2usize)
                 }
@@ -512,7 +538,7 @@ fn next(s: *Scanner) -> Token {
                     let width = utf8_width(s.source, s.off)
                     if width == 0usize {
                         take(s, 1usize)
-                        ret token(s, .Invalid, start, line, column)
+                        ret token(s, .Invalid, start, line, column, column_utf16)
                     }
                     if kind == .Character { character_bytes += width }
                     take_scalar(s, width)
@@ -522,146 +548,146 @@ fn next(s: *Scanner) -> Token {
             }
             take(s, 1usize)
         }
-        if s.off == s.source.len || s.source[s.off] != quote { ret token(s, .Invalid, start, line, column) }
+        if s.off == s.source.len || s.source[s.off] != quote { ret token(s, .Invalid, start, line, column, column_utf16) }
         take(s, 1usize)
-        if kind == .Character && character_bytes != 1usize { ret token(s, .Invalid, start, line, column) }
-        ret token(s, kind, start, line, column)
+        if kind == .Character && character_bytes != 1usize { ret token(s, .Invalid, start, line, column, column_utf16) }
+        ret token(s, kind, start, line, column, column_utf16)
     }
 
     if has3(s, 46u8, 46u8, 46u8) {
         take(s, 3usize)
-        ret token(s, .PunctEllipsis, start, line, column)
+        ret token(s, .PunctEllipsis, start, line, column, column_utf16)
     }
     if has3(s, 43u8, 37u8, 61u8) {
         take(s, 3usize)
-        ret token(s, .PunctAddWrapAssign, start, line, column)
+        ret token(s, .PunctAddWrapAssign, start, line, column, column_utf16)
     }
     if has3(s, 45u8, 37u8, 61u8) {
         take(s, 3usize)
-        ret token(s, .PunctSubWrapAssign, start, line, column)
+        ret token(s, .PunctSubWrapAssign, start, line, column, column_utf16)
     }
     if has3(s, 42u8, 37u8, 61u8) {
         take(s, 3usize)
-        ret token(s, .PunctMulWrapAssign, start, line, column)
+        ret token(s, .PunctMulWrapAssign, start, line, column, column_utf16)
     }
     if has3(s, 60u8, 60u8, 61u8) {
         take(s, 3usize)
-        ret token(s, .PunctShiftLeftAssign, start, line, column)
+        ret token(s, .PunctShiftLeftAssign, start, line, column, column_utf16)
     }
     if has3(s, 62u8, 62u8, 61u8) {
         take(s, 3usize)
-        ret token(s, .PunctShiftRightAssign, start, line, column)
+        ret token(s, .PunctShiftRightAssign, start, line, column, column_utf16)
     }
     if has(s, 46u8, 46u8) {
         take(s, 2usize)
-        ret token(s, .PunctRange, start, line, column)
+        ret token(s, .PunctRange, start, line, column, column_utf16)
     }
     if has(s, 45u8, 62u8) {
         take(s, 2usize)
-        ret token(s, .PunctArrow, start, line, column)
+        ret token(s, .PunctArrow, start, line, column, column_utf16)
     }
     if has(s, 61u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctEqEq, start, line, column)
+        ret token(s, .PunctEqEq, start, line, column, column_utf16)
     }
     if has(s, 33u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctBangEq, start, line, column)
+        ret token(s, .PunctBangEq, start, line, column, column_utf16)
     }
     if has(s, 60u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctLtEq, start, line, column)
+        ret token(s, .PunctLtEq, start, line, column, column_utf16)
     }
     if has(s, 62u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctGtEq, start, line, column)
+        ret token(s, .PunctGtEq, start, line, column, column_utf16)
     }
     if has(s, 60u8, 60u8) {
         take(s, 2usize)
-        ret token(s, .PunctShiftLeft, start, line, column)
+        ret token(s, .PunctShiftLeft, start, line, column, column_utf16)
     }
     if has(s, 62u8, 62u8) {
         take(s, 2usize)
-        ret token(s, .PunctShiftRight, start, line, column)
+        ret token(s, .PunctShiftRight, start, line, column, column_utf16)
     }
     if has(s, 43u8, 37u8) {
         take(s, 2usize)
-        ret token(s, .PunctAddWrap, start, line, column)
+        ret token(s, .PunctAddWrap, start, line, column, column_utf16)
     }
     if has(s, 45u8, 37u8) {
         take(s, 2usize)
-        ret token(s, .PunctSubWrap, start, line, column)
+        ret token(s, .PunctSubWrap, start, line, column, column_utf16)
     }
     if has(s, 42u8, 37u8) {
         take(s, 2usize)
-        ret token(s, .PunctMulWrap, start, line, column)
+        ret token(s, .PunctMulWrap, start, line, column, column_utf16)
     }
     if has(s, 43u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctAddAssign, start, line, column)
+        ret token(s, .PunctAddAssign, start, line, column, column_utf16)
     }
     if has(s, 45u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctSubAssign, start, line, column)
+        ret token(s, .PunctSubAssign, start, line, column, column_utf16)
     }
     if has(s, 42u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctMulAssign, start, line, column)
+        ret token(s, .PunctMulAssign, start, line, column, column_utf16)
     }
     if has(s, 47u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctDivAssign, start, line, column)
+        ret token(s, .PunctDivAssign, start, line, column, column_utf16)
     }
     if has(s, 37u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctRemAssign, start, line, column)
+        ret token(s, .PunctRemAssign, start, line, column, column_utf16)
     }
     if has(s, 38u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctBitAndAssign, start, line, column)
+        ret token(s, .PunctBitAndAssign, start, line, column, column_utf16)
     }
     if has(s, 94u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctBitXorAssign, start, line, column)
+        ret token(s, .PunctBitXorAssign, start, line, column, column_utf16)
     }
     if has(s, 124u8, 61u8) {
         take(s, 2usize)
-        ret token(s, .PunctBitOrAssign, start, line, column)
+        ret token(s, .PunctBitOrAssign, start, line, column, column_utf16)
     }
     if has(s, 38u8, 38u8) {
         take(s, 2usize)
-        ret token(s, .PunctAndAnd, start, line, column)
+        ret token(s, .PunctAndAnd, start, line, column, column_utf16)
     }
     if has(s, 124u8, 124u8) {
         take(s, 2usize)
-        ret token(s, .PunctOrOr, start, line, column)
+        ret token(s, .PunctOrOr, start, line, column, column_utf16)
     }
 
     take(s, 1usize)
-    if c == 64u8 { ret token(s, .PunctAt, start, line, column) }
-    if c == 46u8 { ret token(s, .PunctDot, start, line, column) }
-    if c == 44u8 { ret token(s, .PunctComma, start, line, column) }
-    if c == 58u8 { ret token(s, .PunctColon, start, line, column) }
-    if c == 61u8 { ret token(s, .PunctAssign, start, line, column) }
-    if c == 40u8 { ret token(s, .PunctLParen, start, line, column) }
-    if c == 41u8 { ret token(s, .PunctRParen, start, line, column) }
-    if c == 91u8 { ret token(s, .PunctLBracket, start, line, column) }
-    if c == 93u8 { ret token(s, .PunctRBracket, start, line, column) }
-    if c == 123u8 { ret token(s, .PunctLBrace, start, line, column) }
-    if c == 125u8 { ret token(s, .PunctRBrace, start, line, column) }
-    if c == 42u8 { ret token(s, .PunctStar, start, line, column) }
-    if c == 47u8 { ret token(s, .PunctSlash, start, line, column) }
-    if c == 37u8 { ret token(s, .PunctPercent, start, line, column) }
-    if c == 43u8 { ret token(s, .PunctPlus, start, line, column) }
-    if c == 45u8 { ret token(s, .PunctMinus, start, line, column) }
-    if c == 60u8 { ret token(s, .PunctLt, start, line, column) }
-    if c == 62u8 { ret token(s, .PunctGt, start, line, column) }
-    if c == 38u8 { ret token(s, .PunctAmp, start, line, column) }
-    if c == 94u8 { ret token(s, .PunctCaret, start, line, column) }
-    if c == 124u8 { ret token(s, .PunctPipe, start, line, column) }
-    if c == 33u8 { ret token(s, .PunctBang, start, line, column) }
-    if c == 126u8 { ret token(s, .PunctTilde, start, line, column) }
-    ret token(s, .Invalid, start, line, column)
+    if c == 64u8 { ret token(s, .PunctAt, start, line, column, column_utf16) }
+    if c == 46u8 { ret token(s, .PunctDot, start, line, column, column_utf16) }
+    if c == 44u8 { ret token(s, .PunctComma, start, line, column, column_utf16) }
+    if c == 58u8 { ret token(s, .PunctColon, start, line, column, column_utf16) }
+    if c == 61u8 { ret token(s, .PunctAssign, start, line, column, column_utf16) }
+    if c == 40u8 { ret token(s, .PunctLParen, start, line, column, column_utf16) }
+    if c == 41u8 { ret token(s, .PunctRParen, start, line, column, column_utf16) }
+    if c == 91u8 { ret token(s, .PunctLBracket, start, line, column, column_utf16) }
+    if c == 93u8 { ret token(s, .PunctRBracket, start, line, column, column_utf16) }
+    if c == 123u8 { ret token(s, .PunctLBrace, start, line, column, column_utf16) }
+    if c == 125u8 { ret token(s, .PunctRBrace, start, line, column, column_utf16) }
+    if c == 42u8 { ret token(s, .PunctStar, start, line, column, column_utf16) }
+    if c == 47u8 { ret token(s, .PunctSlash, start, line, column, column_utf16) }
+    if c == 37u8 { ret token(s, .PunctPercent, start, line, column, column_utf16) }
+    if c == 43u8 { ret token(s, .PunctPlus, start, line, column, column_utf16) }
+    if c == 45u8 { ret token(s, .PunctMinus, start, line, column, column_utf16) }
+    if c == 60u8 { ret token(s, .PunctLt, start, line, column, column_utf16) }
+    if c == 62u8 { ret token(s, .PunctGt, start, line, column, column_utf16) }
+    if c == 38u8 { ret token(s, .PunctAmp, start, line, column, column_utf16) }
+    if c == 94u8 { ret token(s, .PunctCaret, start, line, column, column_utf16) }
+    if c == 124u8 { ret token(s, .PunctPipe, start, line, column, column_utf16) }
+    if c == 33u8 { ret token(s, .PunctBang, start, line, column, column_utf16) }
+    if c == 126u8 { ret token(s, .PunctTilde, start, line, column, column_utf16) }
+    ret token(s, .Invalid, start, line, column, column_utf16)
 }
 
 fn validate(source: str) -> err {

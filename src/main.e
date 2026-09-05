@@ -79,6 +79,19 @@ fn self_test() -> err {
     var unicode = lex.init("\"é\" name")
     try expect(&unicode, .String, 0usize, 4usize, 1usize, 1usize)
     try expect(&unicode, .Identifier, 5usize, 9usize, 1usize, 5usize)
+    var positioned = lex.init("\xEF\xBB\xBF\"😀é\"\r\nx")
+    let positioned_string = lex.next(&positioned)
+    if positioned_string.kind != .String || positioned_string.start != 3usize || positioned_string.end != 11usize { ret lex.InvalidSource }
+    if positioned_string.line != 1usize || positioned_string.column != 1usize || positioned_string.end_line != 1usize || positioned_string.end_column != 5usize { ret lex.InvalidSource }
+    if positioned_string.column_utf16 != 1usize || positioned_string.end_column_utf16 != 6usize { ret lex.InvalidSource }
+    let positioned_newline = lex.next(&positioned)
+    if positioned_newline.kind != .Newline || positioned_newline.start != 11usize || positioned_newline.end != 13usize { ret lex.InvalidSource }
+    if positioned_newline.line != 1usize || positioned_newline.column != 5usize || positioned_newline.end_line != 2usize || positioned_newline.end_column != 1usize { ret lex.InvalidSource }
+    if positioned_newline.column_utf16 != 6usize || positioned_newline.end_column_utf16 != 1usize { ret lex.InvalidSource }
+    let positioned_name = lex.next(&positioned)
+    if positioned_name.kind != .Identifier || positioned_name.start != 13usize || positioned_name.end != 14usize { ret lex.InvalidSource }
+    if positioned_name.line != 2usize || positioned_name.column != 1usize || positioned_name.end_line != 2usize || positioned_name.end_column != 2usize { ret lex.InvalidSource }
+    if positioned_name.column_utf16 != 1usize || positioned_name.end_column_utf16 != 2usize { ret lex.InvalidSource }
     let valid_utf8 = lex.validate("\"héllo\" // π\nr\"λ\tvalue\"")
     if valid_utf8 != ok { ret lex.InvalidSource }
     let valid_comment_tab = lex.validate("//\tcomment\nerror Good\n")
