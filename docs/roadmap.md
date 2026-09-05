@@ -241,7 +241,8 @@ Module `const`/`var` declarations now retain type and initializer trees, includi
 the special variable initializer forms, and failed top-level parses transactionally
 discard partial nodes before recovery. Attributes now retain ordered expression
 arguments, including multiline lists, and recovery distinguishes a malformed
-attribute from a valid attribute on a malformed declaration. Assignment parsing now
+attribute from a valid attribute on a malformed declaration. Attribute blocks now
+reject blank or comment-only gaps and cannot attach to `use`. Assignment parsing
 retains ordered multi-place targets, accepts multiline and trailing-comma forms, and
 rejects one-place pseudo-tuples and binary-expression targets. Soft newlines are now
 consumed only inside grammar-approved parentheses, brackets, literal bodies and type

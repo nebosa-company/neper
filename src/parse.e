@@ -1762,12 +1762,16 @@ fn parse_attribute(p: *Parser) -> err {
     }
     if p.current.kind != .Newline { ret InvalidSyntax }
     try add_top_parent(p, .Attribute, token_start, p.token_index, nested[..nested_count])
-    try skip_separators(p)
+    try advance(p)
     ret ok
 }
 
 fn parse_one(p: *Parser) -> err {
-    while p.current.kind == .PunctAt { try parse_attribute(p) }
+    var has_attributes = false
+    while p.current.kind == .PunctAt {
+        has_attributes = true
+        try parse_attribute(p)
+    }
     p.error_start = p.token_index
     p.error_node_checkpoint = p.tree.count
     p.error_child_checkpoint = p.tree.child_count
@@ -1775,6 +1779,7 @@ fn parse_one(p: *Parser) -> err {
     p.error_declarations_checkpoint = p.declarations
     p.error_soft_checkpoint = p.soft_depth
     if p.current.kind == .KwUse {
+        if has_attributes { ret InvalidSyntax }
         try parse_use(p)
     } else {
         if p.current.kind == .KwError {
