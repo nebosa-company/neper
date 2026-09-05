@@ -197,6 +197,8 @@ $indexChecked = & $compiler check-file (Join-Path $checkRoot 'index_valid\src\ma
 if ($LASTEXITCODE -ne 0 -or $indexChecked -ne 'module check ok') { throw 'index and slice expressions did not type-check' }
 $aggregateChecked = & $compiler check-file (Join-Path $checkRoot 'aggregate_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $aggregateChecked -ne 'module check ok') { throw 'aggregate literals and field places did not type-check' }
+$genericAggregateChecked = & $compiler check-file (Join-Path $checkRoot 'generic_aggregate_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $genericAggregateChecked -ne 'module check ok') { throw 'generic aggregate specialization did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -307,7 +309,11 @@ $checkFailures = @(
     @('union_literal_count', 'ArgumentCount'),
     @('tagged_payload_missing', 'InvalidReturn'),
     @('tagged_void_payload', 'InvalidReturn'),
-    @('unknown_field_access', 'InvalidType')
+    @('unknown_field_access', 'InvalidType'),
+    @('generic_aggregate_arity', 'ArgumentCount'),
+    @('generic_aggregate_kind', 'InvalidType'),
+    @('generic_aggregate_identity', 'InvalidReturn'),
+    @('generic_aggregate_field_type', 'InvalidReturn')
 )
 foreach ($case in $checkFailures) {
     $checkOutput = & $compiler check-file (Join-Path $checkRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1

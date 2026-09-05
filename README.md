@@ -224,8 +224,11 @@ Typed `zero`/`undef` initializers share their declared context. Non-generic stru
 union, tagged-union and fixed/inferred-array literals now validate their complete field
 or element sets, including nested and qualified forms. Named field access
 auto-dereferences pointers; field address-of and assignment use those same place rules.
-Generic aggregate specialization and tagged-union tag checks remain outside this
-checkpoint. Unsupported expression
+Generic aggregate types now preserve explicit type and `usize` arguments in nominal
+identity, specialize symbolic array fields at concrete use sites, and flow through
+generic function parameters and bodies. Generic aggregate aliases, nested generic
+aggregate literals and tagged-union tag checks remain outside this checkpoint.
+Unsupported expression
 and statement forms fail explicitly instead of being silently accepted; cross-platform
 fixtures freeze both the implemented behavior and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64

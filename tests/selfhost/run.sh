@@ -278,6 +278,8 @@ index_checked=$($test_build/neper-self check-file "$check_root/index_valid/src/m
 [ "$index_checked" = 'module check ok' ]
 aggregate_checked=$($test_build/neper-self check-file "$check_root/aggregate_valid/src/main.e" "$repo" x64 linux)
 [ "$aggregate_checked" = 'module check ok' ]
+generic_aggregate_checked=$($test_build/neper-self check-file "$check_root/generic_aggregate_valid/src/main.e" "$repo" x64 linux)
+[ "$generic_aggregate_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -400,6 +402,10 @@ expect_check_error union_literal_count ArgumentCount
 expect_check_error tagged_payload_missing InvalidReturn
 expect_check_error tagged_void_payload InvalidReturn
 expect_check_error unknown_field_access InvalidType
+expect_check_error generic_aggregate_arity ArgumentCount
+expect_check_error generic_aggregate_kind InvalidType
+expect_check_error generic_aggregate_identity InvalidReturn
+expect_check_error generic_aggregate_field_type InvalidReturn
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
 [ "$valid_scopes" = 'module resolve ok' ]

@@ -389,13 +389,17 @@ explicit-dereference assignment use the same place rules. Typed `zero`/`undef`
 initializers inherit their declared context. Non-generic struct, union, tagged-union
 and fixed/inferred-array literals now validate complete field or element sets, including
 nested and qualified forms. Named field access auto-dereferences pointers; field
-address-of and assignment share the same pointee-aware place mutability rules. Wider
+address-of and assignment share the same pointee-aware place mutability rules. Generic
+aggregate types preserve explicit type and `usize` arguments in nominal identity,
+specialize symbolic array fields at concrete use sites, and flow through generic
+function parameters and instantiated bodies. Wider
 intermediate arithmetic, bitwise and shift expressions, wrapping constant operators,
-generic aggregate specialization and tagged-union tag checks remain outside the
+generic aggregate aliases, nested generic aggregate literals and tagged-union tag
+checks remain outside the
 `check-file` checkpoint. Unsupported expression and statement
 forms fail explicitly rather than being accepted unchecked. The next type-checking
-increments replace those boundaries with remaining control flow, generic aggregates and
-declaration-time generic checks.
+increments replace those boundaries with remaining control flow, nested generic
+aggregates and declaration-time generic checks.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

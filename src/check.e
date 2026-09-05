@@ -68,6 +68,8 @@ type GenericArgument = struct {
     kind: ComptimeKind,
     ty: Type,
     value: usize,
+    expression: usize,
+    symbolic: bool,
     set: bool,
 }
 
@@ -108,7 +110,12 @@ type Aggregate = struct {
     kind: AggregateKind,
     first_field: usize,
     field_count: usize,
+    first_comptime: usize,
+    comptime_count: usize,
+    template_index: usize,
+    first_argument: usize,
     generic: bool,
+    instance: bool,
 }
 
 type AggregateField = struct {
@@ -312,7 +319,11 @@ fn is_string_shape(c: *Checker, ty: Type) -> bool {
 fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
     if is_string_shape(c, a) || is_string_shape(c, b) { ret is_string_shape(c, a) && is_string_shape(c, b) }
     if a.kind != b.kind { ret false }
-    if a.kind == .Named { ret a.module_index == b.module_index && same(a.name, b.name) }
+    if a.kind == .Named {
+        if a.module_index != b.module_index || !same(a.name, b.name) || a.has_element != b.has_element { ret false }
+        if a.has_element { ret a.element == b.element }
+        ret true
+    }
     if a.kind == .TypeParameter { ret a.has_element && b.has_element && a.element == b.element }
     if a.kind == .Integer || a.kind == .Float { ret same(a.name, b.name) }
     if a.kind == .Pointer || a.kind == .Slice {
@@ -739,10 +750,14 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     var target_module = module_index
     var name = base
     var saw_dot = false
+    var has_arguments = false
     var at = node.token_start + 1usize
     while at < node.token_end {
         let token = c.tokens[at]
-        if token.kind == .PunctLBracket { ret (make_type(.Other, "", module_index), Unsupported) }
+        if token.kind == .PunctLBracket {
+            has_arguments = true
+            break
+        }
         if token.kind == .PunctDot {
             saw_dot = true
         } else {
@@ -752,15 +767,57 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
                     target_module = qualified_module
                     name = g.modules[module_index].text[token.start..token.end]
                 }
-                let result = make_type(.Named, name, target_module)
-                if !c.expand_aliases { ret (result, ok) }
-                let (canonical, canonical_error) = canonical_type(c, result)
-                ret (canonical, canonical_error)
             }
         }
         at += 1usize
     }
-    let result = make_type(.Named, name, target_module)
+    var result = make_type(.Named, name, target_module)
+    if has_arguments {
+        let (template_index, found_template) = find_aggregate(c, target_module, name)
+        if !found_template || !c.aggregates[template_index].generic { ret (invalid_type(), InvalidType) }
+        let template = c.aggregates[template_index]
+        if c.generic_argument_count + template.comptime_count > c.generic_arguments.len { ret (invalid_type(), Capacity) }
+        let first_argument = c.generic_argument_count
+        var argument_count = 0usize
+        let child_end = node.first_child + node.child_count
+        at = node.first_child
+        while at < child_end {
+            if tree.children[at].node {
+                if argument_count >= template.comptime_count { ret (invalid_type(), ArgumentCount) }
+                let parameter = c.comptime_parameters[template.first_comptime + argument_count]
+                let argument_node = tree.children[at].index
+                var argument: GenericArgument = zero
+                argument.kind = parameter.kind
+                argument.set = true
+                if parameter.kind == .Type {
+                    let (argument_type, argument_error) = comptime_type(c, g, tree, module_index, argument_node)
+                    if argument_error != ok { ret (invalid_type(), argument_error) }
+                    argument.ty = argument_type
+                } else {
+                    let (value, value_error) = array_length_value(c, g, tree, module_index, argument_node)
+                    if value_error == ok {
+                        argument.value = value
+                    } else {
+                        if c.active_comptime_count == 0usize || c.active_arguments { ret (invalid_type(), value_error) }
+                        let (expression, expression_error) = copy_constant_expr(c, g, tree, module_index, argument_node)
+                        if expression_error != ok { ret (invalid_type(), value_error) }
+                        argument.expression = expression
+                        argument.symbolic = true
+                    }
+                }
+                c.generic_arguments[c.generic_argument_count] = argument
+                c.generic_argument_count += 1usize
+                argument_count += 1usize
+            }
+            at += 1usize
+        }
+        if argument_count != template.comptime_count { ret (invalid_type(), ArgumentCount) }
+        let (instance_index, instance_error) = instantiate_aggregate(c, template_index, first_argument)
+        if instance_error != ok { ret (invalid_type(), instance_error) }
+        result.element = instance_index
+        result.has_element = true
+        ret (result, ok)
+    }
     if !c.expand_aliases { ret (result, ok) }
     let (canonical, canonical_error) = canonical_type(c, result)
     ret (canonical, canonical_error)
@@ -862,7 +919,14 @@ fn find_aggregate_field(c: *Checker, ty: Type, name: str) -> (usize, bool) {
         subject = c.types[subject.element]
     }
     if subject.kind != .Named { ret (0usize, false) }
-    let (aggregate_index, found) = find_aggregate(c, subject.module_index, subject.name)
+    var aggregate_index = 0usize
+    var found = false
+    if subject.has_element && subject.element < c.aggregate_count {
+        aggregate_index = subject.element
+        found = true
+    } else {
+        (aggregate_index, found) = find_aggregate(c, subject.module_index, subject.name)
+    }
     if !found || c.aggregates[aggregate_index].generic { ret (0usize, false) }
     let aggregate = c.aggregates[aggregate_index]
     var at = 0usize
@@ -913,44 +977,63 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
     if c.aggregate_count == c.aggregates.len { ret Capacity }
     let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
-    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: c.aggregate_field_count, field_count: 0usize, generic: generic }
-    if !generic {
-        let body = tree.nodes[body_index]
-        let body_end = body.first_child + body.child_count
-        at = body.first_child
-        while at < body_end {
-            if tree.children[at].node {
-                let field_node = tree.nodes[tree.children[at].index]
-                if field_node.kind == .FieldDecl || field_node.kind == .UnionMember {
-                    if c.aggregate_field_count == c.aggregate_fields.len { ret Capacity }
-                    let (field_name, has_name) = first_name(c, g.modules[module_index].text, field_node)
-                    if !has_name { ret parse.InvalidSyntax }
-                    var field_type = make_type(.Void, "void", module_index)
-                    let (type_index, has_type) = first_node_child(tree, field_node)
-                    if has_type {
-                        let (resolved, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
-                        if type_error != ok { ret type_error }
-                        field_type = resolved
-                    } else {
-                        if kind != .TaggedUnion { ret parse.InvalidSyntax }
-                    }
-                    if field_type.kind == .Void && kind != .TaggedUnion { ret InvalidType }
-                    c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: field_name, ty: field_type }
-                    c.aggregate_field_count += 1usize
-                    aggregate.field_count += 1usize
-                }
-            }
-            at += 1usize
-        }
-    }
-    c.aggregates[c.aggregate_count] = aggregate
+    let aggregate_index = c.aggregate_count
+    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: c.aggregate_field_count, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false }
+    c.aggregates[aggregate_index] = aggregate
     c.aggregate_count += 1usize
+    at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child = tree.nodes[tree.children[at].index]
+            if child.kind == .ComptimeParam {
+                c.active_first_comptime = aggregate.first_comptime
+                c.active_comptime_count = aggregate.comptime_count
+                try collect_comptime_parameter(c, r, g, tree, module_index, child)
+                aggregate.comptime_count += 1usize
+            }
+        }
+        at += 1usize
+    }
+    c.active_first_comptime = aggregate.first_comptime
+    c.active_comptime_count = aggregate.comptime_count
+    let body = tree.nodes[body_index]
+    let body_end = body.first_child + body.child_count
+    at = body.first_child
+    while at < body_end {
+        if tree.children[at].node {
+            let field_node = tree.nodes[tree.children[at].index]
+            if field_node.kind == .FieldDecl || field_node.kind == .UnionMember {
+                if c.aggregate_field_count == c.aggregate_fields.len { ret Capacity }
+                let (field_name, has_name) = first_name(c, g.modules[module_index].text, field_node)
+                if !has_name { ret parse.InvalidSyntax }
+                var field_type = make_type(.Void, "void", module_index)
+                let (type_index, has_type) = first_node_child(tree, field_node)
+                if has_type {
+                    let (resolved, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+                    if type_error != ok { ret type_error }
+                    field_type = resolved
+                } else {
+                    if kind != .TaggedUnion { ret parse.InvalidSyntax }
+                }
+                if field_type.kind == .Void && kind != .TaggedUnion { ret InvalidType }
+                c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: field_name, ty: field_type }
+                c.aggregate_field_count += 1usize
+                aggregate.field_count += 1usize
+            }
+        }
+        at += 1usize
+    }
+    c.active_first_comptime = 0usize
+    c.active_comptime_count = 0usize
+    c.aggregates[aggregate_index] = aggregate
     ret ok
 }
 
 fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.aggregate_count = 0usize
     c.aggregate_field_count = 0usize
+    c.comptime_parameter_count = 0usize
+    c.generic_argument_count = 0usize
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
@@ -966,6 +1049,216 @@ fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
         module_index += 1usize
     }
     ret ok
+}
+
+fn aggregate_parameter(c: *Checker, template_index: usize, name: str) -> (usize, bool) {
+    if template_index >= c.aggregate_count { ret (0usize, false) }
+    let template = c.aggregates[template_index]
+    var at = 0usize
+    while at < template.comptime_count {
+        let parameter_index = template.first_comptime + at
+        if parameter_index < c.comptime_parameter_count && same(c.comptime_parameters[parameter_index].name, name) { ret (parameter_index, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn aggregate_argument(c: *Checker, template_index: usize, first_argument: usize, parameter_index: usize) -> (GenericArgument, bool) {
+    var empty: GenericArgument = zero
+    if template_index >= c.aggregate_count { ret (empty, false) }
+    let template = c.aggregates[template_index]
+    if parameter_index < template.first_comptime { ret (empty, false) }
+    let offset = parameter_index - template.first_comptime
+    if offset >= template.comptime_count { ret (empty, false) }
+    let argument_index = first_argument + offset
+    if argument_index >= c.generic_argument_count || !c.generic_arguments[argument_index].set { ret (empty, false) }
+    ret (c.generic_arguments[argument_index], true)
+}
+
+fn evaluate_aggregate_bound(c: *Checker, template_index: usize, first_argument: usize, expression_index: usize) -> (IntegerValue, Type, err) {
+    if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+    let expression = c.constant_exprs[expression_index]
+    if expression.kind == .Literal { ret (expression.value, expression.ty, ok) }
+    if expression.kind == .Name {
+        var parameter_index = 0usize
+        var parameter_found = false
+        if template_index < c.aggregate_count && expression.module_index == c.aggregates[template_index].module_index {
+            (parameter_index, parameter_found) = aggregate_parameter(c, template_index, expression.name)
+        }
+        if parameter_found {
+            let parameter = c.comptime_parameters[parameter_index]
+            if parameter.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+            let (argument, argument_found) = aggregate_argument(c, template_index, first_argument, parameter_index)
+            if !argument_found || argument.symbolic { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+            ret (normalized_integer(argument.value, false), parameter.ty, ok)
+        }
+        let (constant_index, found) = find_constant(c, expression.module_index, expression.name)
+        if !found { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let dependency_error = evaluate_constant(c, constant_index)
+        if dependency_error != ok { ret (normalized_integer(0usize, false), invalid_type(), dependency_error) }
+        ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
+    }
+    if expression.kind == .Unary {
+        let (operand, operand_type, operand_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.left)
+        if operand_error != ok { ret (normalized_integer(0usize, false), invalid_type(), operand_error) }
+        if expression.op != .PunctMinus { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
+        if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+        ret (normalized_integer(operand.magnitude, !operand.negative), operand_type, ok)
+    }
+    if expression.kind == .Binary {
+        if !expression.has_right { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let (left, left_type, left_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.left)
+        if left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), left_error) }
+        let (right, right_type, right_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.right)
+        if right_error != ok { ret (normalized_integer(0usize, false), invalid_type(), right_error) }
+        let (result_type, type_error) = constant_result_type(c, left_type, right_type)
+        if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
+        var result = normalized_integer(0usize, false)
+        var result_error = Unsupported
+        if expression.op == .PunctPlus { (result, result_error) = add_integer_values(left, right) }
+        if expression.op == .PunctMinus { (result, result_error) = subtract_integer_values(left, right) }
+        if expression.op == .PunctStar { (result, result_error) = multiply_integer_values(left, right) }
+        if expression.op == .PunctSlash { (result, result_error) = divide_integer_values(left, right) }
+        if expression.op == .PunctPercent { (result, result_error) = remainder_integer_values(left, right) }
+        if result_error != ok { ret (normalized_integer(0usize, false), invalid_type(), result_error) }
+        if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        ret (result, result_type, ok)
+    }
+    ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant)
+}
+
+fn aggregate_arguments_concrete(c: *Checker, template: Aggregate, first_argument: usize) -> bool {
+    var at = 0usize
+    while at < template.comptime_count {
+        let argument = c.generic_arguments[first_argument + at]
+        if !argument.set || argument.symbolic { ret false }
+        if argument.kind == .Type && argument.ty.kind == .TypeParameter { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn aggregate_arguments_equal(c: *Checker, template: Aggregate, first: usize, second: usize) -> bool {
+    var at = 0usize
+    while at < template.comptime_count {
+        let left = c.generic_arguments[first + at]
+        let right = c.generic_arguments[second + at]
+        if !left.set || !right.set || left.kind != right.kind || left.symbolic || right.symbolic { ret false }
+        if left.kind == .Type {
+            if !type_equal(c, left.ty, right.ty) { ret false }
+        } else {
+            if left.value != right.value { ret false }
+        }
+        at += 1usize
+    }
+    ret true
+}
+
+fn find_aggregate_instance(c: *Checker, template_index: usize, first_argument: usize) -> (usize, bool) {
+    if template_index >= c.aggregate_count { ret (0usize, false) }
+    let template = c.aggregates[template_index]
+    var at = template_index + 1usize
+    while at < c.aggregate_count {
+        let candidate = c.aggregates[at]
+        if candidate.instance && !candidate.generic && candidate.template_index == template_index && aggregate_arguments_equal(c, template, candidate.first_argument, first_argument) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn substitute_aggregate_type(c: *Checker, template_index: usize, first_argument: usize, ty: Type) -> (Type, err) {
+    if ty.kind == .TypeParameter {
+        if !ty.has_element { ret (invalid_type(), InvalidType) }
+        let (argument, found) = aggregate_argument(c, template_index, first_argument, ty.element)
+        if !found || argument.kind != .Type || argument.symbolic { ret (invalid_type(), MissingContext) }
+        ret (argument.ty, ok)
+    }
+    if ty.kind == .Named && ty.has_element {
+        if ty.element >= c.aggregate_count || !c.aggregates[ty.element].instance { ret (invalid_type(), InvalidType) }
+        let source = c.aggregates[ty.element]
+        let nested_template = c.aggregates[source.template_index]
+        if c.generic_argument_count + nested_template.comptime_count > c.generic_arguments.len { ret (invalid_type(), Capacity) }
+        let nested_first = c.generic_argument_count
+        var at = 0usize
+        while at < nested_template.comptime_count {
+            let source_argument = c.generic_arguments[source.first_argument + at]
+            var nested_argument = source_argument
+            if source_argument.kind == .Type {
+                let (specialized, specialize_error) = substitute_aggregate_type(c, template_index, first_argument, source_argument.ty)
+                if specialize_error != ok { ret (invalid_type(), specialize_error) }
+                nested_argument.ty = specialized
+            } else {
+                if source_argument.symbolic {
+                    let (value, value_type, value_error) = evaluate_aggregate_bound(c, template_index, first_argument, source_argument.expression)
+                    if value_error != ok || value.negative || (value_type.kind != .UntypedInteger && (value_type.kind != .Integer || !same(value_type.name, "usize"))) { ret (invalid_type(), TypeMismatch) }
+                    nested_argument.value = value.magnitude
+                    nested_argument.symbolic = false
+                }
+            }
+            c.generic_arguments[c.generic_argument_count] = nested_argument
+            c.generic_argument_count += 1usize
+            at += 1usize
+        }
+        let (nested_instance, instance_error) = instantiate_aggregate(c, source.template_index, nested_first)
+        if instance_error != ok { ret (invalid_type(), instance_error) }
+        var result = ty
+        result.element = nested_instance
+        ret (result, ok)
+    }
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Array {
+        if !ty.has_element || ty.element >= c.type_count { ret (invalid_type(), InvalidType) }
+        let (element, element_error) = substitute_aggregate_type(c, template_index, first_argument, c.types[ty.element])
+        if element_error != ok { ret (invalid_type(), element_error) }
+        let (stored_element, store_error) = store_type(c, element)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        var result = ty
+        result.element = stored_element
+        if ty.kind == .Array && !ty.has_length {
+            let (length, length_type, length_error) = evaluate_aggregate_bound(c, template_index, first_argument, ty.array_length)
+            if length_error != ok { ret (invalid_type(), length_error) }
+            if length.negative || (length_type.kind != .UntypedInteger && (length_type.kind != .Integer || !same(length_type.name, "usize"))) { ret (invalid_type(), TypeMismatch) }
+            result.array_length = length.magnitude
+            result.has_length = true
+        }
+        ret (result, ok)
+    }
+    ret (ty, ok)
+}
+
+fn instantiate_aggregate(c: *Checker, template_index: usize, first_argument: usize) -> (usize, err) {
+    if template_index >= c.aggregate_count { ret (0usize, InvalidType) }
+    let template = c.aggregates[template_index]
+    if !template.generic || template.instance { ret (0usize, InvalidType) }
+    let concrete = aggregate_arguments_concrete(c, template, first_argument)
+    if concrete {
+        let (cached, found) = find_aggregate_instance(c, template_index, first_argument)
+        if found { ret (cached, ok) }
+    }
+    if c.aggregate_count == c.aggregates.len { ret (0usize, Capacity) }
+    var instance = template
+    instance.first_field = c.aggregate_field_count
+    instance.field_count = 0usize
+    instance.template_index = template_index
+    instance.first_argument = first_argument
+    instance.generic = !concrete
+    instance.instance = true
+    if concrete {
+        var at = 0usize
+        while at < template.field_count {
+            if c.aggregate_field_count == c.aggregate_fields.len { ret (0usize, Capacity) }
+            let source = c.aggregate_fields[template.first_field + at]
+            let (specialized, specialize_error) = substitute_aggregate_type(c, template_index, first_argument, source.ty)
+            if specialize_error != ok { ret (0usize, specialize_error) }
+            c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: source.name, ty: specialized }
+            c.aggregate_field_count += 1usize
+            instance.field_count += 1usize
+            at += 1usize
+        }
+    }
+    let index = c.aggregate_count
+    c.aggregates[index] = instance
+    c.aggregate_count += 1usize
+    ret (index, ok)
 }
 
 fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
@@ -1258,8 +1551,6 @@ fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
     c.function_count = 0usize
     c.parameter_count = 0usize
     c.return_type_count = 0usize
-    c.comptime_parameter_count = 0usize
-    c.generic_argument_count = 0usize
     c.signature_function_count = 0usize
     try seed_intrinsic_signatures(c, g)
     var module_index = 0usize
@@ -1813,6 +2104,38 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
         if !found || argument.kind != .Type { ret (invalid_type(), MissingContext) }
         ret (argument.ty, ok)
     }
+    if ty.kind == .Named && ty.has_element {
+        if ty.element >= c.aggregate_count || !c.aggregates[ty.element].instance { ret (invalid_type(), InvalidType) }
+        let source = c.aggregates[ty.element]
+        let template = c.aggregates[source.template_index]
+        if c.generic_argument_count + template.comptime_count > c.generic_arguments.len { ret (invalid_type(), Capacity) }
+        let aggregate_first = c.generic_argument_count
+        var argument_at = 0usize
+        while argument_at < template.comptime_count {
+            let source_argument = c.generic_arguments[source.first_argument + argument_at]
+            var aggregate_argument_value = source_argument
+            if source_argument.kind == .Type {
+                let (specialized, specialize_error) = substitute_type(c, function_index, first_argument, source_argument.ty)
+                if specialize_error != ok { ret (invalid_type(), specialize_error) }
+                aggregate_argument_value.ty = specialized
+            } else {
+                if source_argument.symbolic {
+                    let (value, value_type, value_error) = evaluate_bound_expression(c, function_index, first_argument, source_argument.expression)
+                    if value_error != ok || value.negative || (value_type.kind != .UntypedInteger && (value_type.kind != .Integer || !same(value_type.name, "usize"))) { ret (invalid_type(), TypeMismatch) }
+                    aggregate_argument_value.value = value.magnitude
+                    aggregate_argument_value.symbolic = false
+                }
+            }
+            c.generic_arguments[c.generic_argument_count] = aggregate_argument_value
+            c.generic_argument_count += 1usize
+            argument_at += 1usize
+        }
+        let (aggregate_instance, aggregate_error) = instantiate_aggregate(c, source.template_index, aggregate_first)
+        if aggregate_error != ok { ret (invalid_type(), aggregate_error) }
+        var result = ty
+        result.element = aggregate_instance
+        ret (result, ok)
+    }
     if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Array {
         if !ty.has_element || ty.element >= c.type_count { ret (invalid_type(), InvalidType) }
         let (element, element_error) = substitute_type(c, function_index, first_argument, c.types[ty.element])
@@ -1984,7 +2307,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     var at = 0usize
     while at < generic.comptime_count {
         let parameter = c.comptime_parameters[generic.first_comptime + at]
-        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, set: false }
+        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, expression: 0usize, symbolic: false, set: false }
         c.generic_argument_count += 1usize
         at += 1usize
     }
@@ -2085,8 +2408,11 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         if parameter_found {
             if c.comptime_parameters[parameter_index].kind != .Type { ret (invalid_type(), InvalidType) }
             let (argument, argument_found) = active_argument(c, parameter_index)
-            if !argument_found { ret (invalid_type(), MissingContext) }
-            ret (argument.ty, ok)
+            if argument_found { ret (argument.ty, ok) }
+            var parameter_type = make_type(.TypeParameter, name, module_index)
+            parameter_type.element = parameter_index
+            parameter_type.has_element = true
+            ret (parameter_type, ok)
         }
         let (_, found) = resolve.find(c.resolver, module_index, name, .Type)
         if !found { ret (invalid_type(), InvalidType) }
@@ -2469,7 +2795,14 @@ fn check_named_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree
     let (constructed_type, type_error) = type_from_node(c, c.resolver, g, tree, module_index, header)
     if type_error != ok { ret (invalid_type(), type_error) }
     if constructed_type.kind != .Named { ret (invalid_type(), InvalidType) }
-    let (aggregate_index, found_aggregate) = find_aggregate(c, constructed_type.module_index, constructed_type.name)
+    var aggregate_index = 0usize
+    var found_aggregate = false
+    if constructed_type.has_element && constructed_type.element < c.aggregate_count {
+        aggregate_index = constructed_type.element
+        found_aggregate = true
+    } else {
+        (aggregate_index, found_aggregate) = find_aggregate(c, constructed_type.module_index, constructed_type.name)
+    }
     if !found_aggregate { ret (invalid_type(), InvalidType) }
     let aggregate = c.aggregates[aggregate_index]
     if aggregate.generic { ret (invalid_type(), Unsupported) }
