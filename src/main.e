@@ -336,6 +336,12 @@ fn self_test() -> err {
     if tree.nodes[15usize].kind != .FunctionType || tree.nodes[16usize].kind != .TypeDecl { ret lex.InvalidSource }
     let named_function_type_variadic_error = validate_test_parse("type Bad = fn(args: ...)\n")
     if named_function_type_variadic_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let signature_forms_error = validate_test_parse("extern fn c_variadic(value: i32, args: ...,)\nfn packed(args: ...,) {}\nfn bare(...,) {}\ntype Callback = extern fn(i32, ...,) -> i32\ntype EmptyArgs = Box[]\n")
+    if signature_forms_error != ok { ret lex.InvalidSource }
+    let one_return_type_error = validate_test_parse("fn invalid() -> (i32,) {}\n")
+    if one_return_type_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let missing_parameter_comma_error = validate_test_parse("fn invalid(first: i32 second: i32) {}\n")
+    if missing_parameter_comma_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let soft_type_error = parse.parse(&tree, "type Soft = struct {\n    value\n    :\n    i32,\n}\n")
     if soft_type_error != ok || tree.count != 5usize { ret lex.InvalidSource }

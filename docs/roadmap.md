@@ -249,8 +249,12 @@ literals, named payloads, positional values and bare PascalCase members. Local t
 annotations now recursively retain named, pointer, slice, array and function-type nodes, including
 array-length expressions, parameters and return specifications. Function
 declarations now reuse the same trees for typed comptime parameters, ordinary
-parameters and single- or multiple-type returns. Type aliases, aggregate fields and
-union payloads now recurse through those nodes; enum discriminants retain expression
+parameters and single- or multiple-type returns. Signature conformance covers named
+and bare declaration variadics, bare function-
+type variadics, trailing commas and empty comptime arguments; it rejects named
+function-type variadics, one-item return-type lists and missing parameter commas.
+Type aliases, aggregate fields and union payloads now recurse through those nodes;
+enum discriminants retain expression
 nodes; and enums and tagged unions retain their backing type. `if`/`else if`/`else`,
 `while` and `when` now retain condition expressions and recursively parsed blocks;
 canonical-casing lookahead disambiguates PascalCase aggregate literals from lowercase
