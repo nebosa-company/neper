@@ -207,6 +207,12 @@ $compoundChecked = & $compiler check-file (Join-Path $checkRoot 'compound_valid\
 if ($LASTEXITCODE -ne 0 -or $compoundChecked -ne 'module check ok') { throw 'compound assignments did not type-check' }
 $languageConstructsChecked = & $compiler check-file (Join-Path $checkRoot 'language_constructs_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $languageConstructsChecked -ne 'module check ok') { throw 'enum, error, loop and shift constructs did not type-check' }
+$deferChecked = & $compiler check-file (Join-Path $checkRoot 'defer_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $deferChecked -ne 'module check ok') { throw 'deferred calls, discards and blocks did not type-check' }
+$switchChecked = & $compiler check-file (Join-Path $checkRoot 'switch_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $switchChecked -ne 'module check ok') { throw 'enum, tagged-union and scalar switches did not type-check' }
+$tagChecked = & $compiler check-file (Join-Path $checkRoot 'tag_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $tagChecked -ne 'module check ok') { throw 'tagged-union tag values did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -328,7 +334,21 @@ $checkFailures = @(
     @('shift_signed_count', 'InvalidOperator'),
     @('shift_untyped_value', 'InvalidOperator'),
     @('for_non_iterable', 'InvalidOperator'),
-    @('break_outside_loop', 'Unsupported')
+    @('break_outside_loop', 'Unsupported'),
+    @('defer_return', 'InvalidReturn'),
+    @('defer_try', 'InvalidTry'),
+    @('defer_outer_break', 'Unsupported'),
+    @('defer_fallible_call', 'ArgumentCount'),
+    @('switch_non_exhaustive', 'NonExhaustiveSwitch'),
+    @('switch_duplicate_case', 'DuplicateCase'),
+    @('switch_duplicate_default', 'DuplicateCase'),
+    @('switch_non_constant', 'InvalidConstant'),
+    @('switch_invalid_subject', 'InvalidSwitch'),
+    @('switch_invalid_capture', 'InvalidSwitch'),
+    @('tag_invalid_type', 'InvalidType'),
+    @('tag_unknown_member', 'InvalidType'),
+    @('tag_capture', 'InvalidSwitch'),
+    @('switch_missing_return', 'MissingReturn')
 )
 foreach ($case in $checkFailures) {
     $checkOutput = & $compiler check-file (Join-Path $checkRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1

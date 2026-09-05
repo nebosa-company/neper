@@ -23,6 +23,9 @@ error ConstantCycle
 error ConstantOverflow
 error InvalidConstant
 error InvalidTry
+error InvalidSwitch
+error DuplicateCase
+error NonExhaustiveSwitch
 
 type Kind = enum u8 {
     Invalid,
@@ -33,6 +36,7 @@ type Kind = enum u8 {
     Float,
     String,
     Named,
+    Tag,
     Pointer,
     Slice,
     Array,
@@ -144,6 +148,28 @@ type IntegerValue = struct {
     negative: bool,
 }
 
+type SwitchKeyKind = enum u8 {
+    Invalid,
+    Integer,
+    Bool,
+    Error,
+    Member,
+}
+
+type SwitchKey = struct {
+    kind: SwitchKeyKind,
+    integer: IntegerValue,
+    boolean: bool,
+    module_index: usize,
+    name: str,
+}
+
+type CheckedSwitch = struct {
+    module_index: usize,
+    token_start: usize,
+    returns: bool,
+}
+
 type ConstantExprKind = enum u8 {
     Literal,
     Name,
@@ -182,6 +208,7 @@ type Checker = struct {
     generic_arguments: []GenericArgument,
     aggregates: []Aggregate,
     aggregate_fields: []AggregateField,
+    checked_switches: []CheckedSwitch,
     tokens: []lex.Token,
     locals: []Local,
     types: []Type,
@@ -196,6 +223,7 @@ type Checker = struct {
     signature_function_count: usize,
     aggregate_count: usize,
     aggregate_field_count: usize,
+    checked_switch_count: usize,
     token_count: usize,
     local_count: usize,
     type_count: usize,
@@ -209,6 +237,8 @@ type Checker = struct {
     active_first_argument: usize,
     active_arguments: bool,
     loop_depth: usize,
+    break_depth: usize,
+    defer_depth: usize,
     failure_module: usize,
     failure_name: str,
 }
@@ -232,6 +262,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.signature_function_count = 0usize
     c.aggregate_count = 0usize
     c.aggregate_field_count = 0usize
+    c.checked_switch_count = 0usize
     c.token_count = 0usize
     c.local_count = 0usize
     c.type_count = 0usize
@@ -245,6 +276,8 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.active_first_argument = 0usize
     c.active_arguments = false
     c.loop_depth = 0usize
+    c.break_depth = 0usize
+    c.defer_depth = 0usize
     c.failure_module = 0usize
     c.failure_name = ""
     ret ok
@@ -262,6 +295,12 @@ fn init_aggregates(c: *Checker, aggregates: []Aggregate, fields: []AggregateFiel
     if aggregates.len == 0usize || fields.len == 0usize { ret Capacity }
     c.aggregates = aggregates
     c.aggregate_fields = fields
+    ret ok
+}
+
+fn init_control(c: *Checker, switches: []CheckedSwitch) -> err {
+    if switches.len == 0usize { ret Capacity }
+    c.checked_switches = switches
     ret ok
 }
 
@@ -326,7 +365,7 @@ fn is_string_shape(c: *Checker, ty: Type) -> bool {
 fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
     if is_string_shape(c, a) || is_string_shape(c, b) { ret is_string_shape(c, a) && is_string_shape(c, b) }
     if a.kind != b.kind { ret false }
-    if a.kind == .Named {
+    if a.kind == .Named || a.kind == .Tag {
         if a.module_index != b.module_index || !same(a.name, b.name) || a.has_element != b.has_element { ret false }
         if a.has_element { ret a.element == b.element }
         ret true
@@ -757,7 +796,10 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     }
     var target_module = module_index
     var name = base
-    var saw_dot = false
+    let (qualified_module, has_qualifier) = resolve.qualifier(r, module_index, base)
+    if has_qualifier { target_module = qualified_module }
+    var path_identifiers = 0usize
+    var wants_tag = false
     var has_arguments = false
     var at = node.token_start + 1usize
     while at < node.token_end {
@@ -766,19 +808,25 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
             has_arguments = true
             break
         }
-        if token.kind == .PunctDot {
-            saw_dot = true
-        } else {
-            if saw_dot && token.kind == .Identifier {
-                let (qualified_module, found) = resolve.qualifier(r, module_index, base)
-                if found {
-                    target_module = qualified_module
-                    name = g.modules[module_index].text[token.start..token.end]
+        if token.kind == .Identifier {
+            let part = g.modules[module_index].text[token.start..token.end]
+            if has_qualifier {
+                if path_identifiers == 0usize {
+                    name = part
+                } else {
+                    if path_identifiers != 1usize || !same(part, "Tag") { ret (invalid_type(), InvalidType) }
+                    wants_tag = true
                 }
+            } else {
+                if path_identifiers != 0usize || !same(part, "Tag") { ret (invalid_type(), InvalidType) }
+                wants_tag = true
             }
+            path_identifiers += 1usize
         }
         at += 1usize
     }
+    if has_qualifier && path_identifiers == 0usize { ret (invalid_type(), InvalidType) }
+    if wants_tag && has_arguments { ret (invalid_type(), InvalidType) }
     var result = make_type(.Named, name, target_module)
     if has_arguments {
         let (template_index, found_template) = find_aggregate(c, target_module, name)
@@ -829,6 +877,13 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         result.element = instance_index
         result.has_element = true
         ret (result, ok)
+    }
+    if wants_tag {
+        let (canonical_subject, canonical_error) = canonical_type(c, result)
+        if canonical_error != ok { ret (invalid_type(), canonical_error) }
+        let (tag, found_tag) = tagged_union_tag_type(c, canonical_subject)
+        if !found_tag { ret (invalid_type(), InvalidType) }
+        ret (tag, ok)
     }
     if !c.expand_aliases { ret (result, ok) }
     let (canonical, canonical_error) = canonical_type(c, result)
@@ -951,15 +1006,30 @@ fn find_aggregate_field(c: *Checker, ty: Type, name: str) -> (usize, bool) {
 }
 
 fn aggregate_for_type(c: *Checker, ty: Type) -> (usize, bool) {
-    if ty.kind != .Named { ret (0usize, false) }
+    if ty.kind != .Named && ty.kind != .Tag { ret (0usize, false) }
     if ty.has_element && ty.element < c.aggregate_count { ret (ty.element, true) }
     let (aggregate_index, found) = find_aggregate(c, ty.module_index, ty.name)
     ret (aggregate_index, found)
 }
 
 fn is_enum_type(c: *Checker, ty: Type) -> bool {
+    if ty.kind == .Tag { ret ty.has_element && ty.element < c.aggregate_count && c.aggregates[ty.element].kind == .TaggedUnion }
     let (aggregate_index, found) = aggregate_for_type(c, ty)
     ret found && c.aggregates[aggregate_index].kind == .Enum
+}
+
+fn tagged_union_tag_type(c: *Checker, ty: Type) -> (Type, bool) {
+    var subject = ty
+    while subject.kind == .Pointer {
+        if !subject.has_element || subject.element >= c.type_count { ret (invalid_type(), false) }
+        subject = c.types[subject.element]
+    }
+    let (aggregate_index, found) = aggregate_for_type(c, subject)
+    if !found || c.aggregates[aggregate_index].kind != .TaggedUnion { ret (invalid_type(), false) }
+    var tag = make_type(.Tag, c.aggregates[aggregate_index].name, c.aggregates[aggregate_index].module_index)
+    tag.element = aggregate_index
+    tag.has_element = true
+    ret (tag, true)
 }
 
 fn field_expression_name(c: *Checker, text: str, tree: *parse.Tree, node: syntax.Node) -> (str, bool) {
@@ -1650,14 +1720,14 @@ fn qualified_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 }
 
 fn static_enum_member(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node) -> (Type, bool, bool) {
-    var identifiers: [3]str = zero
+    var identifiers: [4]str = zero
     var count = 0usize
     let text = g.modules[module_index].text
     var at = node.token_start
     while at < node.token_end {
         let token = c.tokens[at]
         if token.kind == .Identifier {
-            if count == 3usize { ret (invalid_type(), false, false) }
+            if count == 4usize { ret (invalid_type(), false, false) }
             identifiers[count] = text[token.start..token.end]
             count += 1usize
         }
@@ -1666,16 +1736,32 @@ fn static_enum_member(c: *Checker, g: *graph.Graph, module_index: usize, node: s
     var target_module = module_index
     var type_name = ""
     var member_name = ""
+    var tag_member = false
     if count == 2usize {
         type_name = identifiers[0usize]
         member_name = identifiers[1usize]
     } else {
-        if count != 3usize { ret (invalid_type(), false, false) }
-        let (imported, found_import) = imported_module(g, module_index, identifiers[0usize])
-        if !found_import { ret (invalid_type(), false, false) }
-        target_module = imported
-        type_name = identifiers[1usize]
-        member_name = identifiers[2usize]
+        if count == 3usize {
+            let (imported, found_import) = imported_module(g, module_index, identifiers[0usize])
+            if found_import {
+                target_module = imported
+                type_name = identifiers[1usize]
+                member_name = identifiers[2usize]
+            } else {
+                if !same(identifiers[1usize], "Tag") { ret (invalid_type(), false, false) }
+                type_name = identifiers[0usize]
+                member_name = identifiers[2usize]
+                tag_member = true
+            }
+        } else {
+            if count != 4usize || !same(identifiers[2usize], "Tag") { ret (invalid_type(), false, false) }
+            let (imported, found_import) = imported_module(g, module_index, identifiers[0usize])
+            if !found_import { ret (invalid_type(), false, false) }
+            target_module = imported
+            type_name = identifiers[1usize]
+            member_name = identifiers[3usize]
+            tag_member = true
+        }
     }
     let (_, found_type) = resolve.find(c.resolver, target_module, type_name, .Type)
     if !found_type { ret (invalid_type(), false, false) }
@@ -1683,10 +1769,18 @@ fn static_enum_member(c: *Checker, g: *graph.Graph, module_index: usize, node: s
     let (canonical, canonical_error) = canonical_type(c, named)
     if canonical_error != ok { ret (invalid_type(), false, false) }
     let (aggregate_index, found_aggregate) = aggregate_for_type(c, canonical)
-    if !found_aggregate || c.aggregates[aggregate_index].kind != .Enum { ret (invalid_type(), false, false) }
+    if !found_aggregate { ret (invalid_type(), false, false) }
+    if tag_member {
+        if c.aggregates[aggregate_index].kind != .TaggedUnion { ret (invalid_type(), false, false) }
+    } else {
+        if c.aggregates[aggregate_index].kind != .Enum { ret (invalid_type(), false, false) }
+    }
     let (_, found_member) = aggregate_field_for_name(c, c.aggregates[aggregate_index], member_name)
     if !found_member { ret (invalid_type(), false, true) }
-    ret (canonical, true, true)
+    if !tag_member { ret (canonical, true, true) }
+    let (tag, found_tag) = tagged_union_tag_type(c, canonical)
+    if !found_tag { ret (invalid_type(), false, false) }
+    ret (tag, true, true)
 }
 
 fn find_qualified_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (usize, bool) {
@@ -3071,6 +3165,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         if !found_aggregate { ret (invalid_type(), InvalidType) }
         let aggregate = c.aggregates[aggregate_index]
         if aggregate.kind != .Enum && aggregate.kind != .TaggedUnion { ret (invalid_type(), InvalidType) }
+        if expected.kind == .Tag && aggregate.kind != .TaggedUnion { ret (invalid_type(), InvalidType) }
         var member = ""
         var member_at = node.token_start
         while member_at < node.token_end {
@@ -3080,7 +3175,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         }
         let (field_index, found_member) = aggregate_field_for_name(c, aggregate, member)
         if !found_member { ret (invalid_type(), InvalidType) }
-        if aggregate.kind == .TaggedUnion && c.aggregate_fields[field_index].ty.kind != .Void { ret (invalid_type(), InvalidType) }
+        if expected.kind != .Tag && aggregate.kind == .TaggedUnion && c.aggregate_fields[field_index].ty.kind != .Void { ret (invalid_type(), InvalidType) }
         ret (expected, ok)
     }
     if node.kind == .FieldExpr {
@@ -3115,6 +3210,12 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             if base.kind != .Array && base.kind != .Slice && base.kind != .String { ret (invalid_type(), InvalidOperator) }
             let (length_type, context_error) = apply_context(c, make_type(.Integer, "usize", module_index), expected)
             ret (length_type, context_error)
+        }
+        if same(field, "tag") {
+            let (tag, found_tag) = tagged_union_tag_type(c, base)
+            if !found_tag { ret (invalid_type(), InvalidType) }
+            let (contextual_tag, context_error) = apply_context(c, tag, expected)
+            ret (contextual_tag, context_error)
         }
         let (field_index, found_field) = find_aggregate_field(c, base, field)
         if !found_field { ret (invalid_type(), InvalidType) }
@@ -3421,6 +3522,7 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
 }
 
 fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
+    if c.defer_depth != 0usize { ret InvalidReturn }
     var count = 0usize
     let end = node.first_child + node.child_count
     var at = node.first_child
@@ -3483,14 +3585,20 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
                 if condition_type.kind != .Bool { ret InvalidCondition }
                 first = false
             } else {
-                if node.kind == .WhileStmt { c.loop_depth += 1usize }
+                if node.kind == .WhileStmt {
+                    c.loop_depth += 1usize
+                    c.break_depth += 1usize
+                }
                 var branch_error = ok
                 if child.kind == .Block {
                     branch_error = check_block(c, r, g, tree, module_index, child, function)
                 } else {
                     branch_error = check_statement(c, r, g, tree, module_index, child_index, function)
                 }
-                if node.kind == .WhileStmt { c.loop_depth = c.loop_depth - 1usize }
+                if node.kind == .WhileStmt {
+                    c.loop_depth = c.loop_depth - 1usize
+                    c.break_depth = c.break_depth - 1usize
+                }
                 if branch_error != ok { ret branch_error }
             }
         }
@@ -3510,6 +3618,7 @@ fn check_call_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
 }
 
 fn check_try_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
+    if c.defer_depth != 0usize { ret InvalidTry }
     let (child_index, found) = first_node_child(tree, node)
     if !found { ret parse.InvalidSyntax }
     let call_node = tree.nodes[child_index]
@@ -3582,8 +3691,313 @@ fn check_for_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
         }
     }
     c.loop_depth += 1usize
+    c.break_depth += 1usize
     let body_error = check_block(c, r, g, tree, module_index, tree.nodes[block_index], function)
     c.loop_depth = c.loop_depth - 1usize
+    c.break_depth = c.break_depth - 1usize
+    c.local_count = checkpoint
+    ret body_error
+}
+
+fn check_statement_kind(kind: syntax.Kind) -> bool {
+    ret kind == .BindingStmt || kind == .AssignmentStmt || kind == .CallStmt || kind == .TryStmt || kind == .ReturnStmt || kind == .DeferStmt || kind == .NocheckStmt || kind == .SharedVarStmt || kind == .BreakStmt || kind == .ContinueStmt || kind == .IfStmt || kind == .WhileStmt || kind == .ForStmt || kind == .WhenStmt || kind == .SwitchStmt || kind == .ErrorNode
+}
+
+fn switch_member_name(c: *Checker, text: str, node: syntax.Node) -> (str, bool) {
+    if node.kind != .MemberExpr && node.kind != .FieldExpr { ret ("", false) }
+    var name = ""
+    var at = node.token_start
+    while at < node.token_end {
+        let token = c.tokens[at]
+        if token.kind == .Identifier { name = text[token.start..token.end] }
+        at += 1usize
+    }
+    ret (name, name.len != 0usize)
+}
+
+fn unwrap_switch_case(tree: *parse.Tree, node_index: usize) -> usize {
+    let node = tree.nodes[node_index]
+    if node.kind != .GroupExpr { ret node_index }
+    let (child_index, found) = first_node_child(tree, node)
+    if !found { ret node_index }
+    ret unwrap_switch_case(tree, child_index)
+}
+
+fn switch_case_key(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, subject: Type, aggregate_index: usize, has_aggregate: bool) -> (SwitchKey, usize, bool, err) {
+    var key: SwitchKey = zero
+    let unwrapped_index = unwrap_switch_case(tree, node_index)
+    let node = tree.nodes[unwrapped_index]
+    let text = g.modules[module_index].text
+    if has_aggregate {
+        let aggregate = c.aggregates[aggregate_index]
+        if aggregate.kind == .TaggedUnion {
+            if node.kind != .MemberExpr { ret (key, 0usize, false, InvalidSwitch) }
+        } else {
+            let (_, case_error) = check_expr(c, g, tree, module_index, unwrapped_index, subject)
+            if case_error != ok { ret (key, 0usize, false, case_error) }
+        }
+        let (member, has_member) = switch_member_name(c, text, node)
+        if !has_member { ret (key, 0usize, false, InvalidSwitch) }
+        let (field_index, found_field) = aggregate_field_for_name(c, aggregate, member)
+        if !found_field { ret (key, 0usize, false, InvalidSwitch) }
+        key.kind = .Member
+        key.name = member
+        ret (key, field_index, true, ok)
+    }
+    let (_, case_error) = check_expr(c, g, tree, module_index, unwrapped_index, subject)
+    if case_error != ok { ret (key, 0usize, false, case_error) }
+    if subject.kind == .Integer {
+        let checkpoint = c.constant_expr_count
+        let (expression_index, copy_error) = copy_constant_expr(c, g, tree, module_index, unwrapped_index)
+        if copy_error != ok {
+            c.constant_expr_count = checkpoint
+            ret (key, 0usize, false, InvalidConstant)
+        }
+        let (value, value_type, value_error) = evaluate_constant_expr(c, expression_index)
+        c.constant_expr_count = checkpoint
+        if value_error != ok || !is_integer(value_type) || !integer_representable(value, subject) { ret (key, 0usize, false, InvalidConstant) }
+        key.kind = .Integer
+        key.integer = value
+        ret (key, 0usize, false, ok)
+    }
+    if subject.kind == .Bool {
+        if node.kind != .LiteralExpr { ret (key, 0usize, false, InvalidConstant) }
+        let token = c.tokens[node.token_start]
+        if token.kind != .KwTrue && token.kind != .KwFalse { ret (key, 0usize, false, InvalidConstant) }
+        key.kind = .Bool
+        key.boolean = token.kind == .KwTrue
+        ret (key, 0usize, false, ok)
+    }
+    if subject.kind == .Err {
+        key.kind = .Error
+        if node.kind == .LiteralExpr && c.tokens[node.token_start].kind == .KwOk {
+            key.name = "ok"
+            ret (key, 0usize, false, ok)
+        }
+        if node.kind == .NameExpr {
+            let token = c.tokens[node.token_start]
+            if token.kind != .Identifier { ret (key, 0usize, false, InvalidConstant) }
+            key.module_index = module_index
+            key.name = text[token.start..token.end]
+            ret (key, 0usize, false, ok)
+        }
+        if node.kind == .FieldExpr {
+            let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
+            if !found_member { ret (key, 0usize, false, InvalidConstant) }
+            key.module_index = target_module
+            key.name = member
+            ret (key, 0usize, false, ok)
+        }
+        ret (key, 0usize, false, InvalidConstant)
+    }
+    ret (key, 0usize, false, InvalidSwitch)
+}
+
+fn switch_keys_equal(left: SwitchKey, right: SwitchKey) -> bool {
+    if left.kind != right.kind { ret false }
+    if left.kind == .Integer { ret left.integer.magnitude == right.integer.magnitude && left.integer.negative == right.integer.negative }
+    if left.kind == .Bool { ret left.boolean == right.boolean }
+    if left.kind == .Error { ret left.module_index == right.module_index && same(left.name, right.name) }
+    if left.kind == .Member { ret same(left.name, right.name) }
+    ret false
+}
+
+fn switch_case_seen_before(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, switch_node: syntax.Node, current_index: usize, subject: Type, aggregate_index: usize, has_aggregate: bool, current: SwitchKey) -> (bool, err) {
+    let end = switch_node.first_child + switch_node.child_count
+    var at = switch_node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child = tree.nodes[tree.children[at].index]
+            if child.kind == .SwitchArm {
+                let arm_end = child.first_child + child.child_count
+                var arm_at = child.first_child
+                while arm_at < arm_end {
+                    if tree.children[arm_at].node {
+                        let prior_index = tree.children[arm_at].index
+                        let prior = tree.nodes[prior_index]
+                        if !check_statement_kind(prior.kind) {
+                            if prior_index == current_index { ret (false, ok) }
+                            let (prior_key, prior_field, prior_has_field, prior_error) = switch_case_key(c, g, tree, module_index, prior_index, subject, aggregate_index, has_aggregate)
+                            if prior_error != ok { ret (false, prior_error) }
+                            if switch_keys_equal(prior_key, current) { ret (true, ok) }
+                        }
+                    }
+                    arm_at += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret (false, ok)
+}
+
+fn switch_capture_name(c: *Checker, text: str, arm: syntax.Node) -> (str, bool) {
+    var saw_as = false
+    var at = arm.token_start
+    while at < arm.token_end {
+        let token = c.tokens[at]
+        if token.kind == .KwAs {
+            saw_as = true
+        } else {
+            if saw_as && token.kind == .Identifier { ret (text[token.start..token.end], true) }
+        }
+        at += 1usize
+    }
+    ret ("", false)
+}
+
+fn store_checked_switch(c: *Checker, module_index: usize, token_start: usize, returns: bool) -> err {
+    if c.checked_switch_count == c.checked_switches.len { ret Capacity }
+    c.checked_switches[c.checked_switch_count] = CheckedSwitch { module_index: module_index, token_start: token_start, returns: returns }
+    c.checked_switch_count += 1usize
+    ret ok
+}
+
+fn checked_switch_returns(c: *Checker, module_index: usize, token_start: usize) -> bool {
+    var at = c.checked_switch_count
+    while at > 0usize {
+        at = at - 1usize
+        let item = c.checked_switches[at]
+        if item.module_index == module_index && item.token_start == token_start { ret item.returns }
+    }
+    ret false
+}
+
+fn switch_arm_returns(c: *Checker, tree: *parse.Tree, module_index: usize, arm: syntax.Node) -> bool {
+    let end = arm.first_child + arm.child_count
+    var at = arm.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child = tree.nodes[tree.children[at].index]
+            if check_statement_kind(child.kind) && statement_returns(c, tree, module_index, child) { ret true }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
+    var subject_index = 0usize
+    var has_subject = false
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if tree.nodes[child_index].kind != .SwitchArm {
+                subject_index = child_index
+                has_subject = true
+                break
+            }
+        }
+        at += 1usize
+    }
+    if !has_subject { ret parse.InvalidSyntax }
+    let (subject, subject_error) = check_expr(c, g, tree, module_index, subject_index, invalid_type())
+    if subject_error != ok { ret subject_error }
+    let (aggregate_index, has_aggregate) = aggregate_for_type(c, subject)
+    if has_aggregate {
+        let aggregate_kind = c.aggregates[aggregate_index].kind
+        if aggregate_kind != .Enum && aggregate_kind != .TaggedUnion { ret InvalidSwitch }
+    } else {
+        if subject.kind != .Integer && subject.kind != .Bool && subject.kind != .Err { ret InvalidSwitch }
+    }
+    var default_seen = false
+    var covered_count = 0usize
+    var arm_count = 0usize
+    var returning_arm_count = 0usize
+    at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let arm = tree.nodes[tree.children[at].index]
+            if arm.kind == .SwitchArm {
+                arm_count += 1usize
+                let checkpoint = c.local_count
+                let is_default = c.tokens[arm.token_start].kind == .KwDefault
+                var case_count = 0usize
+                var captured_field_index = 0usize
+                var has_captured_field = false
+                let arm_end = arm.first_child + arm.child_count
+                var arm_at = arm.first_child
+                if is_default {
+                    if default_seen { ret DuplicateCase }
+                    default_seen = true
+                } else {
+                    while arm_at < arm_end {
+                        if tree.children[arm_at].node {
+                            let case_index = tree.children[arm_at].index
+                            if !check_statement_kind(tree.nodes[case_index].kind) {
+                                let (key, field_index, has_field, key_error) = switch_case_key(c, g, tree, module_index, case_index, subject, aggregate_index, has_aggregate)
+                                if key_error != ok { ret key_error }
+                                let (duplicate, duplicate_error) = switch_case_seen_before(c, g, tree, module_index, node, case_index, subject, aggregate_index, has_aggregate, key)
+                                if duplicate_error != ok { ret duplicate_error }
+                                if duplicate { ret DuplicateCase }
+                                case_count += 1usize
+                                if has_aggregate { covered_count += 1usize }
+                                captured_field_index = field_index
+                                has_captured_field = has_field
+                            }
+                        }
+                        arm_at += 1usize
+                    }
+                    if case_count == 0usize { ret parse.InvalidSyntax }
+                }
+                let (capture, has_capture) = switch_capture_name(c, g.modules[module_index].text, arm)
+                if has_capture {
+                    if is_default || subject.kind != .Named || !has_aggregate || c.aggregates[aggregate_index].kind != .TaggedUnion || case_count != 1usize || !has_captured_field { ret InvalidSwitch }
+                    let payload = c.aggregate_fields[captured_field_index].ty
+                    if payload.kind == .Void { ret InvalidSwitch }
+                    let capture_error = add_local(c, capture, payload, false)
+                    if capture_error != ok {
+                        c.local_count = checkpoint
+                        ret capture_error
+                    }
+                }
+                c.break_depth += 1usize
+                arm_at = arm.first_child
+                var body_error = ok
+                while arm_at < arm_end {
+                    if tree.children[arm_at].node {
+                        let statement_index = tree.children[arm_at].index
+                        if check_statement_kind(tree.nodes[statement_index].kind) {
+                            body_error = check_statement(c, r, g, tree, module_index, statement_index, function)
+                            if body_error != ok { break }
+                        }
+                    }
+                    arm_at += 1usize
+                }
+                c.break_depth = c.break_depth - 1usize
+                if body_error == ok && switch_arm_returns(c, tree, module_index, arm) { returning_arm_count += 1usize }
+                c.local_count = checkpoint
+                if body_error != ok { ret body_error }
+            }
+        }
+        at += 1usize
+    }
+    if has_aggregate && !default_seen && covered_count != c.aggregates[aggregate_index].field_count { ret NonExhaustiveSwitch }
+    let exhaustive = default_seen || has_aggregate
+    ret store_checked_switch(c, module_index, node.token_start, exhaustive && arm_count != 0usize && arm_count == returning_arm_count)
+}
+
+fn check_defer_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
+    let (child_index, found) = first_node_child(tree, node)
+    if !found { ret parse.InvalidSyntax }
+    let checkpoint = c.local_count
+    let saved_loop_depth = c.loop_depth
+    let saved_break_depth = c.break_depth
+    c.loop_depth = 0usize
+    c.break_depth = 0usize
+    c.defer_depth += 1usize
+    let child = tree.nodes[child_index]
+    var body_error = ok
+    if child.kind == .Block {
+        body_error = check_block(c, r, g, tree, module_index, child, function)
+    } else {
+        body_error = check_statement(c, r, g, tree, module_index, child_index, function)
+    }
+    c.defer_depth = c.defer_depth - 1usize
+    c.loop_depth = saved_loop_depth
+    c.break_depth = saved_break_depth
     c.local_count = checkpoint
     ret body_error
 }
@@ -3744,13 +4158,19 @@ fn check_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pa
     if node.kind == .ReturnStmt { ret check_return(c, g, tree, module_index, node, function) }
     if node.kind == .IfStmt || node.kind == .WhileStmt { ret check_condition_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .ForStmt { ret check_for_statement(c, r, g, tree, module_index, node, function) }
-    if node.kind == .BreakStmt || node.kind == .ContinueStmt {
+    if node.kind == .SwitchStmt { ret check_switch_statement(c, r, g, tree, module_index, node, function) }
+    if node.kind == .BreakStmt {
+        if c.break_depth == 0usize { ret Unsupported }
+        ret ok
+    }
+    if node.kind == .ContinueStmt {
         if c.loop_depth == 0usize { ret Unsupported }
         ret ok
     }
     if node.kind == .CallStmt { ret check_call_statement(c, g, tree, module_index, node) }
     if node.kind == .TryStmt { ret check_try_statement(c, g, tree, module_index, node, function) }
     if node.kind == .AssignmentStmt { ret check_assignment(c, g, tree, module_index, node, function) }
+    if node.kind == .DeferStmt { ret check_defer_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .NocheckStmt {
         let checkpoint = c.local_count
         let child_error = check_children(c, r, g, tree, module_index, node, function)
@@ -3772,13 +4192,14 @@ fn contains_loop_break(tree: *parse.Tree, node: syntax.Node) -> bool {
     ret false
 }
 
-fn statement_returns(c: *Checker, tree: *parse.Tree, node: syntax.Node) -> bool {
+fn statement_returns(c: *Checker, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> bool {
     if node.kind == .ReturnStmt { ret true }
+    if node.kind == .SwitchStmt { ret checked_switch_returns(c, module_index, node.token_start) }
     if node.kind == .Block {
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node && statement_returns(c, tree, tree.nodes[tree.children[at].index]) { ret true }
+            if tree.children[at].node && statement_returns(c, tree, module_index, tree.nodes[tree.children[at].index]) { ret true }
             at += 1usize
         }
         ret false
@@ -3811,7 +4232,7 @@ fn statement_returns(c: *Checker, tree: *parse.Tree, node: syntax.Node) -> bool 
                     first = false
                 } else {
                     branch_count += 1usize
-                    if statement_returns(c, tree, tree.nodes[tree.children[at].index]) { returning_count += 1usize }
+                    if statement_returns(c, tree, module_index, tree.nodes[tree.children[at].index]) { returning_count += 1usize }
                 }
             }
             at += 1usize
@@ -3843,7 +4264,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
             if child.kind == .Block {
                 let body_error = check_block(c, r, g, tree, module_index, child, function)
                 if body_error != ok { ret body_error }
-                if function.return_count != 0usize && !statement_returns(c, tree, child) { ret MissingReturn }
+                if function.return_count != 0usize && !statement_returns(c, tree, module_index, child) { ret MissingReturn }
                 ret ok
             }
         }

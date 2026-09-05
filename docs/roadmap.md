@@ -402,8 +402,13 @@ string `for` loops install scoped index/value bindings with loop-valid
 `break`/`continue`. Pointer equality and enum equality/ordering are checked, and an
 unbroken `while true` is non-fallthrough for guaranteed-return analysis. The entire
 self-hosted compiler, including `src/check.e` and `src/main.e`, now passes this checker
-on Windows and Linux. Wider intermediate constant arithmetic, bitwise and shift
-constant expressions, wrapping constant operators, tagged-union tag checks remain outside the
+on Windows and Linux. `defer` now checks captured calls, discarded fallible calls and
+block bodies under the no-escaping-control rule. Enum, tagged-union, integer, `bool`
+and `err` switches validate compile-time cases, duplicates, payload captures and
+exhaustiveness; caller-owned switch facts feed guaranteed-return analysis. Tagged-union
+`.tag`, contextual tag members and local/imported `Union.Tag.Member` values use a
+distinct nominal tag type. Wider intermediate constant arithmetic, bitwise and shift
+constant expressions and wrapping constant operators remain outside the
 `check-file` checkpoint. Unsupported expression and statement
 forms fail explicitly rather than being accepted unchecked. The next type-checking
 increments replace those boundaries with remaining control flow and declaration-time

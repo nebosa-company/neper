@@ -288,6 +288,12 @@ compound_checked=$($test_build/neper-self check-file "$check_root/compound_valid
 [ "$compound_checked" = 'module check ok' ]
 language_constructs_checked=$($test_build/neper-self check-file "$check_root/language_constructs_valid/src/main.e" "$repo" x64 linux)
 [ "$language_constructs_checked" = 'module check ok' ]
+defer_checked=$($test_build/neper-self check-file "$check_root/defer_valid/src/main.e" "$repo" x64 linux)
+[ "$defer_checked" = 'module check ok' ]
+switch_checked=$($test_build/neper-self check-file "$check_root/switch_valid/src/main.e" "$repo" x64 linux)
+[ "$switch_checked" = 'module check ok' ]
+tag_checked=$($test_build/neper-self check-file "$check_root/tag_valid/src/main.e" "$repo" x64 linux)
+[ "$tag_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -421,6 +427,20 @@ expect_check_error shift_signed_count InvalidOperator
 expect_check_error shift_untyped_value InvalidOperator
 expect_check_error for_non_iterable InvalidOperator
 expect_check_error break_outside_loop Unsupported
+expect_check_error defer_return InvalidReturn
+expect_check_error defer_try InvalidTry
+expect_check_error defer_outer_break Unsupported
+expect_check_error defer_fallible_call ArgumentCount
+expect_check_error switch_non_exhaustive NonExhaustiveSwitch
+expect_check_error switch_duplicate_case DuplicateCase
+expect_check_error switch_duplicate_default DuplicateCase
+expect_check_error switch_non_constant InvalidConstant
+expect_check_error switch_invalid_subject InvalidSwitch
+expect_check_error switch_invalid_capture InvalidSwitch
+expect_check_error tag_invalid_type InvalidType
+expect_check_error tag_unknown_member InvalidType
+expect_check_error tag_capture InvalidSwitch
+expect_check_error switch_missing_return MissingReturn
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
 [ "$valid_scopes" = 'module resolve ok' ]

@@ -775,6 +775,8 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if aggregates_error != ok { ret aggregates_error }
     let (aggregate_fields, aggregate_fields_error) = mem.alloc[check.AggregateField](a, 8192usize)
     if aggregate_fields_error != ok { ret aggregate_fields_error }
+    let (checked_switches, checked_switches_error) = mem.alloc[check.CheckedSwitch](a, 4096usize)
+    if checked_switches_error != ok { ret checked_switches_error }
     let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
     if tokens_error != ok { ret tokens_error }
     let (locals, locals_error) = mem.alloc[check.Local](a, 16384usize)
@@ -789,7 +791,8 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if constant_exprs_error != ok { ret constant_exprs_error }
     try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, constant_exprs)
     try check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
-    ret check.init_aggregates(checker, aggregates, aggregate_fields)
+    try check.init_aggregates(checker, aggregates, aggregate_fields)
+    ret check.init_control(checker, checked_switches)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

@@ -235,8 +235,12 @@ integer-range, array, slice and string `for` loops; and loop-scoped `break`/`con
 Pointer equality and enum equality/ordering use their declared operand types. Infinite
 `while true` bodies without a reachable loop break satisfy non-fallthrough return
 analysis. The complete self-hosted compiler, including `src/check.e` and `src/main.e`,
-now passes its own checker on Windows and Linux. Tagged-union tag checks remain outside
-this checkpoint. Unsupported expression
+now passes its own checker on Windows and Linux. Deferred calls, discarded fallible
+calls and block bodies enforce their no-escaping-control rule. Enum, tagged-union,
+integer, `bool` and `err` switches validate constant cases, duplicates, payload
+captures and exhaustiveness, and record guaranteed-return facts in caller-owned
+storage. Tagged-union `.tag`, contextual tag members and local/imported
+`Union.Tag.Member` values now have a distinct nominal tag type. Unsupported expression
 and statement forms fail explicitly instead of being silently accepted; cross-platform
 fixtures freeze both the implemented behavior and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64
