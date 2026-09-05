@@ -16,12 +16,12 @@ fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize
     ret ok
 }
 
-fn validate_test_parse(source: str) -> err {
+fn validate_test_parse(text: str) -> err {
     var nodes: [64]syntax.Node = zero
     var children: [512]syntax.Child = zero
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, nodes[..], children[..])
-    ret parse.parse(&tree, source)
+    ret parse.parse(&tree, text)
 }
 
 fn self_test() -> err {
@@ -709,13 +709,13 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
-fn validate_cli_parse(source: str) -> err {
+fn validate_cli_parse(text: str) -> err {
     // The CLI supplies explicit storage; parser lists have no separate caps.
     var nodes: [1024]syntax.Node = zero
     var children: [16384]syntax.Child = zero
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, nodes[..], children[..])
-    ret parse.parse(&tree, source)
+    ret parse.parse(&tree, text)
 }
 
 fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
@@ -735,7 +735,9 @@ fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
     if symbols_error != ok { ret symbols_error }
     let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
     if tokens_error != ok { ret tokens_error }
-    ret resolve.init(resolver, symbols, tokens)
+    let (locals, locals_error) = mem.alloc[resolve.Local](a, 16384usize)
+    if locals_error != ok { ret locals_error }
+    ret resolve.init(resolver, symbols, tokens, locals)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

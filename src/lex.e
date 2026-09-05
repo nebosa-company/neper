@@ -421,15 +421,15 @@ fn take_invalid_utf8(s: *Scanner) {
     s.column_utf16 += 1usize
 }
 
-fn trivia_init(source: str, token: Token) -> TriviaScanner {
+fn trivia_init(source: str, owner: Token) -> TriviaScanner {
     ret TriviaScanner{
         source: source,
-        off: token.leading_start,
-        end: token.start,
-        line: token.leading_line,
-        column: token.leading_column,
-        column_utf16: token.leading_column_utf16,
-        comment_continuation: token.leading_comment,
+        off: owner.leading_start,
+        end: owner.start,
+        line: owner.leading_line,
+        column: owner.leading_column,
+        column_utf16: owner.leading_column_utf16,
+        comment_continuation: owner.leading_comment,
     }
 }
 

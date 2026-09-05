@@ -186,14 +186,14 @@ fn valid_arch(arch: str) -> bool {
     ret same(arch, "x64") || same(arch, "x86") || same(arch, "aarch64") || same(arch, "spv") || same(arch, "ptx")
 }
 
-fn valid_os(os: str) -> bool {
-    ret same(os, "windows") || same(os, "linux") || same(os, "macos") || same(os, "none")
+fn valid_os(value: str) -> bool {
+    ret same(value, "windows") || same(value, "linux") || same(value, "macos") || same(value, "none")
 }
 
-fn valid_target(arch: str, os: str) -> bool {
-    if same(arch, "spv") || same(arch, "ptx") { ret same(os, "none") }
-    if same(os, "none") { ret false }
-    if same(arch, "x86") && same(os, "macos") { ret false }
+fn valid_target(arch: str, target_os: str) -> bool {
+    if same(arch, "spv") || same(arch, "ptx") { ret same(target_os, "none") }
+    if same(target_os, "none") { ret false }
+    if same(arch, "x86") && same(target_os, "macos") { ret false }
     ret true
 }
 
@@ -326,8 +326,8 @@ fn source_path(a: *mem.Arena, directory: str, stem: str, suffix: str) -> (str, e
     ret (path, ok)
 }
 
-fn select_source(a: *mem.Arena, root: str, source_root: str, module: str, arch: str, os: str) -> (str, err) {
-    if !valid_arch(arch) || !valid_os(os) || !valid_target(arch, os) { ret ("", InvalidTarget) }
+fn select_source(a: *mem.Arena, root: str, source_root: str, module: str, arch: str, target_os: str) -> (str, err) {
+    if !valid_arch(arch) || !valid_os(target_os) || !valid_target(arch, target_os) { ret ("", InvalidTarget) }
     let checkpoint = mem.mark(a)
     let (prefix, stem, parts_error) = module_parts(module)
     if parts_error != ok {
@@ -352,7 +352,7 @@ fn select_source(a: *mem.Arena, root: str, source_root: str, module: str, arch: 
         if entry.kind == .File || entry.kind == .Symlink {
             if plain_source(entry.name, stem) { has_plain = true }
             if variant_source(entry.name, stem, arch) { has_arch = true }
-            if variant_source(entry.name, stem, os) { has_os = true }
+            if variant_source(entry.name, stem, target_os) { has_os = true }
         }
     }
     mem.reset(a, checkpoint)
@@ -367,7 +367,7 @@ fn select_source(a: *mem.Arena, root: str, source_root: str, module: str, arch: 
         ret (selected, selected_error)
     }
     if has_os {
-        let (selected, selected_error) = source_path(a, stable_directory, stable_stem, os)
+        let (selected, selected_error) = source_path(a, stable_directory, stable_stem, target_os)
         ret (selected, selected_error)
     }
     if has_plain {

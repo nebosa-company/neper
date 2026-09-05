@@ -10,6 +10,9 @@ error DuplicateName
 error QualifierCollision
 error ReservedName
 error UnknownMember
+error ReservedLocal
+error ModuleShadow
+error DuplicateLocal
 
 type Namespace = enum u8 {
     Type,
@@ -37,11 +40,17 @@ type Symbol = struct {
     token_end: usize,
 }
 
+type Local = struct {
+    name: str,
+}
+
 type Resolver = struct {
     symbols: []Symbol,
     tokens: []lex.Token,
+    locals: []Local,
     count: usize,
     token_count: usize,
+    local_count: usize,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -54,12 +63,14 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
-fn init(r: *Resolver, symbols: []Symbol, tokens: []lex.Token) -> err {
-    if symbols.len == 0usize || tokens.len == 0usize { ret Capacity }
+fn init(r: *Resolver, symbols: []Symbol, tokens: []lex.Token, locals: []Local) -> err {
+    if symbols.len == 0usize || tokens.len == 0usize || locals.len == 0usize { ret Capacity }
     r.symbols = symbols
     r.tokens = tokens
+    r.locals = locals
     r.count = 0usize
     r.token_count = 0usize
+    r.local_count = 0usize
     ret ok
 }
 
@@ -277,11 +288,245 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
     ret UnknownMember
 }
 
+fn module_name_taken(r: *Resolver, module_index: usize, name: str) -> bool {
+    let (type_index, has_type) = find(r, module_index, name, .Type)
+    if has_type { ret true }
+    let (value_index, has_value) = find(r, module_index, name, .Value)
+    ret has_value
+}
+
+fn add_local(r: *Resolver, module_index: usize, name: str) -> err {
+    if reserved(name) { ret ReservedLocal }
+    if module_name_taken(r, module_index, name) { ret ModuleShadow }
+    var i = 0usize
+    while i < r.local_count {
+        if same(r.locals[i].name, name) { ret DuplicateLocal }
+        i += 1usize
+    }
+    if r.local_count == r.locals.len { ret Capacity }
+    r.locals[r.local_count] = Local { name: name }
+    r.local_count += 1usize
+    ret ok
+}
+
+fn add_first_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: syntax.Node) -> err {
+    var at = node.token_start
+    while at < node.token_end {
+        let token = r.tokens[at]
+        if token.kind == .Identifier {
+            try add_local(r, module_index, g.modules[module_index].text[token.start..token.end])
+            ret ok
+        }
+        at += 1usize
+    }
+    if node.token_start < node.token_end && r.tokens[node.token_start].kind == .PunctEllipsis { ret ok }
+    ret parse.InvalidSyntax
+}
+
+fn add_binding_names(r: *Resolver, g: *graph.Graph, module_index: usize, node: syntax.Node) -> err {
+    var at = node.token_start
+    while at < node.token_end {
+        let token = r.tokens[at]
+        if token.kind == .Identifier {
+            try add_local(r, module_index, g.modules[module_index].text[token.start..token.end])
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn add_for_names(r: *Resolver, g: *graph.Graph, module_index: usize, node: syntax.Node) -> err {
+    var at = node.token_start + 1usize
+    while at < node.token_end && r.tokens[at].kind != .KwIn {
+        let token = r.tokens[at]
+        if token.kind == .Identifier {
+            try add_local(r, module_index, g.modules[module_index].text[token.start..token.end])
+        }
+        at += 1usize
+    }
+    if at == node.token_end { ret parse.InvalidSyntax }
+    ret ok
+}
+
+fn add_switch_capture(r: *Resolver, g: *graph.Graph, module_index: usize, node: syntax.Node) -> err {
+    var at = node.token_start
+    while at < node.token_end {
+        if r.tokens[at].kind == .KwAs {
+            at += 1usize
+            while at < node.token_end {
+                let token = r.tokens[at]
+                if token.kind == .Identifier {
+                    try add_local(r, module_index, g.modules[module_index].text[token.start..token.end])
+                    ret ok
+                }
+                at += 1usize
+            }
+            ret parse.InvalidSyntax
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn visit_children(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            try visit_scope_node(r, g, tree, module_index, tree.children[at].index)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn visit_block(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let checkpoint = r.local_count
+    let visit_error = visit_children(r, g, tree, module_index, node)
+    r.local_count = checkpoint
+    ret visit_error
+}
+
+fn visit_binding(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let end = node.first_child + node.child_count
+    var binding_index = 0usize
+    var has_binding = false
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if tree.nodes[child_index].kind == .Binding {
+                binding_index = child_index
+                has_binding = true
+            } else {
+                try visit_scope_node(r, g, tree, module_index, child_index)
+            }
+        }
+        at += 1usize
+    }
+    if !has_binding { ret parse.InvalidSyntax }
+    ret add_binding_names(r, g, module_index, tree.nodes[binding_index])
+}
+
+fn visit_for(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let checkpoint = r.local_count
+    let end = node.first_child + node.child_count
+    var block_index = 0usize
+    var has_block = false
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if tree.nodes[child_index].kind == .Block {
+                block_index = child_index
+                has_block = true
+            } else {
+                let child_error = visit_scope_node(r, g, tree, module_index, child_index)
+                if child_error != ok {
+                    r.local_count = checkpoint
+                    ret child_error
+                }
+            }
+        }
+        at += 1usize
+    }
+    let names_error = add_for_names(r, g, module_index, node)
+    if names_error != ok {
+        r.local_count = checkpoint
+        ret names_error
+    }
+    if !has_block {
+        r.local_count = checkpoint
+        ret parse.InvalidSyntax
+    }
+    let block_error = visit_block(r, g, tree, module_index, tree.nodes[block_index])
+    r.local_count = checkpoint
+    ret block_error
+}
+
+fn visit_switch_arm(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let checkpoint = r.local_count
+    let capture_error = add_switch_capture(r, g, module_index, node)
+    if capture_error != ok {
+        r.local_count = checkpoint
+        ret capture_error
+    }
+    let visit_error = visit_children(r, g, tree, module_index, node)
+    r.local_count = checkpoint
+    ret visit_error
+}
+
+fn visit_shared_var(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    try visit_children(r, g, tree, module_index, node)
+    var at = node.token_start
+    var saw_var = false
+    while at < node.token_end {
+        let token = r.tokens[at]
+        if token.kind == .KwVar {
+            saw_var = true
+        } else {
+            if saw_var && token.kind == .Identifier {
+                ret add_local(r, module_index, g.modules[module_index].text[token.start..token.end])
+            }
+        }
+        at += 1usize
+    }
+    ret parse.InvalidSyntax
+}
+
+fn visit_scope_node(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
+    let node = tree.nodes[node_index]
+    if node.kind == .Block { ret visit_block(r, g, tree, module_index, node) }
+    if node.kind == .BindingStmt { ret visit_binding(r, g, tree, module_index, node) }
+    if node.kind == .ForStmt { ret visit_for(r, g, tree, module_index, node) }
+    if node.kind == .SwitchArm { ret visit_switch_arm(r, g, tree, module_index, node) }
+    if node.kind == .SharedVarStmt { ret visit_shared_var(r, g, tree, module_index, node) }
+    ret visit_children(r, g, tree, module_index, node)
+}
+
+fn validate_declaration_scope(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    r.local_count = 0usize
+    let end = node.first_child + node.child_count
+    var block_index = 0usize
+    var has_block = false
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            let child = tree.nodes[child_index]
+            if child.kind == .ComptimeParam || child.kind == .Parameter {
+                try add_first_name(r, g, module_index, child)
+            }
+            if child.kind == .Block {
+                block_index = child_index
+                has_block = true
+            }
+        }
+        at += 1usize
+    }
+    if has_block { try visit_block(r, g, tree, module_index, tree.nodes[block_index]) }
+    r.local_count = 0usize
+    ret ok
+}
+
+fn validate_scopes(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize) -> err {
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl || node.kind == .TypeDecl) {
+            try validate_declaration_scope(r, g, tree, module_index, node)
+        }
+        node_index += 1usize
+    }
+    ret ok
+}
+
 fn validate_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, g.nodes, g.children)
     try parse.parse(&tree, g.modules[module_index].text)
     try tokenize(r, g.modules[module_index].text)
+    try validate_scopes(r, g, &tree, module_index)
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]

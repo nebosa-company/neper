@@ -171,6 +171,10 @@ builtin reservations and duplicate rules, and resolves imported types, functions
 externs, constants, globals and errors through each module's local qualifier table.
 The same pass now resolves the self-hosted compiler's own complete source graph on
 Windows and Linux, including the compiler-owned `e.mem` and `e.os` bootstrap surface.
+Its lexical-scope walk enforces parameter and local non-shadowing across ordinary,
+tuple, loop, switch-capture and `shared var` bindings while allowing reuse after a
+sibling scope ends. Applying that rule to the compiler also removed three existing
+source/import or builtin collisions.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

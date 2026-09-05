@@ -334,8 +334,12 @@ before resolving references, keeps the type and qualifier/value namespaces separ
 enforces builtin-name and duplicate rules, and validates qualified type and value
 members through local import aliases. It resolves the self-hosted compiler's own
 reachable source graph on both hosts, with the fixed compiler-owned `e.mem`/`e.os`
-names seeded explicitly rather than invented as source declarations. Local scopes,
-unqualified references and type checking are the next compiler increments.
+names seeded explicitly rather than invented as source declarations. Its lexical
+scope pass now covers parameters, ordinary and tuple bindings, loop bindings, switch
+captures and `shared var`; active or module-level shadowing is rejected while names
+may be reused in disjoint sibling scopes. Running that pass over the compiler removed
+three pre-existing collisions. Unqualified reference resolution and type checking are
+the next compiler increments.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

@@ -214,10 +214,10 @@ fn visit(g: *Graph, module_index: usize) -> err {
     let end = g.modules[module_index].first_import + g.modules[module_index].import_count
     var i = g.modules[module_index].first_import
     while i < end {
-        let target = g.imports[i].target
-        if g.modules[target].visit_state == 1u8 { ret ImportCycle }
-        if g.modules[target].visit_state == 0u8 {
-            let visit_error = visit(g, target)
+        let target_module = g.imports[i].target
+        if g.modules[target_module].visit_state == 1u8 { ret ImportCycle }
+        if g.modules[target_module].visit_state == 0u8 {
+            let visit_error = visit(g, target_module)
             if visit_error != ok { ret visit_error }
         }
         i += 1usize
@@ -252,9 +252,9 @@ fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str
             } else {
                 let (path, resolve_error) = resolve_source(a, g, g.imports[import_index].name)
                 if resolve_error != ok { ret resolve_error }
-                let (target, add_error) = add_module(a, g, g.imports[import_index].name, path)
+                let (added_module, add_error) = add_module(a, g, g.imports[import_index].name, path)
                 if add_error != ok { ret add_error }
-                g.imports[import_index].target = target
+                g.imports[import_index].target = added_module
             }
             import_index += 1usize
         }
