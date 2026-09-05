@@ -211,7 +211,9 @@ empty enum bodies recover to the following declaration. Function blocks now own
 classified binding, assignment, call, `try`, `defer`, control-flow, return,
 `@nocheck` and `shared var` statement nodes. A malformed statement becomes a nested
 `ErrorNode`, resumes at the next block newline and preserves both its enclosing
-`Block`/`FnDecl` and following statements. Return values now produce primary,
+`Block`/`FnDecl` and following statements. Every statement now uses its grammar
+production; the legacy raw token-balancing fallback has been removed. Return values
+now produce primary,
 prefix, precedence-aware binary, call, field and bracket-postfix expression nodes,
 including grouped and member-shorthand primaries. Binding and assignment statements
 now retain their binding/target and initializer subtrees; call and `try` statements

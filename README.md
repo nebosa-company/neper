@@ -66,7 +66,9 @@ now expose generic parameters, named/pointer/slice/array/function aliases, aggre
 type nodes, struct/union fields, enum members, and tagged-union members. Function
 blocks now own classified binding, assignment, call, propagation, cleanup, control,
 return and compiler-directive statement nodes, with recovery contained inside the
-surrounding block. Return values now form primary, prefix, precedence-aware binary,
+surrounding block. Every statement now uses its grammar production; the legacy raw
+token-balancing fallback has been removed. Return values now form primary, prefix,
+precedence-aware binary,
 call, field and bracket-postfix expression trees while preserving their source
 tokens in the lossless child stream. Bindings, assignments, call statements and
 `try` statements now retain those expression subtrees too, including tuple-binding

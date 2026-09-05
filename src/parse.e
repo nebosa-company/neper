@@ -1,5 +1,4 @@
-// Bounded syntax parser. Grammar productions replace scan_delimited_decl
-// incrementally while preserving this token cursor, tree, and recovery contract.
+// Bounded grammar-revision-1 syntax parser with a lossless tree and local recovery.
 
 use lex
 use syntax
@@ -273,7 +272,7 @@ fn parse_comptime_node(p: *Parser) -> err {
     ret ok
 }
 
-fn scan_return_spec(p: *Parser, is_extern: bool) -> err {
+fn parse_return_spec(p: *Parser, is_extern: bool) -> err {
     try parse_type_return_spec_node(p)
     if is_extern {
         if p.current.kind != .Newline && p.current.kind != .Eof { ret InvalidSyntax }
@@ -1331,11 +1330,7 @@ fn statement_kind(p: *Parser) -> syntax.Kind {
 }
 
 fn parse_statement_node(p: *Parser) -> err {
-    let token_start = p.token_index
-    var node_kind = statement_kind(p)
-    var parens = 0usize
-    var brackets = 0usize
-    var braces = 0usize
+    let node_kind = statement_kind(p)
     if node_kind == .ErrorNode { ret InvalidSyntax }
     if node_kind == .ReturnStmt { ret parse_return_statement(p) }
     if node_kind == .BindingStmt { ret parse_binding_statement(p) }
@@ -1350,35 +1345,7 @@ fn parse_statement_node(p: *Parser) -> err {
     if node_kind == .SharedVarStmt { ret parse_shared_var_statement(p) }
     if node_kind == .BreakStmt || node_kind == .ContinueStmt { ret parse_keyword_statement(p, node_kind) }
     if node_kind == .SwitchStmt { ret parse_switch_statement(p) }
-    while true {
-        let kind = p.current.kind
-        if kind == .Invalid || kind == .Eof { ret InvalidSyntax }
-        if kind == .PunctRBrace && braces == 0usize {
-            if parens != 0usize || brackets != 0usize { ret InvalidSyntax }
-            break
-        }
-        if kind == .Newline && parens == 0usize && brackets == 0usize && braces == 0usize { break }
-        if is_assignment_op(kind) && node_kind == .CallStmt { node_kind = .AssignmentStmt }
-        if kind == .PunctLParen { parens += 1usize }
-        if kind == .PunctRParen {
-            if parens == 0usize { ret InvalidSyntax }
-            parens = parens - 1usize
-        }
-        if kind == .PunctLBracket { brackets += 1usize }
-        if kind == .PunctRBracket {
-            if brackets == 0usize { ret InvalidSyntax }
-            brackets = brackets - 1usize
-        }
-        if kind == .PunctLBrace { braces += 1usize }
-        if kind == .PunctRBrace {
-            if braces == 0usize { ret InvalidSyntax }
-            braces = braces - 1usize
-        }
-        try advance(p)
-    }
-    if p.token_index == token_start { ret InvalidSyntax }
-    try add_node(p, node_kind, token_start, p.token_index)
-    ret ok
+    ret InvalidSyntax
 }
 
 fn recover_statement(p: *Parser) -> err {
@@ -1475,7 +1442,7 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     if p.current.kind == .PunctArrow {
         try advance(p)
         try skip_soft(p)
-        try scan_return_spec(p, is_extern)
+        try parse_return_spec(p, is_extern)
         if nested_count == nested.len { ret InvalidSyntax }
         nested[nested_count] = p.last_node
         nested_count += 1usize
