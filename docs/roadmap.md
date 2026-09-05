@@ -365,13 +365,15 @@ an order-independent dependency graph across loaded modules. Suffixed initialise
 infer the constant type; forward and qualified references, cycles, invalid runtime-state
 references, division by zero, type mismatches and checked range or bootstrap-word
 arithmetic overflow are covered. Evaluated constants type-check in function bodies and
-drive function and local array lengths. Unary minus and `+`, `-`, `*`, `/`, `%` are the
-current folding subset. Constant-backed lengths in alias right-hand sides, wider
-intermediate arithmetic, bitwise, shift and wrapping constant operators, generic types
-and calls, compiler-owned intrinsics, indexing and aggregate literals remain outside the
-`check-file` checkpoint. Unsupported expression and statement forms fail explicitly
-rather than being accepted unchecked. The next type-checking increments replace those
-boundaries with intrinsic signatures, remaining control flow and full generic checking.
+drive array lengths in function, local and alias type positions; a preliminary/final
+alias pass makes local and qualified constants available to aliases independent of
+declaration order. Unary minus and `+`, `-`, `*`, `/`, `%` are the current folding
+subset. Wider intermediate arithmetic, bitwise, shift and wrapping constant operators,
+generic types and calls, compiler-owned intrinsics, indexing and aggregate literals
+remain outside the `check-file` checkpoint. Unsupported expression and statement forms
+fail explicitly rather than being accepted unchecked. The next type-checking increments
+replace those boundaries with intrinsic signatures, remaining control flow and full
+generic checking.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

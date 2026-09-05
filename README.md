@@ -195,9 +195,10 @@ nominal aggregates retain their identity; direct and pointer-mediated alias cycl
 rejected. Integer constants now resolve through an order-independent, cross-module
 dependency graph, infer a type only from a suffix, diagnose cycles, invalid runtime
 references, division by zero and range or arithmetic overflow, and can be referenced
-from bodies and from function or local array types. This checkpoint folds unary minus
-and `+`, `-`, `*`, `/`, `%` over values whose magnitude fits the bootstrap word.
-Constant-backed lengths inside alias right-hand sides, wider intermediate arithmetic,
+from bodies and every current array type position. A preliminary/final alias pass makes
+local and qualified constants available inside alias right-hand sides without
+declaration-order dependence. This checkpoint folds unary minus and `+`, `-`, `*`, `/`,
+`%` over values whose magnitude fits the bootstrap word. Wider intermediate arithmetic,
 bitwise, shift and wrapping constant operators, generic types and calls, compiler-owned
 intrinsics, indexing and aggregate literals remain outside this checkpoint. Unsupported
 expression and statement forms fail explicitly instead of being silently accepted;

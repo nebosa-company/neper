@@ -631,7 +631,7 @@ fn declaration_name(c: *Checker, text: str, node: syntax.Node) -> (str, err) {
     ret (text[token.start..token.end], ok)
 }
 
-fn collect_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+fn collect_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, allow_deferred: bool) -> err {
     let end = node.first_child + node.child_count
     var rhs_index = 0usize
     var has_rhs = false
@@ -660,14 +660,17 @@ fn collect_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
     }
     if !has_rhs { ret ok }
     if c.alias_count == c.aliases.len { ret Capacity }
-    let (rhs, rhs_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[rhs_index])
-    if rhs_error != ok { ret rhs_error }
+    var (rhs, rhs_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[rhs_index])
+    if rhs_error != ok {
+        if !allow_deferred || rhs_error != Unsupported { ret rhs_error }
+        rhs = make_type(.Other, "", module_index)
+    }
     c.aliases[c.alias_count] = Alias { name: name, module_index: module_index, generic: false, rhs: rhs, resolved: invalid_type(), state: 0u8 }
     c.alias_count += 1usize
     ret ok
 }
 
-fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_deferred: bool) -> err {
     c.alias_count = 0usize
     c.type_count = 0usize
     c.expand_aliases = false
@@ -680,12 +683,13 @@ fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
-            if node.top_level && node.kind == .TypeDecl { try collect_alias_declaration(c, r, g, &tree, module_index, node) }
+            if node.top_level && node.kind == .TypeDecl { try collect_alias_declaration(c, r, g, &tree, module_index, node, allow_deferred) }
             node_index += 1usize
         }
         module_index += 1usize
     }
     c.expand_aliases = true
+    if allow_deferred { ret ok }
     var alias_index = 0usize
     while alias_index < c.alias_count {
         if !c.aliases[alias_index].generic {
@@ -1685,8 +1689,9 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 }
 
 fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
-    try collect_aliases(c, r, g)
+    try collect_aliases(c, r, g, true)
     try collect_constants(c, r, g)
+    try collect_aliases(c, r, g, false)
     try collect_signatures(c, r, g)
     ret check_bodies(c, r, g)
 }
