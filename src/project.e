@@ -357,6 +357,7 @@ fn select_source(a: *mem.Arena, root: str, source_root: str, module: str, arch: 
     }
     mem.reset(a, checkpoint)
     if has_arch && has_os { ret ("", AmbiguousVariant) }
+    if !has_arch && !has_os && !has_plain { ret ("", ModuleNotFound) }
     let (stable_prefix, stable_stem, stable_parts_error) = module_parts(module)
     if stable_parts_error != ok { ret ("", stable_parts_error) }
     let (stable_directory, stable_path_error) = source_directory(a, root, source_root, stable_prefix)

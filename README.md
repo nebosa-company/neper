@@ -160,6 +160,11 @@ canonical module names for project-root and explicitly named outside-root files,
 including mixed Windows/POSIX separators and relative paths. It also selects complete
 OS- or architecture-specific module files ahead of their plain fallback and rejects
 a target for which both variants match.
+`src/graph.e` consumes the parser's `UseDecl` nodes to load the complete reachable
+module DAG. It applies `lib/`/`src/` precedence and toolchain fallback, reuses modules
+imported under multiple aliases, and rejects duplicate qualifiers, duplicate roots,
+missing modules, malformed reached sources and import cycles with caller-sized graph
+and parser storage.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

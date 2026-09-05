@@ -88,6 +88,39 @@ $compoundVariant = & $compiler project-file (Join-Path $variantRoot 'src\system.
 if ($LASTEXITCODE -ne 1 -or ($compoundVariant -join "`n") -notmatch 'error: project\.InvalidPath') {
     throw 'compound target source suffix was not rejected'
 }
+$graphRoot = Join-Path $PSScriptRoot 'fixtures\graph'
+$transitiveGraph = & $compiler graph-file (Join-Path $graphRoot 'transitive\src\main.e') $repo 'x64' 'windows' 'main' 'branch' 'leaf'
+if ($LASTEXITCODE -ne 0 -or $transitiveGraph -ne 'module graph ok') { throw 'transitive module graph loading failed' }
+$reusedGraph = & $compiler graph-file (Join-Path $graphRoot 'reuse\src\main.e') $repo 'x64' 'windows' 'main' 'common'
+if ($LASTEXITCODE -ne 0 -or $reusedGraph -ne 'module graph ok') { throw 'multiply aliased module was not reused' }
+$toolchainGraph = & $compiler graph-file (Join-Path $nestedRoot 'src\main.e') $repo 'x64' 'windows' 'main' 'e.io' 'e.mem' 'util.math'
+if ($LASTEXITCODE -ne 0 -or $toolchainGraph -ne 'module graph ok') { throw 'toolchain fallback module graph loading failed' }
+$variantGraph = & $compiler graph-file (Join-Path $variantRoot 'src\root.e') $repo 'x64' 'windows' 'root' 'system'
+if ($LASTEXITCODE -ne 0 -or $variantGraph -ne 'module graph ok') { throw 'target-variant module graph loading failed' }
+$cycleGraph = & $compiler graph-file (Join-Path $graphRoot 'cycle\src\a.e') $repo 'x64' 'windows' '' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($cycleGraph -join "`n") -notmatch 'error: graph\.ImportCycle') {
+    throw 'module import cycle was not rejected'
+}
+$duplicateGraph = & $compiler graph-file (Join-Path $graphRoot 'duplicate\src\main.e') $repo 'x64' 'windows' '' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($duplicateGraph -join "`n") -notmatch 'error: graph\.DuplicateModule') {
+    throw 'duplicate source-root module was not rejected'
+}
+$aliasGraph = & $compiler graph-file (Join-Path $graphRoot 'alias\src\main.e') $repo 'x64' 'windows' '' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($aliasGraph -join "`n") -notmatch 'error: graph\.DuplicateQualifier') {
+    throw 'duplicate import qualifier was not rejected'
+}
+$missingGraph = & $compiler graph-file (Join-Path $graphRoot 'missing\src\main.e') $repo 'x64' 'windows' '' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($missingGraph -join "`n") -notmatch 'error: project\.ModuleNotFound') {
+    throw 'missing graph module returned the wrong error'
+}
+$invalidGraph = & $compiler graph-file (Join-Path $graphRoot 'invalid\src\main.e') $repo 'x64' 'windows' '' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($invalidGraph -join "`n") -notmatch 'error: parse\.InvalidSyntax') {
+    throw 'invalid imported source returned the wrong error'
+}
+$invalidGraphTarget = & $compiler graph-file (Join-Path $graphRoot 'transitive\src\leaf.e') $repo 'x86' 'macos' '' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($invalidGraphTarget -join "`n") -notmatch 'error: project\.InvalidTarget') {
+    throw 'module graph accepted an invalid target without imports'
+}
 $capacityDeclarations = 0..259 | ForEach-Object { "error Capacity$_" }
 $capacityItems = 0..129 | ForEach-Object { '0u8' }
 $capacitySource = ($capacityDeclarations -join "`n") + "`nfn capacity() {`n    let values = [_]u8{ " + ($capacityItems -join ', ') + " }`n}`n"

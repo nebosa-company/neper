@@ -325,8 +325,11 @@ ancestor containing `lib/` or `src/`, handles relative, POSIX and Windows path r
 and derives canonical dotted names for files below either source root while retaining
 the bare-name rule for an explicitly named file outside them. It now selects a matching
 OS or architecture variant ahead of the plain module, rejects simultaneous matches and
-handles nested module paths. Transitive import traversal remains to complete the
-project/module pipeline.
+handles nested module paths. `src/graph.e` completes the discovery pipeline by reading
+the parser's `UseDecl` nodes, loading every reachable module with project-root
+precedence and toolchain fallback, and rejecting missing or multiply rooted modules,
+duplicate local qualifiers, malformed reached sources and import cycles. Declaration
+collection and semantic resolution across that graph are the next compiler increment.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

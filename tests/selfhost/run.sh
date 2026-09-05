@@ -118,6 +118,63 @@ case "$compound_variant" in
     *'error: project.InvalidPath'*) ;;
     *) printf '%s\n' 'compound target source suffix returned the wrong error' >&2; exit 1 ;;
 esac
+graph_root="$repo/tests/selfhost/fixtures/graph"
+transitive_graph=$($test_build/neper-self graph-file "$graph_root/transitive/src/main.e" "$repo" x64 linux main branch leaf)
+[ "$transitive_graph" = 'module graph ok' ]
+reused_graph=$($test_build/neper-self graph-file "$graph_root/reuse/src/main.e" "$repo" x64 linux main common)
+[ "$reused_graph" = 'module graph ok' ]
+toolchain_graph=$($test_build/neper-self graph-file "$nested_root/src/main.e" "$repo" x64 linux main e.io e.mem util.math)
+[ "$toolchain_graph" = 'module graph ok' ]
+variant_graph=$($test_build/neper-self graph-file "$variant_root/src/root.e" "$repo" x64 linux root system)
+[ "$variant_graph" = 'module graph ok' ]
+if cycle_graph=$($test_build/neper-self graph-file "$graph_root/cycle/src/a.e" "$repo" x64 linux '' 2>&1); then
+    printf '%s\n' 'module import cycle unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$cycle_graph" in
+    *'error: graph.ImportCycle'*) ;;
+    *) printf '%s\n' 'module import cycle returned the wrong error' >&2; exit 1 ;;
+esac
+if duplicate_graph=$($test_build/neper-self graph-file "$graph_root/duplicate/src/main.e" "$repo" x64 linux '' 2>&1); then
+    printf '%s\n' 'duplicate source-root module unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$duplicate_graph" in
+    *'error: graph.DuplicateModule'*) ;;
+    *) printf '%s\n' 'duplicate source-root module returned the wrong error' >&2; exit 1 ;;
+esac
+if alias_graph=$($test_build/neper-self graph-file "$graph_root/alias/src/main.e" "$repo" x64 linux '' 2>&1); then
+    printf '%s\n' 'duplicate import qualifier unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$alias_graph" in
+    *'error: graph.DuplicateQualifier'*) ;;
+    *) printf '%s\n' 'duplicate import qualifier returned the wrong error' >&2; exit 1 ;;
+esac
+if missing_graph=$($test_build/neper-self graph-file "$graph_root/missing/src/main.e" "$repo" x64 linux '' 2>&1); then
+    printf '%s\n' 'missing graph module unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$missing_graph" in
+    *'error: project.ModuleNotFound'*) ;;
+    *) printf '%s\n' 'missing graph module returned the wrong error' >&2; exit 1 ;;
+esac
+if invalid_graph=$($test_build/neper-self graph-file "$graph_root/invalid/src/main.e" "$repo" x64 linux '' 2>&1); then
+    printf '%s\n' 'invalid imported source unexpectedly succeeded' >&2
+    exit 1
+fi
+case "$invalid_graph" in
+    *'error: parse.InvalidSyntax'*) ;;
+    *) printf '%s\n' 'invalid imported source returned the wrong error' >&2; exit 1 ;;
+esac
+if invalid_graph_target=$($test_build/neper-self graph-file "$graph_root/transitive/src/leaf.e" "$repo" x86 macos '' 2>&1); then
+    printf '%s\n' 'module graph accepted an invalid target without imports' >&2
+    exit 1
+fi
+case "$invalid_graph_target" in
+    *'error: project.InvalidTarget'*) ;;
+    *) printf '%s\n' 'invalid graph target returned the wrong error' >&2; exit 1 ;;
+esac
 capacity_source=''
 i=0
 while [ "$i" -lt 260 ]; do

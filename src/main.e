@@ -1,5 +1,6 @@
 use e.io
 use e.mem
+use graph
 use lex
 use parse
 use project
@@ -766,6 +767,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("source variant ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH\n")
+    if args.len >= 7usize && same(args[1usize], "graph-file") {
+        var modules: [32]graph.Module = zero
+        var imports: [64]graph.Import = zero
+        var graph_nodes: [512]syntax.Node = zero
+        var graph_children: [4096]syntax.Child = zero
+        var loaded: graph.Graph = zero
+        try graph.init(&loaded, modules[..], imports[..], graph_nodes[..], graph_children[..])
+        try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        if loaded.count != args.len - 6usize { ret graph.Capacity }
+        var expected = 6usize
+        while expected < args.len {
+            if !graph.has_module(&loaded, args[expected]) { ret project.ModuleNotFound }
+            expected += 1usize
+        }
+        try io.print("module graph ok\n")
+        ret ok
+    }
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE...\n")
     ret ok
 }
