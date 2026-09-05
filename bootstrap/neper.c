@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.66-neper0"
+#define NEPER_VERSION "0.0.67-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -1069,6 +1069,7 @@ static void install_mem_intrinsics(Compiler *c) {
     Type parameter = type_make(TY_NAMED, "T");
     Type values = intrinsic_slice(parameter, 0);
     ErrorDecl *exhausted;
+    StructDecl *stats;
     Function *fn;
 
     exhausted = &c->program.errors[c->program.error_count];
@@ -1092,6 +1093,22 @@ static void install_mem_intrinsics(Compiler *c) {
     intrinsic_param(fn, token, "a", arena_pointer);
     intrinsic_param(fn, token, "n", usize);
     intrinsic_returns(fn, 2, values, error);
+
+    stats = intrinsic_type(c, token, "mem.Stats", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(stats, token, "used", usize, 1, 0);
+    intrinsic_field(stats, token, "capacity", usize, 1, 0);
+
+    fn = intrinsic_function(c, token, "mem.mark", "neper_mem_mark");
+    intrinsic_param(fn, token, "a", arena_pointer);
+    intrinsic_returns(fn, 1, usize, error);
+    fn = intrinsic_function(c, token, "mem.reset", "neper_mem_reset");
+    intrinsic_param(fn, token, "a", arena_pointer);
+    intrinsic_param(fn, token, "m", usize);
+    intrinsic_returns(fn, 0, error, error);
+    fn = intrinsic_function(c, token, "mem.stats", "neper_mem_stats");
+    arena_pointer.is_const = 1;
+    intrinsic_param(fn, token, "a", arena_pointer);
+    intrinsic_returns(fn, 1, type_make(TY_NAMED, "mem.Stats"), error);
 }
 
 static Type array_element_type(Type array) {
@@ -4960,6 +4977,9 @@ static void collect_traps_expr(Compiler *c, Function *fn, Expr *expr) {
     if (!expr) return;
     if (expr->kind == EX_INDEX) { kind = "bounds"; detail = "index out of bounds"; }
     else if (expr->kind == EX_SLICE) { kind = "bounds"; detail = "slice bounds out of range"; }
+    else if (expr->kind == EX_CALL && strcmp(expr->as.call.callee, "mem.reset") == 0) {
+        kind = "bounds"; detail = "arena reset mark is ahead of the current cursor";
+    }
     else if (expr->kind == EX_FIELD && expr->as.field.tag_check) {
         kind = "tag"; detail = "tagged-union payload does not match the active member";
     } else if (expr->kind == EX_NAME) {
@@ -5361,6 +5381,15 @@ static void emit_call(Emitter *e, Expr *x, int aggregate_destination) {
                             aggregate[i] ? slots[i] - k * 8 : slots[i] + k * 8);
             emit_argument_lane(e, lane, source);
         }
+    }
+    if (callee && strcmp(symbol_name(callee), "neper_mem_reset") == 0) {
+        int valid = e->label++;
+        fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", slots[0]);
+        fprintf(e->out, "    mov rax, QWORD PTR [rbp-%d]\n", slots[1]);
+        fputs("    cmp rax, QWORD PTR [r10+16]\n", e->out);
+        fprintf(e->out, "    jbe np_reset_valid_%d\n", valid);
+        emit_trap_call(e, x);
+        fprintf(e->out, "np_reset_valid_%d:\n", valid);
     }
     if (callee && strcmp(symbol_name(callee), "neper_mem_alloc") == 0) {
         Type element = sequence_element_type(callee->return_types[0]);
@@ -7001,7 +7030,8 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
-        "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\n\n"
+        "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\n"
+        "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"
         "np_stack_probe PROC\n"
         "    lea r10, [rsp+8]\n    mov r11, rax\n"
         "np_stack_probe_page:\n    cmp r11, 4096\n    jbe np_stack_probe_last\n"

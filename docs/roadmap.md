@@ -183,6 +183,9 @@ to one runtime entry point with hidden size/alignment constants; zero-count,
 alignment, capacity, multiplication-overflow, cursor-stability and qualified
 `mem.Exhausted` behavior are covered on both x64 ABIs. Compound type arguments use
 structural specialization keys rather than colliding with their element types. The
+next memory increment adds `mem.mark`, source-located bounds-checked `mem.reset`,
+and allocation-free `mem.stats`; the suite verifies scoped rewind, alignment after a
+rewind, stable capacity reporting and the reset trap protocol on both hosts. The
 debug-info increment adds DWARF 4 DIEs on ELF and CodeView type and
 symbol records on COFF for functions, parameters, named locals, primitives,
 structures, bare and tagged unions, enums, pointers with pointee constness, slices,

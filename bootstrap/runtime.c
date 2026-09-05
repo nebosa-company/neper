@@ -78,6 +78,16 @@ void neper_mem_arena_from(void *result, unsigned char *buffer, size_t length) {
     arena->off = 0;
 }
 
+size_t neper_mem_mark(const NpArena *arena) { return arena->off; }
+
+void neper_mem_reset(NpArena *arena, size_t mark) { arena->off = mark; }
+
+void neper_mem_stats(void *result, const NpArena *arena) {
+    size_t *out = (size_t *)result;
+    out[0] = arena->off;
+    out[1] = arena->cap;
+}
+
 void neper_os_set_args(const NpStr *args, size_t count) {
     np_args_ptr = args;
     np_args_len = count;

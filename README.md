@@ -188,6 +188,8 @@ field places, then supplies compiler-owned `mem.arena_from` and generic
 element size and alignment to one runtime entry point; zero-count requests preserve
 the cursor, capacity and multiplication failures preserve it and return
 `mem.Exhausted`, and compound type arguments have distinct specialization keys.
+`mem.mark`, source-located bounds-checked `mem.reset`, and allocation-free
+`mem.stats` complete the arena cursor-management subset.
 Default builds now also emit the fixed debug subset on both hosts. ELF executables
 carry DWARF 4 compile units, functions, parameters, locals, types, and frame-base
 locations without location or range lists. COFF objects carry matching CodeView

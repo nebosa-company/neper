@@ -198,6 +198,14 @@ if ($LASTEXITCODE -ne 1 -or ($arenaExhausted -join "`n") -notmatch 'error: mem\.
     throw 'arena exhaustion propagation failed'
 }
 
+$arenaScope = & $neper run (Join-Path $PSScriptRoot 'arena-scope.e') --output (Join-Path $testBuild 'arena-scope.exe')
+if ($LASTEXITCODE -ne 0 -or $arenaScope -ne 'arena scope ok') { throw 'arena mark, reset, and stats behavior failed' }
+
+$arenaResetBounds = & $neper run (Join-Path $PSScriptRoot 'arena-reset-bounds.e') --output (Join-Path $testBuild 'arena-reset-bounds.exe') 2>&1
+if ($LASTEXITCODE -ne 134 -or ($arenaResetBounds -join "`n") -notmatch '6:5: trap\[bounds\]: arena reset mark is ahead of the current cursor') {
+    throw 'arena reset bounds trap failed'
+}
+
 $osHelper = Join-Path $testBuild 'os-spawn-helper.exe'
 & $neper build (Join-Path $PSScriptRoot 'os-spawn-helper.e') --output $osHelper | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'OS spawn helper build failed' }
