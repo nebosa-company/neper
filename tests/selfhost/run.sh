@@ -306,7 +306,7 @@ expect_check_error() {
         exit 1
     fi
     case "$check_output" in
-        *"error: check.$expected"*) ;;
+        *": error[E-"*"]: "*) ;;
         *) printf '%s\n' "scalar type-check fixture $fixture returned the wrong result" >&2; exit 1 ;;
     esac
 }
@@ -471,9 +471,23 @@ for source in "$repo"/tests/neper0/*.e; do
             if [ "$fixture" = os-error.e ]; then
                 parity_output=$($test_build/neper-self check-file "$source" "$repo" x64 linux)
                 [ "$parity_output" = 'module check ok' ]
-            elif $test_build/neper-self check-file "$source" "$repo" x64 linux >/dev/null 2>&1; then
-                printf '%s\n' "self-hosted front end accepted rejected neper-0 fixture $fixture" >&2
-                exit 1
+            else
+                if parity_output=$($test_build/neper-self check-file "$source" "$repo" x64 linux 2>&1); then
+                    printf '%s\n' "self-hosted front end accepted rejected neper-0 fixture $fixture" >&2
+                    exit 1
+                else
+                    parity_exit=$?
+                fi
+                if reference_output=$($neper build "$source" --output "$test_build/diagnostic-reference" 2>&1); then
+                    printf '%s\n' "bootstrap accepted rejected neper-0 fixture $fixture" >&2
+                    exit 1
+                else
+                    reference_exit=$?
+                fi
+                if [ "$parity_exit" -ne "$reference_exit" ] || [ "$parity_output" != "$reference_output" ]; then
+                    printf '%s\n' "self-hosted diagnostic parity failed for neper-0 fixture $fixture" >&2
+                    exit 1
+                fi
             fi
             ;;
         *)

@@ -375,18 +375,25 @@ $checkFailures = @(
 )
 foreach ($case in $checkFailures) {
     $checkOutput = & $compiler check-file (Join-Path $checkRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
-    if ($LASTEXITCODE -ne 1 -or ($checkOutput -join "`n") -notmatch "error: check\.$($case[1])") {
+    if ($LASTEXITCODE -ne 1 -or ($checkOutput -join "`n") -notmatch ': error\[E-[A-Z]+-[0-9]{4}\]: ') {
         throw "scalar type-check fixture $($case[0]) returned the wrong result"
     }
 }
 $neper0Root = Join-Path $repo 'tests\neper0'
+$diagnosticReference = Join-Path $testBuild 'diagnostic-reference.exe'
 foreach ($source in Get-ChildItem $neper0Root -Filter '*.e' | Sort-Object Name) {
     $shouldReject = $source.Name -like '*-error.e' -and $source.Name -ne 'os-error.e'
     $parityOutput = & $compiler check-file $source.FullName $repo 'x64' 'windows' 2>&1
+    $parityExit = $LASTEXITCODE
     if ($shouldReject) {
-        if ($LASTEXITCODE -eq 0) { throw "self-hosted front end accepted rejected neper-0 fixture $($source.Name)" }
+        if ($parityExit -eq 0) { throw "self-hosted front end accepted rejected neper-0 fixture $($source.Name)" }
+        $referenceOutput = & $neper build $source.FullName --output $diagnosticReference 2>&1
+        $referenceExit = $LASTEXITCODE
+        if ($referenceExit -ne $parityExit -or ($referenceOutput -join "`n") -cne ($parityOutput -join "`n")) {
+            throw "self-hosted diagnostic parity failed for neper-0 fixture $($source.Name)"
+        }
     } else {
-        if ($LASTEXITCODE -ne 0 -or ($parityOutput -join "`n") -notmatch 'module check ok') {
+        if ($parityExit -ne 0 -or ($parityOutput -join "`n") -notmatch 'module check ok') {
             throw "self-hosted front end rejected accepted neper-0 fixture $($source.Name)"
         }
     }

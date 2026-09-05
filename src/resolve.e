@@ -54,6 +54,11 @@ type Resolver = struct {
     count: usize,
     token_count: usize,
     local_count: usize,
+    failure_module: usize,
+    failure_token: lex.Token,
+    failure_has_token: bool,
+    failure_context_token: lex.Token,
+    failure_has_context: bool,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -74,6 +79,9 @@ fn init(r: *Resolver, symbols: []Symbol, tokens: []lex.Token, locals: []Local) -
     r.count = 0usize
     r.token_count = 0usize
     r.local_count = 0usize
+    r.failure_module = 0usize
+    r.failure_has_token = false
+    r.failure_has_context = false
     ret ok
 }
 
@@ -355,6 +363,9 @@ fn validate_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: synta
     if has_value { ret ok }
     let (type_index, has_type) = find(r, module_index, name, .Type)
     if has_type || is_builtin_type(name) || same(name, "target") { ret ok }
+    r.failure_module = module_index
+    r.failure_token = token
+    r.failure_has_token = true
     ret UnknownName
 }
 
@@ -461,6 +472,7 @@ fn visit_binding(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index:
     let end = node.first_child + node.child_count
     var binding_index = 0usize
     var has_binding = false
+    var has_declared_type = false
     var at = node.first_child
     while at < end {
         if tree.children[at].node {
@@ -469,7 +481,16 @@ fn visit_binding(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index:
                 binding_index = child_index
                 has_binding = true
             } else {
-                try visit_scope_node(r, g, tree, module_index, child_index)
+                let child = tree.nodes[child_index]
+                if child.kind == .NamedType || child.kind == .PointerType || child.kind == .SliceType || child.kind == .ArrayType || child.kind == .FunctionType { has_declared_type = true }
+                let child_error = visit_scope_node(r, g, tree, module_index, child_index)
+                if child_error != ok {
+                    if child_error == UnknownName && has_declared_type && node.token_start < r.token_count {
+                        r.failure_context_token = r.tokens[node.token_start]
+                        r.failure_has_context = true
+                    }
+                    ret child_error
+                }
             }
         }
         at += 1usize
@@ -686,6 +707,8 @@ fn validate_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
 
 fn collect(r: *Resolver, g: *graph.Graph) -> err {
     r.count = 0usize
+    r.failure_has_token = false
+    r.failure_has_context = false
     try seed_intrinsics(r, g)
     var module_index = 0usize
     while module_index < g.count {

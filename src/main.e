@@ -1,5 +1,6 @@
 use e.io
 use e.mem
+use e.os
 use check
 use graph
 use lex
@@ -8,6 +9,8 @@ use project
 use resolve
 use source
 use syntax
+
+error DiagnosticWrite
 
 fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize, column: usize) -> err {
     let current = lex.next(s)
@@ -789,10 +792,196 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if constants_error != ok { ret constants_error }
     let (constant_exprs, constant_exprs_error) = mem.alloc[check.ConstantExpr](a, 32768usize)
     if constant_exprs_error != ok { ret constant_exprs_error }
-    try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, constant_exprs)
+    let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, 4096usize)
+    if diagnostics_error != ok { ret diagnostics_error }
+    try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, constant_exprs, diagnostics)
     try check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
     try check.init_aggregates(checker, aggregates, aggregate_fields)
     ret check.init_control(checker, checked_switches)
+}
+
+fn write_all(file: os.File, text: str) -> err {
+    var at = 0usize
+    while at < text.len {
+        let (written, write_error) = os.write(file, text[at..])
+        if write_error != ok { ret write_error }
+        if written == 0usize { ret DiagnosticWrite }
+        at += written
+    }
+    ret ok
+}
+
+fn write_digit(file: os.File, digit: usize) -> err {
+    if digit == 0usize { ret write_all(file, "0") }
+    if digit == 1usize { ret write_all(file, "1") }
+    if digit == 2usize { ret write_all(file, "2") }
+    if digit == 3usize { ret write_all(file, "3") }
+    if digit == 4usize { ret write_all(file, "4") }
+    if digit == 5usize { ret write_all(file, "5") }
+    if digit == 6usize { ret write_all(file, "6") }
+    if digit == 7usize { ret write_all(file, "7") }
+    if digit == 8usize { ret write_all(file, "8") }
+    ret write_all(file, "9")
+}
+
+fn write_usize(file: os.File, value: usize) -> err {
+    var divisor = 1usize
+    var remaining = value
+    while remaining >= 10usize {
+        remaining = remaining / 10usize
+        divisor = divisor * 10usize
+    }
+    remaining = value
+    while divisor != 0usize {
+        try write_digit(file, remaining / divisor)
+        remaining = remaining % divisor
+        divisor = divisor / 10usize
+    }
+    ret ok
+}
+
+fn write_lower_byte(file: os.File, byte: u8) -> err {
+    if byte == 65u8 { ret write_all(file, "a") }
+    if byte == 66u8 { ret write_all(file, "b") }
+    if byte == 67u8 { ret write_all(file, "c") }
+    if byte == 68u8 { ret write_all(file, "d") }
+    if byte == 69u8 { ret write_all(file, "e") }
+    if byte == 70u8 { ret write_all(file, "f") }
+    if byte == 71u8 { ret write_all(file, "g") }
+    if byte == 72u8 { ret write_all(file, "h") }
+    if byte == 73u8 { ret write_all(file, "i") }
+    if byte == 74u8 { ret write_all(file, "j") }
+    if byte == 75u8 { ret write_all(file, "k") }
+    if byte == 76u8 { ret write_all(file, "l") }
+    if byte == 77u8 { ret write_all(file, "m") }
+    if byte == 78u8 { ret write_all(file, "n") }
+    if byte == 79u8 { ret write_all(file, "o") }
+    if byte == 80u8 { ret write_all(file, "p") }
+    if byte == 81u8 { ret write_all(file, "q") }
+    if byte == 82u8 { ret write_all(file, "r") }
+    if byte == 83u8 { ret write_all(file, "s") }
+    if byte == 84u8 { ret write_all(file, "t") }
+    if byte == 85u8 { ret write_all(file, "u") }
+    if byte == 86u8 { ret write_all(file, "v") }
+    if byte == 87u8 { ret write_all(file, "w") }
+    if byte == 88u8 { ret write_all(file, "x") }
+    if byte == 89u8 { ret write_all(file, "y") }
+    ret write_all(file, "z")
+}
+
+fn write_iterator_name(file: os.File, name: str) -> err {
+    var at = 0usize
+    while at < name.len {
+        let byte = name[at]
+        let upper = byte >= 65u8 && byte <= 90u8
+        var previous_lower = false
+        if at > 0usize {
+            let previous = name[at - 1usize]
+            previous_lower = (previous >= 97u8 && previous <= 122u8) || (previous >= 48u8 && previous <= 57u8)
+        }
+        var next_lower = false
+        if at + 1usize < name.len {
+            let next = name[at + 1usize]
+            next_lower = next >= 97u8 && next <= 122u8
+        }
+        if upper && at > 0usize && (previous_lower || next_lower) { try write_all(file, "_") }
+        if upper {
+            try write_lower_byte(file, byte)
+        } else {
+            try write_all(file, name[at..at + 1usize])
+        }
+        at += 1usize
+    }
+    ret write_all(file, "_next")
+}
+
+fn write_check_message(file: os.File, checker: *check.Checker) -> err {
+    if checker.failure_kind == .MissingZeroValue {
+        try write_all(file, "type `")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` has no zero value because `")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "` has no member at 0")
+    }
+    if checker.failure_kind == .IteratorMissing {
+        try write_all(file, "protocol iteration needs `fn ")
+        try write_iterator_name(file, checker.failure_detail)
+        try write_all(file, "(it: *")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, ") -> (T, bool)`")
+    }
+    if checker.failure_kind == .GenericInference {
+        try write_all(file, "cannot infer compile-time parameter `")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "`")
+    }
+    if checker.failure_kind == .NonExhaustive {
+        try write_all(file, "non-exhaustive switch; missing member `")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "`")
+    }
+    ret write_all(file, check.diagnostic_message(checker.failure_kind))
+}
+
+fn print_check_diagnostic(g: *graph.Graph, checker: *check.Checker) -> err {
+    let failure = os.stderr()
+    if checker.failure_module < g.count {
+        try write_all(failure, g.modules[checker.failure_module].path)
+    } else {
+        try write_all(failure, "<unknown>")
+    }
+    try write_all(failure, ":")
+    if checker.failure_has_token {
+        try write_usize(failure, checker.failure_token.line)
+        try write_all(failure, ":")
+        try write_usize(failure, checker.failure_token.column)
+    } else {
+        try write_all(failure, "1:1")
+    }
+    try write_all(failure, ": error[")
+    try write_all(failure, check.diagnostic_code(checker.failure_kind))
+    try write_all(failure, "]: ")
+    try write_check_message(failure, checker)
+    ret write_all(failure, "\n")
+}
+
+fn print_token_diagnostic(g: *graph.Graph, module_index: usize, token: lex.Token, code: str, message: str) -> err {
+    let failure = os.stderr()
+    if module_index < g.count {
+        try write_all(failure, g.modules[module_index].path)
+    } else {
+        try write_all(failure, "<unknown>")
+    }
+    try write_all(failure, ":")
+    try write_usize(failure, token.line)
+    try write_all(failure, ":")
+    try write_usize(failure, token.column)
+    try write_all(failure, ": error[")
+    try write_all(failure, code)
+    try write_all(failure, "]: ")
+    try write_all(failure, message)
+    ret write_all(failure, "\n")
+}
+
+fn print_resolve_diagnostic(g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
+    if resolve_error == resolve.UnknownName && resolver.failure_has_token {
+        if resolver.failure_has_context {
+            try print_token_diagnostic(g, resolver.failure_module, resolver.failure_context_token, "E-TYPE-0002", "initializer type does not match binding")
+        }
+        ret print_token_diagnostic(g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
+    }
+    var token: lex.Token = zero
+    if resolver.failure_has_token { token = resolver.failure_token }
+    ret print_token_diagnostic(g, resolver.failure_module, token, "E-NAME-9999", "name resolution failed")
+}
+
+fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic) {
+    checker.failure_module = diagnostic.module_index
+    checker.failure_kind = diagnostic.kind
+    checker.failure_token = diagnostic.token
+    checker.failure_has_token = true
+    checker.failure_detail = diagnostic.detail
+    checker.failure_detail2 = diagnostic.detail2
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -874,18 +1063,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
-        try resolve.collect(&resolver, &loaded)
+        let resolve_error = resolve.collect(&resolver, &loaded)
+        if resolve_error != ok {
+            try print_resolve_diagnostic(&loaded, &resolver, resolve_error)
+            os.exit(1i32)
+            ret ok
+        }
         var checker: check.Checker = zero
         try init_cli_checker(a, &checker)
         let check_error = check.run(&checker, &resolver, &loaded)
         if check_error != ok {
-            if checker.failure_name.len != 0usize && checker.failure_module < loaded.count {
-                try io.print(loaded.modules[checker.failure_module].name)
-                try io.print(".")
-                try io.print(checker.failure_name)
-                try io.print("\n")
+            if checker.diagnostic_count == 0usize {
+                try print_check_diagnostic(&loaded, &checker)
+            } else {
+                var diagnostic_at = 0usize
+                while diagnostic_at < checker.diagnostic_count {
+                    select_check_diagnostic(&checker, checker.diagnostics[diagnostic_at])
+                    try print_check_diagnostic(&loaded, &checker)
+                    diagnostic_at += 1usize
+                }
             }
-            ret check_error
+            os.exit(1i32)
+            ret ok
         }
         try io.print("module check ok\n")
         ret ok
