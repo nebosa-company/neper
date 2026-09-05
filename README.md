@@ -72,7 +72,9 @@ tokens in the lossless child stream. Bindings, assignments, call statements and
 `try` statements now retain those expression subtrees too, including tuple-binding
 syntax, typed bindings and the special `zero`/`undef` initializer forms. Return
 statements accept multiline, trailing-comma multiple-return lists and retain each
-value as an ordered expression child.
+value as an ordered expression child. Named, generic and fixed/inferred-array
+aggregate literals now expose ordered `LiteralItem` children, including nested
+literals, named payloads, positional values and bare PascalCase members.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

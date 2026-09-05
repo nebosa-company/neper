@@ -274,12 +274,166 @@ fn parse_expression_node(p: *Parser) -> err {
     ret parse_binary_node(p, 1usize)
 }
 
+fn named_aggregate_follows(p: *Parser) -> bool {
+    var look = p.scanner
+    var token = lex.next(&look)
+    while token.kind == .PunctDot {
+        token = lex.next(&look)
+        if token.kind != .Identifier { ret false }
+        token = lex.next(&look)
+    }
+    if token.kind == .PunctLBracket {
+        var depth = 1usize
+        while depth != 0usize {
+            token = lex.next(&look)
+            if token.kind == .Invalid || token.kind == .Eof { ret false }
+            if token.kind == .PunctLBracket { depth += 1usize }
+            if token.kind == .PunctRBracket { depth = depth - 1usize }
+        }
+        token = lex.next(&look)
+    }
+    ret token.kind == .PunctLBrace
+}
+
+fn identifier_is_pascal(p: *Parser) -> bool {
+    let first = p.scanner.source[p.current.start]
+    ret first >= 65u8 && first <= 90u8
+}
+
+fn parse_literal_item_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [1]usize = zero
+    if p.current.kind == .Identifier {
+        var look = p.scanner
+        var following = lex.next(&look)
+        while following.kind == .Newline { following = lex.next(&look) }
+        if following.kind == .PunctColon {
+            try advance(p)
+            try skip_separators(p)
+            try require(p, .PunctColon)
+            try skip_separators(p)
+            try parse_expression_node(p)
+            nested[0usize] = p.last_node
+            try add_parent_node(p, .LiteralItem, token_start, p.token_index, nested[..])
+            ret ok
+        }
+        if identifier_is_pascal(p) {
+            try advance(p)
+            try add_node(p, .LiteralItem, token_start, p.token_index)
+            ret ok
+        }
+    }
+    try parse_expression_node(p)
+    nested[0usize] = p.last_node
+    try add_parent_node(p, .LiteralItem, token_start, p.token_index, nested[..])
+    ret ok
+}
+
+fn scan_array_aggregate_type(p: *Parser) -> err {
+    let token_start = p.token_index
+    var parens = 0usize
+    var brackets = 0usize
+    if p.current.kind != .PunctStar && p.current.kind != .PunctLBracket && p.current.kind != .KwFn && p.current.kind != .KwExtern && p.current.kind != .KwType && p.current.kind != .Identifier { ret InvalidSyntax }
+    while true {
+        let kind = p.current.kind
+        if kind == .Invalid || kind == .Eof || kind == .PunctRBrace { ret InvalidSyntax }
+        if kind == .PunctLBrace && parens == 0usize && brackets == 0usize { break }
+        if kind == .Newline {
+            if parens == 0usize && brackets == 0usize { ret InvalidSyntax }
+            try advance(p)
+            continue
+        }
+        if kind == .PunctLParen { parens += 1usize }
+        if kind == .PunctRParen {
+            if parens == 0usize { ret InvalidSyntax }
+            parens = parens - 1usize
+        }
+        if kind == .PunctLBracket { brackets += 1usize }
+        if kind == .PunctRBracket {
+            if brackets == 0usize { ret InvalidSyntax }
+            brackets = brackets - 1usize
+        }
+        try advance(p)
+    }
+    if p.token_index == token_start || parens != 0usize || brackets != 0usize { ret InvalidSyntax }
+    ret ok
+}
+
+fn parse_aggregate_literal_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [128]usize = zero
+    var nested_count = 0usize
+    if p.current.kind == .Identifier {
+        try advance(p)
+        while p.current.kind == .PunctDot {
+            try advance(p)
+            try require(p, .Identifier)
+        }
+        if p.current.kind == .PunctLBracket {
+            try advance(p)
+            try skip_separators(p)
+            while p.current.kind != .PunctRBracket {
+                try parse_expression_node(p)
+                if nested_count == nested.len { ret InvalidSyntax }
+                nested[nested_count] = p.last_node
+                nested_count += 1usize
+                try skip_separators(p)
+                if p.current.kind == .PunctComma {
+                    try advance(p)
+                    try skip_separators(p)
+                } else {
+                    if p.current.kind != .PunctRBracket { ret InvalidSyntax }
+                }
+            }
+            try advance(p)
+        }
+    } else {
+        try require(p, .PunctLBracket)
+        try skip_separators(p)
+        if p.current.kind == .PunctUnderscore {
+            try advance(p)
+        } else {
+            try parse_expression_node(p)
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+        }
+        try skip_separators(p)
+        try require(p, .PunctRBracket)
+        try scan_array_aggregate_type(p)
+    }
+    try require(p, .PunctLBrace)
+    try skip_separators(p)
+    if p.current.kind == .PunctRBrace { ret InvalidSyntax }
+    while p.current.kind != .PunctRBrace {
+        try parse_literal_item_node(p)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+        try skip_separators(p)
+        if p.current.kind == .PunctComma {
+            try advance(p)
+            try skip_separators(p)
+        } else {
+            if p.current.kind != .PunctRBrace { ret InvalidSyntax }
+        }
+    }
+    try advance(p)
+    try add_parent_node(p, .AggregateLiteral, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
 fn parse_primary_node(p: *Parser) -> err {
     let token_start = p.token_index
     if is_literal(p.current.kind) {
         try advance(p)
         try add_node(p, .LiteralExpr, token_start, p.token_index)
         ret ok
+    }
+    if p.current.kind == .Identifier && named_aggregate_follows(p) {
+        ret parse_aggregate_literal_node(p)
+    }
+    if p.current.kind == .PunctLBracket {
+        ret parse_aggregate_literal_node(p)
     }
     if p.current.kind == .Identifier || p.current.kind == .KwUnreachable {
         try advance(p)
@@ -615,7 +769,7 @@ fn is_assignment_op(kind: lex.Kind) -> bool {
 }
 
 fn is_expression_start(kind: lex.Kind) -> bool {
-    ret is_literal(kind) || kind == .Identifier || kind == .KwUnreachable || kind == .PunctDot || kind == .PunctLParen || is_prefix_op(kind)
+    ret is_literal(kind) || kind == .Identifier || kind == .KwUnreachable || kind == .PunctDot || kind == .PunctLParen || kind == .PunctLBracket || is_prefix_op(kind)
 }
 
 fn statement_kind(p: *Parser) -> syntax.Kind {
