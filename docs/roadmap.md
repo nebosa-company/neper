@@ -211,7 +211,10 @@ empty enum bodies recover to the following declaration. Function blocks now own
 classified binding, assignment, call, `try`, `defer`, control-flow, return,
 `@nocheck` and `shared var` statement nodes. A malformed statement becomes a nested
 `ErrorNode`, resumes at the next block newline and preserves both its enclosing
-`Block`/`FnDecl` and following statements. Expression nodes, bindings, switch arms
+`Block`/`FnDecl` and following statements. Return values now produce primary,
+prefix, precedence-aware binary, call, field and bracket-postfix expression nodes,
+including grouped and member-shorthand primaries. Wiring expressions into the
+remaining statement forms, aggregate literals, structured bindings, switch arms
 and recursively parsed control-flow bodies remain the next parser increments; this
 callout does not mark the `neper-0` milestone complete.
 

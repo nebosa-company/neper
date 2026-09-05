@@ -249,6 +249,199 @@ fn scan_return_spec(p: *Parser, is_extern: bool) -> err {
     ret ok
 }
 
+fn binary_precedence(kind: lex.Kind) -> usize {
+    if kind == .PunctOrOr { ret 1usize }
+    if kind == .PunctAndAnd { ret 2usize }
+    if kind == .PunctEqEq || kind == .PunctBangEq || kind == .PunctLt || kind == .PunctLtEq || kind == .PunctGt || kind == .PunctGtEq { ret 3usize }
+    if kind == .PunctPipe { ret 4usize }
+    if kind == .PunctCaret { ret 5usize }
+    if kind == .PunctAmp { ret 6usize }
+    if kind == .PunctShiftLeft || kind == .PunctShiftRight { ret 7usize }
+    if kind == .PunctPlus || kind == .PunctMinus || kind == .PunctAddWrap || kind == .PunctSubWrap { ret 8usize }
+    if kind == .PunctStar || kind == .PunctSlash || kind == .PunctPercent || kind == .PunctMulWrap { ret 9usize }
+    ret 0usize
+}
+
+fn is_prefix_op(kind: lex.Kind) -> bool {
+    ret kind == .PunctMinus || kind == .PunctBang || kind == .PunctTilde || kind == .PunctAmp || kind == .PunctStar
+}
+
+fn is_literal(kind: lex.Kind) -> bool {
+    ret kind == .Integer || kind == .Float || kind == .String || kind == .RawString || kind == .Character || kind == .KwTrue || kind == .KwFalse || kind == .KwNil || kind == .KwOk
+}
+
+fn parse_expression_node(p: *Parser) -> err {
+    ret parse_binary_node(p, 1usize)
+}
+
+fn parse_primary_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    if is_literal(p.current.kind) {
+        try advance(p)
+        try add_node(p, .LiteralExpr, token_start, p.token_index)
+        ret ok
+    }
+    if p.current.kind == .Identifier || p.current.kind == .KwUnreachable {
+        try advance(p)
+        try add_node(p, .NameExpr, token_start, p.token_index)
+        ret ok
+    }
+    if p.current.kind == .PunctDot {
+        try advance(p)
+        try require(p, .Identifier)
+        try add_node(p, .MemberExpr, token_start, p.token_index)
+        ret ok
+    }
+    if p.current.kind == .PunctLParen {
+        var nested: [1]usize = zero
+        try advance(p)
+        try skip_separators(p)
+        try parse_expression_node(p)
+        nested[0usize] = p.last_node
+        try skip_separators(p)
+        try require(p, .PunctRParen)
+        try add_parent_node(p, .GroupExpr, token_start, p.token_index, nested[..])
+        ret ok
+    }
+    ret InvalidSyntax
+}
+
+fn parse_call_postfix(p: *Parser, receiver: usize) -> err {
+    let token_start = p.tree.nodes[receiver].token_start
+    var nested: [33]usize = zero
+    var nested_count = 1usize
+    nested[0usize] = receiver
+    try require(p, .PunctLParen)
+    try skip_separators(p)
+    while p.current.kind != .PunctRParen {
+        try parse_expression_node(p)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+        if p.current.kind == .PunctComma {
+            try advance(p)
+            try skip_separators(p)
+        } else {
+            if p.current.kind != .PunctRParen { ret InvalidSyntax }
+        }
+    }
+    try advance(p)
+    try add_parent_node(p, .CallExpr, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_bracket_postfix(p: *Parser, receiver: usize) -> err {
+    let token_start = p.tree.nodes[receiver].token_start
+    var nested: [34]usize = zero
+    var nested_count = 1usize
+    nested[0usize] = receiver
+    try require(p, .PunctLBracket)
+    try skip_separators(p)
+    if p.current.kind == .PunctRange {
+        try advance(p)
+        if p.current.kind != .PunctRBracket {
+            try parse_expression_node(p)
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+        }
+    } else {
+        if p.current.kind != .PunctRBracket {
+            try parse_expression_node(p)
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+            if p.current.kind == .PunctRange {
+                try advance(p)
+                if p.current.kind != .PunctRBracket {
+                    try parse_expression_node(p)
+                    nested[nested_count] = p.last_node
+                    nested_count += 1usize
+                }
+            } else {
+                while p.current.kind == .PunctComma {
+                    try advance(p)
+                    try skip_separators(p)
+                    if p.current.kind == .PunctRBracket { break }
+                    try parse_expression_node(p)
+                    if nested_count == nested.len { ret InvalidSyntax }
+                    nested[nested_count] = p.last_node
+                    nested_count += 1usize
+                }
+            }
+        }
+    }
+    try skip_separators(p)
+    try require(p, .PunctRBracket)
+    try add_parent_node(p, .BracketPostfix, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_postfix_node(p: *Parser) -> err {
+    try parse_primary_node(p)
+    while p.current.kind == .PunctDot || p.current.kind == .PunctLParen || p.current.kind == .PunctLBracket {
+        let receiver = p.last_node
+        if p.current.kind == .PunctDot {
+            let token_start = p.tree.nodes[receiver].token_start
+            var nested: [1]usize = zero
+            nested[0usize] = receiver
+            try advance(p)
+            try require(p, .Identifier)
+            try add_parent_node(p, .FieldExpr, token_start, p.token_index, nested[..])
+        } else {
+            if p.current.kind == .PunctLParen {
+                try parse_call_postfix(p, receiver)
+            } else {
+                try parse_bracket_postfix(p, receiver)
+            }
+        }
+    }
+    ret ok
+}
+
+fn parse_prefix_node(p: *Parser) -> err {
+    if is_prefix_op(p.current.kind) {
+        let token_start = p.token_index
+        var nested: [1]usize = zero
+        try advance(p)
+        try parse_prefix_node(p)
+        nested[0usize] = p.last_node
+        try add_parent_node(p, .UnaryExpr, token_start, p.tree.nodes[p.last_node].token_end, nested[..])
+        ret ok
+    }
+    ret parse_postfix_node(p)
+}
+
+fn parse_binary_node(p: *Parser, minimum: usize) -> err {
+    try parse_prefix_node(p)
+    var left = p.last_node
+    while binary_precedence(p.current.kind) >= minimum {
+        let precedence = binary_precedence(p.current.kind)
+        var nested: [2]usize = zero
+        nested[0usize] = left
+        try advance(p)
+        try parse_binary_node(p, precedence + 1usize)
+        nested[1usize] = p.last_node
+        try add_parent_node(p, .BinaryExpr, p.tree.nodes[left].token_start, p.tree.nodes[p.last_node].token_end, nested[..])
+        left = p.last_node
+        if precedence == 3usize && binary_precedence(p.current.kind) == 3usize { ret InvalidSyntax }
+    }
+    ret ok
+}
+
+fn parse_return_statement(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [1]usize = zero
+    var nested_count = 0usize
+    try require(p, .KwRet)
+    if p.current.kind != .Newline && p.current.kind != .PunctRBrace {
+        try parse_expression_node(p)
+        nested[0usize] = p.last_node
+        nested_count = 1usize
+    }
+    if p.current.kind != .Newline && p.current.kind != .PunctRBrace { ret InvalidSyntax }
+    try add_parent_node(p, .ReturnStmt, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
 fn is_assignment_op(kind: lex.Kind) -> bool {
     ret kind == .PunctAssign || kind == .PunctAddAssign || kind == .PunctSubAssign || kind == .PunctMulAssign || kind == .PunctDivAssign || kind == .PunctRemAssign || kind == .PunctAddWrapAssign || kind == .PunctSubWrapAssign || kind == .PunctMulWrapAssign || kind == .PunctShiftLeftAssign || kind == .PunctShiftRightAssign || kind == .PunctBitAndAssign || kind == .PunctBitXorAssign || kind == .PunctBitOrAssign
 }
@@ -279,6 +472,7 @@ fn parse_statement_node(p: *Parser) -> err {
     var brackets = 0usize
     var braces = 0usize
     if node_kind == .ErrorNode { ret InvalidSyntax }
+    if node_kind == .ReturnStmt { ret parse_return_statement(p) }
     while true {
         let kind = p.current.kind
         if kind == .Invalid || kind == .Eof { ret InvalidSyntax }

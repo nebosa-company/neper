@@ -66,7 +66,9 @@ now expose generic parameters, named/pointer/slice/array/function aliases, aggre
 type nodes, struct/union fields, enum members, and tagged-union members. Function
 blocks now own classified binding, assignment, call, propagation, cleanup, control,
 return and compiler-directive statement nodes, with recovery contained inside the
-surrounding block.
+surrounding block. Return values now form primary, prefix, precedence-aware binary,
+call, field and bracket-postfix expression trees while preserving their source
+tokens in the lossless child stream.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
