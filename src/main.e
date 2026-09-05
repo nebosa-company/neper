@@ -661,6 +661,15 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
+fn validate_cli_parse(source: str) -> err {
+    // The CLI supplies explicit storage; parser lists have no separate caps.
+    var nodes: [1024]syntax.Node = zero
+    var children: [16384]syntax.Child = zero
+    var tree: parse.Tree = zero
+    try parse.init_tree(&tree, nodes[..], children[..])
+    ret parse.parse(&tree, source)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 2usize && same(args[1usize], "self-test") {
         try self_test()
@@ -674,7 +683,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if args.len == 3usize && same(args[1usize], "parse") {
-        let parse_error = parse.validate(args[2usize])
+        let parse_error = validate_cli_parse(args[2usize])
         if parse_error != ok { ret parse_error }
         try io.print("parse ok\n")
         ret ok

@@ -15,6 +15,13 @@ $scan = & $compiler scan 'fn main() -> err { ret ok }'
 if ($LASTEXITCODE -ne 0 -or $scan -ne 'scan ok') { throw 'self-hosted compiler scan command failed' }
 $parse = & $compiler parse 'fn main() -> err { ret ok }'
 if ($LASTEXITCODE -ne 0 -or $parse -ne 'parse ok') { throw 'self-hosted compiler parse command failed' }
+$capacityDeclarations = 0..259 | ForEach-Object { "error Capacity$_" }
+$capacityItems = 0..129 | ForEach-Object { '0u8' }
+$capacitySource = ($capacityDeclarations -join "`n") + "`nfn capacity() {`n    let values = [_]u8{ " + ($capacityItems -join ', ') + " }`n}`n"
+$capacityParse = & $compiler parse $capacitySource
+if ($LASTEXITCODE -ne 0 -or $capacityParse -ne 'parse ok') {
+    throw 'self-hosted parser retained a hidden list limit'
+}
 $invalid = & $compiler scan '#' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($invalid -join "`n") -notmatch 'lex.InvalidSource') {
     throw 'self-hosted compiler invalid-source result failed'

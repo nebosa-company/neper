@@ -283,7 +283,9 @@ assignments and attributes now use the same capacity-transparent path rather tha
 embedded 32/64-entry child-ID arrays. Blocks, switch arms/cases, function signatures,
 type bodies and generic type declarations now use it as well. Every unbounded grammar
 list is therefore limited only by explicit caller node/child capacity; the remaining
-local child-ID arrays correspond to fixed-arity productions. The
+local child-ID arrays correspond to fixed-arity productions. The Windows and Linux
+self-host suites parse 261 top-level declarations and a 130-item aggregate in one
+source, crossing both former hidden limits. The
 remaining grammar productions and their conformance coverage are the next
 parser-front-end increments; this callout does not mark the `neper-0` milestone complete.
 

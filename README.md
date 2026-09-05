@@ -133,7 +133,8 @@ parameters, tuple-assignment places and attribute arguments now use the same
 capacity-transparent path instead of embedded 32/64-entry arrays. Blocks, switch
 arms and case lists, function declarations, type bodies and generic type declarations
 have now migrated too; only fixed-arity productions retain correspondingly sized
-local child-ID arrays.
+local child-ID arrays. The cross-platform self-host regression parses 261 top-level
+declarations and a 130-item aggregate in one source, exceeding both former limits.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

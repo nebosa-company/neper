@@ -14,6 +14,25 @@ scan=$($test_build/neper-self scan 'fn main() -> err { ret ok }')
 [ "$scan" = 'scan ok' ]
 parse=$($test_build/neper-self parse 'fn main() -> err { ret ok }')
 [ "$parse" = 'parse ok' ]
+capacity_source=''
+i=0
+while [ "$i" -lt 260 ]; do
+    capacity_source="${capacity_source}error Capacity${i}
+"
+    i=$((i + 1))
+done
+capacity_items='0u8'
+i=1
+while [ "$i" -lt 130 ]; do
+    capacity_items="${capacity_items}, 0u8"
+    i=$((i + 1))
+done
+capacity_source="${capacity_source}fn capacity() {
+    let values = [_]u8{ ${capacity_items} }
+}
+"
+capacity_parse=$($test_build/neper-self parse "$capacity_source")
+[ "$capacity_parse" = 'parse ok' ]
 if invalid=$($test_build/neper-self scan '#' 2>&1); then
     printf '%s\n' 'invalid source unexpectedly succeeded' >&2
     exit 1
