@@ -30,6 +30,10 @@ type Parser = struct {
     token_index: usize,
     declarations: usize,
     error_start: usize,
+    error_node_checkpoint: usize,
+    error_child_checkpoint: usize,
+    error_top_checkpoint: usize,
+    error_declarations_checkpoint: usize,
     last_node: usize,
     top_nodes: [256]usize,
     top_count: usize,
@@ -1504,47 +1508,47 @@ fn parse_type_declaration(p: *Parser) -> err {
     ret ok
 }
 
-fn scan_delimited_decl(p: *Parser, decl_kind: lex.Kind, node_kind: syntax.Kind, token_start: usize) -> err {
-    var parens = 0usize
-    var brackets = 0usize
-    var braces = 0usize
-    var saw_assign = false
-    try require(p, .Identifier)
-    while true {
-        let kind = p.current.kind
-        if kind == .Invalid { ret InvalidSyntax }
-        if kind == .Eof {
-            if parens != 0usize || brackets != 0usize || braces != 0usize { ret InvalidSyntax }
-            if (decl_kind == .KwType || decl_kind == .KwConst) && !saw_assign { ret InvalidSyntax }
-            try add_top_node(p, node_kind, token_start, p.token_index)
-            ret ok
-        }
-        if kind == .Newline && parens == 0usize && brackets == 0usize && braces == 0usize {
-            if (decl_kind == .KwType || decl_kind == .KwConst) && !saw_assign { ret InvalidSyntax }
-            try add_top_node(p, node_kind, token_start, p.token_index)
-            try skip_separators(p)
-            ret ok
-        }
-        if kind == .PunctAssign { saw_assign = true }
-        if kind == .PunctLParen { parens += 1usize }
-        if kind == .PunctRParen {
-            if parens == 0usize { ret InvalidSyntax }
-            parens = parens - 1usize
-        }
-        if kind == .PunctLBracket { brackets += 1usize }
-        if kind == .PunctRBracket {
-            if brackets == 0usize { ret InvalidSyntax }
-            brackets = brackets - 1usize
-        }
-        if kind == .PunctLBrace {
-            braces += 1usize
-        }
-        if kind == .PunctRBrace {
-            if braces == 0usize { ret InvalidSyntax }
-            braces = braces - 1usize
-        }
-        try advance(p)
+fn parse_value_declaration(p: *Parser, is_const: bool) -> err {
+    let token_start = p.token_index
+    var nested: [2]usize = zero
+    var nested_count = 0usize
+    if is_const {
+        try require(p, .KwConst)
+    } else {
+        try require(p, .KwVar)
     }
+    try require(p, .Identifier)
+    if p.current.kind == .PunctColon {
+        try advance(p)
+        var has_type_node = false
+        try parse_type_node(p, &has_type_node)
+        if has_type_node {
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+        }
+    }
+    if is_const {
+        try require(p, .PunctAssign)
+        try parse_expression_node(p)
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    } else {
+        if p.current.kind == .PunctAssign {
+            try advance(p)
+            let initializer_has_node = p.current.kind != .KwZero && p.current.kind != .KwUndef
+            try parse_initializer_node(p)
+            if initializer_has_node {
+                nested[nested_count] = p.last_node
+                nested_count += 1usize
+            }
+        }
+    }
+    if p.current.kind != .Newline && p.current.kind != .Eof { ret InvalidSyntax }
+    var node_kind = syntax.Kind.VarDecl
+    if is_const { node_kind = .ConstDecl }
+    try add_top_parent(p, node_kind, token_start, p.token_index, nested[..nested_count])
+    try finish_line(p)
+    ret ok
 }
 
 fn parse_attribute(p: *Parser) -> err {
@@ -1572,18 +1576,13 @@ fn parse_attribute(p: *Parser) -> err {
     ret ok
 }
 
-fn is_scanned_decl(kind: lex.Kind) -> bool {
-    ret kind == .KwConst || kind == .KwVar
-}
-
-fn node_kind_for_decl(kind: lex.Kind) -> syntax.Kind {
-    if kind == .KwConst { ret .ConstDecl }
-    ret .VarDecl
-}
-
 fn parse_one(p: *Parser) -> err {
     while p.current.kind == .PunctAt { try parse_attribute(p) }
     p.error_start = p.token_index
+    p.error_node_checkpoint = p.tree.count
+    p.error_child_checkpoint = p.tree.child_count
+    p.error_top_checkpoint = p.top_count
+    p.error_declarations_checkpoint = p.declarations
     if p.current.kind == .KwUse {
         try parse_use(p)
     } else {
@@ -1599,14 +1598,14 @@ fn parse_one(p: *Parser) -> err {
                     if p.current.kind == .KwType {
                         try parse_type_declaration(p)
                     } else {
-                        if is_scanned_decl(p.current.kind) {
-                            let token_start = p.token_index
-                            let decl_kind = p.current.kind
-                            let node_kind = node_kind_for_decl(decl_kind)
-                            try advance(p)
-                            try scan_delimited_decl(p, decl_kind, node_kind, token_start)
+                        if p.current.kind == .KwConst {
+                            try parse_value_declaration(p, true)
                         } else {
-                            ret InvalidSyntax
+                            if p.current.kind == .KwVar {
+                                try parse_value_declaration(p, false)
+                            } else {
+                                ret InvalidSyntax
+                            }
                         }
                     }
                 }
@@ -1633,8 +1632,16 @@ fn parse_file(p: *Parser) -> err {
     try skip_separators(p)
     while p.current.kind != .Eof {
         p.error_start = p.token_index
+        p.error_node_checkpoint = p.tree.count
+        p.error_child_checkpoint = p.tree.child_count
+        p.error_top_checkpoint = p.top_count
+        p.error_declarations_checkpoint = p.declarations
         let item_error = parse_one(p)
         if item_error != ok {
+            p.tree.count = p.error_node_checkpoint
+            p.tree.child_count = p.error_child_checkpoint
+            p.top_count = p.error_top_checkpoint
+            p.declarations = p.error_declarations_checkpoint
             p.tree.errors += 1usize
             let node_error = add_top_node(p, .ErrorNode, p.error_start, p.token_index + 1usize)
             if node_error != ok { ret node_error }
