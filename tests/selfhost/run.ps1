@@ -203,6 +203,10 @@ $nestedGenericAggregateChecked = & $compiler check-file (Join-Path $checkRoot 'n
 if ($LASTEXITCODE -ne 0 -or $nestedGenericAggregateChecked -ne 'module check ok') { throw 'nested generic aggregate specialization did not type-check' }
 $genericAggregateAliasChecked = & $compiler check-file (Join-Path $checkRoot 'generic_aggregate_alias_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $genericAggregateAliasChecked -ne 'module check ok') { throw 'generic aggregate aliases did not type-check' }
+$compoundChecked = & $compiler check-file (Join-Path $checkRoot 'compound_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $compoundChecked -ne 'module check ok') { throw 'compound assignments did not type-check' }
+$languageConstructsChecked = & $compiler check-file (Join-Path $checkRoot 'language_constructs_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $languageConstructsChecked -ne 'module check ok') { throw 'enum, error, loop and shift constructs did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -242,7 +246,6 @@ $checkFailures = @(
     @('alias_void_slice', 'InvalidType'),
     @('alias_void_array', 'InvalidType'),
     @('generic_type_bare', 'Unsupported'),
-    @('compound_unsupported', 'Unsupported'),
     @('constant_cycle', 'ConstantCycle'),
     @('constant_type_mismatch', 'TypeMismatch'),
     @('constant_missing_context', 'MissingContext'),
@@ -318,7 +321,14 @@ $checkFailures = @(
     @('generic_aggregate_kind', 'InvalidType'),
     @('generic_aggregate_identity', 'InvalidReturn'),
     @('generic_aggregate_field_type', 'InvalidReturn'),
-    @('nested_generic_aggregate_mismatch', 'InvalidReturn')
+    @('nested_generic_aggregate_mismatch', 'InvalidReturn'),
+    @('compound_unsupported', 'InvalidOperator'),
+    @('enum_unknown_member', 'InvalidType'),
+    @('enum_type_mismatch', 'InvalidReturn'),
+    @('shift_signed_count', 'InvalidOperator'),
+    @('shift_untyped_value', 'InvalidOperator'),
+    @('for_non_iterable', 'InvalidOperator'),
+    @('break_outside_loop', 'Unsupported')
 )
 foreach ($case in $checkFailures) {
     $checkOutput = & $compiler check-file (Join-Path $checkRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1

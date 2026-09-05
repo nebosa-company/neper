@@ -228,8 +228,15 @@ Generic aggregate types now preserve explicit type and `usize` arguments in nomi
 identity, specialize symbolic array fields at concrete use sites, and flow through
 generic function parameters and bodies. Recursive specialization reserves stable field
 ranges for nested generic aggregates, and concrete generic aggregate aliases retain the
-same nominal identity. Tagged-union tag checks remain outside this checkpoint.
-Unsupported expression
+same nominal identity. The checker now validates enum members in contextual, local
+type-qualified and imported type-qualified forms; source and fixed intrinsic error
+values; integer shifts with independently unsigned counts; every compound assignment;
+integer-range, array, slice and string `for` loops; and loop-scoped `break`/`continue`.
+Pointer equality and enum equality/ordering use their declared operand types. Infinite
+`while true` bodies without a reachable loop break satisfy non-fallthrough return
+analysis. The complete self-hosted compiler, including `src/check.e` and `src/main.e`,
+now passes its own checker on Windows and Linux. Tagged-union tag checks remain outside
+this checkpoint. Unsupported expression
 and statement forms fail explicitly instead of being silently accepted; cross-platform
 fixtures freeze both the implemented behavior and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64

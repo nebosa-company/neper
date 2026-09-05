@@ -394,9 +394,16 @@ aggregate types preserve explicit type and `usize` arguments in nominal identity
 specialize symbolic array fields at concrete use sites, and flow through generic
 function parameters and instantiated bodies. Recursive specialization reserves stable
 field ranges for nested generic aggregates, and concrete aliases preserve their nominal
-instance identity. Wider
-intermediate arithmetic, bitwise and shift expressions, wrapping constant operators,
-tagged-union tag checks remain outside the
+instance identity. Enum declarations and contextual, local type-qualified or imported
+type-qualified members now check nominally; source and fixed intrinsic error values are
+typed as `err`. Integer shifts require an independently unsigned count, every compound
+assignment checks its place and operator family, and integer-range, array, slice and
+string `for` loops install scoped index/value bindings with loop-valid
+`break`/`continue`. Pointer equality and enum equality/ordering are checked, and an
+unbroken `while true` is non-fallthrough for guaranteed-return analysis. The entire
+self-hosted compiler, including `src/check.e` and `src/main.e`, now passes this checker
+on Windows and Linux. Wider intermediate constant arithmetic, bitwise and shift
+constant expressions, wrapping constant operators, tagged-union tag checks remain outside the
 `check-file` checkpoint. Unsupported expression and statement
 forms fail explicitly rather than being accepted unchecked. The next type-checking
 increments replace those boundaries with remaining control flow and declaration-time

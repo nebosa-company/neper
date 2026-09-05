@@ -874,7 +874,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try resolve.collect(&resolver, &loaded)
         var checker: check.Checker = zero
         try init_cli_checker(a, &checker)
-        try check.run(&checker, &resolver, &loaded)
+        let check_error = check.run(&checker, &resolver, &loaded)
+        if check_error != ok {
+            if checker.failure_name.len != 0usize && checker.failure_module < loaded.count {
+                try io.print(loaded.modules[checker.failure_module].name)
+                try io.print(".")
+                try io.print(checker.failure_name)
+                try io.print("\n")
+            }
+            ret check_error
+        }
         try io.print("module check ok\n")
         ret ok
     }

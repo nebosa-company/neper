@@ -284,6 +284,10 @@ nested_generic_aggregate_checked=$($test_build/neper-self check-file "$check_roo
 [ "$nested_generic_aggregate_checked" = 'module check ok' ]
 generic_aggregate_alias_checked=$($test_build/neper-self check-file "$check_root/generic_aggregate_alias_valid/src/main.e" "$repo" x64 linux)
 [ "$generic_aggregate_alias_checked" = 'module check ok' ]
+compound_checked=$($test_build/neper-self check-file "$check_root/compound_valid/src/main.e" "$repo" x64 linux)
+[ "$compound_checked" = 'module check ok' ]
+language_constructs_checked=$($test_build/neper-self check-file "$check_root/language_constructs_valid/src/main.e" "$repo" x64 linux)
+[ "$language_constructs_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -334,7 +338,6 @@ expect_check_error alias_void_parameter InvalidType
 expect_check_error alias_void_slice InvalidType
 expect_check_error alias_void_array InvalidType
 expect_check_error generic_type_bare Unsupported
-expect_check_error compound_unsupported Unsupported
 expect_check_error constant_cycle ConstantCycle
 expect_check_error constant_type_mismatch TypeMismatch
 expect_check_error constant_missing_context MissingContext
@@ -411,6 +414,13 @@ expect_check_error generic_aggregate_kind InvalidType
 expect_check_error generic_aggregate_identity InvalidReturn
 expect_check_error generic_aggregate_field_type InvalidReturn
 expect_check_error nested_generic_aggregate_mismatch InvalidReturn
+expect_check_error compound_unsupported InvalidOperator
+expect_check_error enum_unknown_member InvalidType
+expect_check_error enum_type_mismatch InvalidReturn
+expect_check_error shift_signed_count InvalidOperator
+expect_check_error shift_untyped_value InvalidOperator
+expect_check_error for_non_iterable InvalidOperator
+expect_check_error break_outside_loop Unsupported
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
 [ "$valid_scopes" = 'module resolve ok' ]
