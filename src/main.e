@@ -1135,7 +1135,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var builder: nir.Builder = zero
         try init_cli_nir(a, &builder)
-        try lower.module(&checker, &loaded, 0usize, &builder)
+        let (bindings, bindings_error) = mem.alloc[lower.Binding](a, 16384usize)
+        if bindings_error != ok { ret bindings_error }
+        try lower.module(&checker, &loaded, 0usize, &builder, bindings)
         try io.print("module nir ok\n")
         ret ok
     }

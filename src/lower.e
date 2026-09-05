@@ -10,6 +10,30 @@ use syntax
 
 error FunctionNotFound
 
+type Binding = struct {
+    name: str,
+    ty: check.Type,
+    value: usize,
+    address: bool,
+}
+
+fn find_binding(bindings: []Binding, count: usize, name: str) -> (Binding, bool) {
+    var empty: Binding = zero
+    var at = count
+    while at > 0usize {
+        at = at - 1usize
+        if check.same(bindings[at].name, name) { ret (bindings[at], true) }
+    }
+    ret (empty, false)
+}
+
+fn add_binding(bindings: []Binding, count: *usize, binding: Binding) -> err {
+    if *count == bindings.len { ret check.Capacity }
+    bindings[*count] = binding
+    *count += 1usize
+    ret ok
+}
+
 fn declaration_name(c: *check.Checker, text: str, node: syntax.Node) -> (str, err) {
     let name_index = node.token_start + 1usize
     if name_index >= node.token_end || name_index >= c.token_count { ret ("", parse.InvalidSyntax) }
@@ -53,7 +77,7 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
     ret (result, ok)
 }
 
-fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder) -> (check.CallInfo, usize, err) {
+fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (check.CallInfo, usize, err) {
     var empty: check.CallInfo = zero
     let (call, call_error) = check.check_call(c, g, tree, module_index, node)
     if call_error != ok { ret (empty, 0usize, call_error) }
@@ -70,7 +94,7 @@ fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
             if child_position > 0usize {
                 if argument_count == arguments.len || argument_count >= call.function.parameter_count { ret (empty, 0usize, check.ArgumentCount) }
                 let parameter = c.parameters[call.function.first_parameter + argument_count]
-                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, parameter.ty, builder)
+                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, parameter.ty, builder, bindings, binding_count)
                 if value_error != ok { ret (empty, 0usize, value_error) }
                 arguments[argument_count] = value
                 argument_count += 1usize
@@ -121,7 +145,7 @@ fn binary_opcode(kind: lex.Kind) -> nir.Opcode {
     ret .Invalid
 }
 
-fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder) -> (usize, check.Type, err) {
+fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
     let node = tree.nodes[node_index]
     if node.kind == .LiteralExpr {
         let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
@@ -134,15 +158,30 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         var at = node.first_child
         while at < end {
             if tree.children[at].node {
-                let (group_value, group_type, group_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder)
+                let (group_value, group_type, group_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder, bindings, binding_count)
                 ret (group_value, group_type, group_error)
             }
             at += 1usize
         }
         ret (0usize, zero, parse.InvalidSyntax)
     }
+    if node.kind == .NameExpr {
+        let token = c.tokens[node.token_start]
+        if token.kind != .Identifier { ret (0usize, zero, check.Unsupported) }
+        let name = g.modules[module_index].text[token.start..token.end]
+        let (binding, found) = find_binding(bindings, binding_count, name)
+        if !found { ret (0usize, zero, check.Unsupported) }
+        let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+        if type_error != ok { ret (0usize, result_type, type_error) }
+        if !binding.address { ret (binding.value, result_type, ok) }
+        let (instruction, result, load_error) = nir.emit(builder, .Load, result_type, true, 0usize, token)
+        if load_error != ok { ret (0usize, result_type, load_error) }
+        let operand_error = nir.add_operand(builder, instruction, binding.value)
+        if operand_error != ok { ret (0usize, result_type, operand_error) }
+        ret (result, result_type, ok)
+    }
     if node.kind == .CallExpr {
-        let (call, value, call_error) = lower_call(c, g, tree, module_index, node, builder)
+        let (call, value, call_error) = lower_call(c, g, tree, module_index, node, builder, bindings, binding_count)
         if call_error != ok { ret (0usize, zero, call_error) }
         if call.function.return_count != 1usize { ret (0usize, zero, check.ArgumentCount) }
         let (result_type, result_error) = check.call_return(c, call, 0usize)
@@ -172,13 +211,13 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if check.is_comparison(operator) { operand_expected = check.invalid_type() }
         let (left_type, left_type_error) = check.check_expr(c, g, tree, module_index, children[0usize], operand_expected)
         if left_type_error != ok { ret (0usize, left_type, left_type_error) }
-        let (left, lowered_left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], left_type, builder)
+        let (left, lowered_left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], left_type, builder, bindings, binding_count)
         if left_error != ok { ret (0usize, lowered_left_type, left_error) }
         var right_expected = left_type
         if operator == .PunctShiftLeft || operator == .PunctShiftRight { right_expected = check.make_type(.Integer, "u32", module_index) }
         let (right_type, right_type_error) = check.check_expr(c, g, tree, module_index, children[1usize], right_expected)
         if right_type_error != ok { ret (0usize, right_type, right_type_error) }
-        let (right, lowered_right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], right_type, builder)
+        let (right, lowered_right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], right_type, builder, bindings, binding_count)
         if right_error != ok { ret (0usize, lowered_right_type, right_error) }
         let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, c.tokens[node.token_start])
         if emit_error != ok { ret (0usize, result_type, emit_error) }
@@ -191,7 +230,7 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     ret (0usize, zero, check.Unsupported)
 }
 
-fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder) -> err {
+fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
     if function.return_count != 1usize { ret check.Unsupported }
     let end = node.first_child + node.child_count
     var call_index = 0usize
@@ -207,7 +246,7 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     }
     if !found_call { ret parse.InvalidSyntax }
     let call_node = tree.nodes[call_index]
-    let (call, call_result, call_error) = lower_call(c, g, tree, module_index, call_node, builder)
+    let (call, call_result, call_error) = lower_call(c, g, tree, module_index, call_node, builder, bindings, binding_count)
     if call_error != ok { ret call_error }
     if call.function.return_count != 1usize || !check.call_is_fallible(c, call) { ret check.InvalidTry }
     let (caller_error_type, caller_type_error) = check.function_return(c, function, 0usize)
@@ -236,7 +275,7 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     ret ok
 }
 
-fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder) -> err {
+fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
     var values: [2]usize = zero
     var count = 0usize
     let end = node.first_child + node.child_count
@@ -246,7 +285,7 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             if count == values.len || count >= function.return_count { ret check.InvalidReturn }
             let (expected, type_error) = check.function_return(c, function, count)
             if type_error != ok { ret type_error }
-            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder)
+            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder, bindings, binding_count)
             if value_error != ok { ret value_error }
             values[count] = value
             count += 1usize
@@ -266,7 +305,87 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     ret ok
 }
 
-fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder) -> err {
+fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+    var binding_node: syntax.Node = zero
+    var found_binding = false
+    var initializer_index = 0usize
+    var found_initializer = false
+    var declared = check.invalid_type()
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            let child = tree.nodes[child_index]
+            if child.kind == .Binding {
+                binding_node = child
+                found_binding = true
+            } else {
+                if check.is_type_node(child.kind) {
+                    let (resolved, type_error) = check.type_from_node(c, c.resolver, g, tree, module_index, child)
+                    if type_error != ok { ret type_error }
+                    declared = resolved
+                } else {
+                    initializer_index = child_index
+                    found_initializer = true
+                }
+            }
+        }
+        at += 1usize
+    }
+    if !found_binding || !found_initializer || check.contains_token(c, node.token_start, tree.nodes[initializer_index].token_start, .KwTry) { ret check.Unsupported }
+    if c.tokens[binding_node.token_start].kind == .PunctLParen { ret check.Unsupported }
+    let (name, has_name) = check.first_name(c, g.modules[module_index].text, binding_node)
+    if !has_name { ret parse.InvalidSyntax }
+    let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, initializer_index, declared, builder, bindings, *binding_count)
+    if value_error != ok { ret value_error }
+    let mutable = c.tokens[node.token_start].kind == .KwVar
+    var stored_value = value
+    var address = false
+    if mutable {
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, value_type, true, 0usize, c.tokens[node.token_start])
+        if stack_error != ok { ret stack_error }
+        let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, value_type, false, 0usize, c.tokens[node.token_start])
+        if store_error != ok { ret store_error }
+        try nir.add_operand(builder, store_instruction, stack)
+        try nir.add_operand(builder, store_instruction, value)
+        stored_value = stack
+        address = true
+    }
+    try add_binding(bindings, binding_count, Binding { name: name, ty: value_type, value: stored_value, address: address })
+    ret check.add_local(c, name, value_type, mutable)
+}
+
+fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
+    var children: [2]usize = zero
+    var count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if count == children.len { ret parse.InvalidSyntax }
+            children[count] = tree.children[at].index
+            count += 1usize
+        }
+        at += 1usize
+    }
+    if count != 2usize { ret parse.InvalidSyntax }
+    let place = tree.nodes[children[0usize]]
+    if place.kind != .NameExpr { ret check.Unsupported }
+    let token = c.tokens[place.token_start]
+    let name = g.modules[module_index].text[token.start..token.end]
+    let (binding, found) = find_binding(bindings, binding_count, name)
+    if !found || !binding.address { ret check.ImmutableAssignment }
+    let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, children[1usize], binding.ty, builder, bindings, binding_count)
+    if value_error != ok { ret value_error }
+    let (instruction, ignored, emit_error) = nir.emit(builder, .Store, value_type, false, 0usize, c.tokens[node.token_start])
+    if emit_error != ok { ret emit_error }
+    try nir.add_operand(builder, instruction, binding.value)
+    try nir.add_operand(builder, instruction, value)
+    ret ok
+}
+
+fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding) -> err {
     let text = g.modules[module_index].text
     let (name, name_error) = declaration_name(c, text, node)
     if name_error != ok { ret name_error }
@@ -278,11 +397,15 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
     if begin_error != ok { ret begin_error }
     let (entry, block_error) = nir.begin_block(builder)
     if block_error != ok { ret block_error }
+    let local_checkpoint = c.local_count
+    var binding_count = 0usize
     var parameter_at = 0usize
     while parameter_at < function.parameter_count {
         let parameter = c.parameters[function.first_parameter + parameter_at]
         let (instruction, result, parameter_error) = nir.emit(builder, .Parameter, parameter.ty, true, parameter_at, c.tokens[node.token_start])
         if parameter_error != ok { ret parameter_error }
+        try add_binding(bindings, &binding_count, Binding { name: parameter.name, ty: parameter.ty, value: result, address: false })
+        try check.add_local(c, parameter.name, parameter.ty, false)
         parameter_at += 1usize
     }
     var found_body = false
@@ -299,12 +422,20 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
                     if tree.children[body_at].node {
                         let statement = tree.nodes[tree.children[body_at].index]
                         if statement.kind == .ReturnStmt {
-                            try lower_return(c, g, tree, module_index, function, statement, builder)
+                            try lower_return(c, g, tree, module_index, function, statement, builder, bindings, binding_count)
                         } else {
                             if statement.kind == .TryStmt {
-                                try lower_try(c, g, tree, module_index, function, statement, builder)
+                                try lower_try(c, g, tree, module_index, function, statement, builder, bindings, binding_count)
                             } else {
-                                ret check.Unsupported
+                                if statement.kind == .BindingStmt {
+                                    try lower_binding(c, g, tree, module_index, statement, builder, bindings, &binding_count)
+                                } else {
+                                    if statement.kind == .AssignmentStmt {
+                                        try lower_assignment(c, g, tree, module_index, statement, builder, bindings, binding_count)
+                                    } else {
+                                        ret check.Unsupported
+                                    }
+                                }
                             }
                         }
                     }
@@ -320,10 +451,12 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
         let (instruction, ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, c.tokens[node.token_start])
         if return_error != ok { ret return_error }
     }
-    ret nir.end_function(builder)
+    let end_error = nir.end_function(builder)
+    c.local_count = local_checkpoint
+    ret end_error
 }
 
-fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder) -> err {
+fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, bindings: []Binding) -> err {
     if module_index >= g.count { ret FunctionNotFound }
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, g.nodes, g.children)
@@ -332,7 +465,7 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl { try lower_function(c, g, &tree, module_index, node, builder) }
+        if node.top_level && node.kind == .FnDecl { try lower_function(c, g, &tree, module_index, node, builder, bindings) }
         node_index += 1usize
     }
     ret ok
