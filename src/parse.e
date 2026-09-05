@@ -332,6 +332,193 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     ret ok
 }
 
+fn type_leaf_kind(p: *Parser) -> syntax.Kind {
+    if p.current.kind == .PunctStar { ret .PointerType }
+    if p.current.kind == .PunctLBracket {
+        var look = p.scanner
+        let following = lex.next(&look)
+        if following.kind == .PunctRBracket { ret .SliceType }
+        ret .ArrayType
+    }
+    if p.current.kind == .KwFn || p.current.kind == .KwExtern { ret .FunctionType }
+    if p.current.kind == .Identifier { ret .NamedType }
+    ret .ErrorNode
+}
+
+fn scan_type_leaf(p: *Parser) -> err {
+    let token_start = p.token_index
+    let node_kind = type_leaf_kind(p)
+    if node_kind == .ErrorNode { ret InvalidSyntax }
+    var parens = 0usize
+    var brackets = 0usize
+    while true {
+        let kind = p.current.kind
+        if kind == .Invalid { ret InvalidSyntax }
+        if parens == 0usize && brackets == 0usize && (kind == .Newline || kind == .Eof) { break }
+        if kind == .Eof || kind == .PunctLBrace || kind == .PunctRBrace { ret InvalidSyntax }
+        if kind == .PunctLParen { parens += 1usize }
+        if kind == .PunctRParen {
+            if parens == 0usize { ret InvalidSyntax }
+            parens = parens - 1usize
+        }
+        if kind == .PunctLBracket { brackets += 1usize }
+        if kind == .PunctRBracket {
+            if brackets == 0usize { ret InvalidSyntax }
+            brackets = brackets - 1usize
+        }
+        try advance(p)
+    }
+    if p.token_index == token_start || parens != 0usize || brackets != 0usize { ret InvalidSyntax }
+    try add_node(p, node_kind, token_start, p.token_index)
+    ret ok
+}
+
+fn scan_before_type_body(p: *Parser) -> err {
+    var parens = 0usize
+    var brackets = 0usize
+    while true {
+        let kind = p.current.kind
+        if kind == .Invalid || kind == .Eof || kind == .Newline { ret InvalidSyntax }
+        if kind == .PunctLBrace && parens == 0usize && brackets == 0usize { ret ok }
+        if kind == .PunctLParen { parens += 1usize }
+        if kind == .PunctRParen {
+            if parens == 0usize { ret InvalidSyntax }
+            parens = parens - 1usize
+        }
+        if kind == .PunctLBracket { brackets += 1usize }
+        if kind == .PunctRBracket {
+            if brackets == 0usize { ret InvalidSyntax }
+            brackets = brackets - 1usize
+        }
+        if kind == .PunctRBrace { ret InvalidSyntax }
+        try advance(p)
+    }
+}
+
+fn parse_type_member(p: *Parser, member_kind: syntax.Kind) -> err {
+    let token_start = p.token_index
+    try require(p, .Identifier)
+    if member_kind == .FieldDecl {
+        try require(p, .PunctColon)
+        try scan_item_tail(p, .PunctRBrace, p.token_index)
+    } else {
+        if member_kind == .EnumMember {
+            if p.current.kind == .PunctAssign {
+                try advance(p)
+                try scan_item_tail(p, .PunctRBrace, p.token_index)
+            }
+        } else {
+            if p.current.kind == .PunctColon {
+                try advance(p)
+                try scan_item_tail(p, .PunctRBrace, p.token_index)
+            }
+        }
+    }
+    if p.current.kind != .PunctComma && p.current.kind != .PunctRBrace { ret InvalidSyntax }
+    try add_node(p, member_kind, token_start, p.token_index)
+    ret ok
+}
+
+fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize) -> err {
+    var nested: [128]usize = zero
+    var nested_count = 0usize
+    var member_kind = syntax.Kind.FieldDecl
+    if rhs_kind == .EnumType { member_kind = .EnumMember }
+    if rhs_kind == .UnionEnumType { member_kind = .UnionMember }
+    try require(p, .PunctLBrace)
+    try skip_separators(p)
+    while p.current.kind != .PunctRBrace {
+        try parse_type_member(p, member_kind)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+        if p.current.kind == .PunctComma {
+            try advance(p)
+            try skip_separators(p)
+        } else {
+            if p.current.kind != .PunctRBrace { ret InvalidSyntax }
+        }
+    }
+    if (rhs_kind == .EnumType || rhs_kind == .UnionEnumType) && nested_count == 0usize {
+        ret InvalidSyntax
+    }
+    try advance(p)
+    try add_parent_node(p, rhs_kind, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_type_declaration(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [64]usize = zero
+    var nested_count = 0usize
+    var has_rhs_node = false
+    try require(p, .KwType)
+    try require(p, .Identifier)
+    if p.current.kind == .PunctLBracket {
+        try advance(p)
+        try skip_separators(p)
+        if p.current.kind == .PunctRBracket { ret InvalidSyntax }
+        while p.current.kind != .PunctRBracket {
+            try parse_comptime_node(p)
+            if nested_count == nested.len { ret InvalidSyntax }
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+            if p.current.kind == .PunctComma {
+                try advance(p)
+                try skip_separators(p)
+            } else {
+                if p.current.kind != .PunctRBracket { ret InvalidSyntax }
+            }
+        }
+        try advance(p)
+    }
+    try require(p, .PunctAssign)
+    if p.current.kind == .KwStruct {
+        let rhs_start = p.token_index
+        try advance(p)
+        try parse_type_body(p, .StructType, rhs_start)
+        has_rhs_node = true
+    } else {
+        if p.current.kind == .KwUnion {
+            let rhs_start = p.token_index
+            try advance(p)
+            if p.current.kind == .KwEnum {
+                try advance(p)
+                if p.current.kind != .PunctLBrace { try scan_before_type_body(p) }
+                try parse_type_body(p, .UnionEnumType, rhs_start)
+                has_rhs_node = true
+            } else {
+                try parse_type_body(p, .UnionType, rhs_start)
+                has_rhs_node = true
+            }
+        } else {
+            if p.current.kind == .KwEnum {
+                let rhs_start = p.token_index
+                try advance(p)
+                if p.current.kind != .PunctLBrace { try scan_before_type_body(p) }
+                try parse_type_body(p, .EnumType, rhs_start)
+                has_rhs_node = true
+            } else {
+                if p.current.kind == .KwType {
+                    try advance(p)
+                } else {
+                    try scan_type_leaf(p)
+                    has_rhs_node = true
+                }
+            }
+        }
+    }
+    if has_rhs_node {
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    let token_end = p.token_index
+    try add_top_parent(p, .TypeDecl, token_start, token_end, nested[..nested_count])
+    try finish_line(p)
+    ret ok
+}
+
 fn scan_delimited_decl(p: *Parser, decl_kind: lex.Kind, node_kind: syntax.Kind, token_start: usize) -> err {
     var parens = 0usize
     var brackets = 0usize
@@ -401,13 +588,11 @@ fn parse_attribute(p: *Parser) -> err {
 }
 
 fn is_scanned_decl(kind: lex.Kind) -> bool {
-    ret kind == .KwType || kind == .KwConst || kind == .KwVar
+    ret kind == .KwConst || kind == .KwVar
 }
 
 fn node_kind_for_decl(kind: lex.Kind) -> syntax.Kind {
-    if kind == .KwType { ret .TypeDecl }
     if kind == .KwConst { ret .ConstDecl }
-    if kind == .KwVar { ret .VarDecl }
     ret .VarDecl
 }
 
@@ -426,14 +611,18 @@ fn parse_one(p: *Parser) -> err {
                 if p.current.kind == .KwExtern {
                     try parse_function(p, true)
                 } else {
-                    if is_scanned_decl(p.current.kind) {
-                        let token_start = p.token_index
-                        let decl_kind = p.current.kind
-                        let node_kind = node_kind_for_decl(decl_kind)
-                        try advance(p)
-                        try scan_delimited_decl(p, decl_kind, node_kind, token_start)
+                    if p.current.kind == .KwType {
+                        try parse_type_declaration(p)
                     } else {
-                        ret InvalidSyntax
+                        if is_scanned_decl(p.current.kind) {
+                            let token_start = p.token_index
+                            let decl_kind = p.current.kind
+                            let node_kind = node_kind_for_decl(decl_kind)
+                            try advance(p)
+                            try scan_delimited_decl(p, decl_kind, node_kind, token_start)
+                        } else {
+                            ret InvalidSyntax
+                        }
                     }
                 }
             }

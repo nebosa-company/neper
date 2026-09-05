@@ -67,28 +67,44 @@ fn self_test() -> err {
     let invalid_tab = lex.validate("fn\tmain")
     if invalid_tab != lex.InvalidSource { ret lex.InvalidSource }
 
-    let parser_source = "use e.mem\nuse util.math as calc\nerror Failed\ntype Item = struct { value: i32, }\nfn read(item: Item) -> i32 {\n    ret item.value\n}\nextern fn call[T: type](ctx: *T, ...,) -> (i32, err)\n"
-    var nodes: [16]syntax.Node = zero
-    var children: [96]syntax.Child = zero
+    let parser_source = "use e.mem\nuse util.math as calc\nerror Failed\ntype Item = struct { value: i32, }\nfn read(item: Item) -> i32 {\n    ret item.value\n}\nextern fn call[T: type](ctx: *T, ...,) -> (i32, err)\ntype Choice = enum u8 { One, Two = 2u8, }\ntype Value = union { integer: i32, flag: bool, }\ntype Maybe[T: type] = union enum u8 { None, Some: T, }\ntype Id = i64\n"
+    var nodes: [40]syntax.Node = zero
+    var children: [192]syntax.Child = zero
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, nodes[..], children[..])
     let parser_error = parse.parse(&tree, parser_source)
     if parser_error != ok { ret lex.InvalidSource }
-    if tree.nodes[0usize].kind != .File || tree.count != 14usize { ret lex.InvalidSource }
-    if tree.nodes[0usize].child_count != 13usize { ret lex.InvalidSource }
+    if tree.nodes[0usize].kind != .File || tree.count != 31usize { ret lex.InvalidSource }
+    if tree.nodes[0usize].child_count != 21usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .UseDecl || tree.nodes[2usize].kind != .UseDecl { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ErrorDecl || tree.nodes[4usize].kind != .TypeDecl { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .Parameter || tree.nodes[6usize].kind != .ReturnSpec { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .Block || tree.nodes[8usize].kind != .FnDecl { ret lex.InvalidSource }
-    if tree.nodes[8usize].child_count != 8usize { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .ComptimeParam || tree.nodes[10usize].kind != .Parameter { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .Parameter || tree.nodes[12usize].kind != .ReturnSpec { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .ExternDecl { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .ErrorDecl || tree.nodes[4usize].kind != .FieldDecl { ret lex.InvalidSource }
+    if tree.nodes[5usize].kind != .StructType || tree.nodes[6usize].kind != .TypeDecl { ret lex.InvalidSource }
+    if tree.nodes[7usize].kind != .Parameter || tree.nodes[8usize].kind != .ReturnSpec { ret lex.InvalidSource }
+    if tree.nodes[9usize].kind != .Block || tree.nodes[10usize].kind != .FnDecl { ret lex.InvalidSource }
+    if tree.nodes[10usize].child_count != 8usize { ret lex.InvalidSource }
+    if tree.nodes[11usize].kind != .ComptimeParam || tree.nodes[12usize].kind != .Parameter { ret lex.InvalidSource }
+    if tree.nodes[13usize].kind != .Parameter || tree.nodes[14usize].kind != .ReturnSpec { ret lex.InvalidSource }
+    if tree.nodes[15usize].kind != .ExternDecl { ret lex.InvalidSource }
+    if tree.nodes[16usize].kind != .EnumMember || tree.nodes[17usize].kind != .EnumMember { ret lex.InvalidSource }
+    if tree.nodes[18usize].kind != .EnumType || tree.nodes[19usize].kind != .TypeDecl { ret lex.InvalidSource }
+    if tree.nodes[20usize].kind != .FieldDecl || tree.nodes[21usize].kind != .FieldDecl { ret lex.InvalidSource }
+    if tree.nodes[22usize].kind != .UnionType || tree.nodes[23usize].kind != .TypeDecl { ret lex.InvalidSource }
+    if tree.nodes[24usize].kind != .ComptimeParam || tree.nodes[25usize].kind != .UnionMember { ret lex.InvalidSource }
+    if tree.nodes[26usize].kind != .UnionMember || tree.nodes[27usize].kind != .UnionEnumType { ret lex.InvalidSource }
+    if tree.nodes[28usize].kind != .TypeDecl || tree.nodes[29usize].kind != .NamedType { ret lex.InvalidSource }
+    if tree.nodes[30usize].kind != .TypeDecl { ret lex.InvalidSource }
     if tree.nodes[1usize].child_count != 4usize { ret lex.InvalidSource }
     let file_children = tree.nodes[0usize].first_child
     if !tree.children[file_children].node || tree.children[file_children].index != 1usize { ret lex.InvalidSource }
     if tree.children[file_children + 1usize].node || tree.children[file_children + 1usize].index != 4usize { ret lex.InvalidSource }
     if !tree.children[file_children + 2usize].node || tree.children[file_children + 2usize].index != 2usize { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let alias_error = parse.parse(&tree, "type Ptr = *const i32\ntype Bytes = []const u8\ntype Block4 = [4usize]u8\ntype Callback = fn(i32) -> err\n")
+    if alias_error != ok || tree.count != 9usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .PointerType || tree.nodes[2usize].kind != .TypeDecl { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .SliceType || tree.nodes[4usize].kind != .TypeDecl { ret lex.InvalidSource }
+    if tree.nodes[5usize].kind != .ArrayType || tree.nodes[6usize].kind != .TypeDecl { ret lex.InvalidSource }
+    if tree.nodes[7usize].kind != .FunctionType || tree.nodes[8usize].kind != .TypeDecl { ret lex.InvalidSource }
     let syntax_error = parse.validate("fn broken() -> err {\n    ret ok\n")
     if syntax_error != parse.InvalidSyntax { ret lex.InvalidSource }
     var recovery_nodes: [4]syntax.Node = zero
@@ -102,6 +118,11 @@ fn self_test() -> err {
     try parse.init_tree(&recovered, recovery_nodes[..], recovery_children[..])
     let signature_error = parse.parse(&recovered, "fn broken(value i32) -> err {}\nerror Good\n")
     if signature_error != parse.InvalidSyntax || recovered.errors != 1usize { ret lex.InvalidSource }
+    if recovered.count != 3usize || recovered.nodes[1usize].kind != .ErrorNode { ret lex.InvalidSource }
+    if recovered.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    try parse.init_tree(&recovered, recovery_nodes[..], recovery_children[..])
+    let type_error = parse.parse(&recovered, "type Bad = enum {}\nerror Good\n")
+    if type_error != parse.InvalidSyntax || recovered.errors != 1usize { ret lex.InvalidSource }
     if recovered.count != 3usize || recovered.nodes[1usize].kind != .ErrorNode { ret lex.InvalidSource }
     if recovered.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
     var tiny_nodes: [1]syntax.Node = zero

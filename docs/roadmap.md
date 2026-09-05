@@ -204,9 +204,12 @@ delimiter errors produce `ErrorNode`s, and recovery resumes at top-level newline
 barriers. The first self-hosted `parse` command uses that lossless ordering and tests
 bounded-capacity failure. Function declarations now parse compile-time parameters,
 ordinary and variadic parameters, return specifications and their body into nested
-nodes; a malformed signature recovers at the next top-level newline barrier. Type,
-statement and expression productions and their inner recovery barriers remain the
-next parser increments; this callout does not mark the `neper-0` milestone complete.
+nodes; a malformed signature recovers at the next top-level newline barrier. Type
+declarations now parse generic parameters, aliases, struct and bare-union fields,
+enum members and tagged-union members into the corresponding frozen node kinds;
+empty enum bodies recover to the following declaration. Statement and expression
+productions and their inner recovery barriers remain the next parser increments;
+this callout does not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

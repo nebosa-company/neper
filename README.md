@@ -61,7 +61,9 @@ declaration owns its exact token children; the `File` root interleaves those nod
 with original separator and EOF tokens, while malformed input produces recoverable
 `ErrorNode`s. Function declarations now expose nested compile-time parameters,
 parameters, return specifications, and blocks. The first `parse` command path
-exercises this lossless ordering and signature-level recovery.
+exercises this lossless ordering and signature-level recovery. Type declarations
+now expose generic parameters, named/pointer/slice/array/function aliases, aggregate
+type nodes, struct/union fields, enum members, and tagged-union members.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
