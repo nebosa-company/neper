@@ -123,6 +123,9 @@ Unterminated continuations stop at declaration, switch-arm, containing-block and
 barriers without consuming recoverable syntax or double-counting rolled-back errors.
 Top-level syntax nodes now carry an internal root marker and are gathered directly
 from caller-owned node storage, removing the parser's hidden 256-declaration buffer.
+Parent nodes also mark adopted children in the postorder node stream; aggregate
+literals now discover direct children from that stream and no longer impose a hidden
+127-item limit beyond the caller's node and child capacities.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

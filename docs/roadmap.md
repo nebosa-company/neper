@@ -271,6 +271,9 @@ continuations now stop at declaration, switch-arm, containing-block and EOF reco
 barriers; transactional rollback restores both syntax storage and error counts.
 Top-level nodes carry an internal root marker and are gathered from caller-owned node
 storage, so declaration count is no longer capped by an embedded 256-entry array. The
+postorder node stream now records parent adoption as well. Aggregate literals gather
+their direct children from that stream, removing their embedded 127-item ceiling in
+favor of the caller's explicit node and child capacities. The
 remaining grammar productions and their conformance coverage are the next
 parser-front-end increments; this callout does not mark the `neper-0` milestone complete.
 

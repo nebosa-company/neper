@@ -97,8 +97,37 @@ fn add_parent_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end:
             token += 1usize
         }
         try add_child(p, syntax.node_child(node_index))
+        p.tree.nodes[node_index].parented = true
         token = p.tree.nodes[node_index].token_end
         child += 1usize
+    }
+    while token < token_end {
+        try add_child(p, syntax.token_child(token))
+        token += 1usize
+    }
+    p.last_node = p.tree.count
+    p.tree.nodes[p.tree.count] = syntax.node(kind, token_start, token_end, child_start, p.tree.child_count - child_start)
+    p.tree.count += 1usize
+    ret ok
+}
+
+fn add_parent_since(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize, node_start: usize) -> err {
+    if p.tree.count == p.tree.nodes.len || node_start > p.tree.count { ret InvalidSyntax }
+    let child_start = p.tree.child_count
+    var token = token_start
+    var node_index = node_start
+    while node_index < p.tree.count {
+        if !p.tree.nodes[node_index].parented && !p.tree.nodes[node_index].top_level {
+            if p.tree.nodes[node_index].token_start < token { ret InvalidSyntax }
+            while token < p.tree.nodes[node_index].token_start {
+                try add_child(p, syntax.token_child(token))
+                token += 1usize
+            }
+            try add_child(p, syntax.node_child(node_index))
+            p.tree.nodes[node_index].parented = true
+            token = p.tree.nodes[node_index].token_end
+        }
+        node_index += 1usize
     }
     while token < token_end {
         try add_child(p, syntax.token_child(token))
@@ -373,8 +402,7 @@ fn parse_literal_item_node(p: *Parser) -> err {
 
 fn parse_aggregate_literal_node(p: *Parser) -> err {
     let token_start = p.token_index
-    var nested: [128]usize = zero
-    var nested_count = 1usize
+    let node_start = p.tree.count
     if p.current.kind == .Identifier {
         try parse_named_type_node(p)
     } else {
@@ -382,16 +410,12 @@ fn parse_aggregate_literal_node(p: *Parser) -> err {
         try parse_type_node(p, &has_type_node)
         if !has_type_node || p.tree.nodes[p.last_node].kind != .ArrayType { ret InvalidSyntax }
     }
-    nested[0usize] = p.last_node
     try require(p, .PunctLBrace)
     enter_soft(p)
     try skip_separators(p)
     if p.current.kind == .PunctRBrace { ret InvalidSyntax }
     while p.current.kind != .PunctRBrace {
         try parse_literal_item_node(p)
-        if nested_count == nested.len { ret InvalidSyntax }
-        nested[nested_count] = p.last_node
-        nested_count += 1usize
         try skip_separators(p)
         if p.current.kind == .PunctComma {
             try advance(p)
@@ -402,7 +426,7 @@ fn parse_aggregate_literal_node(p: *Parser) -> err {
     }
     try leave_soft(p)
     try advance(p)
-    try add_parent_node(p, .AggregateLiteral, token_start, p.token_index, nested[..nested_count])
+    try add_parent_since(p, .AggregateLiteral, token_start, p.token_index, node_start)
     ret ok
 }
 
