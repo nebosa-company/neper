@@ -96,6 +96,9 @@ now retain ordered expression arguments, including multiline lists, and recovery
 distinguishes a malformed attribute from a valid attribute on a malformed declaration.
 Assignment parsing now retains ordered multi-place targets, accepts multiline and
 trailing-comma forms, and rejects one-place pseudo-tuples and binary-expression targets.
+Soft newlines are now consumed only while a grammar-approved `(`, `[`, literal body,
+or type body remains open. They stay in the lossless token stream, block newlines
+remain statement boundaries, and recovery restores delimiter state after an error.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

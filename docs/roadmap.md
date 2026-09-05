@@ -243,9 +243,12 @@ discard partial nodes before recovery. Attributes now retain ordered expression
 arguments, including multiline lists, and recovery distinguishes a malformed
 attribute from a valid attribute on a malformed declaration. Assignment parsing now
 retains ordered multi-place targets, accepts multiline and trailing-comma forms, and
-rejects one-place pseudo-tuples and binary-expression targets. Soft-newline
-expression edge cases remain the next parser-hardening increment; this callout does
-not mark the `neper-0` milestone complete.
+rejects one-place pseudo-tuples and binary-expression targets. Soft newlines are now
+consumed only inside grammar-approved parentheses, brackets, literal bodies and type
+bodies; the lossless token stream retains them, block newlines stay hard, and parser
+recovery restores delimiter state after malformed nested syntax. The remaining
+grammar productions and their conformance coverage are the next parser-front-end
+increments; this callout does not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

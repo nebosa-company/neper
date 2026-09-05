@@ -188,6 +188,25 @@ fn self_test() -> err {
     if soft_type_error != ok || tree.count != 5usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .FieldDecl { ret lex.InvalidSource }
     if tree.nodes[3usize].kind != .StructType || tree.nodes[4usize].kind != .TypeDecl { ret lex.InvalidSource }
+    let soft_array_type_error = parse.validate("type SoftArray = struct {\n    values: [\n        size\n        +\n        1usize\n    ]u8,\n}\n")
+    if soft_array_type_error != ok { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let soft_signature_error = parse.parse(&tree, "fn soft_signature[\n    T\n    :\n    type\n    ,\n](\n    value\n    :\n    *\n    const\n    package\n    .\n    Value\n    ,\n) -> (\n    *\n    T\n    ,\n    []\n    const\n    u8\n    ,\n) {}\n")
+    if soft_signature_error != ok { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let soft_expression_error = parse.parse(&tree, "fn soft() {\n    let value = (\n        left\n        +\n        right\n    )\n    call(\n        value\n        +\n        1usize,\n    )\n    values[\n        index\n        +\n        1usize\n    ] = zero\n    let point = Point{\n        x: left\n           + right,\n    }\n}\n")
+    if soft_expression_error != ok || tree.count != 28usize { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let nested_soft_error = parse.parse(&tree, "fn nested_soft() {\n    call(\n        package\n        .\n        Point{\n            x: value,\n        },\n        [\n            size + 1usize\n        ]\n        *\n        const\n        T{\n            value,\n        },\n    )\n}\n")
+    if nested_soft_error != ok { ret lex.InvalidSource }
+    let hard_newline_error = parse.validate("fn hard() {\n    ret left\n        + right\n}\n")
+    if hard_newline_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let soft_recovery_error = parse.parse(&tree, "fn recover_soft() {\n    call(value +)\n    ret ok\n}\n")
+    if soft_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 6usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .ReturnStmt || tree.nodes[4usize].kind != .Block { ret lex.InvalidSource }
+    if tree.nodes[5usize].kind != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let statements_error = parse.parse(&tree, "fn statements() -> err {\n    let x = 1i32\n    var y = x\n    y += 1i32\n    call()\n    try fallible()\n    defer cleanup()\n    break\n    continue\n    ret ok\n}\n")
     if statements_error != ok || tree.count != 28usize { ret lex.InvalidSource }

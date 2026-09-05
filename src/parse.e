@@ -34,6 +34,8 @@ type Parser = struct {
     error_child_checkpoint: usize,
     error_top_checkpoint: usize,
     error_declarations_checkpoint: usize,
+    error_soft_checkpoint: usize,
+    soft_depth: usize,
     last_node: usize,
     top_nodes: [256]usize,
     top_count: usize,
@@ -140,6 +142,21 @@ fn skip_separators(p: *Parser) -> err {
     ret ok
 }
 
+fn enter_soft(p: *Parser) {
+    p.soft_depth += 1usize
+}
+
+fn leave_soft(p: *Parser) -> err {
+    if p.soft_depth == 0usize { ret InvalidSyntax }
+    p.soft_depth = p.soft_depth - 1usize
+    ret ok
+}
+
+fn skip_soft(p: *Parser) -> err {
+    if p.soft_depth != 0usize { try skip_separators(p) }
+    ret ok
+}
+
 fn finish_line(p: *Parser) -> err {
     if p.current.kind == .Eof { ret ok }
     if p.current.kind != .Newline { ret InvalidSyntax }
@@ -181,7 +198,9 @@ fn parse_parameter_node(p: *Parser) -> err {
         try advance(p)
     } else {
         try require(p, .Identifier)
+        try skip_soft(p)
         try require(p, .PunctColon)
+        try skip_soft(p)
         if p.current.kind == .PunctEllipsis {
             try advance(p)
         } else {
@@ -202,13 +221,16 @@ fn parse_comptime_node(p: *Parser) -> err {
     var nested: [1]usize = zero
     var nested_count = 0usize
     try require(p, .Identifier)
+    try skip_soft(p)
     try require(p, .PunctColon)
+    try skip_soft(p)
     if p.current.kind == .KwType {
         try advance(p)
     } else {
         if p.current.kind == .KwFn {
             var look = p.scanner
-            let following = lex.next(&look)
+            var following = lex.next(&look)
+            while following.kind == .Newline { following = lex.next(&look) }
             if following.kind != .PunctLParen {
                 try advance(p)
             } else {
@@ -264,6 +286,7 @@ fn is_literal(kind: lex.Kind) -> bool {
 }
 
 fn parse_expression_node(p: *Parser) -> err {
+    try skip_soft(p)
     ret parse_binary_node(p, 1usize)
 }
 
@@ -271,12 +294,21 @@ fn named_aggregate_follows(p: *Parser) -> bool {
     var look = p.scanner
     var pascal = identifier_is_pascal(p)
     var token = lex.next(&look)
+    if p.soft_depth != 0usize {
+        while token.kind == .Newline { token = lex.next(&look) }
+    }
     while token.kind == .PunctDot {
         token = lex.next(&look)
+        if p.soft_depth != 0usize {
+            while token.kind == .Newline { token = lex.next(&look) }
+        }
         if token.kind != .Identifier { ret false }
         let first = look.source[token.start]
         pascal = first >= 65u8 && first <= 90u8
         token = lex.next(&look)
+        if p.soft_depth != 0usize {
+            while token.kind == .Newline { token = lex.next(&look) }
+        }
     }
     if token.kind == .PunctLBracket {
         var depth = 1usize
@@ -287,6 +319,9 @@ fn named_aggregate_follows(p: *Parser) -> bool {
             if token.kind == .PunctRBracket { depth = depth - 1usize }
         }
         token = lex.next(&look)
+        if p.soft_depth != 0usize {
+            while token.kind == .Newline { token = lex.next(&look) }
+        }
     }
     ret pascal && token.kind == .PunctLBrace
 }
@@ -335,7 +370,7 @@ fn scan_array_aggregate_type(p: *Parser) -> err {
         if kind == .Invalid || kind == .Eof || kind == .PunctRBrace { ret InvalidSyntax }
         if kind == .PunctLBrace && parens == 0usize && brackets == 0usize { break }
         if kind == .Newline {
-            if parens == 0usize && brackets == 0usize { ret InvalidSyntax }
+            if p.soft_depth == 0usize && parens == 0usize && brackets == 0usize { ret InvalidSyntax }
             try advance(p)
             continue
         }
@@ -361,12 +396,16 @@ fn parse_aggregate_literal_node(p: *Parser) -> err {
     var nested_count = 0usize
     if p.current.kind == .Identifier {
         try advance(p)
+        try skip_soft(p)
         while p.current.kind == .PunctDot {
             try advance(p)
+            try skip_soft(p)
             try require(p, .Identifier)
+            try skip_soft(p)
         }
         if p.current.kind == .PunctLBracket {
             try advance(p)
+            enter_soft(p)
             try skip_separators(p)
             while p.current.kind != .PunctRBracket {
                 try parse_expression_node(p)
@@ -381,10 +420,13 @@ fn parse_aggregate_literal_node(p: *Parser) -> err {
                     if p.current.kind != .PunctRBracket { ret InvalidSyntax }
                 }
             }
+            try leave_soft(p)
             try advance(p)
+            try skip_soft(p)
         }
     } else {
         try require(p, .PunctLBracket)
+        enter_soft(p)
         try skip_separators(p)
         if p.current.kind == .PunctUnderscore {
             try advance(p)
@@ -394,10 +436,13 @@ fn parse_aggregate_literal_node(p: *Parser) -> err {
             nested_count += 1usize
         }
         try skip_separators(p)
+        try leave_soft(p)
         try require(p, .PunctRBracket)
+        try skip_soft(p)
         try scan_array_aggregate_type(p)
     }
     try require(p, .PunctLBrace)
+    enter_soft(p)
     try skip_separators(p)
     if p.current.kind == .PunctRBrace { ret InvalidSyntax }
     while p.current.kind != .PunctRBrace {
@@ -413,6 +458,7 @@ fn parse_aggregate_literal_node(p: *Parser) -> err {
             if p.current.kind != .PunctRBrace { ret InvalidSyntax }
         }
     }
+    try leave_soft(p)
     try advance(p)
     try add_parent_node(p, .AggregateLiteral, token_start, p.token_index, nested[..nested_count])
     ret ok
@@ -438,6 +484,7 @@ fn parse_primary_node(p: *Parser) -> err {
     }
     if p.current.kind == .PunctDot {
         try advance(p)
+        try skip_soft(p)
         try require(p, .Identifier)
         try add_node(p, .MemberExpr, token_start, p.token_index)
         ret ok
@@ -445,10 +492,12 @@ fn parse_primary_node(p: *Parser) -> err {
     if p.current.kind == .PunctLParen {
         var nested: [1]usize = zero
         try advance(p)
+        enter_soft(p)
         try skip_separators(p)
         try parse_expression_node(p)
         nested[0usize] = p.last_node
         try skip_separators(p)
+        try leave_soft(p)
         try require(p, .PunctRParen)
         try add_parent_node(p, .GroupExpr, token_start, p.token_index, nested[..])
         ret ok
@@ -462,6 +511,7 @@ fn parse_call_postfix(p: *Parser, receiver: usize) -> err {
     var nested_count = 1usize
     nested[0usize] = receiver
     try require(p, .PunctLParen)
+    enter_soft(p)
     try skip_separators(p)
     while p.current.kind != .PunctRParen {
         try parse_expression_node(p)
@@ -476,6 +526,7 @@ fn parse_call_postfix(p: *Parser, receiver: usize) -> err {
             if p.current.kind != .PunctRParen { ret InvalidSyntax }
         }
     }
+    try leave_soft(p)
     try advance(p)
     try add_parent_node(p, .CallExpr, token_start, p.token_index, nested[..nested_count])
     ret ok
@@ -487,6 +538,7 @@ fn parse_bracket_postfix(p: *Parser, receiver: usize) -> err {
     var nested_count = 1usize
     nested[0usize] = receiver
     try require(p, .PunctLBracket)
+    enter_soft(p)
     try skip_separators(p)
     if p.current.kind == .PunctRange {
         try advance(p)
@@ -527,6 +579,7 @@ fn parse_bracket_postfix(p: *Parser, receiver: usize) -> err {
         }
     }
     try skip_separators(p)
+    try leave_soft(p)
     try require(p, .PunctRBracket)
     try add_parent_node(p, .BracketPostfix, token_start, p.token_index, nested[..nested_count])
     ret ok
@@ -534,6 +587,7 @@ fn parse_bracket_postfix(p: *Parser, receiver: usize) -> err {
 
 fn parse_postfix_node(p: *Parser) -> err {
     try parse_primary_node(p)
+    try skip_soft(p)
     while p.current.kind == .PunctDot || p.current.kind == .PunctLParen || p.current.kind == .PunctLBracket {
         let receiver = p.last_node
         if p.current.kind == .PunctDot {
@@ -541,6 +595,7 @@ fn parse_postfix_node(p: *Parser) -> err {
             var nested: [1]usize = zero
             nested[0usize] = receiver
             try advance(p)
+            try skip_soft(p)
             try require(p, .Identifier)
             try add_parent_node(p, .FieldExpr, token_start, p.token_index, nested[..])
         } else {
@@ -550,15 +605,18 @@ fn parse_postfix_node(p: *Parser) -> err {
                 try parse_bracket_postfix(p, receiver)
             }
         }
+        try skip_soft(p)
     }
     ret ok
 }
 
 fn parse_prefix_node(p: *Parser) -> err {
+    try skip_soft(p)
     if is_prefix_op(p.current.kind) {
         let token_start = p.token_index
         var nested: [1]usize = zero
         try advance(p)
+        try skip_soft(p)
         try parse_prefix_node(p)
         nested[0usize] = p.last_node
         try add_parent_node(p, .UnaryExpr, token_start, p.tree.nodes[p.last_node].token_end, nested[..])
@@ -568,14 +626,18 @@ fn parse_prefix_node(p: *Parser) -> err {
 }
 
 fn parse_binary_node(p: *Parser, minimum: usize) -> err {
+    try skip_soft(p)
     try parse_prefix_node(p)
     var left = p.last_node
+    try skip_soft(p)
     while binary_precedence(p.current.kind) >= minimum {
         let precedence = binary_precedence(p.current.kind)
         var nested: [2]usize = zero
         nested[0usize] = left
         try advance(p)
+        try skip_soft(p)
         try parse_binary_node(p, precedence + 1usize)
+        try skip_soft(p)
         nested[1usize] = p.last_node
         try add_parent_node(p, .BinaryExpr, p.tree.nodes[left].token_start, p.tree.nodes[p.last_node].token_end, nested[..])
         left = p.last_node
@@ -589,12 +651,16 @@ fn parse_named_type_node(p: *Parser) -> err {
     var nested: [32]usize = zero
     var nested_count = 0usize
     try require(p, .Identifier)
+    try skip_soft(p)
     while p.current.kind == .PunctDot {
         try advance(p)
+        try skip_soft(p)
         try require(p, .Identifier)
+        try skip_soft(p)
     }
     if p.current.kind == .PunctLBracket {
         try advance(p)
+        enter_soft(p)
         try skip_separators(p)
         while p.current.kind != .PunctRBracket {
             try parse_expression_node(p)
@@ -609,6 +675,7 @@ fn parse_named_type_node(p: *Parser) -> err {
                 if p.current.kind != .PunctRBracket { ret InvalidSyntax }
             }
         }
+        try leave_soft(p)
         try advance(p)
     }
     try add_parent_node(p, .NamedType, token_start, p.token_index, nested[..nested_count])
@@ -628,9 +695,9 @@ fn parse_type_parameter_node(p: *Parser) -> err {
             while following.kind == .Newline { following = lex.next(&look) }
             if following.kind == .PunctColon {
                 try advance(p)
-                try skip_separators(p)
+                try skip_soft(p)
                 try require(p, .PunctColon)
-                try skip_separators(p)
+                try skip_soft(p)
                 if p.current.kind == .PunctEllipsis {
                     try advance(p)
                     try add_node(p, .Parameter, token_start, p.token_index)
@@ -656,6 +723,7 @@ fn parse_type_return_spec_node(p: *Parser) -> err {
     var type_count = 0usize
     if p.current.kind == .PunctLParen {
         try advance(p)
+        enter_soft(p)
         try skip_separators(p)
         while p.current.kind != .PunctRParen {
             var has_type_node = false
@@ -675,6 +743,7 @@ fn parse_type_return_spec_node(p: *Parser) -> err {
             }
         }
         if type_count < 2usize { ret InvalidSyntax }
+        try leave_soft(p)
         try advance(p)
     } else {
         var has_type_node = false
@@ -693,9 +762,14 @@ fn parse_function_type_node(p: *Parser) -> err {
     let token_start = p.token_index
     var nested: [64]usize = zero
     var nested_count = 0usize
-    if p.current.kind == .KwExtern { try advance(p) }
+    if p.current.kind == .KwExtern {
+        try advance(p)
+        try skip_soft(p)
+    }
     try require(p, .KwFn)
+    try skip_soft(p)
     try require(p, .PunctLParen)
+    enter_soft(p)
     try skip_separators(p)
     while p.current.kind != .PunctRParen {
         try parse_type_parameter_node(p)
@@ -710,9 +784,12 @@ fn parse_function_type_node(p: *Parser) -> err {
             if p.current.kind != .PunctRParen { ret InvalidSyntax }
         }
     }
+    try leave_soft(p)
     try advance(p)
+    try skip_soft(p)
     if p.current.kind == .PunctArrow {
         try advance(p)
+        try skip_soft(p)
         try parse_type_return_spec_node(p)
         if nested_count == nested.len { ret InvalidSyntax }
         nested[nested_count] = p.last_node
@@ -729,8 +806,11 @@ fn parse_type_node(p: *Parser, has_node: *bool) -> err {
     *has_node = true
     if p.current.kind == .PunctStar {
         try advance(p)
+        try skip_soft(p)
         if p.current.kind == .KwConst { try advance(p) }
+        try skip_soft(p)
         if p.current.kind == .KwShared { try advance(p) }
+        try skip_soft(p)
         var has_inner = false
         try parse_type_node(p, &has_inner)
         if has_inner {
@@ -742,11 +822,16 @@ fn parse_type_node(p: *Parser, has_node: *bool) -> err {
     }
     if p.current.kind == .PunctLBracket {
         try advance(p)
+        enter_soft(p)
         try skip_separators(p)
         if p.current.kind == .PunctRBracket {
+            try leave_soft(p)
             try advance(p)
+            try skip_soft(p)
             if p.current.kind == .KwConst { try advance(p) }
+            try skip_soft(p)
             if p.current.kind == .KwShared { try advance(p) }
+            try skip_soft(p)
             var has_inner = false
             try parse_type_node(p, &has_inner)
             if has_inner {
@@ -764,7 +849,9 @@ fn parse_type_node(p: *Parser, has_node: *bool) -> err {
             nested_count = 1usize
         }
         try skip_separators(p)
+        try leave_soft(p)
         try require(p, .PunctRBracket)
+        try skip_soft(p)
         var has_inner = false
         try parse_type_node(p, &has_inner)
         if has_inner {
@@ -794,6 +881,7 @@ fn parse_return_statement(p: *Parser) -> err {
     if p.current.kind == .PunctLParen {
         let group_start = p.token_index
         try advance(p)
+        enter_soft(p)
         try skip_separators(p)
         if p.current.kind == .PunctRParen { ret InvalidSyntax }
         try parse_expression_node(p)
@@ -811,10 +899,12 @@ fn parse_return_statement(p: *Parser) -> err {
                 nested_count += 1usize
                 try skip_separators(p)
             }
+            try leave_soft(p)
             try require(p, .PunctRParen)
         } else {
             var grouped: [1]usize = zero
             grouped[0usize] = nested[0usize]
+            try leave_soft(p)
             try require(p, .PunctRParen)
             try add_parent_node(p, .GroupExpr, group_start, p.token_index, grouped[..])
             nested[0usize] = p.last_node
@@ -841,6 +931,7 @@ fn parse_binding_node(p: *Parser) -> err {
         try advance(p)
     } else {
         try require(p, .PunctLParen)
+        enter_soft(p)
         try skip_separators(p)
         var items = 0usize
         while true {
@@ -855,6 +946,7 @@ fn parse_binding_node(p: *Parser) -> err {
         }
         if items < 2usize { ret InvalidSyntax }
         try skip_separators(p)
+        try leave_soft(p)
         try require(p, .PunctRParen)
     }
     try add_node(p, .Binding, token_start, p.token_index)
@@ -951,6 +1043,7 @@ fn parse_tuple_assignment_statement(p: *Parser) -> err {
     var nested: [34]usize = zero
     var nested_count = 0usize
     try require(p, .PunctLParen)
+    enter_soft(p)
     try skip_separators(p)
     while p.current.kind != .PunctRParen {
         try parse_prefix_node(p)
@@ -967,6 +1060,7 @@ fn parse_tuple_assignment_statement(p: *Parser) -> err {
         }
     }
     if nested_count < 2usize { ret InvalidSyntax }
+    try leave_soft(p)
     try advance(p)
     if !is_assignment_op(p.current.kind) { ret InvalidSyntax }
     try advance(p)
@@ -1197,10 +1291,12 @@ fn parse_switch_arm_node(p: *Parser) -> err {
         let statement_start = p.token_index
         let node_checkpoint = p.tree.count
         let child_checkpoint = p.tree.child_count
+        let soft_checkpoint = p.soft_depth
         let statement_error = parse_statement_node(p)
         if statement_error != ok {
             p.tree.count = node_checkpoint
             p.tree.child_count = child_checkpoint
+            p.soft_depth = soft_checkpoint
             p.tree.errors += 1usize
             var error_end = p.token_index
             if p.current.kind == .Invalid || error_end == statement_start { error_end += 1usize }
@@ -1339,10 +1435,12 @@ fn parse_block_node(p: *Parser) -> err {
         let statement_start = p.token_index
         let node_checkpoint = p.tree.count
         let child_checkpoint = p.tree.child_count
+        let soft_checkpoint = p.soft_depth
         let statement_error = parse_statement_node(p)
         if statement_error != ok {
             p.tree.count = node_checkpoint
             p.tree.child_count = child_checkpoint
+            p.soft_depth = soft_checkpoint
             p.tree.errors += 1usize
             var error_end = p.token_index
             if p.current.kind == .Invalid || error_end == statement_start { error_end += 1usize }
@@ -1369,6 +1467,7 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     try require(p, .Identifier)
     if p.current.kind == .PunctLBracket {
         try advance(p)
+        enter_soft(p)
         try skip_separators(p)
         if p.current.kind == .PunctRBracket { ret InvalidSyntax }
         while p.current.kind != .PunctRBracket {
@@ -1376,6 +1475,7 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
             if nested_count == nested.len { ret InvalidSyntax }
             nested[nested_count] = p.last_node
             nested_count += 1usize
+            try skip_soft(p)
             if p.current.kind == .PunctComma {
                 try advance(p)
                 try skip_separators(p)
@@ -1383,15 +1483,18 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
                 if p.current.kind != .PunctRBracket { ret InvalidSyntax }
             }
         }
+        try leave_soft(p)
         try advance(p)
     }
     try require(p, .PunctLParen)
+    enter_soft(p)
     try skip_separators(p)
     while p.current.kind != .PunctRParen {
         try parse_parameter_node(p)
         if nested_count == nested.len { ret InvalidSyntax }
         nested[nested_count] = p.last_node
         nested_count += 1usize
+        try skip_soft(p)
         if p.current.kind == .PunctComma {
             try advance(p)
             try skip_separators(p)
@@ -1399,9 +1502,12 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
             if p.current.kind != .PunctRParen { ret InvalidSyntax }
         }
     }
+    try leave_soft(p)
     try advance(p)
+    try skip_soft(p)
     if p.current.kind == .PunctArrow {
         try advance(p)
+        try skip_soft(p)
         try scan_return_spec(p, is_extern)
         if nested_count == nested.len { ret InvalidSyntax }
         nested[nested_count] = p.last_node
@@ -1481,6 +1587,7 @@ fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize, prefix
         nested_count = 1usize
     }
     try require(p, .PunctLBrace)
+    enter_soft(p)
     try skip_separators(p)
     while p.current.kind != .PunctRBrace {
         try parse_type_member(p, member_kind)
@@ -1498,6 +1605,7 @@ fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize, prefix
     if (rhs_kind == .EnumType || rhs_kind == .UnionEnumType) && member_count == 0usize {
         ret InvalidSyntax
     }
+    try leave_soft(p)
     try advance(p)
     try add_parent_node(p, rhs_kind, token_start, p.token_index, nested[..nested_count])
     ret ok
@@ -1512,6 +1620,7 @@ fn parse_type_declaration(p: *Parser) -> err {
     try require(p, .Identifier)
     if p.current.kind == .PunctLBracket {
         try advance(p)
+        enter_soft(p)
         try skip_separators(p)
         if p.current.kind == .PunctRBracket { ret InvalidSyntax }
         while p.current.kind != .PunctRBracket {
@@ -1519,6 +1628,7 @@ fn parse_type_declaration(p: *Parser) -> err {
             if nested_count == nested.len { ret InvalidSyntax }
             nested[nested_count] = p.last_node
             nested_count += 1usize
+            try skip_soft(p)
             if p.current.kind == .PunctComma {
                 try advance(p)
                 try skip_separators(p)
@@ -1526,6 +1636,7 @@ fn parse_type_declaration(p: *Parser) -> err {
                 if p.current.kind != .PunctRBracket { ret InvalidSyntax }
             }
         }
+        try leave_soft(p)
         try advance(p)
     }
     try require(p, .PunctAssign)
@@ -1631,6 +1742,7 @@ fn parse_attribute(p: *Parser) -> err {
     try require(p, .Identifier)
     if p.current.kind == .PunctLParen {
         try advance(p)
+        enter_soft(p)
         try skip_separators(p)
         while p.current.kind != .PunctRParen {
             try parse_expression_node(p)
@@ -1645,6 +1757,7 @@ fn parse_attribute(p: *Parser) -> err {
                 if p.current.kind != .PunctRParen { ret InvalidSyntax }
             }
         }
+        try leave_soft(p)
         try advance(p)
     }
     if p.current.kind != .Newline { ret InvalidSyntax }
@@ -1660,6 +1773,7 @@ fn parse_one(p: *Parser) -> err {
     p.error_child_checkpoint = p.tree.child_count
     p.error_top_checkpoint = p.top_count
     p.error_declarations_checkpoint = p.declarations
+    p.error_soft_checkpoint = p.soft_depth
     if p.current.kind == .KwUse {
         try parse_use(p)
     } else {
@@ -1713,12 +1827,14 @@ fn parse_file(p: *Parser) -> err {
         p.error_child_checkpoint = p.tree.child_count
         p.error_top_checkpoint = p.top_count
         p.error_declarations_checkpoint = p.declarations
+        p.error_soft_checkpoint = p.soft_depth
         let item_error = parse_one(p)
         if item_error != ok {
             p.tree.count = p.error_node_checkpoint
             p.tree.child_count = p.error_child_checkpoint
             p.top_count = p.error_top_checkpoint
             p.declarations = p.error_declarations_checkpoint
+            p.soft_depth = p.error_soft_checkpoint
             p.tree.errors += 1usize
             let node_error = add_top_node(p, .ErrorNode, p.error_start, p.token_index + 1usize)
             if node_error != ok { ret node_error }
