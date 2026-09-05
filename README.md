@@ -125,7 +125,10 @@ Top-level syntax nodes now carry an internal root marker and are gathered direct
 from caller-owned node storage, removing the parser's hidden 256-declaration buffer.
 Parent nodes also mark adopted children in the postorder node stream; aggregate
 literals now discover direct children from that stream and no longer impose a hidden
-127-item limit beyond the caller's node and child capacities.
+127-item limit beyond the caller's node and child capacities. Call and bracket
+arguments, generic type arguments, return-type and return-value lists, function-type
+parameters, tuple-assignment places and attribute arguments now use the same
+capacity-transparent path instead of embedded 32/64-entry arrays.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
