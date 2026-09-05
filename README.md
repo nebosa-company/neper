@@ -90,7 +90,10 @@ preserving their source tokens in the lossless child stream. Bindings, assignmen
 call statements and `try` statements now retain those expression subtrees too,
 including tuple-binding syntax, typed bindings and the special `zero`/`undef`
 initializer forms. Return statements accept multiline, trailing-comma multiple-return
-lists and retain each value as an ordered expression child. Named, generic and fixed/inferred-array
+lists and retain each value as an ordered expression child. Bracket-postfix conformance
+covers empty contents, indices, every open/closed range form, multi-index lists, soft
+newlines and trailing commas, and rejects mixtures of ranges and argument lists.
+Named, generic and fixed/inferred-array
 aggregate literals now expose a structured `NamedType` or `ArrayType` header and
 ordered `LiteralItem` children, including nested literals, named payloads, positional
 values and bare PascalCase members. Local type annotations now recursively expose

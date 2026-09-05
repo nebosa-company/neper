@@ -239,7 +239,10 @@ now retain their binding/target and initializer subtrees; call and `try` stateme
 retain their call trees; `zero` and `undef` remain lossless initializer tokens; and
 failed statement parses roll back partial nodes before inserting an `ErrorNode`.
 Return statements now retain every value in a multiline or trailing-comma
-multiple-return list while preserving ordinary single-expression grouping.
+multiple-return list while preserving ordinary single-expression grouping. Bracket-
+postfix conformance now covers empty contents, indices, every open/closed range form,
+multi-index lists, soft newlines and trailing commas, and rejects mixtures of ranges
+and argument lists.
 Named, generic and fixed/inferred-array aggregate literals now retain a structured
 `NamedType` or `ArrayType` header and ordered `LiteralItem` children, including nested
 literals, named payloads, positional values and bare PascalCase members. Local type

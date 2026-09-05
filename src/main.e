@@ -461,6 +461,19 @@ fn self_test() -> err {
     if tree.nodes[7usize].kind != .ReturnStmt || tree.nodes[8usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[9usize].kind != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
+    let bracket_error = parse.parse(&tree, "fn postfix() {\n    call(values[], values[index], values[..], values[start..], values[..end], values[start..end], table[\n        row,\n        column,\n    ])\n}\n")
+    if bracket_error != ok || tree.count != 27usize { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .BracketPostfix || tree.nodes[6usize].kind != .BracketPostfix { ret lex.InvalidSource }
+    if tree.nodes[8usize].kind != .BracketPostfix || tree.nodes[11usize].kind != .BracketPostfix { ret lex.InvalidSource }
+    if tree.nodes[14usize].kind != .BracketPostfix || tree.nodes[18usize].kind != .BracketPostfix { ret lex.InvalidSource }
+    if tree.nodes[22usize].kind != .BracketPostfix || tree.nodes[23usize].kind != .CallExpr { ret lex.InvalidSource }
+    let mixed_range_error = validate_test_parse("fn invalid() {\n    call(values[start..end, next])\n}\n")
+    if mixed_range_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let trailing_range_error = validate_test_parse("fn invalid() {\n    call(values[..end,])\n}\n")
+    if trailing_range_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let empty_index_error = validate_test_parse("fn invalid() {\n    call(values[first,, second])\n}\n")
+    if empty_index_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
     let return_list_error = parse.parse(&tree, "fn returns() -> (i32, err) {\n    ret (\n        value + 1i32,\n        ok,\n    )\n}\n")
     if return_list_error != ok || tree.count != 11usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }
