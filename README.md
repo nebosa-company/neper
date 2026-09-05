@@ -85,7 +85,9 @@ enum discriminants retain expressions, and tagged types retain their backing typ
 recursively parsed branch/body blocks. PascalCase lookahead distinguishes named
 aggregate literals from block-introducing lowercase condition names. `for` now
 retains iterable or bounded-range expressions and a recursively parsed body while
-preserving one- or two-name iterator bindings as source tokens.
+preserving one- or two-name iterator bindings as source tokens. `defer` owns its
+structured simple statement or block, `@nocheck` owns a validated directive block,
+`shared var` owns its type and optional initializer, and jump statements are exact.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

@@ -1022,6 +1022,76 @@ fn parse_for_statement(p: *Parser) -> err {
     ret ok
 }
 
+fn parse_defer_statement(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [1]usize = zero
+    try require(p, .KwDefer)
+    if p.current.kind == .PunctLBrace {
+        try parse_block_node(p)
+    } else {
+        let deferred_kind = statement_kind(p)
+        if deferred_kind == .BindingStmt {
+            try parse_binding_statement(p)
+        } else {
+            if deferred_kind != .CallStmt { ret InvalidSyntax }
+            try parse_expression_statement(p)
+        }
+    }
+    nested[0usize] = p.last_node
+    if !at_statement_end(p) { ret InvalidSyntax }
+    try add_parent_node(p, .DeferStmt, token_start, p.token_index, nested[..])
+    ret ok
+}
+
+fn parse_nocheck_statement(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [1]usize = zero
+    try require(p, .PunctAt)
+    if p.current.kind != .Identifier || !lex.text_is(p.scanner.source, p.current.start, p.current.end, "nocheck") { ret InvalidSyntax }
+    try advance(p)
+    try parse_block_node(p)
+    nested[0usize] = p.last_node
+    if !at_statement_end(p) { ret InvalidSyntax }
+    try add_parent_node(p, .NocheckStmt, token_start, p.token_index, nested[..])
+    ret ok
+}
+
+fn parse_shared_var_statement(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [2]usize = zero
+    var nested_count = 0usize
+    try require(p, .KwShared)
+    try require(p, .KwVar)
+    try require(p, .Identifier)
+    try require(p, .PunctColon)
+    var has_type_node = false
+    try parse_type_node(p, &has_type_node)
+    if has_type_node {
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    if p.current.kind == .PunctAssign {
+        try advance(p)
+        let initializer_has_node = p.current.kind != .KwZero && p.current.kind != .KwUndef
+        try parse_initializer_node(p)
+        if initializer_has_node {
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+        }
+    }
+    if !at_statement_end(p) { ret InvalidSyntax }
+    try add_parent_node(p, .SharedVarStmt, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_keyword_statement(p: *Parser, kind: syntax.Kind) -> err {
+    let token_start = p.token_index
+    try advance(p)
+    if !at_statement_end(p) { ret InvalidSyntax }
+    try add_node(p, kind, token_start, p.token_index)
+    ret ok
+}
+
 fn is_assignment_op(kind: lex.Kind) -> bool {
     ret kind == .PunctAssign || kind == .PunctAddAssign || kind == .PunctSubAssign || kind == .PunctMulAssign || kind == .PunctDivAssign || kind == .PunctRemAssign || kind == .PunctAddWrapAssign || kind == .PunctSubWrapAssign || kind == .PunctMulWrapAssign || kind == .PunctShiftLeftAssign || kind == .PunctShiftRightAssign || kind == .PunctBitAndAssign || kind == .PunctBitXorAssign || kind == .PunctBitOrAssign
 }
@@ -1064,6 +1134,10 @@ fn parse_statement_node(p: *Parser) -> err {
     if node_kind == .WhileStmt { ret parse_while_statement(p) }
     if node_kind == .WhenStmt { ret parse_when_statement(p) }
     if node_kind == .ForStmt { ret parse_for_statement(p) }
+    if node_kind == .DeferStmt { ret parse_defer_statement(p) }
+    if node_kind == .NocheckStmt { ret parse_nocheck_statement(p) }
+    if node_kind == .SharedVarStmt { ret parse_shared_var_statement(p) }
+    if node_kind == .BreakStmt || node_kind == .ContinueStmt { ret parse_keyword_statement(p, node_kind) }
     while true {
         let kind = p.current.kind
         if kind == .Invalid || kind == .Eof { ret InvalidSyntax }
