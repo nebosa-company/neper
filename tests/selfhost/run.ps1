@@ -379,6 +379,18 @@ foreach ($case in $checkFailures) {
         throw "scalar type-check fixture $($case[0]) returned the wrong result"
     }
 }
+$neper0Root = Join-Path $repo 'tests\neper0'
+foreach ($source in Get-ChildItem $neper0Root -Filter '*.e' | Sort-Object Name) {
+    $shouldReject = $source.Name -like '*-error.e' -and $source.Name -ne 'os-error.e'
+    $parityOutput = & $compiler check-file $source.FullName $repo 'x64' 'windows' 2>&1
+    if ($shouldReject) {
+        if ($LASTEXITCODE -eq 0) { throw "self-hosted front end accepted rejected neper-0 fixture $($source.Name)" }
+    } else {
+        if ($LASTEXITCODE -ne 0 -or ($parityOutput -join "`n") -notmatch 'module check ok') {
+            throw "self-hosted front end rejected accepted neper-0 fixture $($source.Name)"
+        }
+    }
+}
 $scopeRoot = Join-Path $PSScriptRoot 'fixtures\scope'
 $validScopes = & $compiler resolve-file (Join-Path $scopeRoot 'valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $validScopes -ne 'module resolve ok') { throw 'disjoint lexical scope reuse failed' }

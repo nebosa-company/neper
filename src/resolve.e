@@ -275,6 +275,35 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
     let first = r.tokens[node.token_start]
     if first.kind != .Identifier { ret parse.InvalidSyntax }
     let base = g.modules[module_index].text[first.start..first.end]
+    if same(base, "mem") {
+        var entry_at = node.token_start + 1usize
+        var entry_state = 0usize
+        var valid_entry = true
+        while entry_at < node.token_end {
+            let entry_token = r.tokens[entry_at]
+            if entry_token.kind == .Newline {
+                entry_at += 1usize
+            } else {
+                if entry_state == 0usize && entry_token.kind == .PunctDot {
+                    entry_state = 1usize
+                } else {
+                    if entry_state == 1usize && entry_token.kind == .Identifier {
+                        let entry_name = g.modules[module_index].text[entry_token.start..entry_token.end]
+                        if same(entry_name, "Arena") {
+                            entry_state = 2usize
+                        } else {
+                            valid_entry = false
+                        }
+                    } else {
+                        valid_entry = false
+                    }
+                }
+                entry_at += 1usize
+            }
+            if !valid_entry { break }
+        }
+        if valid_entry && entry_state == 2usize { ret ok }
+    }
     var saw_dot = false
     var at = node.token_start + 1usize
     while at < node.token_end {

@@ -464,6 +464,24 @@ expect_check_error tag_invalid_type InvalidType
 expect_check_error tag_unknown_member InvalidType
 expect_check_error tag_capture InvalidSwitch
 expect_check_error switch_missing_return MissingReturn
+for source in "$repo"/tests/neper0/*.e; do
+    fixture=$(basename "$source")
+    case "$fixture" in
+        *-error.e)
+            if [ "$fixture" = os-error.e ]; then
+                parity_output=$($test_build/neper-self check-file "$source" "$repo" x64 linux)
+                [ "$parity_output" = 'module check ok' ]
+            elif $test_build/neper-self check-file "$source" "$repo" x64 linux >/dev/null 2>&1; then
+                printf '%s\n' "self-hosted front end accepted rejected neper-0 fixture $fixture" >&2
+                exit 1
+            fi
+            ;;
+        *)
+            parity_output=$($test_build/neper-self check-file "$source" "$repo" x64 linux)
+            [ "$parity_output" = 'module check ok' ]
+            ;;
+    esac
+done
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
 [ "$valid_scopes" = 'module resolve ok' ]

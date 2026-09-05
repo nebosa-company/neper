@@ -330,7 +330,7 @@ fn is_prefix_op(kind: lex.Kind) -> bool {
 }
 
 fn is_literal(kind: lex.Kind) -> bool {
-    ret kind == .Integer || kind == .Float || kind == .String || kind == .RawString || kind == .Character || kind == .KwTrue || kind == .KwFalse || kind == .KwNil || kind == .KwOk
+    ret kind == .Integer || kind == .Float || kind == .String || kind == .RawString || kind == .Character || kind == .KwTrue || kind == .KwFalse || kind == .KwNil || kind == .KwOk || kind == .KwZero || kind == .KwUndef
 }
 
 fn parse_expression_node(p: *Parser) -> err {
