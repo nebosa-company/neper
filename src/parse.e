@@ -1749,11 +1749,3 @@ fn parse(tree: *Tree, source: str) -> err {
     var p = init(tree, source)
     ret parse_file(&p)
 }
-
-fn validate(source: str) -> err {
-    var nodes: [16]syntax.Node = zero
-    var children: [64]syntax.Child = zero
-    var tree: Tree = zero
-    try init_tree(&tree, nodes[..], children[..])
-    ret parse(&tree, source)
-}

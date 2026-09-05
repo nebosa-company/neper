@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.57-neper0"
+#define NEPER_VERSION "0.0.58-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32

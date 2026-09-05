@@ -287,7 +287,9 @@ type bodies and generic type declarations now use it as well. Every unbounded gr
 list is therefore limited only by explicit caller node/child capacity; the remaining
 local child-ID arrays correspond to fixed-arity productions. The Windows and Linux
 self-host suites parse 261 top-level declarations and a 130-item aggregate in one
-source, crossing both former hidden limits. The
+source, crossing both former hidden limits. The parser's former 16-node/64-child
+validation shortcut is removed; CLI and test callers now declare their storage
+budgets explicitly. The
 remaining grammar productions and their conformance coverage are the next
 parser-front-end increments; this callout does not mark the `neper-0` milestone complete.
 

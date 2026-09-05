@@ -12,6 +12,14 @@ fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize
     ret ok
 }
 
+fn validate_test_parse(source: str) -> err {
+    var nodes: [64]syntax.Node = zero
+    var children: [512]syntax.Child = zero
+    var tree: parse.Tree = zero
+    try parse.init_tree(&tree, nodes[..], children[..])
+    ret parse.parse(&tree, source)
+}
+
 fn self_test() -> err {
     var basic = lex.init("use e.io\r\nfn main() -> err { // note\n    ret ok\n}\n")
     let basic_use = lex.next(&basic)
@@ -242,7 +250,7 @@ fn self_test() -> err {
     let value_recovery_error = parse.parse(&tree, "const BROKEN: usize = call() +\nerror Good\n")
     if value_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 3usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
-    let invalid_try_initializer_error = parse.validate("var value = try not_a_call\n")
+    let invalid_try_initializer_error = validate_test_parse("var value = try not_a_call\n")
     if invalid_try_initializer_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let tuple_assignment_error = parse.parse(&tree, "fn assign() {\n    (\n        left,\n        values[index],\n        *pointer,\n    ) = try split()\n}\n")
@@ -253,15 +261,15 @@ fn self_test() -> err {
     if tree.nodes[7usize].kind != .NameExpr || tree.nodes[8usize].kind != .CallExpr { ret lex.InvalidSource }
     if tree.nodes[9usize].kind != .AssignmentStmt || tree.nodes[10usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[11usize].kind != .FnDecl { ret lex.InvalidSource }
-    let one_item_assignment_error = parse.validate("fn invalid() {\n    (only,) = zero\n}\n")
+    let one_item_assignment_error = validate_test_parse("fn invalid() {\n    (only,) = zero\n}\n")
     if one_item_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let binary_target_error = parse.validate("fn invalid() {\n    left + right = zero\n}\n")
+    let binary_target_error = validate_test_parse("fn invalid() {\n    left + right = zero\n}\n")
     if binary_target_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let unary_target_error = parse.validate("fn invalid() {\n    -value = zero\n}\n")
+    let unary_target_error = validate_test_parse("fn invalid() {\n    -value = zero\n}\n")
     if unary_target_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let tuple_unary_target_error = parse.validate("fn invalid() {\n    (-left, right) = zero\n}\n")
+    let tuple_unary_target_error = validate_test_parse("fn invalid() {\n    (-left, right) = zero\n}\n")
     if tuple_unary_target_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let deref_target_error = parse.validate("fn deref() {\n    **pointer = zero\n    (*left, **right) = zero\n}\n")
+    let deref_target_error = validate_test_parse("fn deref() {\n    **pointer = zero\n    (*left, **right) = zero\n}\n")
     if deref_target_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let attribute_error = parse.parse(&tree, "@gpu(\n    8usize * 4usize,\n    config.size,\n)\n@align(64usize)\nfn kernel() {}\n")
@@ -313,7 +321,7 @@ fn self_test() -> err {
     if tree.nodes[17usize].kind != .NamedType || tree.nodes[18usize].kind != .SliceType { ret lex.InvalidSource }
     if tree.nodes[19usize].kind != .ReturnSpec || tree.nodes[20usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[21usize].kind != .FnDecl { ret lex.InvalidSource }
-    let grouped_return_type_error = parse.validate("fn invalid() -> (i32) {}\n")
+    let grouped_return_type_error = validate_test_parse("fn invalid() -> (i32) {}\n")
     if grouped_return_type_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let alias_error = parse.parse(&tree, "type Ptr = *const i32\ntype Bytes = []const u8\ntype Block4 = [4usize]u8\ntype Callback = fn(i32) -> err\n")
@@ -326,14 +334,14 @@ fn self_test() -> err {
     if tree.nodes[11usize].kind != .NamedType || tree.nodes[12usize].kind != .Parameter { ret lex.InvalidSource }
     if tree.nodes[13usize].kind != .NamedType || tree.nodes[14usize].kind != .ReturnSpec { ret lex.InvalidSource }
     if tree.nodes[15usize].kind != .FunctionType || tree.nodes[16usize].kind != .TypeDecl { ret lex.InvalidSource }
-    let named_function_type_variadic_error = parse.validate("type Bad = fn(args: ...)\n")
+    let named_function_type_variadic_error = validate_test_parse("type Bad = fn(args: ...)\n")
     if named_function_type_variadic_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let soft_type_error = parse.parse(&tree, "type Soft = struct {\n    value\n    :\n    i32,\n}\n")
     if soft_type_error != ok || tree.count != 5usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .FieldDecl { ret lex.InvalidSource }
     if tree.nodes[3usize].kind != .StructType || tree.nodes[4usize].kind != .TypeDecl { ret lex.InvalidSource }
-    let soft_array_type_error = parse.validate("type SoftArray = struct {\n    values: [\n        size\n        +\n        1usize\n    ]u8,\n}\n")
+    let soft_array_type_error = validate_test_parse("type SoftArray = struct {\n    values: [\n        size\n        +\n        1usize\n    ]u8,\n}\n")
     if soft_array_type_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let soft_signature_error = parse.parse(&tree, "fn soft_signature[\n    T\n    :\n    type\n    ,\n](\n    value\n    :\n    *\n    const\n    package\n    .\n    Value\n    ,\n) -> (\n    *\n    T\n    ,\n    []\n    const\n    u8\n    ,\n) {}\n")
@@ -344,7 +352,7 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let nested_soft_error = parse.parse(&tree, "fn nested_soft() {\n    call(\n        package\n        .\n        Point{\n            x: value,\n        },\n        [\n            size + 1usize\n        ]\n        *\n        const\n        T{\n            value,\n        },\n    )\n}\n")
     if nested_soft_error != ok { ret lex.InvalidSource }
-    let hard_newline_error = parse.validate("fn hard() {\n    ret left\n        + right\n}\n")
+    let hard_newline_error = validate_test_parse("fn hard() {\n    ret left\n        + right\n}\n")
     if hard_newline_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let soft_recovery_error = parse.parse(&tree, "fn recover_soft() {\n    call(value +)\n    ret ok\n}\n")
@@ -407,9 +415,9 @@ fn self_test() -> err {
     if tree.nodes[13usize].kind != .AssignmentStmt || tree.nodes[14usize].kind != .NameExpr { ret lex.InvalidSource }
     if tree.nodes[15usize].kind != .AssignmentStmt || tree.nodes[16usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[17usize].kind != .FnDecl { ret lex.InvalidSource }
-    let undef_assignment_error = parse.validate("fn invalid() {\n    value = undef\n}\n")
+    let undef_assignment_error = validate_test_parse("fn invalid() {\n    value = undef\n}\n")
     if undef_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let undef_tuple_assignment_error = parse.validate("fn invalid() {\n    (left, right) = undef\n}\n")
+    let undef_tuple_assignment_error = validate_test_parse("fn invalid() {\n    (left, right) = undef\n}\n")
     if undef_tuple_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let local_type_error = parse.parse(&tree, "fn local_types() {\n    let pointer: *const []shared u8 = zero\n    let array: [size + 1usize]Point = zero\n    let callback: extern fn(\n        ctx: *Ctx,\n        ...,\n    ) -> (i32, err) = zero\n}\n")
@@ -443,7 +451,7 @@ fn self_test() -> err {
     if tree.nodes[3usize].kind != .NameExpr || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
     if tree.nodes[5usize].kind != .BinaryExpr || tree.nodes[6usize].kind != .NameExpr { ret lex.InvalidSource }
     if tree.nodes[7usize].kind != .BinaryExpr || tree.nodes[8usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    let chained_comparison_error = parse.validate("fn invalid() -> bool {\n    ret a < b < c\n}\n")
+    let chained_comparison_error = validate_test_parse("fn invalid() -> bool {\n    ret a < b < c\n}\n")
     if chained_comparison_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let grouped_error = parse.parse(&tree, "fn grouped() -> bool {\n    ret (.Ready == value)\n}\n")
@@ -460,7 +468,7 @@ fn self_test() -> err {
     if tree.nodes[5usize].kind != .LiteralExpr || tree.nodes[6usize].kind != .BinaryExpr { ret lex.InvalidSource }
     if tree.nodes[7usize].kind != .LiteralExpr || tree.nodes[8usize].kind != .ReturnStmt { ret lex.InvalidSource }
     if tree.nodes[9usize].kind != .Block || tree.nodes[10usize].kind != .FnDecl { ret lex.InvalidSource }
-    let empty_return_list_error = parse.validate("fn invalid() {\n    ret ()\n}\n")
+    let empty_return_list_error = validate_test_parse("fn invalid() {\n    ret ()\n}\n")
     if empty_return_list_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let named_aggregate_error = parse.parse(&tree, "fn point() -> Point {\n    ret Point{\n        x: 1i32,\n        y: base + 2i32,\n    }\n}\n")
@@ -503,13 +511,13 @@ fn self_test() -> err {
     if !tree.children[array_children].node || tree.children[array_children].index != 9usize { ret lex.InvalidSource }
     if !tree.children[array_children + 2usize].node || tree.children[array_children + 2usize].index != 11usize { ret lex.InvalidSource }
     if !tree.children[array_children + 4usize].node || tree.children[array_children + 4usize].index != 13usize { ret lex.InvalidSource }
-    let inferred_aggregate_error = parse.validate("fn inferred() {\n    let values = [_]u8{ 1u8, 2u8, }\n}\n")
+    let inferred_aggregate_error = validate_test_parse("fn inferred() {\n    let values = [_]u8{ 1u8, 2u8, }\n}\n")
     if inferred_aggregate_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let constant_item_error = parse.parse(&tree, "fn constants() {\n    let values = [_]usize{ MAX_NODES, }\n}\n")
     if constant_item_error != ok || tree.count != 10usize { ret lex.InvalidSource }
     if tree.nodes[4usize].kind != .NameExpr || tree.nodes[5usize].kind != .LiteralItem { ret lex.InvalidSource }
-    let slice_aggregate_error = parse.validate("fn invalid() {\n    let values = []u8{ 1u8, }\n}\n")
+    let slice_aggregate_error = validate_test_parse("fn invalid() {\n    let values = []u8{ 1u8, }\n}\n")
     if slice_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let member_aggregate_error = parse.parse(&tree, "fn none() -> Maybe {\n    ret Maybe{ None }\n}\n")
@@ -525,9 +533,9 @@ fn self_test() -> err {
     if tree.nodes[7usize].kind != .AggregateLiteral || tree.nodes[8usize].kind != .LiteralItem { ret lex.InvalidSource }
     if tree.nodes[9usize].kind != .AggregateLiteral || tree.nodes[10usize].kind != .ReturnStmt { ret lex.InvalidSource }
     if tree.nodes[11usize].kind != .Block || tree.nodes[12usize].kind != .FnDecl { ret lex.InvalidSource }
-    let empty_aggregate_error = parse.validate("fn invalid() -> Point {\n    ret Point{}\n}\n")
+    let empty_aggregate_error = validate_test_parse("fn invalid() -> Point {\n    ret Point{}\n}\n")
     if empty_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let constant_condition_error = parse.validate("fn flags() {\n    if ENABLED { ret }\n}\n")
+    let constant_condition_error = validate_test_parse("fn flags() {\n    if ENABLED { ret }\n}\n")
     if constant_condition_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let control_error = parse.parse(&tree, "fn control() {\n    if true { call() }\n    while true { break }\n    for item in items { call() }\n    when true { call() } else { cleanup() }\n    switch item {\n        case 1i32:\n            ret\n    }\n    @nocheck { call() }\n    shared var value: i32 = 0i32\n}\n")
@@ -574,7 +582,7 @@ fn self_test() -> err {
     if tree.nodes[9usize].kind != .NameExpr || tree.nodes[10usize].kind != .ContinueStmt { ret lex.InvalidSource }
     if tree.nodes[11usize].kind != .Block || tree.nodes[12usize].kind != .ForStmt { ret lex.InvalidSource }
     if tree.nodes[13usize].kind != .Block || tree.nodes[14usize].kind != .FnDecl { ret lex.InvalidSource }
-    let missing_range_end_error = parse.validate("fn invalid() {\n    for i in 0usize.. {}\n}\n")
+    let missing_range_end_error = validate_test_parse("fn invalid() {\n    for i in 0usize.. {}\n}\n")
     if missing_range_end_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let deferred_block_error = parse.parse(&tree, "fn deferred() {\n    defer {\n        cleanup()\n    }\n}\n")
@@ -583,9 +591,9 @@ fn self_test() -> err {
     if tree.nodes[3usize].kind != .CallStmt || tree.nodes[4usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[5usize].kind != .DeferStmt || tree.nodes[6usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[7usize].kind != .FnDecl { ret lex.InvalidSource }
-    let invalid_directive_error = parse.validate("fn invalid() {\n    @checked {}\n}\n")
+    let invalid_directive_error = validate_test_parse("fn invalid() {\n    @checked {}\n}\n")
     if invalid_directive_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let trailing_break_error = parse.validate("fn invalid() {\n    break value\n}\n")
+    let trailing_break_error = validate_test_parse("fn invalid() {\n    break value\n}\n")
     if trailing_break_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let switch_error = parse.parse(&tree, "fn choose() {\n    switch value {\n    case 1i32, 2i32:\n        call()\n    case .Some as item:\n        ret item\n    default:\n        break\n    }\n}\n")
@@ -612,9 +620,9 @@ fn self_test() -> err {
     if tree.nodes[5usize].kind != .ReturnStmt || tree.nodes[6usize].kind != .SwitchArm { ret lex.InvalidSource }
     if tree.nodes[7usize].kind != .SwitchStmt || tree.nodes[8usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[9usize].kind != .FnDecl { ret lex.InvalidSource }
-    let empty_switch_error = parse.validate("fn invalid() {\n    switch value {}\n}\n")
+    let empty_switch_error = validate_test_parse("fn invalid() {\n    switch value {}\n}\n")
     if empty_switch_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    let inline_switch_arm_error = parse.validate("fn invalid() {\n    switch value {\n    default: ret\n    }\n}\n")
+    let inline_switch_arm_error = validate_test_parse("fn invalid() {\n    switch value {\n    default: ret\n    }\n}\n")
     if inline_switch_arm_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let block_error = parse.parse(&tree, "fn recover() {\n    use bad\n    ret\n}\nerror Good\n")
@@ -628,7 +636,7 @@ fn self_test() -> err {
     if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
     if tree.nodes[3usize].kind != .ReturnStmt || tree.nodes[4usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[5usize].kind != .FnDecl { ret lex.InvalidSource }
-    let syntax_error = parse.validate("fn broken() -> err {\n    ret ok\n")
+    let syntax_error = validate_test_parse("fn broken() -> err {\n    ret ok\n")
     if syntax_error != parse.InvalidSyntax { ret lex.InvalidSource }
     var recovery_nodes: [4]syntax.Node = zero
     var recovery_children: [16]syntax.Child = zero

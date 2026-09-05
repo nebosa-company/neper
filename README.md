@@ -136,6 +136,8 @@ arms and case lists, function declarations, type bodies and generic type declara
 have now migrated too; only fixed-arity productions retain correspondingly sized
 local child-ID arrays. The cross-platform self-host regression parses 261 top-level
 declarations and a 130-item aggregate in one source, exceeding both former limits.
+The parser exposes no fixed-capacity validation shortcut: CLI and test callers pass
+their node and child storage explicitly.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element
