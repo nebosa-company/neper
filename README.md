@@ -80,6 +80,11 @@ standard handles, directory enumeration, child processes, startup arguments,
 virtual-memory reserve/commit, process exit, and wall/monotonic clocks. Generated
 programs link a small platform runtime object, and native failures retain stable
 qualified `os.*` error identities across both x64 ABIs.
+Default builds now also emit the fixed debug subset on both hosts. ELF executables
+carry DWARF 4 compile units, functions, parameters, locals, types, and frame-base
+locations without location or range lists. COFF objects carry matching CodeView
+type and symbol records; the system-linked PDB exposes parameters and locals at
+stable `rbp` offsets, including materialized by-value aggregate parameters.
 Explicit-backing enums, unchecked bare unions,
 tagged `union enum` values, exact tag/payload layout, tag-checked payload access,
 contextual and qualified member names, and non-fallthrough `switch` are implemented.

@@ -95,6 +95,25 @@ printf '%s' "$aggregate_param_error" | grep -q '10:5: error\[E-TYPE-9999\]'
 
 test "$("$neper" run "$repo/tests/neper0/enum-union-switch.e" --output "$test_build/enum-union-switch")" = 'enum union switch ok'
 
+readelf --debug-dump=info "$test_build/aggregate-abi" >"$test_build/aggregate-abi.dwarf" 2>"$test_build/aggregate-abi.dwarf.err"
+readelf --debug-dump=info "$test_build/enum-union-switch" >"$test_build/enum-union-switch.dwarf" 2>"$test_build/enum-union-switch.dwarf.err"
+readelf --debug-dump=info "$test_build/array" >"$test_build/array.dwarf" 2>"$test_build/array.dwarf.err"
+test ! -s "$test_build/aggregate-abi.dwarf.err"
+test ! -s "$test_build/enum-union-switch.dwarf.err"
+test ! -s "$test_build/array.dwarf.err"
+for tag in compile_unit subprogram formal_parameter variable base_type structure_type member pointer_type const_type; do
+    grep -q "DW_TAG_$tag" "$test_build/aggregate-abi.dwarf"
+done
+grep -q 'DW_TAG_union_type' "$test_build/enum-union-switch.dwarf"
+grep -q 'DW_TAG_enumeration_type' "$test_build/enum-union-switch.dwarf"
+grep -q 'DW_TAG_array_type' "$test_build/array.dwarf"
+grep -q 'DW_OP_fbreg' "$test_build/aggregate-abi.dwarf"
+test "$(grep -c DW_AT_location "$test_build/aggregate-abi.dwarf")" = "$(grep -c DW_OP_fbreg "$test_build/aggregate-abi.dwarf")"
+if readelf -S "$test_build/aggregate-abi" | grep -Eq '\.debug_(loc|loclists|ranges|rnglists)'; then
+    printf '%s\n' 'unexpected DWARF location or range list section' >&2
+    exit 1
+fi
+
 set +e
 exhaustive_error=$("$neper" build "$repo/tests/neper0/switch-exhaustive-error.e" --output "$test_build/switch-exhaustive-error" 2>&1)
 exhaustive_status=$?

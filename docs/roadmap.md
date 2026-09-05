@@ -87,8 +87,9 @@ self-hosted compiler has not started.
 - x64 emitter, System V + Windows x64 ABIs
 - Emit object files, link with the system linker
 - Line tables, symbol tables and unwind info — enough for `lldb` breakpoints,
-  stepping and stack traces with no locals, and enough for profilers to symbolise.
-  Locals and types follow in `neper-0`/M1 (spec §13, D9)
+  stepping and stack traces, and enough for profilers to symbolise. The incremental
+  `neper-0` implementation below now adds the specified locals-and-types subset
+  (spec §13, D9)
 - Subset: `fn`, `let`/`var`, integers, `if`/`while`, calls, structs by value, `use`,
   `err`/`try`/`ok`, pointer types and `[]T` slices over any element with `.len` and
   indexing (string literals as `[]const u8`; `main`'s `*mem.Arena` and `[]str`), and
@@ -169,9 +170,16 @@ argument, virtual-memory and clock surface through a small C99 runtime object.
 Intrinsic signatures are compiler-owned, fallible calls use one deterministic
 caller-owned result layout on both x64 ABIs, host failures map to stable qualified
 `os.*` errors, and the Windows/Linux suite exercises success, failure and process
-exit paths. Debug locals remain open.
-This callout does not
-mark the `neper-0` milestone complete.
+exit paths. The debug-info increment adds DWARF 4 DIEs on ELF and CodeView type and
+symbol records on COFF for functions, parameters, named locals, primitives,
+structures, bare and tagged unions, enums, pointers with pointee constness, slices,
+arenas, and arrays. Every source local has one stable frame slot and one `rbp`-based
+location for the full function; larger by-value parameters are copied out of their
+ABI-indirect input into those slots. Linux validation rejects malformed DIEs and
+location/range-list sections; Windows validation parses the COFF record streams,
+and DIA verification confirms the linked PDB reconstructs locals and recursive
+types. This callout does not mark the `neper-0` milestone complete: the self-hosted
+compiler has not started.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

@@ -85,6 +85,12 @@ if ($LASTEXITCODE -ne 1 -or ($aggregateParamError -join "`n") -notmatch '10:5: e
 $enumUnion = & $neper run (Join-Path $PSScriptRoot 'enum-union-switch.e') --output (Join-Path $testBuild 'enum-union-switch.exe')
 if ($LASTEXITCODE -ne 0 -or $enumUnion -ne 'enum union switch ok') { throw 'enum, union, and switch behavior failed' }
 
+& (Join-Path $PSScriptRoot 'check-codeview.ps1') -ObjectPath @(
+    (Join-Path $testBuild 'aggregate-abi.obj'),
+    (Join-Path $testBuild 'enum-union-switch.obj'),
+    (Join-Path $testBuild 'array.obj')
+)
+
 $exhaustiveError = & $neper build (Join-Path $PSScriptRoot 'switch-exhaustive-error.e') --output (Join-Path $testBuild 'switch-exhaustive-error.exe') 2>&1
 if ($LASTEXITCODE -ne 1 -or ($exhaustiveError -join "`n") -notmatch 'non-exhaustive switch; missing member `Two`') {
     throw 'enum switch exhaustiveness rejection failed'

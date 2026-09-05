@@ -35,7 +35,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.12-neper0"
+#define NEPER_VERSION "0.0.13-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -394,6 +394,7 @@ typedef struct Param {
 typedef struct Local {
     char name[96];
     Type type;
+    Token token;
     int is_mutable;
     int active;
     int offset;
@@ -3371,6 +3372,7 @@ static void prepare_deferred_call(Compiler *c, Function *fn, Stmt *defer,
         snprintf(name, sizeof(name), "$defer_%d_%d", fn->local_count, i);
         strcpy(local->name, name);
         local->type = source->type;
+        local->token = source->token;
         local->active = 1;
         defer->as.defer_stmt.capture_values[defer->as.defer_stmt.capture_count] = source;
         defer->as.defer_stmt.capture_locals[defer->as.defer_stmt.capture_count++] = fn->local_count;
@@ -3433,7 +3435,8 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                 else if (fn->local_count < MAX_LOCALS) {
                     Local *local = &fn->locals[fn->local_count];
                     memset(local, 0, sizeof(*local)); strcpy(local->name, s->as.bind.name);
-                    local->type = chosen; local->is_mutable = s->as.bind.is_mutable;
+                    local->type = chosen; local->token = s->token;
+                    local->is_mutable = s->as.bind.is_mutable;
                     local->active = 1;
                     s->as.bind.local_index = fn->local_count++;
                 }
@@ -3474,6 +3477,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     memset(local, 0, sizeof(*local));
                     strcpy(local->name, s->as.multi.names[i]);
                     local->type = callee->return_types[i];
+                    local->token = s->token;
                     local->is_mutable = s->as.multi.is_mutable;
                     local->active = 1;
                     s->as.multi.local_indices[i] = fn->local_count++;
@@ -3659,6 +3663,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     snprintf(limit->name, sizeof(limit->name), "$range_end_%d", fn->local_count);
                     index->type = start; index->is_mutable = 0; index->active = 1;
                     limit->type = start; limit->is_mutable = 0; limit->active = 1;
+                    index->token = limit->token = s->token;
                     s->as.for_range.local_index = fn->local_count++;
                     s->as.for_range.end_local_index = fn->local_count++;
                     if (loop_depth >= MAX_LOOP_DEPTH)
@@ -3736,6 +3741,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                         snprintf(has->name, sizeof(has->name), "$iter_has_%d", local_start);
                         strcpy(value->name, s->as.for_each.value_name);
                         pointer->type = pointer_type; has->type = type_make(TY_BOOL, "bool"); value->type = element;
+                        pointer->token = has->token = value->token = s->token;
                         pointer->active = has->active = value->active = 1;
                         s->as.for_each.is_protocol = 1;
                         s->as.for_each.iterator_subject_is_pointer = subject_is_pointer;
@@ -3779,6 +3785,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                     type_set_element(&pointer_type, element);
                     pointer->type = pointer_type; length->type = usize_type;
                     index->type = usize_type; value->type = element;
+                    pointer->token = length->token = index->token = value->token = s->token;
                     pointer->active = length->active = index->active = value->active = 1;
                     s->as.for_each.pointer_local_index = fn->local_count++;
                     s->as.for_each.length_local_index = fn->local_count++;
@@ -3879,7 +3886,8 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                             else if (fn->local_count < MAX_LOCALS) {
                                 Local *local = &fn->locals[fn->local_count];
                                 memset(local, 0, sizeof(*local));
-                                strcpy(local->name, arm->binding); local->type = member->type; local->active = 1;
+                                strcpy(local->name, arm->binding); local->type = member->type;
+                                local->token = arm->token; local->active = 1;
                                 arm->local_index = scope_local = fn->local_count++;
                             }
                         }
@@ -4354,7 +4362,8 @@ static void check_program(Compiler *c) {
             resolve_type_constants(c, &fn->params[j].type, &fn->params[j].token);
             check_known_type(c, fn->params[j].type, &fn->params[j].token);
             memset(local, 0, sizeof(*local)); strcpy(local->name, fn->params[j].name);
-            local->type = fn->params[j].type; local->is_mutable = 0; local->active = 1;
+            local->type = fn->params[j].type; local->token = fn->params[j].token;
+            local->is_mutable = 0; local->active = 1;
             if (type_is_value_aggregate(c, local->type) && type_size(c, local->type) > 16)
                 local->is_indirect = 1;
             fn->params[j].local_index = fn->local_count++;
@@ -4590,7 +4599,7 @@ static void emit_address_store(Emitter *e, Type type, TokenKind op) {
 static void assign_offsets(Compiler *c, Function *fn) {
     int i, offset = 0;
     for (i = 0; i < fn->local_count; ++i) {
-        size_t bytes = fn->locals[i].is_indirect ? 8 : type_size(c, fn->locals[i].type);
+        size_t bytes = type_size(c, fn->locals[i].type);
         size_t storage = (bytes + 7) & ~(size_t)7;
         if (storage == 0) storage = 8;
         offset += (int)storage;
@@ -4669,9 +4678,7 @@ static void emit_tag_check(Emitter *e, Expr *expr, int size, int64_t expected) {
 static void emit_name_address(Emitter *e, Expr *name) {
     Local *local = &e->fn->locals[name->local_index];
     int i;
-    if (local->is_indirect)
-        fprintf(e->out, "    mov r10, QWORD PTR [rbp-%d]\n", local->offset);
-    else fprintf(e->out, "    lea r10, [rbp-%d]\n", local->offset);
+    fprintf(e->out, "    lea r10, [rbp-%d]\n", local->offset);
     for (i = 0; i < name->field_path_count; ++i) {
         if (name->field_dereferences[i])
             fputs("    mov r10, QWORD PTR [r10]\n", e->out);
@@ -5540,6 +5547,35 @@ static void emit_function(Emitter *e, Function *fn) {
             lanes = local->is_indirect ? 1 : (int)((bytes + 7) / 8);
             if (lanes == 0) lanes = 1;
         } else lanes = type_lanes(fn->params[i].type);
+        if (local->is_indirect) {
+            size_t bytes = type_size(e->compiler, fn->params[i].type), copied = 0;
+            const char *reg = e->windows ? (lane < 4 ? win_regs[lane] : 0) :
+                                          (lane < 6 ? sysv_regs[lane] : 0);
+            if (reg) fprintf(e->out, "    mov r11, %s\n", reg);
+            else if (e->windows) fprintf(e->out, "    mov r11, QWORD PTR [rbp+%d]\n", 48 + (lane - 4) * 8);
+            else fprintf(e->out, "    mov r11, QWORD PTR [rbp+%d]\n", 16 + (lane - 6) * 8);
+            lane++;
+            while (bytes - copied >= 8) {
+                fprintf(e->out, "    mov rax, QWORD PTR [r11+%u]\n", (unsigned)copied);
+                fprintf(e->out, "    mov QWORD PTR [rbp-%d], rax\n", local->offset - (int)copied);
+                copied += 8;
+            }
+            if (bytes - copied >= 4) {
+                fprintf(e->out, "    mov eax, DWORD PTR [r11+%u]\n", (unsigned)copied);
+                fprintf(e->out, "    mov DWORD PTR [rbp-%d], eax\n", local->offset - (int)copied);
+                copied += 4;
+            }
+            if (bytes - copied >= 2) {
+                fprintf(e->out, "    mov ax, WORD PTR [r11+%u]\n", (unsigned)copied);
+                fprintf(e->out, "    mov WORD PTR [rbp-%d], ax\n", local->offset - (int)copied);
+                copied += 2;
+            }
+            if (bytes != copied) {
+                fprintf(e->out, "    mov al, BYTE PTR [r11+%u]\n", (unsigned)copied);
+                fprintf(e->out, "    mov BYTE PTR [rbp-%d], al\n", local->offset - (int)copied);
+            }
+            continue;
+        }
         for (k = 0; k < lanes; ++k, ++lane) {
             const char *reg = e->windows ? (lane < 4 ? win_regs[lane] : 0) : (lane < 6 ? sysv_regs[lane] : 0);
             if (reg) fprintf(e->out, "    mov QWORD PTR [rbp-%d], %s\n", local->offset - k * 8, reg);
@@ -5568,6 +5604,361 @@ static void emit_bytes(FILE *out, const unsigned char *bytes, size_t n, int wind
         if (i % 12 == 11 || i + 1 == n) fputc('\n', out); else fputs(", ", out);
     }
     if (n == 0) fputs(windows ? "    DB 0\n" : "    .byte 0\n", out);
+}
+
+#define MAX_DEBUG_TYPES 2048
+#define MAX_DEBUG_STRINGS 8192
+
+typedef struct DebugTypeEntry {
+    Type type;
+    uint32_t codeview_type;
+    uint32_t codeview_forward_type;
+    uint32_t codeview_field_list;
+    uint32_t codeview_const_type;
+} DebugTypeEntry;
+
+typedef struct DebugStringEntry {
+    char text[192];
+} DebugStringEntry;
+
+typedef struct DebugContext {
+    DebugTypeEntry types[MAX_DEBUG_TYPES];
+    int type_count;
+    DebugStringEntry strings[MAX_DEBUG_STRINGS];
+    int string_count;
+    uint32_t codeview_arg_lists[MAX_DECLS];
+    uint32_t codeview_functions[MAX_DECLS];
+} DebugContext;
+
+static int debug_visible_local(Local *local) {
+    return local->name[0] && local->name[0] != '$' && strcmp(local->name, "_") != 0;
+}
+
+static int debug_string(DebugContext *debug, const char *text) {
+    int i;
+    for (i = 0; i < debug->string_count; ++i)
+        if (strcmp(debug->strings[i].text, text) == 0) return i;
+    if (debug->string_count >= MAX_DEBUG_STRINGS) return 0;
+    copy_text(debug->strings[debug->string_count].text,
+              sizeof(debug->strings[debug->string_count].text), text, strlen(text));
+    return debug->string_count++;
+}
+
+static int debug_find_string(DebugContext *debug, const char *text) {
+    int i;
+    for (i = 0; i < debug->string_count; ++i)
+        if (strcmp(debug->strings[i].text, text) == 0) return i;
+    return -1;
+}
+
+static void debug_type_name(Type type, char *out, size_t capacity) {
+    char element[128];
+    if (type.kind == TY_POINTER) {
+        debug_type_name(pointer_element_type(type), element, sizeof(element));
+        snprintf(out, capacity, type.is_const ? "*const %s" : "*%s", element);
+    } else if (type.kind == TY_SLICE) {
+        debug_type_name(sequence_element_type(type), element, sizeof(element));
+        snprintf(out, capacity, type.is_const ? "[]const %s" : "[]%s", element);
+    } else if (type.kind == TY_ARRAY) {
+        debug_type_name(array_element_type(type), element, sizeof(element));
+        snprintf(out, capacity, "[%llu]%s", (unsigned long long)type.array_length, element);
+    } else if (type.kind == TY_BOOL) copy_text(out, capacity, "bool", 4);
+    else if (type.kind == TY_ERR) copy_text(out, capacity, "err", 3);
+    else if (type.kind == TY_STR) copy_text(out, capacity, "str", 3);
+    else if (type.kind == TY_ARENA) copy_text(out, capacity, "mem.Arena", 9);
+    else copy_text(out, capacity, type.name, strlen(type.name));
+}
+
+static int debug_find_type(DebugContext *debug, Type type) {
+    int i;
+    for (i = 0; i < debug->type_count; ++i)
+        if (type_equal(debug->types[i].type, type)) return i;
+    return -1;
+}
+
+static int debug_add_type(Compiler *c, DebugContext *debug, Type type) {
+    int id = debug_find_type(debug, type), i;
+    StructDecl *decl;
+    if (id >= 0) return id;
+    if (debug->type_count >= MAX_DEBUG_TYPES) return 0;
+    id = debug->type_count++;
+    debug->types[id].type = type;
+    if (type.kind == TY_POINTER) {
+        Type element = pointer_element_type(type);
+        debug_add_type(c, debug, element);
+    } else if (type.kind == TY_SLICE) {
+        Type element = sequence_element_type(type);
+        Type pointer = type_make(TY_POINTER, element.name);
+        type_set_element(&pointer, element); pointer.is_const = type.is_const;
+        debug_add_type(c, debug, element);
+        debug_add_type(c, debug, pointer);
+        debug_add_type(c, debug, type_make(TY_INT, "usize"));
+    } else if (type.kind == TY_STR) {
+        Type element = type_make(TY_INT, "u8");
+        Type pointer = type_make(TY_POINTER, element.name);
+        type_set_element(&pointer, element); pointer.is_const = 1;
+        debug_add_type(c, debug, element);
+        debug_add_type(c, debug, pointer);
+        debug_add_type(c, debug, type_make(TY_INT, "usize"));
+    } else if (type.kind == TY_ARRAY) {
+        debug_add_type(c, debug, array_element_type(type));
+    } else if (type.kind == TY_ARENA) {
+        Type element = type_make(TY_INT, "u8");
+        Type pointer = type_make(TY_POINTER, element.name);
+        type_set_element(&pointer, element);
+        debug_add_type(c, debug, element);
+        debug_add_type(c, debug, pointer);
+        debug_add_type(c, debug, type_make(TY_INT, "usize"));
+    } else if (type.kind == TY_NAMED) {
+        decl = find_struct(c, type.name);
+        if (!decl) decl = find_tag_owner(c, type.name);
+        if (decl) {
+            if (find_tag_owner(c, type.name)) debug_add_type(c, debug, decl->backing_type);
+            else if (decl->kind == ND_ENUM) debug_add_type(c, debug, decl->backing_type);
+            else if (decl->kind == ND_TAGGED_UNION) {
+                char tag_name[160];
+                Type tag;
+                snprintf(tag_name, sizeof(tag_name), "%s.Tag", decl->name);
+                tag = type_make(TY_NAMED, tag_name);
+                debug_add_type(c, debug, tag);
+            }
+            for (i = 0; i < decl->field_count; ++i)
+                if (decl->kind == ND_STRUCT || decl->kind == ND_UNION ||
+                    (decl->kind == ND_TAGGED_UNION && decl->fields[i].has_payload))
+                    debug_add_type(c, debug, decl->fields[i].type);
+        }
+    }
+    return id;
+}
+
+static void prepare_debug_context(Compiler *c, DebugContext *debug) {
+    int i, j;
+    char name[160];
+    memset(debug, 0, sizeof(*debug));
+    debug_string(debug, "neper " NEPER_VERSION);
+    debug_string(debug, c->source_path);
+    debug_string(debug, ".");
+    debug_string(debug, "ptr"); debug_string(debug, "len");
+    debug_string(debug, "base"); debug_string(debug, "cap"); debug_string(debug, "off");
+    debug_string(debug, "tag");
+    for (i = 0; i < c->program.function_count; ++i) {
+        Function *fn = &c->program.functions[i];
+        if (fn->is_template || fn->is_intrinsic) continue;
+        debug_string(debug, fn->name); debug_string(debug, fn->symbol);
+        for (j = 0; j < fn->return_count; ++j) debug_add_type(c, debug, fn->return_types[j]);
+        for (j = 0; j < fn->param_count; ++j) debug_add_type(c, debug, fn->params[j].type);
+        for (j = 0; j < fn->local_count; ++j) if (debug_visible_local(&fn->locals[j])) {
+            debug_string(debug, fn->locals[j].name);
+            debug_add_type(c, debug, fn->locals[j].type);
+        }
+    }
+    for (i = 0; i < debug->type_count; ++i) {
+        Type type = debug->types[i].type;
+        StructDecl *decl = type.kind == TY_NAMED ? find_struct(c, type.name) : 0;
+        if (!decl && type.kind == TY_NAMED) decl = find_tag_owner(c, type.name);
+        debug_type_name(type, name, sizeof(name)); debug_string(debug, name);
+        if (decl) for (j = 0; j < decl->field_count; ++j)
+            debug_string(debug, decl->fields[j].name);
+    }
+}
+
+static void emit_dwarf_abbrev(FILE *out) {
+    fputs(
+        ".section .debug_abbrev,\"\",@progbits\nnp_debug_abbrev_start:\n"
+        /* compile_unit */
+        ".uleb128 1\n.uleb128 0x11\n.byte 1\n"
+        ".uleb128 0x25\n.uleb128 0x0e\n.uleb128 0x13\n.uleb128 0x05\n"
+        ".uleb128 0x03\n.uleb128 0x0e\n.uleb128 0x1b\n.uleb128 0x0e\n"
+        ".uleb128 0x10\n.uleb128 0x17\n.uleb128 0x11\n.uleb128 0x01\n"
+        ".uleb128 0x12\n.uleb128 0x07\n.byte 0\n.byte 0\n"
+        /* subprogram with return type */
+        ".uleb128 2\n.uleb128 0x2e\n.byte 1\n.uleb128 0x3f\n.uleb128 0x19\n"
+        ".uleb128 0x03\n.uleb128 0x0e\n.uleb128 0x6e\n.uleb128 0x0e\n"
+        ".uleb128 0x3a\n.uleb128 0x0b\n.uleb128 0x3b\n.uleb128 0x06\n"
+        ".uleb128 0x49\n.uleb128 0x13\n.uleb128 0x11\n.uleb128 0x01\n"
+        ".uleb128 0x12\n.uleb128 0x07\n.uleb128 0x40\n.uleb128 0x18\n.byte 0\n.byte 0\n"
+        /* formal_parameter and variable */
+        ".uleb128 3\n.uleb128 0x05\n.byte 0\n.uleb128 0x03\n.uleb128 0x0e\n"
+        ".uleb128 0x3a\n.uleb128 0x0b\n.uleb128 0x3b\n.uleb128 0x06\n"
+        ".uleb128 0x49\n.uleb128 0x13\n.uleb128 0x02\n.uleb128 0x18\n.byte 0\n.byte 0\n"
+        ".uleb128 4\n.uleb128 0x34\n.byte 0\n.uleb128 0x03\n.uleb128 0x0e\n"
+        ".uleb128 0x3a\n.uleb128 0x0b\n.uleb128 0x3b\n.uleb128 0x06\n"
+        ".uleb128 0x49\n.uleb128 0x13\n.uleb128 0x02\n.uleb128 0x18\n.byte 0\n.byte 0\n"
+        /* base, pointer, const */
+        ".uleb128 5\n.uleb128 0x24\n.byte 0\n.uleb128 0x03\n.uleb128 0x0e\n"
+        ".uleb128 0x0b\n.uleb128 0x0b\n.uleb128 0x3e\n.uleb128 0x0b\n.byte 0\n.byte 0\n"
+        ".uleb128 6\n.uleb128 0x0f\n.byte 0\n.uleb128 0x0b\n.uleb128 0x0b\n"
+        ".uleb128 0x49\n.uleb128 0x13\n.byte 0\n.byte 0\n"
+        ".uleb128 7\n.uleb128 0x26\n.byte 0\n.uleb128 0x49\n.uleb128 0x13\n.byte 0\n.byte 0\n"
+        /* structure/member, union, enum/enumerator */
+        ".uleb128 8\n.uleb128 0x13\n.byte 1\n.uleb128 0x03\n.uleb128 0x0e\n"
+        ".uleb128 0x0b\n.uleb128 0x06\n.byte 0\n.byte 0\n"
+        ".uleb128 9\n.uleb128 0x0d\n.byte 0\n.uleb128 0x03\n.uleb128 0x0e\n"
+        ".uleb128 0x49\n.uleb128 0x13\n.uleb128 0x38\n.uleb128 0x06\n.byte 0\n.byte 0\n"
+        ".uleb128 10\n.uleb128 0x17\n.byte 1\n.uleb128 0x03\n.uleb128 0x0e\n"
+        ".uleb128 0x0b\n.uleb128 0x06\n.byte 0\n.byte 0\n"
+        ".uleb128 11\n.uleb128 0x04\n.byte 1\n.uleb128 0x03\n.uleb128 0x0e\n"
+        ".uleb128 0x0b\n.uleb128 0x0b\n.uleb128 0x49\n.uleb128 0x13\n.byte 0\n.byte 0\n"
+        ".uleb128 12\n.uleb128 0x28\n.byte 0\n.uleb128 0x03\n.uleb128 0x0e\n"
+        ".uleb128 0x1c\n.uleb128 0x0d\n.byte 0\n.byte 0\n"
+        /* array/subrange */
+        ".uleb128 13\n.uleb128 0x01\n.byte 1\n.uleb128 0x49\n.uleb128 0x13\n.byte 0\n.byte 0\n"
+        ".uleb128 14\n.uleb128 0x21\n.byte 0\n.uleb128 0x37\n.uleb128 0x0f\n.byte 0\n.byte 0\n"
+        /* void subprogram */
+        ".uleb128 15\n.uleb128 0x2e\n.byte 1\n.uleb128 0x3f\n.uleb128 0x19\n"
+        ".uleb128 0x03\n.uleb128 0x0e\n.uleb128 0x6e\n.uleb128 0x0e\n"
+        ".uleb128 0x3a\n.uleb128 0x0b\n.uleb128 0x3b\n.uleb128 0x06\n"
+        ".uleb128 0x11\n.uleb128 0x01\n.uleb128 0x12\n.uleb128 0x07\n"
+        ".uleb128 0x40\n.uleb128 0x18\n.byte 0\n.byte 0\n.byte 0\n", out);
+}
+
+static void emit_dwarf_string_ref(FILE *out, DebugContext *debug, const char *text) {
+    int id = debug_find_string(debug, text);
+    if (id < 0) { fputs("neper: internal debug string was not prepared\n", stderr); exit(2); }
+    fprintf(out, ".long np_dw_str_%d\n", id);
+}
+
+static void emit_dwarf_type_ref(FILE *out, DebugContext *debug, Type type) {
+    int id = debug_find_type(debug, type);
+    if (id < 0) { fputs("neper: internal debug type was not prepared\n", stderr); exit(2); }
+    fprintf(out, ".long np_dw_type_%d - np_debug_info_start\n", id);
+}
+
+static void emit_dwarf_member(FILE *out, DebugContext *debug, const char *name,
+                              Type type, size_t offset) {
+    fputs(".uleb128 9\n", out); emit_dwarf_string_ref(out, debug, name);
+    emit_dwarf_type_ref(out, debug, type);
+    fprintf(out, ".long %u\n", (unsigned)offset);
+}
+
+static void emit_dwarf_type(Compiler *c, FILE *out, DebugContext *debug, int id) {
+    Type type = debug->types[id].type;
+    char name[160];
+    size_t size = 0, alignment = 1;
+    StructDecl *decl = type.kind == TY_NAMED ? find_struct(c, type.name) : 0;
+    StructDecl *tag_owner = type.kind == TY_NAMED ? find_tag_owner(c, type.name) : 0;
+    int i;
+    debug_type_name(type, name, sizeof(name));
+    type_layout(c, type, &size, &alignment);
+    fprintf(out, "np_dw_type_%d:\n", id);
+    if (type.kind == TY_BOOL || type.kind == TY_ERR || type.kind == TY_INT) {
+        int encoding = type.kind == TY_BOOL ? 0x02 : type_is_signed_integer(c, type) ? 0x05 : 0x07;
+        fputs(".uleb128 5\n", out); emit_dwarf_string_ref(out, debug, name);
+        fprintf(out, ".byte %u\n.byte %d\n", (unsigned)size, encoding);
+    } else if (type.kind == TY_POINTER) {
+        Type element = pointer_element_type(type);
+        fputs(".uleb128 6\n.byte 8\n", out);
+        if (type.is_const) {
+            fprintf(out, ".long np_dw_const_%d - np_debug_info_start\n", id);
+            fprintf(out, "np_dw_const_%d:\n.uleb128 7\n", id);
+            emit_dwarf_type_ref(out, debug, element);
+        } else emit_dwarf_type_ref(out, debug, element);
+    } else if (type.kind == TY_ARRAY) {
+        fputs(".uleb128 13\n", out); emit_dwarf_type_ref(out, debug, array_element_type(type));
+        fprintf(out, ".uleb128 14\n.uleb128 %llu\n.byte 0\n",
+                (unsigned long long)type.array_length);
+    } else if (type.kind == TY_STR || type.kind == TY_SLICE) {
+        Type element = type.kind == TY_STR ? type_make(TY_INT, "u8") : sequence_element_type(type);
+        Type pointer = type_make(TY_POINTER, element.name);
+        type_set_element(&pointer, element); pointer.is_const = type.kind == TY_STR || type.is_const;
+        fputs(".uleb128 8\n", out); emit_dwarf_string_ref(out, debug, name); fputs(".long 16\n", out);
+        emit_dwarf_member(out, debug, "ptr", pointer, 0);
+        emit_dwarf_member(out, debug, "len", type_make(TY_INT, "usize"), 8);
+        fputs(".byte 0\n", out);
+    } else if (type.kind == TY_ARENA) {
+        Type element = type_make(TY_INT, "u8");
+        Type pointer = type_make(TY_POINTER, element.name); type_set_element(&pointer, element);
+        fputs(".uleb128 8\n", out); emit_dwarf_string_ref(out, debug, name); fputs(".long 24\n", out);
+        emit_dwarf_member(out, debug, "base", pointer, 0);
+        emit_dwarf_member(out, debug, "cap", type_make(TY_INT, "usize"), 8);
+        emit_dwarf_member(out, debug, "off", type_make(TY_INT, "usize"), 16);
+        fputs(".byte 0\n", out);
+    } else if (tag_owner || (decl && decl->kind == ND_ENUM)) {
+        StructDecl *owner = tag_owner ? tag_owner : decl;
+        Type backing = owner->backing_type;
+        fputs(".uleb128 11\n", out); emit_dwarf_string_ref(out, debug, name);
+        fprintf(out, ".byte %u\n", (unsigned)scalar_byte_size(backing));
+        emit_dwarf_type_ref(out, debug, backing);
+        for (i = 0; i < owner->field_count; ++i) {
+            fputs(".uleb128 12\n", out); emit_dwarf_string_ref(out, debug, owner->fields[i].name);
+            fprintf(out, ".sleb128 %lld\n", (long long)owner->fields[i].value);
+        }
+        fputs(".byte 0\n", out);
+    } else if (decl) {
+        fprintf(out, ".uleb128 %d\n", decl->kind == ND_UNION ? 10 : 8);
+        emit_dwarf_string_ref(out, debug, name); fprintf(out, ".long %u\n", (unsigned)decl->size);
+        if (decl->kind == ND_TAGGED_UNION) {
+            char tag_name[160]; Type tag;
+            snprintf(tag_name, sizeof(tag_name), "%s.Tag", decl->name);
+            tag = type_make(TY_NAMED, tag_name);
+            emit_dwarf_member(out, debug, "tag", tag, 0);
+        }
+        for (i = 0; i < decl->field_count; ++i)
+            if (decl->kind != ND_TAGGED_UNION || decl->fields[i].has_payload)
+                emit_dwarf_member(out, debug, decl->fields[i].name, decl->fields[i].type,
+                                  decl->kind == ND_UNION ? 0 : decl->fields[i].offset);
+        fputs(".byte 0\n", out);
+    } else {
+        fputs(".uleb128 5\n", out); emit_dwarf_string_ref(out, debug, name);
+        fputs(".byte 8\n.byte 0x07\n", out);
+    }
+}
+
+static int function_param_for_local(Function *fn, int local_index) {
+    int i;
+    for (i = 0; i < fn->param_count; ++i)
+        if (fn->params[i].local_index == local_index) return i;
+    return -1;
+}
+
+static void emit_linux_debug(Compiler *c, FILE *out) {
+    DebugContext *debug = (DebugContext *)calloc(1, sizeof(*debug));
+    int i, j;
+    if (!debug) { fputs("neper: out of memory\n", stderr); exit(2); }
+    prepare_debug_context(c, debug);
+    fputs(".section .debug_str,\"MS\",@progbits,1\nnp_debug_str_start:\n", out);
+    for (i = 0; i < debug->string_count; ++i) {
+        fprintf(out, "np_dw_str_%d:\n", i);
+        emit_bytes(out, (const unsigned char *)debug->strings[i].text,
+                   strlen(debug->strings[i].text) + 1, 0);
+    }
+    emit_dwarf_abbrev(out);
+    fputs(".section .debug_info,\"\",@progbits\nnp_debug_info_start:\n"
+          ".long np_debug_info_end - np_debug_info_body\nnp_debug_info_body:\n"
+          ".short 4\n.long np_debug_abbrev_start\n.byte 8\n"
+          ".uleb128 1\n", out);
+    emit_dwarf_string_ref(out, debug, "neper " NEPER_VERSION);
+    fputs(".short 0x8000\n", out);
+    emit_dwarf_string_ref(out, debug, c->source_path);
+    emit_dwarf_string_ref(out, debug, ".");
+    fputs(".long 0\n.quad np_user_text_start\n.quad np_user_text_end - np_user_text_start\n", out);
+    for (i = 0; i < c->program.function_count; ++i) {
+        Function *fn = &c->program.functions[i];
+        if (fn->is_template || fn->is_intrinsic) continue;
+        fprintf(out, ".uleb128 %d\n", fn->return_count ? 2 : 15);
+        emit_dwarf_string_ref(out, debug, fn->name);
+        emit_dwarf_string_ref(out, debug, fn->symbol);
+        fprintf(out, ".byte 1\n.long %d\n", fn->token.line);
+        if (fn->return_count) emit_dwarf_type_ref(out, debug, fn->return_types[0]);
+        fprintf(out, ".quad %s\n.quad np_end_%s - %s\n.uleb128 1\n.byte 0x56\n",
+                fn->symbol, fn->symbol, fn->symbol);
+        for (j = 0; j < fn->local_count; ++j) {
+            Local *local = &fn->locals[j];
+            int parameter = function_param_for_local(fn, j);
+            if (!debug_visible_local(local)) continue;
+            fprintf(out, ".uleb128 %d\n", parameter >= 0 ? 3 : 4);
+            emit_dwarf_string_ref(out, debug, local->name);
+            fprintf(out, ".byte 1\n.long %d\n", local->token.line ? local->token.line : fn->token.line);
+            emit_dwarf_type_ref(out, debug, local->type);
+            fprintf(out, ".uleb128 np_dw_loc_end_%d_%d - np_dw_loc_%d_%d\n"
+                         "np_dw_loc_%d_%d:\n.byte 0x91\n.sleb128 -%d\nnp_dw_loc_end_%d_%d:\n",
+                    i, j, i, j, i, j, local->offset, i, j);
+        }
+        fputs(".byte 0\n", out);
+    }
+    for (i = 0; i < debug->type_count; ++i) emit_dwarf_type(c, out, debug, i);
+    fputs(".byte 0\nnp_debug_info_end:\n", out);
+    free(debug);
 }
 
 static void error_message(Compiler *c, ErrorDecl *error, char *out, size_t capacity) {
@@ -5670,12 +6061,325 @@ static void emit_codeview_statement_lines(FILE *out, Function *fn, Stmt *stateme
     }
 }
 
-static void emit_windows_codeview(Compiler *c, FILE *out) {
+typedef struct CodeviewMember {
+    const char *name;
+    Type type;
+    size_t offset;
+    int is_enumerator;
+    int64_t value;
+} CodeviewMember;
+
+static uint32_t codeview_simple_type(Type type) {
+    if (type.kind == TY_VOID) return 0x0003;
+    if (type.kind == TY_BOOL) return 0x0030;
+    if (type.kind == TY_ERR) return 0x0075;
+    if (type.kind != TY_INT) return 0;
+    if (strcmp(type.name, "i8") == 0) return 0x0068;
+    if (strcmp(type.name, "u8") == 0) return 0x0069;
+    if (strcmp(type.name, "i16") == 0) return 0x0072;
+    if (strcmp(type.name, "u16") == 0) return 0x0073;
+    if (strcmp(type.name, "i32") == 0) return 0x0074;
+    if (strcmp(type.name, "u32") == 0) return 0x0075;
+    if (strcmp(type.name, "i64") == 0 || strcmp(type.name, "isize") == 0) return 0x0076;
+    return 0x0077;
+}
+
+static int codeview_type_has_field_list(Compiler *c, Type type) {
+    StructDecl *decl;
+    if (type.kind == TY_STR || type.kind == TY_SLICE || type.kind == TY_ARENA) return 1;
+    if (type.kind != TY_NAMED) return 0;
+    decl = find_struct(c, type.name);
+    if (!decl) decl = find_tag_owner(c, type.name);
+    return decl != 0;
+}
+
+static int codeview_type_needs_forward(Compiler *c, Type type) {
+    StructDecl *decl = type.kind == TY_NAMED ? find_struct(c, type.name) : 0;
+    return decl && decl->kind != ND_ENUM;
+}
+
+static void prepare_codeview_indices(Compiler *c, DebugContext *debug) {
+    uint32_t next = 0x1000;
     int i;
+    for (i = 0; i < debug->type_count; ++i) {
+        DebugTypeEntry *entry = &debug->types[i];
+        uint32_t simple = codeview_simple_type(entry->type);
+        if (simple) {
+            entry->codeview_type = simple;
+            continue;
+        }
+        if (codeview_type_needs_forward(c, entry->type))
+            entry->codeview_forward_type = next++;
+        if (entry->type.kind == TY_POINTER && entry->type.is_const)
+            entry->codeview_const_type = next++;
+        if (codeview_type_has_field_list(c, entry->type))
+            entry->codeview_field_list = next++;
+        entry->codeview_type = next++;
+    }
+    for (i = 0; i < c->program.function_count; ++i) {
+        Function *fn = &c->program.functions[i];
+        if (fn->is_template || fn->is_intrinsic) continue;
+        debug->codeview_arg_lists[i] = next++;
+        debug->codeview_functions[i] = next++;
+    }
+}
+
+static uint32_t codeview_type_ref(DebugContext *debug, Type type) {
+    uint32_t simple = codeview_simple_type(type);
+    int id;
+    if (simple) return simple;
+    id = debug_find_type(debug, type);
+    if (id < 0) { fputs("neper: internal CodeView type was not prepared\n", stderr); exit(2); }
+    return debug->types[id].codeview_type;
+}
+
+static uint32_t codeview_pointee_ref(DebugContext *debug, Type type) {
+    int id = debug_find_type(debug, type);
+    if (id >= 0 && debug->types[id].codeview_forward_type)
+        return debug->types[id].codeview_forward_type;
+    return codeview_type_ref(debug, type);
+}
+
+static size_t codeview_numeric_size(int64_t value) {
+    return value >= 0 && value < 0x8000 ? 2 : 10;
+}
+
+static void emit_codeview_numeric(FILE *out, int64_t value, int is_signed) {
+    if (value >= 0 && value < 0x8000) fprintf(out, "DW %u\n", (unsigned)value);
+    else if (is_signed) fprintf(out, "DW 08009h\nDQ %lld\n", (long long)value);
+    else fprintf(out, "DW 0800Ah\nDQ %llu\n", (unsigned long long)value);
+}
+
+static size_t codeview_padding(size_t size) {
+    return (4 - (size & 3)) & 3;
+}
+
+static void emit_codeview_type_padding(FILE *out, size_t padding) {
+    size_t i;
+    if (!padding) return;
+    fputs("DB ", out);
+    for (i = padding; i > 0; --i) {
+        fprintf(out, "0F%Xh", (unsigned)i);
+        if (i > 1) fputs(",", out);
+    }
+    fputc('\n', out);
+}
+
+static int collect_codeview_members(Compiler *c, Type type, CodeviewMember *members) {
+    StructDecl *decl = type.kind == TY_NAMED ? find_struct(c, type.name) : 0;
+    StructDecl *tag_owner = type.kind == TY_NAMED ? find_tag_owner(c, type.name) : 0;
+    int count = 0, i;
+    memset(members, 0, sizeof(CodeviewMember) * (MAX_FIELDS + 4));
+    if (type.kind == TY_STR || type.kind == TY_SLICE) {
+        Type element = type.kind == TY_STR ? type_make(TY_INT, "u8") : sequence_element_type(type);
+        Type pointer = type_make(TY_POINTER, element.name);
+        type_set_element(&pointer, element);
+        pointer.is_const = type.kind == TY_STR || type.is_const;
+        members[count].name = "ptr"; members[count].type = pointer; members[count++].offset = 0;
+        members[count].name = "len"; members[count].type = type_make(TY_INT, "usize"); members[count++].offset = 8;
+    } else if (type.kind == TY_ARENA) {
+        Type element = type_make(TY_INT, "u8");
+        Type pointer = type_make(TY_POINTER, element.name);
+        type_set_element(&pointer, element);
+        members[count].name = "base"; members[count].type = pointer; members[count++].offset = 0;
+        members[count].name = "cap"; members[count].type = type_make(TY_INT, "usize"); members[count++].offset = 8;
+        members[count].name = "off"; members[count].type = type_make(TY_INT, "usize"); members[count++].offset = 16;
+    } else if (tag_owner || (decl && decl->kind == ND_ENUM)) {
+        StructDecl *owner = tag_owner ? tag_owner : decl;
+        for (i = 0; i < owner->field_count; ++i) {
+            members[count].name = owner->fields[i].name;
+            members[count].is_enumerator = 1;
+            members[count].value = owner->fields[i].value;
+            count++;
+        }
+    } else if (decl) {
+        if (decl->kind == ND_TAGGED_UNION) {
+            char tag_name[160];
+            snprintf(tag_name, sizeof(tag_name), "%s.Tag", decl->name);
+            members[count].name = "tag";
+            members[count].type = type_make(TY_NAMED, tag_name);
+            members[count++].offset = 0;
+        }
+        for (i = 0; i < decl->field_count; ++i) {
+            if (decl->kind == ND_TAGGED_UNION && !decl->fields[i].has_payload) continue;
+            members[count].name = decl->fields[i].name;
+            members[count].type = decl->fields[i].type;
+            members[count].offset = decl->kind == ND_UNION ? 0 : decl->fields[i].offset;
+            count++;
+        }
+    }
+    return count;
+}
+
+static size_t codeview_member_size(CodeviewMember *member) {
+    size_t raw = (member->is_enumerator ? 4 : 8) +
+                 codeview_numeric_size(member->is_enumerator ? member->value : (int64_t)member->offset) +
+                 strlen(member->name) + 1;
+    return raw + codeview_padding(raw);
+}
+
+static void emit_codeview_field_list(Compiler *c, FILE *out, DebugContext *debug,
+                                     DebugTypeEntry *entry) {
+    CodeviewMember members[MAX_FIELDS + 4];
+    int count = collect_codeview_members(c, entry->type, members), i;
+    size_t members_size = 0;
+    for (i = 0; i < count; ++i) members_size += codeview_member_size(&members[i]);
+    fprintf(out, "DW %u, 01203h\n", (unsigned)(2 + members_size));
+    for (i = 0; i < count; ++i) {
+        CodeviewMember *member = &members[i];
+        size_t raw;
+        if (member->is_enumerator) {
+            fputs("DW 01502h, 3\n", out);
+            emit_codeview_numeric(out, member->value, 1);
+            emit_bytes(out, (const unsigned char *)member->name, strlen(member->name) + 1, 1);
+            raw = 4 + codeview_numeric_size(member->value) + strlen(member->name) + 1;
+        } else {
+            fputs("DW 0150Dh, 3\n", out);
+            fprintf(out, "DD 0%08Xh\n", (unsigned)codeview_type_ref(debug, member->type));
+            emit_codeview_numeric(out, (int64_t)member->offset, 0);
+            emit_bytes(out, (const unsigned char *)member->name, strlen(member->name) + 1, 1);
+            raw = 8 + codeview_numeric_size((int64_t)member->offset) + strlen(member->name) + 1;
+        }
+        emit_codeview_type_padding(out, codeview_padding(raw));
+    }
+}
+
+static void emit_codeview_type(Compiler *c, FILE *out, DebugContext *debug, int id) {
+    DebugTypeEntry *entry = &debug->types[id];
+    Type type = entry->type;
+    StructDecl *decl = type.kind == TY_NAMED ? find_struct(c, type.name) : 0;
+    StructDecl *tag_owner = type.kind == TY_NAMED ? find_tag_owner(c, type.name) : 0;
+    char name[160];
+    size_t size = 0, alignment = 1, name_size, raw, padding;
+    int member_count = 0;
+    CodeviewMember members[MAX_FIELDS + 4];
+    if (codeview_simple_type(type)) return;
+    debug_type_name(type, name, sizeof(name));
+    name_size = strlen(name) + 1;
+    type_layout(c, type, &size, &alignment);
+    if (type.kind == TY_ARENA) size = 24;
+    if (entry->codeview_forward_type) {
+        int is_union = decl && decl->kind == ND_UNION;
+        raw = (is_union ? 12 : 20) + 2 + name_size;
+        padding = codeview_padding(raw);
+        fprintf(out, "DW %u, 0%04Xh\nDW 0, 080h\nDD 0\n",
+                (unsigned)(raw + padding - 2), is_union ? 0x1506 : 0x1505);
+        if (!is_union) fputs("DD 0, 0\n", out);
+        fputs("DW 0\n", out);
+        emit_bytes(out, (const unsigned char *)name, name_size, 1);
+        emit_codeview_type_padding(out, padding);
+    }
+    if (entry->codeview_const_type) {
+        fprintf(out, "DW 10, 01001h\nDD 0%08Xh\nDW 1\n", (unsigned)codeview_pointee_ref(debug, pointer_element_type(type)));
+        emit_codeview_type_padding(out, 2);
+    }
+    if (entry->codeview_field_list) {
+        emit_codeview_field_list(c, out, debug, entry);
+        member_count = collect_codeview_members(c, type, members);
+    }
+    if (type.kind == TY_POINTER) {
+        uint32_t referent = entry->codeview_const_type ? entry->codeview_const_type :
+                            codeview_pointee_ref(debug, pointer_element_type(type));
+        fprintf(out, "DW 10, 01002h\nDD 0%08Xh\nDD 00001000Ch\n", (unsigned)referent);
+    } else if (type.kind == TY_ARRAY) {
+        raw = 12 + codeview_numeric_size((int64_t)size) + name_size;
+        padding = codeview_padding(raw);
+        fprintf(out, "DW %u, 01503h\nDD 0%08Xh, 000000077h\n",
+                (unsigned)(raw + padding - 2), (unsigned)codeview_type_ref(debug, array_element_type(type)));
+        emit_codeview_numeric(out, (int64_t)size, 0);
+        emit_bytes(out, (const unsigned char *)name, name_size, 1);
+        emit_codeview_type_padding(out, padding);
+    } else if (tag_owner || (decl && decl->kind == ND_ENUM)) {
+        StructDecl *owner = tag_owner ? tag_owner : decl;
+        raw = 16 + name_size;
+        padding = codeview_padding(raw);
+        fprintf(out, "DW %u, 01507h\nDW %d, 0\nDD 0%08Xh, 0%08Xh\n",
+                (unsigned)(raw + padding - 2), member_count,
+                (unsigned)codeview_type_ref(debug, owner->backing_type),
+                (unsigned)entry->codeview_field_list);
+        emit_bytes(out, (const unsigned char *)name, name_size, 1);
+        emit_codeview_type_padding(out, padding);
+    } else if (type.kind == TY_STR || type.kind == TY_SLICE || type.kind == TY_ARENA || decl) {
+        int is_union = decl && decl->kind == ND_UNION;
+        raw = (is_union ? 12 : 20) + codeview_numeric_size((int64_t)size) + name_size;
+        padding = codeview_padding(raw);
+        fprintf(out, "DW %u, 0%04Xh\nDW %d, 0\nDD 0%08Xh\n",
+                (unsigned)(raw + padding - 2), is_union ? 0x1506 : 0x1505,
+                member_count, (unsigned)entry->codeview_field_list);
+        if (!is_union) fputs("DD 0, 0\n", out);
+        emit_codeview_numeric(out, (int64_t)size, 0);
+        emit_bytes(out, (const unsigned char *)name, name_size, 1);
+        emit_codeview_type_padding(out, padding);
+    }
+}
+
+static void emit_codeview_function_type(FILE *out, DebugContext *debug, Function *fn, int index) {
+    int i;
+    fprintf(out, "DW %u, 01201h\nDD %d\n", 6 + fn->param_count * 4, fn->param_count);
+    for (i = 0; i < fn->param_count; ++i)
+        fprintf(out, "DD 0%08Xh\n", (unsigned)codeview_type_ref(debug, fn->params[i].type));
+    fprintf(out, "DW 14, 01008h\nDD 0%08Xh\nDB 0, 0\nDW %d\nDD 0%08Xh\n",
+            (unsigned)(fn->return_count ? codeview_type_ref(debug, fn->return_types[0]) : 0x0003),
+            fn->param_count, (unsigned)debug->codeview_arg_lists[index]);
+}
+
+static void emit_windows_codeview(Compiler *c, FILE *out) {
+    DebugContext *debug = (DebugContext *)calloc(1, sizeof(*debug));
+    int i, j;
     size_t path_length = strlen(c->source_path);
     size_t string_size = path_length + 2;
     size_t padded_string_size = (string_size + 3) & ~(size_t)3;
-    fputs(".debug_s_neper SEGMENT BYTE READ DISCARD ALIAS('.debug$S')\nDD 4\n", out);
+    if (!debug) { fputs("neper: out of memory\n", stderr); exit(2); }
+    prepare_debug_context(c, debug);
+    prepare_codeview_indices(c, debug);
+
+    fputs(".debug_t_neper SEGMENT DWORD READ DISCARD ALIAS('.debug$T')\nDD 4\n", out);
+    for (i = 0; i < debug->type_count; ++i) emit_codeview_type(c, out, debug, i);
+    for (i = 0; i < c->program.function_count; ++i) {
+        Function *fn = &c->program.functions[i];
+        if (!fn->is_template && !fn->is_intrinsic) emit_codeview_function_type(out, debug, fn, i);
+    }
+    fputs(".debug_t_neper ENDS\n\n", out);
+
+    fputs(".debug_s_neper SEGMENT DWORD READ DISCARD ALIAS('.debug$S')\nDD 4\n", out);
+    fputs("DD 0F1h, np_cv_symbols_end - np_cv_symbols_body\nnp_cv_symbols_body LABEL BYTE\n", out);
+    for (i = 0; i < c->program.function_count; ++i) {
+        Function *fn = &c->program.functions[i];
+        size_t name_size;
+        if (fn->is_template || fn->is_intrinsic) continue;
+        name_size = strlen(fn->name) + 1;
+        fprintf(out, "DW %u, 01110h\nDD 0, 0, 0\nDD np_end_%s - %s\nDD 0, np_end_%s - %s\n",
+                (unsigned)(37 + name_size), symbol_name(fn), symbol_name(fn),
+                symbol_name(fn), symbol_name(fn));
+        fprintf(out, "DD 0%08Xh\nDD SECTIONREL %s\nDD SECTIONREL %s + 0%02X000000h\n",
+                (unsigned)debug->codeview_functions[i], symbol_name(fn), symbol_name(fn),
+                (unsigned)(unsigned char)fn->name[0]);
+        emit_bytes(out, (const unsigned char *)fn->name + 1, strlen(fn->name), 1);
+        fprintf(out, "DW 28, 01012h\nDD %d, 0, 0, 0, 0\nDW 0\nDD 000028000h\n", fn->frame_size);
+        for (j = 0; j < fn->local_count; ++j) {
+            Local *local = &fn->locals[j];
+            size_t local_name_size;
+            if (!debug_visible_local(local)) continue;
+            local_name_size = strlen(local->name) + 1;
+            fprintf(out, "DW %u, 01111h\nDD -%d\nDD 0%08Xh\nDW 014Eh\n",
+                    (unsigned)(12 + local_name_size), local->offset,
+                    (unsigned)codeview_type_ref(debug, local->type));
+            emit_bytes(out, (const unsigned char *)local->name, local_name_size, 1);
+        }
+        fputs("DW 2, 00006h\n", out);
+    }
+    for (i = 0; i < debug->type_count; ++i) {
+        DebugTypeEntry *entry = &debug->types[i];
+        char name[160];
+        size_t name_size;
+        if (!entry->codeview_field_list) continue;
+        debug_type_name(entry->type, name, sizeof(name));
+        name_size = strlen(name) + 1;
+        fprintf(out, "DW %u, 01108h\nDD 0%08Xh\n",
+                (unsigned)(6 + name_size), (unsigned)entry->codeview_type);
+        emit_bytes(out, (const unsigned char *)name, name_size, 1);
+    }
+    fputs("np_cv_symbols_end LABEL BYTE\nALIGN 4\n", out);
     for (i = 0; i < c->program.function_count; ++i) {
         Function *fn = &c->program.functions[i];
         if (fn->is_template || fn->is_intrinsic) continue;
@@ -5695,6 +6399,7 @@ static void emit_windows_codeview(Compiler *c, FILE *out) {
     fputs("DB 0\n", out);
     for (i = (int)string_size; i < (int)padded_string_size; ++i) fputs("DB 0\n", out);
     fputs(".debug_s_neper ENDS\n\n", out);
+    free(debug);
 }
 
 static void emit_windows_runtime(Compiler *c, FILE *out) {
@@ -5857,11 +6562,17 @@ static int emit_assembly(Compiler *c, const char *path, int windows) {
         emit_bytes(out, (const unsigned char *)site->message, site->message_length, windows);
     }
     emit_nepersym(c, out, windows);
+    fputs(windows ? "np_user_text_start LABEL BYTE\n" : "np_user_text_start:\n", out);
     for (i = 0; i < c->program.function_count; ++i)
         if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
             emit_function(&e, &c->program.functions[i]);
+    fputs(windows ? "np_user_text_end LABEL BYTE\n" : "np_user_text_end:\n", out);
     if (windows) { emit_windows_runtime(c, out); emit_windows_codeview(c, out); fputs("END\n", out); }
-    else { emit_linux_runtime(c, out); fputs(".section .note.GNU-stack,\"\",@progbits\n", out); }
+    else {
+        emit_linux_runtime(c, out);
+        emit_linux_debug(c, out);
+        fputs(".section .note.GNU-stack,\"\",@progbits\n", out);
+    }
     fclose(out);
     return 1;
 }
