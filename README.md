@@ -266,8 +266,9 @@ Protocol-style `for value in iterator` resolves the declaring type's
 `<type>_next(*Type) -> (T, bool)`, requires a mutable iterator, and supports scalar
 and aggregate yielded values. Multiple-return calls can be consumed with
 `let (a, b) = call()` or assigned with `(a, b) = call()`, including `_` discards.
-Integer `const` declarations are folded with checked arithmetic and can drive array
-lengths in declarations, annotations, and literals.
+Integer `const` declarations are folded with checked arithmetic, bitwise operators,
+typed shifts and width-preserving wrapping arithmetic. The same evaluator semantics
+drive array lengths and concrete generic function and aggregate bounds.
 Generic functions accept explicit or inferred `[T: type]` and `[N: usize]`
 parameters, with cached concrete specializations emitted per argument set.
 Generic structs use the same concrete identity and substitution rules, including

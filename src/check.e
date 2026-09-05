@@ -597,74 +597,80 @@ fn integer_literal_value(c: *Checker, text: str, node: syntax.Node) -> (usize, T
     ret (value, parsed_type, ok)
 }
 
-fn array_length_literal(c: *Checker, text: str, node: syntax.Node) -> (usize, err) {
-    let (value, length_type, value_error) = integer_literal_value(c, text, node)
-    if value_error == ConstantOverflow { ret (0usize, TypeMismatch) }
-    if value_error != ok { ret (0usize, value_error) }
-    if length_type.kind == .Integer && !same(length_type.name, "usize") { ret (0usize, TypeMismatch) }
-    ret (value, ok)
-}
-
-fn constant_array_length(c: *Checker, constant_index: usize) -> (usize, err) {
-    if !c.constants_ready || constant_index >= c.constant_count { ret (0usize, Unsupported) }
-    let item = c.constants[constant_index]
-    if item.state != 2u8 { ret (0usize, InvalidConstant) }
-    if item.ty.kind != .Integer || !same(item.ty.name, "usize") { ret (0usize, TypeMismatch) }
-    if item.value.negative { ret (0usize, TypeMismatch) }
-    ret (item.value.magnitude, ok)
-}
-
-fn array_length_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, err) {
+fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     let node = tree.nodes[node_index]
     let text = g.modules[module_index].text
     if node.kind == .LiteralExpr {
-        let (value, value_error) = array_length_literal(c, text, node)
-        ret (value, value_error)
+        let (magnitude, parsed_type, literal_error) = integer_literal_value(c, text, node)
+        if literal_error != ok { ret (normalized_integer(0usize, false), invalid_type(), literal_error) }
+        let (contextual_type, context_error) = apply_context(c, parsed_type, expected)
+        if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+        let value = normalized_integer(magnitude, false)
+        if contextual_type.kind == .Integer && !integer_representable(value, contextual_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        ret (value, contextual_type, ok)
     }
     if node.kind == .NameExpr {
         let token = c.tokens[node.token_start]
-        if token.kind != .Identifier { ret (0usize, InvalidConstant) }
+        if token.kind != .Identifier { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let name = text[token.start..token.end]
         let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
         if parameter_found {
-            if c.comptime_parameters[parameter_index].kind != .Integer { ret (0usize, TypeMismatch) }
+            if c.comptime_parameters[parameter_index].kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
             let (argument, argument_found) = active_argument(c, parameter_index)
-            if !argument_found { ret (0usize, Unsupported) }
-            ret (argument.value, ok)
+            if !argument_found { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
+            let (contextual_type, context_error) = apply_context(c, c.comptime_parameters[parameter_index].ty, expected)
+            if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+            ret (normalized_integer(argument.value, false), contextual_type, ok)
         }
-        if !c.constants_ready { ret (0usize, Unsupported) }
+        if !c.constants_ready { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
         let (constant_index, found) = find_constant(c, module_index, name)
-        if !found { ret (0usize, InvalidConstant) }
-        let (value, value_error) = constant_array_length(c, constant_index)
-        ret (value, value_error)
+        if !found || constant_index >= c.constant_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let item = c.constants[constant_index]
+        if item.state != 2u8 { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let (contextual_type, context_error) = apply_context(c, item.ty, expected)
+        if context_error != ok || !integer_representable(item.value, contextual_type) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
+        ret (item.value, contextual_type, ok)
     }
     if node.kind == .FieldExpr {
-        if !c.constants_ready { ret (0usize, Unsupported) }
+        if !c.constants_ready { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
         let (target_module, member, found) = qualified_member(c, g, tree, module_index, node)
-        if !found { ret (0usize, InvalidConstant) }
+        if !found { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let (constant_index, constant_found) = find_constant(c, target_module, member)
-        if !constant_found { ret (0usize, InvalidConstant) }
-        let (value, value_error) = constant_array_length(c, constant_index)
-        ret (value, value_error)
+        if !constant_found || constant_index >= c.constant_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let item = c.constants[constant_index]
+        if item.state != 2u8 { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let (contextual_type, context_error) = apply_context(c, item.ty, expected)
+        if context_error != ok || !integer_representable(item.value, contextual_type) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
+        ret (item.value, contextual_type, ok)
     }
     if node.kind == .GroupExpr {
         let (child_index, found) = first_node_child(tree, node)
-        if !found { ret (0usize, parse.InvalidSyntax) }
-        let (value, value_error) = array_length_value(c, g, tree, module_index, child_index)
-        ret (value, value_error)
+        if !found { ret (normalized_integer(0usize, false), invalid_type(), parse.InvalidSyntax) }
+        let (value, value_type, value_error) = evaluate_array_length_expr(c, g, tree, module_index, child_index, expected)
+        ret (value, value_type, value_error)
     }
     if node.kind == .UnaryExpr {
         let (child_index, found) = first_node_child(tree, node)
-        if !found { ret (0usize, parse.InvalidSyntax) }
-        let (value, value_error) = array_length_value(c, g, tree, module_index, child_index)
-        if value_error != ok { ret (0usize, value_error) }
+        if !found { ret (normalized_integer(0usize, false), invalid_type(), parse.InvalidSyntax) }
         let op = c.tokens[node.token_start].kind
+        var operand_expected = expected
+        if op == .PunctMinus { operand_expected = invalid_type() }
+        let (operand, operand_type, operand_error) = evaluate_array_length_expr(c, g, tree, module_index, child_index, operand_expected)
+        if operand_error != ok { ret (normalized_integer(0usize, false), invalid_type(), operand_error) }
         if op == .PunctMinus {
-            if value == 0usize { ret (0usize, ok) }
-            ret (0usize, TypeMismatch)
+            if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+            let result = normalized_integer(operand.magnitude, !operand.negative)
+            let (result_type, context_error) = apply_context(c, operand_type, expected)
+            if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+            if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+            ret (result, result_type, ok)
         }
-        if op == .PunctTilde { ret (18446744073709551615usize - value, ok) }
-        ret (0usize, Unsupported)
+        if op == .PunctTilde {
+            if operand_type.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+            let width = integer_width(operand_type)
+            ret (integer_from_bits(integer_mask(width) - integer_bits(operand, width), operand_type), operand_type, ok)
+        }
+        ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
     }
     if node.kind == .BinaryExpr {
         var children: [2]usize = zero
@@ -673,42 +679,49 @@ fn array_length_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         var at = node.first_child
         while at < end {
             if tree.children[at].node {
-                if count == 2usize { ret (0usize, parse.InvalidSyntax) }
+                if count == 2usize { ret (normalized_integer(0usize, false), invalid_type(), parse.InvalidSyntax) }
                 children[count] = tree.children[at].index
                 count += 1usize
             }
             at += 1usize
         }
-        if count != 2usize { ret (0usize, parse.InvalidSyntax) }
-        let (left, left_error) = array_length_value(c, g, tree, module_index, children[0usize])
-        if left_error != ok { ret (0usize, left_error) }
-        let (right, right_error) = array_length_value(c, g, tree, module_index, children[1usize])
-        if right_error != ok { ret (0usize, right_error) }
+        if count != 2usize { ret (normalized_integer(0usize, false), invalid_type(), parse.InvalidSyntax) }
         let op = binary_operator(c, tree, node)
-        let max_value = 18446744073709551615usize
-        if op == .PunctPlus {
-            if left > max_value - right { ret (0usize, TypeMismatch) }
-            ret (left + right, ok)
+        let (left, left_type, left_error) = evaluate_array_length_expr(c, g, tree, module_index, children[0usize], expected)
+        if left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), left_error) }
+        var right_expected = left_type
+        if is_shift(op) { right_expected = invalid_type() }
+        let (right, raw_right_type, right_error) = evaluate_array_length_expr(c, g, tree, module_index, children[1usize], right_expected)
+        if right_error != ok { ret (normalized_integer(0usize, false), invalid_type(), right_error) }
+        var right_type = raw_right_type
+        var result_type = left_type
+        if is_shift(op) {
+            if right_type.kind == .UntypedInteger { right_type = make_type(.Integer, "u32", module_index) }
+            if result_type.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+            if right_type.kind != .Integer || !unsigned_integer_type(right_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+        } else {
+            let (resolved_type, type_error) = constant_result_type(c, left_type, right_type)
+            if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
+            result_type = resolved_type
+            if (op == .PunctAmp || op == .PunctCaret || op == .PunctPipe || op == .PunctAddWrap || op == .PunctSubWrap || op == .PunctMulWrap) && result_type.kind != .Integer {
+                ret (normalized_integer(0usize, false), invalid_type(), MissingContext)
+            }
         }
-        if op == .PunctMinus {
-            if left < right { ret (0usize, TypeMismatch) }
-            ret (left - right, ok)
-        }
-        if op == .PunctStar {
-            if right != 0usize && left > max_value / right { ret (0usize, TypeMismatch) }
-            ret (left * right, ok)
-        }
-        if op == .PunctSlash {
-            if right == 0usize { ret (0usize, TypeMismatch) }
-            ret (left / right, ok)
-        }
-        if op == .PunctPercent {
-            if right == 0usize { ret (0usize, TypeMismatch) }
-            ret (left % right, ok)
-        }
-        ret (0usize, Unsupported)
+        if result_type.kind == .Integer && (!integer_representable(left, result_type) || !integer_representable(right, right_type)) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        let (result, result_error) = evaluate_integer_binary(op, left, right, result_type, right_type)
+        if result_error != ok { ret (normalized_integer(0usize, false), invalid_type(), result_error) }
+        if result_type.kind == .Integer && op != .PunctAddWrap && op != .PunctSubWrap && op != .PunctMulWrap && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        ret (result, result_type, ok)
     }
-    ret (0usize, Unsupported)
+    ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
+}
+
+fn array_length_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, err) {
+    let expected = make_type(.Integer, "usize", module_index)
+    let (value, value_type, value_error) = evaluate_array_length_expr(c, g, tree, module_index, node_index, expected)
+    if value_error == Unsupported { ret (0usize, Unsupported) }
+    if value_error != ok || value.negative || value_type.kind != .Integer || !same(value_type.name, "usize") { ret (0usize, TypeMismatch) }
+    ret (value.magnitude, ok)
 }
 
 fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, err) {
@@ -1170,10 +1183,14 @@ fn aggregate_argument(c: *Checker, template_index: usize, first_argument: usize,
     ret (c.generic_arguments[argument_index], true)
 }
 
-fn evaluate_aggregate_bound(c: *Checker, template_index: usize, first_argument: usize, expression_index: usize) -> (IntegerValue, Type, err) {
+fn evaluate_aggregate_bound(c: *Checker, template_index: usize, first_argument: usize, expression_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
     let expression = c.constant_exprs[expression_index]
-    if expression.kind == .Literal { ret (expression.value, expression.ty, ok) }
+    if expression.kind == .Literal {
+        let (contextual_type, context_error) = apply_context(c, expression.ty, expected)
+        if context_error != ok || (contextual_type.kind == .Integer && !integer_representable(expression.value, contextual_type)) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
+        ret (expression.value, contextual_type, ok)
+    }
     if expression.kind == .Name {
         var parameter_index = 0usize
         var parameter_found = false
@@ -1185,38 +1202,63 @@ fn evaluate_aggregate_bound(c: *Checker, template_index: usize, first_argument: 
             if parameter.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
             let (argument, argument_found) = aggregate_argument(c, template_index, first_argument, parameter_index)
             if !argument_found || argument.symbolic { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
-            ret (normalized_integer(argument.value, false), parameter.ty, ok)
+            let (contextual_type, context_error) = apply_context(c, parameter.ty, expected)
+            if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+            ret (normalized_integer(argument.value, false), contextual_type, ok)
         }
         let (constant_index, found) = find_constant(c, expression.module_index, expression.name)
         if !found { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let dependency_error = evaluate_constant(c, constant_index)
         if dependency_error != ok { ret (normalized_integer(0usize, false), invalid_type(), dependency_error) }
-        ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
+        let (contextual_type, context_error) = apply_context(c, c.constants[constant_index].ty, expected)
+        if context_error != ok || !integer_representable(c.constants[constant_index].value, contextual_type) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
+        ret (c.constants[constant_index].value, contextual_type, ok)
     }
     if expression.kind == .Unary {
-        let (operand, operand_type, operand_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.left)
+        var operand_expected = expected
+        if expression.op == .PunctMinus { operand_expected = invalid_type() }
+        let (operand, operand_type, operand_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.left, operand_expected)
         if operand_error != ok { ret (normalized_integer(0usize, false), invalid_type(), operand_error) }
-        if expression.op != .PunctMinus { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
-        if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
-        ret (normalized_integer(operand.magnitude, !operand.negative), operand_type, ok)
+        if expression.op == .PunctMinus {
+            if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+            let result = normalized_integer(operand.magnitude, !operand.negative)
+            let (result_type, context_error) = apply_context(c, operand_type, expected)
+            if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+            if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+            ret (result, result_type, ok)
+        }
+        if expression.op == .PunctTilde {
+            let width = integer_width(operand_type)
+            ret (integer_from_bits(integer_mask(width) - integer_bits(operand, width), operand_type), operand_type, ok)
+        }
+        ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
     }
     if expression.kind == .Binary {
         if !expression.has_right { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
-        let (left, left_type, left_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.left)
+        let (left, left_type, left_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.left, expected)
         if left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), left_error) }
-        let (right, right_type, right_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.right)
+        var right_expected = left_type
+        if is_shift(expression.op) { right_expected = invalid_type() }
+        let (right, raw_right_type, right_error) = evaluate_aggregate_bound(c, template_index, first_argument, expression.right, right_expected)
         if right_error != ok { ret (normalized_integer(0usize, false), invalid_type(), right_error) }
-        let (result_type, type_error) = constant_result_type(c, left_type, right_type)
-        if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
-        var result = normalized_integer(0usize, false)
-        var result_error = Unsupported
-        if expression.op == .PunctPlus { (result, result_error) = add_integer_values(left, right) }
-        if expression.op == .PunctMinus { (result, result_error) = subtract_integer_values(left, right) }
-        if expression.op == .PunctStar { (result, result_error) = multiply_integer_values(left, right) }
-        if expression.op == .PunctSlash { (result, result_error) = divide_integer_values(left, right) }
-        if expression.op == .PunctPercent { (result, result_error) = remainder_integer_values(left, right) }
+        var right_type = raw_right_type
+        var result_type = left_type
+        if is_shift(expression.op) {
+            if right_type.kind == .UntypedInteger { right_type = make_type(.Integer, "u32", expression.module_index) }
+            if result_type.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+            if right_type.kind != .Integer || !unsigned_integer_type(right_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+        } else {
+            let (resolved_type, type_error) = constant_result_type(c, left_type, right_type)
+            if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
+            result_type = resolved_type
+            if (expression.op == .PunctAmp || expression.op == .PunctCaret || expression.op == .PunctPipe || expression.op == .PunctAddWrap || expression.op == .PunctSubWrap || expression.op == .PunctMulWrap) && result_type.kind != .Integer {
+                ret (normalized_integer(0usize, false), invalid_type(), MissingContext)
+            }
+        }
+        if result_type.kind == .Integer && (!integer_representable(left, result_type) || !integer_representable(right, right_type)) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        let (result, result_error) = evaluate_integer_binary(expression.op, left, right, result_type, right_type)
         if result_error != ok { ret (normalized_integer(0usize, false), invalid_type(), result_error) }
-        if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        if result_type.kind == .Integer && expression.op != .PunctAddWrap && expression.op != .PunctSubWrap && expression.op != .PunctMulWrap && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
         ret (result, result_type, ok)
     }
     ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant)
@@ -1284,7 +1326,7 @@ fn substitute_aggregate_type(c: *Checker, template_index: usize, first_argument:
                 nested_argument.ty = specialized
             } else {
                 if source_argument.symbolic {
-                    let (value, value_type, value_error) = evaluate_aggregate_bound(c, template_index, first_argument, source_argument.expression)
+                    let (value, value_type, value_error) = evaluate_aggregate_bound(c, template_index, first_argument, source_argument.expression, make_type(.Integer, "usize", nested_template.module_index))
                     if value_error != ok || value.negative || (value_type.kind != .UntypedInteger && (value_type.kind != .Integer || !same(value_type.name, "usize"))) { ret (invalid_type(), TypeMismatch) }
                     nested_argument.value = value.magnitude
                     nested_argument.symbolic = false
@@ -1309,7 +1351,7 @@ fn substitute_aggregate_type(c: *Checker, template_index: usize, first_argument:
         var result = ty
         result.element = stored_element
         if ty.kind == .Array && !ty.has_length {
-            let (length, length_type, length_error) = evaluate_aggregate_bound(c, template_index, first_argument, ty.array_length)
+            let (length, length_type, length_error) = evaluate_aggregate_bound(c, template_index, first_argument, ty.array_length, make_type(.Integer, "usize", c.aggregates[template_index].module_index))
             if length_error != ok { ret (invalid_type(), length_error) }
             if length.negative || (length_type.kind != .UntypedInteger && (length_type.kind != .Integer || !same(length_type.name, "usize"))) { ret (invalid_type(), TypeMismatch) }
             result.array_length = length.magnitude
@@ -1986,48 +2028,249 @@ fn unsigned_integer_type(ty: Type) -> bool {
     ret same(ty.name, "u8") || same(ty.name, "u16") || same(ty.name, "u32") || same(ty.name, "u64") || same(ty.name, "usize")
 }
 
-fn evaluate_constant_expr(c: *Checker, expression_index: usize) -> (IntegerValue, Type, err) {
+fn integer_width(ty: Type) -> usize {
+    if ty.kind != .Integer { ret 0usize }
+    if same(ty.name, "i8") || same(ty.name, "u8") { ret 8usize }
+    if same(ty.name, "i16") || same(ty.name, "u16") { ret 16usize }
+    if same(ty.name, "i32") || same(ty.name, "u32") { ret 32usize }
+    ret 64usize
+}
+
+fn integer_mask(width: usize) -> usize {
+    var result = 0usize
+    var at = 0usize
+    while at < width {
+        result = result * 2usize + 1usize
+        at += 1usize
+    }
+    ret result
+}
+
+fn integer_sign_bit(width: usize) -> usize {
+    var result = 1usize
+    var at = 1usize
+    while at < width {
+        result = result * 2usize
+        at += 1usize
+    }
+    ret result
+}
+
+fn integer_bits(value: IntegerValue, width: usize) -> usize {
+    let mask = integer_mask(width)
+    if !value.negative { ret value.magnitude }
+    if value.magnitude == 0usize { ret 0usize }
+    ret mask - (value.magnitude - 1usize)
+}
+
+fn integer_from_bits(bits: usize, ty: Type) -> IntegerValue {
+    let width = integer_width(ty)
+    let mask = integer_mask(width)
+    let value = bits
+    if unsigned_integer_type(ty) { ret normalized_integer(value, false) }
+    let sign = integer_sign_bit(width)
+    if value < sign { ret normalized_integer(value, false) }
+    ret normalized_integer((mask - value) + 1usize, true)
+}
+
+fn bitwise_integer_bits(op: lex.Kind, left: usize, right: usize, width: usize) -> usize {
+    var left_rest = left
+    var right_rest = right
+    var place = 1usize
+    var result = 0usize
+    var at = 0usize
+    while at < width {
+        let left_set = left_rest % 2usize != 0usize
+        let right_set = right_rest % 2usize != 0usize
+        var selected = left_set && right_set
+        if op == .PunctPipe { selected = left_set || right_set }
+        if op == .PunctCaret { selected = left_set != right_set }
+        if selected { result += place }
+        left_rest = left_rest / 2usize
+        right_rest = right_rest / 2usize
+        at += 1usize
+        if at < width { place = place * 2usize }
+    }
+    ret result
+}
+
+fn modular_add(left: usize, right: usize, mask: usize) -> usize {
+    if left <= mask - right { ret left + right }
+    ret left - (mask - right) - 1usize
+}
+
+fn modular_subtract(left: usize, right: usize, mask: usize) -> usize {
+    if left >= right { ret left - right }
+    ret mask - (right - left) + 1usize
+}
+
+fn modular_multiply(left: usize, right: usize, mask: usize) -> usize {
+    var result = 0usize
+    var addend = left
+    var multiplier = right
+    while multiplier != 0usize {
+        if multiplier % 2usize != 0usize { result = modular_add(result, addend, mask) }
+        multiplier = multiplier / 2usize
+        if multiplier != 0usize { addend = modular_add(addend, addend, mask) }
+    }
+    ret result
+}
+
+fn shift_left_bits(value: usize, count: usize, mask: usize) -> usize {
+    var result = value
+    var at = 0usize
+    while at < count {
+        result = modular_add(result, result, mask)
+        at += 1usize
+    }
+    ret result
+}
+
+fn shift_right_bits(value: usize, count: usize) -> usize {
+    var result = value
+    var at = 0usize
+    while at < count {
+        result = result / 2usize
+        at += 1usize
+    }
+    ret result
+}
+
+fn shift_right_signed(value: IntegerValue, count: usize) -> IntegerValue {
+    var magnitude = value.magnitude
+    var at = 0usize
+    while at < count {
+        magnitude = magnitude / 2usize + magnitude % 2usize
+        at += 1usize
+    }
+    ret normalized_integer(magnitude, true)
+}
+
+fn evaluate_integer_binary(op: lex.Kind, left: IntegerValue, right: IntegerValue, left_type: Type, right_type: Type) -> (IntegerValue, err) {
+    if is_shift(op) {
+        if left_type.kind != .Integer || right_type.kind != .Integer || !unsigned_integer_type(right_type) || right.negative { ret (normalized_integer(0usize, false), InvalidOperator) }
+        let width = integer_width(left_type)
+        if right.magnitude >= width { ret (normalized_integer(0usize, false), InvalidConstant) }
+        if op == .PunctShiftRight && !unsigned_integer_type(left_type) && left.negative {
+            if right.magnitude == 0usize { ret (left, ok) }
+            ret (shift_right_signed(left, right.magnitude), ok)
+        }
+        let left_bits = integer_bits(left, width)
+        var result_bits = shift_left_bits(left_bits, right.magnitude, integer_mask(width))
+        if op == .PunctShiftRight { result_bits = shift_right_bits(left_bits, right.magnitude) }
+        ret (integer_from_bits(result_bits, left_type), ok)
+    }
+    if left_type.kind != .Integer { ret (normalized_integer(0usize, false), InvalidOperator) }
+    if op == .PunctAmp || op == .PunctCaret || op == .PunctPipe {
+        let width = integer_width(left_type)
+        let left_bits = integer_bits(left, width)
+        let right_bits = integer_bits(right, width)
+        let result_bits = bitwise_integer_bits(op, left_bits, right_bits, width)
+        ret (integer_from_bits(result_bits, left_type), ok)
+    }
+    if op == .PunctAddWrap || op == .PunctSubWrap || op == .PunctMulWrap {
+        let width = integer_width(left_type)
+        let mask = integer_mask(width)
+        let left_bits = integer_bits(left, width)
+        let right_bits = integer_bits(right, width)
+        var result_bits = modular_add(left_bits, right_bits, mask)
+        if op == .PunctSubWrap { result_bits = modular_subtract(left_bits, right_bits, mask) }
+        if op == .PunctMulWrap { result_bits = modular_multiply(left_bits, right_bits, mask) }
+        ret (integer_from_bits(result_bits, left_type), ok)
+    }
+    if op == .PunctPlus {
+        let (value, value_error) = add_integer_values(left, right)
+        ret (value, value_error)
+    }
+    if op == .PunctMinus {
+        let (value, value_error) = subtract_integer_values(left, right)
+        ret (value, value_error)
+    }
+    if op == .PunctStar {
+        let (value, value_error) = multiply_integer_values(left, right)
+        ret (value, value_error)
+    }
+    if op == .PunctSlash {
+        let (value, value_error) = divide_integer_values(left, right)
+        ret (value, value_error)
+    }
+    if op == .PunctPercent {
+        let (value, value_error) = remainder_integer_values(left, right)
+        ret (value, value_error)
+    }
+    ret (normalized_integer(0usize, false), Unsupported)
+}
+
+fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
     let expression = c.constant_exprs[expression_index]
-    if expression.kind == .Literal { ret (expression.value, expression.ty, ok) }
+    if expression.kind == .Literal {
+        let (contextual_type, context_error) = apply_context(c, expression.ty, expected)
+        if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+        ret (expression.value, contextual_type, ok)
+    }
     if expression.kind == .Name {
         let (constant_index, found) = find_constant(c, expression.module_index, expression.name)
         if !found { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let dependency_error = evaluate_constant(c, constant_index)
         if dependency_error != ok { ret (normalized_integer(0usize, false), invalid_type(), dependency_error) }
-        ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
+        let (constant_type, context_error) = apply_context(c, c.constants[constant_index].ty, expected)
+        if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+        ret (c.constants[constant_index].value, constant_type, ok)
     }
     if expression.kind == .Unary {
-        let (operand, operand_type, operand_error) = evaluate_constant_expr(c, expression.left)
+        var operand_expected = expected
+        if expression.op == .PunctMinus { operand_expected = invalid_type() }
+        let (operand, operand_type, operand_error) = evaluate_constant_expr(c, expression.left, operand_expected)
         if operand_error != ok { ret (normalized_integer(0usize, false), invalid_type(), operand_error) }
-        if expression.op != .PunctMinus { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
-        if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
-        ret (normalized_integer(operand.magnitude, !operand.negative), operand_type, ok)
+        if expression.op == .PunctMinus {
+            if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+            let result = normalized_integer(operand.magnitude, !operand.negative)
+            let (result_type, context_error) = apply_context(c, operand_type, expected)
+            if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+            if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+            ret (result, result_type, ok)
+        }
+        if expression.op == .PunctTilde {
+            if operand_type.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+            if !integer_representable(operand, operand_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+            let width = integer_width(operand_type)
+            ret (integer_from_bits(integer_mask(width) - integer_bits(operand, width), operand_type), operand_type, ok)
+        }
+        ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
     }
     if expression.kind == .Binary {
         if !expression.has_right { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
-        if expression.op != .PunctPlus && expression.op != .PunctMinus && expression.op != .PunctStar && expression.op != .PunctSlash && expression.op != .PunctPercent {
-            ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
-        }
-        let (left, left_type, left_error) = evaluate_constant_expr(c, expression.left)
+        let (left, left_type, left_error) = evaluate_constant_expr(c, expression.left, expected)
         if left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), left_error) }
-        let (right, right_type, right_error) = evaluate_constant_expr(c, expression.right)
+        var right_expected = left_type
+        if is_shift(expression.op) { right_expected = invalid_type() }
+        let (right, raw_right_type, right_error) = evaluate_constant_expr(c, expression.right, right_expected)
         if right_error != ok { ret (normalized_integer(0usize, false), invalid_type(), right_error) }
-        let (result_type, type_error) = constant_result_type(c, left_type, right_type)
-        if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
-        if result_type.kind == .Integer {
-            if !integer_representable(left, result_type) || !integer_representable(right, result_type) {
-                ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow)
+        var right_type = raw_right_type
+        var result_type = left_type
+        if is_shift(expression.op) {
+            if right_type.kind == .UntypedInteger {
+                right_type = make_type(.Integer, "u32", left_type.module_index)
+            }
+            if result_type.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+            if right_type.kind != .Integer || !unsigned_integer_type(right_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+        } else {
+            let (resolved_type, type_error) = constant_result_type(c, left_type, right_type)
+            if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
+            result_type = resolved_type
+            if (expression.op == .PunctAmp || expression.op == .PunctCaret || expression.op == .PunctPipe || expression.op == .PunctAddWrap || expression.op == .PunctSubWrap || expression.op == .PunctMulWrap) && result_type.kind != .Integer {
+                ret (normalized_integer(0usize, false), invalid_type(), MissingContext)
             }
         }
-        var result = normalized_integer(0usize, false)
-        var result_error = ok
-        if expression.op == .PunctPlus { (result, result_error) = add_integer_values(left, right) }
-        if expression.op == .PunctMinus { (result, result_error) = subtract_integer_values(left, right) }
-        if expression.op == .PunctStar { (result, result_error) = multiply_integer_values(left, right) }
-        if expression.op == .PunctSlash { (result, result_error) = divide_integer_values(left, right) }
-        if expression.op == .PunctPercent { (result, result_error) = remainder_integer_values(left, right) }
+        if result_type.kind == .Integer && (!integer_representable(left, result_type) || !integer_representable(right, result_type)) {
+            ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow)
+        }
+        let (result, result_error) = evaluate_integer_binary(expression.op, left, right, result_type, right_type)
         if result_error != ok { ret (normalized_integer(0usize, false), invalid_type(), result_error) }
+        if result_type.kind == .Integer && expression.op != .PunctAddWrap && expression.op != .PunctSubWrap && expression.op != .PunctMulWrap && !integer_representable(result, result_type) {
+            ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow)
+        }
         ret (result, result_type, ok)
     }
     ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant)
@@ -2038,7 +2281,7 @@ fn evaluate_constant(c: *Checker, constant_index: usize) -> err {
     if c.constants[constant_index].state == 2u8 { ret ok }
     if c.constants[constant_index].state == 1u8 { ret ConstantCycle }
     c.constants[constant_index].state = 1u8
-    let (value, actual_type, value_error) = evaluate_constant_expr(c, c.constants[constant_index].expression)
+    let (value, actual_type, value_error) = evaluate_constant_expr(c, c.constants[constant_index].expression, c.constants[constant_index].ty)
     if value_error != ok { ret value_error }
     var final_type = c.constants[constant_index].ty
     if final_type.kind == .Invalid {
@@ -2202,10 +2445,14 @@ fn instance_argument(c: *Checker, function_index: usize, first_argument: usize, 
     ret (c.generic_arguments[index], true)
 }
 
-fn evaluate_bound_expression(c: *Checker, function_index: usize, first_argument: usize, expression_index: usize) -> (IntegerValue, Type, err) {
+fn evaluate_bound_expression(c: *Checker, function_index: usize, first_argument: usize, expression_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
     let expression = c.constant_exprs[expression_index]
-    if expression.kind == .Literal { ret (expression.value, expression.ty, ok) }
+    if expression.kind == .Literal {
+        let (contextual_type, context_error) = apply_context(c, expression.ty, expected)
+        if context_error != ok || (contextual_type.kind == .Integer && !integer_representable(expression.value, contextual_type)) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
+        ret (expression.value, contextual_type, ok)
+    }
     if expression.kind == .Name {
         var parameter_index = 0usize
         var parameter_found = false
@@ -2217,41 +2464,63 @@ fn evaluate_bound_expression(c: *Checker, function_index: usize, first_argument:
             if parameter.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
             let (argument, argument_found) = instance_argument(c, function_index, first_argument, parameter_index)
             if !argument_found { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
-            ret (normalized_integer(argument.value, false), parameter.ty, ok)
+            let (contextual_type, context_error) = apply_context(c, parameter.ty, expected)
+            if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+            ret (normalized_integer(argument.value, false), contextual_type, ok)
         }
         let (constant_index, found) = find_constant(c, expression.module_index, expression.name)
         if !found { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let dependency_error = evaluate_constant(c, constant_index)
         if dependency_error != ok { ret (normalized_integer(0usize, false), invalid_type(), dependency_error) }
-        ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
+        let (contextual_type, context_error) = apply_context(c, c.constants[constant_index].ty, expected)
+        if context_error != ok || !integer_representable(c.constants[constant_index].value, contextual_type) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
+        ret (c.constants[constant_index].value, contextual_type, ok)
     }
     if expression.kind == .Unary {
-        let (operand, operand_type, operand_error) = evaluate_bound_expression(c, function_index, first_argument, expression.left)
+        var operand_expected = expected
+        if expression.op == .PunctMinus { operand_expected = invalid_type() }
+        let (operand, operand_type, operand_error) = evaluate_bound_expression(c, function_index, first_argument, expression.left, operand_expected)
         if operand_error != ok { ret (normalized_integer(0usize, false), invalid_type(), operand_error) }
-        if expression.op != .PunctMinus { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
-        if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
-        ret (normalized_integer(operand.magnitude, !operand.negative), operand_type, ok)
+        if expression.op == .PunctMinus {
+            if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+            let result = normalized_integer(operand.magnitude, !operand.negative)
+            let (result_type, context_error) = apply_context(c, operand_type, expected)
+            if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+            if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+            ret (result, result_type, ok)
+        }
+        if expression.op == .PunctTilde {
+            let width = integer_width(operand_type)
+            ret (integer_from_bits(integer_mask(width) - integer_bits(operand, width), operand_type), operand_type, ok)
+        }
+        ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
     }
     if expression.kind == .Binary {
         if !expression.has_right { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
-        if expression.op != .PunctPlus && expression.op != .PunctMinus && expression.op != .PunctStar && expression.op != .PunctSlash && expression.op != .PunctPercent {
-            ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
-        }
-        let (left, left_type, left_error) = evaluate_bound_expression(c, function_index, first_argument, expression.left)
+        let (left, left_type, left_error) = evaluate_bound_expression(c, function_index, first_argument, expression.left, expected)
         if left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), left_error) }
-        let (right, right_type, right_error) = evaluate_bound_expression(c, function_index, first_argument, expression.right)
+        var right_expected = left_type
+        if is_shift(expression.op) { right_expected = invalid_type() }
+        let (right, raw_right_type, right_error) = evaluate_bound_expression(c, function_index, first_argument, expression.right, right_expected)
         if right_error != ok { ret (normalized_integer(0usize, false), invalid_type(), right_error) }
-        let (result_type, type_error) = constant_result_type(c, left_type, right_type)
-        if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
-        var result = normalized_integer(0usize, false)
-        var result_error = ok
-        if expression.op == .PunctPlus { (result, result_error) = add_integer_values(left, right) }
-        if expression.op == .PunctMinus { (result, result_error) = subtract_integer_values(left, right) }
-        if expression.op == .PunctStar { (result, result_error) = multiply_integer_values(left, right) }
-        if expression.op == .PunctSlash { (result, result_error) = divide_integer_values(left, right) }
-        if expression.op == .PunctPercent { (result, result_error) = remainder_integer_values(left, right) }
+        var right_type = raw_right_type
+        var result_type = left_type
+        if is_shift(expression.op) {
+            if right_type.kind == .UntypedInteger { right_type = make_type(.Integer, "u32", expression.module_index) }
+            if result_type.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+            if right_type.kind != .Integer || !unsigned_integer_type(right_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+        } else {
+            let (resolved_type, type_error) = constant_result_type(c, left_type, right_type)
+            if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
+            result_type = resolved_type
+            if (expression.op == .PunctAmp || expression.op == .PunctCaret || expression.op == .PunctPipe || expression.op == .PunctAddWrap || expression.op == .PunctSubWrap || expression.op == .PunctMulWrap) && result_type.kind != .Integer {
+                ret (normalized_integer(0usize, false), invalid_type(), MissingContext)
+            }
+        }
+        if result_type.kind == .Integer && (!integer_representable(left, result_type) || !integer_representable(right, right_type)) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        let (result, result_error) = evaluate_integer_binary(expression.op, left, right, result_type, right_type)
         if result_error != ok { ret (normalized_integer(0usize, false), invalid_type(), result_error) }
-        if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        if result_type.kind == .Integer && expression.op != .PunctAddWrap && expression.op != .PunctSubWrap && expression.op != .PunctMulWrap && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
         ret (result, result_type, ok)
     }
     ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant)
@@ -2280,7 +2549,7 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
                 aggregate_argument_value.ty = specialized
             } else {
                 if source_argument.symbolic {
-                    let (value, value_type, value_error) = evaluate_bound_expression(c, function_index, first_argument, source_argument.expression)
+                    let (value, value_type, value_error) = evaluate_bound_expression(c, function_index, first_argument, source_argument.expression, make_type(.Integer, "usize", template.module_index))
                     if value_error != ok || value.negative || (value_type.kind != .UntypedInteger && (value_type.kind != .Integer || !same(value_type.name, "usize"))) { ret (invalid_type(), TypeMismatch) }
                     aggregate_argument_value.value = value.magnitude
                     aggregate_argument_value.symbolic = false
@@ -2305,7 +2574,7 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
         var result = ty
         result.element = stored_element
         if ty.kind == .Array && !ty.has_length {
-            let (length, length_type, length_error) = evaluate_bound_expression(c, function_index, first_argument, ty.array_length)
+            let (length, length_type, length_error) = evaluate_bound_expression(c, function_index, first_argument, ty.array_length, make_type(.Integer, "usize", c.functions[function_index].module_index))
             if length_error != ok { ret (invalid_type(), length_error) }
             if length.negative || (length_type.kind != .UntypedInteger && (length_type.kind != .Integer || !same(length_type.name, "usize"))) { ret (invalid_type(), TypeMismatch) }
             result.array_length = length.magnitude
@@ -3753,7 +4022,7 @@ fn switch_case_key(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
             c.constant_expr_count = checkpoint
             ret (key, 0usize, false, InvalidConstant)
         }
-        let (value, value_type, value_error) = evaluate_constant_expr(c, expression_index)
+        let (value, value_type, value_error) = evaluate_constant_expr(c, expression_index, subject)
         c.constant_expr_count = checkpoint
         if value_error != ok || !is_integer(value_type) || !integer_representable(value, subject) { ret (key, 0usize, false, InvalidConstant) }
         key.kind = .Integer

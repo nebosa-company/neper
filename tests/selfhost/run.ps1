@@ -177,6 +177,8 @@ $constantChecked = & $compiler check-file (Join-Path $checkRoot 'constant_valid\
 if ($LASTEXITCODE -ne 0 -or $constantChecked -ne 'module check ok') { throw 'integer constants did not evaluate' }
 $constantAliasChecked = & $compiler check-file (Join-Path $checkRoot 'constant_alias_array_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $constantAliasChecked -ne 'module check ok') { throw 'constant-backed array aliases did not resolve' }
+$constantOperatorsChecked = & $compiler check-file (Join-Path $checkRoot 'constant_operators_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $constantOperatorsChecked -ne 'module check ok') { throw 'compile-time integer operators did not produce exact values' }
 $intrinsicChecked = & $compiler check-file (Join-Path $checkRoot 'intrinsic_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $intrinsicChecked -ne 'module check ok') { throw 'fixed intrinsic signatures did not type-check' }
 $multiResultChecked = & $compiler check-file (Join-Path $checkRoot 'multi_result_valid\src\main.e') $repo 'x64' 'windows'
@@ -263,6 +265,10 @@ $checkFailures = @(
     @('constant_unsigned_operator', 'InvalidOperator'),
     @('constant_invalid_reference', 'InvalidConstant'),
     @('constant_division_zero', 'InvalidConstant'),
+    @('constant_shift_range', 'InvalidConstant'),
+    @('constant_shift_signed', 'InvalidOperator'),
+    @('constant_bitwise_missing_context', 'MissingContext'),
+    @('array_length_shift_range', 'TypeMismatch'),
     @('array_length_constant_type', 'TypeMismatch'),
     @('intrinsic_argument_count', 'ArgumentCount'),
     @('intrinsic_argument_mismatch', 'TypeMismatch'),

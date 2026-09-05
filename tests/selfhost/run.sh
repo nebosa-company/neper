@@ -258,6 +258,8 @@ constant_checked=$($test_build/neper-self check-file "$check_root/constant_valid
 [ "$constant_checked" = 'module check ok' ]
 constant_alias_checked=$($test_build/neper-self check-file "$check_root/constant_alias_array_valid/src/main.e" "$repo" x64 linux)
 [ "$constant_alias_checked" = 'module check ok' ]
+constant_operators_checked=$($test_build/neper-self check-file "$check_root/constant_operators_valid/src/main.e" "$repo" x64 linux)
+[ "$constant_operators_checked" = 'module check ok' ]
 intrinsic_checked=$($test_build/neper-self check-file "$check_root/intrinsic_valid/src/main.e" "$repo" x64 linux)
 [ "$intrinsic_checked" = 'module check ok' ]
 multi_result_checked=$($test_build/neper-self check-file "$check_root/multi_result_valid/src/main.e" "$repo" x64 linux)
@@ -355,6 +357,10 @@ expect_check_error constant_unsigned_negative ConstantOverflow
 expect_check_error constant_unsigned_operator InvalidOperator
 expect_check_error constant_invalid_reference InvalidConstant
 expect_check_error constant_division_zero InvalidConstant
+expect_check_error constant_shift_range InvalidConstant
+expect_check_error constant_shift_signed InvalidOperator
+expect_check_error constant_bitwise_missing_context MissingContext
+expect_check_error array_length_shift_range TypeMismatch
 expect_check_error array_length_constant_type TypeMismatch
 expect_check_error intrinsic_argument_count ArgumentCount
 expect_check_error intrinsic_argument_mismatch TypeMismatch

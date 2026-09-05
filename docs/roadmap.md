@@ -407,12 +407,14 @@ block bodies under the no-escaping-control rule. Enum, tagged-union, integer, `b
 and `err` switches validate compile-time cases, duplicates, payload captures and
 exhaustiveness; caller-owned switch facts feed guaranteed-return analysis. Tagged-union
 `.tag`, contextual tag members and local/imported `Union.Tag.Member` values use a
-distinct nominal tag type. Wider intermediate constant arithmetic, bitwise and shift
-constant expressions and wrapping constant operators remain outside the
-`check-file` checkpoint. Unsupported expression and statement
-forms fail explicitly rather than being accepted unchecked. The next type-checking
-increments replace those boundaries with remaining control flow and declaration-time
-generic checks.
+distinct nominal tag type. Compile-time integer evaluation now covers checked
+arithmetic, width-specific bitwise complement and binary operators, independently
+unsigned checked shifts, and width-preserving wrapping arithmetic. One result-sensitive
+corpus exercises ordinary constants, direct array lengths, nested generic aggregate
+bounds and instantiated generic function bounds on both hosts. Unsupported expression
+and statement forms fail explicitly rather than being accepted unchecked. The next
+type-checking increments replace those boundaries with remaining control flow and
+declaration-time generic checks.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
