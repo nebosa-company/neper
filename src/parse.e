@@ -32,14 +32,11 @@ type Parser = struct {
     error_node_checkpoint: usize,
     error_child_checkpoint: usize,
     error_errors_checkpoint: usize,
-    error_top_checkpoint: usize,
     error_declarations_checkpoint: usize,
     error_soft_checkpoint: usize,
     soft_depth: usize,
     soft_top_barrier: bool,
     last_node: usize,
-    top_nodes: [256]usize,
-    top_count: usize,
     tree: *Tree,
 }
 
@@ -114,18 +111,14 @@ fn add_parent_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end:
 }
 
 fn add_top_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize) -> err {
-    if p.top_count == p.top_nodes.len { ret InvalidSyntax }
     try add_node(p, kind, token_start, token_end)
-    p.top_nodes[p.top_count] = p.last_node
-    p.top_count += 1usize
+    p.tree.nodes[p.last_node].top_level = true
     ret ok
 }
 
 fn add_top_parent(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize, nested: []usize) -> err {
-    if p.top_count == p.top_nodes.len { ret InvalidSyntax }
     try add_parent_node(p, kind, token_start, token_end, nested)
-    p.top_nodes[p.top_count] = p.last_node
-    p.top_count += 1usize
+    p.tree.nodes[p.last_node].top_level = true
     ret ok
 }
 
@@ -1710,7 +1703,6 @@ fn parse_one(p: *Parser) -> err {
     p.error_node_checkpoint = p.tree.count
     p.error_child_checkpoint = p.tree.child_count
     p.error_errors_checkpoint = p.tree.errors
-    p.error_top_checkpoint = p.top_count
     p.error_declarations_checkpoint = p.declarations
     p.error_soft_checkpoint = p.soft_depth
     if p.current.kind == .KwUse {
@@ -1767,7 +1759,6 @@ fn parse_file(p: *Parser) -> err {
         p.error_node_checkpoint = p.tree.count
         p.error_child_checkpoint = p.tree.child_count
         p.error_errors_checkpoint = p.tree.errors
-        p.error_top_checkpoint = p.top_count
         p.error_declarations_checkpoint = p.declarations
         p.error_soft_checkpoint = p.soft_depth
         let item_error = parse_one(p)
@@ -1775,7 +1766,6 @@ fn parse_file(p: *Parser) -> err {
             p.tree.count = p.error_node_checkpoint
             p.tree.child_count = p.error_child_checkpoint
             p.tree.errors = p.error_errors_checkpoint
-            p.top_count = p.error_top_checkpoint
             p.declarations = p.error_declarations_checkpoint
             p.soft_depth = p.error_soft_checkpoint
             p.soft_top_barrier = false
@@ -1792,16 +1782,17 @@ fn parse_file(p: *Parser) -> err {
     p.tree.nodes[0usize].token_end = p.token_index + 1usize
     p.tree.nodes[0usize].first_child = p.tree.child_count
     var token = 0usize
-    var top = 0usize
-    while top < p.top_count {
-        let node_index = p.top_nodes[top]
-        while token < p.tree.nodes[node_index].token_start {
-            try add_child(p, syntax.token_child(token))
-            token += 1usize
+    var node_index = 1usize
+    while node_index < p.tree.count {
+        if p.tree.nodes[node_index].top_level {
+            while token < p.tree.nodes[node_index].token_start {
+                try add_child(p, syntax.token_child(token))
+                token += 1usize
+            }
+            try add_child(p, syntax.node_child(node_index))
+            token = p.tree.nodes[node_index].token_end
         }
-        try add_child(p, syntax.node_child(node_index))
-        token = p.tree.nodes[node_index].token_end
-        top += 1usize
+        node_index += 1usize
     }
     while token <= p.token_index {
         try add_child(p, syntax.token_child(token))

@@ -121,6 +121,8 @@ or type body remains open. They stay in the lossless token stream, block newline
 remain statement boundaries, and recovery restores delimiter state after an error.
 Unterminated continuations stop at declaration, switch-arm, containing-block and EOF
 barriers without consuming recoverable syntax or double-counting rolled-back errors.
+Top-level syntax nodes now carry an internal root marker and are gathered directly
+from caller-owned node storage, removing the parser's hidden 256-declaration buffer.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

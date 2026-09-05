@@ -59,6 +59,7 @@ type Kind = enum u8 {
 
 type Node = struct {
     kind: Kind,
+    top_level: bool,
     token_start: usize,
     token_end: usize,
     first_child: usize,
@@ -71,7 +72,7 @@ type Child = struct {
 }
 
 fn node(kind: Kind, token_start: usize, token_end: usize, first_child: usize, child_count: usize) -> Node {
-    ret Node { kind: kind, token_start: token_start, token_end: token_end, first_child: first_child, child_count: child_count }
+    ret Node { kind: kind, top_level: false, token_start: token_start, token_end: token_end, first_child: first_child, child_count: child_count }
 }
 
 fn token_child(index: usize) -> Child {

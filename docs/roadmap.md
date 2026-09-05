@@ -268,7 +268,9 @@ consumed only inside grammar-approved parentheses, brackets, literal bodies and 
 bodies; the lossless token stream retains them, block newlines stay hard, and parser
 recovery restores delimiter state after malformed nested syntax. Unterminated
 continuations now stop at declaration, switch-arm, containing-block and EOF recovery
-barriers; transactional rollback restores both syntax storage and error counts. The
+barriers; transactional rollback restores both syntax storage and error counts.
+Top-level nodes carry an internal root marker and are gathered from caller-owned node
+storage, so declaration count is no longer capped by an embedded 256-entry array. The
 remaining grammar productions and their conformance coverage are the next
 parser-front-end increments; this callout does not mark the `neper-0` milestone complete.
 
