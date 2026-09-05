@@ -587,6 +587,8 @@ fn self_test() -> err {
     if tree.nodes[13usize].kind != .Block || tree.nodes[14usize].kind != .FnDecl { ret lex.InvalidSource }
     let missing_range_end_error = validate_test_parse("fn invalid() {\n    for i in 0usize.. {}\n}\n")
     if missing_range_end_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let comptime_range_end_error = validate_test_parse("fn generic_range[N: usize]() {\n    for i in 0usize..N { continue }\n}\n")
+    if comptime_range_end_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let deferred_block_error = parse.parse(&tree, "fn deferred() {\n    defer {\n        cleanup()\n    }\n}\n")
     if deferred_block_error != ok || tree.count != 8usize { ret lex.InvalidSource }

@@ -108,7 +108,8 @@ block. Array literal items, including one-letter comptime values such as `N`, re
 Block-introducing `if`, `while`, `when`, and `switch` expressions likewise retain a
 one-letter value at their outer depth while allowing aggregates in nested calls. `for`
 now retains iterable or bounded-range expressions and a recursively parsed body while
-preserving one- or two-name iterator bindings as source tokens. `defer` owns its
+preserving one- or two-name iterator bindings as source tokens; a one-letter comptime
+range endpoint before the body remains a `NameExpr`. `defer` owns its
 structured simple statement or block, `@nocheck` owns a validated directive block,
 `shared var` owns its type and optional initializer, and jump statements are exact.
 `switch` now owns its subject and ordered `SwitchArm` children; arms retain multiple

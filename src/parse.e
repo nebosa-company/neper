@@ -1144,7 +1144,7 @@ fn parse_for_statement(p: *Parser) -> err {
     nested_count += 1usize
     if p.current.kind == .PunctRange {
         try advance(p)
-        try parse_expression_node(p)
+        try parse_block_expression_node(p)
         nested[nested_count] = p.last_node
         nested_count += 1usize
     }

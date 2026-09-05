@@ -257,7 +257,8 @@ are recognized only in named aggregates. Block-introducing `if`, `while`, `when`
 `switch` expressions retain one-letter values at their outer depth while allowing
 aggregates in nested calls. `for` now retains iterable or bounded-range expressions
 and a recursively parsed body while preserving one- or two-name iterator bindings
-as source tokens. `defer` now owns its structured simple statement or recursive
+as source tokens; a one-letter comptime range endpoint before the body remains a
+`NameExpr`. `defer` now owns its structured simple statement or recursive
 block, `@nocheck` owns a validated directive block, `shared var` owns its type and
 optional initializer, and `break`/`continue` reject trailing syntax. `switch` now
 owns its subject and ordered `SwitchArm` children; arms retain multiple case
