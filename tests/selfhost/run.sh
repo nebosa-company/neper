@@ -250,6 +250,8 @@ checked=$($test_build/neper-self check-file "$check_root/valid/src/main.e" "$rep
 [ "$checked" = 'module check ok' ]
 composite_checked=$($test_build/neper-self check-file "$check_root/composite_valid/src/main.e" "$repo" x64 linux)
 [ "$composite_checked" = 'module check ok' ]
+qualified_checked=$($test_build/neper-self check-file "$check_root/qualified_valid/src/main.e" "$repo" x64 linux)
+[ "$qualified_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -289,6 +291,9 @@ expect_check_error inferred_array_type Unsupported
 expect_check_error void_slice InvalidType
 expect_check_error void_pointer_deref InvalidOperator
 expect_check_error nil_without_context MissingContext
+expect_check_error qualified_argument_mismatch TypeMismatch
+expect_check_error qualified_argument_count ArgumentCount
+expect_check_error qualified_not_callable UnknownCallable
 expect_check_error compound_unsupported Unsupported
 expect_check_error unsupported Unsupported
 scope_root="$repo/tests/selfhost/fixtures/scope"

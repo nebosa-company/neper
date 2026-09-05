@@ -169,6 +169,8 @@ $checked = & $compiler check-file (Join-Path $checkRoot 'valid\src\main.e') $rep
 if ($LASTEXITCODE -ne 0 -or $checked -ne 'module check ok') { throw 'valid scalar program did not type-check' }
 $compositeChecked = & $compiler check-file (Join-Path $checkRoot 'composite_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $compositeChecked -ne 'module check ok') { throw 'valid composite types did not type-check' }
+$qualifiedChecked = & $compiler check-file (Join-Path $checkRoot 'qualified_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $qualifiedChecked -ne 'module check ok') { throw 'qualified calls did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -197,6 +199,9 @@ $checkFailures = @(
     @('void_slice', 'InvalidType'),
     @('void_pointer_deref', 'InvalidOperator'),
     @('nil_without_context', 'MissingContext'),
+    @('qualified_argument_mismatch', 'TypeMismatch'),
+    @('qualified_argument_count', 'ArgumentCount'),
+    @('qualified_not_callable', 'UnknownCallable'),
     @('compound_unsupported', 'Unsupported'),
     @('unsupported', 'Unsupported')
 )

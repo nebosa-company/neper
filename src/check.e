@@ -569,6 +569,39 @@ fn find_function(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     ret (0usize, false)
 }
 
+fn imported_module(g: *graph.Graph, module_index: usize, qualifier: str) -> (usize, bool) {
+    let end = g.modules[module_index].first_import + g.modules[module_index].import_count
+    var at = g.modules[module_index].first_import
+    while at < end {
+        if same(g.imports[at].qualifier, qualifier) { ret (g.imports[at].target, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn find_qualified_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (usize, bool) {
+    let (base_index, has_base) = first_node_child(tree, node)
+    if !has_base { ret (0usize, false) }
+    let base_node = tree.nodes[base_index]
+    if base_node.kind != .NameExpr { ret (0usize, false) }
+    let base_token = c.tokens[base_node.token_start]
+    if base_token.kind != .Identifier { ret (0usize, false) }
+    let text = g.modules[module_index].text
+    let qualifier = text[base_token.start..base_token.end]
+    let (target_module, imported) = imported_module(g, module_index, qualifier)
+    if !imported { ret (0usize, false) }
+    var member = ""
+    var at = base_node.token_end
+    while at < node.token_end {
+        let token = c.tokens[at]
+        if token.kind == .Identifier { member = text[token.start..token.end] }
+        at += 1usize
+    }
+    if member.len == 0usize { ret (0usize, false) }
+    let (function_index, found) = find_function(c, target_module, member)
+    ret (function_index, found)
+}
+
 fn find_local(c: *Checker, name: str) -> (usize, bool) {
     var at = c.local_count
     while at > 0usize {
@@ -806,14 +839,21 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                 let child_index = tree.children[at].index
                 if child_position == 0usize {
                     let receiver = tree.nodes[child_index]
-                    if receiver.kind != .NameExpr { ret (invalid_type(), Unsupported) }
-                    let token = c.tokens[receiver.token_start]
-                    let name = text[token.start..token.end]
-                    cast = scalar_type(name, module_index)
-                    if cast.kind == .Integer || cast.kind == .Float {
-                        has_function = false
+                    if receiver.kind == .NameExpr {
+                        let token = c.tokens[receiver.token_start]
+                        let name = text[token.start..token.end]
+                        cast = scalar_type(name, module_index)
+                        if cast.kind == .Integer || cast.kind == .Float {
+                            has_function = false
+                        } else {
+                            let (found_index, found) = find_function(c, module_index, name)
+                            if !found { ret (invalid_type(), UnknownCallable) }
+                            function_index = found_index
+                            has_function = true
+                        }
                     } else {
-                        let (found_index, found) = find_function(c, module_index, name)
+                        if receiver.kind != .FieldExpr { ret (invalid_type(), Unsupported) }
+                        let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
                         if !found { ret (invalid_type(), UnknownCallable) }
                         function_index = found_index
                         has_function = true

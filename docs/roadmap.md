@@ -346,8 +346,9 @@ names and types, use before binding and references after a lexical scope ends on
 hosts. The first `src/check.e` increments now build caller-owned function, parameter,
 token, local and recursive type tables and check scalar literal context, bindings,
 lexical inference, exact-type arithmetic and comparisons, conditions, return
-statements and guaranteed returns through `if`, forward direct calls, argument arity
-and types, numeric casts, mutability and explicit `void`. Pointer, slice and
+statements and guaranteed returns through `if`, forward local and source-module-
+qualified direct calls, argument arity and types, numeric casts, mutability and
+explicit `void`. Pointer, slice and
 fixed-array types now compare structurally, including nested forms and zero-length
 arrays; `str` is canonical with `[]const u8`; mutable pointer/slice weakening is
 one-way; contextual `nil` covers pointers and slices; and address-of/dereference
@@ -355,12 +356,13 @@ enforce binding and pointee mutability while rejecting `*void` dereference. Arra
 lengths accept all integer-literal bases and checked `usize` literal arithmetic with
 overflow and division-by-zero rejection. The bootstrap's x64 emitter now uses
 unsigned division, remainder and relational instructions for unsigned operand types,
-including the full `usize` range. The `check-file` checkpoint still rejects named
-constant lengths and aliases, generic and qualified calls, indexing, aggregate
-literals and unimplemented statement forms with `check.Unsupported` rather than
-accepting unchecked code. The next type-checking increments replace those explicit
-boundaries with constants and aliases, qualified calls, remaining control flow and
-full generic checking.
+including the full `usize` range. Qualified calls into loaded source modules now use
+the target function's collected signature for arity, argument and return checking.
+Named constant lengths and aliases, generic calls, compiler-owned intrinsics, indexing
+and aggregate literals remain outside the `check-file` checkpoint. Unsupported
+expression and statement forms fail explicitly rather than being accepted unchecked.
+The next type-checking increments replace those boundaries with constants and aliases,
+intrinsic signatures, remaining control flow and full generic checking.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
