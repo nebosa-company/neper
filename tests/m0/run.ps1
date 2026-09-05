@@ -28,6 +28,11 @@ if ($LASTEXITCODE -ne 0 -or $argsOutput -ne 'héllo 😀') { throw 'UTF-8 startu
 $abiOutput = & $neper run (Join-Path $repo 'tests\m0\abi.e') --output (Join-Path $testBuild 'abi.exe')
 if ($LASTEXITCODE -ne 0 -or $abiOutput -ne 'abi ok') { throw 'x64 argument ABI failed' }
 
+$largeStackOutput = & $neper run (Join-Path $repo 'tests\m0\large-stack.e') --output (Join-Path $testBuild 'large-stack.exe')
+if ($LASTEXITCODE -ne 0 -or $largeStackOutput -ne 'large stack ok') { throw 'large stack frame failed' }
+$largeStackAssembly = Get-Content -Raw (Join-Path $testBuild 'large-stack.asm')
+if ($largeStackAssembly -notmatch 'call np_stack_probe') { throw 'large stack frame was not probed' }
+
 $boundsOutput = & $neper run (Join-Path $repo 'tests\m0\bounds.e') --output (Join-Path $testBuild 'bounds.exe') 2>&1
 if ($LASTEXITCODE -ne 134 -or ($boundsOutput -join "`n") -notmatch 'trap\[bounds\]') {
     throw 'bounds trap failed'

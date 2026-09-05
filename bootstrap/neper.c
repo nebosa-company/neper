@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.53-neper0"
+#define NEPER_VERSION "0.0.54-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -5978,7 +5978,11 @@ static void emit_function(Emitter *e, Function *fn) {
     if (e->windows) {
         fprintf(e->out, "%s PROC FRAME\n", symbol_name(fn));
         fputs("    push rbp\n    .pushreg rbp\n    mov rbp, rsp\n", e->out);
-        fprintf(e->out, "    sub rsp, %d\n    .allocstack %d\n    .endprolog\n", fn->frame_size, fn->frame_size);
+        if (fn->frame_size >= 4096)
+            fprintf(e->out, "    mov eax, %d\n    call np_stack_probe\n    sub rsp, rax\n", fn->frame_size);
+        else
+            fprintf(e->out, "    sub rsp, %d\n", fn->frame_size);
+        fprintf(e->out, "    .allocstack %d\n    .endprolog\n", fn->frame_size);
     } else {
         fprintf(e->out, ".globl %s\n.type %s, @function\n%s:\n", symbol_name(fn), symbol_name(fn), symbol_name(fn));
         fprintf(e->out, "    .loc 1 %d %d\n", fn->token.line, fn->token.column);
@@ -6865,6 +6869,13 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n\n"
+        "np_stack_probe PROC\n"
+        "    lea r10, [rsp+8]\n    mov r11, rax\n"
+        "np_stack_probe_page:\n    cmp r11, 4096\n    jbe np_stack_probe_last\n"
+        "    sub r10, 4096\n    test BYTE PTR [r10], 0\n    sub r11, 4096\n"
+        "    jmp np_stack_probe_page\n"
+        "np_stack_probe_last:\n    sub r10, r11\n    test BYTE PTR [r10], 0\n    ret\n"
+        "np_stack_probe ENDP\n\n"
         "neper_io_print PROC FRAME\n"
         "    sub rsp, 88\n    .allocstack 88\n    .endprolog\n"
         "    mov QWORD PTR [rsp+48], rcx\n    mov QWORD PTR [rsp+56], rdx\n"

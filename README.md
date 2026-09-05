@@ -47,7 +47,9 @@ Linux. The first `neper-0` increment adds typed integer range `for`, `break`,
 `continue`, integer local `+=`, and lexical block scopes. Startup constructs the
 root arena and UTF-8 `args`; `try` propagates named errors; bounds and
 invalid-division checks exit through the trap path; and emitted objects carry line,
-symbol, unwind and compact `.nepersym`/`.nepsym` data. The first self-hosted compiler
+symbol, unwind and compact `.nepersym`/`.nepsym` data. Large Windows stack frames
+probe each crossed page before allocation, so generated functions cannot skip the
+thread's guard page. The first self-hosted compiler
 slice now builds and runs under the bootstrap on both hosts. Its lexer lives in
 `src/lex.e`; `src/main.e` imports it through the ordinary project-module resolver.
 The lexer declares the frozen 94-kind grammar vocabulary and scans original-byte
