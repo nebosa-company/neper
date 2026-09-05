@@ -761,10 +761,16 @@ fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
 fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     let (functions, functions_error) = mem.alloc[check.Function](a, 4096usize)
     if functions_error != ok { ret functions_error }
+    let (function_generics, function_generics_error) = mem.alloc[check.FunctionGeneric](a, 4096usize)
+    if function_generics_error != ok { ret function_generics_error }
     let (parameters, parameters_error) = mem.alloc[check.Parameter](a, 32768usize)
     if parameters_error != ok { ret parameters_error }
     let (return_types, return_types_error) = mem.alloc[check.Type](a, 32768usize)
     if return_types_error != ok { ret return_types_error }
+    let (comptime_parameters, comptime_parameters_error) = mem.alloc[check.ComptimeParameter](a, 1024usize)
+    if comptime_parameters_error != ok { ret comptime_parameters_error }
+    let (generic_arguments, generic_arguments_error) = mem.alloc[check.GenericArgument](a, 4096usize)
+    if generic_arguments_error != ok { ret generic_arguments_error }
     let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
     if tokens_error != ok { ret tokens_error }
     let (locals, locals_error) = mem.alloc[check.Local](a, 16384usize)
@@ -777,7 +783,8 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if constants_error != ok { ret constants_error }
     let (constant_exprs, constant_exprs_error) = mem.alloc[check.ConstantExpr](a, 32768usize)
     if constant_exprs_error != ok { ret constant_exprs_error }
-    ret check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, constant_exprs)
+    try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, constant_exprs)
+    ret check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {

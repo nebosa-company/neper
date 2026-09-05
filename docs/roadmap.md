@@ -379,9 +379,13 @@ values cannot be silently ignored. Compiler-owned `mem.alloc[T]` now specializes
 arena/count arguments and `([]T, err)` results for primitive, local or qualified named,
 aliased-composite and pointer `T`. Bracket arguments retain directly written pointer,
 slice and fixed-array types as type nodes without misclassifying array-literal arguments,
-covering every `neper-0` allocation element form. Wider intermediate arithmetic, bitwise,
-shift and wrapping constant operators, generic source calls, indexing and aggregate
-literals remain outside the `check-file` checkpoint. Unsupported expression and statement
+covering every `neper-0` allocation element form. Generic source functions now collect
+`[T: type]` and `[N: usize]` parameters, bind explicit or structurally inferred trailing
+arguments, substitute composite signatures and symbolic array lengths, cache concrete
+instances, and check each instantiated body, including forwarded, fallible and qualified
+calls. Wider intermediate arithmetic, bitwise, shift and wrapping constant operators,
+indexing and aggregate literals remain outside the `check-file` checkpoint. Unsupported
+expression and statement
 forms fail explicitly rather than being accepted unchecked. The next type-checking
 increments replace those boundaries with remaining control flow and full generic checking.
 

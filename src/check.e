@@ -36,6 +36,7 @@ type Kind = enum u8 {
     Pointer,
     Slice,
     Array,
+    TypeParameter,
     UntypedInteger,
     UntypedFloat,
     Other,
@@ -52,6 +53,24 @@ type Type = struct {
     has_length: bool,
 }
 
+type ComptimeKind = enum u8 {
+    Type,
+    Integer,
+}
+
+type ComptimeParameter = struct {
+    name: str,
+    kind: ComptimeKind,
+    ty: Type,
+}
+
+type GenericArgument = struct {
+    kind: ComptimeKind,
+    ty: Type,
+    value: usize,
+    set: bool,
+}
+
 type Parameter = struct {
     name: str,
     ty: Type,
@@ -66,6 +85,15 @@ type Function = struct {
     return_count: usize,
     generic: bool,
     external: bool,
+}
+
+type FunctionGeneric = struct {
+    first_comptime: usize,
+    comptime_count: usize,
+    template_index: usize,
+    first_argument: usize,
+    instance: bool,
+    checked: bool,
 }
 
 type Local = struct {
@@ -119,8 +147,11 @@ type Constant = struct {
 type Checker = struct {
     resolver: *resolve.Resolver,
     functions: []Function,
+    function_generics: []FunctionGeneric,
     parameters: []Parameter,
     return_types: []Type,
+    comptime_parameters: []ComptimeParameter,
+    generic_arguments: []GenericArgument,
     tokens: []lex.Token,
     locals: []Local,
     types: []Type,
@@ -130,6 +161,9 @@ type Checker = struct {
     function_count: usize,
     parameter_count: usize,
     return_type_count: usize,
+    comptime_parameter_count: usize,
+    generic_argument_count: usize,
+    signature_function_count: usize,
     token_count: usize,
     local_count: usize,
     type_count: usize,
@@ -138,6 +172,10 @@ type Checker = struct {
     constant_expr_count: usize,
     constants_ready: bool,
     expand_aliases: bool,
+    active_first_comptime: usize,
+    active_comptime_count: usize,
+    active_first_argument: usize,
+    active_arguments: bool,
 }
 
 fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_types: []Type, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias, constants: []Constant, constant_exprs: []ConstantExpr) -> err {
@@ -154,6 +192,9 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.function_count = 0usize
     c.parameter_count = 0usize
     c.return_type_count = 0usize
+    c.comptime_parameter_count = 0usize
+    c.generic_argument_count = 0usize
+    c.signature_function_count = 0usize
     c.token_count = 0usize
     c.local_count = 0usize
     c.type_count = 0usize
@@ -162,6 +203,18 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.constant_expr_count = 0usize
     c.constants_ready = false
     c.expand_aliases = false
+    c.active_first_comptime = 0usize
+    c.active_comptime_count = 0usize
+    c.active_first_argument = 0usize
+    c.active_arguments = false
+    ret ok
+}
+
+fn init_generics(c: *Checker, functions: []FunctionGeneric, parameters: []ComptimeParameter, arguments: []GenericArgument) -> err {
+    if functions.len < c.functions.len || parameters.len == 0usize || arguments.len == 0usize { ret Capacity }
+    c.function_generics = functions
+    c.comptime_parameters = parameters
+    c.generic_arguments = arguments
     ret ok
 }
 
@@ -227,6 +280,7 @@ fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
     if is_string_shape(c, a) || is_string_shape(c, b) { ret is_string_shape(c, a) && is_string_shape(c, b) }
     if a.kind != b.kind { ret false }
     if a.kind == .Named { ret a.module_index == b.module_index && same(a.name, b.name) }
+    if a.kind == .TypeParameter { ret a.has_element && b.has_element && a.element == b.element }
     if a.kind == .Integer || a.kind == .Float { ret same(a.name, b.name) }
     if a.kind == .Pointer || a.kind == .Slice {
         if a.is_const != b.is_const || !a.has_element || !b.has_element { ret false }
@@ -321,6 +375,26 @@ fn scalar_type(name: str, module_index: usize) -> Type {
     if same(name, "void") { ret make_type(.Void, name, module_index) }
     if same(name, "str") { ret make_type(.String, name, module_index) }
     ret invalid_type()
+}
+
+fn active_comptime_parameter(c: *Checker, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < c.active_comptime_count {
+        let index = c.active_first_comptime + at
+        if index < c.comptime_parameter_count && same(c.comptime_parameters[index].name, name) { ret (index, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn active_argument(c: *Checker, parameter_index: usize) -> (GenericArgument, bool) {
+    var empty: GenericArgument = zero
+    if !c.active_arguments || parameter_index < c.active_first_comptime { ret (empty, false) }
+    let offset = parameter_index - c.active_first_comptime
+    if offset >= c.active_comptime_count { ret (empty, false) }
+    let argument_index = c.active_first_argument + offset
+    if argument_index >= c.generic_argument_count || !c.generic_arguments[argument_index].set { ret (empty, false) }
+    ret (c.generic_arguments[argument_index], true)
 }
 
 fn is_type_node(kind: syntax.Kind) -> bool {
@@ -457,10 +531,17 @@ fn array_length_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         ret (value, value_error)
     }
     if node.kind == .NameExpr {
-        if !c.constants_ready { ret (0usize, Unsupported) }
         let token = c.tokens[node.token_start]
         if token.kind != .Identifier { ret (0usize, InvalidConstant) }
         let name = text[token.start..token.end]
+        let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
+        if parameter_found {
+            if c.comptime_parameters[parameter_index].kind != .Integer { ret (0usize, TypeMismatch) }
+            let (argument, argument_found) = active_argument(c, parameter_index)
+            if !argument_found { ret (0usize, Unsupported) }
+            ret (argument.value, ok)
+        }
+        if !c.constants_ready { ret (0usize, Unsupported) }
         let (constant_index, found) = find_constant(c, module_index, name)
         if !found { ret (0usize, InvalidConstant) }
         let (value, value_error) = constant_array_length(c, constant_index)
@@ -585,13 +666,25 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         if element_type.kind == .Void { ret (invalid_type(), InvalidType) }
         let (stored_element, store_error) = store_type(c, element_type)
         if store_error != ok { ret (invalid_type(), store_error) }
-        let (length, length_error) = array_length_value(c, g, tree, module_index, length_index)
-        if length_error != ok { ret (invalid_type(), length_error) }
+        var length = 0usize
+        var has_concrete_length = false
+        var length_expression = 0usize
+        let (resolved_length, length_error) = array_length_value(c, g, tree, module_index, length_index)
+        if length_error == ok {
+            length = resolved_length
+            has_concrete_length = true
+        } else {
+            if c.active_comptime_count == 0usize || c.active_arguments { ret (invalid_type(), length_error) }
+            let (copied_expression, expression_error) = copy_constant_expr(c, g, tree, module_index, length_index)
+            if expression_error != ok { ret (invalid_type(), length_error) }
+            length_expression = copied_expression
+        }
         var result = make_type(.Array, "", module_index)
         result.element = stored_element
         result.has_element = true
         result.array_length = length
-        result.has_length = true
+        if !has_concrete_length { result.array_length = length_expression }
+        result.has_length = has_concrete_length
         ret (result, ok)
     }
     if node.kind != .NamedType { ret (make_type(.Other, "", module_index), Unsupported) }
@@ -600,6 +693,16 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     let base = g.modules[module_index].text[first.start..first.end]
     let scalar = scalar_type(base, module_index)
     if scalar.kind != .Invalid { ret (scalar, ok) }
+    let (parameter_index, parameter_found) = active_comptime_parameter(c, base)
+    if parameter_found {
+        if c.comptime_parameters[parameter_index].kind != .Type { ret (invalid_type(), InvalidType) }
+        let (argument, argument_found) = active_argument(c, parameter_index)
+        if argument_found { ret (argument.ty, ok) }
+        var parameter_type = make_type(.TypeParameter, base, module_index)
+        parameter_type.element = parameter_index
+        parameter_type.has_element = true
+        ret (parameter_type, ok)
+    }
     var target_module = module_index
     var name = base
     var saw_dot = false
@@ -724,6 +827,44 @@ fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *
     ret ok
 }
 
+fn collect_comptime_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    if c.comptime_parameter_count == c.comptime_parameters.len { ret Capacity }
+    let (name, has_name) = first_name(c, g.modules[module_index].text, node)
+    if !has_name { ret parse.InvalidSyntax }
+    var saw_colon = false
+    var kind_found = false
+    var at = node.token_start
+    while at < node.token_end {
+        let token_kind = c.tokens[at].kind
+        if token_kind == .PunctColon {
+            saw_colon = true
+        } else {
+            if saw_colon && token_kind != .Newline {
+                if token_kind == .KwType {
+                    kind_found = true
+                } else {
+                    if token_kind == .KwFn { ret Unsupported }
+                }
+                break
+            }
+        }
+        at += 1usize
+    }
+    if kind_found {
+        c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Type, ty: invalid_type() }
+        c.comptime_parameter_count += 1usize
+        ret ok
+    }
+    let (type_index, has_type) = first_node_child(tree, node)
+    if !has_type { ret Unsupported }
+    let (ty, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+    if type_error != ok { ret type_error }
+    if ty.kind != .Integer || !same(ty.name, "usize") { ret InvalidType }
+    c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Integer, ty: ty }
+    c.comptime_parameter_count += 1usize
+    ret ok
+}
+
 fn store_return_type(c: *Checker, ty: Type) -> err {
     if c.return_type_count == c.return_types.len { ret Capacity }
     c.return_types[c.return_type_count] = ty
@@ -735,13 +876,35 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     if c.function_count == c.functions.len { ret Capacity }
     let (name, name_error) = function_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
-    var item = Function { name: name, module_index: module_index, first_parameter: c.parameter_count, parameter_count: 0usize, first_return: c.return_type_count, return_count: 0usize, generic: false, external: node.kind == .ExternDecl }
+    var item: Function = zero
+    item.name = name
+    item.module_index = module_index
+    item.first_parameter = c.parameter_count
+    item.first_return = c.return_type_count
+    item.external = node.kind == .ExternDecl
+    var generic: FunctionGeneric = zero
+    generic.first_comptime = c.comptime_parameter_count
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
         if tree.children[at].node {
             let child = tree.nodes[tree.children[at].index]
-            if child.kind == .ComptimeParam { item.generic = true }
+            if child.kind == .ComptimeParam {
+                c.active_first_comptime = generic.first_comptime
+                c.active_comptime_count = generic.comptime_count
+                try collect_comptime_parameter(c, r, g, tree, module_index, child)
+                generic.comptime_count += 1usize
+                item.generic = true
+            }
+        }
+        at += 1usize
+    }
+    c.active_first_comptime = generic.first_comptime
+    c.active_comptime_count = generic.comptime_count
+    at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child = tree.nodes[tree.children[at].index]
             if child.kind == .Parameter {
                 try collect_parameter(c, r, g, tree, module_index, child)
                 item.parameter_count += 1usize
@@ -762,6 +925,8 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         }
         at += 1usize
     }
+    c.active_first_comptime = 0usize
+    c.active_comptime_count = 0usize
     if item.return_count == 1usize && c.return_types[item.first_return].kind == .Void {
         item.return_count = 0usize
         c.return_type_count = c.return_type_count - 1usize
@@ -776,6 +941,7 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         return_index += 1usize
     }
     c.functions[c.function_count] = item
+    c.function_generics[c.function_count] = generic
     c.function_count += 1usize
     ret ok
 }
@@ -805,7 +971,14 @@ fn add_seeded_function(c: *Checker, module_index: usize, name: str, return_type:
         if store_error != ok { ret (0usize, store_error) }
         return_count += 1usize
     }
-    c.functions[index] = Function { name: name, module_index: module_index, first_parameter: c.parameter_count, parameter_count: 0usize, first_return: first_return, return_count: return_count, generic: false, external: false }
+    var item: Function = zero
+    item.name = name
+    item.module_index = module_index
+    item.first_parameter = c.parameter_count
+    item.first_return = first_return
+    item.return_count = return_count
+    c.functions[index] = item
+    c.function_generics[index] = zero
     c.function_count += 1usize
     ret (index, ok)
 }
@@ -930,6 +1103,9 @@ fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
     c.function_count = 0usize
     c.parameter_count = 0usize
     c.return_type_count = 0usize
+    c.comptime_parameter_count = 0usize
+    c.generic_argument_count = 0usize
+    c.signature_function_count = 0usize
     try seed_intrinsic_signatures(c, g)
     var module_index = 0usize
     while module_index < g.count {
@@ -947,6 +1123,7 @@ fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
         }
         module_index += 1usize
     }
+    c.signature_function_count = c.function_count
     ret ok
 }
 
@@ -1395,6 +1572,331 @@ fn is_integer_operator(kind: lex.Kind) -> bool {
     ret kind == .PunctPercent || kind == .PunctAmp || kind == .PunctCaret || kind == .PunctPipe || kind == .PunctAddWrap || kind == .PunctSubWrap || kind == .PunctMulWrap
 }
 
+fn template_parameter(c: *Checker, function_index: usize, name: str) -> (usize, bool) {
+    if function_index >= c.signature_function_count { ret (0usize, false) }
+    let function = c.function_generics[function_index]
+    var at = 0usize
+    while at < function.comptime_count {
+        let index = function.first_comptime + at
+        if index < c.comptime_parameter_count && same(c.comptime_parameters[index].name, name) { ret (index, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn instance_argument(c: *Checker, function_index: usize, first_argument: usize, parameter_index: usize) -> (GenericArgument, bool) {
+    var empty: GenericArgument = zero
+    if function_index >= c.signature_function_count { ret (empty, false) }
+    let function = c.function_generics[function_index]
+    if parameter_index < function.first_comptime { ret (empty, false) }
+    let offset = parameter_index - function.first_comptime
+    if offset >= function.comptime_count { ret (empty, false) }
+    let index = first_argument + offset
+    if index >= c.generic_argument_count || !c.generic_arguments[index].set { ret (empty, false) }
+    ret (c.generic_arguments[index], true)
+}
+
+fn evaluate_bound_expression(c: *Checker, function_index: usize, first_argument: usize, expression_index: usize) -> (IntegerValue, Type, err) {
+    if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+    let expression = c.constant_exprs[expression_index]
+    if expression.kind == .Literal { ret (expression.value, expression.ty, ok) }
+    if expression.kind == .Name {
+        var parameter_index = 0usize
+        var parameter_found = false
+        if expression.module_index == c.functions[function_index].module_index {
+            (parameter_index, parameter_found) = template_parameter(c, function_index, expression.name)
+        }
+        if parameter_found {
+            let parameter = c.comptime_parameters[parameter_index]
+            if parameter.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+            let (argument, argument_found) = instance_argument(c, function_index, first_argument, parameter_index)
+            if !argument_found { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
+            ret (normalized_integer(argument.value, false), parameter.ty, ok)
+        }
+        let (constant_index, found) = find_constant(c, expression.module_index, expression.name)
+        if !found { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let dependency_error = evaluate_constant(c, constant_index)
+        if dependency_error != ok { ret (normalized_integer(0usize, false), invalid_type(), dependency_error) }
+        ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
+    }
+    if expression.kind == .Unary {
+        let (operand, operand_type, operand_error) = evaluate_bound_expression(c, function_index, first_argument, expression.left)
+        if operand_error != ok { ret (normalized_integer(0usize, false), invalid_type(), operand_error) }
+        if expression.op != .PunctMinus { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
+        if unsigned_integer_type(operand_type) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+        ret (normalized_integer(operand.magnitude, !operand.negative), operand_type, ok)
+    }
+    if expression.kind == .Binary {
+        if !expression.has_right { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        if expression.op != .PunctPlus && expression.op != .PunctMinus && expression.op != .PunctStar && expression.op != .PunctSlash && expression.op != .PunctPercent {
+            ret (normalized_integer(0usize, false), invalid_type(), Unsupported)
+        }
+        let (left, left_type, left_error) = evaluate_bound_expression(c, function_index, first_argument, expression.left)
+        if left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), left_error) }
+        let (right, right_type, right_error) = evaluate_bound_expression(c, function_index, first_argument, expression.right)
+        if right_error != ok { ret (normalized_integer(0usize, false), invalid_type(), right_error) }
+        let (result_type, type_error) = constant_result_type(c, left_type, right_type)
+        if type_error != ok { ret (normalized_integer(0usize, false), invalid_type(), type_error) }
+        var result = normalized_integer(0usize, false)
+        var result_error = ok
+        if expression.op == .PunctPlus { (result, result_error) = add_integer_values(left, right) }
+        if expression.op == .PunctMinus { (result, result_error) = subtract_integer_values(left, right) }
+        if expression.op == .PunctStar { (result, result_error) = multiply_integer_values(left, right) }
+        if expression.op == .PunctSlash { (result, result_error) = divide_integer_values(left, right) }
+        if expression.op == .PunctPercent { (result, result_error) = remainder_integer_values(left, right) }
+        if result_error != ok { ret (normalized_integer(0usize, false), invalid_type(), result_error) }
+        if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
+        ret (result, result_type, ok)
+    }
+    ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant)
+}
+
+fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty: Type) -> (Type, err) {
+    if ty.kind == .TypeParameter {
+        if !ty.has_element { ret (invalid_type(), InvalidType) }
+        let (argument, found) = instance_argument(c, function_index, first_argument, ty.element)
+        if !found || argument.kind != .Type { ret (invalid_type(), MissingContext) }
+        ret (argument.ty, ok)
+    }
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Array {
+        if !ty.has_element || ty.element >= c.type_count { ret (invalid_type(), InvalidType) }
+        let (element, element_error) = substitute_type(c, function_index, first_argument, c.types[ty.element])
+        if element_error != ok { ret (invalid_type(), element_error) }
+        let (stored_element, store_error) = store_type(c, element)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        var result = ty
+        result.element = stored_element
+        if ty.kind == .Array && !ty.has_length {
+            let (length, length_type, length_error) = evaluate_bound_expression(c, function_index, first_argument, ty.array_length)
+            if length_error != ok { ret (invalid_type(), length_error) }
+            if length.negative || (length_type.kind != .UntypedInteger && (length_type.kind != .Integer || !same(length_type.name, "usize"))) { ret (invalid_type(), TypeMismatch) }
+            result.array_length = length.magnitude
+            result.has_length = true
+        }
+        ret (result, ok)
+    }
+    ret (ty, ok)
+}
+
+fn bind_inferred_argument(c: *Checker, function_index: usize, first_argument: usize, parameter_index: usize, ty: Type, value: usize, kind: ComptimeKind) -> err {
+    if function_index >= c.signature_function_count { ret InvalidType }
+    let function = c.function_generics[function_index]
+    if parameter_index < function.first_comptime { ret InvalidType }
+    let offset = parameter_index - function.first_comptime
+    if offset >= function.comptime_count { ret InvalidType }
+    let argument_index = first_argument + offset
+    if argument_index >= c.generic_argument_count { ret Capacity }
+    if c.generic_arguments[argument_index].set {
+        if c.generic_arguments[argument_index].kind != kind { ret TypeMismatch }
+        if kind == .Type {
+            if !type_equal(c, c.generic_arguments[argument_index].ty, ty) { ret TypeMismatch }
+        } else {
+            if c.generic_arguments[argument_index].value != value { ret TypeMismatch }
+        }
+        ret ok
+    }
+    c.generic_arguments[argument_index].kind = kind
+    c.generic_arguments[argument_index].ty = ty
+    c.generic_arguments[argument_index].value = value
+    c.generic_arguments[argument_index].set = true
+    ret ok
+}
+
+fn infer_comptime_type(c: *Checker, function_index: usize, first_argument: usize, formal: Type, actual: Type) -> err {
+    if formal.kind == .TypeParameter {
+        if is_untyped(actual) || actual.kind == .Invalid || actual.kind == .Other { ret ok }
+        if !formal.has_element { ret InvalidType }
+        ret bind_inferred_argument(c, function_index, first_argument, formal.element, actual, 0usize, .Type)
+    }
+    if formal.kind != actual.kind { ret ok }
+    if formal.kind == .Array && !formal.has_length && actual.has_length && formal.array_length < c.constant_expr_count {
+        let expression = c.constant_exprs[formal.array_length]
+        if expression.kind == .Name {
+            var parameter_index = 0usize
+            var parameter_found = false
+            if expression.module_index == c.functions[function_index].module_index {
+                (parameter_index, parameter_found) = template_parameter(c, function_index, expression.name)
+            }
+            if parameter_found && c.comptime_parameters[parameter_index].kind == .Integer {
+                try bind_inferred_argument(c, function_index, first_argument, parameter_index, invalid_type(), actual.array_length, .Integer)
+            }
+        }
+    }
+    if (formal.kind == .Pointer || formal.kind == .Slice || formal.kind == .Array) && formal.has_element && actual.has_element {
+        if formal.element >= c.type_count || actual.element >= c.type_count { ret InvalidType }
+        ret infer_comptime_type(c, function_index, first_argument, c.types[formal.element], c.types[actual.element])
+    }
+    ret ok
+}
+
+fn generic_arguments_equal(c: *Checker, function_index: usize, first: usize, second: usize) -> bool {
+    if function_index >= c.signature_function_count { ret false }
+    let function = c.function_generics[function_index]
+    var at = 0usize
+    while at < function.comptime_count {
+        let left = c.generic_arguments[first + at]
+        let right = c.generic_arguments[second + at]
+        if !left.set || !right.set || left.kind != right.kind { ret false }
+        if left.kind == .Type {
+            if !type_equal(c, left.ty, right.ty) { ret false }
+        } else {
+            if left.value != right.value { ret false }
+        }
+        at += 1usize
+    }
+    ret true
+}
+
+fn find_function_instance(c: *Checker, template_index: usize, first_argument: usize) -> (usize, bool) {
+    var at = c.signature_function_count
+    while at < c.function_count {
+        let candidate = c.function_generics[at]
+        if candidate.instance && candidate.template_index == template_index && generic_arguments_equal(c, template_index, candidate.first_argument, first_argument) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn instantiate_function(c: *Checker, template_index: usize, first_argument: usize) -> (usize, err) {
+    let (cached, found) = find_function_instance(c, template_index, first_argument)
+    if found { ret (cached, ok) }
+    if template_index >= c.signature_function_count || c.function_count == c.functions.len { ret (0usize, Capacity) }
+    let template = c.functions[template_index]
+    var instance: Function = zero
+    instance.name = template.name
+    instance.module_index = template.module_index
+    instance.first_parameter = c.parameter_count
+    instance.parameter_count = template.parameter_count
+    instance.first_return = c.return_type_count
+    instance.return_count = template.return_count
+    var generic: FunctionGeneric = zero
+    generic.first_comptime = c.function_generics[template_index].first_comptime
+    generic.comptime_count = c.function_generics[template_index].comptime_count
+    generic.template_index = template_index
+    generic.first_argument = first_argument
+    generic.instance = true
+    var at = 0usize
+    while at < template.parameter_count {
+        if c.parameter_count == c.parameters.len { ret (0usize, Capacity) }
+        let source = c.parameters[template.first_parameter + at]
+        let (specialized, specialize_error) = substitute_type(c, template_index, first_argument, source.ty)
+        if specialize_error != ok { ret (0usize, specialize_error) }
+        c.parameters[c.parameter_count] = Parameter { name: source.name, ty: specialized }
+        c.parameter_count += 1usize
+        at += 1usize
+    }
+    at = 0usize
+    while at < template.return_count {
+        let (specialized, specialize_error) = substitute_type(c, template_index, first_argument, c.return_types[template.first_return + at])
+        if specialize_error != ok { ret (0usize, specialize_error) }
+        let store_error = store_return_type(c, specialized)
+        if store_error != ok { ret (0usize, store_error) }
+        at += 1usize
+    }
+    let index = c.function_count
+    c.functions[index] = instance
+    c.function_generics[index] = generic
+    c.function_count += 1usize
+    ret (index, ok)
+}
+
+fn bracket_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (usize, err) {
+    let (base_index, found_base) = first_node_child(tree, receiver)
+    if !found_base { ret (0usize, parse.InvalidSyntax) }
+    let base = tree.nodes[base_index]
+    if base.kind == .NameExpr {
+        let token = c.tokens[base.token_start]
+        let name = g.modules[module_index].text[token.start..token.end]
+        let (function_index, found) = find_function(c, module_index, name)
+        if !found { ret (0usize, UnknownCallable) }
+        ret (function_index, ok)
+    }
+    if base.kind == .FieldExpr {
+        let (function_index, found) = find_qualified_function(c, g, tree, module_index, base)
+        if !found { ret (0usize, UnknownCallable) }
+        ret (function_index, ok)
+    }
+    ret (0usize, Unsupported)
+}
+
+fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, call: syntax.Node, receiver: syntax.Node, template_index: usize) -> (usize, err) {
+    if template_index >= c.signature_function_count { ret (0usize, UnknownCallable) }
+    let template = c.functions[template_index]
+    let generic = c.function_generics[template_index]
+    if !template.generic || generic.comptime_count == 0usize { ret (0usize, Unsupported) }
+    if c.generic_argument_count + generic.comptime_count > c.generic_arguments.len { ret (0usize, Capacity) }
+    let first_argument = c.generic_argument_count
+    var at = 0usize
+    while at < generic.comptime_count {
+        let parameter = c.comptime_parameters[generic.first_comptime + at]
+        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, set: false }
+        c.generic_argument_count += 1usize
+        at += 1usize
+    }
+    if receiver.kind == .BracketPostfix {
+        let end = receiver.first_child + receiver.child_count
+        var child_position = 0usize
+        at = receiver.first_child
+        while at < end {
+            if tree.children[at].node {
+                if child_position > 0usize {
+                    let argument_position = child_position - 1usize
+                    if argument_position >= generic.comptime_count { ret (0usize, ArgumentCount) }
+                    let parameter = c.comptime_parameters[generic.first_comptime + argument_position]
+                    let node_index = tree.children[at].index
+                    if parameter.kind == .Type {
+                        let (ty, type_error) = comptime_type(c, g, tree, module_index, node_index)
+                        if type_error != ok { ret (0usize, type_error) }
+                        let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, ty, 0usize, .Type)
+                        if bind_error != ok { ret (0usize, bind_error) }
+                    } else {
+                        let (value, value_error) = array_length_value(c, g, tree, module_index, node_index)
+                        if value_error != ok { ret (0usize, InvalidType) }
+                        let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, invalid_type(), value, .Integer)
+                        if bind_error != ok { ret (0usize, bind_error) }
+                    }
+                }
+                child_position += 1usize
+            }
+            at += 1usize
+        }
+    }
+    var runtime_count = 0usize
+    let call_end = call.first_child + call.child_count
+    at = call.first_child
+    while at < call_end {
+        if tree.children[at].node { runtime_count += 1usize }
+        at += 1usize
+    }
+    if runtime_count == 0usize || runtime_count - 1usize != template.parameter_count { ret (0usize, ArgumentCount) }
+    var runtime_position = 0usize
+    at = call.first_child
+    while at < call_end {
+        if tree.children[at].node {
+            if runtime_position > 0usize {
+                let formal = c.parameters[template.first_parameter + runtime_position - 1usize].ty
+                var expected = invalid_type()
+                let (specialized, specialize_error) = substitute_type(c, template_index, first_argument, formal)
+                if specialize_error == ok { expected = specialized }
+                if specialize_error != ok && specialize_error != MissingContext { ret (0usize, specialize_error) }
+                let (actual, actual_error) = check_expr(c, g, tree, module_index, tree.children[at].index, expected)
+                if actual_error != ok { ret (0usize, actual_error) }
+                let inference_error = infer_comptime_type(c, template_index, first_argument, formal, actual)
+                if inference_error != ok { ret (0usize, inference_error) }
+            }
+            runtime_position += 1usize
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < generic.comptime_count {
+        if !c.generic_arguments[first_argument + at].set { ret (0usize, MissingContext) }
+        at += 1usize
+    }
+    let (instance_index, instance_error) = instantiate_function(c, template_index, first_argument)
+    ret (instance_index, instance_error)
+}
+
 type CallInfo = struct {
     function: Function,
     cast: Type,
@@ -1424,6 +1926,13 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         let name = text[token.start..token.end]
         let scalar = scalar_type(name, module_index)
         if scalar.kind != .Invalid { ret (scalar, ok) }
+        let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
+        if parameter_found {
+            if c.comptime_parameters[parameter_index].kind != .Type { ret (invalid_type(), InvalidType) }
+            let (argument, argument_found) = active_argument(c, parameter_index)
+            if !argument_found { ret (invalid_type(), MissingContext) }
+            ret (argument.ty, ok)
+        }
         let (_, found) = resolve.find(c.resolver, module_index, name, .Type)
         if !found { ret (invalid_type(), InvalidType) }
         let named = make_type(.Named, name, module_index)
@@ -1495,7 +2004,12 @@ fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     var arena_pointer = make_type(.Pointer, "", target_module)
     arena_pointer.element = stored_arena
     arena_pointer.has_element = true
-    info.function = Function { name: "alloc", module_index: target_module, first_parameter: 0usize, parameter_count: 2usize, first_return: 0usize, return_count: 2usize, generic: false, external: false }
+    var function: Function = zero
+    function.name = "alloc"
+    function.module_index = target_module
+    function.parameter_count = 2usize
+    function.return_count = 2usize
+    info.function = function
     info.return_type = result
     info.arena_type = arena_pointer
     ret (info, ok)
@@ -1527,24 +2041,43 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     } else {
                         let (found_index, found) = find_function(c, module_index, name)
                         if !found { ret (info, UnknownCallable) }
-                        info.function = c.functions[found_index]
+                        if c.functions[found_index].generic {
+                            let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, found_index)
+                            if specialize_error != ok { ret (info, specialize_error) }
+                            info.function = c.functions[specialized_index]
+                        } else {
+                            info.function = c.functions[found_index]
+                        }
                         has_function = true
                     }
                 } else {
                     if receiver.kind == .BracketPostfix {
                         let (allocation, allocation_error) = alloc_info(c, g, tree, module_index, receiver)
                         if allocation_error != ok { ret (info, allocation_error) }
-                        if !allocation.matched { ret (info, Unsupported) }
-                        info.function = allocation.function
-                        info.alloc_return = allocation.return_type
-                        info.alloc_arena = allocation.arena_type
-                        info.mem_alloc = true
+                        if allocation.matched {
+                            info.function = allocation.function
+                            info.alloc_return = allocation.return_type
+                            info.alloc_arena = allocation.arena_type
+                            info.mem_alloc = true
+                        } else {
+                            let (template_index, template_error) = bracket_function(c, g, tree, module_index, receiver)
+                            if template_error != ok { ret (info, template_error) }
+                            let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, template_index)
+                            if specialize_error != ok { ret (info, specialize_error) }
+                            info.function = c.functions[specialized_index]
+                        }
                         has_function = true
                     } else {
                         if receiver.kind != .FieldExpr { ret (info, Unsupported) }
                         let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
                         if !found { ret (info, UnknownCallable) }
-                        info.function = c.functions[found_index]
+                        if c.functions[found_index].generic {
+                            let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, found_index)
+                            if specialize_error != ok { ret (info, specialize_error) }
+                            info.function = c.functions[specialized_index]
+                        } else {
+                            info.function = c.functions[found_index]
+                        }
                         has_function = true
                     }
                 }
@@ -1637,6 +2170,14 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         if found {
             let (local_type, context_error) = apply_context(c, c.locals[local_index].ty, expected)
             ret (local_type, context_error)
+        }
+        let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
+        if parameter_found {
+            if c.comptime_parameters[parameter_index].kind != .Integer { ret (invalid_type(), InvalidType) }
+            let (argument, argument_found) = active_argument(c, parameter_index)
+            if !argument_found { ret (invalid_type(), MissingContext) }
+            let (parameter_type, context_error) = apply_context(c, c.comptime_parameters[parameter_index].ty, expected)
+            ret (parameter_type, context_error)
         }
         let (constant_index, constant_found) = find_constant(c, module_index, name)
         if !constant_found || c.constants[constant_index].state != 2u8 { ret (invalid_type(), Unsupported) }
@@ -2129,13 +2670,7 @@ fn statement_returns(tree: *parse.Tree, node: syntax.Node) -> bool {
     ret false
 }
 
-fn check_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
-    let (name, name_error) = function_name(c, g.modules[module_index].text, node)
-    if name_error != ok { ret name_error }
-    let (function_index, found) = find_function(c, module_index, name)
-    if !found { ret UnknownCallable }
-    let function = c.functions[function_index]
-    if function.generic { ret Unsupported }
+fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     var return_index = 0usize
     while return_index < function.return_count {
         if c.return_types[function.first_return + return_index].kind == .Other { ret Unsupported }
@@ -2166,6 +2701,52 @@ fn check_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     ret ok
 }
 
+fn check_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let (name, name_error) = function_name(c, g.modules[module_index].text, node)
+    if name_error != ok { ret name_error }
+    let (function_index, found) = find_function(c, module_index, name)
+    if !found { ret UnknownCallable }
+    let function = c.functions[function_index]
+    if function.generic { ret ok }
+    ret check_function_body(c, r, g, tree, module_index, node, function)
+}
+
+fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_index: usize) -> err {
+    if instance_index >= c.function_count { ret UnknownCallable }
+    let instance = c.functions[instance_index]
+    let instance_generic = c.function_generics[instance_index]
+    if !instance_generic.instance || instance_generic.template_index >= c.signature_function_count { ret InvalidType }
+    let template = c.functions[instance_generic.template_index]
+    let template_generic = c.function_generics[instance_generic.template_index]
+    var tree: parse.Tree = zero
+    try parse.init_tree(&tree, g.nodes, g.children)
+    try parse.parse(&tree, g.modules[instance.module_index].text)
+    try tokenize(c, g.modules[instance.module_index].text)
+    c.active_first_comptime = template_generic.first_comptime
+    c.active_comptime_count = template_generic.comptime_count
+    c.active_first_argument = instance_generic.first_argument
+    c.active_arguments = true
+    var result = UnknownCallable
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .FnDecl {
+            let (name, name_error) = function_name(c, g.modules[instance.module_index].text, node)
+            if name_error != ok { result = name_error }
+            if name_error == ok && same(name, template.name) {
+                result = check_function_body(c, r, g, &tree, instance.module_index, node, instance)
+                break
+            }
+        }
+        node_index += 1usize
+    }
+    c.active_first_comptime = 0usize
+    c.active_comptime_count = 0usize
+    c.active_first_argument = 0usize
+    c.active_arguments = false
+    ret result
+}
+
 fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     var module_index = 0usize
     while module_index < g.count {
@@ -2181,10 +2762,19 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
         }
         module_index += 1usize
     }
+    var instance_index = c.signature_function_count
+    while instance_index < c.function_count {
+        if c.function_generics[instance_index].instance && !c.function_generics[instance_index].checked {
+            c.function_generics[instance_index].checked = true
+            try check_instance(c, r, g, instance_index)
+        }
+        instance_index += 1usize
+    }
     ret ok
 }
 
 fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    if c.function_generics.len < c.functions.len || c.comptime_parameters.len == 0usize || c.generic_arguments.len == 0usize { ret Capacity }
     c.resolver = r
     try collect_aliases(c, r, g, true)
     try collect_constants(c, r, g)

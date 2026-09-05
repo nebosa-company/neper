@@ -187,6 +187,12 @@ $intrinsicMultiChecked = & $compiler check-file (Join-Path $checkRoot 'intrinsic
 if ($LASTEXITCODE -ne 0 -or $intrinsicMultiChecked -ne 'module check ok') { throw 'fallible intrinsic results did not type-check' }
 $allocChecked = & $compiler check-file (Join-Path $checkRoot 'alloc_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $allocChecked -ne 'module check ok') { throw 'generic mem.alloc specialization did not type-check' }
+$genericChecked = & $compiler check-file (Join-Path $checkRoot 'generic_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $genericChecked -ne 'module check ok') { throw 'generic source functions did not type-check' }
+$qualifiedGenericChecked = & $compiler check-file (Join-Path $checkRoot 'generic_qualified_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $qualifiedGenericChecked -ne 'module check ok') { throw 'qualified generic source functions did not type-check' }
+$genericMultiChecked = & $compiler check-file (Join-Path $checkRoot 'generic_multi_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $genericMultiChecked -ne 'module check ok') { throw 'fallible generic source functions did not type-check' }
 $checkFailures = @(
     @('missing_context', 'MissingContext'),
     @('binding_mismatch', 'TypeMismatch'),
@@ -268,7 +274,13 @@ $checkFailures = @(
     @('alloc_value_type_argument', 'InvalidType'),
     @('alloc_void', 'InvalidType'),
     @('alloc_result_type', 'TypeMismatch'),
-    @('unsupported', 'Unsupported')
+    @('generic_untyped_inference', 'MissingContext'),
+    @('generic_conflicting_inference', 'TypeMismatch'),
+    @('generic_argument_count', 'ArgumentCount'),
+    @('generic_argument_kind', 'InvalidType'),
+    @('generic_body_mismatch', 'InvalidReturn'),
+    @('generic_integer_conflict', 'TypeMismatch'),
+    @('generic_partial_missing', 'MissingContext')
 )
 foreach ($case in $checkFailures) {
     $checkOutput = & $compiler check-file (Join-Path $checkRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1

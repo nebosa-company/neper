@@ -268,6 +268,12 @@ intrinsic_multi_checked=$($test_build/neper-self check-file "$check_root/intrins
 [ "$intrinsic_multi_checked" = 'module check ok' ]
 alloc_checked=$($test_build/neper-self check-file "$check_root/alloc_valid/src/main.e" "$repo" x64 linux)
 [ "$alloc_checked" = 'module check ok' ]
+generic_checked=$($test_build/neper-self check-file "$check_root/generic_valid/src/main.e" "$repo" x64 linux)
+[ "$generic_checked" = 'module check ok' ]
+qualified_generic_checked=$($test_build/neper-self check-file "$check_root/generic_qualified_valid/src/main.e" "$repo" x64 linux)
+[ "$qualified_generic_checked" = 'module check ok' ]
+generic_multi_checked=$($test_build/neper-self check-file "$check_root/generic_multi_valid/src/main.e" "$repo" x64 linux)
+[ "$generic_multi_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -360,7 +366,13 @@ expect_check_error alloc_type_argument_count ArgumentCount
 expect_check_error alloc_value_type_argument InvalidType
 expect_check_error alloc_void InvalidType
 expect_check_error alloc_result_type TypeMismatch
-expect_check_error unsupported Unsupported
+expect_check_error generic_untyped_inference MissingContext
+expect_check_error generic_conflicting_inference TypeMismatch
+expect_check_error generic_argument_count ArgumentCount
+expect_check_error generic_argument_kind InvalidType
+expect_check_error generic_body_mismatch InvalidReturn
+expect_check_error generic_integer_conflict TypeMismatch
+expect_check_error generic_partial_missing MissingContext
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
 [ "$valid_scopes" = 'module resolve ok' ]

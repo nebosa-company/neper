@@ -212,8 +212,13 @@ owned `mem.alloc[T]` specializes its `(*mem.Arena, usize) -> ([]T, err)` signatu
 primitive, local or qualified named, aliased-composite and pointer element types, then
 uses the same explicit/`try` result paths. Bracket arguments now retain directly written
 pointer, slice and fixed-array types as type nodes while preserving array literals as
-expressions, completing the `neper-0` `mem.alloc` element forms. Generic source calls,
-indexing and aggregate literals remain outside this checkpoint. Unsupported expression
+expressions, completing the `neper-0` `mem.alloc` element forms. Generic source
+functions now collect `[T: type]` and `[N: usize]` parameters, infer omitted trailing
+arguments structurally, substitute through composite signatures and symbolic array
+lengths, cache concrete instances, and check each instantiated body. Explicit,
+inferred, partially inferred, forwarded, fallible and cross-module calls share the
+ordinary result paths. Indexing and aggregate literals remain outside this checkpoint.
+Unsupported expression
 and statement forms fail explicitly instead of being silently accepted; cross-platform
 fixtures freeze both the implemented behavior and those temporary boundaries. The
 bootstrap emitter also selects unsigned x64
