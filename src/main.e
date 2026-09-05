@@ -274,7 +274,7 @@ fn self_test() -> err {
     if empty_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let control_error = parse.parse(&tree, "fn control() {\n    if true { call() }\n    while true { break }\n    for item in items { call() }\n    when true { call() } else { cleanup() }\n    switch item {\n        case 1i32:\n            ret\n    }\n    @nocheck { call() }\n    shared var value: i32 = 0i32\n}\n")
-    if control_error != ok || tree.count != 38usize { ret lex.InvalidSource }
+    if control_error != ok || tree.count != 42usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .LiteralExpr || tree.nodes[2usize].kind != .NameExpr { ret lex.InvalidSource }
     if tree.nodes[3usize].kind != .CallExpr || tree.nodes[4usize].kind != .CallStmt { ret lex.InvalidSource }
     if tree.nodes[5usize].kind != .Block || tree.nodes[6usize].kind != .IfStmt { ret lex.InvalidSource }
@@ -288,12 +288,14 @@ fn self_test() -> err {
     if tree.nodes[21usize].kind != .Block || tree.nodes[22usize].kind != .NameExpr { ret lex.InvalidSource }
     if tree.nodes[23usize].kind != .CallExpr || tree.nodes[24usize].kind != .CallStmt { ret lex.InvalidSource }
     if tree.nodes[25usize].kind != .Block || tree.nodes[26usize].kind != .WhenStmt { ret lex.InvalidSource }
-    if tree.nodes[27usize].kind != .SwitchStmt || tree.nodes[28usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[29usize].kind != .CallExpr || tree.nodes[30usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[31usize].kind != .Block || tree.nodes[32usize].kind != .NocheckStmt { ret lex.InvalidSource }
-    if tree.nodes[33usize].kind != .NamedType || tree.nodes[34usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[35usize].kind != .SharedVarStmt || tree.nodes[36usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[37usize].kind != .FnDecl { ret lex.InvalidSource }
+    if tree.nodes[27usize].kind != .NameExpr || tree.nodes[28usize].kind != .LiteralExpr { ret lex.InvalidSource }
+    if tree.nodes[29usize].kind != .ReturnStmt || tree.nodes[30usize].kind != .SwitchArm { ret lex.InvalidSource }
+    if tree.nodes[31usize].kind != .SwitchStmt || tree.nodes[32usize].kind != .NameExpr { ret lex.InvalidSource }
+    if tree.nodes[33usize].kind != .CallExpr || tree.nodes[34usize].kind != .CallStmt { ret lex.InvalidSource }
+    if tree.nodes[35usize].kind != .Block || tree.nodes[36usize].kind != .NocheckStmt { ret lex.InvalidSource }
+    if tree.nodes[37usize].kind != .NamedType || tree.nodes[38usize].kind != .LiteralExpr { ret lex.InvalidSource }
+    if tree.nodes[39usize].kind != .SharedVarStmt || tree.nodes[40usize].kind != .Block { ret lex.InvalidSource }
+    if tree.nodes[41usize].kind != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let branches_error = parse.parse(&tree, "fn branches() {\n    if a {\n        ret\n    } else if b {\n        call()\n    } else {\n        cleanup()\n    }\n}\n")
     if branches_error != ok || tree.count != 17usize { ret lex.InvalidSource }
@@ -328,6 +330,35 @@ fn self_test() -> err {
     if invalid_directive_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let trailing_break_error = parse.validate("fn invalid() {\n    break value\n}\n")
     if trailing_break_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let switch_error = parse.parse(&tree, "fn choose() {\n    switch value {\n    case 1i32, 2i32:\n        call()\n    case .Some as item:\n        ret item\n    default:\n        break\n    }\n}\n")
+    if switch_error != ok || tree.count != 17usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .LiteralExpr || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
+    if tree.nodes[5usize].kind != .CallExpr || tree.nodes[6usize].kind != .CallStmt { ret lex.InvalidSource }
+    if tree.nodes[7usize].kind != .SwitchArm || tree.nodes[8usize].kind != .MemberExpr { ret lex.InvalidSource }
+    if tree.nodes[9usize].kind != .NameExpr || tree.nodes[10usize].kind != .ReturnStmt { ret lex.InvalidSource }
+    if tree.nodes[11usize].kind != .SwitchArm || tree.nodes[12usize].kind != .BreakStmt { ret lex.InvalidSource }
+    if tree.nodes[13usize].kind != .SwitchArm || tree.nodes[14usize].kind != .SwitchStmt { ret lex.InvalidSource }
+    if tree.nodes[15usize].kind != .Block || tree.nodes[16usize].kind != .FnDecl { ret lex.InvalidSource }
+    if tree.nodes[14usize].child_count != 8usize || tree.nodes[7usize].child_count != 8usize { ret lex.InvalidSource }
+    let switch_children = tree.nodes[14usize].first_child
+    if !tree.children[switch_children + 1usize].node || tree.children[switch_children + 1usize].index != 1usize { ret lex.InvalidSource }
+    if !tree.children[switch_children + 4usize].node || tree.children[switch_children + 4usize].index != 7usize { ret lex.InvalidSource }
+    if !tree.children[switch_children + 5usize].node || tree.children[switch_children + 5usize].index != 11usize { ret lex.InvalidSource }
+    if !tree.children[switch_children + 6usize].node || tree.children[switch_children + 6usize].index != 13usize { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
+    let switch_recovery_error = parse.parse(&tree, "fn recover_switch() {\n    switch value {\n    case 1i32:\n        call() + value\n    default:\n        ret\n    }\n}\n")
+    if switch_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 10usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .ErrorNode || tree.nodes[4usize].kind != .SwitchArm { ret lex.InvalidSource }
+    if tree.nodes[5usize].kind != .ReturnStmt || tree.nodes[6usize].kind != .SwitchArm { ret lex.InvalidSource }
+    if tree.nodes[7usize].kind != .SwitchStmt || tree.nodes[8usize].kind != .Block { ret lex.InvalidSource }
+    if tree.nodes[9usize].kind != .FnDecl { ret lex.InvalidSource }
+    let empty_switch_error = parse.validate("fn invalid() {\n    switch value {}\n}\n")
+    if empty_switch_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    let inline_switch_arm_error = parse.validate("fn invalid() {\n    switch value {\n    default: ret\n    }\n}\n")
+    if inline_switch_arm_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let block_error = parse.parse(&tree, "fn recover() {\n    use bad\n    ret\n}\nerror Good\n")
     if block_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 6usize { ret lex.InvalidSource }

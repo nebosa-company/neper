@@ -234,9 +234,12 @@ names followed by a block. `for` now retains iterable or bounded-range expressio
 and a recursively parsed body while preserving one- or two-name iterator bindings
 as source tokens. `defer` now owns its structured simple statement or recursive
 block, `@nocheck` owns a validated directive block, `shared var` owns its type and
-optional initializer, and `break`/`continue` reject trailing syntax. Switch arms
-remain the next statement-parser increment; this callout does not mark the
-`neper-0` milestone complete.
+optional initializer, and `break`/`continue` reject trailing syntax. `switch` now
+owns its subject and ordered `SwitchArm` children; arms retain multiple case
+expressions, optional captures, recursive statements and local error recovery.
+Structured module constants/variables and attribute arguments remain the next
+declaration-parser increments; this callout does not mark the `neper-0` milestone
+complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

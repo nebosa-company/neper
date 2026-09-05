@@ -115,7 +115,7 @@ when_stmt       = `when` expression block (`else` block)? ;
 switch_stmt     = `switch` expression `{` separator* switch_arm+ `}` ;
 switch_arm      = (`case` case_pattern | `default`) `:` separator+
                   statement_list? separator+ ;
-case_pattern    = expression (`as` value_name)? ;
+case_pattern    = expression (`,` expression)* (`as` value_name)? ;
 
 expression_list = expression (`,` expression)+ `,`? ;
 expression      = logical_or ;

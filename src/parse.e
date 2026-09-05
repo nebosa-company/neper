@@ -1092,6 +1092,79 @@ fn parse_keyword_statement(p: *Parser, kind: syntax.Kind) -> err {
     ret ok
 }
 
+fn parse_switch_arm_node(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [128]usize = zero
+    var nested_count = 0usize
+    if p.current.kind == .KwDefault {
+        try advance(p)
+    } else {
+        try require(p, .KwCase)
+        while true {
+            try parse_expression_node(p)
+            if nested_count == nested.len { ret InvalidSyntax }
+            nested[nested_count] = p.last_node
+            nested_count += 1usize
+            if p.current.kind != .PunctComma { break }
+            try advance(p)
+        }
+        if p.current.kind == .KwAs {
+            try advance(p)
+            try require(p, .Identifier)
+        }
+    }
+    try require(p, .PunctColon)
+    if p.current.kind != .Newline { ret InvalidSyntax }
+    try skip_separators(p)
+    while p.current.kind != .KwCase && p.current.kind != .KwDefault && p.current.kind != .PunctRBrace {
+        if p.current.kind == .Eof { ret InvalidSyntax }
+        let statement_start = p.token_index
+        let node_checkpoint = p.tree.count
+        let child_checkpoint = p.tree.child_count
+        let statement_error = parse_statement_node(p)
+        if statement_error != ok {
+            p.tree.count = node_checkpoint
+            p.tree.child_count = child_checkpoint
+            p.tree.errors += 1usize
+            var error_end = p.token_index
+            if p.current.kind == .Invalid || error_end == statement_start { error_end += 1usize }
+            try add_node(p, .ErrorNode, statement_start, error_end)
+            try recover_statement(p)
+        } else {
+            try skip_separators(p)
+        }
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    try add_parent_node(p, .SwitchArm, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
+fn parse_switch_statement(p: *Parser) -> err {
+    let token_start = p.token_index
+    var nested: [128]usize = zero
+    var nested_count = 0usize
+    try require(p, .KwSwitch)
+    try parse_expression_node(p)
+    nested[nested_count] = p.last_node
+    nested_count += 1usize
+    try require(p, .PunctLBrace)
+    try skip_separators(p)
+    while p.current.kind != .PunctRBrace {
+        if p.current.kind != .KwCase && p.current.kind != .KwDefault { ret InvalidSyntax }
+        try parse_switch_arm_node(p)
+        if nested_count == nested.len { ret InvalidSyntax }
+        nested[nested_count] = p.last_node
+        nested_count += 1usize
+    }
+    if nested_count == 1usize { ret InvalidSyntax }
+    try advance(p)
+    if !at_statement_end(p) { ret InvalidSyntax }
+    try add_parent_node(p, .SwitchStmt, token_start, p.token_index, nested[..nested_count])
+    ret ok
+}
+
 fn is_assignment_op(kind: lex.Kind) -> bool {
     ret kind == .PunctAssign || kind == .PunctAddAssign || kind == .PunctSubAssign || kind == .PunctMulAssign || kind == .PunctDivAssign || kind == .PunctRemAssign || kind == .PunctAddWrapAssign || kind == .PunctSubWrapAssign || kind == .PunctMulWrapAssign || kind == .PunctShiftLeftAssign || kind == .PunctShiftRightAssign || kind == .PunctBitAndAssign || kind == .PunctBitXorAssign || kind == .PunctBitOrAssign
 }
@@ -1138,6 +1211,7 @@ fn parse_statement_node(p: *Parser) -> err {
     if node_kind == .NocheckStmt { ret parse_nocheck_statement(p) }
     if node_kind == .SharedVarStmt { ret parse_shared_var_statement(p) }
     if node_kind == .BreakStmt || node_kind == .ContinueStmt { ret parse_keyword_statement(p, node_kind) }
+    if node_kind == .SwitchStmt { ret parse_switch_statement(p) }
     while true {
         let kind = p.current.kind
         if kind == .Invalid || kind == .Eof { ret InvalidSyntax }
