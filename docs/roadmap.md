@@ -219,9 +219,10 @@ retain their call trees; `zero` and `undef` remain lossless initializer tokens; 
 failed statement parses roll back partial nodes before inserting an `ErrorNode`.
 Return statements now retain every value in a multiline or trailing-comma
 multiple-return list while preserving ordinary single-expression grouping.
-Named, generic and fixed/inferred-array aggregate literals now retain header
-expressions and ordered `LiteralItem` children, including nested literals, named
-payloads, positional values and bare PascalCase members. Local type annotations now
+Named, generic and fixed/inferred-array aggregate literals now retain a structured
+`NamedType` or `ArrayType` header and ordered `LiteralItem` children, including nested
+literals, named payloads, positional values and bare PascalCase members. Local type
+annotations now
 recursively retain named, pointer, slice, array and function-type nodes, including
 array-length expressions, parameters and return specifications. Function
 declarations now reuse the same trees for typed comptime parameters, ordinary

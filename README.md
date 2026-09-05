@@ -73,8 +73,9 @@ tokens in the lossless child stream. Bindings, assignments, call statements and
 syntax, typed bindings and the special `zero`/`undef` initializer forms. Return
 statements accept multiline, trailing-comma multiple-return lists and retain each
 value as an ordered expression child. Named, generic and fixed/inferred-array
-aggregate literals now expose ordered `LiteralItem` children, including nested
-literals, named payloads, positional values and bare PascalCase members. Local type
+aggregate literals now expose a structured `NamedType` or `ArrayType` header and
+ordered `LiteralItem` children, including nested literals, named payloads, positional
+values and bare PascalCase members. Local type
 annotations now recursively expose named, pointer, slice, array and function-type
 nodes, including array-length expressions, parameters and return specifications.
 Function declarations now reuse the same trees for typed comptime parameters,

@@ -379,87 +379,18 @@ fn parse_literal_item_node(p: *Parser) -> err {
     ret ok
 }
 
-fn scan_array_aggregate_type(p: *Parser) -> err {
-    let token_start = p.token_index
-    var parens = 0usize
-    var brackets = 0usize
-    if p.current.kind != .PunctStar && p.current.kind != .PunctLBracket && p.current.kind != .KwFn && p.current.kind != .KwExtern && p.current.kind != .KwType && p.current.kind != .Identifier { ret InvalidSyntax }
-    while true {
-        let kind = p.current.kind
-        if kind == .Invalid || kind == .Eof || kind == .PunctRBrace { ret InvalidSyntax }
-        if kind == .PunctLBrace && parens == 0usize && brackets == 0usize { break }
-        if kind == .Newline {
-            if p.soft_depth == 0usize && parens == 0usize && brackets == 0usize { ret InvalidSyntax }
-            try advance(p)
-            continue
-        }
-        if kind == .PunctLParen { parens += 1usize }
-        if kind == .PunctRParen {
-            if parens == 0usize { ret InvalidSyntax }
-            parens = parens - 1usize
-        }
-        if kind == .PunctLBracket { brackets += 1usize }
-        if kind == .PunctRBracket {
-            if brackets == 0usize { ret InvalidSyntax }
-            brackets = brackets - 1usize
-        }
-        try advance(p)
-    }
-    if p.token_index == token_start || parens != 0usize || brackets != 0usize { ret InvalidSyntax }
-    ret ok
-}
-
 fn parse_aggregate_literal_node(p: *Parser) -> err {
     let token_start = p.token_index
     var nested: [128]usize = zero
-    var nested_count = 0usize
+    var nested_count = 1usize
     if p.current.kind == .Identifier {
-        try advance(p)
-        try skip_soft(p)
-        while p.current.kind == .PunctDot {
-            try advance(p)
-            try skip_soft(p)
-            try require(p, .Identifier)
-            try skip_soft(p)
-        }
-        if p.current.kind == .PunctLBracket {
-            try advance(p)
-            enter_soft(p)
-            try skip_separators(p)
-            while p.current.kind != .PunctRBracket {
-                try parse_expression_node(p)
-                if nested_count == nested.len { ret InvalidSyntax }
-                nested[nested_count] = p.last_node
-                nested_count += 1usize
-                try skip_separators(p)
-                if p.current.kind == .PunctComma {
-                    try advance(p)
-                    try skip_separators(p)
-                } else {
-                    if p.current.kind != .PunctRBracket { ret InvalidSyntax }
-                }
-            }
-            try leave_soft(p)
-            try advance(p)
-            try skip_soft(p)
-        }
+        try parse_named_type_node(p)
     } else {
-        try require(p, .PunctLBracket)
-        enter_soft(p)
-        try skip_separators(p)
-        if p.current.kind == .PunctUnderscore {
-            try advance(p)
-        } else {
-            try parse_expression_node(p)
-            nested[nested_count] = p.last_node
-            nested_count += 1usize
-        }
-        try skip_separators(p)
-        try leave_soft(p)
-        try require(p, .PunctRBracket)
-        try skip_soft(p)
-        try scan_array_aggregate_type(p)
+        var has_type_node = false
+        try parse_type_node(p, &has_type_node)
+        if !has_type_node || p.tree.nodes[p.last_node].kind != .ArrayType { ret InvalidSyntax }
     }
+    nested[0usize] = p.last_node
     try require(p, .PunctLBrace)
     enter_soft(p)
     try skip_separators(p)
