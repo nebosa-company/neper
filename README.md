@@ -59,7 +59,9 @@ literals decode to exactly one byte. Every token now carries half-open original-
 endpoints plus normalized one-based start/end lines and both scalar and UTF-16
 columns. Invalid UTF-8 consumes Unicode maximal subparts as one recovery unit, and a
 valid non-ASCII scalar in an ASCII-only token position remains one `Invalid` token.
-The bootstrap now loads
+Each token also owns the exact leading byte range since the preceding token, so BOM,
+spaces, comments and trailing trivia through EOF partition the original input without
+loss. The bootstrap now loads
 transitive project modules,
 resolves explicit import aliases and qualified declarations, rejects import cycles
 and duplicate qualifiers, and reports diagnostics against the originating file.

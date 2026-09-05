@@ -14,8 +14,10 @@ fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize
 
 fn self_test() -> err {
     var basic = lex.init("use e.io\r\nfn main() -> err { // note\n    ret ok\n}\n")
-    try expect(&basic, .KwUse, 0usize, 3usize, 1usize, 1usize)
-    try expect(&basic, .Identifier, 4usize, 5usize, 1usize, 5usize)
+    let basic_use = lex.next(&basic)
+    if basic_use.kind != .KwUse || basic_use.leading_start != 0usize || basic_use.start != 0usize || basic_use.end != 3usize { ret lex.InvalidSource }
+    let basic_e = lex.next(&basic)
+    if basic_e.kind != .Identifier || basic_e.leading_start != 3usize || basic_e.start != 4usize || basic_e.end != 5usize { ret lex.InvalidSource }
     try expect(&basic, .PunctDot, 5usize, 6usize, 1usize, 6usize)
     try expect(&basic, .Identifier, 6usize, 8usize, 1usize, 7usize)
     try expect(&basic, .Newline, 8usize, 10usize, 1usize, 9usize)
@@ -81,7 +83,7 @@ fn self_test() -> err {
     try expect(&unicode, .Identifier, 5usize, 9usize, 1usize, 5usize)
     var positioned = lex.init("\xEF\xBB\xBF\"😀é\"\r\nx")
     let positioned_string = lex.next(&positioned)
-    if positioned_string.kind != .String || positioned_string.start != 3usize || positioned_string.end != 11usize { ret lex.InvalidSource }
+    if positioned_string.kind != .String || positioned_string.leading_start != 0usize || positioned_string.start != 3usize || positioned_string.end != 11usize { ret lex.InvalidSource }
     if positioned_string.line != 1usize || positioned_string.column != 1usize || positioned_string.end_line != 1usize || positioned_string.end_column != 5usize { ret lex.InvalidSource }
     if positioned_string.column_utf16 != 1usize || positioned_string.end_column_utf16 != 6usize { ret lex.InvalidSource }
     let positioned_newline = lex.next(&positioned)
@@ -104,6 +106,13 @@ fn self_test() -> err {
     if invalid_sequence_token.end_column != 2usize || invalid_sequence_token.end_column_utf16 != 2usize { ret lex.InvalidSource }
     let after_invalid_sequence = lex.next(&invalid_sequence)
     if after_invalid_sequence.kind != .Identifier || after_invalid_sequence.start != 3usize || after_invalid_sequence.column != 2usize || after_invalid_sequence.column_utf16 != 2usize { ret lex.InvalidSource }
+    var trivia = lex.init("\xEF\xBB\xBF // c\r\nx ")
+    let trivia_newline = lex.next(&trivia)
+    if trivia_newline.kind != .Newline || trivia_newline.leading_start != 0usize || trivia_newline.start != 8usize || trivia_newline.end != 10usize { ret lex.InvalidSource }
+    let trivia_name = lex.next(&trivia)
+    if trivia_name.kind != .Identifier || trivia_name.leading_start != 10usize || trivia_name.start != 10usize || trivia_name.end != 11usize { ret lex.InvalidSource }
+    let trivia_eof = lex.next(&trivia)
+    if trivia_eof.kind != .Eof || trivia_eof.leading_start != 11usize || trivia_eof.start != 12usize || trivia_eof.end != 12usize { ret lex.InvalidSource }
     let valid_utf8 = lex.validate("\"héllo\" // π\nr\"λ\tvalue\"")
     if valid_utf8 != ok { ret lex.InvalidSource }
     let valid_comment_tab = lex.validate("//\tcomment\nerror Good\n")

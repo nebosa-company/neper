@@ -196,7 +196,9 @@ byte. Tokens carry half-open original-byte endpoints and normalized one-based
 start/end lines with both scalar and UTF-16 columns, including BOM, CRLF, BMP and
 astral-scalar fixtures. Invalid UTF-8 recovery consumes Unicode maximal subparts as
 one position unit; valid non-ASCII scalars in ASCII-only token positions remain one
-`Invalid` token rather than fragmenting by encoded byte.
+`Invalid` token rather than fragmenting by encoded byte. Every token owns its exact
+leading byte range, including the BOM and trailing trivia on EOF, so the stream
+partitions the original source without gaps.
 The C99 bootstrap now loads transitive modules from the nearest project's `lib/` and
 `src/`, resolves default and explicit import qualifiers, canonicalizes cross-module
 functions, types, constants and errors, rejects duplicate qualifiers and import

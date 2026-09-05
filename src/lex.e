@@ -99,6 +99,7 @@ type Kind = enum u8 {
 
 type Token = struct {
     kind: Kind,
+    leading_start: usize,
     start: usize,
     end: usize,
     line: usize,
@@ -112,6 +113,7 @@ type Token = struct {
 type Scanner = struct {
     source: str,
     off: usize,
+    leading_start: usize,
     line: usize,
     column: usize,
     column_utf16: usize,
@@ -124,7 +126,7 @@ fn init(source: str) -> Scanner {
     if source.len >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 {
         off = 3usize
     }
-    ret Scanner{ source: source, off: off, line: 1usize, column: 1usize, column_utf16: 1usize }
+    ret Scanner{ source: source, off: off, leading_start: 0usize, line: 1usize, column: 1usize, column_utf16: 1usize }
 }
 
 fn is_alpha(c: u8) -> bool {
@@ -315,8 +317,9 @@ fn keyword(source: str, start: usize, end: usize) -> Kind {
 }
 
 fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, column_utf16: usize) -> Token {
-    ret Token{
+    let result = Token{
         kind: kind,
+        leading_start: s.leading_start,
         start: start,
         end: s.off,
         line: line,
@@ -326,6 +329,8 @@ fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, colu
         column_utf16: column_utf16,
         end_column_utf16: s.column_utf16,
     }
+    s.leading_start = s.off
+    ret result
 }
 
 fn has(s: *Scanner, a: u8, b: u8) -> bool {
