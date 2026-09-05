@@ -70,7 +70,9 @@ surrounding block. Return values now form primary, prefix, precedence-aware bina
 call, field and bracket-postfix expression trees while preserving their source
 tokens in the lossless child stream. Bindings, assignments, call statements and
 `try` statements now retain those expression subtrees too, including tuple-binding
-syntax, typed bindings and the special `zero`/`undef` initializer forms.
+syntax, typed bindings and the special `zero`/`undef` initializer forms. Return
+statements accept multiline, trailing-comma multiple-return lists and retain each
+value as an ordered expression child.
 
 Local fixed arrays are also underway: explicit and inferred literal lengths,
 `zero`/`undef`, `.len`, element-size-aware reads and writes, mutable slice-element

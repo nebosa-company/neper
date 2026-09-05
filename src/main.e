@@ -158,6 +158,15 @@ fn self_test() -> err {
     if tree.nodes[6usize].kind != .ReturnStmt || tree.nodes[7usize].kind != .Block { ret lex.InvalidSource }
     if tree.nodes[8usize].kind != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
+    let return_list_error = parse.parse(&tree, "fn returns() -> (i32, err) {\n    ret (\n        value + 1i32,\n        ok,\n    )\n}\n")
+    if return_list_error != ok || tree.count != 9usize { ret lex.InvalidSource }
+    if tree.nodes[1usize].kind != .ReturnSpec || tree.nodes[2usize].kind != .NameExpr { ret lex.InvalidSource }
+    if tree.nodes[3usize].kind != .LiteralExpr || tree.nodes[4usize].kind != .BinaryExpr { ret lex.InvalidSource }
+    if tree.nodes[5usize].kind != .LiteralExpr || tree.nodes[6usize].kind != .ReturnStmt { ret lex.InvalidSource }
+    if tree.nodes[7usize].kind != .Block || tree.nodes[8usize].kind != .FnDecl { ret lex.InvalidSource }
+    let empty_return_list_error = parse.validate("fn invalid() {\n    ret ()\n}\n")
+    if empty_return_list_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    try parse.init_tree(&tree, nodes[..], children[..])
     let control_error = parse.parse(&tree, "fn control() {\n    if true { call() }\n    while true { break }\n    for item in items { call() }\n    when true { call() } else { cleanup() }\n    switch item {\n        case 1i32:\n            ret\n    }\n    @nocheck { call() }\n    shared var value: i32 = 0i32\n}\n")
     if control_error != ok || tree.count != 10usize { ret lex.InvalidSource }
     if tree.nodes[1usize].kind != .IfStmt || tree.nodes[2usize].kind != .WhileStmt { ret lex.InvalidSource }

@@ -436,13 +436,43 @@ fn parse_binary_node(p: *Parser, minimum: usize) -> err {
 
 fn parse_return_statement(p: *Parser) -> err {
     let token_start = p.token_index
-    var nested: [1]usize = zero
+    var nested: [33]usize = zero
     var nested_count = 0usize
     try require(p, .KwRet)
-    if p.current.kind != .Newline && p.current.kind != .PunctRBrace {
+    if p.current.kind == .PunctLParen {
+        let group_start = p.token_index
+        try advance(p)
+        try skip_separators(p)
+        if p.current.kind == .PunctRParen { ret InvalidSyntax }
         try parse_expression_node(p)
         nested[0usize] = p.last_node
         nested_count = 1usize
+        try skip_separators(p)
+        if p.current.kind == .PunctComma {
+            while p.current.kind == .PunctComma {
+                try advance(p)
+                try skip_separators(p)
+                if p.current.kind == .PunctRParen { break }
+                try parse_expression_node(p)
+                if nested_count == nested.len { ret InvalidSyntax }
+                nested[nested_count] = p.last_node
+                nested_count += 1usize
+                try skip_separators(p)
+            }
+            try require(p, .PunctRParen)
+        } else {
+            var grouped: [1]usize = zero
+            grouped[0usize] = nested[0usize]
+            try require(p, .PunctRParen)
+            try add_parent_node(p, .GroupExpr, group_start, p.token_index, grouped[..])
+            nested[0usize] = p.last_node
+        }
+    } else {
+        if p.current.kind != .Newline && p.current.kind != .PunctRBrace {
+            try parse_expression_node(p)
+            nested[0usize] = p.last_node
+            nested_count = 1usize
+        }
     }
     if p.current.kind != .Newline && p.current.kind != .PunctRBrace { ret InvalidSyntax }
     try add_parent_node(p, .ReturnStmt, token_start, p.token_index, nested[..nested_count])
