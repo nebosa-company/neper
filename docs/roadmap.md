@@ -392,14 +392,15 @@ nested and qualified forms. Named field access auto-dereferences pointers; field
 address-of and assignment share the same pointee-aware place mutability rules. Generic
 aggregate types preserve explicit type and `usize` arguments in nominal identity,
 specialize symbolic array fields at concrete use sites, and flow through generic
-function parameters and instantiated bodies. Wider
+function parameters and instantiated bodies. Recursive specialization reserves stable
+field ranges for nested generic aggregates, and concrete aliases preserve their nominal
+instance identity. Wider
 intermediate arithmetic, bitwise and shift expressions, wrapping constant operators,
-generic aggregate aliases, nested generic aggregate literals and tagged-union tag
-checks remain outside the
+tagged-union tag checks remain outside the
 `check-file` checkpoint. Unsupported expression and statement
 forms fail explicitly rather than being accepted unchecked. The next type-checking
-increments replace those boundaries with remaining control flow, nested generic
-aggregates and declaration-time generic checks.
+increments replace those boundaries with remaining control flow and declaration-time
+generic checks.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),

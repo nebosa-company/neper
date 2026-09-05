@@ -456,6 +456,7 @@ fn find_alias(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
 
 fn canonical_type(c: *Checker, ty: Type) -> (Type, err) {
     if ty.kind == .Named {
+        if ty.has_element { ret (ty, ok) }
         let (alias_index, found) = find_alias(c, ty.module_index, ty.name)
         if !found { ret (ty, ok) }
         if c.aliases[alias_index].generic { ret (invalid_type(), Unsupported) }
@@ -774,7 +775,11 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     var result = make_type(.Named, name, target_module)
     if has_arguments {
         let (template_index, found_template) = find_aggregate(c, target_module, name)
-        if !found_template || !c.aggregates[template_index].generic { ret (invalid_type(), InvalidType) }
+        if !found_template {
+            if !c.expand_aliases { ret (make_type(.Other, "", module_index), Unsupported) }
+            ret (invalid_type(), InvalidType)
+        }
+        if !c.aggregates[template_index].generic { ret (invalid_type(), InvalidType) }
         let template = c.aggregates[template_index]
         if c.generic_argument_count + template.comptime_count > c.generic_arguments.len { ret (invalid_type(), Capacity) }
         let first_argument = c.generic_argument_count
@@ -872,7 +877,7 @@ fn collect_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
 
 fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_deferred: bool) -> err {
     c.alias_count = 0usize
-    c.type_count = 0usize
+    if allow_deferred { c.type_count = 0usize }
     c.expand_aliases = false
     var module_index = 0usize
     while module_index < g.count {
@@ -1243,15 +1248,15 @@ fn instantiate_aggregate(c: *Checker, template_index: usize, first_argument: usi
     instance.generic = !concrete
     instance.instance = true
     if concrete {
+        if c.aggregate_field_count + template.field_count > c.aggregate_fields.len { ret (0usize, Capacity) }
+        c.aggregate_field_count += template.field_count
+        instance.field_count = template.field_count
         var at = 0usize
         while at < template.field_count {
-            if c.aggregate_field_count == c.aggregate_fields.len { ret (0usize, Capacity) }
             let source = c.aggregate_fields[template.first_field + at]
             let (specialized, specialize_error) = substitute_aggregate_type(c, template_index, first_argument, source.ty)
             if specialize_error != ok { ret (0usize, specialize_error) }
-            c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: source.name, ty: specialized }
-            c.aggregate_field_count += 1usize
-            instance.field_count += 1usize
+            c.aggregate_fields[instance.first_field + at] = AggregateField { name: source.name, ty: specialized }
             at += 1usize
         }
     }
@@ -3662,8 +3667,8 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.resolver = r
     try collect_aliases(c, r, g, true)
     try collect_constants(c, r, g)
-    try collect_aliases(c, r, g, false)
     try collect_aggregates(c, r, g)
+    try collect_aliases(c, r, g, false)
     try collect_signatures(c, r, g)
     ret check_bodies(c, r, g)
 }

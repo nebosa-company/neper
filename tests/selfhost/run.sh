@@ -280,6 +280,10 @@ aggregate_checked=$($test_build/neper-self check-file "$check_root/aggregate_val
 [ "$aggregate_checked" = 'module check ok' ]
 generic_aggregate_checked=$($test_build/neper-self check-file "$check_root/generic_aggregate_valid/src/main.e" "$repo" x64 linux)
 [ "$generic_aggregate_checked" = 'module check ok' ]
+nested_generic_aggregate_checked=$($test_build/neper-self check-file "$check_root/nested_generic_aggregate_valid/src/main.e" "$repo" x64 linux)
+[ "$nested_generic_aggregate_checked" = 'module check ok' ]
+generic_aggregate_alias_checked=$($test_build/neper-self check-file "$check_root/generic_aggregate_alias_valid/src/main.e" "$repo" x64 linux)
+[ "$generic_aggregate_alias_checked" = 'module check ok' ]
 expect_check_error() {
     fixture=$1
     expected=$2
@@ -406,6 +410,7 @@ expect_check_error generic_aggregate_arity ArgumentCount
 expect_check_error generic_aggregate_kind InvalidType
 expect_check_error generic_aggregate_identity InvalidReturn
 expect_check_error generic_aggregate_field_type InvalidReturn
+expect_check_error nested_generic_aggregate_mismatch InvalidReturn
 scope_root="$repo/tests/selfhost/fixtures/scope"
 valid_scopes=$($test_build/neper-self resolve-file "$scope_root/valid/src/main.e" "$repo" x64 linux)
 [ "$valid_scopes" = 'module resolve ok' ]
