@@ -169,31 +169,6 @@ fn parse_error(p: *Parser) -> err {
     ret ok
 }
 
-fn scan_item_tail(p: *Parser, end_kind: lex.Kind, item_start: usize) -> err {
-    var parens = 0usize
-    var brackets = 0usize
-    while true {
-        let kind = p.current.kind
-        if kind == .Invalid || kind == .Eof { ret InvalidSyntax }
-        if parens == 0usize && brackets == 0usize && (kind == .PunctComma || kind == end_kind) {
-            if p.token_index == item_start { ret InvalidSyntax }
-            ret ok
-        }
-        if kind == .PunctLParen { parens += 1usize }
-        if kind == .PunctRParen {
-            if parens == 0usize { ret InvalidSyntax }
-            parens = parens - 1usize
-        }
-        if kind == .PunctLBracket { brackets += 1usize }
-        if kind == .PunctRBracket {
-            if brackets == 0usize { ret InvalidSyntax }
-            brackets = brackets - 1usize
-        }
-        if kind == .PunctLBrace || kind == .PunctRBrace { ret InvalidSyntax }
-        try advance(p)
-    }
-}
-
 fn parse_parameter_node(p: *Parser) -> err {
     let token_start = p.token_index
     var nested: [1]usize = zero
@@ -1130,99 +1105,61 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     ret ok
 }
 
-fn type_leaf_kind(p: *Parser) -> syntax.Kind {
-    if p.current.kind == .PunctStar { ret .PointerType }
-    if p.current.kind == .PunctLBracket {
-        var look = p.scanner
-        let following = lex.next(&look)
-        if following.kind == .PunctRBracket { ret .SliceType }
-        ret .ArrayType
-    }
-    if p.current.kind == .KwFn || p.current.kind == .KwExtern { ret .FunctionType }
-    if p.current.kind == .Identifier { ret .NamedType }
-    ret .ErrorNode
-}
-
-fn scan_type_leaf(p: *Parser) -> err {
-    let token_start = p.token_index
-    let node_kind = type_leaf_kind(p)
-    if node_kind == .ErrorNode { ret InvalidSyntax }
-    var parens = 0usize
-    var brackets = 0usize
-    while true {
-        let kind = p.current.kind
-        if kind == .Invalid { ret InvalidSyntax }
-        if parens == 0usize && brackets == 0usize && (kind == .Newline || kind == .Eof) { break }
-        if kind == .Eof || kind == .PunctLBrace || kind == .PunctRBrace { ret InvalidSyntax }
-        if kind == .PunctLParen { parens += 1usize }
-        if kind == .PunctRParen {
-            if parens == 0usize { ret InvalidSyntax }
-            parens = parens - 1usize
-        }
-        if kind == .PunctLBracket { brackets += 1usize }
-        if kind == .PunctRBracket {
-            if brackets == 0usize { ret InvalidSyntax }
-            brackets = brackets - 1usize
-        }
-        try advance(p)
-    }
-    if p.token_index == token_start || parens != 0usize || brackets != 0usize { ret InvalidSyntax }
-    try add_node(p, node_kind, token_start, p.token_index)
-    ret ok
-}
-
-fn scan_before_type_body(p: *Parser) -> err {
-    var parens = 0usize
-    var brackets = 0usize
-    while true {
-        let kind = p.current.kind
-        if kind == .Invalid || kind == .Eof || kind == .Newline { ret InvalidSyntax }
-        if kind == .PunctLBrace && parens == 0usize && brackets == 0usize { ret ok }
-        if kind == .PunctLParen { parens += 1usize }
-        if kind == .PunctRParen {
-            if parens == 0usize { ret InvalidSyntax }
-            parens = parens - 1usize
-        }
-        if kind == .PunctLBracket { brackets += 1usize }
-        if kind == .PunctRBracket {
-            if brackets == 0usize { ret InvalidSyntax }
-            brackets = brackets - 1usize
-        }
-        if kind == .PunctRBrace { ret InvalidSyntax }
-        try advance(p)
-    }
-}
-
 fn parse_type_member(p: *Parser, member_kind: syntax.Kind) -> err {
     let token_start = p.token_index
+    var nested: [1]usize = zero
+    var nested_count = 0usize
     try require(p, .Identifier)
+    try skip_separators(p)
     if member_kind == .FieldDecl {
         try require(p, .PunctColon)
-        try scan_item_tail(p, .PunctRBrace, p.token_index)
+        try skip_separators(p)
+        var has_type_node = false
+        try parse_type_node(p, &has_type_node)
+        if has_type_node {
+            nested[0usize] = p.last_node
+            nested_count = 1usize
+        }
     } else {
         if member_kind == .EnumMember {
             if p.current.kind == .PunctAssign {
                 try advance(p)
-                try scan_item_tail(p, .PunctRBrace, p.token_index)
+                try skip_separators(p)
+                try parse_expression_node(p)
+                nested[0usize] = p.last_node
+                nested_count = 1usize
             }
         } else {
             if p.current.kind == .PunctColon {
                 try advance(p)
-                try scan_item_tail(p, .PunctRBrace, p.token_index)
+                try skip_separators(p)
+                var has_type_node = false
+                try parse_type_node(p, &has_type_node)
+                if has_type_node {
+                    nested[0usize] = p.last_node
+                    nested_count = 1usize
+                }
             }
         }
     }
+    let token_end = p.token_index
+    try add_parent_node(p, member_kind, token_start, token_end, nested[..nested_count])
+    try skip_separators(p)
     if p.current.kind != .PunctComma && p.current.kind != .PunctRBrace { ret InvalidSyntax }
-    try add_node(p, member_kind, token_start, p.token_index)
     ret ok
 }
 
-fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize) -> err {
+fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize, prefix_node: usize, has_prefix: bool) -> err {
     var nested: [128]usize = zero
     var nested_count = 0usize
+    var member_count = 0usize
     var member_kind = syntax.Kind.FieldDecl
     if rhs_kind == .EnumType { member_kind = .EnumMember }
     if rhs_kind == .UnionEnumType { member_kind = .UnionMember }
+    if has_prefix {
+        nested[0usize] = prefix_node
+        nested_count = 1usize
+    }
     try require(p, .PunctLBrace)
     try skip_separators(p)
     while p.current.kind != .PunctRBrace {
@@ -1230,6 +1167,7 @@ fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize) -> err
         if nested_count == nested.len { ret InvalidSyntax }
         nested[nested_count] = p.last_node
         nested_count += 1usize
+        member_count += 1usize
         if p.current.kind == .PunctComma {
             try advance(p)
             try skip_separators(p)
@@ -1237,7 +1175,7 @@ fn parse_type_body(p: *Parser, rhs_kind: syntax.Kind, token_start: usize) -> err
             if p.current.kind != .PunctRBrace { ret InvalidSyntax }
         }
     }
-    if (rhs_kind == .EnumType || rhs_kind == .UnionEnumType) && nested_count == 0usize {
+    if (rhs_kind == .EnumType || rhs_kind == .UnionEnumType) && member_count == 0usize {
         ret InvalidSyntax
     }
     try advance(p)
@@ -1274,7 +1212,7 @@ fn parse_type_declaration(p: *Parser) -> err {
     if p.current.kind == .KwStruct {
         let rhs_start = p.token_index
         try advance(p)
-        try parse_type_body(p, .StructType, rhs_start)
+        try parse_type_body(p, .StructType, rhs_start, 0usize, false)
         has_rhs_node = true
     } else {
         if p.current.kind == .KwUnion {
@@ -1282,27 +1220,32 @@ fn parse_type_declaration(p: *Parser) -> err {
             try advance(p)
             if p.current.kind == .KwEnum {
                 try advance(p)
-                if p.current.kind != .PunctLBrace { try scan_before_type_body(p) }
-                try parse_type_body(p, .UnionEnumType, rhs_start)
+                var has_tag_node = false
+                var tag_node = 0usize
+                if p.current.kind != .PunctLBrace {
+                    try parse_type_node(p, &has_tag_node)
+                    if has_tag_node { tag_node = p.last_node }
+                }
+                try parse_type_body(p, .UnionEnumType, rhs_start, tag_node, has_tag_node)
                 has_rhs_node = true
             } else {
-                try parse_type_body(p, .UnionType, rhs_start)
+                try parse_type_body(p, .UnionType, rhs_start, 0usize, false)
                 has_rhs_node = true
             }
         } else {
             if p.current.kind == .KwEnum {
                 let rhs_start = p.token_index
                 try advance(p)
-                if p.current.kind != .PunctLBrace { try scan_before_type_body(p) }
-                try parse_type_body(p, .EnumType, rhs_start)
+                var has_tag_node = false
+                var tag_node = 0usize
+                if p.current.kind != .PunctLBrace {
+                    try parse_type_node(p, &has_tag_node)
+                    if has_tag_node { tag_node = p.last_node }
+                }
+                try parse_type_body(p, .EnumType, rhs_start, tag_node, has_tag_node)
                 has_rhs_node = true
             } else {
-                if p.current.kind == .KwType {
-                    try advance(p)
-                } else {
-                    try scan_type_leaf(p)
-                    has_rhs_node = true
-                }
+                try parse_type_node(p, &has_rhs_node)
             }
         }
     }

@@ -225,9 +225,11 @@ payloads, positional values and bare PascalCase members. Local type annotations 
 recursively retain named, pointer, slice, array and function-type nodes, including
 array-length expressions, parameters and return specifications. Function
 declarations now reuse the same trees for typed comptime parameters, ordinary
-parameters and single- or multiple-type returns. Type-declaration member subtrees,
-switch arms and recursively parsed control-flow bodies remain the next parser
-increments; this callout does not mark the `neper-0` milestone complete.
+parameters and single- or multiple-type returns. Type aliases, aggregate fields and
+union payloads now recurse through those nodes; enum discriminants retain expression
+nodes; and enums and tagged unions retain their backing type. Switch arms and
+recursively parsed control-flow bodies remain the next parser increments; this
+callout does not mark the `neper-0` milestone complete.
 
 - Everything in M0
 - Slices, arrays, `union` and `union enum`, `enum`, `defer`, `switch` (exhaustive),
