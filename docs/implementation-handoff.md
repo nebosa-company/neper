@@ -849,8 +849,9 @@ unsigned element comparison), an enum element, empty and prefix slices, `[3]i32`
 `str`, and the two nested shapes.
 
 An element with a *declared* `fn <t>_cmp` is section 7.17, tagged unions are
-section 7.18. That leaves floats and vectors, blocked on scalar floating point and
-on vectors existing at all, and `hash`, `eq` and `format` entirely.
+section 7.18, and the supplied `hash` is section 7.19. That leaves `cmp` for floats
+and vectors, blocked on scalar floating point and on vectors existing at all, and
+`eq` and `format` entirely.
 
 ### 7.17 An element that declares its own `cmp`
 
@@ -924,6 +925,65 @@ a `str` and a `[]i64`: tag ordering across every pair, two void arms equal, payl
 ordering within each arm, a payload that is itself a sequence, and `[]Node` -- a
 sequence *of* tagged unions, which exercises the recursion in both directions. A
 negative control confirms the payload assertions fail when flipped.
+
+### 7.19 The supplied `hash`, and a new host intrinsic
+
+Rule 4 fixes the supplied `hash` as **xxHash64 with seed 0** over a value's
+canonical little-endian bytes. Unlike `cmp`, which is comparisons the compiler
+already emits, this needs an implementation the compiler did not have. Three
+options were live -- a host runtime symbol, emitting xxHash64 inline as NIR, or an
+implicit dependency on `algo.hash` -- and the runtime symbol was chosen: it is the
+pattern `neper_mem_*` and `neper_os_*` already follow, it needs no module-graph
+machinery, and one implementation serves every shape.
+
+`neper_hash_bytes(ptr, len) -> u64` is therefore in all three runtimes: C in
+`bootstrap/runtime.c`, GNU-as Intel syntax in `runtime_elf_x64_ext.s`, MASM in
+`runtime_pe_x64.asm`. Both assemblers take Intel syntax, so the instruction text is
+one body differing only in directives, label prefixes and the ABI move that puts
+the two arguments in `r8` and `r9`. The C form was written first and checked
+against `algo.hash.xxhash64` over sixteen inputs covering every tail path (0, 1, 2,
+3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33 and 65 bytes); each assembly port was then
+checked against the C by linking it into the same harness. All four agree, and the
+empty and `"abc"` values match upstream xxHash64's published constants.
+
+The C copy is not yet reachable: the bootstrap compiler does not implement protocol
+lookup, so nothing it compiles can call the symbol. It is there because it is the
+reference the two ports were validated against and because a runtime missing a
+symbol the compiler may emit should be a link error rather than a surprise later.
+
+On the compiler side `ProtocolBuiltin` gains `Hash`, `supplied_protocol` dispatches
+on the protocol name rather than assuming `cmp`, the builtin's parameter count now
+comes from `supplied_protocol_parameters`, and `call_return` types the call `u64`.
+`check.supplied_hash_shape` admits integers, `bool`, `err`, pointers, enums, arrays
+of those, and slices and `str` whose element is one of those. That set is exactly
+the one whose canonical bytes are already contiguous in memory, which is why
+`lower.emit_supplied_hash` is a single call: for those shapes the recursion rule 4
+describes *is* the memory, so hashing the whole run in one pass gives the same
+answer as walking it. A scalar has no address of its own and is spilled to a slot
+to get one.
+
+Not supplied, and the reason is the same one: a nested slice's bytes are a pointer
+rather than its contents, and a tagged union's payload is padded. Both need the
+streaming form of xxHash64 -- init, update per component, done -- rather than one
+call, which is the next increment and would reuse `emit_cmp_into`'s dispatch shape.
+
+Two things this broke, both pre-existing and neither about hashing:
+
+- `em_link.assemble` required every relocation to resolve to a function in the
+  artifacts. Host runtime symbols cannot, and none had ever reached it, because no
+  fixture linked a compiled module that called one. The supplied `hash` is the
+  first. Those are now left to `link_pe` and `link_elf`, which own the per-target
+  symbol tables and reject a name neither knows -- the division the direct path
+  already used. `fixtures/link/supplied_hash` links from artifacts to pin it.
+- Both linker `self_test`s were golden-value tests over absolute file offsets, so
+  growing the runtime by 564 bytes broke them. They now compute every offset that
+  sits after the runtime from the layout, and check the values that move with it --
+  the idata address, the import-address-table address, the first import thunk's
+  patched displacement, the import directory's first name RVA -- as relations
+  rather than literals. Two of the old literals were coincidences worth recording:
+  the constant at offset 168 is 4096 because it is the section alignment, not
+  because it equalled the text virtual size, and the bytes at 548 are a *patched*
+  displacement, not static runtime content.
 
 ## 8. Working-tree boundaries
 

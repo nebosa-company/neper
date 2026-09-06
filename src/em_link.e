@@ -222,8 +222,28 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
     var relocation_at = 0usize
     while relocation_at < program.relocation_count {
-        if !program.relocations[relocation_at].resolved { ret MissingSymbol }
+        if !program.relocations[relocation_at].resolved {
+            let reference_index = program.relocations[relocation_at].function_ref
+            if reference_index >= program.builder.function_ref_count { ret InvalidInput }
+            if !host_runtime_symbol(program.builder.function_refs[reference_index].name) { ret MissingSymbol }
+        }
         relocation_at += 1usize
     }
     ret ok
+}
+
+// A call the artifacts cannot satisfy is a missing artifact, except where the host
+// runtime provides it. Those are left for `link_pe` and `link_elf`, which own the
+// per-target symbol tables and reject a name neither of them knows -- the same
+// division the direct path already uses. A module function spelled with the
+// reserved prefix is unaffected: it is in the artifacts and resolves above.
+fn host_runtime_symbol(name: str) -> bool {
+    let prefix = "neper_"
+    if name.len < prefix.len { ret false }
+    var at = 0usize
+    while at < prefix.len {
+        if name[at] != prefix[at] { ret false }
+        at += 1usize
+    }
+    ret true
 }

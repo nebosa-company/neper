@@ -24,6 +24,81 @@ enum {
 static const NpStr *np_args_ptr;
 static size_t np_args_len;
 
+/* Spec section 9 rule 4: the supplied `hash` is xxHash64 with seed 0 over a value's
+ * canonical little-endian bytes. This is the one-shot form of algo.hash.xxhash64,
+ * which it must agree with bit for bit; a fixture asserts that on both platforms. */
+#define NP_XXH_P1 11400714785074694791ull
+#define NP_XXH_P2 14029467366897019727ull
+#define NP_XXH_P3 1609587929392839161ull
+#define NP_XXH_P4 9650029242287828579ull
+#define NP_XXH_P5 2870177450012600261ull
+
+static uint64_t np_xxh_rotl(uint64_t v, unsigned bits) {
+    return (v << bits) | (v >> (64u - bits));
+}
+
+static uint64_t np_xxh_read64(const unsigned char *p) {
+    return (uint64_t)p[0] | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) |
+           ((uint64_t)p[3] << 24) | ((uint64_t)p[4] << 32) | ((uint64_t)p[5] << 40) |
+           ((uint64_t)p[6] << 48) | ((uint64_t)p[7] << 56);
+}
+
+static uint64_t np_xxh_read32(const unsigned char *p) {
+    return (uint64_t)p[0] | ((uint64_t)p[1] << 8) | ((uint64_t)p[2] << 16) |
+           ((uint64_t)p[3] << 24);
+}
+
+static uint64_t np_xxh_round(uint64_t acc, uint64_t word) {
+    return np_xxh_rotl(acc + word * NP_XXH_P2, 31) * NP_XXH_P1;
+}
+
+static uint64_t np_xxh_merge(uint64_t hash, uint64_t lane) {
+    return (hash ^ (np_xxh_rotl(lane * NP_XXH_P2, 31) * NP_XXH_P1)) * NP_XXH_P1 + NP_XXH_P4;
+}
+
+uint64_t neper_hash_bytes(const unsigned char *p, size_t len) {
+    uint64_t hash;
+    size_t at = 0;
+    if (len >= 32) {
+        uint64_t v1 = NP_XXH_P1 + NP_XXH_P2, v2 = NP_XXH_P2, v3 = 0, v4 = 0 - NP_XXH_P1;
+        size_t limit = len - 32;
+        do {
+            v1 = np_xxh_round(v1, np_xxh_read64(p + at)); at += 8;
+            v2 = np_xxh_round(v2, np_xxh_read64(p + at)); at += 8;
+            v3 = np_xxh_round(v3, np_xxh_read64(p + at)); at += 8;
+            v4 = np_xxh_round(v4, np_xxh_read64(p + at)); at += 8;
+        } while (at <= limit);
+        hash = np_xxh_rotl(v1, 1) + np_xxh_rotl(v2, 7) + np_xxh_rotl(v3, 12) + np_xxh_rotl(v4, 18);
+        hash = np_xxh_merge(hash, v1);
+        hash = np_xxh_merge(hash, v2);
+        hash = np_xxh_merge(hash, v3);
+        hash = np_xxh_merge(hash, v4);
+    } else {
+        hash = NP_XXH_P5;
+    }
+    hash += (uint64_t)len;
+    while (at + 8 <= len) {
+        hash ^= np_xxh_rotl(np_xxh_read64(p + at) * NP_XXH_P2, 31) * NP_XXH_P1;
+        hash = np_xxh_rotl(hash, 27) * NP_XXH_P1 + NP_XXH_P4;
+        at += 8;
+    }
+    if (at + 4 <= len) {
+        hash ^= np_xxh_read32(p + at) * NP_XXH_P1;
+        hash = np_xxh_rotl(hash, 23) * NP_XXH_P2 + NP_XXH_P3;
+        at += 4;
+    }
+    while (at < len) {
+        hash ^= (uint64_t)p[at] * NP_XXH_P5;
+        hash = np_xxh_rotl(hash, 11) * NP_XXH_P1;
+        at += 1;
+    }
+    hash ^= hash >> 33;
+    hash *= NP_XXH_P2;
+    hash ^= hash >> 29;
+    hash *= NP_XXH_P3;
+    return hash ^ (hash >> 32);
+}
+
 static void *np_arena_alloc(NpArena *a, size_t n, size_t alignment) {
     size_t at;
     if (!a || !alignment || (alignment & (alignment - 1))) return 0;

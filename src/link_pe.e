@@ -261,16 +261,41 @@ fn self_test() -> err {
     try emit_x64.byte(&machine, 195usize)
     var offsets: [1]usize = zero
     var relocations: [1]codegen_x64.Relocation = zero
-    var executable_storage: [6000]usize = zero
+    var executable_storage: [8192]usize = zero
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
-    if executable.count != 5632usize { ret InvalidExecutable }
+    // The embedded runtime grows whenever a host intrinsic is added, which moves
+    // every section that follows it. Only the header fields that sit ahead of the
+    // runtime are checked at a literal offset; everything after is checked where
+    // the layout above puts it, so a runtime change cannot silently invalidate
+    // this test and a layout change still fails it.
+    let headers_size = 512usize
+    let text_size = runtime_pe_x64.size() + machine.count
+    let (text_raw_size, text_raw_error) = align_up(text_size, 512usize)
+    if text_raw_error != ok { ret text_raw_error }
+    let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
+    if text_virtual_error != ok { ret text_virtual_error }
+    let idata_raw_offset = headers_size + text_raw_size
+    let idata_address = 4096usize + text_virtual_size
+    let import_address_address = idata_address + 216usize
+    let code_at = headers_size + runtime_pe_x64.size()
+    if executable.count != idata_raw_offset + 1024usize { ret InvalidExecutable }
     if executable.bytes[0usize] != 77usize || executable.bytes[1usize] != 90usize || executable.bytes[60usize] != 128usize { ret InvalidExecutable }
     if executable.bytes[128usize] != 80usize || executable.bytes[129usize] != 69usize || executable.bytes[132usize] != 100usize || executable.bytes[133usize] != 134usize || executable.bytes[134usize] != 2usize { ret InvalidExecutable }
-    if executable.bytes[168usize] != 0usize || executable.bytes[169usize] != 16usize || executable.bytes[272usize] != 0usize || executable.bytes[273usize] != 32usize { ret InvalidExecutable }
-    if executable.bytes[360usize] != 216usize || executable.bytes[361usize] != 32usize || executable.bytes[392usize] != 46usize || executable.bytes[432usize] != 46usize { ret InvalidExecutable }
-    if executable.bytes[512usize] != 83usize || executable.bytes[548usize] != 8usize || executable.bytes[549usize] != 17usize || executable.bytes[4521usize] != 195usize { ret InvalidExecutable }
-    if executable.bytes[4608usize] != 40usize || executable.bytes[4609usize] != 32usize || executable.bytes[5000usize] != 75usize || executable.bytes[5016usize] != 67usize { ret InvalidExecutable }
+    if executable.bytes[168usize] != 0usize || executable.bytes[169usize] != 16usize { ret InvalidExecutable }
+    if executable.bytes[272usize] != idata_address % 256usize || executable.bytes[273usize] != (idata_address / 256usize) % 256usize { ret InvalidExecutable }
+    if executable.bytes[360usize] != import_address_address % 256usize || executable.bytes[361usize] != (import_address_address / 256usize) % 256usize { ret InvalidExecutable }
+    if executable.bytes[392usize] != 46usize || executable.bytes[432usize] != 46usize { ret InvalidExecutable }
+    // The runtime's first import thunk, patched to reach entry 11 of the address
+    // table: `patch_import` writes the displacement from the instruction after it.
+    let first_import = import_address_address + 88usize - 4136usize
+    if executable.bytes[512usize] != 83usize { ret InvalidExecutable }
+    if executable.bytes[548usize] != first_import % 256usize || executable.bytes[549usize] != (first_import / 256usize) % 256usize { ret InvalidExecutable }
+    if executable.bytes[code_at] != 195usize { ret InvalidExecutable }
+    // The import directory's first name RVA, which points 40 bytes into idata.
+    let first_name_rva = idata_address + 40usize
+    if executable.bytes[idata_raw_offset] != first_name_rva % 256usize || executable.bytes[idata_raw_offset + 1usize] != (first_name_rva / 256usize) % 256usize { ret InvalidExecutable }
+    if executable.bytes[idata_raw_offset + 392usize] != 75usize || executable.bytes[idata_raw_offset + 408usize] != 67usize { ret InvalidExecutable }
     ret ok
 }

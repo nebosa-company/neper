@@ -1365,4 +1365,166 @@ wait_failed:
     ret
 neper_os_wait ENDP
 
+; Spec section 9 rule 4: the supplied `hash` is xxHash64 with seed 0 over a
+; value's canonical little-endian bytes. This must agree bit for bit with
+; algo.hash.xxhash64 and with neper_hash_bytes in bootstrap/runtime.c; a fixture
+; asserts all three agree on both platforms.
+PUBLIC neper_hash_bytes
+neper_hash_bytes PROC
+    mov r8, rcx
+    mov r9, rdx
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    mov r13, 11400714785074694791
+    mov r14, 14029467366897019727
+    xor ecx, ecx
+    cmp r9, 32
+    jb Lhash_small
+    mov r10, r13
+    add r10, r14
+    mov r11, r14
+    xor ebx, ebx
+    xor r12d, r12d
+    sub r12, r13
+    mov rdx, r9
+    sub rdx, 32
+Lhash_block:
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r10, rax
+    rol r10, 31
+    imul r10, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r11, rax
+    rol r11, 31
+    imul r11, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add rbx, rax
+    rol rbx, 31
+    imul rbx, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r12, rax
+    rol r12, 31
+    imul r12, r13
+    add rcx, 8
+    cmp rcx, rdx
+    jbe Lhash_block
+    mov r15, r10
+    rol r15, 1
+    mov rax, r11
+    rol rax, 7
+    add r15, rax
+    mov rax, rbx
+    rol rax, 12
+    add r15, rax
+    mov rax, r12
+    rol rax, 18
+    add r15, rax
+    mov rax, r10
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    mov rax, r11
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    mov rax, rbx
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    mov rax, r12
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    jmp Lhash_sized
+Lhash_small:
+    mov r15, 2870177450012600261
+Lhash_sized:
+    add r15, r9
+Lhash_tail8:
+    mov rax, rcx
+    add rax, 8
+    cmp rax, r9
+    ja Lhash_tail4
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    rol r15, 27
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    add rcx, 8
+    jmp Lhash_tail8
+Lhash_tail4:
+    mov rax, rcx
+    add rax, 4
+    cmp rax, r9
+    ja Lhash_tail1
+    mov eax, dword ptr [r8 + rcx]
+    imul rax, r13
+    xor r15, rax
+    rol r15, 23
+    imul r15, r14
+    mov rax, 1609587929392839161
+    add r15, rax
+    add rcx, 4
+Lhash_tail1:
+    cmp rcx, r9
+    jae Lhash_final
+    movzx rax, byte ptr [r8 + rcx]
+    mov rdx, 2870177450012600261
+    imul rax, rdx
+    xor r15, rax
+    rol r15, 11
+    imul r15, r13
+    add rcx, 1
+    jmp Lhash_tail1
+Lhash_final:
+    mov rax, r15
+    shr rax, 33
+    xor r15, rax
+    imul r15, r14
+    mov rax, r15
+    shr rax, 29
+    xor r15, rax
+    mov rax, 1609587929392839161
+    imul r15, rax
+    mov rax, r15
+    shr rax, 32
+    xor rax, r15
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+neper_hash_bytes ENDP
+
 END

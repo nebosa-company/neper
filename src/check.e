@@ -152,6 +152,7 @@ type FunctionGeneric = struct {
 type ProtocolBuiltin = enum u8 {
     None,
     Cmp,
+    Hash,
 }
 
 type AggregateKind = enum u8 {
@@ -3797,7 +3798,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                                     info.protocol_builtin = protocol_builtin
                                     info.protocol_type = supplied_receiver
                                     info.function.module_index = supplied_receiver.module_index
-                                    info.function.parameter_count = 2usize
+                                    info.function.parameter_count = supplied_protocol_parameters(protocol_builtin)
                                     info.function.return_count = 1usize
                                 }
                             }
@@ -3939,10 +3940,6 @@ fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool
     ret (0usize, false, ok)
 }
 
-// Only the shapes whose ordering is a single machine comparison are supplied so
-// far. An enum needs its backing type threaded to the comparison for an unsigned
-// backing to order correctly, and floats, slices, arrays and unions need the
-// recursion of rule 4; those still report a missing protocol.
 // An element inside a sequence reaches its comparison as an ordinary call when its
 // own module declares one, so the sequence's supplied `cmp` covers `[]Point` as
 // well as `[]i64`. The declaration has to match rule 3 exactly -- two parameters of
@@ -4021,10 +4018,51 @@ fn tagged_union_comparable(c: *Checker, ty: Type, depth: usize) -> bool {
     ret true
 }
 
+// Rule 4 hashes a value's canonical little-endian bytes with xxHash64 seed 0, and
+// recurses into arrays and slices in index order. Where every leaf is one of these
+// shapes that recursion *is* the memory: the elements sit contiguously in exactly
+// those bytes, so hashing the whole run in one pass is the same answer as walking
+// it. A nested slice, whose bytes are a pointer rather than its contents, and a
+// tagged union, whose payload is padded, are rule 4 shapes not supplied yet.
+fn packed_hash_bytes(c: *Checker, ty: Type, depth: usize) -> bool {
+    if depth > 8usize { ret false }
+    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Err || ty.kind == .Pointer { ret true }
+    let (enum_backing, is_enum) = enum_backing_type(c, ty)
+    if is_enum && enum_backing.kind == .Integer { ret true }
+    if ty.kind != .Array { ret false }
+    let (element, element_error) = index_element_type(c, ty, ty.module_index)
+    if element_error != ok { ret false }
+    let (canonical_element, canonical_error) = canonical_type(c, element)
+    if canonical_error != ok { ret false }
+    ret packed_hash_bytes(c, canonical_element, depth + 1usize)
+}
+
+// A slice hashes over its contents, which rule 4 states outright for `str`.
+fn supplied_hash_shape(c: *Checker, ty: Type) -> bool {
+    if packed_hash_bytes(c, ty, 0usize) { ret true }
+    if ty.kind != .Slice && ty.kind != .String { ret false }
+    let (element, element_error) = index_element_type(c, ty, ty.module_index)
+    if element_error != ok { ret false }
+    let (canonical_element, canonical_error) = canonical_type(c, element)
+    if canonical_error != ok { ret false }
+    ret packed_hash_bytes(c, canonical_element, 1usize)
+}
+
 fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBuiltin {
-    if !same(protocol, "cmp") { ret .None }
-    if supplied_cmp_shape(c, canonical, 0usize) { ret .Cmp }
+    if same(protocol, "cmp") {
+        if supplied_cmp_shape(c, canonical, 0usize) { ret .Cmp }
+        ret .None
+    }
+    if same(protocol, "hash") {
+        if supplied_hash_shape(c, canonical) { ret .Hash }
+        ret .None
+    }
     ret .None
+}
+
+fn supplied_protocol_parameters(builtin: ProtocolBuiltin) -> usize {
+    if builtin == .Hash { ret 1usize }
+    ret 2usize
 }
 
 fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: Type, protocol: str) -> (usize, ProtocolBuiltin, err) {
@@ -4079,6 +4117,10 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
     if call.protocol_builtin == .Cmp {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (make_type(.Integer, "i32", call.protocol_type.module_index), ok)
+    }
+    if call.protocol_builtin == .Hash {
+        if index != 0usize { ret (invalid_type(), InvalidType) }
+        ret (make_type(.Integer, "u64", call.protocol_type.module_index), ok)
     }
     if call.protocol_pending {
         if index != 0usize { ret (invalid_type(), InvalidType) }

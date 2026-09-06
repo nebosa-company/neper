@@ -381,6 +381,23 @@ tagged_union_cmp_written=$($test_build/neper-self emit-executable "$repo/tests/s
 [ "$tagged_union_cmp_written" = 'executable written' ]
 chmod +x "$test_build/tagged-union-cmp-selfhost"
 "$test_build/tagged-union-cmp-selfhost"
+# The supplied `hash` is xxHash64 seed 0 over a value's canonical little-endian
+# bytes, computed by the host runtime, and the fixture checks it against
+# algo.hash.xxhash64 over those same bytes. The artifact link matters here as well:
+# the call is the first host runtime symbol to reach the compiled-module linker.
+supplied_hash_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/supplied_hash/src/main.e" "$repo" x64 linux "$test_build/supplied-hash-selfhost")
+[ "$supplied_hash_written" = 'executable written' ]
+chmod +x "$test_build/supplied-hash-selfhost"
+"$test_build/supplied-hash-selfhost"
+supplied_hash_artifacts="$test_build/supplied-hash-artifacts"
+rm -rf "$supplied_hash_artifacts"
+mkdir -p "$supplied_hash_artifacts"
+supplied_hash_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/supplied_hash/src/main.e" "$repo" x64 linux "$supplied_hash_artifacts")
+[ "$supplied_hash_artifacts_written" = 'compiled modules written' ]
+supplied_hash_link_written=$($test_build/neper-self link-em "$test_build/supplied-hash-from-artifacts" "$supplied_hash_artifacts/main.x64-linux.em" "$supplied_hash_artifacts/algo.hash.x64-linux.em")
+[ "$supplied_hash_link_written" = 'artifact executable written' ]
+chmod +x "$test_build/supplied-hash-from-artifacts"
+"$test_build/supplied-hash-from-artifacts"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {

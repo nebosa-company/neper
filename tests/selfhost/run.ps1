@@ -335,6 +335,24 @@ $taggedUnionCmpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $taggedUnionCmpWritten -ne 'executable written') { throw 'tagged union cmp executable emission failed' }
 & $taggedUnionCmpPath
 if ($LASTEXITCODE -ne 0) { throw 'a tagged union ordered its tag or its live payload wrongly' }
+# The supplied `hash` is xxHash64 seed 0 over a value's canonical little-endian
+# bytes, computed by the host runtime, and the fixture checks it against
+# algo.hash.xxhash64 over those same bytes. The artifact link matters here as well:
+# the call is the first host runtime symbol to reach the compiled-module linker.
+$suppliedHashPath = Join-Path $testBuild 'supplied-hash-selfhost.exe'
+$suppliedHashWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\supplied_hash\src\main.e') $repo 'x64' 'windows' $suppliedHashPath
+if ($LASTEXITCODE -ne 0 -or $suppliedHashWritten -ne 'executable written') { throw 'supplied hash executable emission failed' }
+& $suppliedHashPath
+if ($LASTEXITCODE -ne 0) { throw 'the supplied hash disagrees with algo.hash.xxhash64' }
+$suppliedHashArtifacts = Join-Path $testBuild 'supplied-hash-artifacts'
+New-Item -ItemType Directory -Force -Path $suppliedHashArtifacts | Out-Null
+$suppliedHashArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\supplied_hash\src\main.e') $repo 'x64' 'windows' $suppliedHashArtifacts
+if ($LASTEXITCODE -ne 0 -or $suppliedHashArtifactsWritten -ne 'compiled modules written') { throw 'supplied hash artifact emission failed' }
+$suppliedHashLinked = Join-Path $testBuild 'supplied-hash-from-artifacts.exe'
+$suppliedHashLinkWritten = & $compiler link-em $suppliedHashLinked (Join-Path $suppliedHashArtifacts 'main.x64-windows.em') (Join-Path $suppliedHashArtifacts 'algo.hash.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $suppliedHashLinkWritten -ne 'artifact executable written') { throw 'supplied hash compiled modules did not link' }
+& $suppliedHashLinked
+if ($LASTEXITCODE -ne 0) { throw 'executable linked from supplied hash compiled modules failed' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

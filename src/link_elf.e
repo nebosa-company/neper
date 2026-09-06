@@ -179,13 +179,22 @@ fn self_test() -> err {
     try emit_x64.byte(&machine, 195usize)
     var offsets: [1]usize = zero
     var relocations: [1]codegen_x64.Relocation = zero
-    var executable_storage: [7000]usize = zero
+    var executable_storage: [8192]usize = zero
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
-    if executable.count != 6700usize { ret InvalidExecutable }
+    // Startup and the base runtime are fixed in this file; the extension grows
+    // whenever a host intrinsic is added. Checking the total and the segment size
+    // against it keeps this test honest across that change, and the machine code
+    // is checked where `write` puts it rather than at a literal offset.
+    let base_runtime_size = 1441usize
+    let machine_start = 4096usize + 235usize
+    let total = machine_start + machine.count + base_runtime_size + runtime_elf_x64_ext.size()
+    if executable.count != total { ret InvalidExecutable }
     if executable.bytes[0usize] != 127usize || executable.bytes[16usize] != 2usize || executable.bytes[18usize] != 62usize || executable.bytes[24usize] != 0usize || executable.bytes[25usize] != 16usize || executable.bytes[26usize] != 64usize { ret InvalidExecutable }
-    if executable.bytes[64usize] != 1usize || executable.bytes[68usize] != 5usize || executable.bytes[96usize] != 44usize || executable.bytes[97usize] != 26usize { ret InvalidExecutable }
-    if executable.bytes[4096usize] != 73usize || executable.bytes[4295usize] != 232usize || executable.bytes[4331usize] != 195usize || executable.bytes[4332usize] != 184usize { ret InvalidExecutable }
+    if executable.bytes[64usize] != 1usize || executable.bytes[68usize] != 5usize { ret InvalidExecutable }
+    if executable.bytes[96usize] != total % 256usize || executable.bytes[97usize] != (total / 256usize) % 256usize { ret InvalidExecutable }
+    if executable.bytes[4096usize] != 73usize || executable.bytes[4295usize] != 232usize { ret InvalidExecutable }
+    if executable.bytes[machine_start] != 195usize || executable.bytes[machine_start + 1usize] != 184usize { ret InvalidExecutable }
     ret ok
 }

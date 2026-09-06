@@ -723,8 +723,77 @@ fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize
     ret ok
 }
 
+// Spec section 9 rule 4: the supplied `hash` is xxHash64 seed 0 over the value's
+// canonical little-endian bytes. The compiler does not carry the algorithm; the
+// runtime does, as `neper_hash_bytes`, which is the same one-shot form the C
+// bootstrap runtime and both embedded runtimes provide and which must agree with
+// `algo.hash.xxhash64`. Where the shape is supplied, its bytes are already
+// contiguous, so one call over the whole run is the whole recursion.
+fn emit_supplied_hash(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if argument_count != 1usize { ret check.ArgumentCount }
+    let ty = call.protocol_type
+    let usize_type = check.make_type(.Integer, "usize", ty.module_index)
+    let result_type = check.make_type(.Integer, "u64", ty.module_index)
+    var data = 0usize
+    var byte_length = 0usize
+    if ty.kind == .Slice || ty.kind == .String {
+        let (element_type, element_type_error) = check.index_element_type(c, ty, ty.module_index)
+        if element_type_error != ok { ret element_type_error }
+        let (element_info, element_info_error) = layout.type_info(c, element_type)
+        if element_info_error != ok { ret element_info_error }
+        let (parts_data, parts_length, parts_error) = sequence_parts(c, ty, arguments[0usize], builder, token)
+        if parts_error != ok { ret parts_error }
+        data = parts_data
+        byte_length = parts_length
+        if element_info.size != 1usize {
+            let (stride_instruction, stride, stride_error) = nir.emit(builder, .ConstInteger, usize_type, true, element_info.size, token)
+            if stride_error != ok { ret stride_error }
+            let (scale_instruction, scaled, scale_error) = nir.emit(builder, .Multiply, usize_type, true, 0usize, token)
+            if scale_error != ok { ret scale_error }
+            let length_operand_error = nir.add_operand(builder, scale_instruction, parts_length)
+            if length_operand_error != ok { ret length_operand_error }
+            let stride_operand_error = nir.add_operand(builder, scale_instruction, stride)
+            if stride_operand_error != ok { ret stride_operand_error }
+            byte_length = scaled
+        }
+    } else {
+        let (info, info_error) = layout.type_info(c, ty)
+        if info_error != ok { ret info_error }
+        data = arguments[0usize]
+        if !aggregate_value(c, ty) {
+            // A scalar has no address of its own, so it is spilled to get one.
+            let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, ty, true, 0usize, token)
+            if slot_error != ok { ret slot_error }
+            let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, ty, false, info.size, token)
+            if store_error != ok { ret store_error }
+            let address_error = nir.add_operand(builder, store_instruction, slot)
+            if address_error != ok { ret address_error }
+            let value_error = nir.add_operand(builder, store_instruction, arguments[0usize])
+            if value_error != ok { ret value_error }
+            data = slot
+        }
+        let (size_instruction, size_value, size_error) = nir.emit(builder, .ConstInteger, usize_type, true, info.size, token)
+        if size_error != ok { ret size_error }
+        byte_length = size_value
+    }
+    let (function_ref, reference_error) = nir.intern_function(builder, ty.module_index, "neper_hash_bytes", 0usize)
+    if reference_error != ok { ret reference_error }
+    let (instruction, result, emit_error) = nir.emit(builder, .Call, result_type, true, function_ref, token)
+    if emit_error != ok { ret emit_error }
+    let data_operand_error = nir.add_operand(builder, instruction, data)
+    if data_operand_error != ok { ret data_operand_error }
+    let length_operand_error = nir.add_operand(builder, instruction, byte_length)
+    if length_operand_error != ok { ret length_operand_error }
+    results.call = call
+    results.count = 1usize
+    results.values[0usize] = result
+    results.addresses[0usize] = false
+    ret ok
+}
+
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     if call.protocol_builtin == .Cmp { ret emit_supplied_cmp(c, call, arguments, argument_count, builder, token, results) }
+    if call.protocol_builtin == .Hash { ret emit_supplied_hash(c, call, arguments, argument_count, builder, token, results) }
     results.call = call
     results.count = call.function.return_count
     var return_layout: ReturnLayout = zero

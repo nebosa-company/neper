@@ -605,6 +605,7 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     // identify their source declarations. Keep this table aligned with
     // lower.intrinsic_symbol. mem.alloc is compiler-owned and has no declaration.
     if same(name, "neper_mem_alloc") { ret ("", false) }
+    if same(name, "neper_hash_bytes") { ret ("", false) }
     if same(name, "neper_mem_mark") { ret ("mark", true) }
     if same(name, "neper_mem_reset") { ret ("reset", true) }
     if same(name, "neper_mem_stats") { ret ("stats", true) }
