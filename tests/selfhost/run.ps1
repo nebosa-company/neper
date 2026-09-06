@@ -240,6 +240,11 @@ $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }
 & $moduleExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'cross-module calls failed in the self-hosted PE executable' }
+$collisionExecutablePath = Join-Path $testBuild 'error-collision-selfhost.exe'
+$collisionOutput = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\error_collision\src\main.e') $repo 'x64' 'windows' $collisionExecutablePath 2>&1
+$collisionExit = $LASTEXITCODE
+if ($collisionExit -ne 1 -or ($collisionOutput -join "`n") -notmatch 'main\.E49B7D00B' -or ($collisionOutput -join "`n") -notmatch 'main\.E9E692E7E') { throw 'error hash collision was not rejected with both qualified names' }
+if (Test-Path -LiteralPath $collisionExecutablePath) { throw 'error hash collision wrote an executable before rejection' }
 $moduleArtifactPath = Join-Path $testBuild 'modules.x64-windows.em'
 $moduleArtifactCopyPath = Join-Path $testBuild 'modules-copy.x64-windows.em'
 $moduleArtifactWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleArtifactPath

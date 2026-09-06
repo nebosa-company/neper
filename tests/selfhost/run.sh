@@ -319,6 +319,13 @@ module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/
 [ "$module_executable_written" = 'executable written' ]
 chmod +x "$module_executable_path"
 "$module_executable_path"
+collision_executable_path="$test_build/error-collision-selfhost"
+if collision_output=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/error_collision/src/main.e" "$repo" x64 linux "$collision_executable_path" 2>&1); then
+    printf '%s\n' 'error hash collision unexpectedly linked' >&2
+    exit 1
+fi
+case "$collision_output" in *'main.E49B7D00B'*'main.E9E692E7E'*) ;; *) printf '%s\n' 'error hash collision did not name both qualified errors' >&2; exit 1 ;; esac
+[ ! -e "$collision_executable_path" ]
 module_artifact_path="$test_build/modules.x64-linux.em"
 module_artifact_copy_path="$test_build/modules-copy.x64-linux.em"
 module_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_artifact_path")

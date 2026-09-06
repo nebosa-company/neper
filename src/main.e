@@ -6,6 +6,7 @@ use binary
 use check
 use codegen_x64
 use em
+use error_table
 use emit_x64
 use graph
 use lex
@@ -732,6 +733,7 @@ fn self_test() -> err {
     try artifact_hash.self_test()
     try binary.self_test()
     try em.self_test()
+    try error_table.self_test()
     try nir.self_test()
     try nir.signature_self_test()
     try regalloc.self_test()
@@ -1116,6 +1118,26 @@ fn print_resolve_diagnostic(g: *graph.Graph, resolver: *resolve.Resolver, resolv
     ret print_token_diagnostic(g, resolver.failure_module, token, "E-NAME-9999", "name resolution failed")
 }
 
+fn write_qualified_error(file: os.File, module_name: str, error_name: str) -> err {
+    try write_all(file, module_name)
+    try write_all(file, ".")
+    ret write_all(file, error_name)
+}
+
+fn print_error_table_diagnostic(conflict: *error_table.Conflict, validation_error: err) -> err {
+    let failure = os.stderr()
+    if validation_error == error_table.HashZero {
+        try write_all(failure, "error[E-ERROR-9999]: error `")
+        try write_qualified_error(failure, conflict.first_module, conflict.first_name)
+        ret write_all(failure, "` hashes to reserved value 0; rename it\n")
+    }
+    try write_all(failure, "error[E-LINK-9999]: error hash collision: `")
+    try write_qualified_error(failure, conflict.first_module, conflict.first_name)
+    try write_all(failure, "` and `")
+    try write_qualified_error(failure, conflict.second_module, conflict.second_name)
+    ret write_all(failure, "` have the same 32-bit FNV-1a value\n")
+}
+
 fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic) {
     checker.failure_module = diagnostic.module_index
     checker.failure_kind = diagnostic.kind
@@ -1252,6 +1274,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
             os.exit(1i32)
             ret ok
         }
+        var error_conflict: error_table.Conflict = zero
+        let error_declaration_error = error_table.validate_declarations(&resolver, &loaded, &error_conflict)
+        if error_declaration_error != ok {
+            try print_error_table_diagnostic(&error_conflict, error_declaration_error)
+            os.exit(1i32)
+            ret ok
+        }
         try io.print("module check ok\n")
         ret ok
     }
@@ -1287,6 +1316,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     diagnostic_at += 1usize
                 }
             }
+            os.exit(1i32)
+            ret ok
+        }
+        var error_conflict: error_table.Conflict = zero
+        var error_validation_error = error_table.validate_declarations(&resolver, &loaded, &error_conflict)
+        if error_validation_error == ok && writes_executable {
+            error_validation_error = error_table.validate_link(&resolver, &loaded, &error_conflict)
+        }
+        if error_validation_error != ok {
+            try print_error_table_diagnostic(&error_conflict, error_validation_error)
             os.exit(1i32)
             ret ok
         }
