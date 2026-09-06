@@ -370,11 +370,14 @@ __GROUPS__
     rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>; the rest
     of <code>e.io</code> waits on <code>printf</code>, and so on comptime string
     parameters and varargs.</p>
-    <p><code>e.str</code> scores zero here even though <code>mem.view</code> has just
-    unblocked its <code>Builder</code> half. Its 66 declarations are the largest
+    <p><code>e.str</code> at 23 of 66 is the builder half, which
+    <code>mem.view</code> unblocked and <code>mem.cast</code> completed by making a
+    <code>Sink</code> context constructible. Its 66 declarations remain the largest
     module-side lever available, because rule&nbsp;4's supplied <code>format</code>
     &mdash; the one protocol still missing on the compiler side &mdash; consumes
-    them.</p>
+    them. Most of the 43 left are the pure-string half and need no compiler work;
+    the rest wait on floats, comptime <code>str</code> parameters and a runtime
+    error-name table.</p>
   </div>
 </section>
 
