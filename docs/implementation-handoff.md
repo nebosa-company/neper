@@ -540,6 +540,52 @@ fails the run, plus the supplied `cmp` over signed, unsigned and boolean receive
 `fixtures/check/protocol_missing`, `protocol_signature` and `protocol_no_fallback`
 pin the three diagnostics exactly in both suites.
 
+### 7.8 Function values
+
+`fn(A, B) -> R` is a type (spec section 5), but the compiler only parsed it:
+`check.e` had no handling and `lower.e` none at all. That blocked the `HeapBy`
+half of `e.data.heap` and the `_by` variants across `e.data.sort`.
+
+- `check.Kind.Function` with a `FunctionSignature` side table, because a parameter
+  and return list does not fit the flat `Type` record. Structural equality, an
+  8-byte layout, and resolution of `fn(...) -> R` in any type position.
+- Naming a function in a value position, qualified or not, yields a pointer to it.
+  Generic, intrinsic and `extern` functions are refused.
+- `nir.FunctionAddress` (45) materializes the pointer as a rip-relative `lea`
+  patched by the same relocation pass that patches a `call`, so no new relocation
+  kind was needed. `nir.IndirectCall` (46) carries the callee as its first operand
+  and shares all argument marshalling with the direct path, ending in `call reg`.
+- `.em` serializes function types in both the canonical and indexed writers, and
+  `FunctionAddress` canonicalizes to the referenced name rather than an interning
+  index. `em.reference_used_by_module` and the string collector had to learn that
+  taking a function's address references it exactly as a call does; without that a
+  cross-module function value produced an invalid artifact.
+
+`fixtures/link/function_values` covers a function passed as an argument and called
+through the parameter, one held in a `var` and replaced, and one in a struct field
+taken from another module. Both suites also emit the artifact set, link it, and
+require the result to be byte-identical to the direct link.
+
+Not covered: `extern fn(...) -> R` and the `@cc(CONV)` conventions of section 5,
+and the GPU profile's ban on function pointers. A function value is currently
+only callable from a local or parameter binding; calling one directly out of a
+struct field (`s.cmp(a, b)`) is not wired, which is why the fixture binds it to a
+local first.
+
+Two hazards this increment ran into, both caught by the suites:
+
+- `target` is reserved (spec section 2, the builtin comptime namespace) and was
+  used as a local name in `check.e`, `lower.e` and as a parameter in
+  `emit_x64.call_register`. `resolve-file` reports only `error:
+  resolve.ReservedLocal` with no position, so finding which of 28 modules was at
+  fault took a per-module sweep. Making that finite command report the same exact
+  diagnostic `check-file` gives would be a cheap improvement.
+- The instruction dispatch in `codegen_x64.function` is an eight-level hand-nested
+  `if`/`else` chain, because the language has no `else if`. Adding a case there is
+  easy to get wrong in a way that still compiles: closing one `else` a level early
+  made `.Extract` fall through to `ret Unsupported`, which broke every
+  multiple-return destructuring while leaving everything else working.
+
 ## 8. Working-tree boundaries
 
 No compiler or test change is intentionally uncommitted now. Everything in
@@ -598,7 +644,7 @@ The machine plan currently has ten planned M2 modules:
 
 | Module | Immediate prerequisite or implementation gap |
 | --- | --- |
-| `e.data.heap` | unblocked for integer, `bool` and `err` elements by section 7.7; a heap over a user struct needs that type to declare its own `cmp`, which works, and one over an enum still needs the enum fallback |
+| `e.data.heap` | `partial`: the non-`_by` surface is delivered. Section 7.8 unblocked the `HeapBy` half, which is what remains before it can advance to `source` |
 | `algo.rand` | Exact API includes `f64`; scalar float lowering and ABI support are incomplete |
 | `algo.uuid` | Depends on `algo.hash` and source-complete `e.str`; `e.str` is not source-complete |
 | `e.fs` | Depends on complete `e.path`, `e.str`, memory, and filesystem `e.os` behavior |

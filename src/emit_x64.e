@@ -484,6 +484,14 @@ fn call(buffer: *Buffer) -> (usize, err) {
     ret (displacement, displacement_error)
 }
 
+// FF /2 with a register operand: an indirect call through the callee value.
+fn call_register(buffer: *Buffer, callee: usize) -> err {
+    try check_register(callee)
+    if callee >= 8usize { try byte(buffer, 65usize) }
+    try byte(buffer, 255usize)
+    ret byte(buffer, 208usize + callee % 8usize)
+}
+
 fn jump_nonzero(buffer: *Buffer, value: usize) -> (usize, err) {
     let test_error = test_register(buffer, value)
     if test_error != ok { ret (0usize, test_error) }

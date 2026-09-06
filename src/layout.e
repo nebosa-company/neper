@@ -52,7 +52,7 @@ fn type_info_depth(c: *check.Checker, ty: check.Type, depth: usize) -> (Info, er
     var invalid: Info = zero
     let scalar = scalar_size(ty)
     if scalar != 0usize { ret (Info { size: scalar, alignment: scalar }, ok) }
-    if ty.kind == .Pointer { ret (Info { size: 8usize, alignment: 8usize }, ok) }
+    if ty.kind == .Pointer || ty.kind == .Function { ret (Info { size: 8usize, alignment: 8usize }, ok) }
     if ty.kind == .String || ty.kind == .Slice { ret (Info { size: 16usize, alignment: 8usize }, ok) }
     if ty.kind == .Array {
         if !ty.has_element || ty.element >= c.type_count || !ty.has_length { ret (invalid, InvalidType) }

@@ -37,6 +37,7 @@ type DeferredKind = enum u8 {
 type Deferred = struct {
     kind: DeferredKind,
     call: check.CallInfo,
+    callee: usize,
     arguments: [16]usize,
     argument_count: usize,
     token: lex.Token,
@@ -240,6 +241,13 @@ fn call_return_layout(c: *check.Checker, call: check.CallInfo, result: *ReturnLa
 
 fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) -> (check.Type, err) {
     if index >= call.function.parameter_count { ret (check.invalid_type(), check.ArgumentCount) }
+    if call.indirect {
+        let (signature, has_signature) = check.function_signature_of(c, call.indirect_type)
+        if !has_signature { ret (check.invalid_type(), check.InvalidType) }
+        let (parameter, has_parameter) = check.function_signature_parameter(c, signature, index)
+        if !has_parameter { ret (check.invalid_type(), check.ArgumentCount) }
+        ret (parameter, ok)
+    }
     if call.protocol_builtin != .None { ret (call.protocol_type, ok) }
     if call.mem_alloc {
         if index == 0usize { ret (call.alloc_arena, ok) }
@@ -370,7 +378,7 @@ fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize
     ret ok
 }
 
-fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     if call.protocol_builtin == .Cmp { ret emit_supplied_cmp(c, call, arguments, argument_count, builder, token, results) }
     results.call = call
     results.count = call.function.return_count
@@ -390,8 +398,12 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
             symbol_instance = 0usize
         }
     }
-    let (function_ref, function_ref_error) = nir.intern_function(builder, call.function.owner_module_index, symbol, symbol_instance)
-    if function_ref_error != ok { ret function_ref_error }
+    var function_ref = 0usize
+    if !call.indirect {
+        let (interned, function_ref_error) = nir.intern_function(builder, call.function.owner_module_index, symbol, symbol_instance)
+        if function_ref_error != ok { ret function_ref_error }
+        function_ref = interned
+    }
     var slot = 0usize
     if return_layout.via_slot && results.count != 0usize {
         var slots = (return_layout.size + 7usize) / 8usize
@@ -427,8 +439,14 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
             call_type = check.make_type(.Other, "return-values", call.function.module_index)
         }
     }
-    let (instruction, call_result, emit_error) = nir.emit(builder, .Call, call_type, call_has_result, function_ref, token)
+    var call_opcode: nir.Opcode = .Call
+    if call.indirect { call_opcode = .IndirectCall }
+    let (instruction, call_result, emit_error) = nir.emit(builder, call_opcode, call_type, call_has_result, function_ref, token)
     if emit_error != ok { ret emit_error }
+    if call.indirect {
+        let callee_operand_error = nir.add_operand(builder, instruction, callee)
+        if callee_operand_error != ok { ret callee_operand_error }
+    }
     if return_layout.via_slot && results.count != 0usize {
         let slot_operand_error = nir.add_operand(builder, instruction, slot)
         if slot_operand_error != ok { ret slot_operand_error }
@@ -489,17 +507,23 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
     ret ok
 }
 
-fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, captured: bool, call_out: *check.CallInfo, arguments: []usize, argument_count: *usize) -> err {
+fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, captured: bool, call_out: *check.CallInfo, callee_out: *usize, arguments: []usize, argument_count: *usize) -> err {
     let (call, call_error) = check.check_call(c, g, tree, module_index, node)
     if call_error != ok { ret call_error }
     if call.is_cast || call.function.generic { ret check.Unsupported }
     *call_out = call
+    *callee_out = 0usize
     *argument_count = 0usize
     let end = node.first_child + node.child_count
     var child_position = 0usize
     var at = node.first_child
     while at < end {
         if tree.children[at].node {
+            if child_position == 0usize && call.indirect {
+                let (callee_value, callee_type, callee_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, call.indirect_type, builder, bindings, binding_count)
+                if callee_error != ok { ret callee_error }
+                *callee_out = callee_value
+            }
             if child_position > 0usize {
                 if *argument_count == arguments.len || *argument_count >= call.function.parameter_count { ret check.ArgumentCount }
                 let (parameter_type, parameter_type_error) = call_parameter_type(c, call, *argument_count)
@@ -535,9 +559,10 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     var call: check.CallInfo = zero
     var arguments: [16]usize = zero
     var argument_count = 0usize
-    let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, arguments[..], &argument_count)
+    var callee = 0usize
+    let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, &callee, arguments[..], &argument_count)
     if arguments_error != ok { ret arguments_error }
-    ret emit_call_results(c, call, arguments[..], argument_count, builder, c.tokens[node.token_start], results)
+    ret emit_call_results(c, call, callee, arguments[..], argument_count, builder, c.tokens[node.token_start], results)
 }
 
 fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (check.CallInfo, usize, err) {
@@ -1065,6 +1090,17 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                 let (instruction, result, emit_error) = nir.emit(builder, .ConstError, error_type, true, value, token)
                 ret (result, error_type, emit_error)
             }
+            // A function named in a value position becomes a pointer to it.
+            if has_intrinsic_function {
+                let callee = c.functions[intrinsic_function]
+                let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+                if type_error != ok { ret (0usize, result_type, type_error) }
+                if result_type.kind != .Function { ret (0usize, result_type, check.Unsupported) }
+                let (function_ref, function_ref_error) = nir.intern_function(builder, callee.owner_module_index, callee.name, callee.instance_id)
+                if function_ref_error != ok { ret (0usize, result_type, function_ref_error) }
+                let (instruction, result, emit_error) = nir.emit(builder, .FunctionAddress, result_type, true, function_ref, token)
+                ret (result, result_type, emit_error)
+            }
             ret (0usize, zero, check.Unsupported)
         }
         let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
@@ -1101,6 +1137,16 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                 if value_error != ok { ret (0usize, error_type, value_error) }
                 let (instruction, result, emit_error) = nir.emit(builder, .ConstError, error_type, true, value, c.tokens[node.token_start])
                 ret (result, error_type, emit_error)
+            }
+            if has_intrinsic_function {
+                let callee = c.functions[intrinsic_function]
+                let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+                if type_error == ok && result_type.kind == .Function {
+                    let (function_ref, function_ref_error) = nir.intern_function(builder, callee.owner_module_index, callee.name, callee.instance_id)
+                    if function_ref_error != ok { ret (0usize, result_type, function_ref_error) }
+                    let (instruction, result, emit_error) = nir.emit(builder, .FunctionAddress, result_type, true, function_ref, c.tokens[node.token_start])
+                    ret (result, result_type, emit_error)
+                }
             }
             let (member_value, member_type, member_error) = lower_member(c, g, tree, module_index, node_index, expected, builder)
             if member_error == ok { ret (member_value, member_type, ok) }
@@ -1834,7 +1880,7 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     var arguments: [1]usize = zero
     arguments[0usize] = iterator_pointer
     var results: CallResults = zero
-    try emit_call_results(c, call, arguments[..], 1usize, builder, token, &results)
+    try emit_call_results(c, call, 0usize, arguments[..], 1usize, builder, token, &results)
     if results.count != 2usize { ret check.InvalidType }
     let (element_type, element_type_error) = check.call_return(c, call, 0usize)
     if element_type_error != ok { ret element_type_error }
@@ -2075,7 +2121,7 @@ fn lower_defer(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let (call_index, has_call) = deferred_call_node(tree, child)
     if has_call {
         entry.kind = .Call
-        let arguments_error = lower_call_arguments(c, g, tree, module_index, tree.nodes[call_index], builder, bindings, binding_count, true, &entry.call, entry.arguments[..], &entry.argument_count)
+        let arguments_error = lower_call_arguments(c, g, tree, module_index, tree.nodes[call_index], builder, bindings, binding_count, true, &entry.call, &entry.callee, entry.arguments[..], &entry.argument_count)
         if arguments_error != ok { ret arguments_error }
     } else {
         entry.node_index = child_index
@@ -2094,7 +2140,7 @@ fn emit_deferred_from(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         var entry = defers.entries[at]
         if entry.kind == .Call {
             var results: CallResults = zero
-            try emit_call_results(c, entry.call, entry.arguments[..], entry.argument_count, builder, entry.token, &results)
+            try emit_call_results(c, entry.call, entry.callee, entry.arguments[..], entry.argument_count, builder, entry.token, &results)
         } else {
             let local_checkpoint = c.local_count
             var current_binding_count = binding_count

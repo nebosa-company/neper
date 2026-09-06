@@ -54,6 +54,8 @@ type Opcode = enum u8 {
     Switch = 42,
     Return = 43,
     Unreachable = 44,
+    FunctionAddress = 45,
+    IndirectCall = 46,
 }
 
 type Instruction = struct {

@@ -317,6 +317,21 @@ generic_artifact_executable_written=$($test_build/neper-self link-em "$generic_a
 chmod +x "$generic_artifact_executable_path"
 "$generic_artifact_executable_path"
 cmp "$generic_artifact_executable_path" "$generic_executable_path"
+function_value_executable="$test_build/function-values-selfhost"
+function_value_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/function_values/src/main.e" "$repo" x64 linux "$function_value_executable")
+[ "$function_value_written" = 'executable written' ]
+chmod +x "$function_value_executable"
+"$function_value_executable"
+function_value_artifacts="$test_build/function-values"
+mkdir -p "$function_value_artifacts"
+function_value_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/function_values/src/main.e" "$repo" x64 linux "$function_value_artifacts")
+[ "$function_value_artifacts_written" = 'compiled modules written' ]
+function_value_linked="$test_build/function-values-from-artifacts"
+function_value_link_written=$($test_build/neper-self link-em "$function_value_linked" "$function_value_artifacts/main.x64-linux.em" "$function_value_artifacts/ops.x64-linux.em")
+[ "$function_value_link_written" = 'artifact executable written' ]
+chmod +x "$function_value_linked"
+"$function_value_linked"
+cmp "$function_value_linked" "$function_value_executable"
 protocol_executable_path="$test_build/protocol-cmp-selfhost"
 protocol_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/protocol_cmp/src/main.e" "$repo" x64 linux "$protocol_executable_path")
 [ "$protocol_written" = 'executable written' ]

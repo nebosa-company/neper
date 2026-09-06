@@ -134,6 +134,7 @@ fn type_kind_id(kind: check.Kind) -> usize {
     if kind == .UntypedInteger { ret 13usize }
     if kind == .UntypedFloat { ret 14usize }
     if kind == .Other { ret 15usize }
+    if kind == .Function { ret 16usize }
     ret 0usize
 }
 
@@ -162,6 +163,24 @@ fn collect_type_strings(c: *check.Checker, g: *graph.Graph, table: *StringTable,
         if ty.element >= c.type_count { ret InvalidArtifact }
         ret collect_type_strings(c, g, table, c.types[ty.element])
     }
+    if ty.kind == .Function {
+        let (signature, has_signature) = check.function_signature_of(c, ty)
+        if !has_signature { ret InvalidArtifact }
+        var at = 0usize
+        while at < signature.parameter_count {
+            let (parameter, has_parameter) = check.function_signature_parameter(c, signature, at)
+            if !has_parameter { ret InvalidArtifact }
+            try collect_type_strings(c, g, table, parameter)
+            at += 1usize
+        }
+        at = 0usize
+        while at < signature.return_count {
+            let (result, has_result) = check.function_signature_return(c, signature, at)
+            if !has_result { ret InvalidArtifact }
+            try collect_type_strings(c, g, table, result)
+            at += 1usize
+        }
+    }
     ret ok
 }
 
@@ -181,6 +200,26 @@ fn write_type_canonical(c: *check.Checker, g: *graph.Graph, ty: check.Type, outp
     if aggregate_type(ty.kind) && ty.has_element {
         if ty.element >= c.type_count { ret InvalidArtifact }
         ret write_type_canonical(c, g, c.types[ty.element], output)
+    }
+    if ty.kind == .Function {
+        let (signature, has_signature) = check.function_signature_of(c, ty)
+        if !has_signature { ret InvalidArtifact }
+        try binary.little_u32(output, signature.parameter_count)
+        try binary.little_u32(output, signature.return_count)
+        var at = 0usize
+        while at < signature.parameter_count {
+            let (parameter, has_parameter) = check.function_signature_parameter(c, signature, at)
+            if !has_parameter { ret InvalidArtifact }
+            try write_type_canonical(c, g, parameter, output)
+            at += 1usize
+        }
+        at = 0usize
+        while at < signature.return_count {
+            let (result, has_result) = check.function_signature_return(c, signature, at)
+            if !has_result { ret InvalidArtifact }
+            try write_type_canonical(c, g, result, output)
+            at += 1usize
+        }
     }
     ret ok
 }
@@ -205,6 +244,26 @@ fn write_type_indexed(c: *check.Checker, g: *graph.Graph, table: *StringTable, t
     if aggregate_type(ty.kind) && ty.has_element {
         if ty.element >= c.type_count { ret InvalidArtifact }
         ret write_type_indexed(c, g, table, c.types[ty.element], output)
+    }
+    if ty.kind == .Function {
+        let (signature, has_signature) = check.function_signature_of(c, ty)
+        if !has_signature { ret InvalidArtifact }
+        try binary.little_u32(output, signature.parameter_count)
+        try binary.little_u32(output, signature.return_count)
+        var at = 0usize
+        while at < signature.parameter_count {
+            let (parameter, has_parameter) = check.function_signature_parameter(c, signature, at)
+            if !has_parameter { ret InvalidArtifact }
+            try write_type_indexed(c, g, table, parameter, output)
+            at += 1usize
+        }
+        at = 0usize
+        while at < signature.return_count {
+            let (result, has_result) = check.function_signature_return(c, signature, at)
+            if !has_result { ret InvalidArtifact }
+            try write_type_indexed(c, g, table, result, output)
+            at += 1usize
+        }
     }
     ret ok
 }
@@ -254,6 +313,8 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     if opcode == .Switch { ret 42usize }
     if opcode == .Return { ret 43usize }
     if opcode == .Unreachable { ret 44usize }
+    if opcode == .FunctionAddress { ret 45usize }
+    if opcode == .IndirectCall { ret 46usize }
     ret 0usize
 }
 
@@ -589,7 +650,7 @@ fn find_nir_function(builder: *nir.Builder, module_index: usize, name: str, inst
 }
 
 fn write_instruction_immediate_canonical(g: *graph.Graph, builder: *nir.Builder, instruction: nir.Instruction, output: *binary.Buffer) -> err {
-    if instruction.opcode == .Call {
+    if instruction.opcode == .Call || instruction.opcode == .FunctionAddress {
         if instruction.immediate >= builder.function_ref_count { ret InvalidArtifact }
         let reference = builder.function_refs[instruction.immediate]
         if reference.module_index >= g.count { ret InvalidArtifact }
@@ -840,7 +901,7 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
             while instruction_at < function.first_instruction + function.instruction_count {
                 let instruction = builder.instructions[instruction_at]
                 try collect_type_strings(c, g, table, instruction.ty)
-                if instruction.opcode == .Call {
+                if instruction.opcode == .Call || instruction.opcode == .FunctionAddress {
                     if instruction.immediate >= builder.function_ref_count { ret InvalidArtifact }
                     let reference = builder.function_refs[instruction.immediate]
                     if reference.module_index >= g.count { ret InvalidArtifact }
@@ -1169,7 +1230,8 @@ fn reference_used_by_module(builder: *nir.Builder, module_index: usize, referenc
             var instruction_at = function.first_instruction
             while instruction_at < function.first_instruction + function.instruction_count {
                 let instruction = builder.instructions[instruction_at]
-                if instruction.opcode == .Call && instruction.immediate == reference_index { ret true }
+                // Taking a function's address references it exactly as a call does.
+                if (instruction.opcode == .Call || instruction.opcode == .FunctionAddress) && instruction.immediate == reference_index { ret true }
                 instruction_at += 1usize
             }
         }

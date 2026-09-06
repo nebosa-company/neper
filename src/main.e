@@ -809,6 +809,8 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if aggregate_fields_error != ok { ret aggregate_fields_error }
     let (checked_switches, checked_switches_error) = mem.alloc[check.CheckedSwitch](a, 4096usize)
     if checked_switches_error != ok { ret checked_switches_error }
+    let (function_signatures, function_signatures_error) = mem.alloc[check.FunctionSignature](a, 4096usize)
+    if function_signatures_error != ok { ret function_signatures_error }
     let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
     if tokens_error != ok { ret tokens_error }
     let (locals, locals_error) = mem.alloc[check.Local](a, 16384usize)
@@ -826,7 +828,7 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, constant_exprs, diagnostics)
     try check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
     try check.init_aggregates(checker, aggregates, aggregate_fields)
-    ret check.init_control(checker, checked_switches)
+    ret check.init_control(checker, checked_switches, function_signatures)
 }
 
 fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, compiler_scale: bool) -> err {

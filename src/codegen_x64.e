@@ -247,6 +247,8 @@ fn max_call_arguments(builder: *nir.Builder, current: nir.Function) -> usize {
     while at < end {
         let instruction = builder.instructions[at]
         if instruction.opcode == .Call && instruction.operand_count > maximum { maximum = instruction.operand_count }
+        // An indirect call also parks its callee in the outgoing area.
+        if instruction.opcode == .IndirectCall && instruction.operand_count > maximum { maximum = instruction.operand_count }
         at += 1usize
     }
     ret maximum
@@ -257,7 +259,7 @@ fn needs_fixed_registers(builder: *nir.Builder, current: nir.Function) -> bool {
     var at = current.first_instruction
     while at < end {
         let opcode = builder.instructions[at].opcode
-        if opcode == .Divide || opcode == .Remainder || opcode == .ShiftLeft || opcode == .ShiftRight || opcode == .IndexAddress || opcode == .Slice || opcode == .Copy || opcode == .Call { ret true }
+        if opcode == .Divide || opcode == .Remainder || opcode == .ShiftLeft || opcode == .ShiftRight || opcode == .IndexAddress || opcode == .Slice || opcode == .Copy || opcode == .Call || opcode == .IndirectCall { ret true }
         at += 1usize
     }
     ret false
@@ -741,19 +743,30 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 }
                 try store_result(allocations, instruction.result, destination, output)
             } else {
-                if instruction.opcode == .Call {
-                    if instruction.immediate >= builder.function_ref_count { ret Unsupported }
+                if instruction.opcode == .Call || instruction.opcode == .IndirectCall {
+                    let indirect = instruction.opcode == .IndirectCall
+                    if !indirect && instruction.immediate >= builder.function_ref_count { ret Unsupported }
+                    if indirect && instruction.operand_count == 0usize { ret Unsupported }
+                    var first_argument = 0usize
+                    if indirect { first_argument = 1usize }
+                    let argument_total = instruction.operand_count - first_argument
                     try save_allocated_registers(output, preserve_base, preserve_count)
+                    if indirect {
+                        let callee_value = builder.operands[instruction.first_operand]
+                        let (callee_source, callee_error) = read_value(allocations, callee_value, 10usize, output)
+                        if callee_error != ok { ret callee_error }
+                        try emit_x64.store_stack(output, outgoing_base + argument_total, callee_source)
+                    }
                     var argument_at = 0usize
-                    while argument_at < instruction.operand_count {
-                        let value = builder.operands[instruction.first_operand + argument_at]
+                    while argument_at < argument_total {
+                        let value = builder.operands[instruction.first_operand + first_argument + argument_at]
                         let (source, source_error) = read_value(allocations, value, 10usize, output)
                         if source_error != ok { ret source_error }
                         try emit_x64.store_stack(output, outgoing_base + argument_at, source)
                         argument_at += 1usize
                     }
                     argument_at = 0usize
-                    while argument_at < instruction.operand_count {
+                    while argument_at < argument_total {
                         if argument_at < parameter_register_count(abi) {
                             let (destination, destination_error) = parameter_register(abi, argument_at)
                             if destination_error != ok { ret destination_error }
@@ -764,9 +777,14 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         }
                         argument_at += 1usize
                     }
-                    let (call_displacement, call_error) = emit_x64.call(output)
-                    if call_error != ok { ret call_error }
-                    try add_relocation(relocations, relocation_count, call_displacement, instruction.immediate)
+                    if indirect {
+                        try emit_x64.load_stack(output, 11usize, outgoing_base + argument_total)
+                        try emit_x64.call_register(output, 11usize)
+                    } else {
+                        let (call_displacement, call_error) = emit_x64.call(output)
+                        if call_error != ok { ret call_error }
+                        try add_relocation(relocations, relocation_count, call_displacement, instruction.immediate)
+                    }
                     let multiple_results = instruction.has_result && (instruction.ty.kind == .Invalid || (instruction.ty.kind == .Other && check.same(instruction.ty.name, "return-values")))
                     if instruction.has_result {
                         try emit_x64.mov_register(output, 10usize, 0usize)
@@ -779,6 +797,15 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         if destination != 10usize { try emit_x64.mov_register(output, destination, 10usize) }
                         try store_result(allocations, instruction.result, destination, output)
                     }
+                } else {
+                if instruction.opcode == .FunctionAddress {
+                    if !instruction.has_result || instruction.immediate >= builder.function_ref_count { ret Unsupported }
+                    let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+                    if destination_error != ok { ret destination_error }
+                    let (address_displacement, address_error) = emit_x64.relative_address(output, destination)
+                    if address_error != ok { ret address_error }
+                    try add_relocation(relocations, relocation_count, address_displacement, instruction.immediate)
+                    try store_result(allocations, instruction.result, destination, output)
                 } else {
                 if instruction.opcode == .Extract {
                     if !instruction.has_result || instruction.operand_count != 1usize || instruction.immediate >= 2usize { ret Unsupported }
@@ -844,6 +871,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 }
                 }
                     }
+                }
                 }
                 }
                 }

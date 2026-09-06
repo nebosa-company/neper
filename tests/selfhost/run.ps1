@@ -267,6 +267,21 @@ function Get-EmCodeRecords([string]$path) {
     }
     return ,$records
 }
+$functionValueExecutable = Join-Path $testBuild 'function-values-selfhost.exe'
+$functionValueWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\function_values\src\main.e') $repo 'x64' 'windows' $functionValueExecutable
+if ($LASTEXITCODE -ne 0 -or $functionValueWritten -ne 'executable written') { throw 'function value executable emission failed' }
+& $functionValueExecutable
+if ($LASTEXITCODE -ne 0) { throw 'function values as arguments, bindings or struct fields behaved wrongly' }
+$functionValueArtifacts = Join-Path $testBuild 'function-values'
+New-Item -ItemType Directory -Force -Path $functionValueArtifacts | Out-Null
+$functionValueArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\function_values\src\main.e') $repo 'x64' 'windows' $functionValueArtifacts
+if ($LASTEXITCODE -ne 0 -or $functionValueArtifactsWritten -ne 'compiled modules written') { throw 'function value artifact emission failed' }
+$functionValueLinked = Join-Path $testBuild 'function-values-from-artifacts.exe'
+$functionValueLinkWritten = & $compiler link-em $functionValueLinked (Join-Path $functionValueArtifacts 'main.x64-windows.em') (Join-Path $functionValueArtifacts 'ops.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $functionValueLinkWritten -ne 'artifact executable written') { throw 'function value compiled modules did not link' }
+& $functionValueLinked
+if ($LASTEXITCODE -ne 0) { throw 'executable linked from function value compiled modules failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $functionValueLinked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $functionValueExecutable).Hash) { throw 'function value compiled-module and source links differ' }
 $protocolExecutablePath = Join-Path $testBuild 'protocol-cmp-selfhost.exe'
 $protocolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\protocol_cmp\src\main.e') $repo 'x64' 'windows' $protocolExecutablePath
 if ($LASTEXITCODE -ne 0 -or $protocolWritten -ne 'executable written') { throw 'protocol call executable emission failed' }

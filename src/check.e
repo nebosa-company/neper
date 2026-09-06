@@ -76,6 +76,7 @@ type Kind = enum u8 {
     TypeParameter,
     UntypedInteger,
     UntypedFloat,
+    Function,
     Other,
 }
 
@@ -88,6 +89,13 @@ type Type = struct {
     is_const: bool,
     array_length: usize,
     has_length: bool,
+}
+
+type FunctionSignature = struct {
+    first_parameter: usize,
+    parameter_count: usize,
+    first_return: usize,
+    return_count: usize,
 }
 
 type ComptimeKind = enum u8 {
@@ -268,6 +276,7 @@ type Checker = struct {
     aggregates: []Aggregate,
     aggregate_fields: []AggregateField,
     checked_switches: []CheckedSwitch,
+    function_signatures: []FunctionSignature,
     tokens: []lex.Token,
     locals: []Local,
     types: []Type,
@@ -284,6 +293,7 @@ type Checker = struct {
     aggregate_count: usize,
     aggregate_field_count: usize,
     checked_switch_count: usize,
+    function_signature_count: usize,
     token_count: usize,
     local_count: usize,
     type_count: usize,
@@ -376,6 +386,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.aggregate_count = 0usize
     c.aggregate_field_count = 0usize
     c.checked_switch_count = 0usize
+    c.function_signature_count = 0usize
     c.token_count = 0usize
     c.local_count = 0usize
     c.type_count = 0usize
@@ -419,10 +430,65 @@ fn init_aggregates(c: *Checker, aggregates: []Aggregate, fields: []AggregateFiel
     ret ok
 }
 
-fn init_control(c: *Checker, switches: []CheckedSwitch) -> err {
-    if switches.len == 0usize { ret Capacity }
+fn init_control(c: *Checker, switches: []CheckedSwitch, signatures: []FunctionSignature) -> err {
+    if switches.len == 0usize || signatures.len == 0usize { ret Capacity }
     c.checked_switches = switches
+    c.function_signatures = signatures
     ret ok
+}
+
+fn store_function_signature(c: *Checker, item: FunctionSignature) -> (usize, err) {
+    if c.function_signature_count == c.function_signatures.len { ret (0usize, Capacity) }
+    let index = c.function_signature_count
+    c.function_signatures[index] = item
+    c.function_signature_count += 1usize
+    ret (index, ok)
+}
+
+fn function_signature_of(c: *Checker, ty: Type) -> (FunctionSignature, bool) {
+    var empty: FunctionSignature = zero
+    if ty.kind != .Function || !ty.has_element || ty.element >= c.function_signature_count { ret (empty, false) }
+    ret (c.function_signatures[ty.element], true)
+}
+
+fn function_signature_parameter(c: *Checker, signature: FunctionSignature, index: usize) -> (Type, bool) {
+    if index >= signature.parameter_count || signature.first_parameter + index >= c.type_count { ret (invalid_type(), false) }
+    ret (c.types[signature.first_parameter + index], true)
+}
+
+fn function_signature_return(c: *Checker, signature: FunctionSignature, index: usize) -> (Type, bool) {
+    if index >= signature.return_count || signature.first_return + index >= c.type_count { ret (invalid_type(), false) }
+    ret (c.types[signature.first_return + index], true)
+}
+
+fn function_pointer_type(c: *Checker, function: Function, module_index: usize) -> (Type, err) {
+    let first_parameter = c.type_count
+    var at = 0usize
+    while at < function.parameter_count {
+        if function.first_parameter + at >= c.parameter_count { ret (invalid_type(), InvalidType) }
+        let (stored, store_error) = store_type(c, c.parameters[function.first_parameter + at].ty)
+        if store_error != ok { ret (invalid_type(), store_error) }
+        at += 1usize
+    }
+    let first_return = c.type_count
+    at = 0usize
+    while at < function.return_count {
+        if function.first_return + at >= c.return_type_count { ret (invalid_type(), InvalidType) }
+        let (stored, store_error) = store_type(c, c.return_types[function.first_return + at])
+        if store_error != ok { ret (invalid_type(), store_error) }
+        at += 1usize
+    }
+    var signature: FunctionSignature = zero
+    signature.first_parameter = first_parameter
+    signature.parameter_count = function.parameter_count
+    signature.first_return = first_return
+    signature.return_count = function.return_count
+    let (signature_index, signature_error) = store_function_signature(c, signature)
+    if signature_error != ok { ret (invalid_type(), signature_error) }
+    var result = make_type(.Function, "", module_index)
+    result.element = signature_index
+    result.has_element = true
+    ret (result, ok)
 }
 
 fn same(a: str, b: str) -> bool {
@@ -502,6 +568,27 @@ fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
         if !a.has_length || !b.has_length || a.array_length != b.array_length || !a.has_element || !b.has_element { ret false }
         if a.element >= c.type_count || b.element >= c.type_count { ret false }
         ret type_equal(c, c.types[a.element], c.types[b.element])
+    }
+    if a.kind == .Function {
+        let (left, has_left) = function_signature_of(c, a)
+        let (right, has_right) = function_signature_of(c, b)
+        if !has_left || !has_right { ret false }
+        if left.parameter_count != right.parameter_count || left.return_count != right.return_count { ret false }
+        var at = 0usize
+        while at < left.parameter_count {
+            let (left_parameter, has_left_parameter) = function_signature_parameter(c, left, at)
+            let (right_parameter, has_right_parameter) = function_signature_parameter(c, right, at)
+            if !has_left_parameter || !has_right_parameter || !type_equal(c, left_parameter, right_parameter) { ret false }
+            at += 1usize
+        }
+        at = 0usize
+        while at < left.return_count {
+            let (left_return, has_left_return) = function_signature_return(c, left, at)
+            let (right_return, has_right_return) = function_signature_return(c, right, at)
+            if !has_left_return || !has_right_return || !type_equal(c, left_return, right_return) { ret false }
+            at += 1usize
+        }
+        ret true
     }
     if a.kind == .Other || a.kind == .Invalid { ret false }
     ret true
@@ -884,7 +971,78 @@ fn array_length_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     ret (value.magnitude, ok)
 }
 
+fn function_type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, err) {
+    // The node carries one Parameter child per parameter and an optional ReturnSpec,
+    // the same shape a `fn` declaration uses.
+    var parameter_types: [16]Type = zero
+    var parameter_count = 0usize
+    var return_types: [4]Type = zero
+    var return_count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child = tree.nodes[tree.children[at].index]
+            if child.kind == .Parameter {
+                if parameter_count == parameter_types.len { ret (invalid_type(), Capacity) }
+                let (type_index, has_type) = first_node_child(tree, child)
+                if !has_type { ret (invalid_type(), parse.InvalidSyntax) }
+                let (parameter_type, parameter_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+                if parameter_error != ok { ret (invalid_type(), parameter_error) }
+                if parameter_type.kind == .Void { ret (invalid_type(), InvalidType) }
+                parameter_types[parameter_count] = parameter_type
+                parameter_count += 1usize
+            }
+            if child.kind == .ReturnSpec {
+                let return_end = child.first_child + child.child_count
+                var return_at = child.first_child
+                while return_at < return_end {
+                    if tree.children[return_at].node {
+                        if return_count == return_types.len { ret (invalid_type(), Capacity) }
+                        let (return_type, return_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[tree.children[return_at].index])
+                        if return_error != ok { ret (invalid_type(), return_error) }
+                        return_types[return_count] = return_type
+                        return_count += 1usize
+                    }
+                    return_at += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    if return_count == 1usize && return_types[0usize].kind == .Void { return_count = 0usize }
+    let first_parameter = c.type_count
+    at = 0usize
+    while at < parameter_count {
+        let (stored, store_error) = store_type(c, parameter_types[at])
+        if store_error != ok { ret (invalid_type(), store_error) }
+        at += 1usize
+    }
+    let first_return = c.type_count
+    at = 0usize
+    while at < return_count {
+        let (stored, store_error) = store_type(c, return_types[at])
+        if store_error != ok { ret (invalid_type(), store_error) }
+        at += 1usize
+    }
+    var signature: FunctionSignature = zero
+    signature.first_parameter = first_parameter
+    signature.parameter_count = parameter_count
+    signature.first_return = first_return
+    signature.return_count = return_count
+    let (signature_index, signature_error) = store_function_signature(c, signature)
+    if signature_error != ok { ret (invalid_type(), signature_error) }
+    var result = make_type(.Function, "", module_index)
+    result.element = signature_index
+    result.has_element = true
+    ret (result, ok)
+}
+
 fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, err) {
+    if node.kind == .FunctionType {
+        let (function_type, function_type_error) = function_type_from_node(c, r, g, tree, module_index, node)
+        ret (function_type, function_type_error)
+    }
     if node.kind == .PointerType || node.kind == .SliceType {
         let (child_index, has_child) = first_node_child(tree, node)
         if !has_child { ret (invalid_type(), parse.InvalidSyntax) }
@@ -3305,6 +3463,8 @@ type CallInfo = struct {
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
+    indirect: bool,
+    indirect_type: Type,
 }
 
 type AllocInfo = struct {
@@ -3440,6 +3600,17 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     let token = c.tokens[receiver.token_start]
                     let name = text[token.start..token.end]
                     let cast = scalar_type(name, module_index)
+                    let (callee_local, callee_is_local) = find_local(c, name)
+                    if callee_is_local && c.locals[callee_local].ty.kind == .Function {
+                        let (signature, has_signature) = function_signature_of(c, c.locals[callee_local].ty)
+                        if !has_signature { ret (info, InvalidType) }
+                        info.indirect = true
+                        info.indirect_type = c.locals[callee_local].ty
+                        info.function.module_index = module_index
+                        info.function.parameter_count = signature.parameter_count
+                        info.function.return_count = signature.return_count
+                        has_function = true
+                    } else {
                     if cast.kind == .Integer || cast.kind == .Float {
                         info.cast = cast
                         info.is_cast = true
@@ -3454,6 +3625,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.function = c.functions[found_index]
                         }
                         has_function = true
+                    }
                     }
                 } else {
                     if receiver.kind == .BracketPostfix {
@@ -3529,6 +3701,17 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     let function = info.function
                     if child_position > function.parameter_count { ret (info, ArgumentCount) }
                     var parameter_type = invalid_type()
+                    if info.indirect {
+                        let (signature, has_signature) = function_signature_of(c, info.indirect_type)
+                        if !has_signature { ret (info, InvalidType) }
+                        let (indirect_parameter, has_parameter) = function_signature_parameter(c, signature, child_position - 1usize)
+                        if !has_parameter { ret (info, ArgumentCount) }
+                        let (indirect_argument, indirect_argument_error) = check_expr(c, g, tree, module_index, child_index, indirect_parameter)
+                        if indirect_argument_error != ok { ret (info, indirect_argument_error) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     if info.protocol_builtin != .None {
                         parameter_type = info.protocol_type
                         let (supplied_argument, supplied_argument_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
@@ -3662,6 +3845,13 @@ fn function_return(c: *Checker, function: Function, index: usize) -> (Type, err)
 }
 
 fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
+    if call.indirect {
+        let (signature, has_signature) = function_signature_of(c, call.indirect_type)
+        if !has_signature { ret (invalid_type(), InvalidType) }
+        let (result, has_result) = function_signature_return(c, signature, index)
+        if !has_result { ret (invalid_type(), InvalidType) }
+        ret (result, ok)
+    }
     if call.protocol_builtin == .Cmp {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (make_type(.Integer, "i32", call.protocol_type.module_index), ok)
@@ -4128,6 +4318,16 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let (error_type, context_error) = apply_context(c, make_type(.Err, "err", module_index), expected)
             ret (error_type, context_error)
         }
+        // Spec section 5: `fn(A) -> R` is a type, so naming a function in a value
+        // position yields a pointer to it.
+        if has_intrinsic_function {
+            let callee = c.functions[intrinsic_function]
+            if callee.generic || callee.intrinsic || callee.external { ret (invalid_type(), Unsupported) }
+            let (pointer_type, pointer_error) = function_pointer_type(c, callee, module_index)
+            if pointer_error != ok { ret (invalid_type(), pointer_error) }
+            let (result_type, context_error) = apply_context(c, pointer_type, expected)
+            ret (result_type, context_error)
+        }
         ret (invalid_type(), Unsupported)
     }
     if node.kind == .MemberExpr {
@@ -4168,6 +4368,16 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             if found_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
                 let (error_type, context_error) = apply_context(c, make_type(.Err, "err", target_module), expected)
                 ret (error_type, context_error)
+            }
+            // A qualified function named in a value position, like the unqualified
+            // case above.
+            if has_intrinsic_function {
+                let callee = c.functions[intrinsic_function]
+                if callee.generic || callee.intrinsic || callee.external { ret (invalid_type(), Unsupported) }
+                let (pointer_type, pointer_error) = function_pointer_type(c, callee, target_module)
+                if pointer_error != ok { ret (invalid_type(), pointer_error) }
+                let (result_type, context_error) = apply_context(c, pointer_type, expected)
+                ret (result_type, context_error)
             }
             ret (invalid_type(), Unsupported)
         }
