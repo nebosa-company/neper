@@ -177,6 +177,8 @@ $localsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\loc
 if ($LASTEXITCODE -ne 0 -or $localsLowered -ne 'module nir ok') { throw 'parameters and local storage did not lower to canonical NIR' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
+$loopsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\loops\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $loopsLowered -ne 'module nir ok') { throw 'while condition and back-edge did not lower to canonical NIR' }
 $compositeChecked = & $compiler check-file (Join-Path $checkRoot 'composite_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $compositeChecked -ne 'module check ok') { throw 'valid composite types did not type-check' }
 $qualifiedChecked = & $compiler check-file (Join-Path $checkRoot 'qualified_valid\src\main.e') $repo 'x64' 'windows'
