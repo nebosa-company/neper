@@ -141,6 +141,25 @@ fn divide_register(buffer: *Buffer, divisor: usize, signed: bool) -> err {
     ret modrm(buffer, extension, divisor)
 }
 
+fn and_immediate8(buffer: *Buffer, destination: usize, value: usize) -> err {
+    try check_register(destination)
+    if value > 255usize { ret InvalidByte }
+    try rex(buffer, 4usize, destination)
+    try byte(buffer, 131usize)
+    try modrm(buffer, 4usize, destination)
+    ret byte(buffer, value)
+}
+
+fn shift_register(buffer: *Buffer, destination: usize, left: bool, signed: bool) -> err {
+    try check_register(destination)
+    var extension = 5usize
+    if left { extension = 4usize }
+    if !left && signed { extension = 7usize }
+    try rex(buffer, extension, destination)
+    try byte(buffer, 211usize)
+    ret modrm(buffer, extension, destination)
+}
+
 fn compare_register(buffer: *Buffer, left: usize, right: usize) -> err {
     ret binary_register(buffer, 57usize, left, right)
 }
@@ -344,7 +363,11 @@ fn self_test() -> err {
     try extend_dividend_unsigned(&scalar)
     try divide_register(&scalar, 11usize, true)
     try divide_register(&scalar, 11usize, false)
-    let scalar_expected = [33]usize{ 72usize, 247usize, 216usize, 73usize, 247usize, 209usize, 77usize, 99usize, 209usize, 77usize, 15usize, 182usize, 202usize, 77usize, 33usize, 209usize, 77usize, 49usize, 209usize, 77usize, 9usize, 209usize, 72usize, 153usize, 72usize, 49usize, 210usize, 73usize, 247usize, 251usize, 73usize, 247usize, 243usize }
+    try and_immediate8(&scalar, 1usize, 31usize)
+    try shift_register(&scalar, 10usize, true, false)
+    try shift_register(&scalar, 10usize, false, true)
+    try shift_register(&scalar, 10usize, false, false)
+    let scalar_expected = [46]usize{ 72usize, 247usize, 216usize, 73usize, 247usize, 209usize, 77usize, 99usize, 209usize, 77usize, 15usize, 182usize, 202usize, 77usize, 33usize, 209usize, 77usize, 49usize, 209usize, 77usize, 9usize, 209usize, 72usize, 153usize, 72usize, 49usize, 210usize, 73usize, 247usize, 251usize, 73usize, 247usize, 243usize, 72usize, 131usize, 225usize, 31usize, 73usize, 211usize, 226usize, 73usize, 211usize, 250usize, 73usize, 211usize, 234usize }
     if scalar.count != scalar_expected.len { ret InvalidRegister }
     at = 0usize
     while at < scalar_expected.len {

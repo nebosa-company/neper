@@ -287,6 +287,11 @@ division_executable_written=$($test_build/neper-self emit-executable "$repo/test
 [ "$division_executable_written" = 'executable written' ]
 chmod +x "$division_executable_path"
 "$division_executable_path"
+shift_executable_path="$test_build/shifts-selfhost"
+shift_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/shifts/src/main.e" "$repo" x64 linux "$shift_executable_path")
+[ "$shift_executable_written" = 'executable written' ]
+chmod +x "$shift_executable_path"
+"$shift_executable_path"
 locals_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/locals/src/main.e" "$repo" x64 linux)
 [ "$locals_lowered" = 'module nir ok' ]
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

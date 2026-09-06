@@ -204,6 +204,11 @@ $divisionExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $divisionExecutableWritten -ne 'executable written') { throw 'division PE executable emission failed' }
 & $divisionExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'signed or unsigned division semantics failed in the self-hosted PE executable' }
+$shiftExecutablePath = Join-Path $testBuild 'shifts-selfhost.exe'
+$shiftExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\shifts\src\main.e') $repo 'x64' 'windows' $shiftExecutablePath
+if ($LASTEXITCODE -ne 0 -or $shiftExecutableWritten -ne 'executable written') { throw 'shift PE executable emission failed' }
+& $shiftExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'left or signed-right shift semantics failed in the self-hosted PE executable' }
 $localsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\locals\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $localsLowered -ne 'module nir ok') { throw 'parameters and local storage did not lower to canonical NIR' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
