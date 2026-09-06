@@ -36,6 +36,17 @@ fn little_u64(buffer: *Buffer, value: usize) -> err {
     ret ok
 }
 
+fn little_u32(buffer: *Buffer, value: usize) -> err {
+    var remaining = value
+    var count = 0usize
+    while count < 4usize {
+        try byte(buffer, remaining % 256usize)
+        remaining = remaining / 256usize
+        count += 1usize
+    }
+    ret ok
+}
+
 fn check_register(index: usize) -> err {
     if index >= 16usize { ret InvalidRegister }
     ret ok
@@ -85,6 +96,53 @@ fn multiply_register(buffer: *Buffer, destination: usize, source: usize) -> err 
     ret modrm(buffer, destination, source)
 }
 
+fn frame_size(stack_slots: usize) -> usize {
+    let bytes = stack_slots * 8usize
+    let rounded = bytes + 15usize
+    ret rounded / 16usize * 16usize
+}
+
+fn function_prologue(buffer: *Buffer, stack_slots: usize) -> err {
+    try byte(buffer, 85usize)
+    try mov_register(buffer, 5usize, 4usize)
+    let bytes = frame_size(stack_slots)
+    if bytes != 0usize {
+        try byte(buffer, 72usize)
+        try byte(buffer, 129usize)
+        try byte(buffer, 236usize)
+        try little_u32(buffer, bytes)
+    }
+    ret ok
+}
+
+fn function_epilogue(buffer: *Buffer) -> err {
+    try mov_register(buffer, 4usize, 5usize)
+    try byte(buffer, 93usize)
+    ret return_instruction(buffer)
+}
+
+fn stack_displacement(slot: usize) -> usize {
+    let next = slot + 1usize
+    let magnitude = next * 8usize
+    ret 4294967296usize - magnitude
+}
+
+fn load_stack(buffer: *Buffer, destination: usize, slot: usize) -> err {
+    try check_register(destination)
+    try byte(buffer, 72usize + destination / 8usize * 4usize)
+    try byte(buffer, 139usize)
+    try byte(buffer, 133usize + destination % 8usize * 8usize)
+    ret little_u32(buffer, stack_displacement(slot))
+}
+
+fn store_stack(buffer: *Buffer, slot: usize, source: usize) -> err {
+    try check_register(source)
+    try byte(buffer, 72usize + source / 8usize * 4usize)
+    try byte(buffer, 137usize)
+    try byte(buffer, 133usize + source % 8usize * 8usize)
+    ret little_u32(buffer, stack_displacement(slot))
+}
+
 fn return_instruction(buffer: *Buffer) -> err {
     ret byte(buffer, 195usize)
 }
@@ -113,5 +171,14 @@ fn self_test() -> err {
         if buffer.bytes[at] != expected[at] { ret InvalidRegister }
         at += 1usize
     }
+    var frame_storage: [64]usize = zero
+    var frame: Buffer = zero
+    try init(&frame, frame_storage[..])
+    try function_prologue(&frame, 2usize)
+    try store_stack(&frame, 1usize, 10usize)
+    try load_stack(&frame, 11usize, 1usize)
+    try function_epilogue(&frame)
+    if frame.count != 30usize { ret InvalidRegister }
+    if frame.bytes[0usize] != 85usize || frame.bytes[4usize] != 72usize || frame.bytes[11usize] != 76usize || frame.bytes[18usize] != 76usize || frame.bytes[29usize] != 195usize { ret InvalidRegister }
     ret ok
 }

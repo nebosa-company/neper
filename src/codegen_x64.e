@@ -12,8 +12,6 @@ fn hardware_register(index: usize) -> (usize, err) {
     if index == 2usize { ret (2usize, ok) }
     if index == 3usize { ret (8usize, ok) }
     if index == 4usize { ret (9usize, ok) }
-    if index == 5usize { ret (10usize, ok) }
-    if index == 6usize { ret (11usize, ok) }
     ret (0usize, Unsupported)
 }
 
@@ -23,43 +21,75 @@ fn value_register(allocations: []regalloc.Allocation, value: usize) -> (usize, e
     ret (result, result_error)
 }
 
-fn function(builder: *nir.Builder, function_index: usize, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+fn read_value(allocations: []regalloc.Allocation, value: usize, scratch: usize, output: *emit_x64.Buffer) -> (usize, err) {
+    if value >= allocations.len { ret (0usize, Unsupported) }
+    let allocation = allocations[value]
+    if allocation.kind == .Register {
+        let (physical, physical_error) = hardware_register(allocation.index)
+        ret (physical, physical_error)
+    }
+    if allocation.kind != .Stack { ret (0usize, Unsupported) }
+    let load_error = emit_x64.load_stack(output, scratch, allocation.index)
+    ret (scratch, load_error)
+}
+
+fn result_register(allocations: []regalloc.Allocation, value: usize, scratch: usize) -> (usize, err) {
+    if value >= allocations.len { ret (0usize, Unsupported) }
+    if allocations[value].kind == .Stack { ret (scratch, ok) }
+    let (physical, physical_error) = value_register(allocations, value)
+    ret (physical, physical_error)
+}
+
+fn store_result(allocations: []regalloc.Allocation, value: usize, source: usize, output: *emit_x64.Buffer) -> err {
+    if value >= allocations.len { ret Unsupported }
+    if allocations[value].kind == .Stack { ret emit_x64.store_stack(output, allocations[value].index, source) }
+    ret ok
+}
+
+fn function(builder: *nir.Builder, function_index: usize, allocations: []regalloc.Allocation, stack_slots: usize, output: *emit_x64.Buffer) -> err {
     if function_index >= builder.function_count { ret Unsupported }
+    if stack_slots != 0usize { try emit_x64.function_prologue(output, stack_slots) }
     let current = builder.functions[function_index]
     let end = current.first_instruction + current.instruction_count
     var at = current.first_instruction
     while at < end {
         let instruction = builder.instructions[at]
         if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError {
-            let (destination, destination_error) = value_register(allocations, instruction.result)
+            let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
             if destination_error != ok { ret destination_error }
             try emit_x64.mov_immediate(output, destination, instruction.immediate)
+            try store_result(allocations, instruction.result, destination, output)
         } else {
             if instruction.opcode == .Add || instruction.opcode == .Subtract || instruction.opcode == .Multiply {
                 if instruction.operand_count != 2usize { ret Unsupported }
                 let left_value = builder.operands[instruction.first_operand]
                 let right_value = builder.operands[instruction.first_operand + 1usize]
-                let (destination, destination_error) = value_register(allocations, instruction.result)
+                let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
                 if destination_error != ok { ret destination_error }
-                let (left, left_error) = value_register(allocations, left_value)
+                let (left, left_error) = read_value(allocations, left_value, 10usize, output)
                 if left_error != ok { ret left_error }
-                let (right, right_error) = value_register(allocations, right_value)
+                let (right, right_error) = read_value(allocations, right_value, 11usize, output)
                 if right_error != ok { ret right_error }
                 if destination != left { try emit_x64.mov_register(output, destination, left) }
                 if instruction.opcode == .Add { try emit_x64.add_register(output, destination, right) }
                 if instruction.opcode == .Subtract { try emit_x64.subtract_register(output, destination, right) }
                 if instruction.opcode == .Multiply { try emit_x64.multiply_register(output, destination, right) }
+                try store_result(allocations, instruction.result, destination, output)
             } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {
                         let value = builder.operands[instruction.first_operand]
-                        let (source, source_error) = value_register(allocations, value)
+                        let (source, source_error) = read_value(allocations, value, 10usize, output)
                         if source_error != ok { ret source_error }
                         if source != 0usize { try emit_x64.mov_register(output, 0usize, source) }
                     } else {
                         if instruction.operand_count != 0usize { ret Unsupported }
                     }
-                    try emit_x64.return_instruction(output)
+                    if stack_slots == 0usize {
+                        try emit_x64.return_instruction(output)
+                    } else {
+                        try emit_x64.function_epilogue(output)
+                    }
                 } else {
                     ret Unsupported
                 }
@@ -96,7 +126,14 @@ fn self_test() -> err {
     var storage: [16]usize = zero
     var output: emit_x64.Buffer = zero
     try emit_x64.init(&output, storage[..])
-    try function(&builder, 0usize, allocations[..], &output)
+    try function(&builder, 0usize, allocations[..], stack_slots, &output)
     if output.count != 11usize || output.bytes[0usize] != 72usize || output.bytes[1usize] != 184usize || output.bytes[2usize] != 7usize || output.bytes[10usize] != 195usize { ret Unsupported }
+    allocations[0usize].kind = .Stack
+    allocations[0usize].index = 0usize
+    var spill_storage: [64]usize = zero
+    var spill_output: emit_x64.Buffer = zero
+    try emit_x64.init(&spill_output, spill_storage[..])
+    try function(&builder, 0usize, allocations[..], 1usize, &spill_output)
+    if spill_output.count != 43usize || spill_output.bytes[0usize] != 85usize || spill_output.bytes[11usize] != 73usize || spill_output.bytes[42usize] != 195usize { ret Unsupported }
     ret ok
 }
