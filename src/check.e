@@ -3943,6 +3943,27 @@ fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool
 // far. An enum needs its backing type threaded to the comparison for an unsigned
 // backing to order correctly, and floats, slices, arrays and unions need the
 // recursion of rule 4; those still report a missing protocol.
+// An element inside a sequence reaches its comparison as an ordinary call when its
+// own module declares one, so the sequence's supplied `cmp` covers `[]Point` as
+// well as `[]i64`. The declaration has to match rule 3 exactly -- two parameters of
+// the type by value, one `i32` back -- because nothing re-checks it at the call
+// this synthesizes. A receiver's own `cmp` never reaches here: `check_protocol_call`
+// resolves a declared one before any fallback is considered.
+fn element_cmp_function(c: *Checker, ty: Type) -> (usize, bool) {
+    let (canonical, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok || canonical.kind != .Named { ret (0usize, false) }
+    let (function_index, found, lookup_error) = protocol_function(c, ty, "cmp")
+    if lookup_error != ok || !found { ret (0usize, false) }
+    let function = c.functions[function_index]
+    if function.generic || function.parameter_count != 2usize || function.return_count != 1usize { ret (0usize, false) }
+    if function.first_parameter + 1usize >= c.parameter_count { ret (0usize, false) }
+    if !type_equal(c, c.parameters[function.first_parameter].ty, canonical) { ret (0usize, false) }
+    if !type_equal(c, c.parameters[function.first_parameter + 1usize].ty, canonical) { ret (0usize, false) }
+    let (return_type, return_error) = function_return(c, function, 0usize)
+    if return_error != ok || return_type.kind != .Integer || !same(return_type.name, "i32") { ret (0usize, false) }
+    ret (function_index, true)
+}
+
 // Spec section 9 rule 4 supplies `cmp` for the scalar shapes, and for arrays,
 // slices and vectors it recurses in index order. Rule 4 excludes pointers; floats
 // and tagged unions are shapes rule 4 covers that are not supplied yet. The depth
@@ -3958,7 +3979,9 @@ fn supplied_cmp_shape(c: *Checker, ty: Type, depth: usize) -> bool {
     if element_error != ok { ret false }
     let (canonical_element, canonical_error) = canonical_type(c, element)
     if canonical_error != ok { ret false }
-    ret supplied_cmp_shape(c, canonical_element, depth + 1usize)
+    if supplied_cmp_shape(c, canonical_element, depth + 1usize) { ret true }
+    let (element_function, has_element_function) = element_cmp_function(c, element)
+    ret has_element_function
 }
 
 fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBuiltin {

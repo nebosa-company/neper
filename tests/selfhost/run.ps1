@@ -309,6 +309,25 @@ $sequenceCmpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $sequenceCmpWritten -ne 'executable written') { throw 'sequence cmp executable emission failed' }
 & $sequenceCmpPath
 if ($LASTEXITCODE -ne 0) { throw 'the supplied cmp for an array, slice or str is wrong' }
+# An element whose own module declares `fn <t>_cmp` is compared by calling it. The
+# fixture's `tag_cmp` reverses deliberately, so any comparison that did not reach the
+# declaration would order the other way, and the call has to carry a dependency edge.
+$elementCmpPath = Join-Path $testBuild 'element-cmp-selfhost.exe'
+$elementCmpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\element_cmp\src\main.e') $repo 'x64' 'windows' $elementCmpPath
+if ($LASTEXITCODE -ne 0 -or $elementCmpWritten -ne 'executable written') { throw 'declared element cmp executable emission failed' }
+& $elementCmpPath
+if ($LASTEXITCODE -ne 0) { throw 'a sequence did not compare its elements through their declared cmp' }
+$elementCmpArtifacts = Join-Path $testBuild 'element-cmp-artifacts'
+New-Item -ItemType Directory -Force -Path $elementCmpArtifacts | Out-Null
+$elementCmpArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\element_cmp\src\main.e') $repo 'x64' 'windows' $elementCmpArtifacts
+if ($LASTEXITCODE -ne 0 -or $elementCmpArtifactsWritten -ne 'compiled modules written') { throw 'declared element cmp artifact emission failed' }
+$elementCmpEdge = & $compiler check-em-edge (Join-Path $elementCmpArtifacts 'main.x64-windows.em') (Join-Path $elementCmpArtifacts 'shapes.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $elementCmpEdge -ne 'dependency current') { throw 'the synthesized element cmp call recorded no dependency edge' }
+$elementCmpLinked = Join-Path $testBuild 'element-cmp-from-artifacts.exe'
+$elementCmpLinkWritten = & $compiler link-em $elementCmpLinked (Join-Path $elementCmpArtifacts 'main.x64-windows.em') (Join-Path $elementCmpArtifacts 'shapes.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $elementCmpLinkWritten -ne 'artifact executable written') { throw 'declared element cmp compiled modules did not link' }
+& $elementCmpLinked
+if ($LASTEXITCODE -ne 0) { throw 'executable linked from declared element cmp compiled modules failed' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

@@ -848,13 +848,47 @@ Lowering splits into four pieces where there was one inline emitter:
 unsigned element comparison), an enum element, empty and prefix slices, `[3]i32`,
 `str`, and the two nested shapes.
 
-Not covered. An element with a *declared* `fn <t>_cmp` -- `[]Point` where `Point`
-has `point_cmp` -- still reports `ProtocolMissing`, because the loop body would
-have to emit a real call rather than an inline comparison, which means building a
-`CallInfo` and going through `emit_call_results`. That is the natural next
-increment and it also unblocks tagged unions, whose payload arm needs the same
-machinery. Floats and vectors remain blocked on scalar floating point and on
-vectors existing at all.
+An element with a *declared* `fn <t>_cmp` is section 7.17. Floats and vectors
+remain blocked on scalar floating point and on vectors existing at all.
+
+### 7.17 An element that declares its own `cmp`
+
+`[]Point` where `Point` declares `fn point_cmp` reported `ProtocolMissing`: the
+element was `.Named`, which had no supplied shape, and the loop body only knew how
+to emit an inline comparison. It now emits a call.
+
+`check.element_cmp_function` resolves and validates the declaration, and
+`supplied_cmp_shape` accepts an element that has one. Validation is stricter than
+`check_protocol_call`'s, which checks only rule 3's first parameter: the
+synthesized call is never re-checked anywhere, so the declaration has to be exactly
+two parameters of the type and one `i32` back before it will be called. A receiver's
+own `cmp` never reaches this path, because `check_protocol_call` resolves a declared
+one before any fallback is considered.
+
+`lower.emit_declared_cmp` is short, because rule 3 lands on the shape a direct call
+already has. The receiver is by value, which for an aggregate is its address --
+exactly what `element_operand` supplies, and exactly what an ordinary call passes,
+since `captured` is false for everything but a deferred call. A single `i32` return
+is a register return, so `call_return_layout`'s slot path is not involved. The
+`nir.intern_function` reference is also what gives the artifact its dependency edge:
+`em.write_dependencies` walks `builder.function_refs`, so a call synthesized during
+lowering is indistinguishable from one the checker saw.
+
+`fixtures/link/element_cmp` is two modules, so the call crosses a module boundary.
+Its `tag_cmp` reverses deliberately -- larger id orders first -- so a comparison
+that failed to reach the declaration would order the other way rather than merely
+failing to compile. Both runners also emit the artifact set, assert the
+`main -> shapes` edge with `check-em-edge`, link from artifacts and run the result.
+
+One rough edge left, and it is a diagnostic rather than a behavior. A `<t>_cmp` that
+exists but does not match the strict signature makes the element shape unsupplied,
+so `[]Point` reports `ProtocolMissing` on the sequence rather than
+`ProtocolSignature` on the element. `Point.cmp(p, q)` on its own still reports the
+precise error, so the information is reachable, just not from the sequence.
+
+The machinery a tagged union needs is now all here: its payload arm compares
+whatever the live variant holds, which is the same dispatch `emit_cmp_into` does,
+and its tag is an integer compared before the payload.
 
 ## 8. Working-tree boundaries
 

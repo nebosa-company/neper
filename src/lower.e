@@ -556,10 +556,32 @@ fn element_operand(c: *check.Checker, element_type: check.Type, stride: usize, d
     ret (loaded, ok)
 }
 
+// An element whose own module declares `fn <t>_cmp` is compared by calling it --
+// the same direct call an ordinary `T.cmp(a, b)` lowers to, and the same reference
+// that gives the artifact its dependency edge. Rule 3 passes the receiver by value,
+// which for an aggregate is its address, exactly as `element_operand` supplies it.
+fn emit_declared_cmp(c: *check.Checker, function: check.Function, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let (function_ref, reference_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
+    if reference_error != ok { ret reference_error }
+    let (instruction, call_result, emit_error) = nir.emit(builder, .Call, result_type, true, function_ref, token)
+    if emit_error != ok { ret emit_error }
+    let left_operand_error = nir.add_operand(builder, instruction, left)
+    if left_operand_error != ok { ret left_operand_error }
+    let right_operand_error = nir.add_operand(builder, instruction, right)
+    if right_operand_error != ok { ret right_operand_error }
+    let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, 0usize, token)
+    if store_error != ok { ret store_error }
+    let address_error = nir.add_operand(builder, store_instruction, slot)
+    if address_error != ok { ret address_error }
+    ret nir.add_operand(builder, store_instruction, call_result)
+}
+
 fn emit_cmp_into(c: *check.Checker, ty: check.Type, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
     if ty.kind == .Array || ty.kind == .Slice || ty.kind == .String {
         ret emit_sequence_cmp(c, ty, slot, result_type, left, right, builder, token, depth)
     }
+    let (function_index, has_function) = check.element_cmp_function(c, ty)
+    if has_function { ret emit_declared_cmp(c, c.functions[function_index], slot, result_type, left, right, builder, token) }
     ret emit_scalar_cmp(c, ty, slot, result_type, left, right, builder, token)
 }
 

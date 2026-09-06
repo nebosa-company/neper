@@ -357,6 +357,24 @@ sequence_cmp_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$sequence_cmp_written" = 'executable written' ]
 chmod +x "$test_build/sequence-cmp-selfhost"
 "$test_build/sequence-cmp-selfhost"
+# An element whose own module declares `fn <t>_cmp` is compared by calling it. The
+# fixture's `tag_cmp` reverses deliberately, so any comparison that did not reach the
+# declaration would order the other way, and the call has to carry a dependency edge.
+element_cmp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/element_cmp/src/main.e" "$repo" x64 linux "$test_build/element-cmp-selfhost")
+[ "$element_cmp_written" = 'executable written' ]
+chmod +x "$test_build/element-cmp-selfhost"
+"$test_build/element-cmp-selfhost"
+element_cmp_artifacts="$test_build/element-cmp-artifacts"
+rm -rf "$element_cmp_artifacts"
+mkdir -p "$element_cmp_artifacts"
+element_cmp_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/element_cmp/src/main.e" "$repo" x64 linux "$element_cmp_artifacts")
+[ "$element_cmp_artifacts_written" = 'compiled modules written' ]
+element_cmp_edge=$($test_build/neper-self check-em-edge "$element_cmp_artifacts/main.x64-linux.em" "$element_cmp_artifacts/shapes.x64-linux.em")
+[ "$element_cmp_edge" = 'dependency current' ]
+element_cmp_link_written=$($test_build/neper-self link-em "$test_build/element-cmp-from-artifacts" "$element_cmp_artifacts/main.x64-linux.em" "$element_cmp_artifacts/shapes.x64-linux.em")
+[ "$element_cmp_link_written" = 'artifact executable written' ]
+chmod +x "$test_build/element-cmp-from-artifacts"
+"$test_build/element-cmp-from-artifacts"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {
