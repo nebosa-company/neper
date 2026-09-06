@@ -1,4 +1,4 @@
-# neper
+<h1><img src="docs/gtm/logo/neper-lockup.svg" alt="neper" width="420"></h1>
 
 A minimal procedural language designed to be **written by language models and read by
 people**: stack-resident records, arena memory, direct machine code for CPU and GPU,

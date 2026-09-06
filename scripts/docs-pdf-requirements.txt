@@ -1,0 +1,8 @@
+# Pinned dependencies for scripts/build-docs-pdf.py.
+# Direct:
+reportlab==5.0.1
+markdown-it-py==4.2.0
+# Transitive, pinned so the rendering is repeatable:
+mdurl==0.1.2
+pillow==12.3.0
+charset-normalizer==3.5.1

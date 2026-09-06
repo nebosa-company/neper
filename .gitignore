@@ -15,3 +15,4 @@ examples/hello
 examples/*.exe
 tests/m0/control
 tests/m0/*.exe
+/.venv-docs-pdf/
