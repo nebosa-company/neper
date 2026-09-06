@@ -301,6 +301,21 @@ $bitsetExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $bitsetExecutableWritten -ne 'executable written') { throw 'algo.bitset did not compile into a PE executable' }
 $bitsetOutput = & $bitsetExecutablePath
 if ($LASTEXITCODE -ne 0 -or $bitsetOutput -ne 'algo bitset ok') { throw 'algo.bitset behavior or storage invariants failed' }
+$ringSurface = Get-Content (Join-Path $repo 'lib\e\data\ring.e') |
+    Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
+    ForEach-Object {
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.ring contains an unreadable public declaration' }
+        $Matches[1]
+    }
+$expectedRingSurface = @('Ring', 'Iter', 'init', 'len', 'capacity', 'push', 'push_overwrite', 'pop', 'peek', 'clear', 'iter', 'iter_next')
+if (($ringSurface -join "`n") -ne ($expectedRingSurface -join "`n")) { throw 'e.data.ring public declarations differ from module-apis.md' }
+$ringParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\ring.e')
+if ($LASTEXITCODE -ne 0 -or $ringParsed -ne 'parse file ok') { throw 'e.data.ring failed CLI parsing' }
+$ringExecutablePath = Join-Path $testBuild 'data-ring-selfhost.exe'
+$ringExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_ring\src\main.e') $repo 'x64' 'windows' $ringExecutablePath
+if ($LASTEXITCODE -ne 0 -or $ringExecutableWritten -ne 'executable written') { throw 'e.data.ring did not compile into a PE executable' }
+$ringOutput = & $ringExecutablePath
+if ($LASTEXITCODE -ne 0 -or $ringOutput -ne 'data ring ok') { throw 'e.data.ring FIFO, overwrite, iteration, or empty-capacity behavior failed' }
 $hostExecutablePath = Join-Path $testBuild 'host-memory-clock-selfhost.exe'
 $hostExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\host-memory-clock.e') $repo 'x64' 'windows' $hostExecutablePath
 if ($LASTEXITCODE -ne 0 -or $hostExecutableWritten -ne 'executable written') { throw 'Windows args, memory, or clock intrinsics did not link' }

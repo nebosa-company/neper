@@ -407,6 +407,28 @@ bitset_executable_written=$($test_build/neper-self emit-executable "$repo/tests/
 chmod +x "$bitset_executable_path"
 bitset_output=$("$bitset_executable_path")
 [ "$bitset_output" = 'algo bitset ok' ]
+ring_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/e/data/ring.e")
+expected_ring_surface='Ring
+Iter
+init
+len
+capacity
+push
+push_overwrite
+pop
+peek
+clear
+iter
+iter_next'
+[ "$ring_surface" = "$expected_ring_surface" ]
+ring_parsed=$($test_build/neper-self parse-file "$repo/lib/e/data/ring.e")
+[ "$ring_parsed" = 'parse file ok' ]
+ring_executable_path="$test_build/data-ring-selfhost"
+ring_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_ring/src/main.e" "$repo" x64 linux "$ring_executable_path")
+[ "$ring_executable_written" = 'executable written' ]
+chmod +x "$ring_executable_path"
+ring_output=$("$ring_executable_path")
+[ "$ring_output" = 'data ring ok' ]
 os_helper_path="$test_build/os-spawn-helper-selfhost"
 os_helper_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/os-spawn-helper.e" "$repo" x64 linux "$os_helper_path")
 [ "$os_helper_written" = 'executable written' ]

@@ -30,7 +30,7 @@
     {"name":"e.data.stack","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.data.list","e.mem"],"blocked_by":[]},
     {"name":"e.data.queue","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.data.deque","e.mem"],"blocked_by":[]},
     {"name":"e.data.linked","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.data.list","e.mem"],"blocked_by":[]},
-    {"name":"e.data.ring","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
+    {"name":"e.data.ring","layer":2,"surface":"source","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"e.data.map","layer":2,"surface":"planned","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.mem"],"blocked_by":[]},
     {"name":"e.data.sort","layer":2,"surface":"planned","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.mem"],"blocked_by":[]},
     {"name":"e.data.heap","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.data.list","e.mem"],"blocked_by":[]},
