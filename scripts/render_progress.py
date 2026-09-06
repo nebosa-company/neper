@@ -370,12 +370,12 @@ __GROUPS__
     rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>; the rest
     of <code>e.io</code> waits on <code>printf</code>, and so on comptime string
     parameters and varargs.</p>
-    <p><code>e.str</code> at 53 of 66 is the builder half, which
+    <p><code>e.str</code> at 58 of 66 is the builder half, which
     <code>mem.view</code> unblocked and <code>mem.cast</code> completed by making a
-    <code>Sink</code> context constructible, plus the read-only half that needed no
-    compiler work at all. Of the 13 left, the four integer parsers and
-    <code>BadNumber</code> are unblocked; the four float pushes and two float parsers
-    wait on float lowering, <code>push_err</code> on a runtime error-name table, and
+    <code>Sink</code> context constructible, plus the read-only half and the integer
+    parsers, none of which needed compiler work at all. Nothing is left that a
+    library can reach: the four float pushes and two float parsers wait on float
+    lowering, <code>push_err</code> on a runtime error-name table, and
     <code>format</code> &mdash; rule&nbsp;4's supplied protocol, the one still missing
     on the compiler side &mdash; on comptime <code>str</code> parameters and
     varargs.</p>
