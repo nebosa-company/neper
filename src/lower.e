@@ -27,6 +27,27 @@ type CallResults = struct {
     count: usize,
 }
 
+type DeferredKind = enum u8 {
+    Invalid,
+    Call,
+    Statement,
+    Block,
+}
+
+type Deferred = struct {
+    kind: DeferredKind,
+    call: check.CallInfo,
+    arguments: [16]usize,
+    argument_count: usize,
+    token: lex.Token,
+    node_index: usize,
+}
+
+type DeferState = struct {
+    entries: [256]Deferred,
+    count: usize,
+}
+
 type ReturnLayout = struct {
     offsets: [16]usize,
     size: usize,
@@ -37,6 +58,8 @@ type ReturnLayout = struct {
 type LoopControl = struct {
     active: bool,
     continue_target: usize,
+    break_defer_base: usize,
+    continue_defer_base: usize,
     breaks: []usize,
     break_count: usize,
 }
@@ -359,31 +382,54 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
     ret ok
 }
 
-fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, results: *CallResults) -> err {
+fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, captured: bool, call_out: *check.CallInfo, arguments: []usize, argument_count: *usize) -> err {
     let (call, call_error) = check.check_call(c, g, tree, module_index, node)
     if call_error != ok { ret call_error }
     if call.is_cast || call.function.generic { ret check.Unsupported }
-    var arguments: [16]usize = zero
-    var argument_count = 0usize
+    *call_out = call
+    *argument_count = 0usize
     let end = node.first_child + node.child_count
     var child_position = 0usize
     var at = node.first_child
     while at < end {
         if tree.children[at].node {
             if child_position > 0usize {
-                if argument_count == arguments.len || argument_count >= call.function.parameter_count { ret check.ArgumentCount }
-                let (parameter_type, parameter_type_error) = call_parameter_type(c, call, argument_count)
+                if *argument_count == arguments.len || *argument_count >= call.function.parameter_count { ret check.ArgumentCount }
+                let (parameter_type, parameter_type_error) = call_parameter_type(c, call, *argument_count)
                 if parameter_type_error != ok { ret parameter_type_error }
                 let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, parameter_type, builder, bindings, binding_count)
                 if value_error != ok { ret value_error }
-                arguments[argument_count] = value
-                argument_count += 1usize
+                var argument = value
+                if captured && aggregate_value(c, parameter_type) {
+                    let (info, info_error) = layout.type_info(c, parameter_type)
+                    if info_error != ok { ret info_error }
+                    var slots = (info.size + 7usize) / 8usize
+                    if slots == 0usize { slots = 1usize }
+                    let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, parameter_type, true, slots, c.tokens[node.token_start])
+                    if stack_error != ok { ret stack_error }
+                    let (copy_instruction, ignored, copy_error) = nir.emit(builder, .Copy, parameter_type, false, info.size, c.tokens[node.token_start])
+                    if copy_error != ok { ret copy_error }
+                    try nir.add_operand(builder, copy_instruction, stack)
+                    try nir.add_operand(builder, copy_instruction, value)
+                    argument = stack
+                }
+                arguments[*argument_count] = argument
+                *argument_count += 1usize
             }
             child_position += 1usize
         }
         at += 1usize
     }
-    if argument_count != call.function.parameter_count { ret check.ArgumentCount }
+    if *argument_count != call.function.parameter_count { ret check.ArgumentCount }
+    ret ok
+}
+
+fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, results: *CallResults) -> err {
+    var call: check.CallInfo = zero
+    var arguments: [16]usize = zero
+    var argument_count = 0usize
+    let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, arguments[..], &argument_count)
+    if arguments_error != ok { ret arguments_error }
     ret emit_call_results(c, call, arguments[..], argument_count, builder, c.tokens[node.token_start], results)
 }
 
@@ -1148,7 +1194,7 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     ret (0usize, zero, check.Unsupported)
 }
 
-fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
+fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     if function.return_count != 1usize { ret check.Unsupported }
     let end = node.first_child + node.child_count
     var call_index = 0usize
@@ -1185,6 +1231,7 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     try nir.set_branch_targets(builder, branch_instruction, error_block, continue_block)
     let (error_block_index, error_block_error) = nir.begin_block(builder)
     if error_block_error != ok || error_block_index != error_block { ret nir.InvalidControlFlow }
+    try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, caller_error_type, false, 0usize, c.tokens[node.token_start])
     if return_error != ok { ret return_error }
     try nir.add_operand(builder, return_instruction, call_result)
@@ -1193,7 +1240,7 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     ret ok
 }
 
-fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
+fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     var values: [16]usize = zero
     var count = 0usize
     let end = node.first_child + node.child_count
@@ -1239,9 +1286,11 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             }
             result_at += 1usize
         }
+        try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
         let (instruction, ignored, emit_error) = nir.emit(builder, .Return, zero, false, 0usize, c.tokens[node.token_start])
         ret emit_error
     }
+    try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
     var return_type: check.Type = zero
     if function.return_count == 1usize { return_type = c.return_types[function.first_return] }
     let (instruction, ignored, emit_error) = nir.emit(builder, .Return, return_type, false, 0usize, c.tokens[node.token_start])
@@ -1469,7 +1518,7 @@ fn emit_branch(builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     ret (instruction, emit_error)
 }
 
-fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
+fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
     var condition_index = 0usize
     var found_condition = false
     var branches: [2]usize = zero
@@ -1502,7 +1551,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let true_block = builder.block_count
     let (true_index, true_error) = nir.begin_block(builder)
     if true_error != ok || true_index != true_block { ret nir.InvalidControlFlow }
-    try lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control)
+    try lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers)
     var true_exit = 0usize
     let true_falls_through = !builder.blocks[builder.current_block].terminated
     if true_falls_through {
@@ -1514,7 +1563,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let false_block = builder.block_count
     let (false_index, false_error) = nir.begin_block(builder)
     if false_error != ok || false_index != false_block { ret nir.InvalidControlFlow }
-    if branch_count == 2usize { try lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control) }
+    if branch_count == 2usize { try lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
     var false_exit = 0usize
     let false_falls_through = !builder.blocks[builder.current_block].terminated
     if false_falls_through {
@@ -1534,7 +1583,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     ret ok
 }
 
-fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
     var condition_index = 0usize
     var body_index = 0usize
     var found_condition = false
@@ -1572,8 +1621,8 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let (body_block_index, body_block_error) = nir.begin_block(builder)
     if body_block_error != ok || body_block_index != body_block { ret nir.InvalidControlFlow }
     var break_storage: [256]usize = zero
-    var control = LoopControl { active: true, continue_target: condition_block, breaks: break_storage[..], break_count: 0usize }
-    try lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control)
+    var control = LoopControl { active: true, continue_target: condition_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
+    try lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
     if !builder.blocks[builder.current_block].terminated {
         let (back_edge, back_edge_error) = emit_branch(builder, c.tokens[node.token_start])
         if back_edge_error != ok { ret back_edge_error }
@@ -1635,7 +1684,7 @@ fn lower_iterable_parts(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     ret ok
 }
 
-fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
     var names: [2]lex.Token = zero
     var name_count = 0usize
     var token_at = node.token_start + 1usize
@@ -1777,8 +1826,8 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         try bind_value(c, g, module_index, names[0usize], counter_type, body_counter, false, false, builder, bindings, binding_count)
     }
     var break_storage: [256]usize = zero
-    var control = LoopControl { active: true, continue_target: increment_block, breaks: break_storage[..], break_count: 0usize }
-    let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control)
+    var control = LoopControl { active: true, continue_target: increment_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
+    let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
     if body_error != ok { ret body_error }
@@ -1806,9 +1855,70 @@ fn add_control_exit(control: *LoopControl, branch: usize) -> err {
     ret ok
 }
 
-fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, arm: syntax.Node, subject: usize, subject_type: check.Type, aggregate_index: usize, has_aggregate: bool, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
+fn deferred_call_node(tree: *parse.Tree, node: syntax.Node) -> (usize, bool) {
+    if node.kind != .CallStmt && node.kind != .BindingStmt { ret (0usize, false) }
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if tree.nodes[child_index].kind == .CallExpr { ret (child_index, true) }
+        }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn lower_defer(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
+    if defers.count == defers.entries.len { ret check.Capacity }
+    let (child_index, found_child) = check.first_node_child(tree, node)
+    if !found_child { ret parse.InvalidSyntax }
+    let child = tree.nodes[child_index]
+    var entry: Deferred = zero
+    entry.token = c.tokens[node.token_start]
+    let (call_index, has_call) = deferred_call_node(tree, child)
+    if has_call {
+        entry.kind = .Call
+        let arguments_error = lower_call_arguments(c, g, tree, module_index, tree.nodes[call_index], builder, bindings, binding_count, true, &entry.call, entry.arguments[..], &entry.argument_count)
+        if arguments_error != ok { ret arguments_error }
+    } else {
+        entry.node_index = child_index
+        if child.kind == .Block { entry.kind = .Block } else { entry.kind = .Statement }
+    }
+    defers.entries[defers.count] = entry
+    defers.count += 1usize
+    ret ok
+}
+
+fn emit_deferred_from(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState, base: usize) -> err {
+    if base > defers.count { ret nir.InvalidControlFlow }
+    var at = defers.count
+    while at > base {
+        at = at - 1usize
+        var entry = defers.entries[at]
+        if entry.kind == .Call {
+            var results: CallResults = zero
+            try emit_call_results(c, entry.call, entry.arguments[..], entry.argument_count, builder, entry.token, &results)
+        } else {
+            let local_checkpoint = c.local_count
+            var current_binding_count = binding_count
+            var no_loop: LoopControl = zero
+            if entry.kind == .Block {
+                try lower_block(c, g, tree, module_index, function, tree.nodes[entry.node_index], builder, bindings, &current_binding_count, &no_loop, defers)
+            } else {
+                if entry.kind != .Statement { ret nir.InvalidControlFlow }
+                try lower_statement(c, g, tree, module_index, function, tree.nodes[entry.node_index], builder, bindings, &current_binding_count, &no_loop, defers)
+            }
+            c.local_count = local_checkpoint
+        }
+    }
+    ret ok
+}
+
+fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, arm: syntax.Node, subject: usize, subject_type: check.Type, aggregate_index: usize, has_aggregate: bool, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
     let local_checkpoint = c.local_count
     let binding_checkpoint = *binding_count
+    let defer_checkpoint = defers.count
     let (capture, has_capture) = check.switch_capture_name(c, g.modules[module_index].text, arm)
     if has_capture {
         if !has_aggregate || c.aggregates[aggregate_index].kind != .TaggedUnion { ret check.InvalidSwitch }
@@ -1861,16 +1971,18 @@ fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if builder.blocks[builder.current_block].terminated { break }
         if tree.children[at].node {
             let statement = tree.nodes[tree.children[at].index]
-            if check.check_statement_kind(statement.kind) { try lower_statement(c, g, tree, module_index, function, statement, builder, bindings, binding_count, control) }
+            if check.check_statement_kind(statement.kind) { try lower_statement(c, g, tree, module_index, function, statement, builder, bindings, binding_count, control, defers) }
         }
         at += 1usize
     }
+    if !builder.blocks[builder.current_block].terminated { try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, *binding_count, defers, defer_checkpoint) }
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
+    defers.count = defer_checkpoint
     ret ok
 }
 
-fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, outer_control: *LoopControl) -> err {
+fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, outer_control: *LoopControl, defers: *DeferState) -> err {
     var subject_index = 0usize
     var has_subject = false
     let end = node.first_child + node.child_count
@@ -1910,7 +2022,7 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         compare_type = tag.ty
     }
     var break_storage: [256]usize = zero
-    var control = LoopControl { active: true, continue_target: outer_control.continue_target, breaks: break_storage[..], break_count: 0usize }
+    var control = LoopControl { active: true, continue_target: outer_control.continue_target, break_defer_base: defers.count, continue_defer_base: outer_control.continue_defer_base, breaks: break_storage[..], break_count: 0usize }
     var default_arm: syntax.Node = zero
     var has_default = false
     at = node.first_child
@@ -1969,7 +2081,7 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
                     let body_block = builder.block_count
                     let (body_index, body_error) = nir.begin_block(builder)
                     if body_error != ok || body_index != body_block { ret nir.InvalidControlFlow }
-                    try lower_switch_arm(c, g, tree, module_index, function, arm, subject, subject_type, aggregate_index, has_aggregate, builder, bindings, binding_count, &control)
+                    try lower_switch_arm(c, g, tree, module_index, function, arm, subject, subject_type, aggregate_index, has_aggregate, builder, bindings, binding_count, &control, defers)
                     if !builder.blocks[builder.current_block].terminated {
                         let (exit_branch, exit_error) = emit_branch(builder, c.tokens[arm.token_start])
                         if exit_error != ok { ret exit_error }
@@ -1985,7 +2097,7 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         at += 1usize
     }
     if has_default {
-        try lower_switch_arm(c, g, tree, module_index, function, default_arm, subject, subject_type, aggregate_index, has_aggregate, builder, bindings, binding_count, &control)
+        try lower_switch_arm(c, g, tree, module_index, function, default_arm, subject, subject_type, aggregate_index, has_aggregate, builder, bindings, binding_count, &control, defers)
         if !builder.blocks[builder.current_block].terminated {
             let (exit_branch, exit_error) = emit_branch(builder, c.tokens[node.token_start])
             if exit_error != ok { ret exit_error }
@@ -2008,21 +2120,23 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     ret ok
 }
 
-fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
+fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
     c.failure_module = module_index
     c.failure_token = c.tokens[node.token_start]
     c.failure_has_token = true
-    if node.kind == .ReturnStmt { ret lower_return(c, g, tree, module_index, function, node, builder, bindings, *binding_count) }
-    if node.kind == .TryStmt { ret lower_try(c, g, tree, module_index, function, node, builder, bindings, *binding_count) }
+    if node.kind == .ReturnStmt { ret lower_return(c, g, tree, module_index, function, node, builder, bindings, *binding_count, defers) }
+    if node.kind == .TryStmt { ret lower_try(c, g, tree, module_index, function, node, builder, bindings, *binding_count, defers) }
     if node.kind == .BindingStmt { ret lower_binding(c, g, tree, module_index, node, builder, bindings, binding_count) }
     if node.kind == .AssignmentStmt { ret lower_assignment(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .CallStmt { ret lower_call_statement(c, g, tree, module_index, node, builder, bindings, *binding_count) }
-    if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count, control) }
-    if node.kind == .WhileStmt { ret lower_while(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
-    if node.kind == .ForStmt { ret lower_for(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
-    if node.kind == .SwitchStmt { ret lower_switch(c, g, tree, module_index, function, node, builder, bindings, binding_count, control) }
+    if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
+    if node.kind == .WhileStmt { ret lower_while(c, g, tree, module_index, function, node, builder, bindings, binding_count, defers) }
+    if node.kind == .ForStmt { ret lower_for(c, g, tree, module_index, function, node, builder, bindings, binding_count, defers) }
+    if node.kind == .SwitchStmt { ret lower_switch(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
+    if node.kind == .DeferStmt { ret lower_defer(c, g, tree, module_index, node, builder, bindings, *binding_count, defers) }
     if node.kind == .BreakStmt {
         if !control.active || control.break_count == control.breaks.len { ret check.Unsupported }
+        try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, *binding_count, defers, control.break_defer_base)
         let (branch, branch_error) = emit_branch(builder, c.tokens[node.token_start])
         if branch_error != ok { ret branch_error }
         control.breaks[control.break_count] = branch
@@ -2031,6 +2145,7 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     }
     if node.kind == .ContinueStmt {
         if !control.active { ret check.Unsupported }
+        try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, *binding_count, defers, control.continue_defer_base)
         let (branch, branch_error) = emit_branch(builder, c.tokens[node.token_start])
         if branch_error != ok { ret branch_error }
         ret nir.set_branch_targets(builder, branch, control.continue_target, 0usize)
@@ -2038,19 +2153,22 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     ret check.Unsupported
 }
 
-fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
+fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
     if node.kind != .Block { ret parse.InvalidSyntax }
     let local_checkpoint = c.local_count
     let binding_checkpoint = *binding_count
+    let defer_checkpoint = defers.count
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
         if builder.blocks[builder.current_block].terminated { break }
-        if tree.children[at].node { try lower_statement(c, g, tree, module_index, function, tree.nodes[tree.children[at].index], builder, bindings, binding_count, control) }
+        if tree.children[at].node { try lower_statement(c, g, tree, module_index, function, tree.nodes[tree.children[at].index], builder, bindings, binding_count, control, defers) }
         at += 1usize
     }
+    if !builder.blocks[builder.current_block].terminated { try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, *binding_count, defers, defer_checkpoint) }
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
+    defers.count = defer_checkpoint
     ret ok
 }
 
@@ -2082,6 +2200,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if block_error != ok { ret block_error }
     let local_checkpoint = c.local_count
     var binding_count = 0usize
+    var defers: DeferState = zero
     var hidden_parameters = 0usize
     var function_call: check.CallInfo = zero
     function_call.function = function
@@ -2113,7 +2232,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             let child = tree.nodes[tree.children[at].index]
             if child.kind == .Block {
                 found_body = true
-                try lower_block(c, g, tree, module_index, function, child, builder, bindings, &binding_count, &no_loop)
+                try lower_block(c, g, tree, module_index, function, child, builder, bindings, &binding_count, &no_loop, &defers)
             }
         }
         at += 1usize

@@ -261,6 +261,11 @@ $switchExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests\n
 if ($LASTEXITCODE -ne 0 -or $switchExecutableWritten -ne 'executable written') { throw 'enum, union, tagged-union, or switch lowering failed' }
 $switchOutput = & $switchExecutablePath
 if ($LASTEXITCODE -ne 0 -or $switchOutput -ne 'enum union switch ok') { throw 'enum, union, tagged-union, or switch execution failed' }
+$deferExecutablePath = Join-Path $testBuild 'defer-selfhost.exe'
+$deferExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests\neper0\defer.e') $repo 'x64' 'windows' $deferExecutablePath
+if ($LASTEXITCODE -ne 0 -or $deferExecutableWritten -ne 'executable written') { throw 'defer cleanup did not lower into a PE executable' }
+$deferOutput = & $deferExecutablePath
+if ($LASTEXITCODE -ne 0 -or $deferOutput -ne 'defer ok') { throw 'defer capture, ordering, or control-flow cleanup failed' }
 $ownCompilerPath = Join-Path $testBuild 'neper-own.exe'
 & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $ownCompilerPath | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownCompilerPath)) { throw 'compiler-owned PE linker did not emit the compiler' }

@@ -343,6 +343,12 @@ switch_executable_written=$($test_build/neper-self emit-executable "$repo/tests/
 chmod +x "$switch_executable_path"
 switch_output=$("$switch_executable_path")
 [ "$switch_output" = 'enum union switch ok' ]
+defer_executable_path="$test_build/defer-selfhost"
+defer_executable_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/defer.e" "$repo" x64 linux "$defer_executable_path")
+[ "$defer_executable_written" = 'executable written' ]
+chmod +x "$defer_executable_path"
+defer_output=$("$defer_executable_path")
+[ "$defer_output" = 'defer ok' ]
 own_compiler_path="$test_build/neper-own"
 own_compiler_written=$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$own_compiler_path")
 [ "$own_compiler_written" = 'executable written' ]
