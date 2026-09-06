@@ -897,6 +897,45 @@ fn target_triple(a: *mem.Arena, arch: str, operating_system: str) -> (str, err) 
     ret (storage[..], ok)
 }
 
+fn compiled_module_path(a: *mem.Arena, directory: str, module_name: str, triple: str) -> (str, err) {
+    var separator_count = 1usize
+    if directory.len != 0usize && (directory[directory.len - 1usize] == 47u8 || directory[directory.len - 1usize] == 92u8) { separator_count = 0usize }
+    let length = directory.len + separator_count + module_name.len + 1usize + triple.len + 3usize
+    let (storage, storage_error) = mem.alloc[u8](a, length)
+    if storage_error != ok { ret ("", storage_error) }
+    var written = 0usize
+    var at = 0usize
+    while at < directory.len {
+        storage[written] = directory[at]
+        written += 1usize
+        at += 1usize
+    }
+    if separator_count != 0usize {
+        storage[written] = 47u8
+        written += 1usize
+    }
+    at = 0usize
+    while at < module_name.len {
+        storage[written] = module_name[at]
+        written += 1usize
+        at += 1usize
+    }
+    storage[written] = 46u8
+    written += 1usize
+    at = 0usize
+    while at < triple.len {
+        storage[written] = triple[at]
+        written += 1usize
+        at += 1usize
+    }
+    storage[written] = 46u8
+    storage[written + 1usize] = 101u8
+    storage[written + 2usize] = 109u8
+    written += 3usize
+    if written != length { ret ("", DiagnosticWrite) }
+    ret (storage[..], ok)
+}
+
 fn write_digit(file: os.File, digit: usize) -> err {
     if digit == 0usize { ret write_all(file, "0") }
     if digit == 1usize { ret write_all(file, "1") }
@@ -1178,9 +1217,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     let writes_executable = args.len == 7usize && same(args[1usize], "emit-executable")
     let writes_em = args.len == 7usize && same(args[1usize], "emit-em")
-    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em {
+    let writes_all_em = args.len == 7usize && same(args[1usize], "emit-em-all")
+    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em || writes_all_em {
         let emit_object = same(args[1usize], "object-file") || writes_object
-        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em
+        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
@@ -1255,7 +1295,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             function_at += 1usize
         }
         if emit_machine_code {
-            if writes_em {
+            if writes_em || writes_all_em {
                 let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 262144usize)
                 if artifact_storage_error != ok { ret artifact_storage_error }
                 var artifact: binary.Buffer = zero
@@ -1270,12 +1310,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
                 if triple_error != ok { ret triple_error }
-                try em.write_module(&checker, &loaded, &builder, 0usize, triple, .Debug, &machine, function_offsets, relocations, relocation_count, string_values, sections, &scratch, &artifact)
-                let (packed, packed_error) = mem.alloc[u8](a, artifact.count)
+                let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
                 if packed_error != ok { ret packed_error }
-                try binary.pack(&artifact, packed)
-                try save_bytes(a, args[6usize], packed)
-                try io.print("compiled module written\n")
+                if writes_em {
+                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, .Debug, &machine, function_offsets, relocations, relocation_count, string_values, sections, &scratch, &artifact)
+                    try binary.pack(&artifact, packed)
+                    try save_bytes(a, args[6usize], packed[..artifact.count])
+                    try io.print("compiled module written\n")
+                    ret ok
+                }
+                var module_at = 0usize
+                while module_at < loaded.count {
+                    artifact.count = 0usize
+                    try em.write_module(&checker, &loaded, &builder, module_at, triple, .Debug, &machine, function_offsets, relocations, relocation_count, string_values, sections, &scratch, &artifact)
+                    try binary.pack(&artifact, packed)
+                    let (artifact_path, artifact_path_error) = compiled_module_path(a, args[6usize], loaded.modules[module_at].name, triple)
+                    if artifact_path_error != ok { ret artifact_path_error }
+                    try save_bytes(a, artifact_path, packed[..artifact.count])
+                    module_at += 1usize
+                }
+                try io.print("compiled modules written\n")
                 ret ok
             }
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
@@ -1327,6 +1381,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
     ret ok
 }

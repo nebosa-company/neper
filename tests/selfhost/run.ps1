@@ -256,7 +256,13 @@ if ($LASTEXITCODE -ne 0 -or $interfaceArtifactWritten -ne 'compiled module writt
 $interfaceArtifactBytes = [IO.File]::ReadAllBytes($interfaceArtifactPath)
 $interfaceOffset = [BitConverter]::ToUInt64($interfaceArtifactBytes, 64)
 if ([BitConverter]::ToUInt32($interfaceArtifactBytes, [int]$interfaceOffset + 8) -ne 6) { throw 'compiled-module interface omitted a declaration kind' }
-if ([BitConverter]::ToUInt64($interfaceArtifactBytes, [int]$interfaceOffset + 24) -eq 0) { throw 'compiled-module function signature hash is zero' }
+if ([BitConverter]::ToUInt64($interfaceArtifactBytes, [int]$interfaceOffset + 28) -eq 0) { throw 'compiled-module function signature hash is zero' }
+$allArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $testBuild
+if ($LASTEXITCODE -ne 0 -or $allArtifactsWritten -ne 'compiled modules written') { throw 'per-module artifact emission failed' }
+$rootModuleArtifactPath = Join-Path $testBuild 'main.x64-windows.em'
+$dependencyModuleArtifactPath = Join-Path $testBuild 'dep.x64-windows.em'
+if (-not (Test-Path -LiteralPath $rootModuleArtifactPath) -or -not (Test-Path -LiteralPath $dependencyModuleArtifactPath)) { throw 'per-module artifact set is incomplete' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rootModuleArtifactPath).Hash -ne $moduleArtifactHash) { throw 'root artifact changed when emitted with its dependency set' }
 $scalarOpsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $scalarOpsLowered -ne 'module nir ok') { throw 'casts, unary operators, and call statements did not lower to canonical NIR' }
 $scalarOpsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'

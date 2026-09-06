@@ -38,6 +38,21 @@ type StringTable = struct {
     count: usize,
 }
 
+type Declaration = struct {
+    kind: usize,
+    flags: usize,
+    name_index: usize,
+    signature_hash: usize,
+    body_hash: usize,
+}
+
+type Dependency = struct {
+    kind: usize,
+    module_index: usize,
+    name_index: usize,
+    hash: usize,
+}
+
 fn format_version() -> usize { ret 1usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
@@ -55,6 +70,9 @@ fn declaration_alias_kind() -> usize { ret 3usize }
 fn declaration_constant_kind() -> usize { ret 4usize }
 fn declaration_error_kind() -> usize { ret 5usize }
 fn dependency_signature_kind() -> usize { ret 1usize }
+fn dependency_value_kind() -> usize { ret 2usize }
+fn dependency_body_kind() -> usize { ret 3usize }
+fn dependency_lookup_kind() -> usize { ret 4usize }
 
 fn mode_id(mode: BuildMode) -> usize {
     if mode == .Release { ret 1usize }
@@ -952,6 +970,9 @@ fn write_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, mo
     let section_start = output.count
     try binary.little_u64(output, 0usize)
     try binary.little_u32(output, interface_declaration_count(c, module_index))
+    let (stored_module_index, stored_module_error) = string_index(table, g.modules[module_index].name)
+    if stored_module_error != ok { ret stored_module_error }
+    try binary.little_u32(output, stored_module_index)
     var at = 0usize
     while at < c.signature_function_count {
         if c.functions[at].module_index == module_index { try write_function_interface(c, g, builder, table, at, scratch, output) }
@@ -1324,6 +1345,188 @@ fn validate_strings(bytes: []const usize, section: Section, target_index: usize)
     ret ok
 }
 
+fn find_section_unchecked(bytes: []const usize, kind: usize) -> (Section, bool, err) {
+    let empty = Section { kind: 0usize, flags: 0usize, offset: 0usize, length: 0usize }
+    let (section_count, count_error) = binary.read_u32(bytes, 20usize)
+    let (directory, directory_error) = binary.read_u32(bytes, 24usize)
+    if count_error != ok || directory_error != ok || directory > bytes.len || section_count > (bytes.len - directory) / directory_entry_size() { ret (empty, false, InvalidArtifact) }
+    var at = 0usize
+    while at < section_count {
+        let entry = directory + at * directory_entry_size()
+        let (entry_kind, kind_error) = binary.read_u32(bytes, entry)
+        let (flags, flags_error) = binary.read_u32(bytes, entry + 4usize)
+        let (offset, offset_error) = binary.read_u64(bytes, entry + 8usize)
+        let (length, length_error) = binary.read_u64(bytes, entry + 16usize)
+        if kind_error != ok || flags_error != ok || offset_error != ok || length_error != ok || offset > bytes.len || length > bytes.len - offset { ret (empty, false, InvalidArtifact) }
+        if entry_kind == kind { ret (Section { kind: entry_kind, flags: flags, offset: offset, length: length }, true, ok) }
+        at += 1usize
+    }
+    ret (empty, false, ok)
+}
+
+fn string_bounds(bytes: []const usize, index: usize) -> (usize, usize, err) {
+    let (strings, found_strings, section_error) = find_section_unchecked(bytes, strings_kind())
+    if section_error != ok || !found_strings || strings.length < 4usize { ret (0usize, 0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, strings.offset)
+    if count_error != ok || index >= count { ret (0usize, 0usize, InvalidArtifact) }
+    let end = strings.offset + strings.length
+    var cursor = strings.offset + 4usize
+    var at = 0usize
+    while at < count {
+        let (length, length_error) = binary.read_u32(bytes, cursor)
+        if length_error != ok { ret (0usize, 0usize, InvalidArtifact) }
+        cursor += 4usize
+        if cursor > end || length > end - cursor { ret (0usize, 0usize, InvalidArtifact) }
+        if at == index { ret (cursor, length, ok) }
+        cursor += length
+        at += 1usize
+    }
+    ret (0usize, 0usize, InvalidArtifact)
+}
+
+fn string_matches(bytes: []const usize, index: usize, expected: str) -> (bool, err) {
+    let (start, length, bounds_error) = string_bounds(bytes, index)
+    if bounds_error != ok { ret (false, bounds_error) }
+    if length != expected.len { ret (false, ok) }
+    var at = 0usize
+    while at < length {
+        if bytes[start + at] != usize(expected[at]) { ret (false, ok) }
+        at += 1usize
+    }
+    ret (true, ok)
+}
+
+fn strings_equal(left: []const usize, left_index: usize, right: []const usize, right_index: usize) -> (bool, err) {
+    let (left_start, left_length, left_error) = string_bounds(left, left_index)
+    let (right_start, right_length, right_error) = string_bounds(right, right_index)
+    if left_error != ok { ret (false, left_error) }
+    if right_error != ok { ret (false, right_error) }
+    if left_length != right_length { ret (false, ok) }
+    var at = 0usize
+    while at < left_length {
+        if left[left_start + at] != right[right_start + at] { ret (false, ok) }
+        at += 1usize
+    }
+    ret (true, ok)
+}
+
+fn interface_module_index(bytes: []const usize) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (interface, found_interface, section_error) = find_section_unchecked(bytes, interface_kind())
+    if section_error != ok || !found_interface || interface.length < 16usize { ret (0usize, InvalidArtifact) }
+    let (module_index, module_error) = binary.read_u32(bytes, interface.offset + 12usize)
+    if module_error != ok { ret (0usize, InvalidArtifact) }
+    let (module_start, module_length, bounds_error) = string_bounds(bytes, module_index)
+    if bounds_error != ok || module_length == 0usize || module_start >= bytes.len { ret (0usize, InvalidArtifact) }
+    ret (module_index, ok)
+}
+
+fn find_declaration(bytes: []const usize, name: str) -> (Declaration, bool, err) {
+    let empty = Declaration { kind: 0usize, flags: 0usize, name_index: 0usize, signature_hash: 0usize, body_hash: 0usize }
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (empty, false, validation_error) }
+    let (interface, found_interface, section_error) = find_section_unchecked(bytes, interface_kind())
+    if section_error != ok || !found_interface || interface.length < 16usize { ret (empty, false, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, interface.offset + 8usize)
+    if count_error != ok { ret (empty, false, InvalidArtifact) }
+    let end = interface.offset + interface.length
+    var cursor = interface.offset + 16usize
+    var at = 0usize
+    while at < count {
+        if cursor > end || 8usize > end - cursor { ret (empty, false, InvalidArtifact) }
+        let kind = bytes[cursor]
+        let flags = bytes[cursor + 1usize]
+        if kind > 255usize || flags > 255usize || bytes[cursor + 2usize] != 0usize || bytes[cursor + 3usize] != 0usize { ret (empty, false, InvalidArtifact) }
+        let (length, length_error) = binary.read_u32(bytes, cursor + 4usize)
+        if length_error != ok || length < 20usize { ret (empty, false, InvalidArtifact) }
+        let payload = cursor + 8usize
+        if payload > end || length > end - payload { ret (empty, false, InvalidArtifact) }
+        let (name_index, name_error) = binary.read_u32(bytes, payload)
+        let (signature, signature_error) = binary.read_u64(bytes, payload + 4usize)
+        let (body, body_error) = binary.read_u64(bytes, payload + 12usize)
+        if name_error != ok || signature_error != ok || body_error != ok { ret (empty, false, InvalidArtifact) }
+        let (matches, match_error) = string_matches(bytes, name_index, name)
+        if match_error != ok { ret (empty, false, match_error) }
+        if matches { ret (Declaration { kind: kind, flags: flags, name_index: name_index, signature_hash: signature, body_hash: body }, true, ok) }
+        cursor = payload + length
+        at += 1usize
+    }
+    ret (empty, false, ok)
+}
+
+fn dependency_at(bytes: []const usize, index: usize) -> (Dependency, err) {
+    let empty = Dependency { kind: 0usize, module_index: 0usize, name_index: 0usize, hash: 0usize }
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (empty, validation_error) }
+    let (deps, found_deps, section_error) = find_section_unchecked(bytes, deps_kind())
+    if section_error != ok || !found_deps || deps.length < 4usize { ret (empty, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, deps.offset)
+    if count_error != ok || index >= count || count > (deps.length - 4usize) / 20usize { ret (empty, InvalidArtifact) }
+    let offset = deps.offset + 4usize + index * 20usize
+    if offset + 20usize > deps.offset + deps.length { ret (empty, InvalidArtifact) }
+    let kind = bytes[offset]
+    if kind > 255usize || bytes[offset + 1usize] != 0usize || bytes[offset + 2usize] != 0usize || bytes[offset + 3usize] != 0usize { ret (empty, InvalidArtifact) }
+    let (module_index, module_error) = binary.read_u32(bytes, offset + 4usize)
+    let (name_index, name_error) = binary.read_u32(bytes, offset + 8usize)
+    let (hash, hash_error) = binary.read_u64(bytes, offset + 12usize)
+    if module_error != ok || name_error != ok || hash_error != ok { ret (empty, InvalidArtifact) }
+    let (module_start, module_length, module_bounds_error) = string_bounds(bytes, module_index)
+    let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
+    if module_bounds_error != ok || name_bounds_error != ok || module_length == 0usize || name_length == 0usize { ret (empty, InvalidArtifact) }
+    ret (Dependency { kind: kind, module_index: module_index, name_index: name_index, hash: hash }, ok)
+}
+
+fn find_declaration_indexed(bytes: []const usize, query: []const usize, query_name_index: usize) -> (Declaration, bool, err) {
+    let empty = Declaration { kind: 0usize, flags: 0usize, name_index: 0usize, signature_hash: 0usize, body_hash: 0usize }
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (empty, false, validation_error) }
+    let (interface, found_interface, section_error) = find_section_unchecked(bytes, interface_kind())
+    if section_error != ok || !found_interface || interface.length < 16usize { ret (empty, false, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, interface.offset + 8usize)
+    if count_error != ok { ret (empty, false, InvalidArtifact) }
+    let end = interface.offset + interface.length
+    var cursor = interface.offset + 16usize
+    var at = 0usize
+    while at < count {
+        if cursor > end || 8usize > end - cursor { ret (empty, false, InvalidArtifact) }
+        let kind = bytes[cursor]
+        let flags = bytes[cursor + 1usize]
+        let (length, length_error) = binary.read_u32(bytes, cursor + 4usize)
+        if kind > 255usize || flags > 255usize || length_error != ok || length < 20usize { ret (empty, false, InvalidArtifact) }
+        let payload = cursor + 8usize
+        if payload > end || length > end - payload { ret (empty, false, InvalidArtifact) }
+        let (name_index, name_error) = binary.read_u32(bytes, payload)
+        let (signature, signature_error) = binary.read_u64(bytes, payload + 4usize)
+        let (body, body_error) = binary.read_u64(bytes, payload + 12usize)
+        if name_error != ok || signature_error != ok || body_error != ok { ret (empty, false, InvalidArtifact) }
+        let (matches, match_error) = strings_equal(bytes, name_index, query, query_name_index)
+        if match_error != ok { ret (empty, false, match_error) }
+        if matches { ret (Declaration { kind: kind, flags: flags, name_index: name_index, signature_hash: signature, body_hash: body }, true, ok) }
+        cursor = payload + length
+        at += 1usize
+    }
+    ret (empty, false, ok)
+}
+
+fn dependency_matches(dependent: []const usize, dependency_index: usize, target_artifact: []const usize) -> (bool, err) {
+    let (dependency, dependency_error) = dependency_at(dependent, dependency_index)
+    if dependency_error != ok { ret (false, dependency_error) }
+    let (target_module_index, target_module_error) = interface_module_index(target_artifact)
+    if target_module_error != ok { ret (false, target_module_error) }
+    let (same_module, module_error) = strings_equal(dependent, dependency.module_index, target_artifact, target_module_index)
+    if module_error != ok { ret (false, module_error) }
+    if !same_module { ret (false, ok) }
+    let (declaration, found_declaration, declaration_error) = find_declaration_indexed(target_artifact, dependent, dependency.name_index)
+    if declaration_error != ok { ret (false, declaration_error) }
+    if dependency.kind == dependency_lookup_kind() && dependency.hash == 0usize { ret (!found_declaration, ok) }
+    if !found_declaration { ret (false, ok) }
+    if dependency.kind == dependency_signature_kind() { ret (declaration.signature_hash == dependency.hash, ok) }
+    if dependency.kind == dependency_value_kind() || dependency.kind == dependency_body_kind() { ret (declaration.body_hash == dependency.hash, ok) }
+    if dependency.kind == dependency_lookup_kind() { ret (declaration.signature_hash == dependency.hash, ok) }
+    ret (false, InvalidArtifact)
+}
+
 fn validate(bytes: []const usize) -> err {
     if bytes.len < header_size() || bytes[0usize] != 78usize || bytes[1usize] != 69usize || bytes[2usize] != 80usize || bytes[3usize] != 77usize { ret InvalidArtifact }
     let (version, version_error) = binary.read_u16(bytes, 4usize)
@@ -1382,11 +1585,28 @@ fn self_test() -> err {
     try write_strings(&strings, &output)
     try end_section(&writer)
     try begin_section(&writer, interface_kind(), required_flag())
+    let interface_start = output.count
     try binary.little_u64(&output, 0usize)
+    try binary.little_u32(&output, 1usize)
+    try binary.little_u32(&output, module_name)
+    try binary.byte(&output, declaration_function_kind())
+    try binary.zeroes(&output, 3usize)
+    try binary.little_u32(&output, 20usize)
+    try binary.little_u32(&output, module_name)
+    try binary.little_u64(&output, 123usize)
+    try binary.little_u64(&output, 456usize)
     try binary.little_u32(&output, 0usize)
+    let (interface_hash, interface_hash_error) = artifact_hash.xxhash64(output.bytes[interface_start..output.count])
+    if interface_hash_error != ok { ret interface_hash_error }
+    try binary.patch_little_u64(&output, interface_start, interface_hash)
     try end_section(&writer)
     try begin_section(&writer, deps_kind(), required_flag())
-    try binary.little_u32(&output, 0usize)
+    try binary.little_u32(&output, 1usize)
+    try binary.byte(&output, dependency_signature_kind())
+    try binary.zeroes(&output, 3usize)
+    try binary.little_u32(&output, module_name)
+    try binary.little_u32(&output, module_name)
+    try binary.little_u64(&output, 123usize)
     try end_section(&writer)
     try begin_section(&writer, nir_kind(), required_flag())
     try binary.little_u32(&output, 0usize)
@@ -1399,6 +1619,12 @@ fn self_test() -> err {
     try end_section(&writer)
     try finish(&writer)
     try validate(output.bytes[0usize..output.count])
+    let (declaration, found_declaration, declaration_error) = find_declaration(output.bytes[0usize..output.count], "main")
+    if declaration_error != ok || !found_declaration || declaration.signature_hash != 123usize || declaration.body_hash != 456usize { ret InvalidArtifact }
+    let (dependency, dependency_error) = dependency_at(output.bytes[0usize..output.count], 0usize)
+    if dependency_error != ok || dependency.kind != dependency_signature_kind() || dependency.hash != 123usize { ret InvalidArtifact }
+    let (matches_dependency, dependency_match_error) = dependency_matches(output.bytes[0usize..output.count], 0usize, output.bytes[0usize..output.count])
+    if dependency_match_error != ok || !matches_dependency { ret InvalidArtifact }
     output.bytes[0usize] = 0usize
     if validate(output.bytes[0usize..output.count]) != InvalidArtifact { ret InvalidArtifact }
     output.bytes[0usize] = 78usize
