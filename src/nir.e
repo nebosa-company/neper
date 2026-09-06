@@ -85,6 +85,13 @@ type Function = struct {
     value_count: usize,
 }
 
+type Signature = struct {
+    first_parameter_type: usize,
+    parameter_count: usize,
+    first_return_type: usize,
+    return_count: usize,
+}
+
 type FunctionRef = struct {
     module_index: usize,
     name: str,
@@ -92,6 +99,12 @@ type FunctionRef = struct {
 
 type StringConstant = struct {
     spelling: str,
+}
+
+type Signatures = struct {
+    entries: []Signature,
+    types: []check.Type,
+    count: usize,
 }
 
 type Builder = struct {
@@ -137,6 +150,14 @@ fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions:
     builder.next_value = 0usize
     builder.function_active = false
     builder.block_active = false
+    ret ok
+}
+
+fn init_signatures(signatures: *Signatures, entries: []Signature, types: []check.Type) -> err {
+    if entries.len == 0usize || types.len == 0usize { ret Capacity }
+    signatures.entries = entries
+    signatures.types = types
+    signatures.count = 0usize
     ret ok
 }
 
@@ -186,6 +207,31 @@ fn begin_function(builder: *Builder, module_index: usize, name: str) -> (usize, 
     builder.function_active = true
     builder.block_active = false
     ret (index, ok)
+}
+
+fn begin_signature(builder: *Builder, function_index: usize, signatures: *Signatures) -> err {
+    if !builder.function_active || function_index != builder.current_function || function_index >= signatures.entries.len { ret InvalidControlFlow }
+    signatures.entries[function_index] = Signature { first_parameter_type: signatures.count, parameter_count: 0usize, first_return_type: signatures.count, return_count: 0usize }
+    ret ok
+}
+
+fn add_parameter_type(builder: *Builder, function_index: usize, signatures: *Signatures, ty: check.Type) -> err {
+    if !builder.function_active || function_index != builder.current_function || function_index >= signatures.entries.len || signatures.entries[function_index].return_count != 0usize { ret InvalidControlFlow }
+    if signatures.count == signatures.types.len { ret Capacity }
+    signatures.types[signatures.count] = ty
+    signatures.count += 1usize
+    signatures.entries[function_index].parameter_count += 1usize
+    signatures.entries[function_index].first_return_type = signatures.count
+    ret ok
+}
+
+fn add_return_type(builder: *Builder, function_index: usize, signatures: *Signatures, ty: check.Type) -> err {
+    if !builder.function_active || function_index != builder.current_function || function_index >= signatures.entries.len { ret InvalidControlFlow }
+    if signatures.count == signatures.types.len { ret Capacity }
+    signatures.types[signatures.count] = ty
+    signatures.count += 1usize
+    signatures.entries[function_index].return_count += 1usize
+    ret ok
 }
 
 fn begin_block(builder: *Builder) -> (usize, err) {
@@ -323,5 +369,30 @@ fn self_test() -> err {
     if builder.functions[0usize].value_count != 3usize || builder.blocks[0usize].instruction_count != 4usize || !builder.blocks[0usize].terminated { ret InvalidValue }
     let (invalid_instruction, invalid_result, invalid_error) = emit(&builder, .ConstInteger, integer, true, 0usize, zero)
     if invalid_error != InvalidControlFlow { ret InvalidControlFlow }
+    ret ok
+}
+
+fn signature_self_test() -> err {
+    var functions: [1]Function = zero
+    var blocks: [1]Block = zero
+    var instructions: [1]Instruction = zero
+    var operands: [1]usize = zero
+    var function_refs: [1]FunctionRef = zero
+    var strings: [1]StringConstant = zero
+    var builder: Builder = zero
+    try init(&builder, functions[..], blocks[..], instructions[..], operands[..], function_refs[..], strings[..])
+    var signature_types: [2]check.Type = zero
+    var signature_entries: [1]Signature = zero
+    var signatures: Signatures = zero
+    try init_signatures(&signatures, signature_entries[..], signature_types[..])
+    var integer: check.Type = zero
+    integer.kind = .Integer
+    integer.name = "i64"
+    let (function_index, function_error) = begin_function(&builder, 0usize, "main")
+    if function_error != ok { ret function_error }
+    try begin_signature(&builder, function_index, &signatures)
+    try add_parameter_type(&builder, function_index, &signatures, integer)
+    try add_return_type(&builder, function_index, &signatures, integer)
+    if signatures.entries[0usize].first_parameter_type != 0usize || signatures.entries[0usize].parameter_count != 1usize || signatures.entries[0usize].first_return_type != 1usize || signatures.entries[0usize].return_count != 1usize || signatures.count != 2usize { ret InvalidValue }
     ret ok
 }

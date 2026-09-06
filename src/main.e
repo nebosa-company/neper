@@ -729,6 +729,7 @@ fn self_test() -> err {
     if capacity_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try artifact_hash.self_test()
     try nir.self_test()
+    try nir.signature_self_test()
     try regalloc.self_test()
     try emit_x64.self_test()
     try codegen_x64.self_test()
@@ -819,7 +820,7 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     ret check.init_control(checker, checked_switches)
 }
 
-fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder) -> err {
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize) -> err {
     let (functions, functions_error) = mem.alloc[nir.Function](a, 1024usize)
     if functions_error != ok { ret functions_error }
     let (blocks, blocks_error) = mem.alloc[nir.Block](a, 8192usize)
@@ -832,7 +833,14 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder) -> err {
     if function_refs_error != ok { ret function_refs_error }
     let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 8192usize)
     if strings_error != ok { ret strings_error }
-    ret nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
+    try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
+    let (signature_entries, signature_entries_error) = mem.alloc[nir.Signature](a, 1024usize)
+    if signature_entries_error != ok { ret signature_entries_error }
+    var type_capacity = signature_type_capacity
+    if type_capacity == 0usize { type_capacity = 1usize }
+    let (signature_types, signature_types_error) = mem.alloc[check.Type](a, type_capacity)
+    if signature_types_error != ok { ret signature_types_error }
+    ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
 fn write_all(file: os.File, text: str) -> err {
@@ -1179,12 +1187,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var builder: nir.Builder = zero
-        try init_cli_nir(a, &builder)
+        var signatures: nir.Signatures = zero
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count)
         let (bindings, bindings_error) = mem.alloc[lower.Binding](a, 16384usize)
         if bindings_error != ok { ret bindings_error }
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, 128usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
-        try lower.reachable_modules(&checker, &loaded, &builder, bindings, lowered_modules)
+        try lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
         let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, 32768usize)
         if ranges_error != ok { ret ranges_error }
         let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, 32768usize)

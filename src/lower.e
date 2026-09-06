@@ -617,7 +617,7 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     ret ok
 }
 
-fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding) -> err {
+fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     let text = g.modules[module_index].text
     let (name, name_error) = declaration_name(c, text, node)
     if name_error != ok { ret name_error }
@@ -627,6 +627,17 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
     if function.generic { ret check.Unsupported }
     let (nir_function, begin_error) = nir.begin_function(builder, module_index, name)
     if begin_error != ok { ret begin_error }
+    try nir.begin_signature(builder, nir_function, signatures)
+    var signature_parameter_at = 0usize
+    while signature_parameter_at < function.parameter_count {
+        try nir.add_parameter_type(builder, nir_function, signatures, c.parameters[function.first_parameter + signature_parameter_at].ty)
+        signature_parameter_at += 1usize
+    }
+    var signature_return_at = 0usize
+    while signature_return_at < function.return_count {
+        try nir.add_return_type(builder, nir_function, signatures, c.return_types[function.first_return + signature_return_at])
+        signature_return_at += 1usize
+    }
     let (entry, block_error) = nir.begin_block(builder)
     if block_error != ok { ret block_error }
     let local_checkpoint = c.local_count
@@ -664,7 +675,7 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
     ret end_error
 }
 
-fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, bindings: []Binding) -> err {
+fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     if module_index >= g.count { ret FunctionNotFound }
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, g.nodes, g.children)
@@ -673,36 +684,36 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl { try lower_function(c, g, &tree, module_index, node, builder, bindings) }
+        if node.top_level && node.kind == .FnDecl { try lower_function(c, g, &tree, module_index, node, builder, signatures, bindings) }
         node_index += 1usize
     }
     ret ok
 }
 
-fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, bindings: []Binding) -> err {
+fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     var module_index = 0usize
     while module_index < g.count {
-        try module(c, g, module_index, builder, bindings)
+        try module(c, g, module_index, builder, signatures, bindings)
         module_index += 1usize
     }
     ret ok
 }
 
-fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, bindings: []Binding, lowered: []bool) -> err {
+fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, lowered: []bool) -> err {
     if g.count == 0usize || g.count > lowered.len { ret FunctionNotFound }
     var module_index = 0usize
     while module_index < g.count {
         lowered[module_index] = false
         module_index += 1usize
     }
-    try module(c, g, 0usize, builder, bindings)
+    try module(c, g, 0usize, builder, signatures, bindings)
     lowered[0usize] = true
     var reference_at = 0usize
     while reference_at < builder.function_ref_count {
         let target_module = builder.function_refs[reference_at].module_index
         if target_module >= g.count { ret FunctionNotFound }
         if !lowered[target_module] {
-            try module(c, g, target_module, builder, bindings)
+            try module(c, g, target_module, builder, signatures, bindings)
             lowered[target_module] = true
         }
         reference_at += 1usize
