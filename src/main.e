@@ -2,6 +2,7 @@ use e.io
 use e.mem
 use e.os
 use check
+use emit_x64
 use graph
 use lex
 use lower
@@ -722,6 +723,7 @@ fn self_test() -> err {
     if capacity_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try nir.self_test()
     try regalloc.self_test()
+    try emit_x64.self_test()
     ret ok
 }
 
