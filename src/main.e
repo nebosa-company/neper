@@ -1161,13 +1161,24 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if block_offsets_error != ok { ret block_offsets_error }
         let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, 32768usize)
         if fixups_error != ok { ret fixups_error }
+        let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, 32768usize)
+        if relocations_error != ok { ret relocations_error }
+        var relocation_count = 0usize
         var function_at = 0usize
         var machine_abi: codegen_x64.Abi = .SystemV
         if same(args[5usize], "windows") { machine_abi = .Windows }
+        var codegen_context: codegen_x64.FunctionContext = zero
+        codegen_context.allocations = allocations
+        codegen_context.abi = machine_abi
+        codegen_context.block_offsets = block_offsets
+        codegen_context.fixups = fixups
+        codegen_context.relocations = relocations
+        codegen_context.relocation_count = &relocation_count
+        codegen_context.output = &machine
         while function_at < builder.function_count {
             let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 5usize, ranges, allocations)
             if allocation_error != ok { ret allocation_error }
-            if emit_machine_code { try codegen_x64.function(&builder, function_at, allocations, stack_slots, machine_abi, block_offsets, fixups, &machine) }
+            if emit_machine_code { try codegen_x64.function(&builder, function_at, stack_slots, &codegen_context) }
             function_at += 1usize
         }
         if emit_machine_code {

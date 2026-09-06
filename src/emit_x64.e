@@ -182,6 +182,14 @@ fn jump(buffer: *Buffer) -> (usize, err) {
     ret (displacement, displacement_error)
 }
 
+fn call(buffer: *Buffer) -> (usize, err) {
+    let displacement = buffer.count + 1usize
+    let byte_error = byte(buffer, 232usize)
+    if byte_error != ok { ret (0usize, byte_error) }
+    let displacement_error = little_u32(buffer, 0usize)
+    ret (displacement, displacement_error)
+}
+
 fn jump_nonzero(buffer: *Buffer, value: usize) -> (usize, err) {
     let test_error = test_register(buffer, value)
     if test_error != ok { ret (0usize, test_error) }

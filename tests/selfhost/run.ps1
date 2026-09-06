@@ -177,6 +177,8 @@ $expressionsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $expressionsGenerated -ne 'module codegen ok') { throw 'scalar NIR did not allocate and select x64 machine code' }
 $parametersGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\parameters\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $parametersGenerated -ne 'module codegen ok') { throw 'Windows x64 parameter ingress did not reach allocated NIR values' }
+$callsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\calls\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $callsGenerated -ne 'module codegen ok') { throw 'Windows x64 calls did not emit ABI moves and relocations' }
 $localsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\locals\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $localsLowered -ne 'module nir ok') { throw 'parameters and local storage did not lower to canonical NIR' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
