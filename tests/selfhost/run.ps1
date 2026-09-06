@@ -236,6 +236,20 @@ $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }
 & $moduleExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'cross-module calls failed in the self-hosted PE executable' }
+$moduleArtifactPath = Join-Path $testBuild 'modules.x64-windows.em'
+$moduleArtifactCopyPath = Join-Path $testBuild 'modules-copy.x64-windows.em'
+$moduleArtifactWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleArtifactPath
+if ($LASTEXITCODE -ne 0 -or $moduleArtifactWritten -ne 'compiled module written') { throw 'compiled-module emission failed' }
+$moduleArtifactCopyWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleArtifactCopyPath
+if ($LASTEXITCODE -ne 0 -or $moduleArtifactCopyWritten -ne 'compiled module written') { throw 'repeated compiled-module emission failed' }
+$moduleArtifactHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleArtifactPath).Hash
+$moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleArtifactCopyPath).Hash
+if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
+$moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
+if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 1 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 6) { throw 'compiled-module section count is invalid' }
+if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $scalarOpsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $scalarOpsLowered -ne 'module nir ok') { throw 'casts, unary operators, and call statements did not lower to canonical NIR' }
 $scalarOpsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'

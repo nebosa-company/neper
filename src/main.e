@@ -2,8 +2,10 @@ use e.io
 use e.mem
 use e.os
 use artifact_hash
+use binary
 use check
 use codegen_x64
+use em
 use emit_x64
 use graph
 use lex
@@ -728,6 +730,8 @@ fn self_test() -> err {
     let capacity_error = parse.parse(&tiny, "error Full\n")
     if capacity_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try artifact_hash.self_test()
+    try binary.self_test()
+    try em.self_test()
     try nir.self_test()
     try nir.signature_self_test()
     try regalloc.self_test()
@@ -873,6 +877,24 @@ fn save_bytes(a: *mem.Arena, path: str, bytes: []u8) -> err {
     let close_error = os.close(file)
     if write_error != ok { ret write_error }
     ret close_error
+}
+
+fn target_triple(a: *mem.Arena, arch: str, operating_system: str) -> (str, err) {
+    let length = arch.len + 1usize + operating_system.len
+    let (storage, storage_error) = mem.alloc[u8](a, length)
+    if storage_error != ok { ret ("", storage_error) }
+    var at = 0usize
+    while at < arch.len {
+        storage[at] = arch[at]
+        at += 1usize
+    }
+    storage[arch.len] = 45u8
+    at = 0usize
+    while at < operating_system.len {
+        storage[arch.len + 1usize + at] = operating_system[at]
+        at += 1usize
+    }
+    ret (storage[..], ok)
 }
 
 fn write_digit(file: os.File, digit: usize) -> err {
@@ -1155,9 +1177,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     let writes_executable = args.len == 7usize && same(args[1usize], "emit-executable")
-    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable {
+    let writes_em = args.len == 7usize && same(args[1usize], "emit-em")
+    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em {
         let emit_object = same(args[1usize], "object-file") || writes_object
-        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable
+        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
@@ -1232,6 +1255,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
             function_at += 1usize
         }
         if emit_machine_code {
+            if writes_em {
+                let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 262144usize)
+                if artifact_storage_error != ok { ret artifact_storage_error }
+                var artifact: binary.Buffer = zero
+                try binary.init(&artifact, artifact_storage)
+                let (scratch_storage, scratch_storage_error) = mem.alloc[usize](a, 65536usize)
+                if scratch_storage_error != ok { ret scratch_storage_error }
+                var scratch: binary.Buffer = zero
+                try binary.init(&scratch, scratch_storage)
+                let (string_values, string_values_error) = mem.alloc[str](a, 8192usize)
+                if string_values_error != ok { ret string_values_error }
+                let (sections, sections_error) = mem.alloc[em.Section](a, 6usize)
+                if sections_error != ok { ret sections_error }
+                let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
+                if triple_error != ok { ret triple_error }
+                try em.write_module(&checker, &loaded, &builder, 0usize, triple, .Debug, &machine, function_offsets, relocations, relocation_count, string_values, sections, &scratch, &artifact)
+                let (packed, packed_error) = mem.alloc[u8](a, artifact.count)
+                if packed_error != ok { ret packed_error }
+                try binary.pack(&artifact, packed)
+                try save_bytes(a, args[6usize], packed)
+                try io.print("compiled module written\n")
+                ret ok
+            }
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
             if writes_executable {
                 let (executable_storage, executable_storage_error) = mem.alloc[usize](a, 1048576usize)
@@ -1281,6 +1327,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
     ret ok
 }

@@ -319,6 +319,18 @@ module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/
 [ "$module_executable_written" = 'executable written' ]
 chmod +x "$module_executable_path"
 "$module_executable_path"
+module_artifact_path="$test_build/modules.x64-linux.em"
+module_artifact_copy_path="$test_build/modules-copy.x64-linux.em"
+module_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_artifact_path")
+[ "$module_artifact_written" = 'compiled module written' ]
+module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_artifact_copy_path")
+[ "$module_artifact_copy_written" = 'compiled module written' ]
+cmp "$module_artifact_path" "$module_artifact_copy_path"
+[ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '1' ]
+[ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
+[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '6' ]
+[ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
 scalar_ops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
 [ "$scalar_ops_lowered" = 'module nir ok' ]
 scalar_ops_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
