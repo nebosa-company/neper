@@ -597,6 +597,31 @@ list_executable_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$list_executable_path"
 list_output=$("$list_executable_path")
 [ "$list_output" = 'data list ok' ]
+heap_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/e/data/heap.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
+expected_heap_surface='Heap
+Iter
+heapify_in_place
+init
+from_slice
+len
+push
+peek
+pop
+clear
+iter
+iter_next'
+[ "$heap_surface" = "$expected_heap_surface" ]
+heap_parsed=$($test_build/neper-self parse-file "$repo/lib/e/data/heap.e")
+[ "$heap_parsed" = 'parse file ok' ]
+heap_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_heap/src/main.e" "$repo" x64 linux "$test_build/data-heap-selfhost")
+[ "$heap_executable_written" = 'executable written' ]
+chmod +x "$test_build/data-heap-selfhost"
+heap_output=$($test_build/data-heap-selfhost)
+[ "$heap_output" = 'data heap ok' ]
+same_name_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_same_name/src/main.e" "$repo" x64 linux "$test_build/generic-same-name-selfhost")
+[ "$same_name_written" = 'executable written' ]
+chmod +x "$test_build/generic-same-name-selfhost"
+"$test_build/generic-same-name-selfhost"
 os_helper_path="$test_build/os-spawn-helper-selfhost"
 os_helper_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/os-spawn-helper.e" "$repo" x64 linux "$os_helper_path")
 [ "$os_helper_written" = 'executable written' ]

@@ -1266,7 +1266,7 @@ fn field_expression_name(c: *Checker, text: str, tree: *parse.Tree, node: syntax
     ret (name, name.len != 0usize)
 }
 
-fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+fn aggregate_declaration_shape(tree: *parse.Tree, node: syntax.Node) -> (usize, AggregateKind, bool, bool) {
     var body_index = 0usize
     var has_body = false
     var generic = false
@@ -1288,15 +1288,21 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
         }
         at += 1usize
     }
+    ret (body_index, kind, generic, has_body)
+}
+
+fn register_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let (body_index, kind, generic, has_body) = aggregate_declaration_shape(tree, node)
     if !has_body { ret ok }
     if c.aggregate_count == c.aggregates.len { ret Capacity }
     let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
     let aggregate_index = c.aggregate_count
-    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: c.aggregate_field_count, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[node.token_start] }
+    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[node.token_start] }
     c.aggregates[aggregate_index] = aggregate
     c.aggregate_count += 1usize
-    at = node.first_child
+    let end = node.first_child + node.child_count
+    var at = node.first_child
     while at < end {
         if tree.children[at].node {
             let child = tree.nodes[tree.children[at].index]
@@ -1309,6 +1315,24 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
         }
         at += 1usize
     }
+    c.active_first_comptime = 0usize
+    c.active_comptime_count = 0usize
+    c.aggregates[aggregate_index] = aggregate
+    ret ok
+}
+
+fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let (body_index, kind, generic, has_body) = aggregate_declaration_shape(tree, node)
+    if !has_body { ret ok }
+    let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
+    if name_error != ok { ret name_error }
+    let (aggregate_index, found_aggregate) = find_aggregate(c, module_index, name)
+    if !found_aggregate { ret InvalidType }
+    var aggregate = c.aggregates[aggregate_index]
+    aggregate.first_field = c.aggregate_field_count
+    aggregate.field_count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
     c.active_first_comptime = aggregate.first_comptime
     c.active_comptime_count = aggregate.comptime_count
     let body = tree.nodes[body_index]
@@ -1431,12 +1455,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
     ret ok
 }
 
-fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
-    c.aggregate_count = 0usize
-    c.aggregate_field_count = 0usize
-    c.comptime_parameter_count = 0usize
-    c.generic_argument_count = 0usize
-    try seed_intrinsic_aggregates(c, g)
+fn collect_aggregate_pass(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, register: bool) -> err {
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
@@ -1446,12 +1465,32 @@ fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
-            if node.top_level && node.kind == .TypeDecl { try collect_aggregate_declaration(c, r, g, &tree, module_index, node) }
+            if node.top_level && node.kind == .TypeDecl {
+                if register {
+                    try register_aggregate_declaration(c, r, g, &tree, module_index, node)
+                } else {
+                    try collect_aggregate_declaration(c, r, g, &tree, module_index, node)
+                }
+            }
             node_index += 1usize
         }
         module_index += 1usize
     }
     ret ok
+}
+
+// Spec section 14 invariant 7: module scope is order-independent. A field whose
+// type instantiates a generic aggregate needs that aggregate's declaration, which
+// may come later in the same file or in a module collected later, so every
+// aggregate is registered before any field type is resolved.
+fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    c.aggregate_count = 0usize
+    c.aggregate_field_count = 0usize
+    c.comptime_parameter_count = 0usize
+    c.generic_argument_count = 0usize
+    try seed_intrinsic_aggregates(c, g)
+    try collect_aggregate_pass(c, r, g, true)
+    ret collect_aggregate_pass(c, r, g, false)
 }
 
 fn type_has_value_cycle(c: *Checker, ty: Type, cycle_root: usize, depth: usize) -> (bool, err) {
@@ -3048,12 +3087,16 @@ fn generic_arguments_equal(c: *Checker, function_index: usize, first: usize, sec
     ret true
 }
 
-fn template_instance_count(c: *Checker, owner_module_index: usize, template_index: usize) -> usize {
+// A NIR function is identified by its owning module, its name and this
+// discriminator, so the discriminator has to separate every instance a module
+// owns under one name -- including instances of same-named templates declared in
+// different modules, such as `list.init` and `heap.init` used by one consumer.
+fn owner_instance_count(c: *Checker, owner_module_index: usize, name: str) -> usize {
     var count = 0usize
     var at = c.signature_function_count
     while at < c.function_count {
         let candidate = c.function_generics[at]
-        if candidate.instance && candidate.template_index == template_index && c.functions[at].owner_module_index == owner_module_index { count += 1usize }
+        if candidate.instance && c.functions[at].owner_module_index == owner_module_index && same(c.functions[at].name, name) { count += 1usize }
         at += 1usize
     }
     ret count
@@ -3102,7 +3145,7 @@ fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: 
     // template's source, so it keeps the template's source range.
     instance.source_start = template.source_start
     instance.source_end = template.source_end
-    instance.instance_id = template_instance_count(c, owner_module_index, template_index) + 1usize
+    instance.instance_id = owner_instance_count(c, owner_module_index, template.name) + 1usize
     instance.first_parameter = c.parameter_count
     instance.parameter_count = template.parameter_count
     instance.first_return = c.return_type_count

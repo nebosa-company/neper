@@ -474,6 +474,26 @@ $listExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $listExecutableWritten -ne 'executable written') { throw 'e.data.list did not compile into a PE executable' }
 $listOutput = & $listExecutablePath
 if ($LASTEXITCODE -ne 0 -or $listOutput -ne 'data list ok') { throw 'e.data.list growth, insertion, removal, copy, view, or iteration behavior failed' }
+$heapSurface = Get-Content (Join-Path $repo 'lib\e\data\heap.e') |
+    Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
+    ForEach-Object {
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.heap contains an unreadable public declaration' }
+        $Matches[1]
+    }
+$expectedHeapSurface = @('Heap', 'Iter', 'heapify_in_place', 'init', 'from_slice', 'len', 'push', 'peek', 'pop', 'clear', 'iter', 'iter_next')
+if (($heapSurface -join "`n") -ne ($expectedHeapSurface -join "`n")) { throw 'e.data.heap public declarations differ from the delivered surface' }
+$heapParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\heap.e')
+if ($LASTEXITCODE -ne 0 -or $heapParsed -ne 'parse file ok') { throw 'e.data.heap failed CLI parsing' }
+$heapExecutablePath = Join-Path $testBuild 'data-heap-selfhost.exe'
+$heapExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_heap\src\main.e') $repo 'x64' 'windows' $heapExecutablePath
+if ($LASTEXITCODE -ne 0 -or $heapExecutableWritten -ne 'executable written') { throw 'e.data.heap did not compile into a PE executable' }
+$heapOutput = & $heapExecutablePath
+if ($LASTEXITCODE -ne 0 -or $heapOutput -ne 'data heap ok') { throw 'e.data.heap ordering, bulk construction, iteration, or user-cmp behavior failed' }
+$sameNameExecutablePath = Join-Path $testBuild 'generic-same-name-selfhost.exe'
+$sameNameWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_same_name\src\main.e') $repo 'x64' 'windows' $sameNameExecutablePath
+if ($LASTEXITCODE -ne 0 -or $sameNameWritten -ne 'executable written') { throw 'same-named generic templates did not compile into a PE executable' }
+& $sameNameExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'instances of same-named templates from different modules collided' }
 $hostExecutablePath = Join-Path $testBuild 'host-memory-clock-selfhost.exe'
 $hostExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\host-memory-clock.e') $repo 'x64' 'windows' $hostExecutablePath
 if ($LASTEXITCODE -ne 0 -or $hostExecutableWritten -ne 'executable written') { throw 'Windows args, memory, or clock intrinsics did not link' }
