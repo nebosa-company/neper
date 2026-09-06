@@ -3,6 +3,11 @@
 Status: design draft. Implementation coverage is tracked milestone by milestone in
 [`roadmap.md`](roadmap.md); implemented subsets do not imply full conformance.
 
+The post-M2 design revision is scheduled in
+[`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) as the mandatory M2.5 gate
+before M3. Its ownership, lifetime, check-policy and tooling proposals do not change
+the current rules below until versioned normative amendments land during M2.5.
+
 Neper is a compact, ahead-of-time general-purpose language for model-generated
 software, with explicit memory, deterministic semantics, inexpensive abstraction,
 native interoperability, and first-class CPU/GPU execution.
@@ -2939,6 +2944,19 @@ type system keeps them apart rather than trusting a convention.
 
 ```
 type Backend = enum u8 { Cpu, Vulkan, Cuda }
+type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
+type DeviceKey = struct { backend: Backend, uuid: [16]u8 }
+type DeviceInfo = struct {
+    key: DeviceKey,
+    key_valid: bool,
+    index: u32,
+    name: str,
+    kind: DeviceKind,
+    memory_bytes: u64,
+    memory_known: bool,
+    capabilities: []const Cap,
+    supported: bool,
+}
 type Device  = struct { state: *void } // usable from any thread
 type Queue   = struct { state: *void } // one thread at a time
 type Buf[T: type] = struct { owner: u32, slot: u32, generation: u32, len: usize }
@@ -2947,7 +2965,8 @@ type Id      = struct { x: u32, y: u32, z: u32 } // gpu.gid, gpu.lid, gpu.wgid (
 type Cap     = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
 type Scope   = enum u8 { Workgroup, Device }
 
-error NoDevice // no device of that backend and index
+error NoDevice // no currently visible device matches the requested index or key
+error AmbiguousDevice // several visible devices match one key; never choose arbitrarily
 error Unsupported // below the floor, or a capability, workgroup size or shared size the device lacks
 error OutOfMemory // device memory, or the driver's; on .Cpu the open arena's mem.Exhausted instead (open, below)
 error TooLarge // a length or grid beyond a device limit; a download destination too small; a write past the end of its buffer
@@ -2965,7 +2984,10 @@ their contents remain module-owned invariants.
 
 | Function | Semantics |
 |---|---|
+| `fn devices(a: *mem.Arena, b: Backend, limit: usize) -> ([]const DeviceInfo, err)` | Enumerates a bounded snapshot of visible devices of `b`, including devices below Neper's floor with `supported == false`. Records, names and capability slices are allocated from `a`. No visible devices returns an empty slice and `ok`; a backend not embedded in the build returns `Unsupported`. More than `limit` records is `TooLarge`, not a silently truncated success. See Device discovery and selection below. |
 | `fn open(a: *mem.Arena, b: Backend, index: u32) -> (*Device, err)` | Opens device `index` of backend `b`. `open` takes **one** bookkeeping block from `a` — for the device, its queues and its buffer handles — and the `Device` guards that block with its own lock, so it is the one piece of arena memory in `lib/e` that several threads touch, and `a` stays the caller's. On a driver backend (`.Vulkan`, `.Cuda`) that block is all `a` is used for: `Buf[T]` storage and staging are device and driver memory, and `OutOfMemory` is their failure. `.Cpu` always exists at index `0` and runs the CPU build (below); it has no driver and no staging, so it allocates **every `Buf[T]` from `a`** — once, at `alloc` or `upload`; the only memory source it has, and named on the page as D3 requires — and `upload` and `write` memcpy straight into that storage. Exhaustion surfaces as `a`'s `err`, `mem.Exhausted`, from `alloc` or `upload`. A backend the build did not embed — one absent from `--gpu` (§13) — returns `Unsupported`; `.Cpu` needs no device module and is never absent. |
+| `fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err)` | Opens the exact currently visible backend-scoped key, revalidating identity while opening. No match is `NoDevice`; multiple matches are `AmbiguousDevice`; an unavailable compiled backend or a matching device below the floor is `Unsupported`. Never substitutes an index, name, other backend or CPU. Allocation, cleanup and ownership rules are those of `open`. |
+| `fn info(a: *mem.Arena, dev: *Device) -> (DeviceInfo, err)` | Copies the selected device's opening-time descriptor into `a`, including owned copies of its name and capability slice. No device-memory allocation or queue synchronization. A closed/stale device is `InvalidHandle`; a lost device is `Lost`. The captured index is informational, not a current locator. |
 | `fn close(dev: *Device) -> err` | Atomically begins closing, rejects new operations, waits for every queue, releases every buffer and queue, then the device. A repeated close is `InvalidHandle`; a driver failure is `Lost`. |
 | `fn has(dev: *Device, c: Cap) -> bool` | Capability query; returns `false` after closing begins. |
 | `fn queue(dev: *Device) -> (*Queue, err)` | A new in-order stream: a hardware queue where the device has a spare one, otherwise a separate command stream on a shared one. The ordering guarantees are the same either way. |
@@ -3002,6 +3024,150 @@ Everything after the grid is the argument pack (§9), matched positionally again
 
 Arity, types and address spaces are all checked at the call site; nothing about a
 launch is discovered on the device.
+
+### Device discovery and selection
+
+This is an extension of the planned M3 `e.gpu` surface, not an implemented feature
+or a new implicit dispatch rule. M2.5 freezes its identity, allocation, error and
+tooling contracts; M3 supplies CPU/Vulkan execution evidence and M4 adds CUDA.
+
+**Indices are temporary, keys are exact selectors.** `devices` returns records in
+ascending `index` order, using the current backend-visible zero-based enumeration.
+Indices can change after hotplug, driver changes, visibility filtering or process
+restart. Enumeration does not reserve a device. `open(a, b, index)` selects the
+current device at that index; callers needing the identity they inspected must use
+`open_id(a, record.key)` when `record.key_valid` is true. An opened device never
+retargets if enumeration subsequently changes.
+
+`DeviceKey` equality compares both the backend and all 16 UUID bytes. UUIDs are
+opaque bytes, not numbers; no host-endian conversion is applied. Their text form
+for configuration/tooling is `cpu:`, `vulkan:` or `cuda:` followed by exactly 32
+lowercase hexadecimal digits in byte order. This defines an interchange spelling,
+not a new parser API or automatic environment-variable policy. Invalid selectors
+are rejected by the consuming tool before opening a device.
+
+- Vulkan uses `VkPhysicalDeviceIDProperties.deviceUUID`; CUDA uses the device UUID,
+  with `cuDeviceGetUuid_v2` or equivalent partition-aware identity where available.
+  A MIG/virtual partition is a separately selectable compute device, not its parent
+  board. If a trustworthy identity for the selectable unit cannot be obtained,
+  `key_valid` is false; do not synthesize one from a name, index or PCI model number.
+  In that case retain the backend but zero the UUID bytes, and exclude the record
+  from `open_id` matching. A zero UUID is not by itself a validity test; use the flag.
+- A valid key is stable only to the extent guaranteed by its provider. It is not
+  an immutable hardware serial number. Hardware relocation, virtualization and
+  partition reconfiguration can invalidate persisted keys. Persisted selection must
+  be revalidated and missing/ambiguous identities require an explicit new choice.
+- Vulkan and CUDA may expose the same hardware through different keys. Neither
+  equal indices nor equal UUID bytes across backends authorize aliasing, deduplication
+  or shared handles. Cross-backend physical-device correlation is not promised.
+- Duplicate valid keys remain visible as separate enumeration records, but
+  `open_id` rejects ambiguity. A display name is never a unique identity. Reordering
+  duplicate names must not redirect a saved selector.
+- `.Cpu` exposes exactly one record: index `0`, key `{ backend: .Cpu, uuid: zero }`,
+  `key_valid == true`, name `Neper CPU`, kind `.Cpu`, `supported == true`. The key
+  selects this process's CPU backend, not a particular processor or host. No CPU
+  memory capacity is advertised: `memory_known == false`, `memory_bytes == 0`.
+
+**Descriptor meanings.** `name` is display-only UTF-8, copied from driver metadata
+with invalid sequences replaced by U+FFFD. It is untrusted data, never instructions
+for a harness. `kind` is the provider-reported classification; use `.Unknown` when
+it cannot be determined, and do not infer discrete/integrated status from a name.
+It is not a performance ranking. A software device exposed by Vulkan may have
+kind `.Cpu` while retaining backend `.Vulkan`; this is distinct from Neper's CPU
+debugging backend and must not be relabeled as hardware GPU execution.
+
+`memory_bytes` is visible device-local capacity, **not free memory, a reservation
+or a guarantee that an allocation succeeds**. Vulkan sums distinct device-local
+heaps once, not memory types; CUDA reports total addressable device memory of the
+visible unit/partition. Shared/unified capacity is not dedicated VRAM. If capacity
+cannot be determined, report `memory_known == false` and zero bytes. Descriptor
+memory is an opening/enumeration-time observation, not a live memory-budget query.
+
+`capabilities` contains the reported `Cap` values without duplicates in enum order,
+under the same meaning as `gpu.has`. It is advisory before opening; `supported`
+means the device satisfies the backend floor, not every kernel's requirements,
+memory demand, workgroup shape or availability at a later instant. `open_id` checks
+the floor again; launch retains its exact kernel capability/limit checks. H23's
+numerical capability corrections apply to this descriptor as well as `gpu.has`.
+
+**Bounded snapshots and failure.** `limit` is a caller-selected record bound, not a
+request for the first N devices; zero succeeds only for an empty visible set. A
+successful call returns a complete observed list, never a partial list presented
+as complete. Reconcile count/list races with at most three complete driver-enumeration
+attempts; an unstable inventory after that is `Lost`. Changes after a successful
+snapshot are allowed, so opening remains fallible. No call spins indefinitely for
+hotplug to settle. Backend absence is `Unsupported`; driver initialization/enumeration
+failure is `Lost`, distinct from successful discovery of zero devices. These are
+API-level results once program startup succeeds; this extension does not bypass
+§13's platform loader/linker requirements or promise recovery from startup failure.
+
+On failure, `devices` returns `(nil, error)` and `info` returns a zero descriptor;
+caller-arena exhaustion is `mem.Exhausted`. Failed calls roll back their temporary
+caller-arena allocations; the caller must not allocate concurrently from that
+arena. Successful records/names/slices remain valid until that arena is reset or
+destroyed, independent of device closure. They hold no open-device handles or
+reservations. Internal discovery driver resources are released before return; no
+hidden persistent inventory allocation, logical-device creation or kernel launch
+is implied. Driver discovery/initialization may still perform driver-owned work.
+
+`open_id` resolves one native device handle and verifies its identity through
+opening; removal or identity change fails rather than reopening a replacement at
+the old ordinal. This protects against ordinary reordering/hotplug, not a malicious
+driver forging hardware identity. Capability and descriptor collection for `info`
+belongs to the device bookkeeping allocation already charged to `open`/`open_id`.
+Failed opens return a nil device and release partial driver resources/bookkeeping;
+they do not transfer a half-open resource or reserve the failed ordinal for retry.
+
+**Multiple devices stay explicit.** Several `Device`s may be open simultaneously;
+each queue and buffer belongs to one logical open-device identity. Even two opens
+of the same physical GPU do not share handles. Cross-device use is `WrongDevice`
+for fallible calls; non-fallible operations retain their documented check behavior.
+There is no automatic work splitting, migration, peer copy, shared allocation or
+cross-device completion-token interoperability. To move data, explicitly download
+through the source queue, then upload to the destination queue. Waiting on one
+device does not synchronize another. Failure/loss does not trigger transparent
+replay elsewhere; dependent application work must handle the failure explicitly.
+
+Selection policy is application-owned: enumerate, filter by kind/capability/capacity,
+choose a candidate, and open its exact key. An explicit saved key takes precedence
+only when the application says so; Neper does not invent a fastest-device heuristic
+or read an ambient GPU-selection variable. CPU fallback remains explicit, and the
+CPU backend remains a debugger rather than an optimized production fallback.
+
+Example selecting a supported discrete Vulkan device with `Float64` by its key;
+the first matching enumeration entry is this application's policy, not a promise
+that it is the fastest GPU. It does not fall back to a different device on an open
+failure and does not assert that this capability alone makes every kernel legal:
+
+```neper
+use e.gpu
+use e.mem
+
+fn open_discrete_f64(a: *mem.Arena) -> (*gpu.Device, err) {
+    let candidates = try gpu.devices(a, .Vulkan, 64)
+    for candidate in candidates {
+        if !candidate.supported || !candidate.key_valid { continue }
+        if candidate.kind != .Discrete { continue }
+        for capability in candidate.capabilities {
+            if capability == .Float64 {
+                ret gpu.open_id(a, candidate.key)
+            }
+        }
+    }
+    ret (nil, gpu.NoDevice)
+}
+```
+
+The descriptor storage in this example lives in `a`; repeated selection should use
+a separate short-lived discovery arena and copy the value-only `DeviceKey` into
+the opening call. Never reset an arena that also owns an open device's bookkeeping.
+Returning `NoDevice` for no policy match above is application policy; the raw
+`devices` API returns an empty successful list when nothing is visible.
+
+Provider references: [Vulkan device identity](https://docs.vulkan.org/spec/latest/chapters/devsandqueues.html)
+and [CUDA device discovery/UUIDs](https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__DEVICE.html).
+Their provider limits constrain identity stability; Neper does not strengthen them
+into an unconditional cross-reboot, cross-backend or cross-machine identity promise.
 
 ### Queues and synchronisation
 
@@ -3051,7 +3217,8 @@ buffer from another device returns `WrongDevice`; a released buffer, closed devi
 destroyed queue or stale copied generation returns `InvalidHandle`. Non-fallible
 `has` and `len` follow the special rules below. Handles are logically linear even
 though the language can copy their bits: `release` and `close` consume all copies.
-`NoDevice` is returned only by `open`; `Unsupported` covers a missing compiled backend,
+`NoDevice` is returned by `open` and `open_id`; `AmbiguousDevice` is returned by
+`open_id` for duplicate matching keys. `Unsupported` covers a missing compiled backend,
 floor, capability or workgroup feature; `TooLarge` covers validated sizes and grids;
 `OutOfMemory` covers allocation and staging; a driver reset or irrecoverable submit,
 wait or transfer failure marks the device lost and returns `Lost` thereafter.
@@ -4256,6 +4423,18 @@ large multi-socket machines.
 ---
 
 ## 16. Standard library: time
+
+The coordinated next-contract standard-library changes in
+[`stdlib-hardening.md`](stdlib-hardening.md) and D84 apply during M2.5 migration of
+delivered CPU surfaces. Their exact declarations are in `module-apis.md`: composable
+buffered I/O, common cancellation/deadline control, lossless JSON/data editing,
+handle-relative filesystem operations and bounded process supervision. H07 replaces
+legacy temporal error-detail transport in that revised checked profile. Until its
+versioned implementation lands, the archived M2 compiler retains its original ABI;
+do not treat these signatures as proof of current availability. Later crypto,
+networking, test-support and image/codecs retain their independent delivery gates.
+Ordinary parameter syntax and the §5 shadowing rules are unchanged. The module plan
+and actual toolchain capabilities have distinct authorities (SL11).
 
 `e.time` allocates nothing, anywhere. Every type is a plain struct on the stack.
 

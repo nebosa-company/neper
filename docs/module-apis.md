@@ -3,7 +3,9 @@
 Status: exact public-surface proposal for the toolchain modules in `modules.md`.
 Delivery commitment and presentation order come from `modules.json`'s `core`,
 `extended` and `experimental` tiers; this file remains dependency-layer ordered.
-Implementation has not started. Semantic details already fixed by `spec.md` remain
+This is the next-contract design, not an installed-toolchain availability report.
+The coordinated changes in `stdlib-hardening.md` migrate delivered CPU APIs during
+M2.5; later facilities retain their stated delivery gates. Semantic details in `spec.md` remain
 authoritative; this file fixes names, public value shapes and signatures. A module
 implements no additional public declaration unless this file is amended.
 
@@ -18,7 +20,8 @@ Callback context is always explicit; there are no closures. Read-only slices are
 Qualified names in signatures resolve through that module's `direct_dependencies`
 in `modules.json`. They use the dependency's final segment except
 `linalg_tensor`, the explicit alias for `algo.linalg.tensor`; `ui.widget` additionally
-uses `layout` for `text.layout` and `ui_layout` for `ui.layout`. Imports themselves are
+uses `layout` for `text.layout` and `ui_layout` for `ui.layout`; `e.async.io` uses
+`cancel_api` for `e.cancel` because it declares `cancel`. Imports themselves are
 not public declarations. The catalogue's declaration fragments intentionally omit
 function bodies and are not standalone modules.
 
@@ -175,6 +178,8 @@ fn fence(o: Ordering)
 ```neper
 type Endian = enum u8 { Little, Big }
 type Base64Alphabet = enum u8 { Standard, Url }
+type Base32Alphabet = enum u8 { Standard, Hex }
+type Base85Alphabet = enum u8 { Ascii85, Z85 }
 type Reader = struct { data: []const u8, off: usize }
 type Writer = struct { data: []u8, off: usize }
 error End
@@ -201,10 +206,18 @@ fn trailing_zeros[T: type](v: T) -> u32
 fn base64_encoded_len(n: usize, padded: bool) -> (usize, err)
 fn base64_encode(dst: []u8, src: []const u8, alphabet: Base64Alphabet, padded: bool) -> (str, err)
 fn base64_decode(dst: []u8, src: str, alphabet: Base64Alphabet) -> ([]u8, err)
+fn base32_encoded_len(n: usize, padded: bool) -> (usize, err)
+fn base32_encode(dst: []u8, src: []const u8, alphabet: Base32Alphabet, padded: bool) -> (str, err)
+fn base32_decode(dst: []u8, src: str, alphabet: Base32Alphabet) -> ([]u8, err)
+fn base85_encoded_len(n: usize, alphabet: Base85Alphabet) -> (usize, err)
+fn base85_encode(dst: []u8, src: []const u8, alphabet: Base85Alphabet) -> (str, err)
+fn base85_decode(dst: []u8, src: str, alphabet: Base85Alphabet) -> ([]u8, err)
 ```
 
 Generic numeric operations accept integer and float primitives only; bit operations
-accept unsigned integers only.
+accept unsigned integers only. Base32 accepts the RFC 4648 standard and extended-hex
+alphabets with optional canonical padding. Base85 supports unframed ASCII85 and Z85;
+Z85 rejects input outside its four-byte or five-character quantum.
 
 ### `e.str`
 
@@ -247,7 +260,7 @@ fn split(s: str, separator: str) -> (Split, err)
 fn split_next(it: *Split) -> (str, bool)
 fn lines(s: str) -> Split
 fn replace(a: *mem.Arena, s: str, needle: str, replacement: str) -> (str, err)
-fn repeat(a: *mem.Arena, s: str, count: usize) -> (str, err)
+fn repeat(a: *mem.Arena, s: str, repeat_count: usize) -> (str, err)
 fn ascii_lower_in_place(s: []u8)
 fn ascii_upper_in_place(s: []u8)
 fn is_ascii_space(b: u8) -> bool
@@ -306,9 +319,25 @@ fn extension(path: str, style: Style) -> str
 fn stem(path: str, style: Style) -> str
 fn join(a: *mem.Arena, parts: []const str, style: Style) -> (str, err)
 fn normalize(a: *mem.Arena, path: str, style: Style) -> (str, err)
-fn relative(a: *mem.Arena, base: str, target: str, style: Style) -> (str, err)
+fn relative(a: *mem.Arena, base: str, target_path: str, style: Style) -> (str, err)
 fn replace_extension(a: *mem.Arena, path: str, ext: str, style: Style) -> (str, err)
+type Glob = struct { state: *const void }
+type GlobOptions = struct { style: Style, case_sensitive: bool, max_pattern_bytes: usize, max_steps: usize }
+error TooLarge
+
+fn glob(a: *mem.Arena, pattern: str, options: GlobOptions) -> (Glob, err)
+fn glob_match(pattern: *const Glob, path: str) -> (bool, err)
+
 ```
+
+Globs are pure matching over relative paths, not filesystem traversal. * and ? match
+within a component; a whole ** component matches zero or more components. Bracket
+classes support ASCII ranges and ! negation; malformed patterns are Invalid.
+Pattern separators are /; input separators follow the explicit Style. Matching is
+byte-exact unless ASCII case folding is requested, never host-locale dependent.
+Literal dotfiles are not implicitly excluded. Parent/absolute paths are Invalid;
+matching proves no filesystem containment. Work-limit exhaustion is TooLarge, not
+false. Ignore-file precedence/negation is application policy, not an implicit glob rule.
 
 ---
 
@@ -572,7 +601,7 @@ type Nodes = struct { next: NodeId, end: NodeId }
 error InvalidNode
 error TooLarge
 
-fn builder[E: type](a: *mem.Arena, node_count: usize, edge_capacity: usize) -> (Builder[E], err)
+fn builder[E: type](a: *mem.Arena, initial_nodes: usize, edge_capacity: usize) -> (Builder[E], err)
 fn add_directed[E: type](b: *Builder[E], from: NodeId, to: NodeId, value: E) -> err
 fn add_undirected[E: type](b: *Builder[E], a: NodeId, b_node: NodeId, value: E) -> err
 fn finish[E: type](a: *mem.Arena, b: *const Builder[E]) -> (Graph[E], err)
@@ -599,7 +628,7 @@ type Iter[T: type] = struct { state: *const void, slot: u32 }
 error Full
 error TooLarge
 
-fn init[T: type](a: *mem.Arena, capacity: usize) -> (SlotMap[T], err)
+fn init[T: type](a: *mem.Arena, initial_capacity: usize) -> (SlotMap[T], err)
 fn len[T: type](m: *const SlotMap[T]) -> usize
 fn capacity[T: type](m: *const SlotMap[T]) -> usize
 fn insert[T: type](m: *SlotMap[T], value: T) -> (Key, err)
@@ -658,6 +687,16 @@ fn min[I: type, T: type](it: *I) -> (T, bool)
 fn max[I: type, T: type](it: *I) -> (T, bool)
 fn collect[I: type, T: type](a: *mem.Arena, it: *I) -> (list.List[T], err)
 fn partition[I: type, T: type](a: *mem.Arena, it: *I, pred: fn(T) -> bool) -> (list.List[T], list.List[T], err)
+type TryMap[I: type, T: type, U: type, Ctx: type] = struct { it: *I, ctx: *Ctx, f: fn(*Ctx, T) -> (U, err), ended: bool }
+type TryFilter[I: type, T: type, Ctx: type] = struct { it: *I, ctx: *Ctx, pred: fn(*Ctx, T) -> (bool, err), ended: bool }
+
+fn try_map[I: type, T: type, U: type, Ctx: type](it: *I, ctx: *Ctx, f: fn(*Ctx, T) -> (U, err)) -> TryMap[I, T, U, Ctx]
+fn try_map_next_err[I: type, T: type, U: type, Ctx: type](it: *TryMap[I, T, U, Ctx]) -> (U, bool, err)
+fn try_filter[I: type, T: type, Ctx: type](it: *I, ctx: *Ctx, pred: fn(*Ctx, T) -> (bool, err)) -> TryFilter[I, T, Ctx]
+fn try_filter_next_err[I: type, T: type, Ctx: type](it: *TryFilter[I, T, Ctx]) -> (T, bool, err)
+fn try_collect[T: type, I: type](a: *mem.Arena, it: *I, limit: usize) -> (list.List[T], err)
+fn try_reduce[I: type, T: type, U: type, Ctx: type](it: *I, initial: U, ctx: *Ctx, f: fn(*Ctx, U, T) -> (U, err)) -> (U, err)
+
 ```
 
 `take[T](it, n)` and `zip[X, Y](left, right)` write the item type(s) explicitly;
@@ -670,6 +709,14 @@ source invalidates all of its live iterators; using an invalid iterator is a deb
 the collection. Lists, deques, rings and queues use logical element order; stacks use
 LIFO order; hash maps use deterministic table-slot order; trees use ascending key
 order; heaps expose heap storage order. Set iterators expose only keys.
+
+Try adapters require I.next_err and borrow the source; they never close it. Source
+errors and callback errors propagate once and put the adapter in terminal state;
+later next_err returns no item and ok. Failure's value is not a valid yielded item.
+try_collect returns a zero result and rolls back its allocations on error/limit,
+but cannot undo consumed input. The source and callbacks must not allocate from
+that result arena during collection. try_reduce returns its last fully committed
+accumulator alongside an error. Ordinary for never silently consumes next_err.
 
 ---
 
@@ -810,7 +857,7 @@ fn correlation(s: *const Regression) -> (f64, bool)
 type BitSet = struct { words: []u64, len: usize }
 error TooSmall
 
-fn init(storage: []u64, len: usize) -> (BitSet, err)
+fn init(storage: []u64, bit_count: usize) -> (BitSet, err)
 fn len(s: *const BitSet) -> usize
 fn clear_all(s: *BitSet)
 fn fill_all(s: *BitSet)
@@ -1057,19 +1104,41 @@ fn builtin(a: *mem.Arena) -> (Database, err)
 fn version(db: *const Database) -> str
 fn locale(db: *const Database, tag: str) -> (Locale, err)
 fn canonical_tag(a: *mem.Arena, tag: str) -> (str, err)
-fn format_i64(a: *mem.Arena, locale: Locale, value: i64, options: NumberOptions) -> (str, err)
-fn format_f64(a: *mem.Arena, locale: Locale, value: f64, options: NumberOptions) -> (str, err)
-fn parse_f64(locale: Locale, value: str) -> (f64, err)
-fn format_currency(a: *mem.Arena, locale: Locale, value: decimal.Decimal, options: CurrencyOptions) -> (str, err)
-fn format_date(a: *mem.Arena, locale: Locale, value: calendar.DateTime, style: DateStyle) -> (str, err)
-fn compare(locale: Locale, a: str, b: str) -> i32
-fn lower(a: *mem.Arena, locale: Locale, value: str) -> (str, err)
-fn upper(a: *mem.Arena, locale: Locale, value: str) -> (str, err)
+fn format_i64(a: *mem.Arena, selected_locale: Locale, value: i64, options: NumberOptions) -> (str, err)
+fn format_f64(a: *mem.Arena, selected_locale: Locale, value: f64, options: NumberOptions) -> (str, err)
+fn parse_f64(selected_locale: Locale, value: str) -> (f64, err)
+fn format_currency(a: *mem.Arena, selected_locale: Locale, value: decimal.Decimal, options: CurrencyOptions) -> (str, err)
+fn format_date(a: *mem.Arena, selected_locale: Locale, value: calendar.DateTime, style: DateStyle) -> (str, err)
+fn compare(selected_locale: Locale, a: str, b: str) -> i32
+fn lower(a: *mem.Arena, selected_locale: Locale, value: str) -> (str, err)
+fn upper(a: *mem.Arena, selected_locale: Locale, value: str) -> (str, err)
 ```
 
 `builtin` uses the CLDR release pinned to the toolchain and reported by `version`;
 `load` accepts explicit compatible data. Parsing consumes the whole input. Currency
 codes are caller-supplied ISO 4217 identifiers. No process-global locale exists.
+
+### `text.template`
+
+```neper
+type Template = struct { state: *void }
+type Options = struct { max_bytes: usize, max_nodes: usize, max_depth: u16 }
+type Value = union enum u8 { Null, Bool: bool, I64: i64, U64: u64, F64: f64, Text: str, Bytes: []const u8 }
+type Binding = struct { name: str, value: Value }
+error InvalidTemplate
+error MissingValue
+error TooDeep
+error TooLarge
+
+fn parse(a: *mem.Arena, source: str, options: Options) -> (Template, err)
+fn execute(template: *const Template, writer: *io.Writer, bindings: []const Binding) -> err
+fn validate[T: type](template: *const Template) -> err
+fn execute_typed[T: type](template: *const Template, writer: *io.Writer, value: *const T) -> err
+```
+
+Templates provide deterministic interpolation, conditionals and bounded iteration
+over explicit values or compile-time-inspected structs. The core engine performs no
+contextual escaping; specialized output modules such as `fmt.html.template` own it.
 
 ### `text.regex`
 
@@ -1157,6 +1226,7 @@ transfer. Gradient stops are borrowed, ordered and bounded to `0..1`.
 ```neper
 type Format = enum u8 { R8, Rgba8, Bgra8, Rgba16Float }
 type Alpha = enum u8 { Opaque, Straight, Premultiplied }
+type Info = struct { width: u32, height: u32, format: Format, alpha: Alpha, frames: u32 }
 type Image = struct { pixels: []u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha }
 type ConstImage = struct { pixels: []const u8, width: u32, height: u32, stride: usize, format: Format, alpha: Alpha }
 error Invalid
@@ -1290,6 +1360,47 @@ fn legacy_md5(data: []const u8) -> [16]u8
 fn equal_constant_time(a: []const u8, b: []const u8) -> bool
 ```
 
+### `crypto.mac`
+
+```neper
+type HmacSha256 = struct { inner: hash.Sha256, outer: hash.Sha256 }
+type HmacSha512 = struct { inner: hash.Sha512, outer: hash.Sha512 }
+
+fn hmac_sha256(key: []const u8, message: []const u8) -> [32]u8
+fn hmac_sha512(key: []const u8, message: []const u8) -> [64]u8
+fn verify_sha256(key: []const u8, message: []const u8, tag: [32]u8) -> bool
+fn verify_sha512(key: []const u8, message: []const u8, tag: [64]u8) -> bool
+fn sha256_init(key: []const u8) -> HmacSha256
+fn sha256_update(state: *HmacSha256, bytes: []const u8)
+fn sha256_done(state: *HmacSha256) -> [32]u8
+fn sha512_init(key: []const u8) -> HmacSha512
+fn sha512_update(state: *HmacSha512, bytes: []const u8)
+fn sha512_done(state: *HmacSha512) -> [64]u8
+```
+
+HMAC follows RFC 2104; verification compares fixed-length tags in constant time.
+Inputs are borrowed only for the call; bounded internal stack state is declared.
+No key generation, entropy read, truncation or secret logging is implicit.
+Streaming state lets HKDF process multiple input segments without concatenating
+unbounded caller data. done consumes the message state; reinitialize before reuse.
+
+### `crypto.kdf`
+
+```neper
+error TooLarge
+
+fn hkdf_sha256_extract(salt: []const u8, input_key: []const u8) -> [32]u8
+fn hkdf_sha256_expand(dst: []u8, prk: [32]u8, info: []const u8) -> err
+fn hkdf_sha512_extract(salt: []const u8, input_key: []const u8) -> [64]u8
+fn hkdf_sha512_expand(dst: []u8, prk: [64]u8, info: []const u8) -> err
+```
+
+HKDF follows RFC 5869. Expand rejects output longer than 255 hash blocks before
+writing dst; salt omission has the RFC-defined zero-salt behavior. Output aliases
+with key/info inputs are forbidden unless separately proven safe. HKDF is not a
+password-storage KDF; no password-hashing security claim or custom construction is
+introduced. Release requires published independent vectors and boundary tests.
+
 ### `crypto.aead`
 
 ```neper
@@ -1354,6 +1465,33 @@ fn chacha20_bounded(r: *ChaCha20, upper: u64) -> (u64, err)
 The counter never wraps; a request that would do so returns `Exhausted` before
 reusing a block. `chacha20_bounded(..., 0)` returns zero and otherwise uses rejection
 sampling.
+
+### `crypto.x509`
+
+```neper
+type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey }
+type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool }
+type Pool = struct { certificates: []const Certificate }
+type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
+type KeyUsage = enum u8 { ServerAuth, ClientAuth, CodeSigning, EmailProtection, Any }
+type Chain = struct { certificates: []const Certificate }
+error InvalidCertificate
+error UnknownAuthority
+error Expired
+error NameMismatch
+error InvalidUsage
+error TooDeep
+
+fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err)
+fn parse_pem(a: *mem.Arena, source: str) -> ([]const Certificate, err)
+fn pool(a: *mem.Arena, certificates: []const Certificate) -> Pool
+fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, err)
+fn verify_signature(certificate: Certificate, issuer: Certificate) -> err
+```
+
+Parsing and verification use the DER and PEM modules and the algorithm set pinned to
+the toolchain. Verification receives roots and time explicitly; it never consults a
+host trust store, clock or network revocation service implicitly.
 
 ---
 
@@ -1470,6 +1608,22 @@ fn dlsym[F: type](a: *mem.Arena, l: Lib, sym: str) -> (F, err)
 fn dlclose(l: Lib) -> err
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)
+type Dir = struct { raw: usize }
+type FileLock = struct { raw: usize }
+type ProcGroup = struct { raw: usize }
+type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
+
+fn dir_open(a: *mem.Arena, path: str) -> (Dir, err)
+fn dir_close(dir: Dir) -> err
+fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err)
+fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err
+fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err
+fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err)
+fn file_unlock(lock: FileLock) -> err
+fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err)
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err
+fn proc_group_close(group: ProcGroup) -> err
+
 ```
 
 All path strings use the host convention. `SpawnOptions.cwd == ""` inherits the
@@ -1487,11 +1641,47 @@ APIs may expose a detail snapshot while ordinary callers retain cheap `err`/`try
 `operation` and `subject` are borrowed caller strings, never inferred global state;
 `error_message` is the only locale-dependent rendering operation in `e.os`.
 
+
+These new primitives are the reviewed platform boundary for SL05/SL06, not permission
+for e.fs/e.proc to add externs. Directory-relative operations reject absolute paths,
+parent traversal and embedded NULs; NoSymlinks rejects every traversed link/reparse
+point. Beneath permits only traversal provably confined under the opened root, or
+returns Unsupported. No lexical-prefix or canonicalize-then-open safety claim.
+remove_at/rename_at traverse without following symlinks; removing a final symlink
+removes the link, not its target. Durable rename may succeed before persistence fails;
+report that partial effect. File locks are cooperative unless the platform explicitly
+guarantees more. Process groups promise supported descendant containment, not a
+security sandbox; unsupported strict containment fails before spawning. SL05 names
+platform delivery requirements and escape limitations.
+
+### `e.cancel`
+
+```neper
+type Token = struct { state: Atomic[u32] }
+type Control = struct { token: *const Token, deadline: time.Instant, has_deadline: bool }
+error Cancelled
+error Timeout
+
+fn token() -> Token
+fn request(t: *Token)
+fn requested(t: *const Token) -> bool
+fn check(control: Control, now: time.Instant) -> err
+```
+
+Token is non-copyable after sharing and needs no allocation or worker pool.
+request is thread-safe and idempotent; requested(nil) is false. Control borrows
+its token until the operation acknowledges completion. has_deadline=false means
+no deadline; zero is a valid clock value, not a sentinel. check observes an explicit
+monotonic now: cancellation takes precedence when both conditions hold at that
+observation. Requesting cancellation does not join work or release its buffers.
+No ambient values, automatic timer, parent registry or hidden allocation is added.
+See stdlib-hardening.md SL03 for operation-level completion/partial-progress rules.
+
 ### `e.io`
 
 ```neper
 type Reader = struct { ctx: *void, read: fn(*void, []u8) -> (usize, err) }
-type Writer = struct { ctx: *void, write: fn(*void, []const u8) -> (usize, err) }
+type Writer = struct { ctx: *void, write: fn(*void, []const u8) -> (usize, err), flush: fn(*void) -> err }
 type SliceReader = struct { data: []const u8, off: usize }
 type SliceWriter = struct { data: []u8, off: usize }
 type BufferedReader = struct { state: *void }
@@ -1530,12 +1720,25 @@ fn seek(s: *Seeker, off: i64, whence: os.SeekWhence) -> (u64, err)
 fn copy(dst: *Writer, src: *Reader, scratch: []u8) -> (u64, err)
 fn print(s: str) -> err
 fn printf[FMT: str](args: ...) -> err
+fn writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err), flush_fn: fn(*void) -> err) -> Writer
+fn buffered_source(buffer: *BufferedReader) -> Reader
+fn buffered_sink(buffer: *BufferedWriter) -> Writer
+
 ```
 
 `limit` is a hard maximum; crossing it returns `TooSmall` without retaining a partial
 result. A callback returning `(0, ok)` for a non-empty request returns `NoProgress`.
 `tee_writer` writes each input to the left sink before the right sink and stops on
 the first error; it therefore does not promise transactional duplication.
+
+
+Buffered adapters borrow their wrapper and transitively its source/sink and arena.
+They never close the underlying stream. writer constructs an unbuffered sink whose
+flush callback is nil (flush succeeds without work); writer_with_flush supplies an
+explicit callback. buffered_sink flushes buffered bytes before forwarding flush.
+Partial writes retain only the unwritten suffix; a failed flush is not a rollback.
+Compression finish, protocol shutdown, and durable filesystem sync are distinct
+operations, never implied by generic flush. See stdlib-hardening.md SL02.
 
 ### `text.io`
 
@@ -1547,11 +1750,11 @@ error End
 error TooLarge
 error Invalid
 
-fn reader(a: *mem.Arena, source: io.Reader, encoding: encoding.Encoding, policy: encoding.InvalidPolicy, capacity: usize) -> (Reader, err)
+fn reader(a: *mem.Arena, source: io.Reader, source_encoding: encoding.Encoding, policy: encoding.InvalidPolicy, capacity: usize) -> (Reader, err)
 fn reader_bom(a: *mem.Arena, source: io.Reader, fallback: encoding.Encoding, policy: encoding.InvalidPolicy, capacity: usize) -> (Reader, err)
 fn read_line(a: *mem.Arena, r: *Reader, limit: usize) -> (str, err)
 fn read_all(a: *mem.Arena, r: *Reader, limit: usize) -> (str, err)
-fn writer(a: *mem.Arena, sink: io.Writer, encoding: encoding.Encoding, emit_bom: bool, newline: Newline, capacity: usize) -> (Writer, err)
+fn writer(a: *mem.Arena, sink: io.Writer, source_encoding: encoding.Encoding, emit_bom: bool, newline: Newline, capacity: usize) -> (Writer, err)
 fn write(w: *Writer, text: str) -> err
 fn write_line(w: *Writer, text: str) -> err
 fn flush(w: *Writer) -> err
@@ -1577,32 +1780,41 @@ error Denied
 error Invalid
 error Io
 
-fn exists(a: *mem.Arena, path: str) -> (bool, err)
-fn stat(a: *mem.Arena, path: str) -> (Entry, err)
-fn metadata(a: *mem.Arena, path: str, follow_symlinks: bool) -> (Metadata, err)
-fn set_permissions(a: *mem.Arena, path: str, permissions: Permissions) -> err
-fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
-fn make_dir(a: *mem.Arena, path: str) -> err
-fn make_dirs(a: *mem.Arena, path: str) -> err
-fn remove_file(a: *mem.Arena, path: str) -> err
-fn remove_dir(a: *mem.Arena, path: str) -> err
+fn exists(a: *mem.Arena, path_text: str) -> (bool, err)
+fn stat(a: *mem.Arena, path_text: str) -> (Entry, err)
+fn metadata(a: *mem.Arena, path_text: str, follow_symlinks: bool) -> (Metadata, err)
+fn set_permissions(a: *mem.Arena, path_text: str, permissions: Permissions) -> err
+fn set_times(a: *mem.Arena, path_text: str, accessed_ns: i64, modified_ns: i64) -> err
+fn make_dir(a: *mem.Arena, path_text: str) -> err
+fn make_dirs(a: *mem.Arena, path_text: str) -> err
+fn remove_file(a: *mem.Arena, path_text: str) -> err
+fn remove_dir(a: *mem.Arena, path_text: str) -> err
 fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err
 fn move(a: *mem.Arena, src: str, dst: str) -> err
 fn replace(a: *mem.Arena, src: str, dst: str, options: ReplaceOptions) -> err
-fn symlink(a: *mem.Arena, target: str, link: str) -> err
-fn read_link(a: *mem.Arena, path: str) -> (str, err)
-fn canonical(a: *mem.Arena, path: str) -> (str, err)
+fn symlink(a: *mem.Arena, target_path: str, link: str) -> err
+fn read_link(a: *mem.Arena, path_text: str) -> (str, err)
+fn canonical(a: *mem.Arena, path_text: str) -> (str, err)
 fn current_dir(a: *mem.Arena) -> (str, err)
-fn set_current_dir(a: *mem.Arena, path: str) -> err
+fn set_current_dir(a: *mem.Arena, path_text: str) -> err
 fn executable_path(a: *mem.Arena) -> (str, err)
 fn temp_dir(a: *mem.Arena) -> (str, err)
 fn temp_file(a: *mem.Arena, dir: str, prefix: str) -> (str, os.File, err)
 fn home_dir(a: *mem.Arena) -> (str, err)
-fn read_file(a: *mem.Arena, path: str, limit: usize) -> ([]u8, err)
-fn write_file(a: *mem.Arena, path: str, data: []const u8) -> err
-fn walk(a: *mem.Arena, root: str, options: WalkOptions) -> (Walk, err)
+fn read_file(a: *mem.Arena, path_text: str, limit: usize) -> ([]u8, err)
+fn write_file(a: *mem.Arena, path_text: str, data: []const u8) -> err
+fn walk(a: *mem.Arena, root_path: str, options: WalkOptions) -> (Walk, err)
 fn walk_next_err(it: *Walk) -> (Entry, bool, err)
 fn last_error_detail(operation: str, subject: str) -> os.ErrorDetail
+type Root = struct { dir: os.Dir }
+
+fn root(a: *mem.Arena, path_text: str) -> (Root, err)
+fn root_close(r: *Root) -> err
+fn open_at(a: *mem.Arena, r: *const Root, relative_path: str, flags: os.OpenFlags, policy: os.ResolvePolicy) -> (os.File, err)
+fn remove_at(a: *mem.Arena, r: *const Root, relative_path: str, directory: bool) -> err
+fn replace_at(a: *mem.Arena, src_root: *const Root, src_path: str, dst_root: *const Root, dst_path: str, options: ReplaceOptions) -> err
+fn walk_close(it: *Walk) -> err
+
 ```
 
 Unavailable creation times are `-1`; timestamps are Unix-epoch nanoseconds. Windows
@@ -1612,6 +1824,14 @@ access and never returns a predictable uncreated name. `replace` is atomic withi
 filesystem or returns `Invalid`; `durable` requests file and parent-directory
 persistence. `last_error_detail` snapshots the underlying failure without another
 host operation and is called before any cleanup that could replace it.
+
+
+Root owns its directory handle and follows H01; its methods retain the SL06
+handle-relative semantics rather than normalizing strings then using path APIs.
+walk_close releases an abandoned traversal and is required on early exit; exhaustion
+releases OS traversal handles. Path functions remain convenience APIs, not sandboxes.
+last_error_detail is a legacy M2 bridge pending H07, not the revised checked API's
+error-detail transport. H07 migration must preserve partial effects and cleanup errors.
 
 ### `e.fs.mmap`
 
@@ -1662,10 +1882,30 @@ fn spawn_piped(a: *mem.Arena, command: Command) -> (Child, err)
 fn wait(child: *Child) -> (i32, err)
 fn kill(child: *Child) -> err
 fn output(a: *mem.Arena, command: Command, limit: usize) -> (Output, err)
+type Outcome = enum u8 { Exited, Cancelled, TimedOut, OutputLimit }
+type RunOptions = struct { control: cancel.Control, stdout_limit: usize, stderr_limit: usize, terminate_grace: time.Duration, contain_tree: bool }
+type RunResult = struct { outcome: Outcome, status: i32, status_known: bool, stdout: []const u8, stderr: []const u8, stdout_bytes: u64, stderr_bytes: u64, truncated: bool }
+
+fn run(a: *mem.Arena, command: Command, options: RunOptions) -> (RunResult, err)
+
 ```
 
 An empty `cwd` inherits the parent directory. `inherit_env` has the same overlay vs
 replacement meaning as `os.SpawnOptions`; environment entries are `NAME=VALUE`.
+
+
+run drains stdout/stderr concurrently, enforces independent capture budgets, and
+returns only after reaping its child and closing its capture pipes. Exited includes
+nonzero status; cancellation/timeout/output limit are explicit outcomes, not API
+success of the child. Overflow retains bounded prefixes, initiates termination,
+and records truncation and observed byte totals. Infrastructure failure returns err
+and a valid possibly partial RunResult; callers must inspect err first.
+A control deadline governs running work; terminate_grace bounds cooperative shutdown
+before forced termination. A separate bounded drain follows, then inherited pipe
+writers are closed locally and truncation recorded. contain_tree requires a
+supported containment facility established before child code executes; unsupported
+containment is rejected before spawning. No shell is inserted. Child-only mode
+does not promise descendant cleanup. See SL05 for platform limits and test cases.
 
 ### `e.thread`
 
@@ -1759,7 +1999,7 @@ type Queue[T: type] = struct { state: *void }
 error Closed
 error Invalid
 
-fn init[T: type](a: *mem.Arena, capacity: usize) -> (Queue[T], err)
+fn init[T: type](a: *mem.Arena, initial_capacity: usize) -> (Queue[T], err)
 fn try_push[T: type](q: *Queue[T], value: T) -> (bool, err)
 fn push[T: type](q: *Queue[T], value: T) -> err
 fn push_for[T: type](q: *Queue[T], value: T, timeout: time.Duration) -> (bool, err)
@@ -1804,7 +2044,7 @@ into a full map returns `Full`, while replacing an existing key still succeeds.
 type Pool = struct { state: *void }
 type Task = struct { state: *void }
 type Future[T: type] = struct { state: *void }
-type Cancel = struct { state: Atomic[u32] }
+type Cancel = cancel.Token
 type Status = enum u8 { Pending, Running, Succeeded, Failed, Cancelled }
 type Options = struct { workers: u32, queue_capacity: usize, stack_size: usize }
 error Cancelled
@@ -1812,24 +2052,22 @@ error Closed
 error Invalid
 
 fn pool(a: *mem.Arena, options: Options) -> (Pool, err)
-fn cancellation() -> Cancel
-fn cancel(c: *Cancel)
-fn is_cancelled(c: *const Cancel) -> bool
-fn submit[Ctx: type](p: *Pool, cancel: *Cancel, ctx: *Ctx, f: fn(*Ctx, *const Cancel) -> err) -> (Task, err)
-fn future[T: type, Ctx: type](p: *Pool, cancel: *Cancel, ctx: *Ctx, f: fn(*Ctx, *const Cancel) -> (T, err)) -> (Future[T], err)
+fn submit[Ctx: type](p: *Pool, cancel_token: *Cancel, ctx: *Ctx, f: fn(*Ctx, *const Cancel) -> err) -> (Task, err)
+fn future[T: type, Ctx: type](p: *Pool, cancel_token: *Cancel, ctx: *Ctx, f: fn(*Ctx, *const Cancel) -> (T, err)) -> (Future[T], err)
 fn status(t: *const Task) -> Status
 fn wait(t: *Task) -> err
 fn wait_for(t: *Task, timeout: time.Duration) -> (bool, err)
 fn future_get[T: type](f: *Future[T]) -> (T, err)
 fn wait_any(tasks: []*Task, timeout: time.Duration) -> (usize, bool, err)
 fn wait_all(tasks: []*Task) -> err
-fn parallel_for[Ctx: type](p: *Pool, cancel: *Cancel, begin: usize, end: usize, grain: usize, ctx: *Ctx, body: fn(*Ctx, usize, usize, *const Cancel) -> err) -> err
+fn parallel_for[Ctx: type](p: *Pool, cancel_token: *Cancel, begin: usize, end: usize, grain: usize, ctx: *Ctx, body: fn(*Ctx, usize, usize, *const Cancel) -> err) -> err
 fn close(p: *Pool) -> err
 ```
 
 The pool and all task records borrow their arena for the pool lifetime. Submission is
 bounded and never allocates secretly. Cancellation is cooperative: queued work may
-become `Cancelled`, while running work observes the token. `close` rejects new work,
+become `Cancelled`, while running work observes the shared e.cancel token; construct/request it through that module.
+The Cancel alias preserves a named task parameter type, not a second token system. `close` rejects new work,
 cancels queued work and joins every worker. `wait_all` returns the first error in
 input order, not completion order. `parallel_for` partitions `[begin..end)` into
 deterministic ranges no smaller than `grain` except the last; scheduling order is not
@@ -1934,9 +2172,9 @@ fn load(a: *mem.Arena, source: []const u8) -> (Database, err)
 fn builtin(a: *mem.Arena) -> (Database, err)
 fn version(db: *const Database) -> str
 fn zone(db: *const Database, name: str) -> (Zone, err)
-fn offset_at(zone: Zone, instant: time.Timestamp) -> Offset
-fn to_local(zone: Zone, instant: time.Timestamp) -> Local
-fn resolve(zone: Zone, local: Local) -> (Resolve, err)
+fn offset_at(selected_zone: Zone, instant: time.Timestamp) -> Offset
+fn to_local(selected_zone: Zone, instant: time.Timestamp) -> Local
+fn resolve(selected_zone: Zone, local: Local) -> (Resolve, err)
 fn names(db: *const Database) -> []const str
 ```
 
@@ -1974,6 +2212,19 @@ file and provides no mutation, decompression or global cache.
 
 ```neper
 type Backend = enum u8 { Cpu, Vulkan, Cuda }
+type DeviceKind = enum u8 { Unknown, Cpu, Integrated, Discrete, Virtual, Other }
+type DeviceKey = struct { backend: Backend, uuid: [16]u8 }
+type DeviceInfo = struct {
+    key: DeviceKey,
+    key_valid: bool,
+    index: u32,
+    name: str,
+    kind: DeviceKind,
+    memory_bytes: u64,
+    memory_known: bool,
+    capabilities: []const Cap,
+    supported: bool,
+}
 type Device = struct { state: *void }
 type Queue = struct { state: *void }
 type Buf[T: type] = struct { owner: u32, slot: u32, generation: u32, len: usize }
@@ -1982,6 +2233,7 @@ type Id = struct { x: u32, y: u32, z: u32 }
 type Cap = enum u8 { Int8, Int16, Int64, Float16, Float64, Atomic64, Subgroup, Ftz, DenormPreserve }
 type Scope = enum u8 { Workgroup, Device }
 error NoDevice
+error AmbiguousDevice
 error Unsupported
 error OutOfMemory
 error TooLarge
@@ -1990,6 +2242,9 @@ error WrongDevice
 error InvalidHandle
 
 fn open(a: *mem.Arena, backend: Backend, index: u32) -> (*Device, err)
+fn devices(a: *mem.Arena, backend: Backend, limit: usize) -> ([]const DeviceInfo, err)
+fn open_id(a: *mem.Arena, key: DeviceKey) -> (*Device, err)
+fn info(a: *mem.Arena, device: *Device) -> (DeviceInfo, err)
 fn close(device: *Device) -> err
 fn has(device: *Device, capability: Cap) -> bool
 fn queue(device: *Device) -> (*Queue, err)
@@ -2006,6 +2261,18 @@ fn grid2(x: usize, y: usize) -> Grid
 fn grid3(x: usize, y: usize, z: usize) -> Grid
 ```
 
+Discovery/selection is specified in [spec §10](spec.md#device-discovery-and-selection).
+`devices` is a bounded, caller-arena-owned snapshot, including copied names and
+capability lists; exceeding the limit fails rather than returning a partial success.
+Indices are temporary backend ordinals. `open_id` requires an exact backend-scoped
+UUID match, rejects duplicate matches with `AmbiguousDevice`, and never silently
+falls back. `key_valid == false` means stable-key selection is unavailable, not that
+a fabricated index/name hash may substitute. `info` copies the opening-time descriptor
+of the selected device. Memory is reported capacity, not free or reserved storage.
+Every queue/buffer belongs to one open device, including when two opens address the
+same GPU. These additions are planned for M3 CPU/Vulkan, with CUDA in M4; they do not
+claim implementation or an optimized production CPU fallback.
+
 The device-only intrinsics are exactly `gid`, `lid`, `wgid`, `barrier`,
 `subgroup_size`, `subgroup_lane`, `subgroup_ballot`, `subgroup_any`, `subgroup_all`,
 `subgroup_broadcast`, `subgroup_add`, `subgroup_min`, `subgroup_max`, and the scoped
@@ -2021,7 +2288,7 @@ fn upload[T: type](a: *mem.Arena, queue: *gpu.Queue, src: linalg_tensor.ConstTen
 fn download[T: type](queue: *gpu.Queue, src: Tensor[T], dst: linalg_tensor.Tensor[T]) -> err
 fn add[T: type](queue: *gpu.Queue, dst: Tensor[T], x: Tensor[T], y: Tensor[T]) -> err
 fn matmul[T: type](queue: *gpu.Queue, dst: Tensor[T], x: Tensor[T], y: Tensor[T]) -> err
-fn release[T: type](queue: *gpu.Queue, tensor: Tensor[T]) -> err
+fn release[T: type](queue: *gpu.Queue, tensor_view: Tensor[T]) -> err
 ```
 
 The import of `algo.linalg.tensor` uses the deterministic alias `linalg_tensor`.
@@ -2040,6 +2307,71 @@ fn fail(msg: str) -> err
 ```
 
 Discovery, process isolation and reporting belong to `neper test`, not this module.
+
+### `e.test.support`
+
+```neper
+type Clock = struct { instant: time.Instant, timestamp: time.Timestamp }
+type ReadStep = struct { bytes: []const u8, failure: err }
+type WriteStep = struct { max_bytes: usize, failure: err }
+type ScriptedReader = struct { state: *void }
+type ScriptedWriter = struct { state: *void }
+type Schedule = struct { state: *void }
+
+fn clock(instant: time.Instant, timestamp: time.Timestamp) -> Clock
+fn advance(c: *Clock, elapsed: time.Duration) -> err
+fn scripted_reader(a: *mem.Arena, steps: []const ReadStep) -> (ScriptedReader, err)
+fn scripted_writer(a: *mem.Arena, steps: []const WriteStep, capacity: usize) -> (ScriptedWriter, err)
+fn reader(script: *ScriptedReader) -> io.Reader
+fn writer(script: *ScriptedWriter) -> io.Writer
+fn captured(script: *const ScriptedWriter) -> []const u8
+fn schedule(a: *mem.Arena, turns: []const u64) -> (Schedule, err)
+fn checkpoint(s: *Schedule, participant: u64) -> (bool, err)
+fn complete(s: *const Schedule) -> bool
+```
+
+These are caller-owned deterministic test doubles, never replacements for ambient
+OS state. Script steps are copied; input bytes remain borrowed until the scripted
+reader is released with its arena. Partial data plus an error is intentional.
+Script/capture exhaustion is explicit; no callback runs unboundedly. Clock advance
+rejects negative durations and overflow. Schedule is a single-threaded cooperative
+test driver: checkpoint advances only the prescribed participant, returning false
+for others; exhaustion returns test.Failed. It is not an OS-thread scheduler or race
+proof. Production APIs accept explicit clock/I/O/control inputs where applicable.
+
+### `e.test.coverage`
+
+```neper
+type Counter = struct { file_id: u32, region_id: u32, hits: u64 }
+type Report = struct { counters: []const Counter }
+error InvalidProfile
+error TooLarge
+
+fn snapshot(dst: []Counter) -> ([]Counter, err)
+fn reset()
+fn merge(a: *mem.Arena, profiles: []const Report) -> (Report, err)
+fn write_json(writer: *io.Writer, report: *const Report) -> err
+```
+
+The compiler assigns stable file and region identifiers and owns instrumentation.
+This runtime only snapshots, resets, merges and serializes bounded counters.
+
+### `e.test.fuzz`
+
+```neper
+type Input = struct { bytes: []const u8, seed: u64 }
+type Options = struct { max_input: usize, max_runs: u64, deadline: time.Instant }
+type Result = struct { runs: u64, failing: Input, failed: bool }
+type Target = fn(input: Input) -> err
+error InvalidCorpus
+error Limit
+
+fn run(a: *mem.Arena, target_fn: Target, corpus: []const Input, options: Options) -> (Result, err)
+fn minimize(a: *mem.Arena, target_fn: Target, failing: Input, deadline: time.Instant) -> (Input, err)
+```
+
+Mutation is deterministic from each explicit seed. Corpus persistence, subprocess
+isolation and reproduction commands belong to `neper test --fuzz`.
 
 ### `e.debug`
 
@@ -2158,26 +2490,38 @@ error Cancelled
 error Timeout
 error Closed
 
-fn read(a: *mem.Arena, loop: *async.Loop, source: io.Reader, dst: []u8, deadline: time.Instant, cancel: *task.Cancel) -> (Op[usize], err)
-fn write(a: *mem.Arena, loop: *async.Loop, sink: io.Writer, src: []const u8, deadline: time.Instant, cancel: *task.Cancel) -> (Op[usize], err)
-fn accept(a: *mem.Arena, loop: *async.Loop, listener: os.Socket, deadline: time.Instant, cancel: *task.Cancel) -> (Op[os.Socket], err)
-fn connect(a: *mem.Arena, loop: *async.Loop, socket: os.Socket, address: os.SocketAddress, deadline: time.Instant, cancel: *task.Cancel) -> (Op[bool], err)
+fn read(a: *mem.Arena, loop: *async.Loop, source: io.Reader, dst: []u8, control: cancel_api.Control) -> (Op[usize], err)
+fn write(a: *mem.Arena, loop: *async.Loop, sink: io.Writer, src: []const u8, control: cancel_api.Control) -> (Op[usize], err)
+fn accept(a: *mem.Arena, loop: *async.Loop, listener: os.Socket, control: cancel_api.Control) -> (Op[os.Socket], err)
+fn connect(a: *mem.Arena, loop: *async.Loop, socket: os.Socket, address: os.SocketAddress, control: cancel_api.Control) -> (Op[bool], err)
 fn state[T: type](op: *const Op[T]) -> State
 fn erase[T: type](op: *Op[T]) -> AnyOp
 fn take[T: type](op: *Op[T]) -> (T, err)
 fn wait[T: type](loop: *async.Loop, op: *Op[T]) -> (T, err)
 fn wait_any(loop: *async.Loop, ops: []AnyOp, timeout: time.Duration) -> (usize, bool, err)
-fn cancel[T: type](op: *Op[T])
+fn cancel[T: type](op: *Op[T]) -> (bool, err)
+type Progress = struct { bytes: u64, known: bool }
+fn progress[T: type](op: *const Op[T]) -> Progress
+
 ```
 
 Submission never blocks and every operation completes exactly once. Buffers, handles,
-contexts and cancellation tokens must outlive completion. A deadline with
-`nanos == 0` means no deadline. Cancellation is cooperative but completion after a
-successful cancel request reports `Cancelled`, never a partial success. `wait` drives
+contexts and cancellation tokens must outlive completion. Control uses e.cancel's explicit deadline flag. cancel returns whether it newly
+requested cancellation; it does not acknowledge completion. A completed operation
+wins a later cancellation request. Otherwise cancellation is cooperative and the
+terminal state reports Cancelled/TimedOut with observable partial effects preserved.
+No consumed bytes or transmitted bytes are silently reported as rolled back. `wait` drives
 the supplied loop; applications may instead poll it directly. `take` consumes a
 completed operation and returns its exact I/O error. `erase` is a non-owning typed
 conversion used only to build a heterogeneous `wait_any` slice; the original `Op[T]`
 must remain live.
+
+
+Progress is a monotonic observation, not completion acknowledgement. Byte operations
+report exact completed bytes at terminal state even on failure/cancellation; operations
+without a byte metric report known=false. take remains mandatory to consume a terminal
+operation. An uncancellable blocking callback cannot be advertised as promptly
+cancellable: reject an incompatible submission or keep resources pinned until it ends.
 
 ### `e.net`
 
@@ -2212,7 +2556,18 @@ fn shutdown(socket: Socket, how: Shutdown) -> err
 fn close(socket: Socket) -> err
 fn reader(socket: *Socket) -> io.Reader
 fn writer(socket: *Socket) -> io.Writer
+fn resolve_with_control(a: *mem.Arena, host: str, port: u16, family: Family, control: cancel.Control) -> ([]Endpoint, err)
+fn tcp_connect_with_control(endpoint: Endpoint, control: cancel.Control) -> (Socket, err)
+fn receive_with_control(socket: Socket, dst: []u8, control: cancel.Control) -> (usize, err)
+fn send_with_control(socket: Socket, src: []const u8, control: cancel.Control) -> (usize, err)
+
 ```
+
+
+Controlled operations use e.cancel and preserve byte counts on failure. DNS may
+require bounded worker isolation; completion is not acknowledged while caller-owned
+buffers remain in use. Unsupported cancellation guarantees are reported explicitly,
+not implemented as a blocking call ignoring its deadline.
 
 ### `e.net.tls`
 
@@ -2235,6 +2590,8 @@ fn writer(stream: *Stream) -> io.Writer
 fn protocol(stream: *const Stream) -> Version
 fn negotiated_alpn(stream: *const Stream) -> str
 fn close(stream: *Stream) -> err
+fn handshake_with_control(stream: *Stream, control: cancel.Control) -> err
+
 ```
 
 Version 1 implements TLS 1.3 only. Trust roots, certificate time and entropy are
@@ -2242,6 +2599,17 @@ explicit inputs; the module never reads host trust state, clocks or randomness.
 Certificate and key inputs are bounded DER encodings. The cryptographic algorithms
 and validation profiles supported by a toolchain release are reported by `neper info`
 and tested against published protocol and malformed-peer vectors.
+
+
+The release contract must name its cipher suites, signature/certificate algorithms,
+key schedule and entropy requirements; reporting merely TLS 1.3 is insufficient.
+HKDF/HMAC come from reviewed crypto.kdf/crypto.mac surfaces. SHA-384-based suites
+cannot be advertised until SHA-384/HKDF-SHA384 exists. The current Ed25519-only public
+signature surface does not establish compatibility with typical RSA/ECDSA certificate
+chains; those profiles require explicit reviewed additions or remain unsupported.
+Do not silently weaken certificate/hostname verification to improve connectivity.
+Entropy seeds require sufficient fresh caller entropy per independent handshake;
+copied/reused config bytes are not permission to repeat ephemeral randomness.
 
 ### `e.net.http`
 
@@ -2268,11 +2636,48 @@ fn request(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: L
 fn request_tls(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientConfig, req: *const Request, limits: Limits) -> (Response, err)
 fn header(headers: []const Header, name: str) -> (str, bool)
 fn reason(status: u16) -> str
+type ResponseHead = struct { version: Version, status: u16, reason: str, headers: []const Header }
+type ResponseStream = struct { state: *void }
+type SseEvent = struct { event: str, data: str, id: str, has_id: bool, retry_ms: u64, has_retry: bool }
+type SseState = struct { id: str, has_id: bool, retry_ms: u64, has_retry: bool }
+type SseReader = struct { state: *void }
+type SseLimits = struct { line_bytes: usize, event_bytes: usize }
+
+fn request_stream(a: *mem.Arena, endpoint: net.Endpoint, req: *const Request, limits: Limits, control: cancel.Control) -> (ResponseStream, err)
+fn request_tls_stream(a: *mem.Arena, endpoint: net.Endpoint, config: tls.ClientConfig, req: *const Request, limits: Limits, control: cancel.Control) -> (ResponseStream, err)
+fn response_head(stream: *const ResponseStream) -> ResponseHead
+fn response_read(stream: *ResponseStream, dst: []u8) -> (usize, err)
+fn response_close(stream: *ResponseStream) -> err
+fn sse_reader(a: *mem.Arena, source: io.Reader, limits: SseLimits) -> (SseReader, err)
+fn sse_next_err(it: *SseReader) -> (SseEvent, bool, err)
+fn sse_state(it: *const SseReader) -> SseState
+
 ```
 
 Chunked transfer encoding is supported. `request_tls` performs and verifies one TLS
 connection using the explicit configuration. Automatic redirects, cookies,
 compression and connection pooling remain outside the version-1 surface.
+
+
+ResponseStream owns the connection; headers borrow its arena and response_read
+incrementally decodes framing without buffering a complete body. Limits.body_bytes
+is a total transfer cap (zero permits no body), not a mandatory allocation. Control
+applies through reads/close; closing early disposes the connection without draining
+an unbounded peer. No automatic replay, redirect or credential forwarding.
+Existing convenience request functions remain bounded full-body wrappers.
+SSE incrementally handles UTF-8, CR/LF/CRLF, comments, repeated data lines, id,
+event and decimal retry fields under the standard event-stream algorithm. Returned
+fields borrow reader storage until next call. The decoder ignores an initial UTF-8
+BOM and replaces malformed UTF-8 with U+FFFD. An id containing NUL and a
+non-decimal retry field are ignored; a valid decimal retry exceeding u64 or an
+exceeded size limit fails TooLarge. EOF does not dispatch an unterminated event.
+The reader retains valid id/retry updates even in blocks without data;
+sse_state exposes that state, including after EOF. Its strings have the same
+borrow lifetime as event fields. Event id/retry fields report the effective
+retained values; has_id records whether a valid id was seen, including an empty
+id that resets it. Reconnection, persistence across readers and retry policy
+belong to the caller. An io.Reader adapter can wrap response_read for SSE; its
+lifetime and cancellation remain those of ResponseStream.
 
 ### `e.net.ws`
 
@@ -2286,7 +2691,7 @@ error TooLarge
 error Closed
 
 fn client_key(entropy: [16]u8, dst: []u8) -> (str, err)
-fn client_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, host: str, target: str, entropy: [16]u8) -> (Connection, err)
+fn client_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, host: str, target_path: str, entropy: [16]u8) -> (Connection, err)
 fn server_upgrade(a: *mem.Arena, stream: io.Reader, sink: io.Writer, request: *const http.Request) -> (Connection, err)
 fn receive(a: *mem.Arena, connection: *Connection, limit: usize) -> (Frame, err)
 fn send(connection: *Connection, frame: Frame, mask: [4]u8) -> err
@@ -2296,6 +2701,47 @@ fn close(connection: *Connection, code: u16, reason: str, mask: [4]u8) -> err
 
 Client masking material and handshake entropy are caller-supplied. The module never
 reads OS randomness implicitly.
+
+### `e.db`
+
+```neper
+type Connection = struct { ctx: *void, driver: *const Driver }
+type Statement = struct { ctx: *void, driver: *const Driver }
+type Rows = struct { ctx: *void, driver: *const Driver }
+type Transaction = struct { ctx: *void, driver: *const Driver }
+type Value = union enum u8 { Null, Bool: bool, I64: i64, U64: u64, F64: f64, Text: str, Bytes: []const u8, Time: time.Instant }
+type Parameter = struct { name: str, value: Value }
+type Column = struct { name: str, kind: ValueKind, nullable: bool }
+type ValueKind = enum u8 { Null, Bool, I64, U64, F64, Text, Bytes, Time }
+type Driver = struct { close: fn(ctx: *void) -> err, prepare: fn(ctx: *void, sql: str) -> (Statement, err), execute: fn(ctx: *void, sql: str, params: []const Parameter) -> (u64, err), query: fn(ctx: *void, sql: str, params: []const Parameter) -> (Rows, err), begin: fn(ctx: *void) -> (Transaction, err), statement_close: fn(ctx: *void) -> err, statement_execute: fn(ctx: *void, params: []const Parameter) -> (u64, err), statement_query: fn(ctx: *void, params: []const Parameter) -> (Rows, err), rows_columns: fn(ctx: *void) -> []const Column, rows_next: fn(ctx: *void, dst: []Value) -> (bool, err), rows_close: fn(ctx: *void) -> err, transaction_execute: fn(ctx: *void, sql: str, params: []const Parameter) -> (u64, err), transaction_query: fn(ctx: *void, sql: str, params: []const Parameter) -> (Rows, err), transaction_commit: fn(ctx: *void) -> err, transaction_rollback: fn(ctx: *void) -> err }
+error Closed
+error InvalidQuery
+error Constraint
+error Busy
+error Unsupported
+
+fn close(connection: *Connection) -> err
+fn prepare(connection: *Connection, sql: str) -> (Statement, err)
+fn execute(connection: *Connection, sql: str, params: []const Parameter) -> (u64, err)
+fn query(connection: *Connection, sql: str, params: []const Parameter) -> (Rows, err)
+fn close_statement(statement: *Statement) -> err
+fn execute_statement(statement: *Statement, params: []const Parameter) -> (u64, err)
+fn query_statement(statement: *Statement, params: []const Parameter) -> (Rows, err)
+fn columns(rows: *Rows) -> []const Column
+fn reader_next_err(rows: *Rows, dst: []Value) -> (bool, err)
+fn close_rows(rows: *Rows) -> err
+fn begin(connection: *Connection) -> (Transaction, err)
+fn execute_transaction(transaction: *Transaction, sql: str, params: []const Parameter) -> (u64, err)
+fn query_transaction(transaction: *Transaction, sql: str, params: []const Parameter) -> (Rows, err)
+fn commit(transaction: *Transaction) -> err
+fn rollback(transaction: *Transaction) -> err
+```
+
+`e.db` defines the generic SQL connection, prepared-statement, transaction and
+streaming row-reader contract. Concrete database drivers are owner-qualified
+packages—initially `x.sqlite.sqlite`, `x.oracle.mysql` and
+`x.postgresql.libpq`; queries, parameters and row buffers are always explicit, and the module
+does not discover drivers or allocate hidden connection pools.
 
 ---
 
@@ -2327,11 +2773,11 @@ fn builder(a: *mem.Arena, max_commands: usize) -> (Builder, err)
 fn push(b: *Builder, command: Command) -> err
 fn finish(b: *Builder) -> DisplayList
 fn renderer(a: *mem.Arena, device: *gpu.Device, queue: *gpu.Queue, max_scenes: u32, max_textures: u32) -> (Renderer, err)
-fn upload_image(r: *Renderer, image: image.ConstImage) -> (TextureId, err)
-fn update_image(r: *Renderer, texture: TextureId, image: image.ConstImage) -> err
+fn upload_image(r: *Renderer, image_view: image.ConstImage) -> (TextureId, err)
+fn update_image(r: *Renderer, texture: TextureId, image_view: image.ConstImage) -> err
 fn release_image(r: *Renderer, texture: TextureId) -> err
 fn compile(r: *Renderer, list: DisplayList) -> (SceneId, err)
-fn render(r: *Renderer, scene: SceneId, target: Target, size: geometry.Size) -> err
+fn render(r: *Renderer, scene: SceneId, render_target: Target, size: geometry.Size) -> err
 fn release_scene(r: *Renderer, scene: SceneId) -> err
 fn close(r: *Renderer) -> err
 ```
@@ -2356,10 +2802,10 @@ error Full
 fn select(base: str, request: Request) -> (asset.Asset, err)
 fn font(base: str, request: Request, face_index: u32) -> (shape.Font, err)
 fn cache(a: *mem.Arena, renderer: *scene.Renderer, capacity: usize) -> (Cache, err)
-fn texture(cache: *Cache, scratch: *mem.Arena, base: str, request: Request, decoder: ImageDecoder) -> (scene.TextureId, err)
-fn evict(cache: *Cache, renderer: *scene.Renderer, base: str) -> err
-fn clear(cache: *Cache, renderer: *scene.Renderer) -> err
-fn close(cache: *Cache, renderer: *scene.Renderer) -> err
+fn texture(texture_cache: *Cache, scratch: *mem.Arena, base: str, request: Request, decoder: ImageDecoder) -> (scene.TextureId, err)
+fn evict(texture_cache: *Cache, renderer: *scene.Renderer, base: str) -> err
+fn clear(texture_cache: *Cache, renderer: *scene.Renderer) -> err
+fn close(texture_cache: *Cache, renderer: *scene.Renderer) -> err
 ```
 
 Variants share a manifest `base` attribute. Selection first filters by base, then
@@ -2423,9 +2869,9 @@ error TooLarge
 
 fn queue(a: *mem.Arena, capacity: usize) -> (Queue, err)
 fn poll(q: *Queue, timeout: time.Duration) -> (Event, bool, err)
-fn capture(q: *Queue, window: window.Id, pointer: PointerId) -> err
-fn release_capture(q: *Queue, window: window.Id, pointer: PointerId) -> err
-fn composition_rect(q: *Queue, window: window.Id, rect: geometry.Rect) -> err
+fn capture(q: *Queue, window_value: window.Id, pointer: PointerId) -> err
+fn release_capture(q: *Queue, window_value: window.Id, pointer: PointerId) -> err
+fn composition_rect(q: *Queue, window_value: window.Id, rect: geometry.Rect) -> err
 fn close(q: *Queue) -> err
 ```
 
@@ -2468,11 +2914,11 @@ fn button(key: Key, value: Button, value_style: style.Style, children: []const N
 fn image(key: Key, value: Image, value_style: style.Style) -> Node
 fn scroll(key: Key, value: Scroll, value_style: style.Style, children: []const Node) -> Node
 fn state[T: type](ctx: *BuildContext, key: Key, initial: T) -> (*T, StateId, err)
-fn invalidate(runtime: *Runtime, element: ElementId)
-fn reconcile(runtime: *Runtime, frame_arena: *mem.Arena, root: Node, constraints: ui_layout.Constraints) -> (scene.SceneId, err)
-fn dispatch(runtime: *Runtime, event: input.Event) -> err
-fn focus(runtime: *Runtime, element: ElementId) -> err
-fn close(runtime: *Runtime) -> err
+fn invalidate(widget_runtime: *Runtime, element: ElementId)
+fn reconcile(widget_runtime: *Runtime, frame_arena: *mem.Arena, root: Node, constraints: ui_layout.Constraints) -> (scene.SceneId, err)
+fn dispatch(widget_runtime: *Runtime, event: input.Event) -> err
+fn focus(widget_runtime: *Runtime, element: ElementId) -> err
+fn close(widget_runtime: *Runtime) -> err
 ```
 
 `Node` is the declarative syntax: ordinary literals and the allocation-free convenience
@@ -2514,7 +2960,7 @@ error Unsupported
 error Invalid
 
 fn build(a: *mem.Arena, runtime: *const widget.Runtime) -> (Tree, err)
-fn publish(window: window.Id, tree: *const Tree) -> err
+fn publish(window_value: window.Id, tree: *const Tree) -> err
 fn perform(runtime: *widget.Runtime, id: Id, action: Action, value: str) -> err
 ```
 
@@ -2566,20 +3012,21 @@ window closes or `stop` is called. `run` is exactly a loop over `step`; applicat
 retain control by calling `step` themselves. All memory comes from the application
 arena plus a bounded frame arena reset after presentation.
 
----
-
-## 9. Interchange formats
-
 All document decoders allocate retained strings and nodes in the arena passed to the
 call. Streaming readers retain only their documented scratch state. Every writer uses
 `io.Writer`; no format module opens files.
 
+---
+
+## 9. Interchange formats
+
 ### `fmt.json`
 
 ```neper
+type Number = struct { lexeme: str }
 type Member = struct { key: str, value: Value }
-type Value = union enum u8 { Null, Bool: bool, Number: f64, String: str, Array: []const Value, Object: []const Member }
-type Event = union enum u8 { Null, Bool: bool, Number: f64, String: str, Key: str, BeginArray, EndArray, BeginObject, EndObject }
+type Value = union enum u8 { Null, Bool: bool, Number: Number, String: str, Array: []const Value, Object: []const Member }
+type Event = union enum u8 { Null, Bool: bool, Number: Number, String: str, Key: str, BeginArray, EndArray, BeginObject, EndObject }
 type Reader = struct { state: *void }
 type Options = struct { allow_duplicate_keys: bool, max_depth: u16 }
 error Invalid
@@ -2594,10 +3041,41 @@ fn write(writer: *io.Writer, value: *const Value) -> err
 fn write_pretty(writer: *io.Writer, value: *const Value, indent: u8) -> err
 fn encode[T: type](writer: *io.Writer, value: *const T) -> err
 fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err)
+error InvalidPointer
+error PatchFailed
+
+fn number(source: str) -> (Number, err)
+fn number_i64(value: Number) -> (i64, err)
+fn number_u64(value: Number) -> (u64, err)
+fn number_f64(value: Number) -> (f64, err)
+fn number_from_i64(a: *mem.Arena, value: i64) -> (Number, err)
+fn number_from_u64(a: *mem.Arena, value: u64) -> (Number, err)
+fn number_from_f64(a: *mem.Arena, value: f64) -> (Number, err)
+fn pointer(root: *const Value, path: str) -> (*const Value, err)
+fn patch(a: *mem.Arena, root: *const Value, operations: *const Value, max_operations: usize, max_depth: u16) -> (Value, err)
+
 ```
 
-Numbers use finite `f64`; overflow and non-finite output are `Invalid`. `encode` and
-`decode` use the structural subset and type-owned protocols from spec §9.
+Numbers preserve their validated JSON lexeme, including large integers, exponent
+spelling and negative zero. parse borrows number lexemes from source; streaming
+events borrow reader-owned storage until the next reader call. Writers revalidate
+public Number values and never silently round them through f64. number_i64/u64
+accept mathematically integral values exactly in range (including exponent forms);
+number_f64 explicitly rounds to nearest ties-to-even and rejects nonfinite overflow.
+Typed integer encode/decode never takes a floating-point detour. Object order is
+preserved; duplicate keys are rejected unless Options explicitly allows them.
+These are semantic round trips, not whitespace-preserving source edits. Structural
+encoding/decoding still uses spec §9. See stdlib-hardening.md SL04.
+
+
+pointer follows RFC 6901 JSON Pointer, including the empty root pointer and ~0/~1
+escapes; URI-fragment notation is not accepted by this function. patch implements
+RFC 6902 add/remove/replace/move/copy/test into a new arena-owned tree. It never
+mutates root; all output strings and number lexemes are copied. Failure rolls back
+its own arena allocations and returns zero. Duplicate-key objects anywhere in a
+patch input are rejected. Numeric test equality is exact mathematical equality,
+not f64 equality. Limits, invalid array indices, move-into-descendant and missing
+targets fail explicitly. Source-file edits additionally require H09 transactions.
 
 ### `fmt.csv`
 
@@ -2677,6 +3155,103 @@ fn header(headers: []const Header, name: str) -> (str, bool)
 
 Header names compare by ASCII case folding. Obsolete line folding is rejected.
 
+### `fmt.asn1`
+
+```neper
+type Class = enum u8 { Universal, Application, Context, Private }
+type Tag = struct { class: Class, number: u32, constructed: bool }
+type Value = struct { tag: Tag, content: []const u8, encoded: []const u8 }
+type Reader = struct { data: []const u8, off: usize, depth: u16, max_depth: u16 }
+error Invalid
+error NonCanonical
+error TooDeep
+error TooLarge
+
+fn reader(data: []const u8, max_depth: u16) -> Reader
+fn reader_next_err(source_reader: *Reader) -> (Value, bool, err)
+fn children(value: Value, max_depth: u16) -> (Reader, err)
+fn decode[T: type](a: *mem.Arena, source: []const u8, max_depth: u16) -> (T, err)
+fn encoded_len[T: type](value: *const T) -> (usize, err)
+fn encode[T: type](dst: []u8, value: *const T) -> ([]u8, err)
+```
+
+The version-1 surface accepts and emits canonical DER only. Lengths, nesting and
+integer encodings are validated before typed decoding exposes a value.
+
+### `fmt.pem`
+
+```neper
+type Block = struct { label: str, headers: []const mime.Header, bytes: []const u8 }
+error Invalid
+error TooLarge
+
+fn decode(a: *mem.Arena, source: str, byte_limit: usize) -> (Block, str, err)
+fn encode(writer: *io.Writer, block: *const Block) -> err
+```
+
+`decode` returns the first strict PEM block and the unconsumed suffix. Base64 is
+decoded through `e.bytes`; encrypted legacy PEM headers are not interpreted.
+
+### `fmt.multipart`
+
+```neper
+type Part = struct { headers: []const mime.Header, body: io.Reader }
+type Reader = struct { state: *void }
+type Writer = struct { state: *void }
+error InvalidBoundary
+error Invalid
+error TooLarge
+
+fn reader(storage: []u8, source: io.Reader, boundary: str, part_limit: u32, byte_limit: u64) -> (Reader, err)
+fn reader_next_err(source_reader: *Reader) -> (Part, bool, err)
+fn writer(storage: []u8, sink: io.Writer, boundary: str) -> (Writer, err)
+fn start_part(sink_writer: *Writer, headers: []const mime.Header) -> (io.Writer, err)
+fn finish(sink_writer: *Writer) -> err
+```
+
+Bodies stream without implicit buffering. Boundaries are caller-supplied for writing,
+making output reproducible; nested multipart content uses another explicit reader.
+
+### `fmt.quoted_printable`
+
+```neper
+type Reader = struct { state: *void }
+type Writer = struct { state: *void }
+error Invalid
+
+fn reader(storage: []u8, source: io.Reader) -> Reader
+fn read(source_reader: *Reader, dst: []u8) -> (usize, err)
+fn writer(storage: []u8, sink: io.Writer, line_limit: u8) -> (Writer, err)
+fn write(sink_writer: *Writer, src: []const u8) -> (usize, err)
+fn finish(sink_writer: *Writer) -> err
+```
+
+Decoding is strict RFC 2045. Encoding uses canonical uppercase hex escapes and
+caller-selected line limits.
+
+### `fmt.mail`
+
+```neper
+type Address = struct { name: str, address: str }
+type Message = struct { headers: []const mime.Header, body: io.Reader }
+type Date = struct { instant: i64, offset_minutes: i16 }
+error InvalidAddress
+error InvalidDate
+error InvalidMessage
+error TooLarge
+
+fn parse_address(a: *mem.Arena, source: str) -> (Address, err)
+fn parse_address_list(a: *mem.Arena, source: str) -> ([]const Address, err)
+fn format_address(a: *mem.Arena, value: Address) -> (str, err)
+fn parse_date(source: str) -> (Date, err)
+fn read_message(a: *mem.Arena, source: io.Reader, header_limit: usize) -> (Message, err)
+fn decode_header(a: *mem.Arena, source: str, output_limit: usize) -> (str, err)
+```
+
+The module parses Internet message headers and addresses without SMTP transport.
+MIME bodies are consumed through `fmt.mime`, `fmt.multipart` and
+`fmt.quoted_printable`; charset conversion is explicit through `text.encoding`.
+
 ### `fmt.gzip`
 
 ```neper
@@ -2718,6 +3293,61 @@ fn writer_storage(level: Level) -> usize
 Version 1 supports standard frames without dictionaries. Window and decompressed
 output limits are mandatory; unsupported skippable or dictionary frames return
 `Unsupported`.
+
+### `fmt.bzip2`
+
+```neper
+type Reader = struct { state: *void }
+error Invalid
+error Checksum
+error TooLarge
+
+fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err)
+fn read(source_reader: *Reader, dst: []u8) -> (usize, err)
+fn storage_required(block_limit: usize) -> (usize, err)
+```
+
+Version 1 provides bounded bzip2 decompression. Compression is deliberately omitted
+until a workload justifies its larger implementation and memory surface.
+
+### `fmt.lzw`
+
+```neper
+type Order = enum u8 { LeastSignificant, MostSignificant }
+type Reader = struct { state: *void }
+type Writer = struct { state: *void }
+error Invalid
+error TooLarge
+
+fn reader(storage: []u8, source: io.Reader, order: Order, literal_width: u8, output_limit: u64) -> (Reader, err)
+fn read(source_reader: *Reader, dst: []u8) -> (usize, err)
+fn writer(storage: []u8, sink: io.Writer, order: Order, literal_width: u8) -> (Writer, err)
+fn write(sink_writer: *Writer, src: []const u8) -> (usize, err)
+fn finish(sink_writer: *Writer) -> err
+fn storage_required(literal_width: u8) -> (usize, err)
+```
+
+Bit order and literal width are explicit so GIF- and TIFF-style streams cannot be
+silently confused.
+
+### `fmt.zlib`
+
+```neper
+type Reader = struct { state: *void }
+type Writer = struct { state: *void }
+error Invalid
+error Checksum
+
+fn reader(storage: []u8, source: io.Reader, output_limit: u64) -> (Reader, err)
+fn read(source_reader: *Reader, dst: []u8) -> (usize, err)
+fn writer(storage: []u8, sink: io.Writer, level: deflate.Level) -> (Writer, err)
+fn write(sink_writer: *Writer, src: []const u8) -> (usize, err)
+fn finish(sink_writer: *Writer) -> err
+fn storage_required(level: deflate.Level) -> usize
+```
+
+The reader and writer implement RFC 1950 framing around `algo.deflate` and validate
+the Adler-32 trailer before successful completion.
 
 ### `fmt.zip`
 
@@ -2826,7 +3456,7 @@ fn parse_reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Document
 fn node(document: *const Document, id: NodeId) -> *const Node
 fn children(document: *const Document, parent: NodeId) -> Children
 fn children_next(it: *Children) -> (NodeId, bool)
-fn attribute(node: *const Node, name: str) -> (str, bool)
+fn attribute(element: *const Node, name: str) -> (str, bool)
 fn text_content(a: *mem.Arena, document: *const Document, root: NodeId) -> (str, err)
 fn write(writer: *io.Writer, document: *const Document) -> err
 ```
@@ -2854,6 +3484,79 @@ The module does not open files, fetch subresources, execute scripts, apply CSS,
 construct a browser DOM or expose mutable tree operations. A caller loads a file
 through `e.fs` or supplies an `e.io.Reader`. Legacy encoding sniffing and conversion
 must occur before parsing and are outside the version-1 surface.
+
+### `fmt.html.template`
+
+```neper
+type Template = struct { inner: template.Template }
+type Options = struct { max_bytes: usize, max_nodes: usize, max_depth: u16 }
+error InvalidTemplate
+error UnsafeContext
+error MissingValue
+error TooLarge
+
+fn parse(a: *mem.Arena, source: str, options: Options) -> (Template, err)
+fn execute(value: *const Template, writer: *io.Writer, bindings: []const template.Binding) -> err
+fn validate[T: type](value: *const Template) -> err
+fn execute_typed[T: type](value: *const Template, writer: *io.Writer, data: *const T) -> err
+```
+
+HTML templates track text, attribute, URI, CSS and script contexts and apply the
+matching escaping rules. Ambiguous or unsafe context transitions fail at parse time;
+trusted raw insertion is intentionally absent from version 1.
+
+### `fmt.png`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64, verify_crc: bool }
+type EncodeOptions = struct { compression: deflate.Level, interlace: bool }
+error Invalid
+error Unsupported
+error Checksum
+error TooLarge
+
+fn inspect(source: io.Reader) -> (image.Info, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
+```
+
+PNG decoding supports the standard grayscale, RGB, indexed and alpha color types and
+rejects dimensions before pixel allocation. Encoding is deterministic for identical
+pixels and options.
+
+### `fmt.jpeg`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64 }
+type EncodeOptions = struct { quality: u8, progressive: bool }
+error Invalid
+error Unsupported
+error TooLarge
+
+fn inspect(source: io.Reader) -> (image.Info, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
+```
+
+Version 1 supports baseline and progressive Huffman JPEG with bounded dimensions.
+Arithmetic coding and embedded color-profile conversion return `Unsupported`.
+
+### `fmt.webp`
+
+```neper
+type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64, first_frame_only: bool }
+type EncodeOptions = struct { quality: f32, lossless: bool }
+error Invalid
+error Unsupported
+error TooLarge
+
+fn inspect(source: io.Reader) -> (image.Info, err)
+fn decode(a: *mem.Arena, source: io.Reader, options: DecodeOptions) -> (image.Image, err)
+fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -> err
+```
+
+The module supports lossy and lossless WebP. Animation is inspectable; decoding more
+than the first frame remains `Unsupported` until a frame-sequence image type exists.
 
 ### `fmt.bson`
 
