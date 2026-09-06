@@ -1114,7 +1114,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module check ok\n")
         ret ok
     }
-    if args.len == 6usize && same(args[1usize], "nir-file") {
+    if args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file")) {
+        let emit_machine_code = same(args[1usize], "codegen-file")
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
@@ -1152,15 +1153,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if ranges_error != ok { ret ranges_error }
         let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, 32768usize)
         if allocations_error != ok { ret allocations_error }
+        let (machine_storage, machine_storage_error) = mem.alloc[usize](a, 131072usize)
+        if machine_storage_error != ok { ret machine_storage_error }
+        var machine: emit_x64.Buffer = zero
+        try emit_x64.init(&machine, machine_storage)
+        let (block_offsets, block_offsets_error) = mem.alloc[usize](a, 8192usize)
+        if block_offsets_error != ok { ret block_offsets_error }
+        let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, 32768usize)
+        if fixups_error != ok { ret fixups_error }
         var function_at = 0usize
         while function_at < builder.function_count {
-            let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 10usize, ranges, allocations)
+            let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 5usize, ranges, allocations)
             if allocation_error != ok { ret allocation_error }
+            if emit_machine_code { try codegen_x64.function(&builder, function_at, allocations, stack_slots, block_offsets, fixups, &machine) }
             function_at += 1usize
+        }
+        if emit_machine_code {
+            try io.print("module codegen ok\n")
+            ret ok
         }
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file PATH TOOLCHAIN_ROOT ARCH OS\n")
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file PATH TOOLCHAIN_ROOT ARCH OS\n")
     ret ok
 }
