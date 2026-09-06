@@ -11,6 +11,17 @@ New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 $hello = & $neper run (Join-Path $repo 'examples\hello.e') --output (Join-Path $testBuild 'hello.exe')
 if ($LASTEXITCODE -ne 0 -or $hello -ne 'hello, neper') { throw 'hello.e failed' }
 
+$sizedHello = & $neper run (Join-Path $repo 'examples\hello.e') --arena 96K --output (Join-Path $testBuild 'hello-sized.exe')
+if ($LASTEXITCODE -ne 0 -or $sizedHello -ne 'hello, neper') { throw '--arena did not size the root arena' }
+$sizedAssembly = Get-Content -Raw (Join-Path $testBuild 'hello-sized.asm')
+if ($sizedAssembly -notmatch 'mov rdx, 98304' -or $sizedAssembly -notmatch 'mov r11, 98304') {
+    throw '--arena size was not embedded in Windows startup code'
+}
+$invalidArena = & $neper build (Join-Path $repo 'examples\hello.e') --arena 0 --output (Join-Path $testBuild 'hello-invalid-arena.exe') 2>&1
+if ($LASTEXITCODE -ne 2 -or ($invalidArena -join "`n") -notmatch 'invalid arena size `0`') {
+    throw '--arena accepted an invalid size'
+}
+
 Push-Location ([IO.Path]::GetTempPath())
 try {
     $cwdHello = & $neper run (Join-Path $repo 'examples\hello.e') --output (Join-Path $testBuild 'hello-cwd.exe')

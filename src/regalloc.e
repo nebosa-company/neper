@@ -23,6 +23,49 @@ type Allocation = struct {
     index: usize,
 }
 
+fn extend_back_edge(function: nir.Function, ranges: []LiveRange, source_instruction: usize, target_block: usize, builder: *nir.Builder, changed: *bool) -> err {
+    if target_block < function.first_block || target_block >= function.first_block + function.block_count { ret InvalidIR }
+    let target_instruction = builder.blocks[target_block].first_instruction
+    if target_instruction > source_instruction { ret ok }
+    var value = 0usize
+    while value < function.value_count {
+        let range = ranges[value]
+        if range.defined && range.first <= source_instruction && range.last >= target_instruction && range.last < source_instruction {
+            ranges[value].last = source_instruction
+            *changed = true
+        }
+        value += 1usize
+    }
+    ret ok
+}
+
+fn extend_loop_liveness(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange) -> err {
+    var pass = 0usize
+    while pass < function.block_count {
+        var changed = false
+        var block_at = function.first_block
+        while block_at < function.first_block + function.block_count {
+            let block = builder.blocks[block_at]
+            if block.instruction_count == 0usize { ret InvalidIR }
+            let terminator_index = block.first_instruction + block.instruction_count - 1usize
+            if terminator_index >= builder.instruction_count { ret InvalidIR }
+            let terminator = builder.instructions[terminator_index]
+            if terminator.opcode == .Branch {
+                try extend_back_edge(function, ranges, terminator_index, terminator.target, builder, &changed)
+            } else {
+                if terminator.opcode == .BranchIf {
+                    try extend_back_edge(function, ranges, terminator_index, terminator.target, builder, &changed)
+                    try extend_back_edge(function, ranges, terminator_index, terminator.target2, builder, &changed)
+                }
+            }
+            block_at += 1usize
+        }
+        if !changed { ret ok }
+        pass += 1usize
+    }
+    ret ok
+}
+
 fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange) -> err {
     if function.value_count > ranges.len { ret Capacity }
     var value_at = 0usize
@@ -56,7 +99,7 @@ fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRan
         if !ranges[value_at].defined { ret InvalidIR }
         value_at += 1usize
     }
-    ret ok
+    ret extend_loop_liveness(builder, function, ranges)
 }
 
 fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize, ranges: []LiveRange, allocations: []Allocation) -> (usize, err) {

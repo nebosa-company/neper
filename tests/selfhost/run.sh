@@ -320,6 +320,11 @@ aggregate_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$aggregate_executable_written" = 'executable written' ]
 chmod +x "$aggregate_executable_path"
 "$aggregate_executable_path"
+advanced_executable_path="$test_build/advanced-selfhost"
+advanced_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/advanced/src/main.e" "$repo" x64 linux "$advanced_executable_path")
+[ "$advanced_executable_written" = 'executable written' ]
+chmod +x "$advanced_executable_path"
+"$advanced_executable_path"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

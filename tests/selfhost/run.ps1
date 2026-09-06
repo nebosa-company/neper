@@ -241,6 +241,11 @@ $aggregateExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $aggregateExecutableWritten -ne 'executable written') { throw 'aggregate PE executable emission failed' }
 & $aggregateExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'aggregate layout, literal storage, or field access failed in the self-hosted PE executable' }
+$advancedExecutablePath = Join-Path $testBuild 'advanced-selfhost.exe'
+$advancedExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\advanced\src\main.e') $repo 'x64' 'windows' $advancedExecutablePath
+if ($LASTEXITCODE -ne 0 -or $advancedExecutableWritten -ne 'executable written') { throw 'advanced self-host PE executable emission failed' }
+& $advancedExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'multiple returns, caller slots, strings, stack arguments, slices, or for loops failed in the self-hosted PE executable' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

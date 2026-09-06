@@ -8,6 +8,14 @@ test -x "$neper" || "$repo/scripts/build-bootstrap.sh" >/dev/null
 mkdir -p "$test_build"
 
 test "$("$neper" run "$repo/examples/hello.e" --output "$test_build/hello")" = 'hello, neper'
+test "$("$neper" run "$repo/examples/hello.e" --arena 96K --output "$test_build/hello-sized")" = 'hello, neper'
+grep -q 'mov rsi, 98304' "$test_build/hello-sized.s"
+set +e
+invalid_arena=$("$neper" build "$repo/examples/hello.e" --arena 0 --output "$test_build/hello-invalid-arena" 2>&1)
+invalid_arena_status=$?
+set -e
+test "$invalid_arena_status" -eq 2
+printf '%s' "$invalid_arena" | grep -q 'invalid arena size `0`'
 test "$(cd /tmp && "$neper" run "$repo/examples/hello.e" --output "$test_build/hello-cwd")" = 'hello, neper'
 test "$("$neper" run "$repo/tests/m0/control.e" --output "$test_build/control")" = 'control ok'
 test "$("$neper" run "$repo/tests/m0/args.e" --output "$test_build/args" -- 'héllo 😀')" = 'héllo 😀'

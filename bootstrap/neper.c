@@ -563,6 +563,7 @@ typedef struct Compiler {
     Token root_token;
     SourceFile sources[MAX_SOURCES];
     int source_count;
+    size_t root_arena_size;
 } Compiler;
 
 static void copy_text(char *dst, size_t capacity, const char *src, size_t length) {
@@ -7202,7 +7203,10 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
     fputs(
         "mainCRTStartup PROC FRAME\n"
         "    sub rsp, 232\n    .allocstack 232\n    .endprolog\n"
-        "    xor ecx, ecx\n    mov edx, 67108864\n    mov r8d, 3000h\n    mov r9d, 4\n"
+        "    xor ecx, ecx\n", out);
+    fprintf(out, "    mov rdx, %llu\n", (unsigned long long)c->root_arena_size);
+    fputs(
+        "    mov r8d, 3000h\n    mov r9d, 4\n"
         "    call VirtualAlloc\n    test rax, rax\n    je np_start_fail\n"
         "    mov QWORD PTR [rsp+80], rax\n"
         "    call GetCommandLineW\n    mov rcx, rax\n    lea rdx, [rsp+88]\n    call CommandLineToArgvW\n"
@@ -7215,7 +7219,10 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "    mov QWORD PTR [rsp+32], 0\n    mov QWORD PTR [rsp+40], 0\n    mov QWORD PTR [rsp+48], 0\n    mov QWORD PTR [rsp+56], 0\n"
         "    call WideCharToMultiByte\n    test eax, eax\n    jle np_start_args_fail\n"
         "    mov DWORD PTR [rsp+176], eax\n    dec eax\n    mov DWORD PTR [rsp+152], eax\n"
-        "    mov r10, QWORD PTR [rsp+104]\n    mov eax, DWORD PTR [rsp+176]\n    add r10, rax\n    cmp r10, 67108864\n    ja np_start_args_fail\n"
+        "    mov r10, QWORD PTR [rsp+104]\n    mov eax, DWORD PTR [rsp+176]\n    add r10, rax\n", out);
+    fprintf(out, "    mov r11, %llu\n    cmp r10, r11\n", (unsigned long long)c->root_arena_size);
+    fputs(
+        "    ja np_start_args_fail\n"
         "    mov rax, QWORD PTR [rsp+80]\n    add rax, QWORD PTR [rsp+104]\n    mov QWORD PTR [rsp+160], rax\n"
         "    mov ecx, 65001\n    xor edx, edx\n    mov r8, QWORD PTR [rsp+144]\n    mov r9d, -1\n"
         "    mov QWORD PTR [rsp+32], rax\n    mov eax, DWORD PTR [rsp+176]\n    mov QWORD PTR [rsp+40], rax\n"
@@ -7225,7 +7232,9 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "    mov r10, QWORD PTR [rsp+160]\n    mov QWORD PTR [rax], r10\n    mov r10d, DWORD PTR [rsp+152]\n    mov QWORD PTR [rax+8], r10\n"
         "    mov eax, DWORD PTR [rsp+176]\n    add QWORD PTR [rsp+104], rax\n    inc QWORD PTR [rsp+112]\n    jmp np_win_arg_loop\n"
         "np_win_args_done:\n    mov rcx, QWORD PTR [rsp+96]\n    call LocalFree\n"
-        "    mov rax, QWORD PTR [rsp+80]\n    mov QWORD PTR [rsp+120], rax\n    mov QWORD PTR [rsp+128], 67108864\n"
+        "    mov rax, QWORD PTR [rsp+80]\n    mov QWORD PTR [rsp+120], rax\n", out);
+    fprintf(out, "    mov rax, %llu\n    mov QWORD PTR [rsp+128], rax\n", (unsigned long long)c->root_arena_size);
+    fputs(
         "    mov rax, QWORD PTR [rsp+104]\n    mov QWORD PTR [rsp+136], rax\n"
         "    mov rcx, QWORD PTR [rsp+80]\n    mov edx, DWORD PTR [rsp+88]\n    call neper_os_set_args\n"
         "    lea rcx, [rsp+120]\n    mov rdx, QWORD PTR [rsp+80]\n    mov r8d, DWORD PTR [rsp+88]\n    call neper_main\n"
@@ -7269,7 +7278,10 @@ static void emit_linux_runtime(Compiler *c, FILE *out) {
         "    mov edi, 2\n    lea rsi, np_trap_divide_text[rip]\n    mov edx, 31\n"
         "neper_trap_abort:\n    mov eax, 1\n    syscall\n    mov edi, 134\n    mov eax, 60\n    syscall\n\n"
         ".globl _start\n.type _start, @function\n_start:\n"
-        "    mov r12, rsp\n    xor edi, edi\n    mov esi, 67108864\n    mov edx, 3\n"
+        "    mov r12, rsp\n    xor edi, edi\n", out);
+    fprintf(out, "    mov rsi, %llu\n", (unsigned long long)c->root_arena_size);
+    fputs(
+        "    mov edx, 3\n"
         "    mov r10d, 34\n    mov r8, -1\n    xor r9d, r9d\n    mov eax, 9\n    syscall\n"
         "    test rax, rax\n    js np_start_fail\n"
         "    mov r13, rax\n    mov r14, QWORD PTR [r12]\n    mov rbx, r14\n    shl rbx, 4\n    xor r15d, r15d\n"
@@ -7280,7 +7292,10 @@ static void emit_linux_runtime(Compiler *c, FILE *out) {
         "    mov QWORD PTR [r13+r10], r9\n    mov QWORD PTR [r13+r10+8], rcx\n"
         "    mov rdx, rcx\n    mov rsi, r8\n    mov rdi, r9\n    rep movsb\n    add rbx, rdx\n    inc r15\n    jmp np_arg_loop\n"
         "np_args_done:\n    mov rdi, r13\n    mov rsi, r14\n    call neper_os_set_args\n    sub rsp, 32\n"
-        "    mov QWORD PTR [rsp], r13\n    mov QWORD PTR [rsp+8], 67108864\n    mov QWORD PTR [rsp+16], rbx\n"
+        "    mov QWORD PTR [rsp], r13\n", out);
+    fprintf(out, "    mov rax, %llu\n    mov QWORD PTR [rsp+8], rax\n", (unsigned long long)c->root_arena_size);
+    fputs(
+        "    mov QWORD PTR [rsp+16], rbx\n"
         "    mov rdi, rsp\n    mov rsi, r13\n    mov rdx, r14\n    call neper_main\n"
         "    test eax, eax\n    jne np_main_error\n    xor edi, edi\n    jmp np_exit\n"
         "np_main_error:\n    mov ecx, eax\n    jmp neper_report_error\n"
@@ -7617,9 +7632,28 @@ static void executable_directory(char *out, size_t cap, const char *argv0) {
 static void usage(void) {
     fputs("neper " NEPER_VERSION "\n"
           "usage:\n"
-          "  neper build <file.e> [--output FILE] [--emit-asm FILE]\n"
-          "  neper run <file.e> [-- ARGS...]\n"
+          "  neper build <file.e> [--output FILE] [--emit-asm FILE] [--arena SIZE]\n"
+          "  neper run <file.e> [--arena SIZE] [-- ARGS...]\n"
           "  neper --version\n", stderr);
+}
+
+static int parse_size(const char *text, size_t *result) {
+    char *end;
+    unsigned long long value, multiplier = 1;
+    if (!text || !isdigit((unsigned char)text[0])) return 0;
+    errno = 0;
+    value = strtoull(text, &end, 10);
+    if (errno == ERANGE || end == text) return 0;
+    if (*end) {
+        if (end[1]) return 0;
+        if (*end == 'K' || *end == 'k') multiplier = 1024ULL;
+        else if (*end == 'M' || *end == 'm') multiplier = 1024ULL * 1024ULL;
+        else if (*end == 'G' || *end == 'g') multiplier = 1024ULL * 1024ULL * 1024ULL;
+        else return 0;
+    }
+    if (value == 0 || value > (unsigned long long)SIZE_MAX / multiplier) return 0;
+    *result = (size_t)(value * multiplier);
+    return 1;
 }
 
 #ifdef _WIN32
@@ -7642,6 +7676,7 @@ int main(int argc, char **argv) {
     }
 #endif
     memset(&c, 0, sizeof(c));
+    c.root_arena_size = 64u * 1024u * 1024u;
     if (argc == 2 && strcmp(argv[1], "--version") == 0) { puts(NEPER_VERSION); return 0; }
     if (argc < 3) { usage(); return 2; }
     command = argv[1]; source_path = argv[2];
@@ -7651,6 +7686,12 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i], "--") == 0) { run_arg_start = i + 1; break; }
         if (strcmp(argv[i], "--output") == 0 && i + 1 < argc) output = argv[++i];
         else if (strcmp(argv[i], "--emit-asm") == 0 && i + 1 < argc) asm_output = argv[++i];
+        else if (strcmp(argv[i], "--arena") == 0 && i + 1 < argc) {
+            if (!parse_size(argv[++i], &c.root_arena_size)) {
+                fprintf(stderr, "neper: error[E-CLI-9999]: invalid arena size `%s`\n", argv[i]);
+                return 2;
+            }
+        }
         else { fprintf(stderr, "neper: error[E-CLI-9999]: unknown option `%s`\n", argv[i]); return 2; }
     }
     absolute_source_path(absolute_source, sizeof(absolute_source), source_path);

@@ -109,6 +109,20 @@ fn mov_register(buffer: *Buffer, destination: usize, source: usize) -> err {
     ret binary_register(buffer, 137usize, destination, source)
 }
 
+fn relative_address(buffer: *Buffer, destination: usize) -> (usize, err) {
+    let register_error = check_register(destination)
+    if register_error != ok { ret (0usize, register_error) }
+    let rex_error = byte(buffer, 72usize + destination / 8usize * 4usize)
+    if rex_error != ok { ret (0usize, rex_error) }
+    let opcode_error = byte(buffer, 141usize)
+    if opcode_error != ok { ret (0usize, opcode_error) }
+    let address_error = byte(buffer, 5usize + destination % 8usize * 8usize)
+    if address_error != ok { ret (0usize, address_error) }
+    let displacement = buffer.count
+    let displacement_error = little_u32(buffer, 0usize)
+    ret (displacement, displacement_error)
+}
+
 fn add_immediate(buffer: *Buffer, destination: usize, value: usize) -> err {
     if value > 4294967295usize { ret InvalidByte }
     try rex(buffer, 0usize, destination)
@@ -205,6 +219,19 @@ fn multiply_immediate(buffer: *Buffer, destination: usize, source: usize, value:
 fn bounds_check(buffer: *Buffer, index: usize, length: usize) -> err {
     try compare_register(buffer, index, length)
     try byte(buffer, 114usize)
+    try byte(buffer, 2usize)
+    try byte(buffer, 15usize)
+    ret byte(buffer, 11usize)
+}
+
+fn slice_bounds_check(buffer: *Buffer, lower: usize, upper: usize, length: usize) -> err {
+    try compare_register(buffer, lower, upper)
+    try byte(buffer, 118usize)
+    try byte(buffer, 2usize)
+    try byte(buffer, 15usize)
+    try byte(buffer, 11usize)
+    try compare_register(buffer, upper, length)
+    try byte(buffer, 118usize)
     try byte(buffer, 2usize)
     try byte(buffer, 15usize)
     ret byte(buffer, 11usize)
@@ -358,6 +385,30 @@ fn zero_memory(buffer: *Buffer, address: usize, size: usize) -> err {
     ret byte(buffer, 244usize)
 }
 
+fn copy_memory(buffer: *Buffer, destination: usize, source: usize, size: usize) -> err {
+    if size == 0usize { ret ok }
+    if destination != 10usize { try mov_register(buffer, 10usize, destination) }
+    if source != 11usize { try mov_register(buffer, 11usize, source) }
+    try mov_immediate(buffer, 0usize, size)
+    try byte(buffer, 69usize)
+    try byte(buffer, 138usize)
+    try byte(buffer, 11usize)
+    try byte(buffer, 69usize)
+    try byte(buffer, 136usize)
+    try byte(buffer, 10usize)
+    try byte(buffer, 73usize)
+    try byte(buffer, 255usize)
+    try byte(buffer, 195usize)
+    try byte(buffer, 73usize)
+    try byte(buffer, 255usize)
+    try byte(buffer, 194usize)
+    try byte(buffer, 72usize)
+    try byte(buffer, 255usize)
+    try byte(buffer, 200usize)
+    try byte(buffer, 117usize)
+    ret byte(buffer, 239usize)
+}
+
 fn load_stack(buffer: *Buffer, destination: usize, slot: usize) -> err {
     try check_register(destination)
     try byte(buffer, 72usize + destination / 8usize * 4usize)
@@ -372,6 +423,25 @@ fn store_stack(buffer: *Buffer, slot: usize, source: usize) -> err {
     try byte(buffer, 137usize)
     try byte(buffer, 133usize + source % 8usize * 8usize)
     ret little_u32(buffer, stack_displacement(slot))
+}
+
+fn load_frame_argument(buffer: *Buffer, destination: usize, displacement: usize) -> err {
+    try check_register(destination)
+    if displacement > 4294967295usize { ret InvalidByte }
+    try byte(buffer, 72usize + destination / 8usize * 4usize)
+    try byte(buffer, 139usize)
+    try byte(buffer, 133usize + destination % 8usize * 8usize)
+    ret little_u32(buffer, displacement)
+}
+
+fn store_call_argument(buffer: *Buffer, displacement: usize, source: usize) -> err {
+    try check_register(source)
+    if displacement > 4294967295usize { ret InvalidByte }
+    try byte(buffer, 72usize + source / 8usize * 4usize)
+    try byte(buffer, 137usize)
+    try byte(buffer, 132usize + source % 8usize * 8usize)
+    try byte(buffer, 36usize)
+    ret little_u32(buffer, displacement)
 }
 
 fn test_register(buffer: *Buffer, value: usize) -> err {

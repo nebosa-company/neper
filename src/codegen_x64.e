@@ -105,6 +105,18 @@ fn read_value(allocations: []regalloc.Allocation, value: usize, scratch: usize, 
     ret (scratch, load_error)
 }
 
+fn read_preserved_value(allocations: []regalloc.Allocation, value: usize, scratch: usize, preserve_base: usize, output: *emit_x64.Buffer) -> (usize, err) {
+    if value >= allocations.len { ret (0usize, Unsupported) }
+    let allocation = allocations[value]
+    if allocation.kind == .Register {
+        let load_error = emit_x64.load_stack(output, scratch, preserve_base + allocation.index)
+        ret (scratch, load_error)
+    }
+    if allocation.kind != .Stack { ret (0usize, Unsupported) }
+    let load_error = emit_x64.load_stack(output, scratch, allocation.index)
+    ret (scratch, load_error)
+}
+
 fn result_register(allocations: []regalloc.Allocation, value: usize, scratch: usize) -> (usize, err) {
     if value >= allocations.len { ret (0usize, Unsupported) }
     if allocations[value].kind == .Stack { ret (scratch, ok) }
@@ -212,6 +224,22 @@ fn parameter_register(abi: Abi, index: usize) -> (usize, err) {
     ret (0usize, Unsupported)
 }
 
+fn parameter_register_count(abi: Abi) -> usize {
+    if abi == .Windows { ret 4usize }
+    ret 6usize
+}
+
+fn incoming_stack_displacement(abi: Abi, index: usize) -> usize {
+    if abi == .Windows { ret 48usize + (index - 4usize) * 8usize }
+    ret 16usize + (index - 6usize) * 8usize
+}
+
+fn outgoing_stack_displacement(abi: Abi, index: usize) -> usize {
+    if abi == .Windows { ret 32usize + (index - 4usize) * 8usize }
+    let stack_index = index - 6usize
+    ret stack_index * 8usize
+}
+
 fn max_call_arguments(builder: *nir.Builder, current: nir.Function) -> usize {
     var maximum = 0usize
     let end = current.first_instruction + current.instruction_count
@@ -229,10 +257,116 @@ fn needs_fixed_registers(builder: *nir.Builder, current: nir.Function) -> bool {
     var at = current.first_instruction
     while at < end {
         let opcode = builder.instructions[at].opcode
-        if opcode == .Divide || opcode == .Remainder || opcode == .ShiftLeft || opcode == .ShiftRight || opcode == .IndexAddress { ret true }
+        if opcode == .Divide || opcode == .Remainder || opcode == .ShiftLeft || opcode == .ShiftRight || opcode == .IndexAddress || opcode == .Slice || opcode == .Copy || opcode == .Call { ret true }
         at += 1usize
     }
     ret false
+}
+
+fn hex_digit(value: u8) -> (usize, bool) {
+    if value >= 48u8 && value <= 57u8 { ret (usize(value - 48u8), true) }
+    if value >= 65u8 && value <= 70u8 { ret (usize(value - 65u8) + 10usize, true) }
+    if value >= 97u8 && value <= 102u8 { ret (usize(value - 97u8) + 10usize, true) }
+    ret (0usize, false)
+}
+
+fn string_contents(spelling: str, start: *usize, end: *usize, raw: *bool) -> err {
+    if spelling.len >= 2usize && spelling[0usize] == 34u8 && spelling[spelling.len - 1usize] == 34u8 {
+        *start = 1usize
+        *end = spelling.len - 1usize
+        *raw = false
+        ret ok
+    }
+    if spelling.len < 3usize || spelling[0usize] != 114u8 { ret Unsupported }
+    var delimiter = 1usize
+    var hashes = 0usize
+    while delimiter < spelling.len && spelling[delimiter] == 35u8 {
+        delimiter += 1usize
+        hashes += 1usize
+    }
+    if delimiter >= spelling.len || spelling[delimiter] != 34u8 || spelling.len < delimiter + hashes + 2usize { ret Unsupported }
+    let closing_quote = spelling.len - hashes - 1usize
+    if spelling[closing_quote] != 34u8 { ret Unsupported }
+    var hash_at = closing_quote + 1usize
+    while hash_at < spelling.len {
+        if spelling[hash_at] != 35u8 { ret Unsupported }
+        hash_at += 1usize
+    }
+    *start = delimiter + 1usize
+    *end = closing_quote
+    *raw = true
+    ret ok
+}
+
+fn emit_string_bytes(output: *emit_x64.Buffer, spelling: str) -> (usize, err) {
+    var start = 0usize
+    var end = 0usize
+    var raw = false
+    let contents_error = string_contents(spelling, &start, &end, &raw)
+    if contents_error != ok { ret (0usize, contents_error) }
+    let output_start = output.count
+    var at = start
+    while at < end {
+        var value = usize(spelling[at])
+        if !raw && spelling[at] == 92u8 {
+            at += 1usize
+            if at >= end { ret (0usize, Unsupported) }
+            let escaped = spelling[at]
+            if escaped == 110u8 { value = 10usize } else {
+            if escaped == 116u8 { value = 9usize } else {
+            if escaped == 114u8 { value = 13usize } else {
+            if escaped == 92u8 { value = 92usize } else {
+            if escaped == 34u8 { value = 34usize } else {
+            if escaped == 39u8 { value = 39usize } else {
+            if escaped == 48u8 { value = 0usize } else {
+            if escaped == 120u8 {
+                if at + 2usize >= end { ret (0usize, Unsupported) }
+                let (high, high_ok) = hex_digit(spelling[at + 1usize])
+                let (low, low_ok) = hex_digit(spelling[at + 2usize])
+                if !high_ok || !low_ok { ret (0usize, Unsupported) }
+                value = high * 16usize + low
+                at += 2usize
+            } else {
+                ret (0usize, Unsupported)
+            }
+            }
+            }
+            }
+            }
+            }
+            }
+        }
+        }
+        let byte_error = emit_x64.byte(output, value)
+        if byte_error != ok { ret (0usize, byte_error) }
+        at += 1usize
+    }
+    ret (output.count - output_start, ok)
+}
+
+fn select_string(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, local_base: usize, output: *emit_x64.Buffer) -> err {
+    if !instruction.has_result || instruction.operand_count != 0usize || instruction.immediate >= builder.string_count { ret Unsupported }
+    let (skip_displacement, skip_error) = emit_x64.jump(output)
+    if skip_error != ok { ret skip_error }
+    let data_offset = output.count
+    let (length, data_error) = emit_string_bytes(output, builder.strings[instruction.immediate].spelling)
+    if data_error != ok { ret data_error }
+    try emit_x64.patch_relative32(output, skip_displacement, output.count)
+    let (data_displacement, address_error) = emit_x64.relative_address(output, 11usize)
+    if address_error != ok { ret address_error }
+    try emit_x64.patch_relative32(output, data_displacement, data_offset)
+    let (slot, slot_error) = stack_object_slot(builder, current, instruction.result, local_base)
+    if slot_error != ok { ret slot_error }
+    try emit_x64.stack_address(output, 10usize, slot)
+    try emit_x64.store_memory(output, 10usize, 11usize, 64usize)
+    try emit_x64.mov_immediate(output, 11usize, length)
+    try emit_x64.add_immediate(output, 10usize, 8usize)
+    try emit_x64.store_memory(output, 10usize, 11usize, 64usize)
+    try emit_x64.stack_address(output, 10usize, slot)
+    let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
+    if destination_error != ok { ret destination_error }
+    if destination != 10usize { try emit_x64.mov_register(output, destination, 10usize) }
+    ret store_result(allocations, instruction.result, destination, output)
 }
 
 fn stack_object_count(builder: *nir.Builder, current: nir.Function) -> usize {
@@ -240,9 +374,13 @@ fn stack_object_count(builder: *nir.Builder, current: nir.Function) -> usize {
     var count = 0usize
     var at = current.first_instruction
     while at < end {
-        if builder.instructions[at].opcode == .Stack {
-            var slots = builder.instructions[at].immediate
-            if slots == 0usize { slots = 1usize }
+        let instruction = builder.instructions[at]
+        if instruction.opcode == .Stack || instruction.opcode == .ConstString {
+            var slots = 2usize
+            if instruction.opcode == .Stack {
+                slots = instruction.immediate
+                if slots == 0usize { slots = 1usize }
+            }
             count += slots
         }
         at += 1usize
@@ -256,9 +394,12 @@ fn stack_object_slot(builder: *nir.Builder, current: nir.Function, value: usize,
     var at = current.first_instruction
     while at < end {
         let instruction = builder.instructions[at]
-        if instruction.opcode == .Stack {
-            var slots = instruction.immediate
-            if slots == 0usize { slots = 1usize }
+        if instruction.opcode == .Stack || instruction.opcode == .ConstString {
+            var slots = 2usize
+            if instruction.opcode == .Stack {
+                slots = instruction.immediate
+                if slots == 0usize { slots = 1usize }
+            }
             if instruction.has_result && instruction.result == value { ret (base + count + slots - 1usize, ok) }
             count += slots
         }
@@ -329,6 +470,39 @@ fn select_index_address(builder: *nir.Builder, instruction: nir.Instruction, all
     ret store_result(allocations, instruction.result, destination, output)
 }
 
+fn select_slice(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, output: *emit_x64.Buffer) -> err {
+    if instruction.has_result || instruction.operand_count != 5usize || instruction.immediate == 0usize { ret Unsupported }
+    try save_allocated_registers(output, preserve_base, preserve_count)
+    let destination_value = builder.operands[instruction.first_operand]
+    let data_value = builder.operands[instruction.first_operand + 1usize]
+    let length_value = builder.operands[instruction.first_operand + 2usize]
+    let lower_value = builder.operands[instruction.first_operand + 3usize]
+    let upper_value = builder.operands[instruction.first_operand + 4usize]
+    let (destination_source, destination_error) = read_preserved_value(allocations, destination_value, 9usize, preserve_base, output)
+    if destination_error != ok { ret destination_error }
+    if destination_source != 9usize { try emit_x64.mov_register(output, 9usize, destination_source) }
+    let (data_source, data_error) = read_preserved_value(allocations, data_value, 10usize, preserve_base, output)
+    if data_error != ok { ret data_error }
+    if data_source != 10usize { try emit_x64.mov_register(output, 10usize, data_source) }
+    let (length_source, length_error) = read_preserved_value(allocations, length_value, 11usize, preserve_base, output)
+    if length_error != ok { ret length_error }
+    if length_source != 11usize { try emit_x64.mov_register(output, 11usize, length_source) }
+    let (lower_source, lower_error) = read_preserved_value(allocations, lower_value, 0usize, preserve_base, output)
+    if lower_error != ok { ret lower_error }
+    if lower_source != 0usize { try emit_x64.mov_register(output, 0usize, lower_source) }
+    let (upper_source, upper_error) = read_preserved_value(allocations, upper_value, 1usize, preserve_base, output)
+    if upper_error != ok { ret upper_error }
+    if upper_source != 1usize { try emit_x64.mov_register(output, 1usize, upper_source) }
+    try emit_x64.slice_bounds_check(output, 0usize, 1usize, 11usize)
+    try emit_x64.subtract_register(output, 1usize, 0usize)
+    if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 0usize, 0usize, instruction.immediate) }
+    try emit_x64.add_register(output, 10usize, 0usize)
+    try emit_x64.store_memory(output, 9usize, 10usize, 64usize)
+    try emit_x64.add_immediate(output, 9usize, 8usize)
+    try emit_x64.store_memory(output, 9usize, 1usize, 64usize)
+    ret restore_allocated_registers(output, preserve_base, preserve_count)
+}
+
 fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
     let allocations = context.allocations
     let abi = context.abi
@@ -348,20 +522,27 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     let outgoing_base = local_base + local_count
     let preserve_base = outgoing_base + outgoing
     var preserve_count = 0usize
-    var shadow_count = 0usize
+    var call_area_count = 0usize
     if outgoing != 0usize || needs_fixed_registers(builder, current) {
         preserve_count = 5usize
     }
     if outgoing != 0usize {
-        if abi == .Windows { shadow_count = 4usize }
+        let register_count = parameter_register_count(abi)
+        if abi == .Windows { call_area_count = 4usize }
+        if outgoing > register_count { call_area_count += outgoing - register_count }
     }
-    let frame_slots = preserve_base + preserve_count + shadow_count
+    let frame_slots = preserve_base + preserve_count + call_area_count
     if frame_slots != 0usize { try emit_x64.function_prologue(output, frame_slots) }
     var parameter_at = 0usize
     while parameter_at < parameters {
-        let (incoming, incoming_error) = parameter_register(abi, parameter_at)
-        if incoming_error != ok { ret incoming_error }
-        try emit_x64.store_stack(output, stack_slots + parameter_at, incoming)
+        if parameter_at < parameter_register_count(abi) {
+            let (incoming, incoming_error) = parameter_register(abi, parameter_at)
+            if incoming_error != ok { ret incoming_error }
+            try emit_x64.store_stack(output, stack_slots + parameter_at, incoming)
+        } else {
+            try emit_x64.load_frame_argument(output, 10usize, incoming_stack_displacement(abi, parameter_at))
+            try emit_x64.store_stack(output, stack_slots + parameter_at, 10usize)
+        }
         parameter_at += 1usize
     }
     let end = current.first_instruction + current.instruction_count
@@ -393,6 +574,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 try emit_x64.stack_address(output, destination, slot)
                 try store_result(allocations, instruction.result, destination, output)
             } else {
+            if instruction.opcode == .ConstString {
+                try select_string(builder, current, instruction, allocations, local_base, output)
+            } else {
             if instruction.opcode == .Store {
                 if instruction.has_result || instruction.operand_count != 2usize { ret Unsupported }
                 let address = builder.operands[instruction.first_operand]
@@ -404,6 +588,20 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 let (source, source_error) = read_value(allocations, value, 10usize, output)
                 if source_error != ok { ret source_error }
                 try emit_x64.store_memory(output, address_register, source, width)
+            } else {
+            if instruction.opcode == .Copy {
+                if instruction.has_result || instruction.operand_count != 2usize { ret Unsupported }
+                try save_allocated_registers(output, preserve_base, preserve_count)
+                let destination_value = builder.operands[instruction.first_operand]
+                let source_value = builder.operands[instruction.first_operand + 1usize]
+                let (destination_source, destination_error) = read_value(allocations, destination_value, 10usize, output)
+                if destination_error != ok { ret destination_error }
+                if destination_source != 10usize { try emit_x64.mov_register(output, 10usize, destination_source) }
+                let (source, source_error) = read_value(allocations, source_value, 11usize, output)
+                if source_error != ok { ret source_error }
+                if source != 11usize { try emit_x64.mov_register(output, 11usize, source) }
+                try emit_x64.copy_memory(output, 10usize, 11usize, instruction.immediate)
+                try restore_allocated_registers(output, preserve_base, preserve_count)
             } else {
             if instruction.opcode == .Load {
                 if !instruction.has_result || instruction.operand_count != 1usize { ret Unsupported }
@@ -421,9 +619,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if !instruction.has_result || instruction.operand_count != 1usize { ret InvalidFieldAddress }
                 let address = builder.operands[instruction.first_operand]
                 let (source, source_error) = read_value(allocations, address, 10usize, output)
-                if source_error != ok { ret InvalidFieldAddress }
+                if source_error != ok { ret source_error }
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
-                if destination_error != ok { ret InvalidFieldAddress }
+                if destination_error != ok { ret destination_error }
                 if destination != source { try emit_x64.mov_register(output, destination, source) }
                 if instruction.immediate != 0usize { try emit_x64.add_immediate(output, destination, instruction.immediate) }
                 try store_result(allocations, instruction.result, destination, output)
@@ -433,6 +631,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             } else {
             if instruction.opcode == .IndexAddress {
                 try select_index_address(builder, instruction, allocations, preserve_base, preserve_count, output)
+            } else {
+            if instruction.opcode == .Slice {
+                try select_slice(builder, instruction, allocations, preserve_base, preserve_count, output)
             } else {
             if instruction.opcode == .Cast || instruction.opcode == .Negate || instruction.opcode == .BitNot {
                 if instruction.operand_count != 1usize || instruction.ty.kind != .Integer { ret Unsupported }
@@ -553,22 +754,40 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     }
                     argument_at = 0usize
                     while argument_at < instruction.operand_count {
-                        let (destination, destination_error) = parameter_register(abi, argument_at)
-                        if destination_error != ok { ret destination_error }
-                        try emit_x64.load_stack(output, destination, outgoing_base + argument_at)
+                        if argument_at < parameter_register_count(abi) {
+                            let (destination, destination_error) = parameter_register(abi, argument_at)
+                            if destination_error != ok { ret destination_error }
+                            try emit_x64.load_stack(output, destination, outgoing_base + argument_at)
+                        } else {
+                            try emit_x64.load_stack(output, 10usize, outgoing_base + argument_at)
+                            try emit_x64.store_call_argument(output, outgoing_stack_displacement(abi, argument_at), 10usize)
+                        }
                         argument_at += 1usize
                     }
                     let (call_displacement, call_error) = emit_x64.call(output)
                     if call_error != ok { ret call_error }
                     try add_relocation(relocations, relocation_count, call_displacement, instruction.immediate)
-                    if instruction.has_result { try emit_x64.mov_register(output, 10usize, 0usize) }
-                    try restore_allocated_registers(output, preserve_base, preserve_count)
+                    let multiple_results = instruction.has_result && instruction.ty.kind == .Invalid
                     if instruction.has_result {
+                        try emit_x64.mov_register(output, 10usize, 0usize)
+                        if multiple_results { try emit_x64.mov_register(output, 11usize, 2usize) }
+                    }
+                    try restore_allocated_registers(output, preserve_base, preserve_count)
+                    if instruction.has_result && !multiple_results {
                         let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                         if destination_error != ok { ret destination_error }
                         if destination != 10usize { try emit_x64.mov_register(output, destination, 10usize) }
                         try store_result(allocations, instruction.result, destination, output)
                     }
+                } else {
+                if instruction.opcode == .Extract {
+                    if !instruction.has_result || instruction.operand_count != 1usize || instruction.immediate >= 2usize { ret Unsupported }
+                    var source = 10usize
+                    if instruction.immediate == 1usize { source = 11usize }
+                    let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+                    if destination_error != ok { ret destination_error }
+                    if destination != source { try emit_x64.mov_register(output, destination, source) }
+                    try store_result(allocations, instruction.result, destination, output)
                 } else {
                 if instruction.opcode == .Branch {
                     if instruction.target < current.first_block || instruction.target >= current.first_block + current.block_count { ret Unsupported }
@@ -588,6 +807,11 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         if false_error != ok { ret false_error }
                         try add_fixup(fixups, &fixup_count, false_displacement, instruction.target2 - current.first_block)
                     } else {
+                if instruction.opcode == .Trap || instruction.opcode == .Unreachable {
+                    if instruction.has_result || instruction.operand_count != 0usize { ret Unsupported }
+                    try emit_x64.byte(output, 15usize)
+                    try emit_x64.byte(output, 11usize)
+                } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {
                         let value = builder.operands[instruction.first_operand]
@@ -595,7 +819,20 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         if source_error != ok { ret source_error }
                         if source != 0usize { try emit_x64.mov_register(output, 0usize, source) }
                     } else {
-                        if instruction.operand_count != 0usize { ret Unsupported }
+                        if instruction.operand_count == 2usize {
+                            let first_value = builder.operands[instruction.first_operand]
+                            let second_value = builder.operands[instruction.first_operand + 1usize]
+                            let (first_source, first_error) = read_value(allocations, first_value, 10usize, output)
+                            if first_error != ok { ret first_error }
+                            if first_source != 10usize { try emit_x64.mov_register(output, 10usize, first_source) }
+                            let (second_source, second_error) = read_value(allocations, second_value, 11usize, output)
+                            if second_error != ok { ret second_error }
+                            if second_source != 11usize { try emit_x64.mov_register(output, 11usize, second_source) }
+                            try emit_x64.mov_register(output, 0usize, 10usize)
+                            try emit_x64.mov_register(output, 2usize, 11usize)
+                        } else {
+                            if instruction.operand_count != 0usize { ret Unsupported }
+                        }
                     }
                     if frame_slots == 0usize {
                         try emit_x64.return_instruction(output)
@@ -605,9 +842,14 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 } else {
                     ret Unsupported
                 }
+                }
                     }
                 }
                 }
+                }
+            }
+            }
+            }
             }
             }
             }

@@ -827,14 +827,22 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     ret check.init_control(checker, checked_switches)
 }
 
-fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize) -> err {
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, compiler_scale: bool) -> err {
     let (functions, functions_error) = mem.alloc[nir.Function](a, 1024usize)
     if functions_error != ok { ret functions_error }
-    let (blocks, blocks_error) = mem.alloc[nir.Block](a, 8192usize)
+    var block_capacity = 8192usize
+    var instruction_capacity = 32768usize
+    var operand_capacity = 131072usize
+    if compiler_scale {
+        block_capacity = 32768usize
+        instruction_capacity = 131072usize
+        operand_capacity = 524288usize
+    }
+    let (blocks, blocks_error) = mem.alloc[nir.Block](a, block_capacity)
     if blocks_error != ok { ret blocks_error }
-    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, 32768usize)
+    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, instruction_capacity)
     if instructions_error != ok { ret instructions_error }
-    let (operands, operands_error) = mem.alloc[usize](a, 131072usize)
+    let (operands, operands_error) = mem.alloc[usize](a, operand_capacity)
     if operands_error != ok { ret operands_error }
     let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, 8192usize)
     if function_refs_error != ok { ret function_refs_error }
@@ -1211,7 +1219,11 @@ fn print_lower_diagnostic(g: *graph.Graph, checker: *check.Checker, lower_error:
     if lower_error == check.Unsupported {
         try write_all(failure, "construct is not implemented in self-hosted lowering")
     } else {
-        try write_all(failure, "lowering failed")
+        if lower_error == nir.Capacity {
+            try write_all(failure, "lowering failed: NIR capacity exhausted")
+        } else {
+            try write_all(failure, "lowering failed")
+        }
     }
     ret write_all(failure, "\n")
 }
@@ -1547,7 +1559,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var builder: nir.Builder = zero
         var signatures: nir.Signatures = zero
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count)
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count, checker.function_count > 256usize)
         let (bindings, bindings_error) = mem.alloc[lower.Binding](a, 16384usize)
         if bindings_error != ok { ret bindings_error }
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, 128usize)
@@ -1562,7 +1574,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if ranges_error != ok { ret ranges_error }
         let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, 32768usize)
         if allocations_error != ok { ret allocations_error }
-        let (machine_storage, machine_storage_error) = mem.alloc[usize](a, 131072usize)
+        var machine_capacity = 1usize
+        if emit_machine_code {
+            machine_capacity = 131072usize
+            if builder.instruction_count > 32768usize { machine_capacity = 8388608usize }
+        }
+        let (machine_storage, machine_storage_error) = mem.alloc[usize](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }
         var machine: emit_x64.Buffer = zero
         try emit_x64.init(&machine, machine_storage)
@@ -1639,7 +1656,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
             if writes_executable {
-                let (executable_storage, executable_storage_error) = mem.alloc[usize](a, 1048576usize)
+                let executable_capacity = machine.count + 1048576usize
+                let (executable_storage, executable_storage_error) = mem.alloc[usize](a, executable_capacity)
                 if executable_storage_error != ok { ret executable_storage_error }
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
