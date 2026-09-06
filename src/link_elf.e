@@ -21,7 +21,7 @@ fn pad_to(output: *emit_x64.Buffer, offset: usize) -> err {
 fn find_main(builder: *nir.Builder) -> (usize, err) {
     var at = 0usize
     while at < builder.function_count {
-        if check.same(builder.functions[at].name, "main") { ret (at, ok) }
+        if builder.functions[at].module_index == 0usize && check.same(builder.functions[at].name, "main") { ret (at, ok) }
         at += 1usize
     }
     ret (0usize, InvalidExecutable)

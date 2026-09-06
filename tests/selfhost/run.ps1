@@ -274,6 +274,12 @@ if (-not (Test-Path -LiteralPath $rootModuleArtifactPath) -or -not (Test-Path -L
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rootModuleArtifactPath).Hash -ne $moduleArtifactHash) { throw 'root artifact changed when emitted with its dependency set' }
 $validatedArtifact = & $compiler validate-em $rootModuleArtifactPath
 if ($LASTEXITCODE -ne 0 -or $validatedArtifact -ne 'compiled module valid') { throw 'packed compiled-module validation failed' }
+$artifactExecutablePath = Join-Path $testBuild 'modules-from-artifacts.exe'
+$artifactExecutableWritten = & $compiler link-em $artifactExecutablePath $rootModuleArtifactPath $dependencyModuleArtifactPath
+if ($LASTEXITCODE -ne 0 -or $artifactExecutableWritten -ne 'artifact executable written') { throw 'PE executable link from compiled modules failed' }
+& $artifactExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'PE executable linked from compiled modules did not run' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $artifactExecutablePath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleExecutablePath).Hash) { throw 'compiled-module and clean-source PE links differ' }
 $currentEdge = & $compiler check-em-edge $rootModuleArtifactPath $dependencyModuleArtifactPath
 if ($LASTEXITCODE -ne 0 -or $currentEdge -ne 'dependency current') { throw 'matching compiled-module dependency was rejected' }
 $mergedErrorTables = & $compiler check-em-errors $rootModuleArtifactPath $dependencyModuleArtifactPath
@@ -285,6 +291,9 @@ if ($LASTEXITCODE -ne 0 -or $collisionArtifactsWritten -ne 'compiled modules wri
 $artifactCollisionOutput = & $compiler check-em-errors (Join-Path $collisionArtifacts 'main.x64-windows.em') (Join-Path $collisionArtifacts 'dep.x64-windows.em') 2>&1
 $artifactCollisionExit = $LASTEXITCODE
 if ($artifactCollisionExit -ne 1 -or ($artifactCollisionOutput -join "`n") -notmatch 'main\.E08DED258' -or ($artifactCollisionOutput -join "`n") -notmatch 'dep\.E29EBB918') { throw 'compiled-module error table collision was not rejected with both qualified names' }
+$artifactCollisionExecutable = Join-Path $collisionArtifacts 'collision.exe'
+$artifactLinkCollisionOutput = & $compiler link-em $artifactCollisionExecutable (Join-Path $collisionArtifacts 'main.x64-windows.em') (Join-Path $collisionArtifacts 'dep.x64-windows.em') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($artifactLinkCollisionOutput -join "`n") -notmatch 'main\.E08DED258' -or (Test-Path -LiteralPath $artifactCollisionExecutable)) { throw 'artifact linker did not reject an error collision before writing output' }
 $bodyEditArtifacts = Join-Path $testBuild 'body-edit'
 $signatureEditArtifacts = Join-Path $testBuild 'signature-edit'
 New-Item -ItemType Directory -Force -Path $bodyEditArtifacts, $signatureEditArtifacts | Out-Null

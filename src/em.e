@@ -1713,6 +1713,16 @@ fn interface_module_index(bytes: []const usize) -> (usize, err) {
     ret (module_index, ok)
 }
 
+fn artifact_target_index(bytes: []const usize) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (target_index, target_error) = binary.read_u32(bytes, 8usize)
+    if target_error != ok { ret (0usize, InvalidArtifact) }
+    let (target_start, target_length, bounds_error) = string_bounds(bytes, target_index)
+    if bounds_error != ok || target_length == 0usize || target_start >= bytes.len { ret (0usize, InvalidArtifact) }
+    ret (target_index, ok)
+}
+
 fn find_declaration(bytes: []const usize, name: str) -> (Declaration, bool, err) {
     let empty = Declaration { kind: 0usize, flags: 0usize, name_index: 0usize, signature_hash: 0usize, body_hash: 0usize }
     let validation_error = validate(bytes)

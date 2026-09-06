@@ -351,6 +351,12 @@ all_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost
 cmp "$module_artifact_path" "$test_build/main.x64-linux.em"
 validated_artifact=$($test_build/neper-self validate-em "$test_build/main.x64-linux.em")
 [ "$validated_artifact" = 'compiled module valid' ]
+artifact_executable_path="$test_build/modules-from-artifacts"
+artifact_executable_written=$($test_build/neper-self link-em "$artifact_executable_path" "$test_build/main.x64-linux.em" "$test_build/dep.x64-linux.em")
+[ "$artifact_executable_written" = 'artifact executable written' ]
+chmod +x "$artifact_executable_path"
+"$artifact_executable_path"
+cmp "$artifact_executable_path" "$module_executable_path"
 current_edge=$($test_build/neper-self check-em-edge "$test_build/main.x64-linux.em" "$test_build/dep.x64-linux.em")
 [ "$current_edge" = 'dependency current' ]
 merged_error_tables=$($test_build/neper-self check-em-errors "$test_build/main.x64-linux.em" "$test_build/dep.x64-linux.em")
@@ -364,6 +370,13 @@ if artifact_collision_output=$($test_build/neper-self check-em-errors "$collisio
     exit 1
 fi
 case "$artifact_collision_output" in *'main.E08DED258'*'dep.E29EBB918'*) ;; *) printf '%s\n' 'compiled-module collision did not name both qualified errors' >&2; exit 1 ;; esac
+artifact_collision_executable="$collision_artifacts/collision"
+if artifact_link_collision_output=$($test_build/neper-self link-em "$artifact_collision_executable" "$collision_artifacts/main.x64-linux.em" "$collision_artifacts/dep.x64-linux.em" 2>&1); then
+    printf '%s\n' 'artifact linker accepted an error hash collision' >&2
+    exit 1
+fi
+case "$artifact_link_collision_output" in *'main.E08DED258'*'dep.E29EBB918'*) ;; *) printf '%s\n' 'artifact linker collision did not name both errors' >&2; exit 1 ;; esac
+[ ! -e "$artifact_collision_executable" ]
 body_edit_artifacts="$test_build/body-edit"
 signature_edit_artifacts="$test_build/signature-edit"
 mkdir -p "$body_edit_artifacts" "$signature_edit_artifacts"

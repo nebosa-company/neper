@@ -1,0 +1,183 @@
+// Deterministic assembly of cached .em machine code into own-linker input.
+
+use e.mem
+use codegen_x64
+use em
+use emit_x64
+use nir
+
+error InvalidInput
+error DuplicateModule
+error TargetMismatch
+error MissingSymbol
+
+type Artifact = struct {
+    bytes: []usize,
+}
+
+type Program = struct {
+    builder: nir.Builder,
+    machine: emit_x64.Buffer,
+    function_offsets: []usize,
+    relocations: []codegen_x64.Relocation,
+    relocation_count: usize,
+}
+
+fn capacity(value: usize) -> usize {
+    if value == 0usize { ret 1usize }
+    ret value
+}
+
+fn copy_string(a: *mem.Arena, bytes: []const usize, index: usize) -> (str, err) {
+    let (start, length, bounds_error) = em.string_bounds(bytes, index)
+    if bounds_error != ok || length == 0usize { ret ("", InvalidInput) }
+    let (storage, storage_error) = mem.alloc[u8](a, length)
+    if storage_error != ok { ret ("", storage_error) }
+    var at = 0usize
+    while at < length {
+        if bytes[start + at] > 255usize { ret ("", InvalidInput) }
+        storage[at] = u8(bytes[start + at])
+        at += 1usize
+    }
+    ret (storage[..], ok)
+}
+
+fn validate_set(artifacts: []Artifact) -> err {
+    if artifacts.len == 0usize { ret InvalidInput }
+    let (root_target, root_target_error) = em.artifact_target_index(artifacts[0usize].bytes)
+    if root_target_error != ok { ret root_target_error }
+    var at = 0usize
+    while at < artifacts.len {
+        let (artifact_target, target_error) = em.artifact_target_index(artifacts[at].bytes)
+        if target_error != ok { ret target_error }
+        let (same_target, target_match_error) = em.strings_equal(artifacts[0usize].bytes, root_target, artifacts[at].bytes, artifact_target)
+        if target_match_error != ok { ret target_match_error }
+        if !same_target { ret TargetMismatch }
+        let (module_index, module_error) = em.interface_module_index(artifacts[at].bytes)
+        if module_error != ok { ret module_error }
+        var prior = 0usize
+        while prior < at {
+            let (prior_module, prior_error) = em.interface_module_index(artifacts[prior].bytes)
+            if prior_error != ok { ret prior_error }
+            let (same_module, same_module_error) = em.strings_equal(artifacts[prior].bytes, prior_module, artifacts[at].bytes, module_index)
+            if same_module_error != ok { ret same_module_error }
+            if same_module { ret DuplicateModule }
+            prior += 1usize
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn target_module(artifacts: []Artifact, source: []const usize, target_module_index: usize) -> (usize, err) {
+    var at = 0usize
+    while at < artifacts.len {
+        let (candidate_module, candidate_error) = em.interface_module_index(artifacts[at].bytes)
+        if candidate_error != ok { ret (0usize, candidate_error) }
+        let (matches, match_error) = em.strings_equal(source, target_module_index, artifacts[at].bytes, candidate_module)
+        if match_error != ok { ret (0usize, match_error) }
+        if matches { ret (at, ok) }
+        at += 1usize
+    }
+    ret (0usize, MissingSymbol)
+}
+
+fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
+    try validate_set(artifacts)
+    var function_count = 0usize
+    var relocation_count = 0usize
+    var code_size = 0usize
+    var artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
+        if count_error != ok { ret count_error }
+        function_count += count
+        var function_at = 0usize
+        while function_at < count {
+            let (function, function_error) = em.artifact_code_function_at(artifacts[artifact_at].bytes, function_at)
+            if function_error != ok { ret function_error }
+            code_size += function.code_length
+            relocation_count += function.relocation_count
+            function_at += 1usize
+        }
+        artifact_at += 1usize
+    }
+    if function_count == 0usize { ret InvalidInput }
+
+    let (functions, functions_error) = mem.alloc[nir.Function](a, function_count)
+    if functions_error != ok { ret functions_error }
+    let (blocks, blocks_error) = mem.alloc[nir.Block](a, 1usize)
+    if blocks_error != ok { ret blocks_error }
+    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, 1usize)
+    if instructions_error != ok { ret instructions_error }
+    let (operands, operands_error) = mem.alloc[usize](a, 1usize)
+    if operands_error != ok { ret operands_error }
+    let (references, references_error) = mem.alloc[nir.FunctionRef](a, capacity(relocation_count))
+    if references_error != ok { ret references_error }
+    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 1usize)
+    if strings_error != ok { ret strings_error }
+    try nir.init(&program.builder, functions, blocks, instructions, operands, references, strings)
+    let (machine_storage, machine_error) = mem.alloc[usize](a, capacity(code_size))
+    if machine_error != ok { ret machine_error }
+    try emit_x64.init(&program.machine, machine_storage)
+    let (function_offsets, offsets_error) = mem.alloc[usize](a, function_count)
+    if offsets_error != ok { ret offsets_error }
+    program.function_offsets = function_offsets
+    let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, capacity(relocation_count))
+    if relocations_error != ok { ret relocations_error }
+    program.relocations = relocations
+    program.relocation_count = 0usize
+
+    artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
+        if count_error != ok { ret count_error }
+        var function_at = 0usize
+        while function_at < count {
+            let (function, function_error) = em.artifact_code_function_at(artifacts[artifact_at].bytes, function_at)
+            if function_error != ok { ret function_error }
+            let (name, name_error) = copy_string(a, artifacts[artifact_at].bytes, function.name_index)
+            if name_error != ok { ret name_error }
+            let global_function = program.builder.function_count
+            program.builder.functions[global_function] = zero
+            program.builder.functions[global_function].name = name
+            program.builder.functions[global_function].module_index = artifact_at
+            program.function_offsets[global_function] = program.machine.count
+            program.builder.function_count += 1usize
+            var code_at = 0usize
+            while code_at < function.code_length {
+                try emit_x64.byte(&program.machine, artifacts[artifact_at].bytes[function.code_start + code_at])
+                code_at += 1usize
+            }
+            var relocation_at = 0usize
+            while relocation_at < function.relocation_count {
+                let (stored, stored_error) = em.artifact_code_relocation_at(artifacts[artifact_at].bytes, function, relocation_at)
+                if stored_error != ok { ret stored_error }
+                let (module_index, module_error) = target_module(artifacts, artifacts[artifact_at].bytes, stored.module_index)
+                if module_error != ok { ret module_error }
+                let (target_name, target_name_error) = copy_string(a, artifacts[artifact_at].bytes, stored.name_index)
+                if target_name_error != ok { ret target_name_error }
+                let reference_index = program.builder.function_ref_count
+                program.builder.function_refs[reference_index] = zero
+                program.builder.function_refs[reference_index].module_index = module_index
+                program.builder.function_refs[reference_index].name = target_name
+                program.builder.function_ref_count += 1usize
+                program.relocations[program.relocation_count] = zero
+                program.relocations[program.relocation_count].displacement_at = program.function_offsets[global_function] + stored.displacement_at
+                program.relocations[program.relocation_count].function_ref = reference_index
+                program.relocations[program.relocation_count].resolved = false
+                program.relocation_count += 1usize
+                relocation_at += 1usize
+            }
+            function_at += 1usize
+        }
+        artifact_at += 1usize
+    }
+    try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
+    var relocation_at = 0usize
+    while relocation_at < program.relocation_count {
+        if !program.relocations[relocation_at].resolved { ret MissingSymbol }
+        relocation_at += 1usize
+    }
+    ret ok
+}
