@@ -8,6 +8,7 @@ use lower
 use nir
 use parse
 use project
+use regalloc
 use resolve
 use source
 use syntax
@@ -720,6 +721,7 @@ fn self_test() -> err {
     let capacity_error = parse.parse(&tiny, "error Full\n")
     if capacity_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try nir.self_test()
+    try regalloc.self_test()
     ret ok
 }
 
@@ -1142,6 +1144,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (bindings, bindings_error) = mem.alloc[lower.Binding](a, 16384usize)
         if bindings_error != ok { ret bindings_error }
         try lower.module(&checker, &loaded, 0usize, &builder, bindings)
+        let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, 32768usize)
+        if ranges_error != ok { ret ranges_error }
+        let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, 32768usize)
+        if allocations_error != ok { ret allocations_error }
+        var function_at = 0usize
+        while function_at < builder.function_count {
+            let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 10usize, ranges, allocations)
+            if allocation_error != ok { ret allocation_error }
+            function_at += 1usize
+        }
         try io.print("module nir ok\n")
         ret ok
     }
