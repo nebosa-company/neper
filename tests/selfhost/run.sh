@@ -355,6 +355,18 @@ protocol_executable_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$protocol_executable_path"
 protocol_output=$("$protocol_executable_path")
 [ "$protocol_output" = 'protocol iteration ok' ]
+os_helper_path="$test_build/os-spawn-helper-selfhost"
+os_helper_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/os-spawn-helper.e" "$repo" x64 linux "$os_helper_path")
+[ "$os_helper_written" = 'executable written' ]
+chmod +x "$os_helper_path"
+os_intrinsic_path="$test_build/os-intrinsics-selfhost"
+os_intrinsic_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/os-intrinsics.e" "$repo" x64 linux "$os_intrinsic_path")
+[ "$os_intrinsic_written" = 'executable written' ]
+chmod +x "$os_intrinsic_path"
+os_intrinsic_output_path="$test_build/os-intrinsics-output.txt"
+os_intrinsic_output=$("$os_intrinsic_path" "$os_intrinsic_output_path" "$repo/tests/neper0" "$os_helper_path")
+[ "$os_intrinsic_output" = 'intrinsic ok' ]
+[ "$(cat "$os_intrinsic_output_path")" = 'neper os!' ]
 own_compiler_path="$test_build/neper-own"
 own_compiler_written=$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$own_compiler_path")
 [ "$own_compiler_written" = 'executable written' ]

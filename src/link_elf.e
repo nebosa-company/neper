@@ -4,6 +4,7 @@ use check
 use codegen_x64
 use emit_x64
 use nir
+use runtime_elf_x64_ext
 
 error InvalidExecutable
 
@@ -65,6 +66,8 @@ fn runtime_symbol_offset(name: str) -> (usize, bool) {
     if check.same(name, "neper_os_stderr") { ret (691usize, true) }
     if check.same(name, "neper_os_exit") { ret (699usize, true) }
     if check.same(name, "neper_os_readdir") { ret (708usize, true) }
+    let (extension_offset, found_extension) = runtime_elf_x64_ext.symbol_offset(name)
+    if found_extension { ret (1441usize + extension_offset, true) }
     ret (0usize, false)
 }
 
@@ -137,6 +140,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     }
     let runtime_start = output.count
     try append_runtime(output)
+    try runtime_elf_x64_ext.append(output)
     let main_offset = machine_start + function_offsets[main_index]
     try emit_x64.patch_relative32(output, code_offset + 200usize, main_offset)
     var relocation_at = 0usize
@@ -175,13 +179,13 @@ fn self_test() -> err {
     try emit_x64.byte(&machine, 195usize)
     var offsets: [1]usize = zero
     var relocations: [1]codegen_x64.Relocation = zero
-    var executable_storage: [6000]usize = zero
+    var executable_storage: [7000]usize = zero
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
-    if executable.count != 5773usize { ret InvalidExecutable }
+    if executable.count != 6700usize { ret InvalidExecutable }
     if executable.bytes[0usize] != 127usize || executable.bytes[16usize] != 2usize || executable.bytes[18usize] != 62usize || executable.bytes[24usize] != 0usize || executable.bytes[25usize] != 16usize || executable.bytes[26usize] != 64usize { ret InvalidExecutable }
-    if executable.bytes[64usize] != 1usize || executable.bytes[68usize] != 5usize || executable.bytes[96usize] != 141usize || executable.bytes[97usize] != 22usize { ret InvalidExecutable }
+    if executable.bytes[64usize] != 1usize || executable.bytes[68usize] != 5usize || executable.bytes[96usize] != 44usize || executable.bytes[97usize] != 26usize { ret InvalidExecutable }
     if executable.bytes[4096usize] != 73usize || executable.bytes[4295usize] != 232usize || executable.bytes[4331usize] != 195usize || executable.bytes[4332usize] != 184usize { ret InvalidExecutable }
     ret ok
 }
