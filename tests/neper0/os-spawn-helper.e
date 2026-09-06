@@ -12,7 +12,8 @@ fn same(left: str, right: str) -> bool {
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
-    if args.len != 3usize { ret os.Failed }
+    if args.len != 5usize { ret os.Failed }
     if !same(args[1usize], "alpha beta") || !same(args[2usize], "gamma") { ret os.Failed }
+    if !same(args[3usize], "quote\"slash\\tail\\") || args[4usize].len != 0usize { ret os.Failed }
     ret ok
 }

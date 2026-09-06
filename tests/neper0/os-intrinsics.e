@@ -57,7 +57,7 @@ fn main(a: *mem.Arena, startup_args: []str) -> err {
 
     let output = os.stdout()
     let errors = os.stderr()
-    var child_args = [3]str{ args[3usize], "alpha beta", "gamma" }
+    var child_args = [5]str{ args[3usize], "alpha beta", "gamma", "quote\"slash\\tail\\", "" }
     var inherited = [1]os.Handle{ os.Handle{ raw: output.raw } }
     let stdio = os.Stdio{
         stdin: os.File{ raw: 0usize },

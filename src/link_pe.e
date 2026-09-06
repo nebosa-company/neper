@@ -270,7 +270,7 @@ fn self_test() -> err {
     if executable.bytes[128usize] != 80usize || executable.bytes[129usize] != 69usize || executable.bytes[132usize] != 100usize || executable.bytes[133usize] != 134usize || executable.bytes[134usize] != 2usize { ret InvalidExecutable }
     if executable.bytes[168usize] != 0usize || executable.bytes[169usize] != 16usize || executable.bytes[272usize] != 0usize || executable.bytes[273usize] != 32usize { ret InvalidExecutable }
     if executable.bytes[360usize] != 216usize || executable.bytes[361usize] != 32usize || executable.bytes[392usize] != 46usize || executable.bytes[432usize] != 46usize { ret InvalidExecutable }
-    if executable.bytes[512usize] != 83usize || executable.bytes[548usize] != 8usize || executable.bytes[549usize] != 17usize || executable.bytes[4353usize] != 195usize { ret InvalidExecutable }
+    if executable.bytes[512usize] != 83usize || executable.bytes[548usize] != 8usize || executable.bytes[549usize] != 17usize || executable.bytes[4521usize] != 195usize { ret InvalidExecutable }
     if executable.bytes[4608usize] != 40usize || executable.bytes[4609usize] != 32usize || executable.bytes[5000usize] != 75usize || executable.bytes[5016usize] != 67usize { ret InvalidExecutable }
     ret ok
 }

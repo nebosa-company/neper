@@ -59,6 +59,22 @@ neper_entry PROC
     jz entry_fail
     mov rbx, rax
 
+    xor edi, edi
+entry_command_length:
+    cmp word ptr [rbx+rdi*2], 0
+    je entry_command_scratch
+    inc rdi
+    jmp entry_command_length
+entry_command_scratch:
+    lea rdx, [rdi+1]
+    shl rdx, 1
+    mov rcx, r13
+    mov r8d, 2
+    call np_arena_alloc
+    test rax, rax
+    jz entry_fail
+    mov [rsp+32], rax
+
 entry_skip_space:
     movzx eax, word ptr [rbx]
     cmp eax, 20h
@@ -74,39 +90,78 @@ entry_arg_start:
     je entry_args_done
     cmp r15, 256
     jae entry_fail
+    mov rsi, [rsp+32]
     xor edi, edi
-    cmp word ptr [rbx], 22h
-    jne entry_plain_arg
-    add rbx, 2
-    mov rsi, rbx
-entry_quoted_scan:
-    movzx eax, word ptr [rbx]
-    test eax, eax
-    jz entry_fail
-    cmp eax, 22h
-    je entry_quoted_done
-    add rbx, 2
-    inc rdi
-    jmp entry_quoted_scan
-entry_quoted_done:
-    add rbx, 2
-    jmp entry_convert
-
-entry_plain_arg:
-    mov rsi, rbx
-entry_plain_scan:
+    xor r11d, r11d
+entry_decode_char:
     movzx eax, word ptr [rbx]
     test eax, eax
     jz entry_convert
+    cmp eax, 5ch
+    je entry_decode_slashes
+    cmp eax, 22h
+    je entry_decode_quote
     cmp eax, 20h
-    je entry_convert
+    je entry_decode_space
     cmp eax, 9
-    je entry_convert
+    je entry_decode_space
+entry_decode_copy:
+    mov [rsi+rdi*2], ax
     add rbx, 2
     inc rdi
-    jmp entry_plain_scan
+    jmp entry_decode_char
+
+entry_decode_space:
+    test r11d, r11d
+    jz entry_convert
+    jmp entry_decode_copy
+
+entry_decode_quote:
+    xor r11d, 1
+    add rbx, 2
+    jmp entry_decode_char
+
+entry_decode_slashes:
+    xor r10d, r10d
+entry_count_slashes:
+    cmp word ptr [rbx], 5ch
+    jne entry_after_slashes
+    inc r10
+    add rbx, 2
+    jmp entry_count_slashes
+entry_after_slashes:
+    cmp word ptr [rbx], 22h
+    jne entry_copy_all_slashes
+    mov rdx, r10
+    shr rdx, 1
+entry_copy_half_slashes:
+    test rdx, rdx
+    jz entry_slash_quote
+    mov word ptr [rsi+rdi*2], 5ch
+    inc rdi
+    dec rdx
+    jmp entry_copy_half_slashes
+entry_slash_quote:
+    test r10b, 1
+    jz entry_slash_delimiter
+    mov word ptr [rsi+rdi*2], 22h
+    inc rdi
+    add rbx, 2
+    jmp entry_decode_char
+entry_slash_delimiter:
+    xor r11d, 1
+    add rbx, 2
+    jmp entry_decode_char
+entry_copy_all_slashes:
+    test r10, r10
+    jz entry_decode_char
+    mov word ptr [rsi+rdi*2], 5ch
+    inc rdi
+    dec r10
+    jmp entry_copy_all_slashes
 
 entry_convert:
+    mov word ptr [rsi+rdi*2], 0
     mov rcx, r13
     mov rdx, rsi
     mov r8, rdi
