@@ -81,6 +81,12 @@ fn rex(buffer: *Buffer, reg: usize, rm: usize) -> err {
     ret byte(buffer, value)
 }
 
+fn rex32(buffer: *Buffer, reg: usize, rm: usize) -> err {
+    try check_register(reg)
+    try check_register(rm)
+    ret byte(buffer, 64usize + reg / 8usize * 4usize + rm / 8usize)
+}
+
 fn modrm(buffer: *Buffer, reg: usize, rm: usize) -> err {
     let value = 192usize + reg % 8usize * 8usize + rm % 8usize
     ret byte(buffer, value)
@@ -101,6 +107,14 @@ fn binary_register(buffer: *Buffer, opcode: usize, destination: usize, source: u
 
 fn mov_register(buffer: *Buffer, destination: usize, source: usize) -> err {
     ret binary_register(buffer, 137usize, destination, source)
+}
+
+fn add_immediate(buffer: *Buffer, destination: usize, value: usize) -> err {
+    if value > 4294967295usize { ret InvalidByte }
+    try rex(buffer, 0usize, destination)
+    try byte(buffer, 129usize)
+    try modrm(buffer, 0usize, destination)
+    ret little_u32(buffer, value)
 }
 
 fn add_register(buffer: *Buffer, destination: usize, source: usize) -> err {
@@ -255,6 +269,79 @@ fn stack_displacement(slot: usize) -> usize {
     ret 4294967296usize - magnitude
 }
 
+fn stack_address(buffer: *Buffer, destination: usize, slot: usize) -> err {
+    try check_register(destination)
+    try byte(buffer, 72usize + destination / 8usize * 4usize)
+    try byte(buffer, 141usize)
+    try byte(buffer, 133usize + destination % 8usize * 8usize)
+    ret little_u32(buffer, stack_displacement(slot))
+}
+
+fn memory_modrm(buffer: *Buffer, reg: usize, address: usize) -> err {
+    try check_register(reg)
+    try check_register(address)
+    if address % 8usize == 4usize || address % 8usize == 5usize { ret InvalidRegister }
+    ret byte(buffer, reg % 8usize * 8usize + address % 8usize)
+}
+
+fn load_memory(buffer: *Buffer, destination: usize, address: usize, width: usize, signed: bool) -> err {
+    if width == 64usize {
+        try rex(buffer, destination, address)
+        try byte(buffer, 139usize)
+        ret memory_modrm(buffer, destination, address)
+    }
+    if width == 32usize && !signed {
+        try rex32(buffer, destination, address)
+        try byte(buffer, 139usize)
+        ret memory_modrm(buffer, destination, address)
+    }
+    try rex(buffer, destination, address)
+    if width == 32usize {
+        try byte(buffer, 99usize)
+        ret memory_modrm(buffer, destination, address)
+    }
+    try byte(buffer, 15usize)
+    if width == 8usize {
+        if signed { try byte(buffer, 190usize) } else { try byte(buffer, 182usize) }
+        ret memory_modrm(buffer, destination, address)
+    }
+    if width == 16usize {
+        if signed { try byte(buffer, 191usize) } else { try byte(buffer, 183usize) }
+        ret memory_modrm(buffer, destination, address)
+    }
+    ret InvalidByte
+}
+
+fn store_memory(buffer: *Buffer, address: usize, source: usize, width: usize) -> err {
+    if width == 16usize { try byte(buffer, 102usize) }
+    if width == 64usize {
+        try rex(buffer, source, address)
+    } else {
+        if width != 8usize && width != 16usize && width != 32usize { ret InvalidByte }
+        try rex32(buffer, source, address)
+    }
+    if width == 8usize { try byte(buffer, 136usize) } else { try byte(buffer, 137usize) }
+    ret memory_modrm(buffer, source, address)
+}
+
+fn zero_memory(buffer: *Buffer, address: usize, size: usize) -> err {
+    if size == 0usize { ret ok }
+    if address != 10usize { try mov_register(buffer, 10usize, address) }
+    try mov_immediate(buffer, 11usize, size)
+    try byte(buffer, 65usize)
+    try byte(buffer, 198usize)
+    try byte(buffer, 2usize)
+    try byte(buffer, 0usize)
+    try byte(buffer, 73usize)
+    try byte(buffer, 255usize)
+    try byte(buffer, 194usize)
+    try byte(buffer, 73usize)
+    try byte(buffer, 255usize)
+    try byte(buffer, 203usize)
+    try byte(buffer, 117usize)
+    ret byte(buffer, 244usize)
+}
+
 fn load_stack(buffer: *Buffer, destination: usize, slot: usize) -> err {
     try check_register(destination)
     try byte(buffer, 72usize + destination / 8usize * 4usize)
@@ -383,5 +470,22 @@ fn self_test() -> err {
     try function_epilogue(&frame)
     if frame.count != 30usize { ret InvalidRegister }
     if frame.bytes[0usize] != 85usize || frame.bytes[4usize] != 72usize || frame.bytes[11usize] != 76usize || frame.bytes[18usize] != 76usize || frame.bytes[29usize] != 195usize { ret InvalidRegister }
+    var memory_storage: [80]usize = zero
+    var memory: Buffer = zero
+    try init(&memory, memory_storage[..])
+    try stack_address(&memory, 10usize, 1usize)
+    try add_immediate(&memory, 10usize, 3usize)
+    try load_memory(&memory, 11usize, 10usize, 8usize, false)
+    try load_memory(&memory, 11usize, 10usize, 16usize, true)
+    try load_memory(&memory, 11usize, 10usize, 32usize, false)
+    try load_memory(&memory, 11usize, 10usize, 64usize, false)
+    try store_memory(&memory, 10usize, 11usize, 8usize)
+    try store_memory(&memory, 10usize, 11usize, 16usize)
+    try store_memory(&memory, 10usize, 11usize, 32usize)
+    try store_memory(&memory, 10usize, 11usize, 64usize)
+    try zero_memory(&memory, 9usize, 24usize)
+    if memory.count != 66usize { ret InvalidRegister }
+    if memory.bytes[0usize] != 76usize || memory.bytes[1usize] != 141usize || memory.bytes[7usize] != 73usize || memory.bytes[14usize] != 77usize || memory.bytes[16usize] != 182usize || memory.bytes[31usize] != 102usize || memory.bytes[40usize] != 26usize { ret InvalidRegister }
+    if memory.bytes[41usize] != 77usize || memory.bytes[44usize] != 73usize || memory.bytes[54usize] != 65usize || memory.bytes[65usize] != 244usize { ret InvalidRegister }
     ret ok
 }

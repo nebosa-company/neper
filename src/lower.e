@@ -1,11 +1,14 @@
 // Checked syntax to canonical NIR lowering. The initial slice lowers parameters and
 // literal returns; later increments extend expressions and structured control flow.
 
+use artifact_hash
 use check
 use graph
+use layout
 use lex
 use nir
 use parse
+use resolve
 use syntax
 
 error FunctionNotFound
@@ -147,6 +150,62 @@ fn binary_opcode(kind: lex.Kind) -> nir.Opcode {
     ret .Invalid
 }
 
+fn aggregate_value(c: *check.Checker, ty: check.Type) -> bool {
+    if ty.kind == .Array || ty.kind == .Slice || ty.kind == .String { ret true }
+    let (index, found) = layout.aggregate_index(c, ty)
+    if !found { ret false }
+    ret c.aggregates[index].kind != .Enum && ty.kind != .Tag
+}
+
+fn lower_full_slice(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
+    let node = tree.nodes[node_index]
+    var base_index = 0usize
+    var node_count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if node_count == 0usize { base_index = tree.children[at].index }
+            node_count += 1usize
+        }
+        at += 1usize
+    }
+    if node_count != 1usize { ret (0usize, zero, check.Unsupported) }
+    let (base_type, base_type_error) = check.check_expr(c, g, tree, module_index, base_index, check.invalid_type())
+    if base_type_error != ok || base_type.kind != .Array || !base_type.has_length { ret (0usize, base_type, check.Unsupported) }
+    let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+    if result_type_error != ok { ret (0usize, result_type, result_type_error) }
+    let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, base_index, base_type, builder, bindings, binding_count)
+    if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+    let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, 2usize, c.tokens[node.token_start])
+    if stack_error != ok { ret (0usize, result_type, stack_error) }
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let (pointer_address_instruction, pointer_address, pointer_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, c.tokens[node.token_start])
+    if pointer_address_error != ok { ret (0usize, result_type, pointer_address_error) }
+    let pointer_address_operand_error = nir.add_operand(builder, pointer_address_instruction, stack)
+    if pointer_address_operand_error != ok { ret (0usize, result_type, pointer_address_operand_error) }
+    let (pointer_store, pointer_store_ignored, pointer_store_error) = nir.emit(builder, .Store, pointer_type, false, 8usize, c.tokens[node.token_start])
+    if pointer_store_error != ok { ret (0usize, result_type, pointer_store_error) }
+    let pointer_store_address_error = nir.add_operand(builder, pointer_store, pointer_address)
+    if pointer_store_address_error != ok { ret (0usize, result_type, pointer_store_address_error) }
+    let pointer_store_value_error = nir.add_operand(builder, pointer_store, base)
+    if pointer_store_value_error != ok { ret (0usize, result_type, pointer_store_value_error) }
+    let length_type = check.make_type(.Integer, "usize", module_index)
+    let (length_instruction, length_result, length_error) = nir.emit(builder, .ConstInteger, length_type, true, base_type.array_length, c.tokens[node.token_start])
+    if length_error != ok { ret (0usize, result_type, length_error) }
+    let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, length_type, true, 8usize, c.tokens[node.token_start])
+    if length_address_error != ok { ret (0usize, result_type, length_address_error) }
+    let length_address_operand_error = nir.add_operand(builder, length_address_instruction, stack)
+    if length_address_operand_error != ok { ret (0usize, result_type, length_address_operand_error) }
+    let (length_store, length_store_ignored, length_store_error) = nir.emit(builder, .Store, length_type, false, 8usize, c.tokens[node.token_start])
+    if length_store_error != ok { ret (0usize, result_type, length_store_error) }
+    let length_store_address_error = nir.add_operand(builder, length_store, length_address)
+    if length_store_address_error != ok { ret (0usize, result_type, length_store_address_error) }
+    let length_store_value_error = nir.add_operand(builder, length_store, length_result)
+    if length_store_value_error != ok { ret (0usize, result_type, length_store_value_error) }
+    ret (stack, result_type, ok)
+}
+
 fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
     let node = tree.nodes[node_index]
     c.failure_module = module_index
@@ -175,15 +234,154 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if token.kind != .Identifier { ret (0usize, zero, check.Unsupported) }
         let name = g.modules[module_index].text[token.start..token.end]
         let (binding, found) = find_binding(bindings, binding_count, name)
-        if !found { ret (0usize, zero, check.Unsupported) }
+        if !found {
+            let (symbol_index, has_symbol) = resolve.find(c.resolver, module_index, name, .Value)
+            if has_symbol && c.resolver.symbols[symbol_index].kind == .Error {
+                let error_type = check.make_type(.Err, "err", module_index)
+                let (value, value_error) = artifact_hash.qualified_error_value(g.modules[module_index].name, name)
+                if value_error != ok { ret (0usize, error_type, value_error) }
+                let (instruction, result, emit_error) = nir.emit(builder, .ConstError, error_type, true, value, token)
+                ret (result, error_type, emit_error)
+            }
+            ret (0usize, zero, check.Unsupported)
+        }
         let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
         if type_error != ok { ret (0usize, result_type, type_error) }
         if !binding.address { ret (binding.value, result_type, ok) }
+        if aggregate_value(c, result_type) { ret (binding.value, result_type, ok) }
         let (instruction, result, load_error) = nir.emit(builder, .Load, result_type, true, 0usize, token)
         if load_error != ok { ret (0usize, result_type, load_error) }
         let operand_error = nir.add_operand(builder, instruction, binding.value)
         if operand_error != ok { ret (0usize, result_type, operand_error) }
         ret (result, result_type, ok)
+    }
+    if node.kind == .MemberExpr {
+        let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+        if result_type_error != ok { ret (0usize, result_type, result_type_error) }
+        let (aggregate_index, found_aggregate) = layout.aggregate_index(c, result_type)
+        if !found_aggregate { ret (0usize, result_type, check.Unsupported) }
+        let aggregate = c.aggregates[aggregate_index]
+        var member_name = ""
+        var token_at = node.token_start
+        while token_at < node.token_end {
+            let token = c.tokens[token_at]
+            if token.kind == .Identifier { member_name = g.modules[module_index].text[token.start..token.end] }
+            token_at += 1usize
+        }
+        var field_at = 0usize
+        while field_at < aggregate.field_count {
+            let field_index = aggregate.first_field + field_at
+            if field_index < c.aggregate_field_count {
+                let member = c.aggregate_fields[field_index]
+                if check.same(member.name, member_name) {
+                    if member.enum_negative { ret (0usize, result_type, check.Unsupported) }
+                    let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, member.enum_value, c.tokens[node.token_start])
+                    ret (result, result_type, emit_error)
+                }
+            }
+            field_at += 1usize
+        }
+        ret (0usize, result_type, check.InvalidType)
+    }
+    if node.kind == .FieldExpr {
+        let (target_module, qualified_name, qualified) = check.qualified_member(c, g, tree, module_index, node)
+        if qualified {
+            let (symbol_index, has_symbol) = resolve.find(c.resolver, target_module, qualified_name, .Value)
+            if has_symbol && c.resolver.symbols[symbol_index].kind == .Error {
+                let error_type = check.make_type(.Err, "err", target_module)
+                let (value, value_error) = artifact_hash.qualified_error_value(g.modules[target_module].name, qualified_name)
+                if value_error != ok { ret (0usize, error_type, value_error) }
+                let (instruction, result, emit_error) = nir.emit(builder, .ConstError, error_type, true, value, c.tokens[node.token_start])
+                ret (result, error_type, emit_error)
+            }
+            ret (0usize, zero, check.Unsupported)
+        }
+        let (base_index, has_base) = check.first_node_child(tree, node)
+        if !has_base { ret (0usize, zero, parse.InvalidSyntax) }
+        let (field_name, has_field) = check.field_expression_name(c, g.modules[module_index].text, tree, node)
+        if !has_field { ret (0usize, zero, parse.InvalidSyntax) }
+        let (base_type, base_type_error) = check.check_expr(c, g, tree, module_index, base_index, check.invalid_type())
+        if base_type_error != ok { ret (0usize, base_type, base_type_error) }
+        if check.same(field_name, "len") && (base_type.kind == .String || base_type.kind == .Slice || base_type.kind == .Array) {
+            let length_type = check.make_type(.Integer, "usize", module_index)
+            if base_type.kind == .Array {
+                let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, length_type, true, base_type.array_length, c.tokens[node.token_start])
+                ret (result, length_type, emit_error)
+            }
+            let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, base_index, base_type, builder, bindings, binding_count)
+            if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+            let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, length_type, true, 8usize, c.tokens[node.token_start])
+            if address_error != ok { ret (0usize, length_type, address_error) }
+            let address_operand_error = nir.add_operand(builder, address_instruction, base)
+            if address_operand_error != ok { ret (0usize, length_type, address_operand_error) }
+            let (load_instruction, result, load_error) = nir.emit(builder, .Load, length_type, true, 8usize, c.tokens[node.token_start])
+            if load_error != ok { ret (0usize, length_type, load_error) }
+            let load_operand_error = nir.add_operand(builder, load_instruction, address)
+            if load_operand_error != ok { ret (0usize, length_type, load_operand_error) }
+            ret (result, length_type, ok)
+        }
+        let (field, field_error) = layout.field(c, base_type, field_name)
+        if field_error != ok { ret (0usize, zero, check.Unsupported) }
+        let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, base_index, base_type, builder, bindings, binding_count)
+        if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, field.ty, true, field.offset, c.tokens[node.token_start])
+        if address_error != ok { ret (0usize, field.ty, address_error) }
+        let address_operand_error = nir.add_operand(builder, address_instruction, base)
+        if address_operand_error != ok { ret (0usize, field.ty, address_operand_error) }
+        if aggregate_value(c, field.ty) { ret (address, field.ty, ok) }
+        let (field_info, field_info_error) = layout.type_info(c, field.ty)
+        if field_info_error != ok { ret (0usize, field.ty, field_info_error) }
+        let (load_instruction, result, load_error) = nir.emit(builder, .Load, field.ty, true, field_info.size, c.tokens[node.token_start])
+        if load_error != ok { ret (0usize, field.ty, load_error) }
+        let load_operand_error = nir.add_operand(builder, load_instruction, address)
+        if load_operand_error != ok { ret (0usize, field.ty, load_operand_error) }
+        ret (result, field.ty, ok)
+    }
+    if node.kind == .AggregateLiteral {
+        let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+        if result_type_error != ok { ret (0usize, result_type, result_type_error) }
+        let (info, info_error) = layout.type_info(c, result_type)
+        if info_error != ok { ret (0usize, result_type, info_error) }
+        var slots = (info.size + 7usize) / 8usize
+        if slots == 0usize { slots = 1usize }
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, slots, c.tokens[node.token_start])
+        if stack_error != ok { ret (0usize, result_type, stack_error) }
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                let item = tree.nodes[tree.children[at].index]
+                if item.kind == .LiteralItem {
+                    let (name, has_name) = check.literal_item_name(c, g.modules[module_index].text, item)
+                    if !has_name { ret (0usize, result_type, check.Unsupported) }
+                    let (field, field_error) = layout.field(c, result_type, name)
+                    if field_error != ok { ret (0usize, result_type, field_error) }
+                    let (expression_index, has_expression) = check.first_node_child(tree, item)
+                    if !has_expression { ret (0usize, result_type, check.Unsupported) }
+                    let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, expression_index, field.ty, builder, bindings, binding_count)
+                    if value_error != ok { ret (0usize, value_type, value_error) }
+                    if aggregate_value(c, field.ty) { ret (0usize, result_type, check.Unsupported) }
+                    let (field_info, field_info_error) = layout.type_info(c, field.ty)
+                    if field_info_error != ok { ret (0usize, result_type, field_info_error) }
+                    let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, field.ty, true, field.offset, c.tokens[item.token_start])
+                    if address_error != ok { ret (0usize, result_type, address_error) }
+                    let address_operand_error = nir.add_operand(builder, address_instruction, stack)
+                    if address_operand_error != ok { ret (0usize, result_type, address_operand_error) }
+                    let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, field.ty, false, field_info.size, c.tokens[item.token_start])
+                    if store_error != ok { ret (0usize, result_type, store_error) }
+                    let store_address_error = nir.add_operand(builder, store_instruction, address)
+                    if store_address_error != ok { ret (0usize, result_type, store_address_error) }
+                    let store_value_error = nir.add_operand(builder, store_instruction, value)
+                    if store_value_error != ok { ret (0usize, result_type, store_value_error) }
+                }
+            }
+            at += 1usize
+        }
+        ret (stack, result_type, ok)
+    }
+    if node.kind == .BracketPostfix && check.contains_token(c, node.token_start, node.token_end, .PunctRange) {
+        let (slice, slice_type, slice_error) = lower_full_slice(c, g, tree, module_index, node_index, expected, builder, bindings, binding_count)
+        ret (slice, slice_type, slice_error)
     }
     if node.kind == .UnaryExpr {
         let end = node.first_child + node.child_count
@@ -202,6 +400,15 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
         if result_type_error != ok { ret (0usize, result_type, result_type_error) }
         let operator = c.tokens[node.token_start].kind
+        if operator == .PunctAmp {
+            let place = tree.nodes[child_index]
+            if place.kind != .NameExpr { ret (0usize, result_type, check.Unsupported) }
+            let place_token = c.tokens[place.token_start]
+            let place_name = g.modules[module_index].text[place_token.start..place_token.end]
+            let (binding, found_binding) = find_binding(bindings, binding_count, place_name)
+            if !found_binding || !binding.address { ret (0usize, result_type, check.Unsupported) }
+            ret (binding.value, result_type, ok)
+        }
         var operand_expected = result_type
         if operator == .PunctBang { operand_expected = check.make_type(.Bool, "bool", module_index) }
         let (operand, operand_type, operand_error) = lower_expression(c, g, tree, module_index, child_index, operand_expected, builder, bindings, binding_count)
@@ -465,16 +672,61 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         }
         at += 1usize
     }
-    if !found_binding || !found_initializer || check.contains_token(c, node.token_start, tree.nodes[initializer_index].token_start, .KwTry) { ret check.Unsupported }
+    if !found_binding { ret check.Unsupported }
+    if found_initializer && check.contains_token(c, node.token_start, tree.nodes[initializer_index].token_start, .KwTry) { ret check.Unsupported }
     if c.tokens[binding_node.token_start].kind == .PunctLParen { ret check.Unsupported }
     let (name, has_name) = check.first_name(c, g.modules[module_index].text, binding_node)
     if !has_name { ret parse.InvalidSyntax }
-    let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, initializer_index, declared, builder, bindings, *binding_count)
-    if value_error != ok { ret value_error }
     let mutable = c.tokens[node.token_start].kind == .KwVar
-    var stored_value = value
+    var value = 0usize
+    var value_type = declared
+    var stored_value = 0usize
     var address = false
-    if mutable {
+    if found_initializer {
+        let (lowered_value, lowered_type, value_error) = lower_expression(c, g, tree, module_index, initializer_index, declared, builder, bindings, *binding_count)
+        if value_error != ok { ret value_error }
+        value = lowered_value
+        value_type = lowered_type
+        stored_value = value
+    } else {
+        if declared.kind == .Invalid { ret check.MissingContext }
+        let is_zero = check.contains_token(c, node.token_start, node.token_end, .KwZero)
+        let is_undef = check.contains_token(c, node.token_start, node.token_end, .KwUndef)
+        if !is_zero && !is_undef { ret check.Unsupported }
+        if aggregate_value(c, declared) {
+            let (info, info_error) = layout.type_info(c, declared)
+            if info_error != ok { ret info_error }
+            var slots = (info.size + 7usize) / 8usize
+            if slots == 0usize { slots = 1usize }
+            let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, declared, true, slots, c.tokens[node.token_start])
+            if stack_error != ok { ret stack_error }
+            if is_zero {
+                let (zero_instruction, zero_ignored, zero_error) = nir.emit(builder, .Zero, declared, false, info.size, c.tokens[node.token_start])
+                if zero_error != ok { ret zero_error }
+                try nir.add_operand(builder, zero_instruction, stack)
+            }
+            value = stack
+            stored_value = stack
+            address = true
+        } else {
+            if is_zero {
+                let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .Zero, declared, true, 0usize, c.tokens[node.token_start])
+                if zero_error != ok { ret zero_error }
+                value = zero_value
+                stored_value = zero_value
+            } else {
+                let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, declared, true, 0usize, c.tokens[node.token_start])
+                if stack_error != ok { ret stack_error }
+                value = stack
+                stored_value = stack
+                address = true
+            }
+        }
+    }
+    if aggregate_value(c, value_type) {
+        address = true
+    } else {
+    if mutable && !address {
         let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, value_type, true, 0usize, c.tokens[node.token_start])
         if stack_error != ok { ret stack_error }
         let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, value_type, false, 0usize, c.tokens[node.token_start])
@@ -483,6 +735,7 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         try nir.add_operand(builder, store_instruction, value)
         stored_value = stack
         address = true
+    }
     }
     try add_binding(bindings, binding_count, Binding { name: name, ty: value_type, value: stored_value, address: address })
     ret check.add_local(c, name, value_type, mutable)
@@ -716,7 +969,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         let parameter = c.parameters[function.first_parameter + parameter_at]
         let (instruction, result, parameter_error) = nir.emit(builder, .Parameter, parameter.ty, true, parameter_at, c.tokens[node.token_start])
         if parameter_error != ok { ret parameter_error }
-        try add_binding(bindings, &binding_count, Binding { name: parameter.name, ty: parameter.ty, value: result, address: false })
+        try add_binding(bindings, &binding_count, Binding { name: parameter.name, ty: parameter.ty, value: result, address: aggregate_value(c, parameter.ty) })
         try check.add_local(c, parameter.name, parameter.ty, false)
         parameter_at += 1usize
     }

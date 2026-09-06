@@ -1216,6 +1216,18 @@ fn print_lower_diagnostic(g: *graph.Graph, checker: *check.Checker, lower_error:
     ret write_all(failure, "\n")
 }
 
+fn print_codegen_diagnostic(g: *graph.Graph, function: nir.Function, context: *codegen_x64.FunctionContext) -> err {
+    let failure = os.stderr()
+    if function.module_index < g.count { try write_all(failure, g.modules[function.module_index].path) } else { try write_all(failure, "<unknown>") }
+    try write_all(failure, ":")
+    try write_usize(failure, context.failure_token.line)
+    try write_all(failure, ":")
+    try write_usize(failure, context.failure_token.column)
+    try write_all(failure, ": error[E-CODEGEN-9999]: cannot select machine code for `")
+    try write_all(failure, function.name)
+    ret write_all(failure, "`\n")
+}
+
 fn write_qualified_error(file: os.File, module_name: str, error_name: str) -> err {
     try write_all(file, module_name)
     try write_all(file, ".")
@@ -1579,7 +1591,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if allocation_error != ok { ret allocation_error }
             if emit_machine_code {
                 function_offsets[function_at] = machine.count
-                try codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
+                let codegen_error = codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
+                if codegen_error != ok {
+                    try print_codegen_diagnostic(&loaded, builder.functions[function_at], &codegen_context)
+                    ret codegen_error
+                }
             }
             function_at += 1usize
         }
