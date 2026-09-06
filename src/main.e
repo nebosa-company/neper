@@ -1576,8 +1576,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if allocations_error != ok { ret allocations_error }
         var machine_capacity = 1usize
         if emit_machine_code {
-            machine_capacity = 131072usize
-            if builder.instruction_count > 32768usize { machine_capacity = 8388608usize }
+            machine_capacity = builder.instruction_count * 256usize + 65536usize
         }
         let (machine_storage, machine_storage_error) = mem.alloc[usize](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }
@@ -1674,7 +1673,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 ret ok
             }
             if emit_object {
-                let (object_storage, object_storage_error) = mem.alloc[usize](a, 262144usize)
+                let object_capacity = machine.count + builder.function_count * 256usize + relocation_count * 32usize + 65536usize
+                let (object_storage, object_storage_error) = mem.alloc[usize](a, object_capacity)
                 if object_storage_error != ok { ret object_storage_error }
                 var object: emit_x64.Buffer = zero
                 try emit_x64.init(&object, object_storage)

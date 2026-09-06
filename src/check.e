@@ -121,6 +121,7 @@ type Function = struct {
     return_count: usize,
     generic: bool,
     external: bool,
+    intrinsic: bool,
 }
 
 type FunctionGeneric = struct {
@@ -1927,6 +1928,7 @@ fn add_seeded_function(c: *Checker, module_index: usize, name: str, return_type:
     item.first_parameter = c.parameter_count
     item.first_return = first_return
     item.return_count = return_count
+    item.intrinsic = true
     c.functions[index] = item
     var generic: FunctionGeneric = zero
     c.function_generics[index] = generic
@@ -3320,6 +3322,7 @@ fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     function.module_index = target_module
     function.parameter_count = 2usize
     function.return_count = 2usize
+    function.intrinsic = true
     info.function = function
     info.return_type = result
     info.arena_type = arena_pointer

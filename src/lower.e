@@ -62,7 +62,21 @@ fn bind_value(c: *check.Checker, g: *graph.Graph, module_index: usize, token: le
     if token.kind == .PunctUnderscore { ret ok }
     if token.kind != .Identifier { ret parse.InvalidSyntax }
     var stored_value = value
-    var address = address_value || aggregate_value(c, ty)
+    var address = address_value
+    if aggregate_value(c, ty) {
+        let (info, info_error) = layout.type_info(c, ty)
+        if info_error != ok { ret info_error }
+        var slots = (info.size + 7usize) / 8usize
+        if slots == 0usize { slots = 1usize }
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, ty, true, slots, token)
+        if stack_error != ok { ret stack_error }
+        let (copy_instruction, ignored, copy_error) = nir.emit(builder, .Copy, ty, false, info.size, token)
+        if copy_error != ok { ret copy_error }
+        try nir.add_operand(builder, copy_instruction, stack)
+        try nir.add_operand(builder, copy_instruction, value)
+        stored_value = stack
+        address = true
+    } else {
     if mutable && !address {
         let (info, info_error) = layout.type_info(c, ty)
         if info_error != ok { ret info_error }
@@ -74,6 +88,7 @@ fn bind_value(c: *check.Checker, g: *graph.Graph, module_index: usize, token: le
         try nir.add_operand(builder, store_instruction, value)
         stored_value = stack
         address = true
+    }
     }
     let name = g.modules[module_index].text[token.start..token.end]
     try add_binding(bindings, binding_count, Binding { name: name, ty: ty, value: stored_value, address: address })
@@ -109,6 +124,19 @@ fn declaration_name(c: *check.Checker, text: str, node: syntax.Node) -> (str, er
 fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type, builder: *nir.Builder) -> (usize, err) {
     if node.kind != .LiteralExpr || node.token_start >= c.token_count { ret (0usize, check.Unsupported) }
     let token = c.tokens[node.token_start]
+    if token.kind == .KwZero && aggregate_value(c, expected) {
+        let (info, info_error) = layout.type_info(c, expected)
+        if info_error != ok { ret (0usize, info_error) }
+        var slots = (info.size + 7usize) / 8usize
+        if slots == 0usize { slots = 1usize }
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, expected, true, slots, token)
+        if stack_error != ok { ret (0usize, stack_error) }
+        let (zero_instruction, ignored, zero_error) = nir.emit(builder, .Zero, expected, false, info.size, token)
+        if zero_error != ok { ret (0usize, zero_error) }
+        let operand_error = nir.add_operand(builder, zero_instruction, stack)
+        if operand_error != ok { ret (0usize, operand_error) }
+        ret (stack, ok)
+    }
     var opcode: nir.Opcode = .Invalid
     var immediate = 0usize
     var ty = expected
@@ -189,6 +217,27 @@ fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) ->
     ret (c.parameters[parameter_index].ty, ok)
 }
 
+fn intrinsic_symbol(name: str) -> (str, err) {
+    if check.same(name, "mark") { ret ("neper_mem_mark", ok) }
+    if check.same(name, "reset") { ret ("neper_mem_reset", ok) }
+    if check.same(name, "stats") { ret ("neper_mem_stats", ok) }
+    if check.same(name, "open") { ret ("neper_os_open", ok) }
+    if check.same(name, "read") { ret ("neper_os_read", ok) }
+    if check.same(name, "write") { ret ("neper_os_write", ok) }
+    if check.same(name, "close") { ret ("neper_os_close", ok) }
+    if check.same(name, "stdout") { ret ("neper_os_stdout", ok) }
+    if check.same(name, "stderr") { ret ("neper_os_stderr", ok) }
+    if check.same(name, "readdir") { ret ("neper_os_readdir", ok) }
+    if check.same(name, "spawn") { ret ("neper_os_spawn", ok) }
+    if check.same(name, "wait") { ret ("neper_os_wait", ok) }
+    if check.same(name, "exit") { ret ("neper_os_exit", ok) }
+    if check.same(name, "args") { ret ("neper_os_args", ok) }
+    if check.same(name, "reserve") { ret ("neper_os_reserve", ok) }
+    if check.same(name, "commit") { ret ("neper_os_commit", ok) }
+    if check.same(name, "clock") { ret ("neper_os_clock", ok) }
+    ret ("", check.UnknownCallable)
+}
+
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     results.call = call
     results.count = call.function.return_count
@@ -196,7 +245,15 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
     let return_layout_error = call_return_layout(c, call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
     var symbol = call.function.name
-    if call.mem_alloc { symbol = "neper_mem_alloc" }
+    if call.mem_alloc {
+        symbol = "neper_mem_alloc"
+    } else {
+        if call.function.intrinsic {
+            let (mapped_symbol, mapped_error) = intrinsic_symbol(symbol)
+            if mapped_error != ok { ret mapped_error }
+            symbol = mapped_symbol
+        }
+    }
     let (function_ref, function_ref_error) = nir.intern_function(builder, call.function.module_index, symbol)
     if function_ref_error != ok { ret function_ref_error }
     var slot = 0usize
@@ -350,6 +407,23 @@ fn binary_opcode(kind: lex.Kind) -> nir.Opcode {
     if kind == .PunctLtEq { ret .LessEqual }
     if kind == .PunctGt { ret .Greater }
     if kind == .PunctGtEq { ret .GreaterEqual }
+    ret .Invalid
+}
+
+fn compound_opcode(kind: lex.Kind) -> nir.Opcode {
+    if kind == .PunctAddAssign { ret .Add }
+    if kind == .PunctSubAssign { ret .Subtract }
+    if kind == .PunctMulAssign { ret .Multiply }
+    if kind == .PunctDivAssign { ret .Divide }
+    if kind == .PunctRemAssign { ret .Remainder }
+    if kind == .PunctAddWrapAssign { ret .AddWrap }
+    if kind == .PunctSubWrapAssign { ret .SubtractWrap }
+    if kind == .PunctMulWrapAssign { ret .MultiplyWrap }
+    if kind == .PunctShiftLeftAssign { ret .ShiftLeft }
+    if kind == .PunctShiftRightAssign { ret .ShiftRight }
+    if kind == .PunctBitAndAssign { ret .BitAnd }
+    if kind == .PunctBitXorAssign { ret .BitXor }
+    if kind == .PunctBitOrAssign { ret .BitOr }
     ret .Invalid
 }
 
@@ -1264,6 +1338,26 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     }
     let (address, place_type, address_error) = lower_place(c, g, tree, module_index, children[0usize], builder, bindings, binding_count)
     if address_error != ok { ret address_error }
+    let assignment = check.assignment_operator(c, tree.nodes[children[0usize]].token_end, tree.nodes[children[1usize]].token_start)
+    if assignment != .PunctAssign {
+        let opcode = compound_opcode(assignment)
+        if opcode == .Invalid || aggregate_value(c, place_type) { ret check.InvalidOperator }
+        let (info, info_error) = layout.type_info(c, place_type)
+        if info_error != ok { ret info_error }
+        let (load_instruction, current, load_error) = nir.emit(builder, .Load, place_type, true, info.size, c.tokens[node.token_start])
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, address)
+        var expected = place_type
+        if opcode == .ShiftLeft || opcode == .ShiftRight { expected = check.invalid_type() }
+        let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], expected, builder, bindings, binding_count)
+        if right_error != ok { ret right_error }
+        if opcode != .ShiftLeft && opcode != .ShiftRight && !check.type_equal(c, place_type, right_type) { ret check.InvalidType }
+        let (binary_instruction, value, binary_error) = nir.emit(builder, opcode, place_type, true, 0usize, c.tokens[node.token_start])
+        if binary_error != ok { ret binary_error }
+        try nir.add_operand(builder, binary_instruction, current)
+        try nir.add_operand(builder, binary_instruction, right)
+        ret store_assignment_value(c, place_type, address, value, c.tokens[node.token_start], builder)
+    }
     let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, children[1usize], place_type, builder, bindings, binding_count)
     if value_error != ok { ret value_error }
     if !check.type_equal(c, place_type, value_type) { ret check.InvalidType }

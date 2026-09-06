@@ -7,6 +7,12 @@ type Pair = struct {
     right: usize,
 }
 
+type Triple = struct {
+    first: usize,
+    second: usize,
+    third: usize,
+}
+
 fn split() -> (usize, bool) {
     ret (7usize, true)
 }
@@ -19,6 +25,10 @@ fn sum7(a: usize, b: usize, c: usize, d: usize, e: usize, f: usize, g: usize) ->
     ret a + b + c + d + e + f + g
 }
 
+fn triple_is_zero(value: Triple) -> bool {
+    ret value.first == 0usize && value.second == 0usize && value.third == 0usize
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var number = 0usize
     var present = false
@@ -27,7 +37,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
 
     let made = pair()
     if made.left != 11usize || made.right != 13usize { ret Failed }
+    var original = Pair { left: 17usize, right: 19usize }
+    var copied = original
+    copied.left = 23usize
+    if original.left != 17usize || copied.left != 23usize || copied.right != 19usize { ret Failed }
     if sum7(1usize, 2usize, 3usize, 4usize, 5usize, 6usize, 7usize) != 28usize { ret Failed }
+    if !triple_is_zero(zero) { ret Failed }
 
     let escaped = "A\nB"
     if escaped.len != 3usize || escaped[0usize] != 65u8 || escaped[1usize] != 10u8 || escaped[2usize] != 66u8 { ret Failed }
