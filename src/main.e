@@ -1162,10 +1162,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, 32768usize)
         if fixups_error != ok { ret fixups_error }
         var function_at = 0usize
+        var machine_abi: codegen_x64.Abi = .SystemV
+        if same(args[5usize], "windows") { machine_abi = .Windows }
         while function_at < builder.function_count {
             let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 5usize, ranges, allocations)
             if allocation_error != ok { ret allocation_error }
-            if emit_machine_code { try codegen_x64.function(&builder, function_at, allocations, stack_slots, block_offsets, fixups, &machine) }
+            if emit_machine_code { try codegen_x64.function(&builder, function_at, allocations, stack_slots, machine_abi, block_offsets, fixups, &machine) }
             function_at += 1usize
         }
         if emit_machine_code {

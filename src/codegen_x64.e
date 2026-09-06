@@ -7,6 +7,11 @@ use regalloc
 
 error Unsupported
 
+type Abi = enum u8 {
+    SystemV,
+    Windows,
+}
+
 type Fixup = struct {
     displacement_at: usize,
     block: usize,
@@ -96,11 +101,53 @@ fn comparison_condition(opcode: nir.Opcode, unsigned: bool) -> (usize, err) {
     ret (0usize, Unsupported)
 }
 
-fn function(builder: *nir.Builder, function_index: usize, allocations: []regalloc.Allocation, stack_slots: usize, block_offsets: []usize, fixups: []Fixup, output: *emit_x64.Buffer) -> err {
+fn parameter_count(builder: *nir.Builder, current: nir.Function) -> (usize, err) {
+    var count = 0usize
+    let end = current.first_instruction + current.instruction_count
+    var at = current.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        if instruction.opcode == .Parameter {
+            if instruction.immediate != count { ret (0usize, Unsupported) }
+            count += 1usize
+        }
+        at += 1usize
+    }
+    ret (count, ok)
+}
+
+fn parameter_register(abi: Abi, index: usize) -> (usize, err) {
+    if abi == .Windows {
+        if index == 0usize { ret (1usize, ok) }
+        if index == 1usize { ret (2usize, ok) }
+        if index == 2usize { ret (8usize, ok) }
+        if index == 3usize { ret (9usize, ok) }
+        ret (0usize, Unsupported)
+    }
+    if index == 0usize { ret (7usize, ok) }
+    if index == 1usize { ret (6usize, ok) }
+    if index == 2usize { ret (2usize, ok) }
+    if index == 3usize { ret (1usize, ok) }
+    if index == 4usize { ret (8usize, ok) }
+    if index == 5usize { ret (9usize, ok) }
+    ret (0usize, Unsupported)
+}
+
+fn function(builder: *nir.Builder, function_index: usize, allocations: []regalloc.Allocation, stack_slots: usize, abi: Abi, block_offsets: []usize, fixups: []Fixup, output: *emit_x64.Buffer) -> err {
     if function_index >= builder.function_count { ret Unsupported }
     let current = builder.functions[function_index]
     if current.block_count > block_offsets.len { ret Unsupported }
-    if stack_slots != 0usize { try emit_x64.function_prologue(output, stack_slots) }
+    let (parameters, parameters_error) = parameter_count(builder, current)
+    if parameters_error != ok { ret parameters_error }
+    let frame_slots = stack_slots + parameters
+    if frame_slots != 0usize { try emit_x64.function_prologue(output, frame_slots) }
+    var parameter_at = 0usize
+    while parameter_at < parameters {
+        let (incoming, incoming_error) = parameter_register(abi, parameter_at)
+        if incoming_error != ok { ret incoming_error }
+        try emit_x64.store_stack(output, stack_slots + parameter_at, incoming)
+        parameter_at += 1usize
+    }
     let end = current.first_instruction + current.instruction_count
     var fixup_count = 0usize
     var at = current.first_instruction
@@ -112,6 +159,13 @@ fn function(builder: *nir.Builder, function_index: usize, allocations: []regallo
             block_at += 1usize
         }
         let instruction = builder.instructions[at]
+        if instruction.opcode == .Parameter {
+            if instruction.immediate >= parameters { ret Unsupported }
+            let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+            if destination_error != ok { ret destination_error }
+            try emit_x64.load_stack(output, destination, stack_slots + instruction.immediate)
+            try store_result(allocations, instruction.result, destination, output)
+        } else {
         if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError {
             let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
             if destination_error != ok { ret destination_error }
@@ -172,7 +226,7 @@ fn function(builder: *nir.Builder, function_index: usize, allocations: []regallo
                     } else {
                         if instruction.operand_count != 0usize { ret Unsupported }
                     }
-                    if stack_slots == 0usize {
+                    if frame_slots == 0usize {
                         try emit_x64.return_instruction(output)
                     } else {
                         try emit_x64.function_epilogue(output)
@@ -183,6 +237,7 @@ fn function(builder: *nir.Builder, function_index: usize, allocations: []regallo
                     }
                 }
             }
+        }
         }
         at += 1usize
     }
@@ -224,14 +279,14 @@ fn self_test() -> err {
     try emit_x64.init(&output, storage[..])
     var block_offsets: [4]usize = zero
     var fixups: [4]Fixup = zero
-    try function(&builder, 0usize, allocations[..], stack_slots, block_offsets[..], fixups[..], &output)
+    try function(&builder, 0usize, allocations[..], stack_slots, .SystemV, block_offsets[..], fixups[..], &output)
     if output.count != 11usize || output.bytes[0usize] != 72usize || output.bytes[1usize] != 184usize || output.bytes[2usize] != 7usize || output.bytes[10usize] != 195usize { ret Unsupported }
     allocations[0usize].kind = .Stack
     allocations[0usize].index = 0usize
     var spill_storage: [64]usize = zero
     var spill_output: emit_x64.Buffer = zero
     try emit_x64.init(&spill_output, spill_storage[..])
-    try function(&builder, 0usize, allocations[..], 1usize, block_offsets[..], fixups[..], &spill_output)
+    try function(&builder, 0usize, allocations[..], 1usize, .SystemV, block_offsets[..], fixups[..], &spill_output)
     if spill_output.count != 43usize || spill_output.bytes[0usize] != 85usize || spill_output.bytes[11usize] != 73usize || spill_output.bytes[42usize] != 195usize { ret Unsupported }
 
     let (branch_function, branch_function_error) = nir.begin_function(&builder, 0usize, "branch")
@@ -274,7 +329,7 @@ fn self_test() -> err {
     var branch_storage: [96]usize = zero
     var branch_output: emit_x64.Buffer = zero
     try emit_x64.init(&branch_output, branch_storage[..])
-    try function(&builder, 1usize, branch_allocations[..], 0usize, block_offsets[..], fixups[..], &branch_output)
+    try function(&builder, 1usize, branch_allocations[..], 0usize, .SystemV, block_offsets[..], fixups[..], &branch_output)
     if branch_output.count != 73usize || branch_output.bytes[20usize] != 72usize || branch_output.bytes[21usize] != 57usize || branch_output.bytes[22usize] != 200usize || branch_output.bytes[40usize] != 15usize || branch_output.bytes[41usize] != 133usize || branch_output.bytes[42usize] != 5usize || branch_output.bytes[47usize] != 11usize || branch_output.bytes[72usize] != 195usize { ret Unsupported }
     ret ok
 }
