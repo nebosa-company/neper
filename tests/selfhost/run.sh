@@ -429,6 +429,29 @@ ring_executable_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$ring_executable_path"
 ring_output=$("$ring_executable_path")
 [ "$ring_output" = 'data ring ok' ]
+deque_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/e/data/deque.e")
+expected_deque_surface='Deque
+Iter
+init
+len
+reserve
+push_front
+push_back
+pop_front
+pop_back
+get
+clear
+iter
+iter_next'
+[ "$deque_surface" = "$expected_deque_surface" ]
+deque_parsed=$($test_build/neper-self parse-file "$repo/lib/e/data/deque.e")
+[ "$deque_parsed" = 'parse file ok' ]
+deque_executable_path="$test_build/data-deque-selfhost"
+deque_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_deque/src/main.e" "$repo" x64 linux "$deque_executable_path")
+[ "$deque_executable_written" = 'executable written' ]
+chmod +x "$deque_executable_path"
+deque_output=$("$deque_executable_path")
+[ "$deque_output" = 'data deque ok' ]
 os_helper_path="$test_build/os-spawn-helper-selfhost"
 os_helper_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/os-spawn-helper.e" "$repo" x64 linux "$os_helper_path")
 [ "$os_helper_written" = 'executable written' ]

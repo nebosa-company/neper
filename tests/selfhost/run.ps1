@@ -316,6 +316,21 @@ $ringExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $ringExecutableWritten -ne 'executable written') { throw 'e.data.ring did not compile into a PE executable' }
 $ringOutput = & $ringExecutablePath
 if ($LASTEXITCODE -ne 0 -or $ringOutput -ne 'data ring ok') { throw 'e.data.ring FIFO, overwrite, iteration, or empty-capacity behavior failed' }
+$dequeSurface = Get-Content (Join-Path $repo 'lib\e\data\deque.e') |
+    Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
+    ForEach-Object {
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.deque contains an unreadable public declaration' }
+        $Matches[1]
+    }
+$expectedDequeSurface = @('Deque', 'Iter', 'init', 'len', 'reserve', 'push_front', 'push_back', 'pop_front', 'pop_back', 'get', 'clear', 'iter', 'iter_next')
+if (($dequeSurface -join "`n") -ne ($expectedDequeSurface -join "`n")) { throw 'e.data.deque public declarations differ from module-apis.md' }
+$dequeParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\deque.e')
+if ($LASTEXITCODE -ne 0 -or $dequeParsed -ne 'parse file ok') { throw 'e.data.deque failed CLI parsing' }
+$dequeExecutablePath = Join-Path $testBuild 'data-deque-selfhost.exe'
+$dequeExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_deque\src\main.e') $repo 'x64' 'windows' $dequeExecutablePath
+if ($LASTEXITCODE -ne 0 -or $dequeExecutableWritten -ne 'executable written') { throw 'e.data.deque did not compile into a PE executable' }
+$dequeOutput = & $dequeExecutablePath
+if ($LASTEXITCODE -ne 0 -or $dequeOutput -ne 'data deque ok') { throw 'e.data.deque growth, wraparound, iteration, or empty-capacity behavior failed' }
 $hostExecutablePath = Join-Path $testBuild 'host-memory-clock-selfhost.exe'
 $hostExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\host-memory-clock.e') $repo 'x64' 'windows' $hostExecutablePath
 if ($LASTEXITCODE -ne 0 -or $hostExecutableWritten -ne 'executable written') { throw 'Windows args, memory, or clock intrinsics did not link' }
