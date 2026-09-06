@@ -325,6 +325,24 @@ advanced_executable_written=$($test_build/neper-self emit-executable "$repo/test
 [ "$advanced_executable_written" = 'executable written' ]
 chmod +x "$advanced_executable_path"
 "$advanced_executable_path"
+constant_executable_path="$test_build/constant-folding-selfhost"
+constant_executable_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/constant-folding.e" "$repo" x64 linux "$constant_executable_path")
+[ "$constant_executable_written" = 'executable written' ]
+chmod +x "$constant_executable_path"
+constant_output=$("$constant_executable_path")
+[ "$constant_output" = 'constant folding ok' ]
+generic_neper0_path="$test_build/generic-neper0-selfhost"
+generic_neper0_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/generic-function.e" "$repo" x64 linux "$generic_neper0_path")
+[ "$generic_neper0_written" = 'executable written' ]
+chmod +x "$generic_neper0_path"
+generic_neper0_output=$("$generic_neper0_path")
+[ "$generic_neper0_output" = 'generic function ok' ]
+switch_executable_path="$test_build/enum-union-switch-selfhost"
+switch_executable_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/enum-union-switch.e" "$repo" x64 linux "$switch_executable_path")
+[ "$switch_executable_written" = 'executable written' ]
+chmod +x "$switch_executable_path"
+switch_output=$("$switch_executable_path")
+[ "$switch_output" = 'enum union switch ok' ]
 own_compiler_path="$test_build/neper-own"
 own_compiler_written=$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$own_compiler_path")
 [ "$own_compiler_written" = 'executable written' ]
@@ -456,6 +474,8 @@ alias_checked=$($test_build/neper-self check-file "$check_root/alias_valid/src/m
 [ "$alias_checked" = 'module check ok' ]
 constant_checked=$($test_build/neper-self check-file "$check_root/constant_valid/src/main.e" "$repo" x64 linux)
 [ "$constant_checked" = 'module check ok' ]
+constant_generated=$($test_build/neper-self codegen-file "$check_root/constant_valid/src/main.e" "$repo" x64 linux)
+[ "$constant_generated" = 'module codegen ok' ]
 constant_alias_checked=$($test_build/neper-self check-file "$check_root/constant_alias_array_valid/src/main.e" "$repo" x64 linux)
 [ "$constant_alias_checked" = 'module check ok' ]
 constant_operators_checked=$($test_build/neper-self check-file "$check_root/constant_operators_valid/src/main.e" "$repo" x64 linux)

@@ -1222,7 +1222,27 @@ fn print_lower_diagnostic(g: *graph.Graph, checker: *check.Checker, lower_error:
         if lower_error == nir.Capacity {
             try write_all(failure, "lowering failed: NIR capacity exhausted")
         } else {
-            try write_all(failure, "lowering failed")
+            if lower_error == nir.InvalidControlFlow {
+                try write_all(failure, "lowering failed: invalid NIR control flow")
+            } else {
+                if lower_error == check.InvalidSwitch {
+                    try write_all(failure, "lowering failed: invalid switch")
+                } else {
+                    if lower_error == check.MissingReturn {
+                        try write_all(failure, "lowering failed: missing return")
+                    } else {
+                        if lower_error == check.InvalidType {
+                            try write_all(failure, "lowering failed: invalid type")
+                        } else {
+                            if lower_error == nir.InvalidValue {
+                                try write_all(failure, "lowering failed: invalid NIR value")
+                            } else {
+                                try write_all(failure, "lowering failed")
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     ret write_all(failure, "\n")

@@ -246,6 +246,21 @@ $advancedExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $advancedExecutableWritten -ne 'executable written') { throw 'advanced self-host PE executable emission failed' }
 & $advancedExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'multiple returns, caller slots, strings, stack arguments, slices, or for loops failed in the self-hosted PE executable' }
+$constantExecutablePath = Join-Path $testBuild 'constant-folding-selfhost.exe'
+$constantExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests\neper0\constant-folding.e') $repo 'x64' 'windows' $constantExecutablePath
+if ($LASTEXITCODE -ne 0 -or $constantExecutableWritten -ne 'executable written') { throw 'evaluated constants did not lower into a PE executable' }
+$constantOutput = & $constantExecutablePath
+if ($LASTEXITCODE -ne 0 -or $constantOutput -ne 'constant folding ok') { throw 'local evaluated constants failed in the self-hosted PE executable' }
+$genericNeper0Path = Join-Path $testBuild 'generic-neper0-selfhost.exe'
+$genericNeper0Written = & $compiler emit-executable (Join-Path $repo 'tests\neper0\generic-function.e') $repo 'x64' 'windows' $genericNeper0Path
+if ($LASTEXITCODE -ne 0 -or $genericNeper0Written -ne 'executable written') { throw 'value-comptime generic expressions did not lower into a PE executable' }
+$genericNeper0Output = & $genericNeper0Path
+if ($LASTEXITCODE -ne 0 -or $genericNeper0Output -ne 'generic function ok') { throw 'value-comptime generic expressions failed in the self-hosted PE executable' }
+$switchExecutablePath = Join-Path $testBuild 'enum-union-switch-selfhost.exe'
+$switchExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests\neper0\enum-union-switch.e') $repo 'x64' 'windows' $switchExecutablePath
+if ($LASTEXITCODE -ne 0 -or $switchExecutableWritten -ne 'executable written') { throw 'enum, union, tagged-union, or switch lowering failed' }
+$switchOutput = & $switchExecutablePath
+if ($LASTEXITCODE -ne 0 -or $switchOutput -ne 'enum union switch ok') { throw 'enum, union, tagged-union, or switch execution failed' }
 $ownCompilerPath = Join-Path $testBuild 'neper-own.exe'
 & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $ownCompilerPath | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownCompilerPath)) { throw 'compiler-owned PE linker did not emit the compiler' }
@@ -366,6 +381,8 @@ $aliasChecked = & $compiler check-file (Join-Path $checkRoot 'alias_valid\src\ma
 if ($LASTEXITCODE -ne 0 -or $aliasChecked -ne 'module check ok') { throw 'type aliases did not canonicalize' }
 $constantChecked = & $compiler check-file (Join-Path $checkRoot 'constant_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $constantChecked -ne 'module check ok') { throw 'integer constants did not evaluate' }
+$constantGenerated = & $compiler codegen-file (Join-Path $checkRoot 'constant_valid\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $constantGenerated -ne 'module codegen ok') { throw 'local and qualified evaluated constants did not lower' }
 $constantAliasChecked = & $compiler check-file (Join-Path $checkRoot 'constant_alias_array_valid\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $constantAliasChecked -ne 'module check ok') { throw 'constant-backed array aliases did not resolve' }
 $constantOperatorsChecked = & $compiler check-file (Join-Path $checkRoot 'constant_operators_valid\src\main.e') $repo 'x64' 'windows'

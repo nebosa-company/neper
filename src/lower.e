@@ -171,6 +171,15 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
     ret (result, ok)
 }
 
+fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
+    if constant_index >= c.constant_count || c.constants[constant_index].state != 2u8 || ty.kind != .Integer { ret (0usize, check.InvalidConstant) }
+    let width = check.integer_width(ty)
+    if width == 0usize { ret (0usize, check.InvalidType) }
+    let immediate = check.integer_bits(c.constants[constant_index].value, width)
+    let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, ty, true, immediate, token)
+    ret (result, emit_error)
+}
+
 fn register_return_type(c: *check.Checker, ty: check.Type) -> bool {
     if ty.kind == .Bool || ty.kind == .Err || ty.kind == .Integer || ty.kind == .Pointer { ret true }
     if ty.kind == .Named || ty.kind == .Tag {
@@ -663,6 +672,21 @@ fn lower_member(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             let member = c.aggregate_fields[field_index]
             if check.same(member.name, member_name) {
                 if member.enum_negative { ret (0usize, result_type, check.Unsupported) }
+                if aggregate.kind == .TaggedUnion && result_type.kind == .Named {
+                    let (info, info_error) = layout.type_info(c, result_type)
+                    if info_error != ok { ret (0usize, result_type, info_error) }
+                    var slots = (info.size + 7usize) / 8usize
+                    if slots == 0usize { slots = 1usize }
+                    let token = c.tokens[node.token_start]
+                    let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, slots, token)
+                    if stack_error != ok { ret (0usize, result_type, stack_error) }
+                    let (zero_instruction, ignored, zero_error) = nir.emit(builder, .Zero, result_type, false, info.size, token)
+                    if zero_error != ok { ret (0usize, result_type, zero_error) }
+                    let zero_operand_error = nir.add_operand(builder, zero_instruction, stack)
+                    if zero_operand_error != ok { ret (0usize, result_type, zero_operand_error) }
+                    let tag_error = store_tag(c, aggregate, field_index, stack, token, builder)
+                    ret (stack, result_type, tag_error)
+                }
                 let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, member.enum_value, c.tokens[node.token_start])
                 ret (result, result_type, emit_error)
             }
@@ -725,6 +749,23 @@ fn lower_unary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     ret (result, result_type, ok)
 }
 
+fn store_tag(c: *check.Checker, aggregate: check.Aggregate, field_index: usize, destination: usize, token: lex.Token, builder: *nir.Builder) -> err {
+    if field_index >= c.aggregate_field_count { ret check.InvalidType }
+    let field = c.aggregate_fields[field_index]
+    if field.enum_negative { ret check.Unsupported }
+    let (tag_info, tag_info_error) = layout.type_info(c, aggregate.backing_type)
+    if tag_info_error != ok { ret tag_info_error }
+    let (constant_instruction, tag_value, constant_error) = nir.emit(builder, .ConstInteger, aggregate.backing_type, true, field.enum_value, token)
+    if constant_error != ok { ret constant_error }
+    let (address_instruction, tag_address, address_error) = nir.emit(builder, .FieldAddress, aggregate.backing_type, true, 0usize, token)
+    if address_error != ok { ret address_error }
+    try nir.add_operand(builder, address_instruction, destination)
+    let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, aggregate.backing_type, false, tag_info.size, token)
+    if store_error != ok { ret store_error }
+    try nir.add_operand(builder, store_instruction, tag_address)
+    ret nir.add_operand(builder, store_instruction, tag_value)
+}
+
 fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
     let node = tree.nodes[node_index]
     let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
@@ -735,6 +776,19 @@ fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree
     if slots == 0usize { slots = 1usize }
     let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, slots, c.tokens[node.token_start])
     if stack_error != ok { ret (0usize, result_type, stack_error) }
+    let (aggregate_index, has_aggregate) = layout.aggregate_index(c, result_type)
+    var tagged = false
+    var aggregate: check.Aggregate = zero
+    if has_aggregate {
+        aggregate = c.aggregates[aggregate_index]
+        tagged = aggregate.kind == .TaggedUnion
+    }
+    if tagged {
+        let (zero_instruction, ignored, zero_error) = nir.emit(builder, .Zero, result_type, false, info.size, c.tokens[node.token_start])
+        if zero_error != ok { ret (0usize, result_type, zero_error) }
+        let zero_operand_error = nir.add_operand(builder, zero_instruction, stack)
+        if zero_operand_error != ok { ret (0usize, result_type, zero_operand_error) }
+    }
     var array_element: check.Type = zero
     var array_info: layout.Info = zero
     if result_type.kind == .Array {
@@ -764,6 +818,12 @@ fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree
                     if field_error != ok { ret (0usize, result_type, field_error) }
                     item_type = field.ty
                     item_offset = field.offset
+                    if tagged {
+                        let (field_index, found_field) = check.aggregate_field_for_name(c, aggregate, name)
+                        if !found_field { ret (0usize, result_type, check.InvalidType) }
+                        let tag_error = store_tag(c, aggregate, field_index, stack, c.tokens[item.token_start], builder)
+                        if tag_error != ok { ret (0usize, result_type, tag_error) }
+                    }
                 }
                 let (expression_index, has_expression) = check.first_node_child(tree, item)
                 if !has_expression { ret (0usize, result_type, check.Unsupported) }
@@ -827,6 +887,22 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         let name = g.modules[module_index].text[token.start..token.end]
         let (binding, found) = find_binding(bindings, binding_count, name)
         if !found {
+            let (parameter_index, has_parameter) = check.active_comptime_parameter(c, name)
+            if has_parameter {
+                let (argument, has_argument) = check.active_argument(c, parameter_index)
+                if !has_argument || argument.kind != .Integer || argument.symbolic { ret (0usize, zero, check.InvalidConstant) }
+                let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+                if type_error != ok { ret (0usize, result_type, type_error) }
+                let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, argument.value, token)
+                ret (result, result_type, emit_error)
+            }
+            let (constant_index, has_constant) = check.find_constant(c, module_index, name)
+            if has_constant {
+                let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+                if type_error != ok { ret (0usize, result_type, type_error) }
+                let (constant, constant_error) = lower_constant(c, constant_index, result_type, token, builder)
+                ret (constant, result_type, constant_error)
+            }
             let (symbol_index, has_symbol) = resolve.find(c.resolver, module_index, name, .Value)
             let (intrinsic_function, has_intrinsic_function) = check.find_function(c, module_index, name)
             if has_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
@@ -857,6 +933,13 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if node.kind == .FieldExpr {
         let (target_module, qualified_name, qualified) = check.qualified_member(c, g, tree, module_index, node)
         if qualified {
+            let (constant_index, has_constant) = check.find_constant(c, target_module, qualified_name)
+            if has_constant {
+                let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+                if type_error != ok { ret (0usize, result_type, type_error) }
+                let (constant, constant_error) = lower_constant(c, constant_index, result_type, c.tokens[node.token_start], builder)
+                ret (constant, result_type, constant_error)
+            }
             let (symbol_index, has_symbol) = resolve.find(c.resolver, target_module, qualified_name, .Value)
             let (intrinsic_function, has_intrinsic_function) = check.find_function(c, target_module, qualified_name)
             if has_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
@@ -1716,6 +1799,215 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     ret ok
 }
 
+fn add_control_exit(control: *LoopControl, branch: usize) -> err {
+    if control.break_count == control.breaks.len { ret check.Capacity }
+    control.breaks[control.break_count] = branch
+    control.break_count += 1usize
+    ret ok
+}
+
+fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, arm: syntax.Node, subject: usize, subject_type: check.Type, aggregate_index: usize, has_aggregate: bool, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
+    let local_checkpoint = c.local_count
+    let binding_checkpoint = *binding_count
+    let (capture, has_capture) = check.switch_capture_name(c, g.modules[module_index].text, arm)
+    if has_capture {
+        if !has_aggregate || c.aggregates[aggregate_index].kind != .TaggedUnion { ret check.InvalidSwitch }
+        var field_index = 0usize
+        var found_field = false
+        let arm_end = arm.first_child + arm.child_count
+        var case_at = arm.first_child
+        while case_at < arm_end {
+            if tree.children[case_at].node {
+                let case_index = tree.children[case_at].index
+                if !check.check_statement_kind(tree.nodes[case_index].kind) {
+                    let (key, candidate, has_candidate, key_error) = check.switch_case_key(c, g, tree, module_index, case_index, subject_type, aggregate_index, true)
+                    if key_error != ok { ret key_error }
+                    field_index = candidate
+                    found_field = has_candidate
+                    break
+                }
+            }
+            case_at += 1usize
+        }
+        if !found_field || field_index >= c.aggregate_field_count { ret check.InvalidSwitch }
+        let field = c.aggregate_fields[field_index]
+        let (payload, payload_error) = layout.field(c, subject_type, field.name)
+        if payload_error != ok { ret payload_error }
+        let token = c.tokens[arm.token_start]
+        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, field.ty, true, payload.offset, token)
+        if address_error != ok { ret address_error }
+        try nir.add_operand(builder, address_instruction, subject)
+        var value = address
+        var address_value = aggregate_value(c, field.ty)
+        if !address_value {
+            let (info, info_error) = layout.type_info(c, field.ty)
+            if info_error != ok { ret info_error }
+            let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, field.ty, true, info.size, token)
+            if load_error != ok { ret load_error }
+            try nir.add_operand(builder, load_instruction, address)
+            value = loaded
+        }
+        var capture_token = token
+        var token_at = arm.token_start
+        while token_at < arm.token_end {
+            if c.tokens[token_at].kind == .Identifier && check.same(g.modules[module_index].text[c.tokens[token_at].start..c.tokens[token_at].end], capture) { capture_token = c.tokens[token_at] }
+            token_at += 1usize
+        }
+        try bind_value(c, g, module_index, capture_token, field.ty, value, address_value, false, builder, bindings, binding_count)
+    }
+    let end = arm.first_child + arm.child_count
+    var at = arm.first_child
+    while at < end {
+        if builder.blocks[builder.current_block].terminated { break }
+        if tree.children[at].node {
+            let statement = tree.nodes[tree.children[at].index]
+            if check.check_statement_kind(statement.kind) { try lower_statement(c, g, tree, module_index, function, statement, builder, bindings, binding_count, control) }
+        }
+        at += 1usize
+    }
+    c.local_count = local_checkpoint
+    *binding_count = binding_checkpoint
+    ret ok
+}
+
+fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, outer_control: *LoopControl) -> err {
+    var subject_index = 0usize
+    var has_subject = false
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if tree.nodes[child_index].kind != .SwitchArm {
+                subject_index = child_index
+                has_subject = true
+                break
+            }
+        }
+        at += 1usize
+    }
+    if !has_subject { ret parse.InvalidSyntax }
+    let (subject_type, subject_type_error) = check.check_expr(c, g, tree, module_index, subject_index, check.invalid_type())
+    if subject_type_error != ok { ret subject_type_error }
+    let (subject, lowered_subject_type, subject_error) = lower_expression(c, g, tree, module_index, subject_index, subject_type, builder, bindings, *binding_count)
+    if subject_error != ok { ret subject_error }
+    let (aggregate_index, has_aggregate) = layout.aggregate_index(c, subject_type)
+    var compared = subject
+    var compare_type = subject_type
+    if has_aggregate && c.aggregates[aggregate_index].kind == .TaggedUnion {
+        let (tag, tag_error) = layout.field(c, subject_type, "tag")
+        if tag_error != ok { ret tag_error }
+        let token = c.tokens[node.token_start]
+        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, tag.ty, true, tag.offset, token)
+        if address_error != ok { ret address_error }
+        try nir.add_operand(builder, address_instruction, subject)
+        let (tag_info, tag_info_error) = layout.type_info(c, tag.ty)
+        if tag_info_error != ok { ret tag_info_error }
+        let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, tag.ty, true, tag_info.size, token)
+        if load_error != ok { ret load_error }
+        try nir.add_operand(builder, load_instruction, address)
+        compared = loaded
+        compare_type = tag.ty
+    }
+    var break_storage: [256]usize = zero
+    var control = LoopControl { active: true, continue_target: outer_control.continue_target, breaks: break_storage[..], break_count: 0usize }
+    var default_arm: syntax.Node = zero
+    var has_default = false
+    at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let arm = tree.nodes[tree.children[at].index]
+            if arm.kind == .SwitchArm {
+                if c.tokens[arm.token_start].kind == .KwDefault {
+                    default_arm = arm
+                    has_default = true
+                } else {
+                    var match = 0usize
+                    var has_match = false
+                    let arm_end = arm.first_child + arm.child_count
+                    var case_at = arm.first_child
+                    while case_at < arm_end {
+                        if tree.children[case_at].node {
+                            let case_index = tree.children[case_at].index
+                            if !check.check_statement_kind(tree.nodes[case_index].kind) {
+                                var case_value = 0usize
+                                if has_aggregate && c.aggregates[aggregate_index].kind == .TaggedUnion {
+                                    let (key, field_index, has_field, key_error) = check.switch_case_key(c, g, tree, module_index, case_index, subject_type, aggregate_index, true)
+                                    if key_error != ok || !has_field || field_index >= c.aggregate_field_count { ret check.InvalidSwitch }
+                                    let field = c.aggregate_fields[field_index]
+                                    let (case_instruction, value, case_error) = nir.emit(builder, .ConstInteger, compare_type, true, field.enum_value, c.tokens[arm.token_start])
+                                    if case_error != ok { ret case_error }
+                                    case_value = value
+                                } else {
+                                    let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, case_index, subject_type, builder, bindings, *binding_count)
+                                    if value_error != ok { ret value_error }
+                                    case_value = value
+                                }
+                                let boolean = check.make_type(.Bool, "bool", module_index)
+                                let (equal_instruction, equal, equal_error) = nir.emit(builder, .Equal, boolean, true, 0usize, c.tokens[arm.token_start])
+                                if equal_error != ok { ret equal_error }
+                                try nir.add_operand(builder, equal_instruction, compared)
+                                try nir.add_operand(builder, equal_instruction, case_value)
+                                if has_match {
+                                    let (or_instruction, combined, or_error) = nir.emit(builder, .BitOr, boolean, true, 0usize, c.tokens[arm.token_start])
+                                    if or_error != ok { ret or_error }
+                                    try nir.add_operand(builder, or_instruction, match)
+                                    try nir.add_operand(builder, or_instruction, equal)
+                                    match = combined
+                                } else {
+                                    match = equal
+                                    has_match = true
+                                }
+                            }
+                        }
+                        case_at += 1usize
+                    }
+                    if !has_match { ret parse.InvalidSyntax }
+                    let (decision, ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, c.tokens[arm.token_start])
+                    if decision_error != ok { ret decision_error }
+                    try nir.add_operand(builder, decision, match)
+                    let body_block = builder.block_count
+                    let (body_index, body_error) = nir.begin_block(builder)
+                    if body_error != ok || body_index != body_block { ret nir.InvalidControlFlow }
+                    try lower_switch_arm(c, g, tree, module_index, function, arm, subject, subject_type, aggregate_index, has_aggregate, builder, bindings, binding_count, &control)
+                    if !builder.blocks[builder.current_block].terminated {
+                        let (exit_branch, exit_error) = emit_branch(builder, c.tokens[arm.token_start])
+                        if exit_error != ok { ret exit_error }
+                        try add_control_exit(&control, exit_branch)
+                    }
+                    let next_block = builder.block_count
+                    let (next_index, next_error) = nir.begin_block(builder)
+                    if next_error != ok || next_index != next_block { ret nir.InvalidControlFlow }
+                    try nir.set_branch_targets(builder, decision, body_block, next_block)
+                }
+            }
+        }
+        at += 1usize
+    }
+    if has_default {
+        try lower_switch_arm(c, g, tree, module_index, function, default_arm, subject, subject_type, aggregate_index, has_aggregate, builder, bindings, binding_count, &control)
+        if !builder.blocks[builder.current_block].terminated {
+            let (exit_branch, exit_error) = emit_branch(builder, c.tokens[node.token_start])
+            if exit_error != ok { ret exit_error }
+            try add_control_exit(&control, exit_branch)
+        }
+    } else {
+        let (instruction, ignored, unreachable_error) = nir.emit(builder, .Unreachable, zero, false, 0usize, c.tokens[node.token_start])
+        if unreachable_error != ok { ret unreachable_error }
+    }
+    if control.break_count != 0usize {
+        let exit_block = builder.block_count
+        let (exit_index, exit_error) = nir.begin_block(builder)
+        if exit_error != ok || exit_index != exit_block { ret nir.InvalidControlFlow }
+        var break_at = 0usize
+        while break_at < control.break_count {
+            try nir.set_branch_targets(builder, control.breaks[break_at], exit_block, 0usize)
+            break_at += 1usize
+        }
+    }
+    ret ok
+}
+
 fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
     c.failure_module = module_index
     c.failure_token = c.tokens[node.token_start]
@@ -1728,6 +2020,7 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count, control) }
     if node.kind == .WhileStmt { ret lower_while(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
     if node.kind == .ForStmt { ret lower_for(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
+    if node.kind == .SwitchStmt { ret lower_switch(c, g, tree, module_index, function, node, builder, bindings, binding_count, control) }
     if node.kind == .BreakStmt {
         if !control.active || control.break_count == control.breaks.len { ret check.Unsupported }
         let (branch, branch_error) = emit_branch(builder, c.tokens[node.token_start])
