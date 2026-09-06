@@ -278,6 +278,17 @@ $bodyEdge = & $compiler check-em-edge $rootModuleArtifactPath (Join-Path $bodyEd
 if ($LASTEXITCODE -ne 0 -or $bodyEdge -ne 'dependency current') { throw 'signature-only dependency was invalidated by a body edit' }
 $signatureEdge = & $compiler check-em-edge $rootModuleArtifactPath (Join-Path $signatureEditArtifacts 'dep.x64-windows.em') 2>&1
 if ($LASTEXITCODE -ne 1 -or ($signatureEdge -join "`n") -notmatch 'dependency stale') { throw 'signature dependency was not invalidated by a signature edit' }
+$valueBaseArtifacts = Join-Path $testBuild 'value-base'
+$valueEditArtifacts = Join-Path $testBuild 'value-edit'
+New-Item -ItemType Directory -Force -Path $valueBaseArtifacts, $valueEditArtifacts | Out-Null
+$valueBaseWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\em\value_base\src\main.e') $repo 'x64' 'windows' $valueBaseArtifacts
+if ($LASTEXITCODE -ne 0 -or $valueBaseWritten -ne 'compiled modules written') { throw 'constant-value base artifact emission failed' }
+$valueEditWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\em\value_edit\src\main.e') $repo 'x64' 'windows' $valueEditArtifacts
+if ($LASTEXITCODE -ne 0 -or $valueEditWritten -ne 'compiled modules written') { throw 'constant-value edit artifact emission failed' }
+$currentValueEdge = & $compiler check-em-edge (Join-Path $valueBaseArtifacts 'main.x64-windows.em') (Join-Path $valueBaseArtifacts 'dep.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $currentValueEdge -ne 'dependency current') { throw 'matching constant value dependency was rejected' }
+$staleValueEdge = & $compiler check-em-edge (Join-Path $valueBaseArtifacts 'main.x64-windows.em') (Join-Path $valueEditArtifacts 'dep.x64-windows.em') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($staleValueEdge -join "`n") -notmatch 'dependency stale') { throw 'constant value dependency was not invalidated by a value edit' }
 $scalarOpsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $scalarOpsLowered -ne 'module nir ok') { throw 'casts, unary operators, and call statements did not lower to canonical NIR' }
 $scalarOpsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'

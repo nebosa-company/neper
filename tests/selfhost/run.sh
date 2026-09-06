@@ -360,6 +360,20 @@ if signature_edge=$($test_build/neper-self check-em-edge "$test_build/main.x64-l
     exit 1
 fi
 case "$signature_edge" in *'dependency stale'*) ;; *) printf '%s\n' 'signature dependency returned the wrong stale result' >&2; exit 1 ;; esac
+value_base_artifacts="$test_build/value-base"
+value_edit_artifacts="$test_build/value-edit"
+mkdir -p "$value_base_artifacts" "$value_edit_artifacts"
+value_base_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/em/value_base/src/main.e" "$repo" x64 linux "$value_base_artifacts")
+[ "$value_base_written" = 'compiled modules written' ]
+value_edit_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/em/value_edit/src/main.e" "$repo" x64 linux "$value_edit_artifacts")
+[ "$value_edit_written" = 'compiled modules written' ]
+current_value_edge=$($test_build/neper-self check-em-edge "$value_base_artifacts/main.x64-linux.em" "$value_base_artifacts/dep.x64-linux.em")
+[ "$current_value_edge" = 'dependency current' ]
+if stale_value_edge=$($test_build/neper-self check-em-edge "$value_base_artifacts/main.x64-linux.em" "$value_edit_artifacts/dep.x64-linux.em" 2>&1); then
+    printf '%s\n' 'constant value edit left dependency current' >&2
+    exit 1
+fi
+case "$stale_value_edge" in *'dependency stale'*) ;; *) printf '%s\n' 'constant value dependency returned the wrong stale result' >&2; exit 1 ;; esac
 scalar_ops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
 [ "$scalar_ops_lowered" = 'module nir ok' ]
 scalar_ops_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)

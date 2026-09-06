@@ -689,6 +689,22 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
         }
         constant_at += 1usize
     }
+    constant_at = 0usize
+    while constant_at < c.constant_count {
+        let constant = c.constants[constant_at]
+        if constant.module_index != module_index {
+            let (used, used_error) = foreign_constant_used_by_module(c, module_index, constant_at)
+            if used_error != ok { ret used_error }
+            if used {
+                if constant.module_index >= g.count { ret InvalidArtifact }
+                let (target_module_name, target_module_name_error) = intern(table, g.modules[constant.module_index].name)
+                if target_module_name_error != ok { ret target_module_name_error }
+                let (target_constant_name, target_constant_name_error) = intern(table, constant.name)
+                if target_constant_name_error != ok { ret target_constant_name_error }
+            }
+        }
+        constant_at += 1usize
+    }
     var symbol_at = 0usize
     while symbol_at < c.resolver.count {
         let symbol = c.resolver.symbols[symbol_at]
@@ -1035,6 +1051,41 @@ fn reference_used_by_module(builder: *nir.Builder, module_index: usize, referenc
     ret false
 }
 
+fn constant_expression_references(c: *check.Checker, expression_index: usize, module_index: usize, name: str) -> (bool, err) {
+    if expression_index >= c.constant_expr_count { ret (false, InvalidArtifact) }
+    let expression = c.constant_exprs[expression_index]
+    if expression.kind == .Name { ret (expression.module_index == module_index && same(expression.name, name), ok) }
+    if expression.kind == .Unary {
+        let (references, reference_error) = constant_expression_references(c, expression.left, module_index, name)
+        ret (references, reference_error)
+    }
+    if expression.kind == .Binary {
+        let (left, left_error) = constant_expression_references(c, expression.left, module_index, name)
+        if left_error != ok || left { ret (left, left_error) }
+        if !expression.has_right { ret (false, InvalidArtifact) }
+        let (right, right_error) = constant_expression_references(c, expression.right, module_index, name)
+        ret (right, right_error)
+    }
+    ret (false, ok)
+}
+
+fn foreign_constant_used_by_module(c: *check.Checker, module_index: usize, target_constant: usize) -> (bool, err) {
+    if target_constant >= c.constant_count { ret (false, InvalidArtifact) }
+    let target_item = c.constants[target_constant]
+    if target_item.module_index == module_index { ret (false, ok) }
+    var at = 0usize
+    while at < c.constant_count {
+        let item = c.constants[at]
+        if item.module_index == module_index {
+            let (references, reference_error) = constant_expression_references(c, item.expression, target_item.module_index, target_item.name)
+            if reference_error != ok { ret (false, reference_error) }
+            if references { ret (true, ok) }
+        }
+        at += 1usize
+    }
+    ret (false, ok)
+}
+
 fn dependency_count(builder: *nir.Builder, module_index: usize) -> usize {
     var count = 0usize
     var at = 0usize
@@ -1045,8 +1096,22 @@ fn dependency_count(builder: *nir.Builder, module_index: usize) -> usize {
     ret count
 }
 
+fn value_dependency_count(c: *check.Checker, module_index: usize) -> (usize, err) {
+    var count = 0usize
+    var at = 0usize
+    while at < c.constant_count {
+        let (used, used_error) = foreign_constant_used_by_module(c, module_index, at)
+        if used_error != ok { ret (0usize, used_error) }
+        if used { count += 1usize }
+        at += 1usize
+    }
+    ret (count, ok)
+}
+
 fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
-    try binary.little_u32(output, dependency_count(builder, module_index))
+    let (value_count, value_count_error) = value_dependency_count(c, module_index)
+    if value_count_error != ok { ret value_count_error }
+    try binary.little_u32(output, dependency_count(builder, module_index) + value_count)
     var at = 0usize
     while at < builder.function_ref_count {
         let reference = builder.function_refs[at]
@@ -1061,6 +1126,27 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
             let (target_name, target_name_error) = string_index(table, reference.name)
             if target_name_error != ok { ret target_name_error }
             try binary.byte(output, dependency_signature_kind())
+            try binary.zeroes(output, 3usize)
+            try binary.little_u32(output, target_module)
+            try binary.little_u32(output, target_name)
+            try binary.little_u64(output, hash)
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < c.constant_count {
+        let (used, used_error) = foreign_constant_used_by_module(c, module_index, at)
+        if used_error != ok { ret used_error }
+        if used {
+            let constant = c.constants[at]
+            if constant.module_index >= g.count { ret InvalidArtifact }
+            let (hash, hash_error) = constant_body_hash(c, g, at, scratch)
+            if hash_error != ok { ret hash_error }
+            let (target_module, target_module_error) = string_index(table, g.modules[constant.module_index].name)
+            if target_module_error != ok { ret target_module_error }
+            let (target_name, target_name_error) = string_index(table, constant.name)
+            if target_name_error != ok { ret target_name_error }
+            try binary.byte(output, dependency_value_kind())
             try binary.zeroes(output, 3usize)
             try binary.little_u32(output, target_module)
             try binary.little_u32(output, target_name)
