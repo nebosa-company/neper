@@ -3,17 +3,21 @@ option casemap:none
 EXTERN main:PROC
 EXTERN __imp_CloseHandle:QWORD
 EXTERN __imp_CreateFileW:QWORD
+EXTERN __imp_CreateProcessW:QWORD
 EXTERN __imp_ExitProcess:QWORD
 EXTERN __imp_FindClose:QWORD
 EXTERN __imp_FindFirstFileW:QWORD
 EXTERN __imp_FindNextFileW:QWORD
 EXTERN __imp_GetCommandLineW:QWORD
 EXTERN __imp_GetLastError:QWORD
+EXTERN __imp_GetExitCodeProcess:QWORD
 EXTERN __imp_GetStdHandle:QWORD
 EXTERN __imp_GetSystemTimeAsFileTime:QWORD
 EXTERN __imp_MultiByteToWideChar:QWORD
 EXTERN __imp_QueryPerformanceCounter:QWORD
 EXTERN __imp_QueryPerformanceFrequency:QWORD
+EXTERN __imp_SetHandleInformation:QWORD
+EXTERN __imp_WaitForSingleObject:QWORD
 EXTERN __imp_ReadFile:QWORD
 EXTERN __imp_VirtualAlloc:QWORD
 EXTERN __imp_WideCharToMultiByte:QWORD
@@ -334,6 +338,102 @@ wide_done:
     pop r12
     ret
 np_utf8_to_wide ENDP
+
+np_quoted_size PROC
+    mov r8, [rcx]
+    mov r9, [rcx+8]
+    mov eax, 2
+    xor r10d, r10d
+    xor r11d, r11d
+quoted_size_loop:
+    cmp r10, r9
+    jae quoted_size_tail
+    movzx ecx, byte ptr [r8+r10]
+    cmp ecx, 5ch
+    jne quoted_size_not_slash
+    inc r11
+    inc rax
+    jc quoted_size_overflow
+    jmp quoted_size_next
+quoted_size_not_slash:
+    cmp ecx, 22h
+    jne quoted_size_plain
+    add rax, r11
+    jc quoted_size_overflow
+    add rax, 2
+    jc quoted_size_overflow
+    xor r11d, r11d
+    jmp quoted_size_next
+quoted_size_plain:
+    add rax, 1
+    jc quoted_size_overflow
+    xor r11d, r11d
+quoted_size_next:
+    inc r10
+    jmp quoted_size_loop
+quoted_size_tail:
+    add rax, r11
+    jc quoted_size_overflow
+    ret
+quoted_size_overflow:
+    xor eax, eax
+    ret
+np_quoted_size ENDP
+
+np_quote PROC
+    mov r8, [rdx]
+    mov r9, [rdx+8]
+    mov byte ptr [rcx], 22h
+    inc rcx
+    xor r10d, r10d
+    xor r11d, r11d
+quote_loop:
+    cmp r10, r9
+    jae quote_tail
+    mov al, [r8+r10]
+    cmp al, 5ch
+    jne quote_not_slash
+    mov [rcx], al
+    inc rcx
+    inc r11
+    jmp quote_next
+quote_not_slash:
+    cmp al, 22h
+    jne quote_plain
+    mov rdx, r11
+    inc rdx
+quote_escape_quote:
+    test rdx, rdx
+    jz quote_write_quote
+    mov byte ptr [rcx], 5ch
+    inc rcx
+    dec rdx
+    jmp quote_escape_quote
+quote_write_quote:
+    mov byte ptr [rcx], 22h
+    inc rcx
+    xor r11d, r11d
+    jmp quote_next
+quote_plain:
+    mov [rcx], al
+    inc rcx
+    xor r11d, r11d
+quote_next:
+    inc r10
+    jmp quote_loop
+quote_tail:
+    test r11, r11
+    jz quote_close
+quote_escape_tail:
+    mov byte ptr [rcx], 5ch
+    inc rcx
+    dec r11
+    jnz quote_escape_tail
+quote_close:
+    mov byte ptr [rcx], 22h
+    lea rax, [rcx+1]
+    ret
+np_quote ENDP
 
 PUBLIC neper_mem_alloc
 neper_mem_alloc PROC
@@ -774,9 +874,70 @@ neper_os_readdir ENDP
 
 PUBLIC neper_os_args
 neper_os_args PROC
-    mov qword ptr [rcx], r12
-    mov qword ptr [rcx+8], r15
-    mov dword ptr [rcx+16], 0
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 48
+    mov r13, rcx
+    mov r14, rdx
+    mov rbx, r12
+    mov rax, [r14+16]
+    mov [rsp+32], rax
+    mov qword ptr [r13], 0
+    mov qword ptr [r13+8], 0
+    mov dword ptr [r13+16], 0
+    mov rax, r15
+    shl rax, 4
+    jc args_oom
+    mov rdx, rax
+    mov rcx, r14
+    mov r8d, 8
+    call np_arena_alloc
+    test rax, rax
+    jz args_oom
+    mov [r13], rax
+    mov [r13+8], r15
+    mov r12, rax
+args_copy_loop:
+    test r15, r15
+    jz args_copied
+    mov rdx, [rbx+8]
+    mov rcx, r14
+    mov r8d, 1
+    call np_arena_alloc
+    test rax, rax
+    jz args_oom
+    mov [r12], rax
+    mov rcx, [rbx+8]
+    mov [r12+8], rcx
+    mov rdi, rax
+    mov rsi, [rbx]
+    rep movsb
+    add rbx, 16
+    add r12, 16
+    dec r15
+    jmp args_copy_loop
+args_copied:
+    jmp args_done
+args_oom:
+    mov rax, [rsp+32]
+    mov [r14+16], rax
+    mov qword ptr [r13], 0
+    mov qword ptr [r13+8], 0
+    mov dword ptr [r13+16], 06979AADCh
+args_done:
+    add rsp, 48
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
     ret
 neper_os_args ENDP
 
@@ -871,5 +1032,282 @@ clock_failed:
     add rsp, 56
     ret
 neper_os_clock ENDP
+
+PUBLIC neper_os_spawn
+neper_os_spawn PROC
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 272
+    mov r12, rcx
+    mov r13, rdx
+    mov rbx, r9
+    mov r14, [r8]
+    mov r15, [r8+8]
+    mov qword ptr [r12], 0
+    mov dword ptr [r12+8], 0
+    test r15, r15
+    je spawn_not_found
+    mov [rsp+208], r13
+    mov rax, [r13+16]
+    mov [rsp+216], rax
+
+    mov edi, 1
+    xor esi, esi
+spawn_size_arg:
+    cmp rsi, r15
+    jae spawn_allocate_command
+    mov rcx, rsi
+    shl rcx, 4
+    add rcx, r14
+    call np_quoted_size
+    test rax, rax
+    jz spawn_oom
+    test rsi, rsi
+    jz spawn_size_add
+    inc rax
+    jz spawn_oom
+spawn_size_add:
+    add rdi, rax
+    jc spawn_oom
+    inc rsi
+    jmp spawn_size_arg
+
+spawn_allocate_command:
+    mov rdx, rdi
+    mov rcx, r13
+    mov r8d, 1
+    call np_arena_alloc
+    test rax, rax
+    jz spawn_oom
+    mov [rsp+224], rax
+    mov rax, rdi
+    dec rax
+    mov [rsp+232], rax
+    mov rdi, [rsp+224]
+    xor esi, esi
+spawn_quote_arg:
+    cmp rsi, r15
+    jae spawn_command_done
+    test rsi, rsi
+    jz spawn_quote_value
+    mov byte ptr [rdi], 20h
+    inc rdi
+spawn_quote_value:
+    mov rdx, rsi
+    shl rdx, 4
+    add rdx, r14
+    mov rcx, rdi
+    call np_quote
+    mov rdi, rax
+    inc rsi
+    jmp spawn_quote_arg
+spawn_command_done:
+    mov byte ptr [rdi], 0
+    mov rax, [rsp+224]
+    mov [rsp+32], rax
+    mov rax, [rsp+232]
+    mov [rsp+40], rax
+    mov rcx, r13
+    lea rdx, [rsp+32]
+    xor r8d, r8d
+    call np_utf8_to_wide
+    test rax, rax
+    jz spawn_oom
+    mov [rsp+240], rax
+    xor eax, eax
+    lea rdi, [rsp+80]
+    mov ecx, 16
+    rep stosq
+    mov dword ptr [rsp+80], 104
+    mov dword ptr [rsp+140], 100h
+    mov rax, [rbx]
+    mov [rsp+160], rax
+    mov rax, [rbx+8]
+    mov [rsp+168], rax
+    mov rax, [rbx+16]
+    mov [rsp+176], rax
+
+    mov rcx, [rbx]
+    test rcx, rcx
+    jz spawn_set_stdout
+    mov edx, 1
+    mov r8d, 1
+    call qword ptr [__imp_SetHandleInformation]
+    test eax, eax
+    jz spawn_inherit_failed
+spawn_set_stdout:
+    mov rcx, [rbx+8]
+    test rcx, rcx
+    jz spawn_set_stderr
+    mov edx, 1
+    mov r8d, 1
+    call qword ptr [__imp_SetHandleInformation]
+    test eax, eax
+    jz spawn_inherit_failed
+spawn_set_stderr:
+    mov rcx, [rbx+16]
+    test rcx, rcx
+    jz spawn_set_extra_begin
+    mov edx, 1
+    mov r8d, 1
+    call qword ptr [__imp_SetHandleInformation]
+    test eax, eax
+    jz spawn_inherit_failed
+
+spawn_set_extra_begin:
+    mov r14, [rbx+24]
+    mov r15, [rbx+32]
+    xor esi, esi
+spawn_set_extra:
+    cmp rsi, r15
+    jae spawn_create
+    mov rcx, [r14+rsi*8]
+    mov edx, 1
+    mov r8d, 1
+    call qword ptr [__imp_SetHandleInformation]
+    test eax, eax
+    jz spawn_extra_inherit_failed
+    inc rsi
+    jmp spawn_set_extra
+
+spawn_create:
+    mov qword ptr [rsp+32], 1
+    mov qword ptr [rsp+40], 0
+    mov qword ptr [rsp+48], 0
+    mov qword ptr [rsp+56], 0
+    lea rax, [rsp+80]
+    mov [rsp+64], rax
+    lea rax, [rsp+184]
+    mov [rsp+72], rax
+    xor ecx, ecx
+    mov rdx, [rsp+240]
+    xor r8d, r8d
+    xor r9d, r9d
+    call qword ptr [__imp_CreateProcessW]
+    test eax, eax
+    jz spawn_create_failed
+    mov dword ptr [rsp+264], 0
+    jmp spawn_clear_extra
+spawn_create_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov [rsp+264], eax
+
+spawn_clear_extra:
+    test rsi, rsi
+    jz spawn_clear_stdio
+    dec rsi
+    mov rcx, [r14+rsi*8]
+    mov edx, 1
+    xor r8d, r8d
+    call qword ptr [__imp_SetHandleInformation]
+    jmp spawn_clear_extra
+
+spawn_clear_stdio:
+    mov rcx, [rbx]
+    test rcx, rcx
+    jz spawn_clear_stdout
+    mov edx, 1
+    xor r8d, r8d
+    call qword ptr [__imp_SetHandleInformation]
+spawn_clear_stdout:
+    mov rcx, [rbx+8]
+    test rcx, rcx
+    jz spawn_clear_stderr
+    mov edx, 1
+    xor r8d, r8d
+    call qword ptr [__imp_SetHandleInformation]
+spawn_clear_stderr:
+    mov rcx, [rbx+16]
+    test rcx, rcx
+    jz spawn_finish_create
+    mov edx, 1
+    xor r8d, r8d
+    call qword ptr [__imp_SetHandleInformation]
+spawn_finish_create:
+    cmp dword ptr [rsp+264], 0
+    jne spawn_load_error
+    mov rcx, [rsp+192]
+    call qword ptr [__imp_CloseHandle]
+    mov rax, [rsp+184]
+    mov [r12], rax
+    jmp spawn_restore
+spawn_extra_inherit_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov [rsp+264], eax
+    jmp spawn_clear_extra
+spawn_inherit_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov [rsp+264], eax
+    xor esi, esi
+    jmp spawn_clear_stdio
+spawn_load_error:
+    mov eax, [rsp+264]
+spawn_store_error:
+    mov [r12+8], eax
+    jmp spawn_restore
+spawn_not_found:
+    mov dword ptr [r12+8], 07683E2CDh
+    jmp spawn_done
+spawn_oom:
+    mov dword ptr [r12+8], 06979AADCh
+spawn_restore:
+    mov rcx, [rsp+208]
+    mov rax, [rsp+216]
+    mov [rcx+16], rax
+spawn_done:
+    add rsp, 272
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+neper_os_spawn ENDP
+
+PUBLIC neper_os_wait
+neper_os_wait PROC
+    push rbx
+    sub rsp, 48
+    mov rbx, [rcx]
+    mov rcx, rbx
+    mov edx, 0FFFFFFFFh
+    call qword ptr [__imp_WaitForSingleObject]
+    test eax, eax
+    jnz wait_failed
+    mov rcx, rbx
+    lea rdx, [rsp+32]
+    call qword ptr [__imp_GetExitCodeProcess]
+    test eax, eax
+    jz wait_failed
+    mov rcx, rbx
+    call qword ptr [__imp_CloseHandle]
+    mov eax, [rsp+32]
+    xor edx, edx
+    add rsp, 48
+    pop rbx
+    ret
+wait_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov edx, eax
+    mov eax, -1
+    add rsp, 48
+    pop rbx
+    ret
+neper_os_wait ENDP
 
 END

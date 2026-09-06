@@ -286,6 +286,16 @@ $ownAdvancedPath = Join-Path $testBuild 'advanced-own.exe'
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownAdvancedPath)) { throw 'compiler-owned PE compiler did not emit the advanced fixture' }
 & $ownAdvancedPath
 if ($LASTEXITCODE -ne 0) { throw 'compiler-owned PE compiler emitted a failing advanced fixture' }
+$ownOsHelperPath = Join-Path $testBuild 'os-spawn-helper-own.exe'
+& $ownCompilerPath emit-executable (Join-Path $repo 'tests\neper0\os-spawn-helper.e') $repo 'x64' 'windows' $ownOsHelperPath | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownOsHelperPath)) { throw 'compiler-owned PE compiler did not emit the OS spawn helper' }
+$ownOsPath = Join-Path $testBuild 'os-intrinsics-own.exe'
+& $ownCompilerPath emit-executable (Join-Path $repo 'tests\neper0\os-intrinsics.e') $repo 'x64' 'windows' $ownOsPath | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownOsPath)) { throw 'compiler-owned PE compiler did not emit the OS intrinsic fixture' }
+$ownOsFile = Join-Path $testBuild 'os-intrinsics-own.txt'
+$ownOsOutput = & $ownOsPath $ownOsFile $testBuild $ownOsHelperPath
+if ($LASTEXITCODE -ne 0 -or $ownOsOutput -ne 'intrinsic ok') { throw 'compiler-owned PE args, file, directory, memory, clock, process, or handle inheritance behavior failed' }
+if ([IO.File]::ReadAllText($ownOsFile) -ne 'neper os!') { throw 'compiler-owned PE file write or append behavior failed' }
 $stableCompilerPath = Join-Path $testBuild 'neper-own-stable.exe'
 & $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stableCompilerPath | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $stableCompilerPath)) { throw 'compiler-owned PE compiler did not emit its stable stage' }
