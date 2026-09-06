@@ -302,6 +302,13 @@ $enumNegativeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $enumNegativeWritten -ne 'executable written') { throw 'negative enum member executable emission failed' }
 & $enumNegativePath
 if ($LASTEXITCODE -ne 0) { throw 'a negative enum member compares, matches or orders wrongly' }
+# Spec section 9 rule 4 recurses into arrays, slices and `str` in index order, and
+# orders a matching prefix before the sequence that extends it.
+$sequenceCmpPath = Join-Path $testBuild 'sequence-cmp-selfhost.exe'
+$sequenceCmpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\sequence_cmp\src\main.e') $repo 'x64' 'windows' $sequenceCmpPath
+if ($LASTEXITCODE -ne 0 -or $sequenceCmpWritten -ne 'executable written') { throw 'sequence cmp executable emission failed' }
+& $sequenceCmpPath
+if ($LASTEXITCODE -ne 0) { throw 'the supplied cmp for an array, slice or str is wrong' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

@@ -351,6 +351,12 @@ enum_negative_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$enum_negative_written" = 'executable written' ]
 chmod +x "$test_build/enum-negative-selfhost"
 "$test_build/enum-negative-selfhost"
+# Spec section 9 rule 4 recurses into arrays, slices and `str` in index order, and
+# orders a matching prefix before the sequence that extends it.
+sequence_cmp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/sequence_cmp/src/main.e" "$repo" x64 linux "$test_build/sequence-cmp-selfhost")
+[ "$sequence_cmp_written" = 'executable written' ]
+chmod +x "$test_build/sequence-cmp-selfhost"
+"$test_build/sequence-cmp-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {

@@ -697,9 +697,9 @@ With ordering correct, `supplied_protocol` adds the enum shape to `cmp`, so
 covers a `u64`, a `u8` and an `i32` enum through both the operators and `T.cmp`;
 its `u64` assertions all fail under a signed comparison.
 
-Negative enum members, which this turned up, are section 7.13. Rule 4's remaining
-`cmp` shapes are floats and the recursive ones (slices, arrays, vectors, tagged
-unions); `hash`, `eq` and `format` are untouched.
+Negative enum members, which this turned up, are section 7.13; arrays, slices and
+`str` are section 7.16. Rule 4's remaining `cmp` shapes are floats, vectors and
+tagged unions; `hash`, `eq` and `format` are untouched.
 
 ### 7.13 Negative enum members
 
@@ -811,6 +811,50 @@ Still to do, and deliberately not done here: a cross-reference from `tooling.md`
 `post-m2-llm-hardening.md`, so the file stops being an orphan. Both were uncommitted
 work in another session's hands at the time (section 8), and this tree is shared
 rather than branched, so editing them would have raced that session.
+
+### 7.16 The supplied `cmp` for arrays, slices and `str`
+
+Spec section 9 rule 4 says arrays, slices and vectors recurse in index order.
+That is now supplied, for arrays, slices and `str`, with the shorter sequence
+ordering first where the common prefix matches -- the rule does not spell out
+unequal lengths, and lexicographic order is the only reading consistent with `eq`
+being over contents.
+
+`check.supplied_cmp_shape` replaces the flat list in `supplied_protocol` and
+recurses through the element type, so `[]i64`, `[]u8`, `str`, `[3]i32`,
+`[]Level` for an enum, `[2][3]i32` and `[2][]i64` all have one. A depth bound of 8
+guards against a pathological alias chain; no honest type reaches it.
+
+Lowering splits into four pieces where there was one inline emitter:
+
+- `emit_scalar_cmp` is the old body, minus the slot allocation and the final load.
+  The caller now owns the slot; every path stores, and the builder is left on a
+  fresh block. The enum coercion from section 7.12 moved in here, so it applies to
+  an element as well as a receiver.
+- `emit_sequence_cmp` emits the loop. `sequence_parts` gives the data pointer and
+  length -- an array is its own storage with a static length, a slice and a `str`
+  are the {pointer, length} pair, which is also exactly how one sits inside an
+  enclosing sequence, so nesting needs no special case. The loop runs while the
+  index is below *both* lengths (two comparisons and a `BitAnd` on bools, which
+  avoids a min branch), compares elements through `emit_cmp_into`, and carries the
+  first non-zero result out. Falling off the end means the prefix matched, and the
+  tail compares the two lengths through `emit_scalar_cmp` -- which for two arrays
+  of one type is the equal case and stores zero.
+- `element_operand` passes an element the way the rest of lowering does: an
+  aggregate by address, everything else loaded.
+- `emit_cmp_into` dispatches, and is what makes the recursion mutual.
+
+`fixtures/link/sequence_cmp` covers `[]i64`, `[]u8` (where 200 against 3 pins the
+unsigned element comparison), an enum element, empty and prefix slices, `[3]i32`,
+`str`, and the two nested shapes.
+
+Not covered. An element with a *declared* `fn <t>_cmp` -- `[]Point` where `Point`
+has `point_cmp` -- still reports `ProtocolMissing`, because the loop body would
+have to emit a real call rather than an inline comparison, which means building a
+`CallInfo` and going through `emit_call_results`. That is the natural next
+increment and it also unblocks tagged unions, whose payload arm needs the same
+machinery. Floats and vectors remain blocked on scalar floating point and on
+vectors existing at all.
 
 ## 8. Working-tree boundaries
 

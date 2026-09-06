@@ -327,20 +327,49 @@ fn emit_supplied_compare(builder: *nir.Builder, opcode: nir.Opcode, boolean: che
     ret (value, ok)
 }
 
+// The data pointer and length behind an array, slice or `str`. An array value is
+// already its storage and its length is static; a slice and a `str` are a
+// {pointer, length} pair, which is also how one sits inside an enclosing sequence.
+fn sequence_parts(c: *check.Checker, ty: check.Type, subject: usize, builder: *nir.Builder, token: lex.Token) -> (usize, usize, err) {
+    let usize_type = check.make_type(.Integer, "usize", ty.module_index)
+    if ty.kind == .Array {
+        let (length_instruction, length_value, length_error) = nir.emit(builder, .ConstInteger, usize_type, true, ty.array_length, token)
+        if length_error != ok { ret (0usize, 0usize, length_error) }
+        ret (subject, length_value, ok)
+    }
+    if ty.kind != .Slice && ty.kind != .String { ret (0usize, 0usize, check.Unsupported) }
+    let pointer_type = check.make_type(.Pointer, "", ty.module_index)
+    let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, token)
+    if data_address_error != ok { ret (0usize, 0usize, data_address_error) }
+    let data_address_operand_error = nir.add_operand(builder, data_address_instruction, subject)
+    if data_address_operand_error != ok { ret (0usize, 0usize, data_address_operand_error) }
+    let (data_load_instruction, data_value, data_load_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
+    if data_load_error != ok { ret (0usize, 0usize, data_load_error) }
+    let data_load_operand_error = nir.add_operand(builder, data_load_instruction, data_address)
+    if data_load_operand_error != ok { ret (0usize, 0usize, data_load_operand_error) }
+    let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, usize_type, true, 8usize, token)
+    if length_address_error != ok { ret (0usize, 0usize, length_address_error) }
+    let length_address_operand_error = nir.add_operand(builder, length_address_instruction, subject)
+    if length_address_operand_error != ok { ret (0usize, 0usize, length_address_operand_error) }
+    let (length_load_instruction, length_value, length_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if length_load_error != ok { ret (0usize, 0usize, length_load_error) }
+    let length_load_operand_error = nir.add_operand(builder, length_load_instruction, length_address)
+    if length_load_operand_error != ok { ret (0usize, 0usize, length_load_operand_error) }
+    ret (data_value, length_value, ok)
+}
+
 // Spec section 9 rule 4 supplies `cmp` for the single-scalar shapes. There is
 // nothing to call, so it is emitted inline. The language has no bool-to-integer
-// cast, so the three results come from branches into one slot.
-fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
-    if argument_count != 2usize { ret check.ArgumentCount }
-    let boolean = check.make_type(.Bool, "bool", call.protocol_type.module_index)
-    let result_type = check.make_type(.Integer, "i32", call.protocol_type.module_index)
-    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, result_type, true, 0usize, token)
-    if slot_error != ok { ret slot_error }
-    let (left, left_coerce_error) = coerce_ordering_operand(c, call.protocol_type, arguments[0usize], builder, token)
+// cast, so the three results come from branches into one slot. The caller owns the
+// slot and reads it; every path through here stores, and the builder is left on a
+// fresh block.
+fn emit_scalar_cmp(c: *check.Checker, ty: check.Type, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let boolean = check.make_type(.Bool, "bool", ty.module_index)
+    let (ordered_left, left_coerce_error) = coerce_ordering_operand(c, ty, left, builder, token)
     if left_coerce_error != ok { ret left_coerce_error }
-    let (right, right_coerce_error) = coerce_ordering_operand(c, call.protocol_type, arguments[1usize], builder, token)
+    let (ordered_right, right_coerce_error) = coerce_ordering_operand(c, ty, right, builder, token)
     if right_coerce_error != ok { ret right_coerce_error }
-    let (less, less_error) = emit_supplied_compare(builder, .Less, boolean, left, right, token)
+    let (less, less_error) = emit_supplied_compare(builder, .Less, boolean, ordered_left, ordered_right, token)
     if less_error != ok { ret less_error }
     let (less_decision, less_decision_ignored, less_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
     if less_decision_error != ok { ret less_decision_error }
@@ -356,7 +385,7 @@ fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize
     let rest_block = builder.block_count
     let (rest_index, rest_error) = nir.begin_block(builder)
     if rest_error != ok || rest_index != rest_block { ret nir.InvalidControlFlow }
-    let (greater, greater_error) = emit_supplied_compare(builder, .Greater, boolean, left, right, token)
+    let (greater, greater_error) = emit_supplied_compare(builder, .Greater, boolean, ordered_left, ordered_right, token)
     if greater_error != ok { ret greater_error }
     let (greater_decision, greater_decision_ignored, greater_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
     if greater_decision_error != ok { ret greater_decision_error }
@@ -386,8 +415,161 @@ fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize
     if below_target_error != ok { ret below_target_error }
     let above_target_error = nir.set_branch_targets(builder, above_exit, merge_block, 0usize)
     if above_target_error != ok { ret above_target_error }
-    let same_target_error = nir.set_branch_targets(builder, same_exit, merge_block, 0usize)
-    if same_target_error != ok { ret same_target_error }
+    ret nir.set_branch_targets(builder, same_exit, merge_block, 0usize)
+}
+
+// Rule 4 again: arrays, slices and `str` recurse in index order. The common prefix
+// decides where it differs; where it does not, the shorter sequence orders first,
+// which for two arrays of one type is the equal-length case and stores zero.
+fn emit_sequence_cmp(c: *check.Checker, ty: check.Type, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
+    if depth > 8usize { ret check.Unsupported }
+    let (element_type, element_type_error) = check.index_element_type(c, ty, ty.module_index)
+    if element_type_error != ok { ret element_type_error }
+    let (element_info, element_info_error) = layout.type_info(c, element_type)
+    if element_info_error != ok { ret element_info_error }
+    let usize_type = check.make_type(.Integer, "usize", ty.module_index)
+    let boolean = check.make_type(.Bool, "bool", ty.module_index)
+    let (left_data, left_length, left_parts_error) = sequence_parts(c, ty, left, builder, token)
+    if left_parts_error != ok { ret left_parts_error }
+    let (right_data, right_length, right_parts_error) = sequence_parts(c, ty, right, builder, token)
+    if right_parts_error != ok { ret right_parts_error }
+    let (element_slot_instruction, element_slot, element_slot_error) = nir.emit(builder, .Stack, result_type, true, 0usize, token)
+    if element_slot_error != ok { ret element_slot_error }
+    let (counter_slot_instruction, counter_slot, counter_slot_error) = nir.emit(builder, .Stack, usize_type, true, 0usize, token)
+    if counter_slot_error != ok { ret counter_slot_error }
+    let (start_instruction, start, start_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+    if start_error != ok { ret start_error }
+    let (start_store_instruction, start_store_ignored, start_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if start_store_error != ok { ret start_store_error }
+    try nir.add_operand(builder, start_store_instruction, counter_slot)
+    try nir.add_operand(builder, start_store_instruction, start)
+    let (entry_branch, entry_branch_error) = emit_branch(builder, token)
+    if entry_branch_error != ok { ret entry_branch_error }
+
+    let condition_block = builder.block_count
+    let (condition_index, condition_error) = nir.begin_block(builder)
+    if condition_error != ok || condition_index != condition_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, entry_branch, condition_block, 0usize)
+    let (condition_load_instruction, condition_counter, condition_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if condition_load_error != ok { ret condition_load_error }
+    try nir.add_operand(builder, condition_load_instruction, counter_slot)
+    let (has_left, has_left_error) = emit_supplied_compare(builder, .Less, boolean, condition_counter, left_length, token)
+    if has_left_error != ok { ret has_left_error }
+    let (has_right, has_right_error) = emit_supplied_compare(builder, .Less, boolean, condition_counter, right_length, token)
+    if has_right_error != ok { ret has_right_error }
+    let (both_instruction, has_next, both_error) = nir.emit(builder, .BitAnd, boolean, true, 0usize, token)
+    if both_error != ok { ret both_error }
+    try nir.add_operand(builder, both_instruction, has_left)
+    try nir.add_operand(builder, both_instruction, has_right)
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, has_next)
+
+    let increment_block = builder.block_count
+    let (increment_index, increment_error) = nir.begin_block(builder)
+    if increment_error != ok || increment_index != increment_block { ret nir.InvalidControlFlow }
+    let (increment_load_instruction, increment_counter, increment_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if increment_load_error != ok { ret increment_load_error }
+    try nir.add_operand(builder, increment_load_instruction, counter_slot)
+    let (one_instruction, one, one_error) = nir.emit(builder, .ConstInteger, usize_type, true, 1usize, token)
+    if one_error != ok { ret one_error }
+    let (add_instruction, incremented, add_error) = nir.emit(builder, .Add, usize_type, true, 0usize, token)
+    if add_error != ok { ret add_error }
+    try nir.add_operand(builder, add_instruction, increment_counter)
+    try nir.add_operand(builder, add_instruction, one)
+    let (increment_store_instruction, increment_store_ignored, increment_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if increment_store_error != ok { ret increment_store_error }
+    try nir.add_operand(builder, increment_store_instruction, counter_slot)
+    try nir.add_operand(builder, increment_store_instruction, incremented)
+    let (back_edge, back_edge_error) = emit_branch(builder, token)
+    if back_edge_error != ok { ret back_edge_error }
+    try nir.set_branch_targets(builder, back_edge, condition_block, 0usize)
+
+    let body_block = builder.block_count
+    let (body_index, body_error) = nir.begin_block(builder)
+    if body_error != ok || body_index != body_block { ret nir.InvalidControlFlow }
+    let (body_load_instruction, body_counter, body_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if body_load_error != ok { ret body_load_error }
+    try nir.add_operand(builder, body_load_instruction, counter_slot)
+    let (left_element, left_element_error) = element_operand(c, element_type, element_info.size, left_data, body_counter, left_length, builder, token)
+    if left_element_error != ok { ret left_element_error }
+    let (right_element, right_element_error) = element_operand(c, element_type, element_info.size, right_data, body_counter, right_length, builder, token)
+    if right_element_error != ok { ret right_element_error }
+    let element_error = emit_cmp_into(c, element_type, element_slot, result_type, left_element, right_element, builder, token, depth + 1usize)
+    if element_error != ok { ret element_error }
+    let (element_load_instruction, element_result, element_load_error) = nir.emit(builder, .Load, result_type, true, 0usize, token)
+    if element_load_error != ok { ret element_load_error }
+    try nir.add_operand(builder, element_load_instruction, element_slot)
+    let (element_zero_instruction, element_zero, element_zero_error) = nir.emit(builder, .ConstInteger, result_type, true, 0usize, token)
+    if element_zero_error != ok { ret element_zero_error }
+    let (differs, differs_error) = emit_supplied_compare(builder, .NotEqual, boolean, element_result, element_zero, token)
+    if differs_error != ok { ret differs_error }
+    let (element_decision, element_decision_ignored, element_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if element_decision_error != ok { ret element_decision_error }
+    try nir.add_operand(builder, element_decision, differs)
+
+    let carry_block = builder.block_count
+    let (carry_index, carry_error) = nir.begin_block(builder)
+    if carry_error != ok || carry_index != carry_block { ret nir.InvalidControlFlow }
+    let (carry_result_instruction, carry_result_ignored, carry_result_error) = nir.emit(builder, .Store, result_type, false, 0usize, token)
+    if carry_result_error != ok { ret carry_result_error }
+    try nir.add_operand(builder, carry_result_instruction, slot)
+    try nir.add_operand(builder, carry_result_instruction, element_result)
+    let (carry_exit, carry_exit_error) = emit_branch(builder, token)
+    if carry_exit_error != ok { ret carry_exit_error }
+
+    // The common prefix matched, so the shorter sequence orders first. Two arrays
+    // of one type reach this with equal lengths and store zero.
+    let tail_block = builder.block_count
+    let (tail_index, tail_error) = nir.begin_block(builder)
+    if tail_error != ok || tail_index != tail_block { ret nir.InvalidControlFlow }
+    let length_error = emit_scalar_cmp(c, usize_type, slot, result_type, left_length, right_length, builder, token)
+    if length_error != ok { ret length_error }
+    let (tail_exit, tail_exit_error) = emit_branch(builder, token)
+    if tail_exit_error != ok { ret tail_exit_error }
+
+    let done_block = builder.block_count
+    let (done_index, done_error) = nir.begin_block(builder)
+    if done_error != ok || done_index != done_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, decision, body_block, tail_block)
+    try nir.set_branch_targets(builder, element_decision, carry_block, increment_block)
+    try nir.set_branch_targets(builder, carry_exit, done_block, 0usize)
+    ret nir.set_branch_targets(builder, tail_exit, done_block, 0usize)
+}
+
+// An element reaches its comparison the way the rest of lowering passes one: an
+// aggregate by address, everything else loaded.
+fn element_operand(c: *check.Checker, element_type: check.Type, stride: usize, data: usize, index: usize, limit: usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (address_instruction, address, address_error) = nir.emit(builder, .IndexAddress, element_type, true, stride, token)
+    if address_error != ok { ret (0usize, address_error) }
+    let data_operand_error = nir.add_operand(builder, address_instruction, data)
+    if data_operand_error != ok { ret (0usize, data_operand_error) }
+    let index_operand_error = nir.add_operand(builder, address_instruction, index)
+    if index_operand_error != ok { ret (0usize, index_operand_error) }
+    let limit_operand_error = nir.add_operand(builder, address_instruction, limit)
+    if limit_operand_error != ok { ret (0usize, limit_operand_error) }
+    if aggregate_value(c, element_type) { ret (address, ok) }
+    let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, element_type, true, stride, token)
+    if load_error != ok { ret (0usize, load_error) }
+    let load_operand_error = nir.add_operand(builder, load_instruction, address)
+    if load_operand_error != ok { ret (0usize, load_operand_error) }
+    ret (loaded, ok)
+}
+
+fn emit_cmp_into(c: *check.Checker, ty: check.Type, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
+    if ty.kind == .Array || ty.kind == .Slice || ty.kind == .String {
+        ret emit_sequence_cmp(c, ty, slot, result_type, left, right, builder, token, depth)
+    }
+    ret emit_scalar_cmp(c, ty, slot, result_type, left, right, builder, token)
+}
+
+fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if argument_count != 2usize { ret check.ArgumentCount }
+    let result_type = check.make_type(.Integer, "i32", call.protocol_type.module_index)
+    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, result_type, true, 0usize, token)
+    if slot_error != ok { ret slot_error }
+    let cmp_error = emit_cmp_into(c, call.protocol_type, slot, result_type, arguments[0usize], arguments[1usize], builder, token, 0usize)
+    if cmp_error != ok { ret cmp_error }
     let (load_instruction, result, load_error) = nir.emit(builder, .Load, result_type, true, 0usize, token)
     if load_error != ok { ret load_error }
     let load_operand_error = nir.add_operand(builder, load_instruction, slot)

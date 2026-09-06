@@ -3943,11 +3943,27 @@ fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool
 // far. An enum needs its backing type threaded to the comparison for an unsigned
 // backing to order correctly, and floats, slices, arrays and unions need the
 // recursion of rule 4; those still report a missing protocol.
+// Spec section 9 rule 4 supplies `cmp` for the scalar shapes, and for arrays,
+// slices and vectors it recurses in index order. Rule 4 excludes pointers; floats
+// and tagged unions are shapes rule 4 covers that are not supplied yet. The depth
+// bound keeps a pathological alias chain from recursing without end; no honest
+// type reaches it.
+fn supplied_cmp_shape(c: *Checker, ty: Type, depth: usize) -> bool {
+    if depth > 8usize { ret false }
+    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Err { ret true }
+    let (enum_backing, is_enum) = enum_backing_type(c, ty)
+    if is_enum && enum_backing.kind == .Integer { ret true }
+    if ty.kind != .Array && ty.kind != .Slice && ty.kind != .String { ret false }
+    let (element, element_error) = index_element_type(c, ty, ty.module_index)
+    if element_error != ok { ret false }
+    let (canonical_element, canonical_error) = canonical_type(c, element)
+    if canonical_error != ok { ret false }
+    ret supplied_cmp_shape(c, canonical_element, depth + 1usize)
+}
+
 fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBuiltin {
     if !same(protocol, "cmp") { ret .None }
-    if canonical.kind == .Integer || canonical.kind == .Bool || canonical.kind == .Err { ret .Cmp }
-    let (enum_backing, is_enum) = enum_backing_type(c, canonical)
-    if is_enum && enum_backing.kind == .Integer { ret .Cmp }
+    if supplied_cmp_shape(c, canonical, 0usize) { ret .Cmp }
     ret .None
 }
 
