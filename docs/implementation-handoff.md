@@ -807,10 +807,10 @@ Sections 1-3, the MCP server itself, are the part with no counterpart elsewhere.
 is a client over `neper index --json`, `neper parse --json` and `neper check`, so it
 needs an owning milestone rather than a place in the specification.
 
-Still to do, and deliberately not done here: a cross-reference from `tooling.md` or
-`post-m2-llm-hardening.md`, so the file stops being an orphan. Both were uncommitted
-work in another session's hands at the time (section 8), and this tree is shared
-rather than branched, so editing them would have raced that session.
+`post-m2-llm-hardening.md` now names it, which is the right host: the file is a
+proposal for the M2.5 gate, and that document is the gate. `tooling.md`, the other
+candidate, was uncommitted work in another session's hands (section 8), and this tree
+is shared rather than branched, so editing it would have raced that session.
 
 ### 7.16 The supplied `cmp` for arrays, slices and `str`
 

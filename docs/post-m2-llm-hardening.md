@@ -14,6 +14,17 @@ here as H26–H29 — that close the gap between "readable by a human reviewer" 
 "operated on by a model end-to-end". H26–H29 are supplementary obligations under the
 same closure policy as H01–H25; they do not supersede any earlier item.
 
+A separate **proposal**, not adopted and not scheduled, sits in
+[`llm-mcp-server.md`](llm-mcp-server.md): a native MCP server over the compiler's
+JSONL streams, plus `neper patch`, `neper header` and an edit-loop benchmark suite.
+Its server is the part with no counterpart here and would need an owning milestone.
+Its other three parts touch adopted items and have to be settled against them before
+any of it is scheduled — `neper patch` as written conflicts with H29, which requires
+typed operations with preconditions rather than raw byte replacement; `neper header`
+overlaps R05's retrievable API catalogue; and its benchmark thresholds are numbers no
+adopted item stands behind, which R03's measurement basis and R07's evidence gate
+would have to supply. Nothing in it is normative.
+
 ## 1. Motivation, evidence and limits
 
 Jose Crespo's [Why AI Sucks at These Programming Languages](https://aiadvances.org/why-ai-sucks-at-these-programming-languages-f35c14ac4a8e)
