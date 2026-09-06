@@ -7,7 +7,7 @@ $testBuild = Join-Path $repo 'build\tests\selfhost'
 New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 
 $compiler = Join-Path $testBuild 'neper-self.exe'
-& $neper build (Join-Path $repo 'src\main.e') --output $compiler
+& $neper build (Join-Path $repo 'src\main.e') --arena 1g --output $compiler
 if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
 $lexer = & $compiler self-test
 if ($LASTEXITCODE -ne 0 -or $lexer -ne 'selfhost lexer ok') { throw 'self-hosted lexer behavior failed' }
@@ -246,6 +246,20 @@ $advancedExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $advancedExecutableWritten -ne 'executable written') { throw 'advanced self-host PE executable emission failed' }
 & $advancedExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'multiple returns, caller slots, strings, stack arguments, slices, or for loops failed in the self-hosted PE executable' }
+$ownCompilerPath = Join-Path $testBuild 'neper-own.exe'
+& $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $ownCompilerPath | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownCompilerPath)) { throw 'compiler-owned PE linker did not emit the compiler' }
+& $ownCompilerPath self-test | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'compiler-owned PE compiler self-test failed' }
+$ownAdvancedPath = Join-Path $testBuild 'advanced-own.exe'
+& $ownCompilerPath emit-executable (Join-Path $PSScriptRoot 'fixtures\link\advanced\src\main.e') $repo 'x64' 'windows' $ownAdvancedPath | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownAdvancedPath)) { throw 'compiler-owned PE compiler did not emit the advanced fixture' }
+& $ownAdvancedPath
+if ($LASTEXITCODE -ne 0) { throw 'compiler-owned PE compiler emitted a failing advanced fixture' }
+$stableCompilerPath = Join-Path $testBuild 'neper-own-stable.exe'
+& $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stableCompilerPath | Out-Null
+if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $stableCompilerPath)) { throw 'compiler-owned PE compiler did not emit its stable stage' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $ownCompilerPath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'compiler-owned PE stages are not byte-for-byte deterministic' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

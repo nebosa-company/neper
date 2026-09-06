@@ -291,11 +291,29 @@ fn function_prologue(buffer: *Buffer, stack_slots: usize) -> err {
     try byte(buffer, 85usize)
     try mov_register(buffer, 5usize, 4usize)
     let bytes = frame_size(stack_slots)
-    if bytes != 0usize {
+    var remaining = bytes
+    while remaining > 4096usize {
         try byte(buffer, 72usize)
         try byte(buffer, 129usize)
         try byte(buffer, 236usize)
-        try little_u32(buffer, bytes)
+        try little_u32(buffer, 4096usize)
+        try byte(buffer, 246usize)
+        try byte(buffer, 4usize)
+        try byte(buffer, 36usize)
+        try byte(buffer, 0usize)
+        remaining = remaining - 4096usize
+    }
+    if remaining != 0usize {
+        try byte(buffer, 72usize)
+        try byte(buffer, 129usize)
+        try byte(buffer, 236usize)
+        try little_u32(buffer, remaining)
+        if bytes >= 4096usize {
+            try byte(buffer, 246usize)
+            try byte(buffer, 4usize)
+            try byte(buffer, 36usize)
+            try byte(buffer, 0usize)
+        }
     }
     ret ok
 }
@@ -556,6 +574,11 @@ fn self_test() -> err {
     try function_epilogue(&frame)
     if frame.count != 30usize { ret InvalidRegister }
     if frame.bytes[0usize] != 85usize || frame.bytes[4usize] != 72usize || frame.bytes[11usize] != 76usize || frame.bytes[18usize] != 76usize || frame.bytes[29usize] != 195usize { ret InvalidRegister }
+    var probe_storage: [64]usize = zero
+    var probe: Buffer = zero
+    try init(&probe, probe_storage[..])
+    try function_prologue(&probe, 1024usize)
+    if probe.count != 26usize || probe.bytes[4usize] != 72usize || probe.bytes[11usize] != 246usize || probe.bytes[15usize] != 72usize || probe.bytes[22usize] != 246usize { ret InvalidRegister }
     var memory_storage: [80]usize = zero
     var memory: Buffer = zero
     try init(&memory, memory_storage[..])

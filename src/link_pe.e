@@ -1,9 +1,10 @@
-// Minimal deterministic x86-64 PE32+ executable linker for closed modules.
+// Deterministic x86-64 PE32+ executable linker for closed Neper programs.
 
 use check
 use codegen_x64
 use emit_x64
 use nir
+use runtime_pe_x64
 
 error InvalidExecutable
 
@@ -46,33 +47,82 @@ fn append_name(output: *emit_x64.Buffer, name: str, width: usize) -> err {
     ret ok
 }
 
+fn append_thunks(output: *emit_x64.Buffer, idata_address: usize) -> err {
+    try emit_x64.little_u64(output, idata_address + 294usize)
+    try emit_x64.little_u64(output, idata_address + 308usize)
+    try emit_x64.little_u64(output, idata_address + 322usize)
+    try emit_x64.little_u64(output, idata_address + 336usize)
+    try emit_x64.little_u64(output, idata_address + 348usize)
+    try emit_x64.little_u64(output, idata_address + 366usize)
+    try emit_x64.little_u64(output, idata_address + 382usize)
+    try emit_x64.little_u64(output, idata_address + 400usize)
+    try emit_x64.little_u64(output, idata_address + 416usize)
+    try emit_x64.little_u64(output, idata_address + 432usize)
+    try emit_x64.little_u64(output, idata_address + 454usize)
+    try emit_x64.little_u64(output, idata_address + 466usize)
+    try emit_x64.little_u64(output, idata_address + 482usize)
+    try emit_x64.little_u64(output, idata_address + 504usize)
+    ret emit_x64.little_u64(output, 0usize)
+}
+
+fn append_import_name(output: *emit_x64.Buffer, name: str) -> err {
+    try little_u16(output, 0usize)
+    try append_name(output, name, name.len)
+    try emit_x64.byte(output, 0usize)
+    if output.count % 2usize != 0usize { try emit_x64.byte(output, 0usize) }
+    ret ok
+}
+
+fn append_imports(output: *emit_x64.Buffer, raw_offset: usize, idata_address: usize) -> err {
+    let lookup_address = idata_address + 40usize
+    let iat_address = idata_address + 160usize
+    let dll_address = idata_address + 280usize
+    try emit_x64.little_u32(output, lookup_address)
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, 0usize)
+    try emit_x64.little_u32(output, dll_address)
+    try emit_x64.little_u32(output, iat_address)
+    try pad_to(output, raw_offset + 40usize)
+    try append_thunks(output, idata_address)
+    try append_thunks(output, idata_address)
+    try append_name(output, "KERNEL32.dll", 13usize)
+    try emit_x64.byte(output, 0usize)
+    try append_import_name(output, "CloseHandle")
+    try append_import_name(output, "CreateFileW")
+    try append_import_name(output, "ExitProcess")
+    try append_import_name(output, "FindClose")
+    try append_import_name(output, "FindFirstFileW")
+    try append_import_name(output, "FindNextFileW")
+    try append_import_name(output, "GetCommandLineW")
+    try append_import_name(output, "GetLastError")
+    try append_import_name(output, "GetStdHandle")
+    try append_import_name(output, "MultiByteToWideChar")
+    try append_import_name(output, "ReadFile")
+    try append_import_name(output, "VirtualAlloc")
+    try append_import_name(output, "WideCharToMultiByte")
+    ret append_import_name(output, "WriteFile")
+}
+
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret InvalidExecutable }
-    var relocation_at = 0usize
-    while relocation_at < relocation_count {
-        if !relocations[relocation_at].resolved { ret InvalidExecutable }
-        relocation_at += 1usize
-    }
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
     let headers_size = 512usize
     let text_address = 4096usize
-    let startup_size = 19usize
-    let text_size = startup_size + machine.count
+    let text_size = runtime_pe_x64.size() + machine.count
     let (text_raw_size, text_raw_error) = align_up(text_size, 512usize)
     if text_raw_error != ok { ret text_raw_error }
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_address = text_address + text_virtual_size
-    let idata_size = 100usize
+    let idata_size = 516usize
     let (idata_raw_size, idata_raw_error) = align_up(idata_size, 512usize)
     if idata_raw_error != ok { ret idata_raw_error }
     let idata_raw_offset = headers_size + text_raw_size
-    let image_size = idata_address + 4096usize
-    let import_lookup_address = idata_address + 40usize
-    let import_address_address = idata_address + 56usize
-    let dll_name_address = idata_address + 72usize
-    let exit_process_name_address = idata_address + 86usize
+    let (idata_virtual_size, idata_virtual_error) = align_up(idata_size, 4096usize)
+    if idata_virtual_error != ok { ret idata_virtual_error }
+    let image_size = idata_address + idata_virtual_size
+    let import_address_address = idata_address + 160usize
 
     try emit_x64.byte(output, 77usize)
     try emit_x64.byte(output, 90usize)
@@ -90,7 +140,6 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 0usize)
     try little_u16(output, 240usize)
     try little_u16(output, 34usize)
-
     try little_u16(output, 523usize)
     try emit_x64.byte(output, 0usize)
     try emit_x64.byte(output, 0usize)
@@ -125,7 +174,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 40usize)
     try pad_to(output, 360usize)
     try emit_x64.little_u32(output, import_address_address)
-    try emit_x64.little_u32(output, 16usize)
+    try emit_x64.little_u32(output, 120usize)
     try pad_to(output, 392usize)
 
     try append_name(output, ".text", 8usize)
@@ -148,47 +197,34 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 0usize)
     try little_u16(output, 0usize)
     try little_u16(output, 0usize)
-    try emit_x64.little_u32(output, 3221225536usize + 64usize)
+    try emit_x64.little_u32(output, 3221225536usize)
     try pad_to(output, headers_size)
 
-    try emit_x64.byte(output, 72usize)
-    try emit_x64.byte(output, 131usize)
-    try emit_x64.byte(output, 236usize)
-    try emit_x64.byte(output, 40usize)
-    let (call_displacement, call_error) = emit_x64.call(output)
-    if call_error != ok { ret call_error }
-    try emit_x64.byte(output, 137usize)
-    try emit_x64.byte(output, 193usize)
-    try emit_x64.byte(output, 255usize)
-    try emit_x64.byte(output, 21usize)
-    let exit_displacement_at = output.count
-    let next_instruction_address = text_address + exit_displacement_at - headers_size + 4usize
-    try emit_x64.little_u32(output, import_address_address - next_instruction_address)
-    try emit_x64.byte(output, 15usize)
-    try emit_x64.byte(output, 11usize)
+    let runtime_file = output.count
+    try runtime_pe_x64.append(output)
+    let machine_file = output.count
     var machine_at = 0usize
     while machine_at < machine.count {
         try emit_x64.byte(output, machine.bytes[machine_at])
         machine_at += 1usize
     }
-    let main_offset = headers_size + startup_size + function_offsets[main_index]
-    try emit_x64.patch_relative32(output, call_displacement, main_offset)
+    let main_file = machine_file + function_offsets[main_index]
+    try runtime_pe_x64.patch(output, runtime_file, text_address, main_file, import_address_address)
+    var relocation_at = 0usize
+    while relocation_at < relocation_count {
+        if !relocations[relocation_at].resolved {
+            let reference_index = relocations[relocation_at].function_ref
+            if reference_index >= builder.function_ref_count { ret InvalidExecutable }
+            let (runtime_offset, found_runtime) = runtime_pe_x64.symbol_offset(builder.function_refs[reference_index].name)
+            if !found_runtime { ret InvalidExecutable }
+            try emit_x64.patch_relative32(output, machine_file + relocations[relocation_at].displacement_at, runtime_file + runtime_offset)
+            relocations[relocation_at].resolved = true
+        }
+        relocation_at += 1usize
+    }
     try pad_to(output, idata_raw_offset)
-
-    try emit_x64.little_u32(output, import_lookup_address)
-    try emit_x64.little_u32(output, 0usize)
-    try emit_x64.little_u32(output, 0usize)
-    try emit_x64.little_u32(output, dll_name_address)
-    try emit_x64.little_u32(output, import_address_address)
-    try pad_to(output, idata_raw_offset + 40usize)
-    try emit_x64.little_u64(output, exit_process_name_address)
-    try emit_x64.little_u64(output, 0usize)
-    try emit_x64.little_u64(output, exit_process_name_address)
-    try emit_x64.little_u64(output, 0usize)
-    try append_name(output, "KERNEL32.dll", 13usize)
-    try emit_x64.byte(output, 0usize)
-    try little_u16(output, 0usize)
-    try append_name(output, "ExitProcess", 12usize)
+    try append_imports(output, idata_raw_offset, idata_address)
+    if output.count != idata_raw_offset + idata_size { ret InvalidExecutable }
     ret pad_to(output, idata_raw_offset + idata_raw_size)
 }
 
@@ -211,17 +247,16 @@ fn self_test() -> err {
     try emit_x64.byte(&machine, 195usize)
     var offsets: [1]usize = zero
     var relocations: [1]codegen_x64.Relocation = zero
-    var executable_storage: [1600]usize = zero
+    var executable_storage: [4096]usize = zero
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
-    if executable.count != 1536usize { ret InvalidExecutable }
+    if executable.count != 4096usize { ret InvalidExecutable }
     if executable.bytes[0usize] != 77usize || executable.bytes[1usize] != 90usize || executable.bytes[60usize] != 128usize { ret InvalidExecutable }
     if executable.bytes[128usize] != 80usize || executable.bytes[129usize] != 69usize || executable.bytes[132usize] != 100usize || executable.bytes[133usize] != 134usize || executable.bytes[134usize] != 2usize { ret InvalidExecutable }
-    if executable.bytes[152usize] != 11usize || executable.bytes[153usize] != 2usize || executable.bytes[168usize] != 0usize || executable.bytes[169usize] != 16usize { ret InvalidExecutable }
-    if executable.bytes[272usize] != 0usize || executable.bytes[273usize] != 32usize || executable.bytes[360usize] != 56usize || executable.bytes[361usize] != 32usize { ret InvalidExecutable }
-    if executable.bytes[392usize] != 46usize || executable.bytes[393usize] != 116usize || executable.bytes[432usize] != 46usize || executable.bytes[433usize] != 105usize { ret InvalidExecutable }
-    if executable.bytes[512usize] != 72usize || executable.bytes[516usize] != 232usize || executable.bytes[521usize] != 137usize || executable.bytes[523usize] != 255usize || executable.bytes[531usize] != 195usize { ret InvalidExecutable }
-    if executable.bytes[1024usize] != 40usize || executable.bytes[1025usize] != 32usize || executable.bytes[1096usize] != 75usize || executable.bytes[1112usize] != 69usize { ret InvalidExecutable }
+    if executable.bytes[168usize] != 0usize || executable.bytes[169usize] != 16usize || executable.bytes[272usize] != 0usize || executable.bytes[273usize] != 32usize { ret InvalidExecutable }
+    if executable.bytes[360usize] != 160usize || executable.bytes[361usize] != 32usize || executable.bytes[392usize] != 46usize || executable.bytes[432usize] != 46usize { ret InvalidExecutable }
+    if executable.bytes[512usize] != 83usize || executable.bytes[548usize] != 208usize || executable.bytes[549usize] != 16usize || executable.bytes[2676usize] != 195usize { ret InvalidExecutable }
+    if executable.bytes[3072usize] != 40usize || executable.bytes[3073usize] != 32usize || executable.bytes[3352usize] != 75usize || executable.bytes[3368usize] != 67usize { ret InvalidExecutable }
     ret ok
 }

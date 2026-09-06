@@ -7,7 +7,7 @@ test_build="$repo/build-linux/tests/selfhost"
 "$repo/scripts/build-bootstrap.sh" >/dev/null
 mkdir -p "$test_build"
 
-$neper build "$repo/src/main.e" --output "$test_build/neper-self"
+$neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self"
 lexer=$($test_build/neper-self self-test)
 [ "$lexer" = 'selfhost lexer ok' ]
 scan=$($test_build/neper-self scan 'fn main() -> err { ret ok }')
