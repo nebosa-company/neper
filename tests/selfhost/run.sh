@@ -123,7 +123,7 @@ transitive_graph=$($test_build/neper-self graph-file "$graph_root/transitive/src
 [ "$transitive_graph" = 'module graph ok' ]
 reused_graph=$($test_build/neper-self graph-file "$graph_root/reuse/src/main.e" "$repo" x64 linux main common)
 [ "$reused_graph" = 'module graph ok' ]
-toolchain_graph=$($test_build/neper-self graph-file "$nested_root/src/main.e" "$repo" x64 linux main e.io e.mem util.math)
+toolchain_graph=$($test_build/neper-self graph-file "$nested_root/src/main.e" "$repo" x64 linux main e.io e.mem e.os util.math)
 [ "$toolchain_graph" = 'module graph ok' ]
 variant_graph=$($test_build/neper-self graph-file "$variant_root/src/root.e" "$repo" x64 linux root system)
 [ "$variant_graph" = 'module graph ok' ]
@@ -325,6 +325,21 @@ advanced_executable_written=$($test_build/neper-self emit-executable "$repo/test
 [ "$advanced_executable_written" = 'executable written' ]
 chmod +x "$advanced_executable_path"
 "$advanced_executable_path"
+own_compiler_path="$test_build/neper-own"
+own_compiler_written=$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$own_compiler_path")
+[ "$own_compiler_written" = 'executable written' ]
+chmod +x "$own_compiler_path"
+own_self_test=$("$own_compiler_path" self-test)
+[ "$own_self_test" = 'selfhost lexer ok' ]
+own_advanced_path="$test_build/advanced-own"
+own_advanced_written=$("$own_compiler_path" emit-executable "$repo/tests/selfhost/fixtures/link/advanced/src/main.e" "$repo" x64 linux "$own_advanced_path")
+[ "$own_advanced_written" = 'executable written' ]
+chmod +x "$own_advanced_path"
+"$own_advanced_path"
+stable_compiler_path="$test_build/neper-own-stable"
+stable_compiler_written=$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$stable_compiler_path")
+[ "$stable_compiler_written" = 'executable written' ]
+cmp "$own_compiler_path" "$stable_compiler_path"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
