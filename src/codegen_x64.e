@@ -209,6 +209,39 @@ fn max_call_arguments(builder: *nir.Builder, current: nir.Function) -> usize {
     ret maximum
 }
 
+fn needs_fixed_registers(builder: *nir.Builder, current: nir.Function) -> bool {
+    let end = current.first_instruction + current.instruction_count
+    var at = current.first_instruction
+    while at < end {
+        let opcode = builder.instructions[at].opcode
+        if opcode == .Divide || opcode == .Remainder { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn save_allocated_registers(output: *emit_x64.Buffer, base: usize, count: usize) -> err {
+    var at = 0usize
+    while at < count {
+        let (physical, physical_error) = hardware_register(at)
+        if physical_error != ok { ret physical_error }
+        try emit_x64.store_stack(output, base + at, physical)
+        at += 1usize
+    }
+    ret ok
+}
+
+fn restore_allocated_registers(output: *emit_x64.Buffer, base: usize, count: usize) -> err {
+    var at = 0usize
+    while at < count {
+        let (physical, physical_error) = hardware_register(at)
+        if physical_error != ok { ret physical_error }
+        try emit_x64.load_stack(output, physical, base + at)
+        at += 1usize
+    }
+    ret ok
+}
+
 fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
     let allocations = context.allocations
     let abi = context.abi
@@ -227,8 +260,10 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     let preserve_base = outgoing_base + outgoing
     var preserve_count = 0usize
     var shadow_count = 0usize
-    if outgoing != 0usize {
+    if outgoing != 0usize || needs_fixed_registers(builder, current) {
         preserve_count = 5usize
+    }
+    if outgoing != 0usize {
         if abi == .Windows { shadow_count = 4usize }
     }
     let frame_slots = preserve_base + preserve_count + shadow_count
@@ -285,6 +320,33 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             try emit_x64.mov_immediate(output, destination, instruction.immediate)
             try store_result(allocations, instruction.result, destination, output)
         } else {
+            if instruction.opcode == .Divide || instruction.opcode == .Remainder {
+                if instruction.operand_count != 2usize || instruction.ty.kind != .Integer { ret Unsupported }
+                let left_value = builder.operands[instruction.first_operand]
+                let right_value = builder.operands[instruction.first_operand + 1usize]
+                let (left_type, left_type_error) = value_type(builder, current, left_value)
+                if left_type_error != ok || left_type.kind != .Integer { ret Unsupported }
+                try save_allocated_registers(output, preserve_base, preserve_count)
+                let (left, left_error) = read_value(allocations, left_value, 10usize, output)
+                if left_error != ok { ret left_error }
+                let (right, right_error) = read_value(allocations, right_value, 11usize, output)
+                if right_error != ok { ret right_error }
+                if right != 11usize { try emit_x64.mov_register(output, 11usize, right) }
+                if left != 0usize { try emit_x64.mov_register(output, 0usize, left) }
+                let signed = signed_integer(left_type)
+                if signed { try emit_x64.extend_dividend_signed(output) } else { try emit_x64.extend_dividend_unsigned(output) }
+                try emit_x64.divide_register(output, 11usize, signed)
+                if instruction.opcode == .Divide {
+                    try emit_x64.mov_register(output, 10usize, 0usize)
+                } else {
+                    try emit_x64.mov_register(output, 10usize, 2usize)
+                }
+                try restore_allocated_registers(output, preserve_base, preserve_count)
+                let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
+                if destination_error != ok { ret destination_error }
+                try emit_x64.normalize_integer(output, destination, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
+                try store_result(allocations, instruction.result, destination, output)
+            } else {
             if register_binary(instruction.opcode) {
                 if instruction.operand_count != 2usize { ret Unsupported }
                 let left_value = builder.operands[instruction.first_operand]
@@ -318,13 +380,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             } else {
                 if instruction.opcode == .Call {
                     if instruction.immediate >= builder.function_ref_count { ret Unsupported }
-                    var register_at = 0usize
-                    while register_at < preserve_count {
-                        let (physical, physical_error) = hardware_register(register_at)
-                        if physical_error != ok { ret physical_error }
-                        try emit_x64.store_stack(output, preserve_base + register_at, physical)
-                        register_at += 1usize
-                    }
+                    try save_allocated_registers(output, preserve_base, preserve_count)
                     var argument_at = 0usize
                     while argument_at < instruction.operand_count {
                         let value = builder.operands[instruction.first_operand + argument_at]
@@ -344,13 +400,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     if call_error != ok { ret call_error }
                     try add_relocation(relocations, relocation_count, call_displacement, instruction.immediate)
                     if instruction.has_result { try emit_x64.mov_register(output, 10usize, 0usize) }
-                    register_at = 0usize
-                    while register_at < preserve_count {
-                        let (physical, physical_error) = hardware_register(register_at)
-                        if physical_error != ok { ret physical_error }
-                        try emit_x64.load_stack(output, physical, preserve_base + register_at)
-                        register_at += 1usize
-                    }
+                    try restore_allocated_registers(output, preserve_base, preserve_count)
                     if instruction.has_result {
                         let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                         if destination_error != ok { ret destination_error }
@@ -397,6 +447,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 }
                 }
             }
+        }
         }
         }
         }
