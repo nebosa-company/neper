@@ -1190,6 +1190,32 @@ fn print_resolve_diagnostic(g: *graph.Graph, resolver: *resolve.Resolver, resolv
     ret print_token_diagnostic(g, resolver.failure_module, token, "E-NAME-9999", "name resolution failed")
 }
 
+fn print_lower_diagnostic(g: *graph.Graph, checker: *check.Checker, lower_error: err) -> err {
+    let failure = os.stderr()
+    if checker.failure_module < g.count {
+        try write_all(failure, g.modules[checker.failure_module].path)
+    } else {
+        try write_all(failure, "<unknown>")
+    }
+    try write_all(failure, ":")
+    if checker.failure_has_token {
+        try write_usize(failure, checker.failure_token.line)
+        try write_all(failure, ":")
+        try write_usize(failure, checker.failure_token.column)
+    } else {
+        try write_all(failure, "1:1")
+    }
+    try write_all(failure, ": error[E-TYPE-9999]: cannot lower `")
+    try write_all(failure, checker.failure_name)
+    try write_all(failure, "`: ")
+    if lower_error == check.Unsupported {
+        try write_all(failure, "construct is not implemented in self-hosted lowering")
+    } else {
+        try write_all(failure, "lowering failed")
+    }
+    ret write_all(failure, "\n")
+}
+
 fn write_qualified_error(file: os.File, module_name: str, error_name: str) -> err {
     try write_all(file, module_name)
     try write_all(file, ".")
@@ -1514,7 +1540,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if bindings_error != ok { ret bindings_error }
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, 128usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
-        try lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
+        let lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
+        if lower_error != ok {
+            try print_lower_diagnostic(&loaded, &checker, lower_error)
+            os.exit(1i32)
+            ret ok
+        }
         let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, 32768usize)
         if ranges_error != ok { ret ranges_error }
         let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, 32768usize)

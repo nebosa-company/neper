@@ -248,7 +248,7 @@ $controlExecutablePath = Join-Path $testBuild 'control-selfhost.exe'
 $controlExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\control\src\main.e') $repo 'x64' 'windows' $controlExecutablePath
 if ($LASTEXITCODE -ne 0 -or $controlExecutableWritten -ne 'executable written') { throw 'control-flow PE executable emission failed' }
 & $controlExecutablePath
-if ($LASTEXITCODE -ne 0) { throw 'branches, loops, or direct calls failed in the self-hosted PE executable' }
+if ($LASTEXITCODE -ne 0) { throw 'branches, loops, short-circuit logic, or direct calls failed in the self-hosted PE executable' }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }

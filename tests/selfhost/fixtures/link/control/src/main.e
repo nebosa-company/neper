@@ -15,5 +15,8 @@ fn count() -> i64 {
 }
 
 fn main() -> i64 {
+    if false && true { ret 1i64 }
+    if !(true || false) { ret 2i64 }
+    if !(true && (false || true)) { ret 3i64 }
     ret choose(false) - 2i64 + count() - 3i64
 }

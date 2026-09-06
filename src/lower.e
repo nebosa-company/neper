@@ -149,6 +149,9 @@ fn binary_opcode(kind: lex.Kind) -> nir.Opcode {
 
 fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
     let node = tree.nodes[node_index]
+    c.failure_module = module_index
+    c.failure_token = c.tokens[node.token_start]
+    c.failure_has_token = true
     if node.kind == .LiteralExpr {
         let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
         if type_error != ok { ret (0usize, result_type, type_error) }
@@ -273,7 +276,67 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
         if result_type_error != ok { ret (0usize, result_type, result_type_error) }
         let operator = check.binary_operator(c, tree, node)
-        if operator == .PunctAndAnd || operator == .PunctOrOr { ret (0usize, zero, check.Unsupported) }
+        if operator == .PunctAndAnd || operator == .PunctOrOr {
+            let boolean = check.make_type(.Bool, "bool", module_index)
+            let (left, left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], boolean, builder, bindings, binding_count)
+            if left_error != ok { ret (0usize, left_type, left_error) }
+            let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, boolean, true, 0usize, c.tokens[node.token_start])
+            if stack_error != ok { ret (0usize, boolean, stack_error) }
+            let (decision, ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, c.tokens[node.token_start])
+            if decision_error != ok { ret (0usize, boolean, decision_error) }
+            let decision_operand_error = nir.add_operand(builder, decision, left)
+            if decision_operand_error != ok { ret (0usize, boolean, decision_operand_error) }
+
+            let right_block = builder.block_count
+            let (right_block_index, right_block_error) = nir.begin_block(builder)
+            if right_block_error != ok || right_block_index != right_block { ret (0usize, boolean, nir.InvalidControlFlow) }
+            let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], boolean, builder, bindings, binding_count)
+            if right_error != ok { ret (0usize, right_type, right_error) }
+            let (right_store, right_store_ignored, right_store_error) = nir.emit(builder, .Store, boolean, false, 0usize, c.tokens[node.token_start])
+            if right_store_error != ok { ret (0usize, boolean, right_store_error) }
+            let right_address_error = nir.add_operand(builder, right_store, stack)
+            if right_address_error != ok { ret (0usize, boolean, right_address_error) }
+            let right_value_error = nir.add_operand(builder, right_store, right)
+            if right_value_error != ok { ret (0usize, boolean, right_value_error) }
+            let (right_exit, right_exit_error) = emit_branch(builder, c.tokens[node.token_start])
+            if right_exit_error != ok { ret (0usize, boolean, right_exit_error) }
+
+            let short_block = builder.block_count
+            let (short_block_index, short_block_error) = nir.begin_block(builder)
+            if short_block_error != ok || short_block_index != short_block { ret (0usize, boolean, nir.InvalidControlFlow) }
+            var short_immediate = 0usize
+            if operator == .PunctOrOr { short_immediate = 1usize }
+            let (short_constant_instruction, short_value, short_constant_error) = nir.emit(builder, .ConstBool, boolean, true, short_immediate, c.tokens[node.token_start])
+            if short_constant_error != ok { ret (0usize, boolean, short_constant_error) }
+            let (short_store, short_store_ignored, short_store_error) = nir.emit(builder, .Store, boolean, false, 0usize, c.tokens[node.token_start])
+            if short_store_error != ok { ret (0usize, boolean, short_store_error) }
+            let short_address_error = nir.add_operand(builder, short_store, stack)
+            if short_address_error != ok { ret (0usize, boolean, short_address_error) }
+            let short_value_error = nir.add_operand(builder, short_store, short_value)
+            if short_value_error != ok { ret (0usize, boolean, short_value_error) }
+            let (short_exit, short_exit_error) = emit_branch(builder, c.tokens[node.token_start])
+            if short_exit_error != ok { ret (0usize, boolean, short_exit_error) }
+
+            let merge_block = builder.block_count
+            let (merge_block_index, merge_block_error) = nir.begin_block(builder)
+            if merge_block_error != ok || merge_block_index != merge_block { ret (0usize, boolean, nir.InvalidControlFlow) }
+            if operator == .PunctAndAnd {
+                let target_error = nir.set_branch_targets(builder, decision, right_block, short_block)
+                if target_error != ok { ret (0usize, boolean, target_error) }
+            } else {
+                let target_error = nir.set_branch_targets(builder, decision, short_block, right_block)
+                if target_error != ok { ret (0usize, boolean, target_error) }
+            }
+            let right_target_error = nir.set_branch_targets(builder, right_exit, merge_block, 0usize)
+            if right_target_error != ok { ret (0usize, boolean, right_target_error) }
+            let short_target_error = nir.set_branch_targets(builder, short_exit, merge_block, 0usize)
+            if short_target_error != ok { ret (0usize, boolean, short_target_error) }
+            let (load_instruction, result, load_error) = nir.emit(builder, .Load, boolean, true, 0usize, c.tokens[node.token_start])
+            if load_error != ok { ret (0usize, boolean, load_error) }
+            let load_operand_error = nir.add_operand(builder, load_instruction, stack)
+            if load_operand_error != ok { ret (0usize, boolean, load_operand_error) }
+            ret (result, result_type, ok)
+        }
         let opcode = binary_opcode(operator)
         if opcode == .Invalid { ret (0usize, zero, check.InvalidOperator) }
         var operand_expected = result_type
@@ -591,6 +654,9 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 }
 
 fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+    c.failure_module = module_index
+    c.failure_token = c.tokens[node.token_start]
+    c.failure_has_token = true
     if node.kind == .ReturnStmt { ret lower_return(c, g, tree, module_index, function, node, builder, bindings, *binding_count) }
     if node.kind == .TryStmt { ret lower_try(c, g, tree, module_index, function, node, builder, bindings, *binding_count) }
     if node.kind == .BindingStmt { ret lower_binding(c, g, tree, module_index, node, builder, bindings, binding_count) }
@@ -621,6 +687,10 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     let text = g.modules[module_index].text
     let (name, name_error) = declaration_name(c, text, node)
     if name_error != ok { ret name_error }
+    c.failure_module = module_index
+    c.failure_name = name
+    c.failure_token = c.tokens[node.token_start]
+    c.failure_has_token = true
     if function_index >= c.function_count { ret FunctionNotFound }
     let function = c.functions[function_index]
     if function.generic { ret check.Unsupported }
