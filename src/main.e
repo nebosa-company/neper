@@ -1118,8 +1118,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module check ok\n")
         ret ok
     }
-    if args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file")) {
-        let emit_machine_code = same(args[1usize], "codegen-file")
+    if args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file")) {
+        let emit_object = same(args[1usize], "object-file")
+        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
@@ -1192,12 +1193,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         if emit_machine_code {
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
+            if emit_object {
+                let (object_storage, object_storage_error) = mem.alloc[usize](a, 262144usize)
+                if object_storage_error != ok { ret object_storage_error }
+                var object: emit_x64.Buffer = zero
+                try emit_x64.init(&object, object_storage)
+                if machine_abi == .Windows {
+                    let (symbols, symbols_error) = mem.alloc[object_coff.Symbol](a, 16384usize)
+                    if symbols_error != ok { ret symbols_error }
+                    try object_coff.write(&builder, &machine, function_offsets, relocations, relocation_count, symbols, &object)
+                } else {
+                    let (symbols, symbols_error) = mem.alloc[object_elf.Symbol](a, 16384usize)
+                    if symbols_error != ok { ret symbols_error }
+                    try object_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, symbols, &object)
+                }
+                try io.print("module object ok\n")
+                ret ok
+            }
             try io.print("module codegen ok\n")
             ret ok
         }
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file PATH TOOLCHAIN_ROOT ARCH OS\n")
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS\n")
     ret ok
 }
