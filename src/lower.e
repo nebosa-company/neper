@@ -180,7 +180,74 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if operand_error != ok { ret (0usize, result_type, operand_error) }
         ret (result, result_type, ok)
     }
+    if node.kind == .UnaryExpr {
+        let end = node.first_child + node.child_count
+        var child_index = 0usize
+        var found_child = false
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if found_child { ret (0usize, zero, parse.InvalidSyntax) }
+                child_index = tree.children[at].index
+                found_child = true
+            }
+            at += 1usize
+        }
+        if !found_child { ret (0usize, zero, parse.InvalidSyntax) }
+        let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+        if result_type_error != ok { ret (0usize, result_type, result_type_error) }
+        let operator = c.tokens[node.token_start].kind
+        var operand_expected = result_type
+        if operator == .PunctBang { operand_expected = check.make_type(.Bool, "bool", module_index) }
+        let (operand, operand_type, operand_error) = lower_expression(c, g, tree, module_index, child_index, operand_expected, builder, bindings, binding_count)
+        if operand_error != ok { ret (0usize, operand_type, operand_error) }
+        if operator == .PunctBang {
+            let (false_instruction, false_value, false_error) = nir.emit(builder, .ConstBool, operand_expected, true, 0usize, c.tokens[node.token_start])
+            if false_error != ok { ret (0usize, result_type, false_error) }
+            let (instruction, result, emit_error) = nir.emit(builder, .Equal, result_type, true, 0usize, c.tokens[node.token_start])
+            if emit_error != ok { ret (0usize, result_type, emit_error) }
+            let operand_add_error = nir.add_operand(builder, instruction, operand)
+            if operand_add_error != ok { ret (0usize, result_type, operand_add_error) }
+            let false_add_error = nir.add_operand(builder, instruction, false_value)
+            if false_add_error != ok { ret (0usize, result_type, false_add_error) }
+            ret (result, result_type, ok)
+        }
+        var opcode: nir.Opcode = .Invalid
+        if operator == .PunctMinus { opcode = .Negate }
+        if operator == .PunctTilde { opcode = .BitNot }
+        if opcode == .Invalid { ret (0usize, zero, check.Unsupported) }
+        let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, c.tokens[node.token_start])
+        if emit_error != ok { ret (0usize, result_type, emit_error) }
+        let add_error = nir.add_operand(builder, instruction, operand)
+        if add_error != ok { ret (0usize, result_type, add_error) }
+        ret (result, result_type, ok)
+    }
     if node.kind == .CallExpr {
+        let (call_info, call_info_error) = check.check_call(c, g, tree, module_index, node)
+        if call_info_error != ok { ret (0usize, zero, call_info_error) }
+        if call_info.is_cast {
+            var argument_index = 0usize
+            var child_position = 0usize
+            let end = node.first_child + node.child_count
+            var at = node.first_child
+            while at < end {
+                if tree.children[at].node {
+                    if child_position == 1usize { argument_index = tree.children[at].index }
+                    child_position += 1usize
+                }
+                at += 1usize
+            }
+            if child_position != 2usize { ret (0usize, zero, check.ArgumentCount) }
+            let (argument_type, argument_type_error) = check.check_expr(c, g, tree, module_index, argument_index, check.invalid_type())
+            if argument_type_error != ok { ret (0usize, argument_type, argument_type_error) }
+            let (argument, lowered_argument_type, argument_error) = lower_expression(c, g, tree, module_index, argument_index, argument_type, builder, bindings, binding_count)
+            if argument_error != ok { ret (0usize, lowered_argument_type, argument_error) }
+            let (instruction, result, emit_error) = nir.emit(builder, .Cast, call_info.cast, true, 0usize, c.tokens[node.token_start])
+            if emit_error != ok { ret (0usize, call_info.cast, emit_error) }
+            let add_error = nir.add_operand(builder, instruction, argument)
+            if add_error != ok { ret (0usize, call_info.cast, add_error) }
+            ret (result, call_info.cast, ok)
+        }
         let (call, value, call_error) = lower_call(c, g, tree, module_index, node, builder, bindings, binding_count)
         if call_error != ok { ret (0usize, zero, call_error) }
         if call.function.return_count != 1usize { ret (0usize, zero, check.ArgumentCount) }
@@ -385,6 +452,22 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     ret ok
 }
 
+fn lower_call_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> err {
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let call_node = tree.nodes[tree.children[at].index]
+            let (call, ignored, call_error) = lower_call(c, g, tree, module_index, call_node, builder, bindings, binding_count)
+            if call_error != ok { ret call_error }
+            if call.function.return_count != 0usize { ret check.ArgumentCount }
+            ret ok
+        }
+        at += 1usize
+    }
+    ret parse.InvalidSyntax
+}
+
 fn emit_branch(builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (instruction, ignored, emit_error) = nir.emit(builder, .Branch, zero, false, 0usize, token)
     ret (instruction, emit_error)
@@ -510,6 +593,7 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     if node.kind == .TryStmt { ret lower_try(c, g, tree, module_index, function, node, builder, bindings, *binding_count) }
     if node.kind == .BindingStmt { ret lower_binding(c, g, tree, module_index, node, builder, bindings, binding_count) }
     if node.kind == .AssignmentStmt { ret lower_assignment(c, g, tree, module_index, node, builder, bindings, *binding_count) }
+    if node.kind == .CallStmt { ret lower_call_statement(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
     if node.kind == .WhileStmt { ret lower_while(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
     ret check.Unsupported
