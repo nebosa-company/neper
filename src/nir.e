@@ -85,15 +85,28 @@ type Function = struct {
     value_count: usize,
 }
 
+type FunctionRef = struct {
+    module_index: usize,
+    name: str,
+}
+
+type StringConstant = struct {
+    spelling: str,
+}
+
 type Builder = struct {
     functions: []Function,
     blocks: []Block,
     instructions: []Instruction,
     operands: []usize,
+    function_refs: []FunctionRef,
+    strings: []StringConstant,
     function_count: usize,
     block_count: usize,
     instruction_count: usize,
     operand_count: usize,
+    function_ref_count: usize,
+    string_count: usize,
     current_function: usize,
     current_block: usize,
     next_value: usize,
@@ -105,22 +118,53 @@ fn is_terminator(opcode: Opcode) -> bool {
     ret opcode == .Trap || opcode == .Branch || opcode == .BranchIf || opcode == .Switch || opcode == .Return || opcode == .Unreachable
 }
 
-fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions: []Instruction, operands: []usize) -> err {
-    if functions.len == 0usize || blocks.len == 0usize || instructions.len == 0usize || operands.len == 0usize { ret Capacity }
+fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions: []Instruction, operands: []usize, function_refs: []FunctionRef, strings: []StringConstant) -> err {
+    if functions.len == 0usize || blocks.len == 0usize || instructions.len == 0usize || operands.len == 0usize || function_refs.len == 0usize || strings.len == 0usize { ret Capacity }
     builder.functions = functions
     builder.blocks = blocks
     builder.instructions = instructions
     builder.operands = operands
+    builder.function_refs = function_refs
+    builder.strings = strings
     builder.function_count = 0usize
     builder.block_count = 0usize
     builder.instruction_count = 0usize
     builder.operand_count = 0usize
+    builder.function_ref_count = 0usize
+    builder.string_count = 0usize
     builder.current_function = 0usize
     builder.current_block = 0usize
     builder.next_value = 0usize
     builder.function_active = false
     builder.block_active = false
     ret ok
+}
+
+fn intern_function(builder: *Builder, module_index: usize, name: str) -> (usize, err) {
+    var at = 0usize
+    while at < builder.function_ref_count {
+        let reference = builder.function_refs[at]
+        if reference.module_index == module_index && check.same(reference.name, name) { ret (at, ok) }
+        at += 1usize
+    }
+    if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
+    let index = builder.function_ref_count
+    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name }
+    builder.function_ref_count += 1usize
+    ret (index, ok)
+}
+
+fn intern_string(builder: *Builder, spelling: str) -> (usize, err) {
+    var at = 0usize
+    while at < builder.string_count {
+        if check.same(builder.strings[at].spelling, spelling) { ret (at, ok) }
+        at += 1usize
+    }
+    if builder.string_count == builder.strings.len { ret (0usize, Capacity) }
+    let index = builder.string_count
+    builder.strings[index] = StringConstant { spelling: spelling }
+    builder.string_count += 1usize
+    ret (index, ok)
 }
 
 fn begin_function(builder: *Builder, module_index: usize, name: str) -> (usize, err) {
@@ -244,8 +288,18 @@ fn self_test() -> err {
     var blocks: [1]Block = zero
     var instructions: [4]Instruction = zero
     var operands: [4]usize = zero
+    var function_refs: [1]FunctionRef = zero
+    var strings: [1]StringConstant = zero
     var builder: Builder = zero
-    try init(&builder, functions[..], blocks[..], instructions[..], operands[..])
+    try init(&builder, functions[..], blocks[..], instructions[..], operands[..], function_refs[..], strings[..])
+    let (function_ref, function_ref_error) = intern_function(&builder, 1usize, "callee")
+    if function_ref_error != ok || function_ref != 0usize { ret InvalidValue }
+    let (same_function_ref, same_function_ref_error) = intern_function(&builder, 1usize, "callee")
+    if same_function_ref_error != ok || same_function_ref != function_ref || builder.function_ref_count != 1usize { ret InvalidValue }
+    let (string_index, string_error) = intern_string(&builder, "\"value\"")
+    if string_error != ok || string_index != 0usize { ret InvalidValue }
+    let (same_string_index, same_string_error) = intern_string(&builder, "\"value\"")
+    if same_string_error != ok || same_string_index != string_index || builder.string_count != 1usize { ret InvalidValue }
     let (function_index, function_error) = begin_function(&builder, 0usize, "main")
     if function_error != ok || function_index != 0usize { ret InvalidControlFlow }
     let (block_index, block_error) = begin_block(&builder)

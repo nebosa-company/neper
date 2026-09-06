@@ -812,7 +812,11 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder) -> err {
     if instructions_error != ok { ret instructions_error }
     let (operands, operands_error) = mem.alloc[usize](a, 131072usize)
     if operands_error != ok { ret operands_error }
-    ret nir.init(builder, functions, blocks, instructions, operands)
+    let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, 8192usize)
+    if function_refs_error != ok { ret function_refs_error }
+    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 8192usize)
+    if strings_error != ok { ret strings_error }
+    ret nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
 }
 
 fn write_all(file: os.File, text: str) -> err {

@@ -60,7 +60,9 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
             } else {
                 if token.kind == .String || token.kind == .RawString {
                     opcode = .ConstString
-                    immediate = token.start
+                    let (string_index, string_error) = nir.intern_string(builder, text[token.start..token.end])
+                    if string_error != ok { ret (0usize, string_error) }
+                    immediate = string_index
                 } else {
                     if token.kind != .Integer { ret (0usize, check.Unsupported) }
                     let (value, literal_type, value_error) = check.integer_literal_value(c, text, node)
@@ -82,8 +84,8 @@ fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let (call, call_error) = check.check_call(c, g, tree, module_index, node)
     if call_error != ok { ret (empty, 0usize, call_error) }
     if call.is_cast || call.mem_alloc || call.function.generic || call.function.return_count > 1usize { ret (empty, 0usize, check.Unsupported) }
-    let (function_index, found) = check.find_function(c, call.function.module_index, call.function.name)
-    if !found { ret (empty, 0usize, FunctionNotFound) }
+    let (function_ref, function_ref_error) = nir.intern_function(builder, call.function.module_index, call.function.name)
+    if function_ref_error != ok { ret (empty, 0usize, function_ref_error) }
     var arguments: [16]usize = zero
     var argument_count = 0usize
     let end = node.first_child + node.child_count
@@ -111,7 +113,7 @@ fn lower_call(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         if result_type_error != ok { ret (empty, 0usize, result_type_error) }
         return_type = result_type
     }
-    let (instruction, result, emit_error) = nir.emit(builder, .Call, return_type, has_result, function_index, c.tokens[node.token_start])
+    let (instruction, result, emit_error) = nir.emit(builder, .Call, return_type, has_result, function_ref, c.tokens[node.token_start])
     if emit_error != ok { ret (empty, 0usize, emit_error) }
     at = 0usize
     while at < argument_count {
