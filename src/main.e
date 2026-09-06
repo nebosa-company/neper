@@ -7,6 +7,7 @@ use emit_x64
 use graph
 use lex
 use link_elf
+use link_pe
 use lower
 use nir
 use object_coff
@@ -732,6 +733,7 @@ fn self_test() -> err {
     try object_coff.self_test()
     try object_elf.self_test()
     try link_elf.self_test()
+    try link_pe.self_test()
     ret ok
 }
 
@@ -1219,12 +1221,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if emit_machine_code {
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
             if writes_executable {
-                if machine_abi == .Windows { ret link_elf.InvalidExecutable }
                 let (executable_storage, executable_storage_error) = mem.alloc[usize](a, 1048576usize)
                 if executable_storage_error != ok { ret executable_storage_error }
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
-                try link_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
+                if machine_abi == .Windows {
+                    try link_pe.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
+                } else {
+                    try link_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
+                }
                 let (packed, packed_error) = mem.alloc[u8](a, executable.count)
                 if packed_error != ok { ret packed_error }
                 try emit_x64.pack(&executable, packed)

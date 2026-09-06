@@ -184,6 +184,11 @@ if ($LASTEXITCODE -ne 0 -or $objectGenerated -ne 'module object ok') { throw 'so
 $coffPath = Join-Path $testBuild 'calls.obj'
 $objectWritten = & $compiler emit-object (Join-Path $PSScriptRoot 'fixtures\nir\calls\src\main.e') $repo 'x64' 'windows' $coffPath
 if ($LASTEXITCODE -ne 0 -or $objectWritten -ne 'object written' -or -not (Test-Path -LiteralPath $coffPath) -or (Get-Item -LiteralPath $coffPath).Length -le 60) { throw 'COFF object file emission failed' }
+$executablePath = Join-Path $testBuild 'basic-selfhost.exe'
+$executableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\basic\src\main.e') $repo 'x64' 'windows' $executablePath
+if ($LASTEXITCODE -ne 0 -or $executableWritten -ne 'executable written' -or -not (Test-Path -LiteralPath $executablePath) -or (Get-Item -LiteralPath $executablePath).Length -le 512) { throw 'PE executable emission failed' }
+& $executablePath
+if ($LASTEXITCODE -ne 0) { throw 'self-hosted PE executable did not run successfully' }
 $localsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\locals\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $localsLowered -ne 'module nir ok') { throw 'parameters and local storage did not lower to canonical NIR' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
