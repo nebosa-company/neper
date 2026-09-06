@@ -146,6 +146,38 @@ module is specified by its library source and indexed by `neper index`, the spec
 authoritative only where it writes a signature — is unchanged and now reads
 `algo.sort`.
 
+## D86 — the `e.data.*` / `algo.*` boundary is genericity
+
+Record the rule the catalogue already follows, in `modules.md` §1: `e.data.*` is
+generic containers parameterised by their element type; `algo.*` is concrete domain
+types and pure computation over caller-owned data. Where an `algo.*` type is generic
+it is over a numeric parameter — `Complex[F]`, `Matrix[F]`, `Tensor[F]` — never over an
+arbitrary `T`. Move `e.data.disjoint_set` to `algo.disjoint_set` under that rule; its
+declarations, `layer`, `surface`, `milestone`, `schedule` and dependencies are
+unchanged, and no `lib/` source exists. Keep `algo.bitset` where it is.
+
+Storage ownership was the obvious candidate rule and is wrong: `e.data.ring` takes
+`init(storage: []T)` and `disjoint_set` takes `init(parent: []u32, rank: []u8, ...)`,
+so both borrow caller storage while only one is a container. Genericity separates them
+and already held for 21 of the 26 catalogue entries — 12 of 14 `e.data.*` modules are
+generic over an arbitrary element type, while 9 of 12 `algo.*` modules are concrete.
+`disjoint_set` was the one genuine outlier: non-generic, concrete, a state array plus
+union-find, which is textbook kin to `algo.bitset` rather than to `List[T]`.
+
+`algo.bitset` stays because the rule puts it there, and the reason is recorded rather
+than left silent because general convention shelves bitsets with containers
+(`std::bitset`, `java.util.BitSet`) and the question will recur. A `BitSet` is a bit
+vector over `[]u64` words holding bit indices; it can never hold an arbitrary `T`,
+which makes it kin to `Uuid` and `Decimal`. The generic `Set` in `e.data.map` is the
+contrast — a container over whatever key type the caller names. It is also already
+`surface:"source"` at M2, so it is the expensive one to move and the one where being
+wrong would cost most.
+
+This supersedes D76's placement of caller-storage `disjoint_set` in `e.data`, and
+sharpens D51's namespace definitions and D78's namespace-ownership clause without
+changing what either assigns; D85 moved `sort` on the same rule, before the rule was
+written down.
+
 ## Consequences accepted
 
 - **We own the optimiser.** v1 targets roughly `-O1` quality: inlining, constant

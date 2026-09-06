@@ -664,8 +664,8 @@ source/API equality and a same-change transition to `surface:"source"`.
 Their position here does not order them before M5 or M6; independent waves may run
 in parallel once their prerequisites and specifications are ready.
 
-- **Extended containers and graph algorithms:** `e.data.tree`,
-  `e.data.disjoint_set`, `e.data.graph`, `e.data.slot_map` and `algo.graph`. Existing
+- **Extended containers and graph algorithms:** `e.data.tree`, `e.data.graph`,
+  `e.data.slot_map`, `algo.disjoint_set` and `algo.graph`. Existing
   collections gain deterministic non-mutating iterators; `e.data.heap` also gains
   comparator/context and linear-time bulk construction. Graph delivery covers BFS,
   DFS, deterministic topological sorting, weak/strong components and Dijkstra over

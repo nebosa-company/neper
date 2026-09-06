@@ -18,7 +18,7 @@ exist. The catalogue currently has 128 modules: 33 core, 77 extended, 18 experim
 | Prefix | Meaning | Distribution |
 |---|---|---|
 | `e.*` | Stable facilities owned by the language and guaranteed by the applicable toolchain version | Toolchain |
-| `algo.*` | Pure algorithms over caller-owned data | Toolchain |
+| `algo.*` | Concrete domain types and pure computation over caller-owned data | Toolchain |
 | `text.*` | Unicode and text processing | Toolchain |
 | `crypto.*` | Pure cryptographic primitives; entropy is caller-supplied | Toolchain |
 | `fmt.*` | Interchange-format parsers and writers | Toolchain |
@@ -29,6 +29,28 @@ exist. The catalogue currently has 128 modules: 33 core, 77 extended, 18 experim
 Namespaces describe ownership and domain, not whether code is implemented with an
 intrinsic. `e.*` availability begins at the module's delivery milestone; it does not
 put every module into the bootstrap.
+
+### `e.data.*` against `algo.*`
+
+Genericity decides which of the two a module belongs to:
+
+- **`e.data.*` is generic containers**, parameterised by the element type the caller
+  puts in them: `List[T]`, `Map[K, V]`, `Ring[T]`, `Heap[T]`, `Tree[K, V]`,
+  `SlotMap[T]`.
+- **`algo.*` is concrete domain types and pure computation over caller-owned data**:
+  `Uuid`, `Decimal`, `Bignum`, `BitSet`, `Pcg64`, and the sorting and traversal
+  functions. Where an `algo.*` type is generic it is over a numeric parameter, as
+  `Complex[F]`, `Matrix[F]` and `Tensor[F]` are, and not over an arbitrary `T`.
+
+**Storage ownership is not the test.** `e.data.ring` takes `init(storage: []T)` and
+`algo.disjoint_set` takes `init(parent: []u32, rank: []u8, ...)`. Both borrow caller
+storage; the first is a container and the second is not.
+
+A type that can never hold an arbitrary `T` belongs in `algo.*` even where general
+convention files it with the containers. `algo.bitset` is a bit vector over `[]u64`
+words holding bit indices, which makes it kin to `Uuid` and `Decimal`; the generic
+`Set` in `e.data.map` is the contrast, a container over whatever key type the caller
+names. Same word, different thing.
 
 Imports use spec §2's default final-segment qualifier or an explicit alias. Final
 segments are not globally reserved:
@@ -151,17 +173,18 @@ Global constraints:
 
 ### Layer 2 — containers and pure domains
 
-Containers are one module per data structure rather than the former `e.data` grab bag:
+Containers are one module per data structure, each generic over its element type
+(§1), rather than the former `e.data` grab bag:
 
 - `e.data.list`, `e.data.deque`, `e.data.stack`, `e.data.queue`, `e.data.linked`,
   `e.data.ring`, `e.data.heap`, `e.data.tree`.
-- `e.data.map`, `e.data.iter`, `e.data.disjoint_set`,
-  `e.data.graph`, `e.data.slot_map`.
+- `e.data.map`, `e.data.iter`, `e.data.graph`, `e.data.slot_map`.
 
 Pure algorithm domains are:
 
 - `algo.rand`, `algo.uuid`, `algo.hash`, `algo.graph`, `algo.stat`, `algo.bitset`,
-  `algo.sort`, `algo.complex`, `algo.decimal`, `algo.bignum`, `algo.deflate`.
+  `algo.sort`, `algo.disjoint_set`, `algo.complex`, `algo.decimal`, `algo.bignum`,
+  `algo.deflate`.
 - `algo.linalg.matrix`, `algo.linalg.tensor`.
 - `text.encoding`, `text.utf8`, `text.unicode`, `text.normalize`, `text.collate`,
   `text.regex`.

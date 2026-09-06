@@ -556,26 +556,6 @@ fn set_iter_next[K: type](it: *SetIter[K]) -> (K, bool)
 Tree iteration is ascending by key. `iter_from` begins at the first key not less
 than `key`.
 
-### `e.data.disjoint_set`
-
-```neper
-type DisjointSet = struct { parent: []u32, rank: []u8, sets: usize }
-error TooLarge
-error TooSmall
-
-fn init(parent: []u32, rank: []u8, count: usize) -> (DisjointSet, err)
-fn len(s: *const DisjointSet) -> usize
-fn set_count(s: *const DisjointSet) -> usize
-fn find(s: *DisjointSet, value: u32) -> u32
-fn same(s: *DisjointSet, a: u32, b: u32) -> bool
-fn union(s: *DisjointSet, a: u32, b: u32) -> bool
-fn reset(s: *DisjointSet)
-```
-
-The caller supplies storage. `count` must fit `u32` and both slices. `find` performs
-path compression and `union` uses union by rank; indices outside `count` follow the
-ordinary bounds-trap rule.
-
 ### `e.data.graph`
 
 ```neper
@@ -818,6 +798,26 @@ returns `Cycle` without a partial order. Component identifiers are assigned by t
 smallest node in each component. Dijkstra rejects negative, NaN and infinite weights
 as `InvalidWeight`; unreachable distance is positive infinity and its predecessor is
 `graph.NONE`. All returned slices are arena-owned.
+
+### `algo.disjoint_set`
+
+```neper
+type DisjointSet = struct { parent: []u32, rank: []u8, sets: usize }
+error TooLarge
+error TooSmall
+
+fn init(parent: []u32, rank: []u8, count: usize) -> (DisjointSet, err)
+fn len(s: *const DisjointSet) -> usize
+fn set_count(s: *const DisjointSet) -> usize
+fn find(s: *DisjointSet, value: u32) -> u32
+fn same(s: *DisjointSet, a: u32, b: u32) -> bool
+fn union(s: *DisjointSet, a: u32, b: u32) -> bool
+fn reset(s: *DisjointSet)
+```
+
+The caller supplies storage. `count` must fit `u32` and both slices. `find` performs
+path compression and `union` uses union by rank; indices outside `count` follow the
+ordinary bounds-trap rule.
 
 ### `algo.stat`
 
