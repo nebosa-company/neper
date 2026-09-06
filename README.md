@@ -304,6 +304,14 @@ left to right when registered; deferred blocks read their referenced places at e
 Cleanup runs in reverse order on normal block exit, `ret`, propagated `try`, `break`,
 and `continue`, including once per loop iteration, while preserving return values.
 
+The self-hosted front end now accepts and rejects the same complete 51-file
+`tests/neper0` corpus as the bootstrap on Windows and Linux. The shared gate covers
+contextual ranges and zero values, enum discriminants and zeroability, aggregate
+value-layout cycles, nested aggregate literals, the fixed arena/OS surface and
+compiler-generated iterator protocol lookup. Every rejected fixture also emits the
+same ordered versioned diagnostics from exact source-token spans on both hosts. The
+self-hosted NIR and code-generation rewrite is next.
+
 On Windows with the Visual Studio C++ tools installed:
 
 ```powershell
@@ -331,9 +339,12 @@ On Linux:
 - [`docs/tooling.md`](docs/tooling.md) — normative harness, JSONL, span and formatter contracts
 - [`docs/diagnostics.md`](docs/diagnostics.md) — stable diagnostic-code registry
 - [`docs/roadmap.md`](docs/roadmap.md) — implementation milestones
-- [`DECISIONS.md`](DECISIONS.md) — settled architecture decisions and their reasoning
+- [`docs/post-m2-llm-hardening.md`](docs/post-m2-llm-hardening.md) — mandatory post-M2, pre-M3 language/compiler hardening and LLM evidence gate
+- [`docs/llm-hardening-recommendations.md`](docs/llm-hardening-recommendations.md) — prioritized R01–R11 recommendations for a language optimized for LLM processing end-to-end
+- [`docs/decisions.md`](docs/decisions.md) — settled architecture decisions and their reasoning
 - [`docs/modules.md`](docs/modules.md) — the standard library and package plan
 - [`docs/module-apis.md`](docs/module-apis.md) — exact proposed APIs for toolchain modules
+- [`docs/stdlib-hardening.md`](docs/stdlib-hardening.md) — adopted library composition, naming, cancellation, JSON, process/filesystem and stable image/codec contracts
 - [`docs/modules.json`](docs/modules.json) — machine-readable module catalogue
 - [`docs/general-purpose-verification.md`](docs/general-purpose-verification.md) — workload and LLM-generation acceptance plan
 - [`docs/ui-framework.md`](docs/ui-framework.md) — experimental declarative GPU UI architecture
