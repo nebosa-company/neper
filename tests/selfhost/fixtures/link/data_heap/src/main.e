@@ -5,6 +5,17 @@ use e.mem
 error Failed
 
 type Task = struct { cost: i64, id: i64 }
+type Budget = struct { cutoff: i64, seen: i64 }
+
+fn by_cost(ctx: *Budget, a: Task, b: Task) -> i32 {
+    ctx.seen += 1i64
+    ret task_cmp(a, b)
+}
+
+fn by_cost_desc(ctx: *Budget, a: Task, b: Task) -> i32 {
+    ctx.seen += 1i64
+    ret 0i32 - task_cmp(a, b)
+}
 
 fn task_cmp(a: Task, b: Task) -> i32 {
     if a.cost < b.cost { ret 0i32 - 1i32 }
@@ -97,6 +108,70 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (next_cheapest, has_next) = heap.pop[Task](&tasks)
     if !has_next || next_cheapest.id != 3i64 { ret Failed }
     if heap.len[Task](&tasks) != 1usize { ret Failed }
+
+    // HeapBy carries its comparison, so ordering can depend on borrowed context.
+    var budget = Budget { cutoff: 25i64, seen: 0i64 }
+    let (by_empty, by_error) = heap.init_by[Task, Budget](a, 2usize, &budget, by_cost)
+    if by_error != ok { ret by_error }
+    var ordered = by_empty
+    if heap.len_by[Task, Budget](&ordered) != 0usize { ret Failed }
+    let (_, by_has_peek) = heap.peek_by[Task, Budget](&ordered)
+    if by_has_peek { ret Failed }
+    try heap.push_by[Task, Budget](&ordered, Task { cost: 40i64, id: 1i64 })
+    try heap.push_by[Task, Budget](&ordered, Task { cost: 10i64, id: 2i64 })
+    try heap.push_by[Task, Budget](&ordered, Task { cost: 30i64, id: 3i64 })
+    if heap.len_by[Task, Budget](&ordered) != 3usize { ret Failed }
+    let (by_top, by_has_top) = heap.peek_by[Task, Budget](&ordered)
+    if !by_has_top || by_top.id != 2i64 { ret Failed }
+    let (by_first, by_has_first) = heap.pop_by[Task, Budget](&ordered)
+    let (by_second, by_has_second) = heap.pop_by[Task, Budget](&ordered)
+    if !by_has_first || !by_has_second || by_first.id != 2i64 || by_second.id != 3i64 { ret Failed }
+    // The comparison ran, so the borrowed context was reachable and mutable.
+    if budget.seen == 0i64 { ret Failed }
+    heap.clear_by[Task, Budget](&ordered)
+    if heap.len_by[Task, Budget](&ordered) != 0usize { ret Failed }
+
+    // The same elements under the opposite ordering, built in bulk.
+    var reversed = Budget { cutoff: 0i64, seen: 0i64 }
+    var costed: [4]Task = zero
+    costed[0usize] = Task { cost: 40i64, id: 1i64 }
+    costed[1usize] = Task { cost: 10i64, id: 2i64 }
+    costed[2usize] = Task { cost: 30i64, id: 3i64 }
+    costed[3usize] = Task { cost: 20i64, id: 4i64 }
+    let (bulk_by, bulk_by_error) = heap.from_slice_by[Task, Budget](a, costed[..], &reversed, by_cost_desc)
+    if bulk_by_error != ok { ret bulk_by_error }
+    var descending = bulk_by
+    var previous_cost = 100i64
+    var by_drained = 0usize
+    while true {
+        let (task, more) = heap.pop_by[Task, Budget](&descending)
+        if !more { break }
+        if task.cost > previous_cost { ret Failed }
+        previous_cost = task.cost
+        by_drained += 1usize
+    }
+    if by_drained != 4usize || previous_cost != 10i64 { ret Failed }
+
+    // heapify_in_place_by over a bare slice, and iteration over internal order.
+    var raw_tasks: [3]Task = zero
+    raw_tasks[0usize] = Task { cost: 9i64, id: 7i64 }
+    raw_tasks[1usize] = Task { cost: 1i64, id: 8i64 }
+    raw_tasks[2usize] = Task { cost: 5i64, id: 9i64 }
+    heap.heapify_in_place_by[Task, Budget](raw_tasks[..], &reversed, by_cost)
+    if raw_tasks[0usize].cost != 1i64 { ret Failed }
+    let (view_by, view_by_error) = heap.from_slice_by[Task, Budget](a, raw_tasks[..], &reversed, by_cost)
+    if view_by_error != ok { ret view_by_error }
+    var by_view = view_by
+    var by_it = heap.iter_by[Task, Budget](&by_view)
+    var by_seen = 0usize
+    var by_total = 0i64
+    while true {
+        let (task, more) = heap.iter_next[Task](&by_it)
+        if !more { break }
+        by_seen += 1usize
+        by_total += task.cost
+    }
+    if by_seen != 3usize || by_total != 15i64 { ret Failed }
 
     try io.print("data heap ok\n")
     ret ok

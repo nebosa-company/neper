@@ -1,42 +1,16 @@
-// Binary min-heap ordered by `T.cmp`.
+// Binary min-heap. `Heap` orders by `T.cmp`; `HeapBy` orders by a comparison
+// carried with the heap, which is what an ordering over borrowed context needs.
 //
 // Every module-scope declaration is exported (spec section 5), so the sift loops are
 // written out at each site rather than factored into helpers that would widen the
 // module's public surface beyond its frozen API.
-//
-// The `HeapBy` half of that API takes its comparison as a `fn(*Ctx, T, T) -> i32`
-// value. Function pointers are a language type (spec section 5) that the compiler
-// does not yet check or lower, so that half is not declared here and the module
-// stays `partial` in docs/modules.json.
 
 use e.data.list
 use e.mem
 
 type Heap[T: type] = struct { items: list.List[T] }
+type HeapBy[T: type, Ctx: type] = struct { items: list.List[T], ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32 }
 type Iter[T: type] = struct { items: []const T, index: usize }
-
-// Floyd's construction: every node above the leaves sifts down once, which is
-// linear in the element count rather than n log n.
-fn heapify_in_place[T: type](items: []T) {
-    if items.len < 2usize { ret }
-    var start = items.len / 2usize
-    while start != 0usize {
-        start -= 1usize
-        var at = start
-        while true {
-            let left = at * 2usize + 1usize
-            if left >= items.len { break }
-            var smallest = left
-            let right = left + 1usize
-            if right < items.len && T.cmp(items[right], items[left]) < 0i32 { smallest = right }
-            if T.cmp(items[smallest], items[at]) >= 0i32 { break }
-            let carried = items[at]
-            items[at] = items[smallest]
-            items[smallest] = carried
-            at = smallest
-        }
-    }
-}
 
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Heap[T], err) {
     let (items, items_error) = list.init[T](a, capacity)
@@ -102,8 +76,124 @@ fn pop[T: type](h: *Heap[T]) -> (T, bool) {
 
 fn clear[T: type](h: *Heap[T]) { list.clear[T](&h.items) }
 
+fn init_by[T: type, Ctx: type](a: *mem.Arena, capacity: usize, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) -> (HeapBy[T, Ctx], err) {
+    let (items, items_error) = list.init[T](a, capacity)
+    if items_error != ok { ret (zero, items_error) }
+    ret (HeapBy[T, Ctx] { items: items, ctx: ctx, cmp: cmp }, ok)
+}
+
+fn from_slice_by[T: type, Ctx: type](a: *mem.Arena, source: []const T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) -> (HeapBy[T, Ctx], err) {
+    let (items, items_error) = list.from_slice[T](a, source)
+    if items_error != ok { ret (zero, items_error) }
+    var result = HeapBy[T, Ctx] { items: items, ctx: ctx, cmp: cmp }
+    heapify_in_place_by[T, Ctx](list.slice[T](&result.items), ctx, cmp)
+    ret (result, ok)
+}
+
+fn len_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> usize { ret h.items.len }
+
+fn push_by[T: type, Ctx: type](h: *HeapBy[T, Ctx], value: T) -> err {
+    try list.push[T](&h.items, value)
+    let compare = h.cmp
+    let context = h.ctx
+    let items = list.slice[T](&h.items)
+    var at = items.len - 1usize
+    while at != 0usize {
+        let above = at - 1usize
+        let parent = above / 2usize
+        if compare(context, items[at], items[parent]) >= 0i32 { break }
+        let carried = items[at]
+        items[at] = items[parent]
+        items[parent] = carried
+        at = parent
+    }
+    ret ok
+}
+
+fn peek_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> (T, bool) {
+    if h.items.len == 0usize { ret (zero, false) }
+    let items = list.slice_const[T](&h.items)
+    ret (items[0usize], true)
+}
+
+fn pop_by[T: type, Ctx: type](h: *HeapBy[T, Ctx]) -> (T, bool) {
+    if h.items.len == 0usize { ret (zero, false) }
+    let compare = h.cmp
+    let context = h.ctx
+    let full = list.slice[T](&h.items)
+    let smallest = full[0usize]
+    full[0usize] = full[full.len - 1usize]
+    let (discarded, popped) = list.pop[T](&h.items)
+    if !popped { ret (zero, false) }
+    let items = list.slice[T](&h.items)
+    var at = 0usize
+    while true {
+        let left = at * 2usize + 1usize
+        if left >= items.len { break }
+        var next = left
+        let right = left + 1usize
+        if right < items.len && compare(context, items[right], items[left]) < 0i32 { next = right }
+        if compare(context, items[next], items[at]) >= 0i32 { break }
+        let carried = items[at]
+        items[at] = items[next]
+        items[next] = carried
+        at = next
+    }
+    ret (smallest, true)
+}
+
+fn clear_by[T: type, Ctx: type](h: *HeapBy[T, Ctx]) { list.clear[T](&h.items) }
+
+// Floyd's construction: every node above the leaves sifts down once, which is
+// linear in the element count rather than n log n.
+fn heapify_in_place[T: type](items: []T) {
+    if items.len < 2usize { ret }
+    var start = items.len / 2usize
+    while start != 0usize {
+        start -= 1usize
+        var at = start
+        while true {
+            let left = at * 2usize + 1usize
+            if left >= items.len { break }
+            var smallest = left
+            let right = left + 1usize
+            if right < items.len && T.cmp(items[right], items[left]) < 0i32 { smallest = right }
+            if T.cmp(items[smallest], items[at]) >= 0i32 { break }
+            let carried = items[at]
+            items[at] = items[smallest]
+            items[smallest] = carried
+            at = smallest
+        }
+    }
+}
+
+fn heapify_in_place_by[T: type, Ctx: type](items: []T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) {
+    if items.len < 2usize { ret }
+    var start = items.len / 2usize
+    while start != 0usize {
+        start -= 1usize
+        var at = start
+        while true {
+            let left = at * 2usize + 1usize
+            if left >= items.len { break }
+            var smallest = left
+            let right = left + 1usize
+            if right < items.len && cmp(ctx, items[right], items[left]) < 0i32 { smallest = right }
+            if cmp(ctx, items[smallest], items[at]) >= 0i32 { break }
+            let carried = items[at]
+            items[at] = items[smallest]
+            items[smallest] = carried
+            at = smallest
+        }
+    }
+}
+
 // Iteration exposes internal heap order, not sorted order.
 fn iter[T: type](h: *const Heap[T]) -> Iter[T] {
+    ret Iter[T] { items: list.slice_const[T](&h.items), index: 0usize }
+}
+
+fn iter_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> Iter[T] {
     ret Iter[T] { items: list.slice_const[T](&h.items), index: 0usize }
 }
 

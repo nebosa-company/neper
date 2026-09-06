@@ -461,6 +461,34 @@ fn function_signature_return(c: *Checker, signature: FunctionSignature, index: u
     ret (c.types[signature.first_return + index], true)
 }
 
+fn build_function_type(c: *Checker, parameters: []const Type, returns: []const Type, module_index: usize) -> (Type, err) {
+    let first_parameter = c.type_count
+    var at = 0usize
+    while at < parameters.len {
+        let (stored, store_error) = store_type(c, parameters[at])
+        if store_error != ok { ret (invalid_type(), store_error) }
+        at += 1usize
+    }
+    let first_return = c.type_count
+    at = 0usize
+    while at < returns.len {
+        let (stored, store_error) = store_type(c, returns[at])
+        if store_error != ok { ret (invalid_type(), store_error) }
+        at += 1usize
+    }
+    var signature: FunctionSignature = zero
+    signature.first_parameter = first_parameter
+    signature.parameter_count = parameters.len
+    signature.first_return = first_return
+    signature.return_count = returns.len
+    let (signature_index, signature_error) = store_function_signature(c, signature)
+    if signature_error != ok { ret (invalid_type(), signature_error) }
+    var result = make_type(.Function, "", module_index)
+    result.element = signature_index
+    result.has_element = true
+    ret (result, ok)
+}
+
 fn function_pointer_type(c: *Checker, function: Function, module_index: usize) -> (Type, err) {
     let first_parameter = c.type_count
     var at = 0usize
@@ -642,6 +670,32 @@ fn types_may_match_after_instantiation(c: *Checker, actual: Type, expected: Type
         if actual.has_length && expected.has_length && actual.array_length != expected.array_length { ret false }
         if !actual.has_element || !expected.has_element || actual.element >= c.type_count || expected.element >= c.type_count { ret false }
         ret types_may_match_after_instantiation(c, c.types[actual.element], c.types[expected.element])
+    }
+    // A declaration and the aggregate it constructs number their comptime
+    // parameters separately, so two signatures written the same way are not equal
+    // until the instantiation binds both.
+    if actual.kind == .Function {
+        let (left, has_left) = function_signature_of(c, actual)
+        let (right, has_right) = function_signature_of(c, expected)
+        if !has_left || !has_right { ret false }
+        if left.parameter_count != right.parameter_count || left.return_count != right.return_count { ret false }
+        var at = 0usize
+        while at < left.parameter_count {
+            let (left_parameter, has_left_parameter) = function_signature_parameter(c, left, at)
+            let (right_parameter, has_right_parameter) = function_signature_parameter(c, right, at)
+            if !has_left_parameter || !has_right_parameter { ret false }
+            if !types_may_match_after_instantiation(c, left_parameter, right_parameter) { ret false }
+            at += 1usize
+        }
+        at = 0usize
+        while at < left.return_count {
+            let (left_return, has_left_return) = function_signature_return(c, left, at)
+            let (right_return, has_right_return) = function_signature_return(c, right, at)
+            if !has_left_return || !has_right_return { ret false }
+            if !types_may_match_after_instantiation(c, left_return, right_return) { ret false }
+            at += 1usize
+        }
+        ret true
     }
     ret false
 }
@@ -1939,6 +1993,33 @@ fn substitute_aggregate_type(c: *Checker, template_index: usize, first_argument:
         }
         ret (result, ok)
     }
+    if ty.kind == .Function {
+        let (signature, has_signature) = function_signature_of(c, ty)
+        if !has_signature { ret (invalid_type(), InvalidType) }
+        var parameters: [16]Type = zero
+        var returns: [4]Type = zero
+        if signature.parameter_count > parameters.len || signature.return_count > returns.len { ret (invalid_type(), Capacity) }
+        var at = 0usize
+        while at < signature.parameter_count {
+            let (source, has_source) = function_signature_parameter(c, signature, at)
+            if !has_source { ret (invalid_type(), InvalidType) }
+            let (specialized, specialize_error) = substitute_aggregate_type(c, template_index, first_argument, source)
+            if specialize_error != ok { ret (invalid_type(), specialize_error) }
+            parameters[at] = specialized
+            at += 1usize
+        }
+        at = 0usize
+        while at < signature.return_count {
+            let (source, has_source) = function_signature_return(c, signature, at)
+            if !has_source { ret (invalid_type(), InvalidType) }
+            let (specialized, specialize_error) = substitute_aggregate_type(c, template_index, first_argument, source)
+            if specialize_error != ok { ret (invalid_type(), specialize_error) }
+            returns[at] = specialized
+            at += 1usize
+        }
+        let (result, build_error) = build_function_type(c, parameters[..signature.parameter_count], returns[..signature.return_count], ty.module_index)
+        ret (result, build_error)
+    }
     ret (ty, ok)
 }
 
@@ -3172,6 +3253,33 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
             result.has_length = true
         }
         ret (result, ok)
+    }
+    if ty.kind == .Function {
+        let (signature, has_signature) = function_signature_of(c, ty)
+        if !has_signature { ret (invalid_type(), InvalidType) }
+        var parameters: [16]Type = zero
+        var returns: [4]Type = zero
+        if signature.parameter_count > parameters.len || signature.return_count > returns.len { ret (invalid_type(), Capacity) }
+        var at = 0usize
+        while at < signature.parameter_count {
+            let (source, has_source) = function_signature_parameter(c, signature, at)
+            if !has_source { ret (invalid_type(), InvalidType) }
+            let (specialized, specialize_error) = substitute_type(c, function_index, first_argument, source)
+            if specialize_error != ok { ret (invalid_type(), specialize_error) }
+            parameters[at] = specialized
+            at += 1usize
+        }
+        at = 0usize
+        while at < signature.return_count {
+            let (source, has_source) = function_signature_return(c, signature, at)
+            if !has_source { ret (invalid_type(), InvalidType) }
+            let (specialized, specialize_error) = substitute_type(c, function_index, first_argument, source)
+            if specialize_error != ok { ret (invalid_type(), specialize_error) }
+            returns[at] = specialized
+            at += 1usize
+        }
+        let (result, build_error) = build_function_type(c, parameters[..signature.parameter_count], returns[..signature.return_count], ty.module_index)
+        ret (result, build_error)
     }
     ret (ty, ok)
 }

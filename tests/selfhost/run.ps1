@@ -495,8 +495,8 @@ $heapSurface = Get-Content (Join-Path $repo 'lib\e\data\heap.e') |
         if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.heap contains an unreadable public declaration' }
         $Matches[1]
     }
-$expectedHeapSurface = @('Heap', 'Iter', 'heapify_in_place', 'init', 'from_slice', 'len', 'push', 'peek', 'pop', 'clear', 'iter', 'iter_next')
-if (($heapSurface -join "`n") -ne ($expectedHeapSurface -join "`n")) { throw 'e.data.heap public declarations differ from the delivered surface' }
+$expectedHeapSurface = @('Heap', 'HeapBy', 'Iter', 'init', 'from_slice', 'len', 'push', 'peek', 'pop', 'clear', 'init_by', 'from_slice_by', 'len_by', 'push_by', 'peek_by', 'pop_by', 'clear_by', 'heapify_in_place', 'heapify_in_place_by', 'iter', 'iter_by', 'iter_next')
+if (($heapSurface -join "`n") -ne ($expectedHeapSurface -join "`n")) { throw 'e.data.heap public declarations differ from module-apis.md' }
 $heapParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\heap.e')
 if ($LASTEXITCODE -ne 0 -or $heapParsed -ne 'parse file ok') { throw 'e.data.heap failed CLI parsing' }
 $heapExecutablePath = Join-Path $testBuild 'data-heap-selfhost.exe'

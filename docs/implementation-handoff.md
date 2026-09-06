@@ -586,6 +586,38 @@ Two hazards this increment ran into, both caught by the suites:
   made `.Extract` fall through to `ret Unsupported`, which broke every
   multiple-return destructuring while leaving everything else working.
 
+### 7.9 e.data.heap completed
+
+The `HeapBy` half of the frozen API is declared and `e.data.heap` is `source`. All
+22 public declarations are present, in the order `docs/module-apis.md` lists them,
+and both suites check that list against the file.
+
+Function values (section 7.8) were necessary but not sufficient. Two further
+checker gaps only appeared once `HeapBy` was written:
+
+- Type substitution did not descend into a function type. `HeapBy`'s `cmp` field is
+  `fn(*Ctx, T, T) -> i32`, so instantiating the aggregate has to rebuild that
+  signature with the arguments bound. Both `substitute_type` and
+  `substitute_aggregate_type` now do, through a shared `build_function_type`.
+- A declaration and the aggregate it constructs number their comptime parameters
+  separately, so `HeapBy[T, Ctx] { cmp: cmp }` inside `init_by[T, Ctx]` compared two
+  signatures whose `.TypeParameter` entries had different indices and rejected
+  them. `types_may_match_after_instantiation` now compares function signatures
+  structurally, which is the same leniency it already gave `Named`, `Pointer`,
+  `Slice` and `Array` while a template body is being checked.
+
+The `_by` bodies bind `h.cmp` and `h.ctx` to locals before calling, because calling
+a function value directly out of a struct field is still not wired (section 7.8).
+That reads fine here and hoists the load out of the sift loop, but it is a
+workaround, not a preference.
+
+`fixtures/link/data_heap` now covers both halves in one program: the supplied `cmp`
+over integers, a user struct dispatching to its own declared `task_cmp`, and a
+`HeapBy` whose comparison mutates borrowed context, in both orderings, through
+`init_by`, `from_slice_by`, `push_by`, `peek_by`, `pop_by`, `clear_by`,
+`heapify_in_place_by` and `iter_by`. The fixture asserts the context was actually
+reached and written.
+
 ## 8. Working-tree boundaries
 
 No compiler or test change is intentionally uncommitted now. Everything in
@@ -644,7 +676,7 @@ The machine plan currently has ten planned M2 modules:
 
 | Module | Immediate prerequisite or implementation gap |
 | --- | --- |
-| `e.data.heap` | `partial`: the non-`_by` surface is delivered. Section 7.8 unblocked the `HeapBy` half, which is what remains before it can advance to `source` |
+| `e.data.heap` | delivered, `surface:"source"` (section 7.9) |
 | `algo.rand` | Exact API includes `f64`; scalar float lowering and ABI support are incomplete |
 | `algo.uuid` | Depends on `algo.hash` and source-complete `e.str`; `e.str` is not source-complete |
 | `e.fs` | Depends on complete `e.path`, `e.str`, memory, and filesystem `e.os` behavior |

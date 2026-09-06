@@ -614,8 +614,8 @@ list_output=$("$list_executable_path")
 [ "$list_output" = 'data list ok' ]
 heap_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/e/data/heap.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
 expected_heap_surface='Heap
+HeapBy
 Iter
-heapify_in_place
 init
 from_slice
 len
@@ -623,7 +623,17 @@ push
 peek
 pop
 clear
+init_by
+from_slice_by
+len_by
+push_by
+peek_by
+pop_by
+clear_by
+heapify_in_place
+heapify_in_place_by
 iter
+iter_by
 iter_next'
 [ "$heap_surface" = "$expected_heap_surface" ]
 heap_parsed=$($test_build/neper-self parse-file "$repo/lib/e/data/heap.e")
