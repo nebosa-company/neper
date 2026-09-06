@@ -153,6 +153,7 @@ type ProtocolBuiltin = enum u8 {
     None,
     Cmp,
     Hash,
+    Eq,
 }
 
 type AggregateKind = enum u8 {
@@ -3947,9 +3948,19 @@ fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool
 // this synthesizes. A receiver's own `cmp` never reaches here: `check_protocol_call`
 // resolves a declared one before any fallback is considered.
 fn element_cmp_function(c: *Checker, ty: Type) -> (usize, bool) {
+    let (index, found) = component_protocol_function(c, ty, "cmp", make_type(.Integer, "i32", ty.module_index))
+    ret (index, found)
+}
+
+fn element_eq_function(c: *Checker, ty: Type) -> (usize, bool) {
+    let (index, found) = component_protocol_function(c, ty, "eq", make_type(.Bool, "bool", ty.module_index))
+    ret (index, found)
+}
+
+fn component_protocol_function(c: *Checker, ty: Type, protocol: str, expected_return: Type) -> (usize, bool) {
     let (canonical, canonical_error) = canonical_type(c, ty)
     if canonical_error != ok || canonical.kind != .Named { ret (0usize, false) }
-    let (function_index, found, lookup_error) = protocol_function(c, ty, "cmp")
+    let (function_index, found, lookup_error) = protocol_function(c, ty, protocol)
     if lookup_error != ok || !found { ret (0usize, false) }
     let function = c.functions[function_index]
     if function.generic || function.parameter_count != 2usize || function.return_count != 1usize { ret (0usize, false) }
@@ -3957,7 +3968,7 @@ fn element_cmp_function(c: *Checker, ty: Type) -> (usize, bool) {
     if !type_equal(c, c.parameters[function.first_parameter].ty, canonical) { ret (0usize, false) }
     if !type_equal(c, c.parameters[function.first_parameter + 1usize].ty, canonical) { ret (0usize, false) }
     let (return_type, return_error) = function_return(c, function, 0usize)
-    if return_error != ok || return_type.kind != .Integer || !same(return_type.name, "i32") { ret (0usize, false) }
+    if return_error != ok || !type_equal(c, return_type, expected_return) { ret (0usize, false) }
     ret (function_index, true)
 }
 
@@ -4048,6 +4059,46 @@ fn supplied_hash_shape(c: *Checker, ty: Type) -> bool {
     ret packed_hash_bytes(c, canonical_element, 1usize)
 }
 
+fn supplied_eq_shape(c: *Checker, ty: Type, depth: usize) -> bool {
+    if depth > 8usize { ret false }
+    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Err || ty.kind == .Pointer { ret true }
+    let (enum_backing, is_enum) = enum_backing_type(c, ty)
+    if is_enum && enum_backing.kind == .Integer { ret true }
+    if ty.kind == .Named { ret tagged_union_equatable(c, ty, depth) }
+    if ty.kind != .Array && ty.kind != .Slice && ty.kind != .String { ret false }
+    let (element, element_error) = index_element_type(c, ty, ty.module_index)
+    if element_error != ok { ret false }
+    let (canonical_element, canonical_error) = canonical_type(c, element)
+    if canonical_error != ok { ret false }
+    ret equatable_component(c, element, canonical_element, depth + 1usize)
+}
+
+fn equatable_component(c: *Checker, ty: Type, canonical: Type, depth: usize) -> bool {
+    if supplied_eq_shape(c, canonical, depth) { ret true }
+    let (component_function, has_component_function) = element_eq_function(c, ty)
+    ret has_component_function
+}
+
+fn tagged_union_equatable(c: *Checker, ty: Type, depth: usize) -> bool {
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found || c.aggregates[aggregate_index].kind != .TaggedUnion { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.backing_type.kind != .Integer { ret false }
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index >= c.aggregate_field_count { ret false }
+        let arm = c.aggregate_fields[field_index]
+        if arm.ty.kind != .Void {
+            let (canonical_arm, canonical_arm_error) = canonical_type(c, arm.ty)
+            if canonical_arm_error != ok { ret false }
+            if !equatable_component(c, arm.ty, canonical_arm, depth + 1usize) { ret false }
+        }
+        at += 1usize
+    }
+    ret true
+}
+
 fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBuiltin {
     if same(protocol, "cmp") {
         if supplied_cmp_shape(c, canonical, 0usize) { ret .Cmp }
@@ -4055,6 +4106,10 @@ fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBui
     }
     if same(protocol, "hash") {
         if supplied_hash_shape(c, canonical) { ret .Hash }
+        ret .None
+    }
+    if same(protocol, "eq") {
+        if supplied_eq_shape(c, canonical, 0usize) { ret .Eq }
         ret .None
     }
     ret .None
@@ -4121,6 +4176,10 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
     if call.protocol_builtin == .Hash {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (make_type(.Integer, "u64", call.protocol_type.module_index), ok)
+    }
+    if call.protocol_builtin == .Eq {
+        if index != 0usize { ret (invalid_type(), InvalidType) }
+        ret (make_type(.Bool, "bool", call.protocol_type.module_index), ok)
     }
     if call.protocol_pending {
         if index != 0usize { ret (invalid_type(), InvalidType) }

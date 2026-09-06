@@ -353,6 +353,14 @@ $suppliedHashLinkWritten = & $compiler link-em $suppliedHashLinked (Join-Path $s
 if ($LASTEXITCODE -ne 0 -or $suppliedHashLinkWritten -ne 'artifact executable written') { throw 'supplied hash compiled modules did not link' }
 & $suppliedHashLinked
 if ($LASTEXITCODE -ne 0) { throw 'executable linked from supplied hash compiled modules failed' }
+# Rule 4 supplies `eq` for the same shapes as `cmp` and adds pointers. The fixture's
+# `pair_eq` compares one field of two deliberately, so a comparison that did not reach
+# the declaration would call unequal pairs equal.
+$suppliedEqPath = Join-Path $testBuild 'supplied-eq-selfhost.exe'
+$suppliedEqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\supplied_eq\src\main.e') $repo 'x64' 'windows' $suppliedEqPath
+if ($LASTEXITCODE -ne 0 -or $suppliedEqWritten -ne 'executable written') { throw 'supplied eq executable emission failed' }
+& $suppliedEqPath
+if ($LASTEXITCODE -ne 0) { throw 'the supplied eq is wrong for a scalar, pointer, sequence, tagged union or declared component' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

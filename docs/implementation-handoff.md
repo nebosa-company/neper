@@ -985,6 +985,43 @@ Two things this broke, both pre-existing and neither about hashing:
   because it equalled the text virtual size, and the bytes at 548 are a *patched*
   displacement, not static runtime content.
 
+### 7.20 The supplied `eq`, and why `format` is blocked
+
+Rule 4 supplies `eq` for the same shapes as `cmp` and adds pointers, whose equality
+is address equality. `check.supplied_eq_shape` mirrors the `cmp` predicate with that
+one addition, and `equatable_component` resolves a component through its own `eq`
+rather than an ordering -- a type may be equatable without being ordered, so routing
+`eq` through `cmp == 0` would have refused `[]Point` where `Point` declares only
+`point_eq`, and refused `[]*T` entirely.
+
+The emitter is a parallel of the `cmp` one and simpler, because equality has no
+three-way result: every shape either short-circuits to false or falls through to
+true. A scalar is one `Equal`, with no cast to a backing type -- unlike ordering,
+nothing here depends on signedness. A sequence rejects unequal lengths outright and
+then stops at the first element that differs. A tagged union rejects unequal tags,
+and a void arm is equal to itself once the tags match. `component_protocol_function`
+is the shared validation `element_cmp_function` used to do alone, now parameterised
+by protocol name and return type.
+
+`fixtures/link/supplied_eq` covers scalars, `bool`, an enum, pointers, slices
+including the unequal-length and empty cases, `str`, nested arrays, a four-arm tagged
+union with a void arm and a slice payload, and a component whose `pair_eq` compares
+one field of two deliberately -- so a comparison that failed to reach the declaration
+would call unequal pairs equal. A negative control confirms that assertion fails when
+flipped.
+
+`format` is blocked, not deferred. Rule 4's signature is
+`fn <t>_format(v: T, b: *str.Builder) -> err`, and `e.str` is `surface:"spec"` with no
+source file: `lib/e/` holds `io.e`, `mem.e` and `os.e`. There is no `Builder` to take,
+no `push_*` to call and nothing to test against. The supplied `format` also needs what
+no other protocol has needed -- runtime access to enum member *names*, since `{}` on
+an enum writes `Int` for `Kind.Int`, which means emitting a name table the compiler
+does not build today. Both wait on `e.str`.
+
+With this, rule 4 is delivered for `cmp`, `hash` and `eq` across every shape that
+exists. What remains of it is floats and `Vec`/`Mask`, blocked on scalar floating
+point and on vectors existing at all, and `format`, blocked above.
+
 ## 8. Working-tree boundaries
 
 No compiler or test change is intentionally uncommitted now. Everything in

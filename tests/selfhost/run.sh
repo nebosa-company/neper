@@ -398,6 +398,13 @@ supplied_hash_link_written=$($test_build/neper-self link-em "$test_build/supplie
 [ "$supplied_hash_link_written" = 'artifact executable written' ]
 chmod +x "$test_build/supplied-hash-from-artifacts"
 "$test_build/supplied-hash-from-artifacts"
+# Rule 4 supplies `eq` for the same shapes as `cmp` and adds pointers. The fixture's
+# `pair_eq` compares one field of two deliberately, so a comparison that did not reach
+# the declaration would call unequal pairs equal.
+supplied_eq_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/supplied_eq/src/main.e" "$repo" x64 linux "$test_build/supplied-eq-selfhost")
+[ "$supplied_eq_written" = 'executable written' ]
+chmod +x "$test_build/supplied-eq-selfhost"
+"$test_build/supplied-eq-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {
