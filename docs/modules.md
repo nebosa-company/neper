@@ -251,8 +251,9 @@ registration or RTTI.
 - `surface:"spec"` means `spec.md` already fixes the declarations' semantics;
   `surface:"partial"` means the spec fixes only the subset it names; and
   `surface:"planned"` means `module-apis.md` is the exact proposal to freeze before
-  implementation of that milestone. `surface:"source"` is reserved for a future
-  plan revision after an implementation exists.
+  implementation of that milestone. `surface:"source"` means an implementation
+  exists and the same revision verifies its complete public declarations against
+  `module-apis.md`.
 - `schedule:"scheduled"` requires a non-null `milestone`; every other schedule has
   `milestone:null`. A blocker describes a prerequisite and does not alter that
   normalized delivery state.

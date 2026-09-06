@@ -41,7 +41,7 @@
     {"name":"e.data.iter","layer":2,"surface":"planned","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.data.list","e.mem"],"blocked_by":[]},
     {"name":"algo.rand","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"algo.uuid","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":["algo.hash","e.str"],"blocked_by":[]},
-    {"name":"algo.hash","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
+    {"name":"algo.hash","layer":2,"surface":"source","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"algo.graph","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.data.graph","e.data.heap","e.mem"],"blocked_by":[]},
     {"name":"algo.stat","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":[],"blocked_by":[]},
     {"name":"algo.bitset","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},

@@ -271,6 +271,21 @@ $protocolExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests
 if ($LASTEXITCODE -ne 0 -or $protocolExecutableWritten -ne 'executable written') { throw 'custom iterator protocol did not lower into a PE executable' }
 $protocolOutput = & $protocolExecutablePath
 if ($LASTEXITCODE -ne 0 -or $protocolOutput -ne 'protocol iteration ok') { throw 'custom iterator protocol call, aggregate result, or cleanup failed' }
+$hashSurface = Get-Content (Join-Path $repo 'lib\algo\hash.e') |
+    Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
+    ForEach-Object {
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'algo.hash contains an unreadable public declaration' }
+        $Matches[1]
+    }
+$expectedHashSurface = @('XxHash64', 'Crc32', 'fnv1a32', 'fnv1a64', 'xxhash64', 'xxhash64_init', 'xxhash64_update', 'xxhash64_done', 'crc32', 'crc32_init', 'crc32_update', 'crc32_done', 'adler32')
+if (($hashSurface -join "`n") -ne ($expectedHashSurface -join "`n")) { throw 'algo.hash public declarations differ from module-apis.md' }
+$hashParsed = & $compiler parse-file (Join-Path $repo 'lib\algo\hash.e')
+if ($LASTEXITCODE -ne 0 -or $hashParsed -ne 'parse file ok') { throw 'algo.hash exceeded or failed CLI parser storage' }
+$hashExecutablePath = Join-Path $testBuild 'algo-hash-selfhost.exe'
+$hashExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_hash\src\main.e') $repo 'x64' 'windows' $hashExecutablePath
+if ($LASTEXITCODE -ne 0 -or $hashExecutableWritten -ne 'executable written') { throw 'algo.hash did not compile into a PE executable' }
+$hashOutput = & $hashExecutablePath
+if ($LASTEXITCODE -ne 0 -or $hashOutput -ne 'algo hash ok') { throw 'algo.hash one-shot or streaming behavior failed' }
 $hostExecutablePath = Join-Path $testBuild 'host-memory-clock-selfhost.exe'
 $hostExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\host-memory-clock.e') $repo 'x64' 'windows' $hostExecutablePath
 if ($LASTEXITCODE -ne 0 -or $hostExecutableWritten -ne 'executable written') { throw 'Windows args, memory, or clock intrinsics did not link' }

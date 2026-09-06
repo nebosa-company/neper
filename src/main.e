@@ -757,12 +757,14 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
-fn validate_cli_parse(text: str) -> err {
+fn validate_cli_parse(a: *mem.Arena, text: str) -> err {
     // The CLI supplies explicit storage; parser lists have no separate caps.
-    var nodes: [1024]syntax.Node = zero
-    var children: [16384]syntax.Child = zero
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 4096usize)
+    if nodes_error != ok { ret nodes_error }
+    let (children, children_error) = mem.alloc[syntax.Child](a, 65536usize)
+    if children_error != ok { ret children_error }
     var tree: parse.Tree = zero
-    try parse.init_tree(&tree, nodes[..], children[..])
+    try parse.init_tree(&tree, nodes, children)
     ret parse.parse(&tree, text)
 }
 
@@ -771,9 +773,9 @@ fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
     if modules_error != ok { ret modules_error }
     let (imports, imports_error) = mem.alloc[graph.Import](a, 2048usize)
     if imports_error != ok { ret imports_error }
-    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 32768usize)
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 65536usize)
     if nodes_error != ok { ret nodes_error }
-    let (children, children_error) = mem.alloc[syntax.Child](a, 262144usize)
+    let (children, children_error) = mem.alloc[syntax.Child](a, 524288usize)
     if children_error != ok { ret children_error }
     ret graph.init(loaded, modules, imports, nodes, children)
 }
@@ -1433,7 +1435,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if args.len == 3usize && same(args[1usize], "parse") {
-        let parse_error = validate_cli_parse(args[2usize])
+        let parse_error = validate_cli_parse(a, args[2usize])
         if parse_error != ok { ret parse_error }
         try io.print("parse ok\n")
         ret ok
@@ -1449,7 +1451,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 3usize && same(args[1usize], "parse-file") {
         let (text, load_error) = source.load(a, args[2usize])
         if load_error != ok { ret load_error }
-        let parse_error = validate_cli_parse(text)
+        let parse_error = validate_cli_parse(a, text)
         if parse_error != ok { ret parse_error }
         try io.print("parse file ok\n")
         ret ok

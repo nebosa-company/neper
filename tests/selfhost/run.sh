@@ -355,6 +355,29 @@ protocol_executable_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$protocol_executable_path"
 protocol_output=$("$protocol_executable_path")
 [ "$protocol_output" = 'protocol iteration ok' ]
+hash_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/algo/hash.e")
+expected_hash_surface='XxHash64
+Crc32
+fnv1a32
+fnv1a64
+xxhash64
+xxhash64_init
+xxhash64_update
+xxhash64_done
+crc32
+crc32_init
+crc32_update
+crc32_done
+adler32'
+[ "$hash_surface" = "$expected_hash_surface" ]
+hash_parsed=$($test_build/neper-self parse-file "$repo/lib/algo/hash.e")
+[ "$hash_parsed" = 'parse file ok' ]
+hash_executable_path="$test_build/algo-hash-selfhost"
+hash_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_hash/src/main.e" "$repo" x64 linux "$hash_executable_path")
+[ "$hash_executable_written" = 'executable written' ]
+chmod +x "$hash_executable_path"
+hash_output=$("$hash_executable_path")
+[ "$hash_output" = 'algo hash ok' ]
 os_helper_path="$test_build/os-spawn-helper-selfhost"
 os_helper_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/os-spawn-helper.e" "$repo" x64 linux "$os_helper_path")
 [ "$os_helper_written" = 'executable written' ]
