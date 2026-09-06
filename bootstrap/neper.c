@@ -104,9 +104,17 @@ typedef enum TokenKind {
     TK_ASSIGN,
     TK_ADD_ASSIGN,
     TK_PLUS,
+    TK_ADD_WRAP,
     TK_MINUS,
+    TK_SUB_WRAP,
     TK_SLASH,
     TK_PERCENT,
+    TK_MUL_WRAP,
+    TK_SHIFT_LEFT,
+    TK_SHIFT_RIGHT,
+    TK_CARET,
+    TK_PIPE,
+    TK_TILDE,
     TK_EQ,
     TK_NE,
     TK_LT,
@@ -857,6 +865,11 @@ static void lex(Compiler *c) {
                 else if (a == '|' && b == '|') { kind = TK_OR; width = 2; }
                 else if (a == '.' && b == '.') { kind = TK_RANGE; width = 2; }
                 else if (a == '+' && b == '=') { kind = TK_ADD_ASSIGN; width = 2; }
+                else if (a == '+' && b == '%') { kind = TK_ADD_WRAP; width = 2; }
+                else if (a == '-' && b == '%') { kind = TK_SUB_WRAP; width = 2; }
+                else if (a == '*' && b == '%') { kind = TK_MUL_WRAP; width = 2; }
+                else if (a == '<' && b == '<') { kind = TK_SHIFT_LEFT; width = 2; }
+                else if (a == '>' && b == '>') { kind = TK_SHIFT_RIGHT; width = 2; }
             }
             if (kind == TK_EOF) {
                 switch (ch) {
@@ -870,6 +883,8 @@ static void lex(Compiler *c) {
                     case '-': kind = TK_MINUS; break; case '/': kind = TK_SLASH; break;
                     case '%': kind = TK_PERCENT; break; case '<': kind = TK_LT; break;
                     case '>': kind = TK_GT; break; case '!': kind = TK_BANG; break;
+                    case '^': kind = TK_CARET; break; case '|': kind = TK_PIPE; break;
+                    case '~': kind = TK_TILDE; break;
                     default:
                         lexical_error(c, i, line, column, "E-LEX-9999", "invalid source byte");
                         i++; column++; column_utf16++; continue;
@@ -1599,7 +1614,7 @@ static Expr *parse_primary(Compiler *c) {
 static Expr *parse_unary(Compiler *c) {
     Token *token = peek(c);
     if (match(c, TK_MINUS) || match(c, TK_BANG) ||
-        match(c, TK_AMP) || match(c, TK_STAR)) {
+        match(c, TK_TILDE) || match(c, TK_AMP) || match(c, TK_STAR)) {
         Expr *e = new_expr(EX_UNARY, *token);
         e->as.unary.op = token->kind;
         e->as.unary.value = parse_unary(c);
@@ -1610,7 +1625,7 @@ static Expr *parse_unary(Compiler *c) {
 
 static Expr *parse_factor(Compiler *c) {
     Expr *e = parse_unary(c);
-    while (check(c, TK_STAR) || check(c, TK_SLASH) || check(c, TK_PERCENT)) {
+    while (check(c, TK_STAR) || check(c, TK_SLASH) || check(c, TK_PERCENT) || check(c, TK_MUL_WRAP)) {
         Token *op = peek(c); c->current++;
         { Expr *b = new_expr(EX_BINARY, *op); b->as.binary.op = op->kind;
           b->as.binary.left = e; b->as.binary.right = parse_unary(c); e = b; }
@@ -1620,7 +1635,7 @@ static Expr *parse_factor(Compiler *c) {
 
 static Expr *parse_term(Compiler *c) {
     Expr *e = parse_factor(c);
-    while (check(c, TK_PLUS) || check(c, TK_MINUS)) {
+    while (check(c, TK_PLUS) || check(c, TK_MINUS) || check(c, TK_ADD_WRAP) || check(c, TK_SUB_WRAP)) {
         Token *op = peek(c); c->current++;
         { Expr *b = new_expr(EX_BINARY, *op); b->as.binary.op = op->kind;
           b->as.binary.left = e; b->as.binary.right = parse_factor(c); e = b; }
@@ -1628,13 +1643,53 @@ static Expr *parse_term(Compiler *c) {
     return e;
 }
 
-static Expr *parse_compare(Compiler *c) {
+static Expr *parse_shift(Compiler *c) {
     Expr *e = parse_term(c);
+    while (check(c, TK_SHIFT_LEFT) || check(c, TK_SHIFT_RIGHT)) {
+        Token *op = peek(c); c->current++;
+        { Expr *b = new_expr(EX_BINARY, *op); b->as.binary.op = op->kind;
+          b->as.binary.left = e; b->as.binary.right = parse_term(c); e = b; }
+    }
+    return e;
+}
+
+static Expr *parse_bit_and(Compiler *c) {
+    Expr *e = parse_shift(c);
+    while (check(c, TK_AMP)) {
+        Token *op = peek(c); c->current++;
+        { Expr *b = new_expr(EX_BINARY, *op); b->as.binary.op = op->kind;
+          b->as.binary.left = e; b->as.binary.right = parse_shift(c); e = b; }
+    }
+    return e;
+}
+
+static Expr *parse_bit_xor(Compiler *c) {
+    Expr *e = parse_bit_and(c);
+    while (check(c, TK_CARET)) {
+        Token *op = peek(c); c->current++;
+        { Expr *b = new_expr(EX_BINARY, *op); b->as.binary.op = op->kind;
+          b->as.binary.left = e; b->as.binary.right = parse_bit_and(c); e = b; }
+    }
+    return e;
+}
+
+static Expr *parse_bit_or(Compiler *c) {
+    Expr *e = parse_bit_xor(c);
+    while (check(c, TK_PIPE)) {
+        Token *op = peek(c); c->current++;
+        { Expr *b = new_expr(EX_BINARY, *op); b->as.binary.op = op->kind;
+          b->as.binary.left = e; b->as.binary.right = parse_bit_xor(c); e = b; }
+    }
+    return e;
+}
+
+static Expr *parse_compare(Compiler *c) {
+    Expr *e = parse_bit_or(c);
     if (check(c, TK_EQ) || check(c, TK_NE) || check(c, TK_LT) || check(c, TK_LE) ||
         check(c, TK_GT) || check(c, TK_GE)) {
         Token *op = peek(c); c->current++;
         { Expr *b = new_expr(EX_BINARY, *op); b->as.binary.op = op->kind;
-          b->as.binary.left = e; b->as.binary.right = parse_term(c); e = b; }
+          b->as.binary.left = e; b->as.binary.right = parse_bit_or(c); e = b; }
     }
     return e;
 }
@@ -3742,7 +3797,7 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
                 if (e->type.kind != TY_BOOL) diagnostic_at(c, &e->token, "E-TYPE-9999", "`!` requires bool");
                 e->type = type_make(TY_BOOL, "bool");
             } else if (e->type.kind != TY_INT && e->type.kind != TY_UNTYPED_INT)
-                diagnostic_at(c, &e->token, "E-TYPE-9999", "unary `-` requires an integer");
+                diagnostic_at(c, &e->token, "E-TYPE-9999", "unary integer operator requires an integer");
             return e->type;
     }
     return type_make(TY_INVALID, 0);
@@ -4636,6 +4691,19 @@ static int checked_integer_binary(Compiler *c, Expr *expr, int64_t left,
                     (right < 0 && left < INT64_MAX / right)) break;
             }
             *out = left * right; return 1;
+        case TK_ADD_WRAP:
+            *out = (int64_t)((uint64_t)left + (uint64_t)right); return 1;
+        case TK_SUB_WRAP:
+            *out = (int64_t)((uint64_t)left - (uint64_t)right); return 1;
+        case TK_MUL_WRAP:
+            *out = (int64_t)((uint64_t)left * (uint64_t)right); return 1;
+        case TK_AMP: *out = left & right; return 1;
+        case TK_CARET: *out = left ^ right; return 1;
+        case TK_PIPE: *out = left | right; return 1;
+        case TK_SHIFT_LEFT:
+            *out = (int64_t)((uint64_t)left << ((uint64_t)right & 63u)); return 1;
+        case TK_SHIFT_RIGHT:
+            *out = left >> ((uint64_t)right & 63u); return 1;
         case TK_SLASH:
             if (right == 0) {
                 diagnostic_at(c, &expr->token, "E-TYPE-9999",
@@ -5587,6 +5655,7 @@ static void emit_expr(Emitter *e, Expr *x) {
             } else {
                 emit_expr(e, x->as.unary.value);
                 if (x->as.unary.op == TK_MINUS) fputs("    neg rax\n", e->out);
+                else if (x->as.unary.op == TK_TILDE) fputs("    not rax\n", e->out);
                 else fputs("    test rax, rax\n    sete al\n    movzx rax, al\n", e->out);
             }
             break;
@@ -5610,8 +5679,20 @@ static void emit_expr(Emitter *e, Expr *x) {
             int is_unsigned = type_is_unsigned(e->compiler, x->as.binary.left->type);
             switch (x->as.binary.op) {
                 case TK_PLUS: fputs("    add r10, rax\n    mov rax, r10\n", e->out); break;
+                case TK_ADD_WRAP: fputs("    add r10, rax\n    mov rax, r10\n", e->out); break;
                 case TK_MINUS: fputs("    sub r10, rax\n    mov rax, r10\n", e->out); break;
+                case TK_SUB_WRAP: fputs("    sub r10, rax\n    mov rax, r10\n", e->out); break;
                 case TK_STAR: fputs("    imul r10, rax\n    mov rax, r10\n", e->out); break;
+                case TK_MUL_WRAP: fputs("    imul r10, rax\n    mov rax, r10\n", e->out); break;
+                case TK_AMP: fputs("    and r10, rax\n    mov rax, r10\n", e->out); break;
+                case TK_CARET: fputs("    xor r10, rax\n    mov rax, r10\n", e->out); break;
+                case TK_PIPE: fputs("    or r10, rax\n    mov rax, r10\n", e->out); break;
+                case TK_SHIFT_LEFT:
+                    fputs("    mov rcx, rax\n    shl r10, cl\n    mov rax, r10\n", e->out); break;
+                case TK_SHIFT_RIGHT:
+                    fputs("    mov rcx, rax\n", e->out);
+                    fputs(is_unsigned ? "    shr r10, cl\n" : "    sar r10, cl\n", e->out);
+                    fputs("    mov rax, r10\n", e->out); break;
                 case TK_SLASH: case TK_PERCENT:
                     {
                         int trap_label = e->label++, safe_label = e->label++;

@@ -1,6 +1,7 @@
 use e.io
 use e.mem
 use e.os
+use artifact_hash
 use check
 use codegen_x64
 use emit_x64
@@ -726,6 +727,7 @@ fn self_test() -> err {
     try parse.init_tree(&tiny, tiny_nodes[..], tiny_children[..])
     let capacity_error = parse.parse(&tiny, "error Full\n")
     if capacity_error != parse.InvalidSyntax { ret lex.InvalidSource }
+    try artifact_hash.self_test()
     try nir.self_test()
     try regalloc.self_test()
     try emit_x64.self_test()
