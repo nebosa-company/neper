@@ -370,6 +370,13 @@ $foldedHashWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $foldedHashWritten -ne 'executable written') { throw 'folded hash executable emission failed' }
 & $foldedHashPath
 if ($LASTEXITCODE -ne 0) { throw 'the folded hash is wrong for a nested slice or a tagged union' }
+# `mem.view` is the one arena intrinsic emitted where it is called rather than
+# through a runtime symbol. It must alias storage the caller already owns.
+$memViewPath = Join-Path $testBuild 'mem-view-selfhost.exe'
+$memViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_view\src\main.e') $repo 'x64' 'windows' $memViewPath
+if ($LASTEXITCODE -ne 0 -or $memViewWritten -ne 'executable written') { throw 'mem.view executable emission failed' }
+& $memViewPath
+if ($LASTEXITCODE -ne 0) { throw 'mem.view did not alias the arena storage it was given' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

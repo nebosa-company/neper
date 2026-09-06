@@ -46,6 +46,7 @@ fn arena_from(buf: []u8) -> Arena
 fn alloc[T: type](a: *Arena, n: usize) -> ([]T, err)
 fn mark(a: *Arena) -> usize
 fn reset(a: *Arena, m: usize)
+fn view(a: *const Arena, start: usize, len: usize) -> []u8
 fn copy[T: type](dst: []T, src: []const T)
 fn eq[T: type](x: []const T, y: []const T) -> bool
 fn cast[P: type, Q: type](p: Q) -> P
@@ -55,7 +56,9 @@ fn align_of[T: type]() -> usize
 fn stats(a: *const Arena) -> Stats
 ```
 
-For `cast`, `P` and `Q` must be pointer types; callers spell `P` and inference fills
+`view` exposes arena storage the caller already owns as a slice, which is how a
+structure that records an offset rather than a slice reaches its own bytes; `start`
+and `len` follow the ordinary bounds-trap rule. For `cast`, `P` and `Q` must be pointer types; callers spell `P` and inference fills
 the trailing `Q` from `p`. For `bitcast`, callers spell `T` and inference fills `U`
 from `x`; the representation restrictions are those in spec §4 and §8.
 

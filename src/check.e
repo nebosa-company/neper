@@ -2289,6 +2289,18 @@ fn seed_memory_signatures(c: *Checker, module_index: usize) -> err {
     let (stats_index, stats_error) = add_seeded_function(c, module_index, "stats", stats, false)
     if stats_error != ok { ret stats_error }
     try add_seeded_parameter(c, stats_index, "a", arena_pointer)
+    // `view` is the one arena operation the language cannot express in source: it
+    // turns a base pointer and an offset into a slice, which nothing else does.
+    let u8_type = make_type(.Integer, "u8", module_index)
+    let (bytes, bytes_error) = seeded_composite_type(c, .Slice, u8_type, false, module_index)
+    if bytes_error != ok { ret bytes_error }
+    let (const_arena_pointer, const_pointer_error) = seeded_composite_type(c, .Pointer, arena, true, module_index)
+    if const_pointer_error != ok { ret const_pointer_error }
+    let (view_index, view_error) = add_seeded_function(c, module_index, "view", bytes, false)
+    if view_error != ok { ret view_error }
+    try add_seeded_parameter(c, view_index, "a", const_arena_pointer)
+    try add_seeded_parameter(c, view_index, "start", usize_type)
+    try add_seeded_parameter(c, view_index, "len", usize_type)
     ret ok
 }
 

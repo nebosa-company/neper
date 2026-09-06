@@ -1339,7 +1339,52 @@ fn emit_supplied_eq(c: *check.Checker, call: check.CallInfo, arguments: []usize,
     ret ok
 }
 
+// `mem.view` is the one arena intrinsic with no runtime symbol behind it: turning a
+// base pointer and an offset into a slice is three instructions, so it is emitted
+// where it is called rather than through `neper_mem_*`. A slice value is the address
+// of a {pointer, length} pair, which is what `sequence_parts` reads back.
+fn emit_mem_view(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if argument_count != 3usize { ret check.ArgumentCount }
+    let module_index = call.function.module_index
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let (result_type, result_type_error) = check.call_return(c, call, 0usize)
+    if result_type_error != ok { ret result_type_error }
+    // Arena.base is the first field, so the arena pointer addresses it directly.
+    let (base_address_instruction, base_address, base_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, token)
+    if base_address_error != ok { ret base_address_error }
+    try nir.add_operand(builder, base_address_instruction, arguments[0usize])
+    let (base_instruction, base, base_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, token)
+    if base_error != ok { ret base_error }
+    try nir.add_operand(builder, base_instruction, base_address)
+    let (offset_instruction, offset, offset_error) = nir.emit(builder, .Add, pointer_type, true, 0usize, token)
+    if offset_error != ok { ret offset_error }
+    try nir.add_operand(builder, offset_instruction, base)
+    try nir.add_operand(builder, offset_instruction, arguments[1usize])
+    let (slice_instruction, slice, slice_error) = nir.emit(builder, .Stack, result_type, true, 2usize, token)
+    if slice_error != ok { ret slice_error }
+    let (data_store_instruction, data_store_ignored, data_store_error) = nir.emit(builder, .Store, pointer_type, false, 8usize, token)
+    if data_store_error != ok { ret data_store_error }
+    try nir.add_operand(builder, data_store_instruction, slice)
+    try nir.add_operand(builder, data_store_instruction, offset)
+    let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, usize_type, true, 8usize, token)
+    if length_address_error != ok { ret length_address_error }
+    try nir.add_operand(builder, length_address_instruction, slice)
+    let (length_store_instruction, length_store_ignored, length_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if length_store_error != ok { ret length_store_error }
+    try nir.add_operand(builder, length_store_instruction, length_address)
+    try nir.add_operand(builder, length_store_instruction, arguments[2usize])
+    results.call = call
+    results.count = 1usize
+    results.values[0usize] = slice
+    results.addresses[0usize] = true
+    ret ok
+}
+
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if call.function.intrinsic && check.same(call.function.name, "view") {
+        ret emit_mem_view(c, call, arguments, argument_count, builder, token, results)
+    }
     if call.protocol_builtin == .Cmp { ret emit_supplied_cmp(c, call, arguments, argument_count, builder, token, results) }
     if call.protocol_builtin == .Hash { ret emit_supplied_hash(c, call, arguments, argument_count, builder, token, results) }
     if call.protocol_builtin == .Eq { ret emit_supplied_eq(c, call, arguments, argument_count, builder, token, results) }

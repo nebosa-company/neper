@@ -413,6 +413,12 @@ folded_hash_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$folded_hash_written" = 'executable written' ]
 chmod +x "$test_build/folded-hash-selfhost"
 "$test_build/folded-hash-selfhost"
+# `mem.view` is the one arena intrinsic emitted where it is called rather than
+# through a runtime symbol. It must alias storage the caller already owns.
+mem_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mem_view/src/main.e" "$repo" x64 linux "$test_build/mem-view-selfhost")
+[ "$mem_view_written" = 'executable written' ]
+chmod +x "$test_build/mem-view-selfhost"
+"$test_build/mem-view-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {

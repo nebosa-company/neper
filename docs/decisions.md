@@ -256,6 +256,38 @@ little-endian bytes under xxHash64 seed 0, is untouched.
 D87's consolidation is unrelated except that the library this must agree with is now
 `e.algo.hash`. This adds to rule 4's implementation rather than superseding a row.
 
+## D89 — `e.mem` gains `view`, the one arena operation source cannot express
+
+Add `fn view(a: *const Arena, start: usize, len: usize) -> []u8` to `e.mem`'s frozen
+surface. It exposes arena storage the caller already owns as a slice; `start` and
+`len` follow the ordinary bounds-trap rule rather than returning an error, matching
+how the language treats slice bounds everywhere else.
+
+It exists because `e.str`'s frozen `Builder` cannot be implemented without it.
+`Builder` records `arena`, `start`, `len` and `reserved` -- an offset, not a slice --
+so reaching its own bytes means turning `arena.base + start` into a writable `[]u8`.
+The language offers no way: indexing a `*u8`, slicing a `*u8` and pointer arithmetic
+all fail to type-check, and `e.mem` had no view. That blocked `Builder`, `builder`,
+`builder_to`, `done` and all nineteen `push_*` functions, which is the half of
+`e.str` that spec section 4's formatting depends on, and therefore rule 4's supplied
+`format` as well.
+
+Two alternatives were rejected. Widening the language with pointer arithmetic or
+pointer slicing buys the same thing at far greater cost and hands every program a
+primitive only an allocator needs. Re-freezing `Builder` to hold a `[]u8` instead of
+an offset avoids the compiler change, but edits a frozen type that the delivery
+discipline treats as a contract, and leaves the underlying gap for the next structure
+that records an offset.
+
+`view` is compiler-owned like `alloc`, `mark`, `reset` and `stats`, but unlike them
+it has no runtime symbol: a base load, an add and a two-word store are emitted where
+the call appears. It is the first arena intrinsic lowered inline rather than through
+`neper_mem_*`, which keeps all three runtimes unchanged.
+
+Nothing about arena ownership changes. `view` allocates nothing, moves no offset and
+takes `*const Arena`; it is a way to name memory the caller already has, not a second
+way to obtain it.
+
 ## Consequences accepted
 
 - **We own the optimiser.** v1 targets roughly `-O1` quality: inlining, constant
