@@ -9,6 +9,7 @@ use lex
 use lower
 use nir
 use object_coff
+use object_elf
 use parse
 use project
 use regalloc
@@ -728,6 +729,7 @@ fn self_test() -> err {
     try emit_x64.self_test()
     try codegen_x64.self_test()
     try object_coff.self_test()
+    try object_elf.self_test()
     ret ok
 }
 
