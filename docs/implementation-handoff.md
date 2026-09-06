@@ -455,12 +455,6 @@ identical content hash while `lib.x64-*.em` carries no code. Both suites assert
 the code counts, the instance discriminators, the shared content hash, and that
 the executable linked from the folded artifacts runs.
 
-Note on where this state lives: `source_start` and `source_end` went on
-`check.FunctionGeneric` rather than `check.Function` because the bootstrap
-miscompiled generic instantiation on Windows once `check.Function` grew by three
-`usize` fields. Section 7.6 fixed that, so the placement is now a free choice
-rather than a constraint.
-
 ### 7.6 Bootstrap frames sized by measurement
 
 `bootstrap/neper.c` sized every stack frame as
@@ -492,8 +486,10 @@ function body exceeds that function's frame size. The check fails on assembly
 produced before the fix and passes after.
 
 The constraint this placed on compiler state is lifted. `check.Function` was
-verified to take 24 extra `usize` fields with no failure; `source_start` and
-`source_end` may be moved back onto it whenever that reads better.
+verified to take 24 extra `usize` fields with no failure, and `source_start` and
+`source_end` were moved back onto it: a declaration's source range describes the
+function, not its generic parameters, and every instance needs it whether or not
+it came from a template.
 
 ## 8. Working-tree boundaries
 

@@ -116,6 +116,8 @@ type Function = struct {
     name: str,
     module_index: usize,
     owner_module_index: usize,
+    source_start: usize,
+    source_end: usize,
     first_parameter: usize,
     parameter_count: usize,
     first_return: usize,
@@ -134,8 +136,6 @@ type FunctionGeneric = struct {
     instance: bool,
     checked: bool,
     lowered: bool,
-    source_start: usize,
-    source_end: usize,
 }
 
 type AggregateKind = enum u8 {
@@ -1840,14 +1840,14 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     item.name = name
     item.module_index = module_index
     item.owner_module_index = module_index
+    if node.token_start < node.token_end && node.token_end <= c.token_count {
+        item.source_start = c.tokens[node.token_start].start
+        item.source_end = c.tokens[node.token_end - 1usize].end
+    }
     item.first_parameter = c.parameter_count
     item.first_return = c.return_type_count
     item.external = node.kind == .ExternDecl
     var generic: FunctionGeneric = zero
-    if node.token_start < node.token_end && node.token_end <= c.token_count {
-        generic.source_start = c.tokens[node.token_start].start
-        generic.source_end = c.tokens[node.token_end - 1usize].end
-    }
     generic.first_comptime = c.comptime_parameter_count
     let end = node.first_child + node.child_count
     var at = node.first_child
@@ -3090,6 +3090,10 @@ fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: 
     instance.name = template.name
     instance.module_index = template.module_index
     instance.owner_module_index = owner_module_index
+    // The instance is code in the instantiating module, but its body is still the
+    // template's source, so it keeps the template's source range.
+    instance.source_start = template.source_start
+    instance.source_end = template.source_end
     instance.instance_id = template_instance_count(c, owner_module_index, template_index) + 1usize
     instance.first_parameter = c.parameter_count
     instance.parameter_count = template.parameter_count
@@ -3099,10 +3103,6 @@ fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: 
     var generic: FunctionGeneric = zero
     generic.first_comptime = c.function_generics[template_index].first_comptime
     generic.comptime_count = c.function_generics[template_index].comptime_count
-    // The instance is code in the instantiating module, but its body is still the
-    // template's source, so it keeps the template's source range.
-    generic.source_start = c.function_generics[template_index].source_start
-    generic.source_end = c.function_generics[template_index].source_end
     generic.template_index = template_index
     generic.first_argument = first_argument
     generic.instance = true

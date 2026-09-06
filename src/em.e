@@ -692,11 +692,10 @@ fn body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_
     } else {
         if checked_function >= c.function_count { ret (0usize, InvalidArtifact) }
         let function = c.functions[checked_function]
-        let generic = c.function_generics[checked_function]
-        if function.generic && generic.source_end > generic.source_start && function.module_index < g.count {
+        if function.generic && function.source_end > function.source_start && function.module_index < g.count {
             let marker_error = binary.byte(scratch, 2usize)
             if marker_error != ok { ret (0usize, marker_error) }
-            let tokens_error = write_declaration_tokens_canonical(g.modules[function.module_index].text, generic.source_start, generic.source_end, scratch)
+            let tokens_error = write_declaration_tokens_canonical(g.modules[function.module_index].text, function.source_start, function.source_end, scratch)
             if tokens_error != ok { ret (0usize, tokens_error) }
         } else {
             let marker_error = binary.byte(scratch, 0usize)
