@@ -825,3 +825,6 @@ if ($LASTEXITCODE -ne 1 -or ($cycleOutput -join "`n") -notmatch
 }
 
 Write-Output 'selfhost tests passed'
+# The last native command above is an expected-failure case, so $LASTEXITCODE is
+# still 1 here. Report the suite's own result instead of inheriting that.
+exit 0
