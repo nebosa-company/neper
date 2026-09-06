@@ -266,6 +266,12 @@ elf_path="$test_build/calls.o"
 object_written=$($test_build/neper-self emit-object "$repo/tests/selfhost/fixtures/nir/calls/src/main.e" "$repo" x64 linux "$elf_path")
 [ "$object_written" = 'object written' ]
 readelf -h "$elf_path" >/dev/null
+executable_path="$test_build/basic-selfhost"
+executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/basic/src/main.e" "$repo" x64 linux "$executable_path")
+[ "$executable_written" = 'executable written' ]
+chmod +x "$executable_path"
+"$executable_path"
+readelf -h -l "$executable_path" >/dev/null
 locals_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/locals/src/main.e" "$repo" x64 linux)
 [ "$locals_lowered" = 'module nir ok' ]
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

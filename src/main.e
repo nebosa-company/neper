@@ -6,6 +6,7 @@ use codegen_x64
 use emit_x64
 use graph
 use lex
+use link_elf
 use lower
 use nir
 use object_coff
@@ -730,6 +731,7 @@ fn self_test() -> err {
     try codegen_x64.self_test()
     try object_coff.self_test()
     try object_elf.self_test()
+    try link_elf.self_test()
     ret ok
 }
 
@@ -1140,9 +1142,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
-    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object {
+    let writes_executable = args.len == 7usize && same(args[1usize], "emit-executable")
+    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable {
         let emit_object = same(args[1usize], "object-file") || writes_object
-        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object
+        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
@@ -1215,6 +1218,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         if emit_machine_code {
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
+            if writes_executable {
+                if machine_abi == .Windows { ret link_elf.InvalidExecutable }
+                let (executable_storage, executable_storage_error) = mem.alloc[usize](a, 1048576usize)
+                if executable_storage_error != ok { ret executable_storage_error }
+                var executable: emit_x64.Buffer = zero
+                try emit_x64.init(&executable, executable_storage)
+                try link_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
+                let (packed, packed_error) = mem.alloc[u8](a, executable.count)
+                if packed_error != ok { ret packed_error }
+                try emit_x64.pack(&executable, packed)
+                try save_bytes(a, args[6usize], packed)
+                try io.print("executable written\n")
+                ret ok
+            }
             if emit_object {
                 let (object_storage, object_storage_error) = mem.alloc[usize](a, 262144usize)
                 if object_storage_error != ok { ret object_storage_error }
@@ -1246,6 +1263,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
     ret ok
 }
