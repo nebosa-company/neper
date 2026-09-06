@@ -7,8 +7,43 @@ $testBuild = Join-Path $repo 'build\tests\selfhost'
 New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 
 $compiler = Join-Path $testBuild 'neper-self.exe'
-& $neper build (Join-Path $repo 'src\main.e') --arena 1g --output $compiler
+$compilerAsm = Join-Path $testBuild 'neper-self.asm'
+& $neper build (Join-Path $repo 'src\main.e') --arena 1g --output $compiler --emit-asm $compilerAsm
 if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
+# Every bootstrap frame has to cover the temporaries its statements allocate. A
+# frame sized by guess rather than by measurement lets a deep statement address
+# below rsp, into the outgoing argument area and past the stack pointer.
+$frameProc = ''
+$frameSize = 0
+$frameDeepest = 0
+$frameProbe = -1
+$frameOverruns = @()
+function Test-Frame {
+    if ($script:frameProc -and $script:frameSize -gt 0 -and $script:frameDeepest -gt $script:frameSize) {
+        $script:frameOverruns += "$($script:frameProc) reaches [rbp-$($script:frameDeepest)] in a $($script:frameSize)-byte frame"
+    }
+}
+foreach ($line in [IO.File]::ReadLines($compilerAsm)) {
+    if ($line -match '^(\S+) PROC FRAME') {
+        Test-Frame
+        $frameProc = $Matches[1]; $frameSize = 0; $frameDeepest = 0; $frameProbe = -1
+        continue
+    }
+    if (-not $frameProc) { continue }
+    if ($frameSize -eq 0) {
+        if ($line -match '^\s+sub rsp, (\d+)$') { $frameSize = [int]$Matches[1]; continue }
+        if ($line -match '^\s+mov eax, (\d+)$') { $frameProbe = [int]$Matches[1]; continue }
+        if ($frameProbe -ge 0 -and $line.Contains('call np_stack_probe')) { $frameSize = $frameProbe; $frameProbe = -1 }
+        continue
+    }
+    if (-not $line.Contains('[rbp-')) { continue }
+    foreach ($hit in [regex]::Matches($line, '\[rbp-(\d+)')) {
+        $depth = [int]$hit.Groups[1].Value
+        if ($depth -gt $frameDeepest) { $frameDeepest = $depth }
+    }
+}
+Test-Frame
+if ($frameOverruns.Count -ne 0) { throw "bootstrap frames do not cover their temporaries: $($frameOverruns -join '; ')" }
 $lexer = & $compiler self-test
 if ($LASTEXITCODE -ne 0 -or $lexer -ne 'selfhost lexer ok') { throw 'self-hosted lexer behavior failed' }
 $scan = & $compiler scan 'fn main() -> err { ret ok }'

@@ -7,7 +7,33 @@ test_build="$repo/build-linux/tests/selfhost"
 "$repo/scripts/build-bootstrap.sh" >/dev/null
 mkdir -p "$test_build"
 
-$neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self"
+$neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
+# Every bootstrap frame has to cover the temporaries its statements allocate. A
+# frame sized by guess rather than by measurement lets a deep statement address
+# below rsp, into the outgoing argument area and past the stack pointer.
+awk '
+function report() {
+    if (proc != "" && frame > 0 && deepest > frame) {
+        printf "%s reaches [rbp-%d] in a %d-byte frame\n", proc, deepest, frame
+        bad = 1
+    }
+}
+/^\.type [A-Za-z0-9_]+, @function/ { report(); proc = $2; sub(/,$/, "", proc); frame = 0; deepest = 0; probe = -1; next }
+proc == "" { next }
+frame == 0 && /^[ \t]+sub rsp, [0-9]+$/ { frame = $3 + 0; next }
+frame == 0 && /^[ \t]+mov eax, [0-9]+$/ { probe = $3 + 0; next }
+frame == 0 && probe >= 0 && /call np_stack_probe/ { frame = probe; probe = -1; next }
+frame == 0 { next }
+{
+    rest = $0
+    while (match(rest, /\[rbp-[0-9]+/)) {
+        depth = substr(rest, RSTART + 5, RLENGTH - 5) + 0
+        if (depth > deepest) deepest = depth
+        rest = substr(rest, RSTART + RLENGTH)
+    }
+}
+END { report(); if (bad) exit 1; exit 0 }
+' "$test_build/neper-self.s"
 lexer=$($test_build/neper-self self-test)
 [ "$lexer" = 'selfhost lexer ok' ]
 scan=$($test_build/neper-self scan 'fn main() -> err { ret ok }')

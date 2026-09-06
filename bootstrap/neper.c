@@ -5213,6 +5213,8 @@ typedef struct Emitter {
     Function *fn;
     int temp_offset;
     int call_base;
+    int max_temp;
+    int outgoing_bytes;
     int return_label;
     int debug_label;
     int loop_break[MAX_LOOP_DEPTH];
@@ -5302,6 +5304,7 @@ static void assign_offsets(Compiler *c, Function *fn) {
 static int alloc_temp(Emitter *e, int lanes) {
     int offset = e->temp_offset;
     e->temp_offset += lanes * 8;
+    if (e->temp_offset > e->max_temp) e->max_temp = e->temp_offset;
     return offset;
 }
 
@@ -5417,9 +5420,11 @@ static void emit_argument_lane(Emitter *e, int lane, const char *source) {
                                   (lane < 6 ? sysv_regs[lane] : 0);
     if (reg) fprintf(e->out, "    mov %s, %s\n", reg, source);
     else {
+        int top = e->windows ? 32 + (lane - 3) * 8 : (lane - 5) * 8;
         fprintf(e->out, "    mov rax, %s\n", source);
         if (e->windows) fprintf(e->out, "    mov QWORD PTR [rsp+%d], rax\n", 32 + (lane - 4) * 8);
         else fprintf(e->out, "    mov QWORD PTR [rsp+%d], rax\n", (lane - 6) * 8);
+        if (top > e->outgoing_bytes) e->outgoing_bytes = top;
     }
 }
 
@@ -6262,13 +6267,45 @@ static void emit_statements(Emitter *e, Stmt *s) {
     e->defer_scope_depth--;
 }
 
+/* How much scratch a function needs is only known once its statements have been
+   emitted: temporaries are allocated per statement and the outgoing argument area
+   depends on the widest call. Emitting once to a null sink measures both, so the
+   frame can be sized to fit instead of guessing a fixed area and letting deep
+   statements write below rsp. Label counters are restored so the measured pass and
+   the real pass produce identical labels. */
+static void emit_function_stream(Emitter *e, Function *fn);
+
 static void emit_function(Emitter *e, Function *fn) {
+    assign_offsets(e->compiler, fn);
+    e->fn = fn;
+    e->call_base = fn->local_count ? fn->locals[fn->local_count - 1].offset + 16 : 16;
+    {
+        FILE *sink = fopen(e->windows ? "NUL" : "/dev/null", "w");
+        if (sink) {
+            FILE *real = e->out;
+            int label = e->label, debug_label = e->debug_label;
+            e->out = sink;
+            e->max_temp = e->call_base;
+            e->outgoing_bytes = e->windows ? 32 : 0;
+            e->return_label = e->label++;
+            emit_function_stream(e, fn);
+            fclose(sink);
+            e->out = real;
+            e->label = label;
+            e->debug_label = debug_label;
+            fn->frame_size = align16(e->max_temp + e->outgoing_bytes + 16);
+        }
+    }
+    e->max_temp = e->call_base;
+    e->outgoing_bytes = e->windows ? 32 : 0;
+    e->return_label = e->label++;
+    emit_function_stream(e, fn);
+}
+
+static void emit_function_stream(Emitter *e, Function *fn) {
     static const char *win_regs[] = {"rcx", "rdx", "r8", "r9"};
     static const char *sysv_regs[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
     int i, lane = 0;
-    assign_offsets(e->compiler, fn);
-    e->fn = fn; e->return_label = e->label++;
-    e->call_base = fn->local_count ? fn->locals[fn->local_count - 1].offset + 16 : 16;
     if (e->windows) {
         fprintf(e->out, "%s PROC FRAME\n", symbol_name(fn));
         fputs("    push rbp\n    .pushreg rbp\n    mov rbp, rsp\n", e->out);

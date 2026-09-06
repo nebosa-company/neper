@@ -455,10 +455,45 @@ identical content hash while `lib.x64-*.em` carries no code. Both suites assert
 the code counts, the instance discriminators, the shared content hash, and that
 the executable linked from the folded artifacts runs.
 
-Note for anyone adding compiler state: `source_start` and `source_end` live on
-`check.FunctionGeneric` rather than `check.Function` only because the bootstrap
-miscompiles generic instantiation on Windows once `check.Function` grows by three
-`usize` fields. See section 11.
+Note on where this state lives: `source_start` and `source_end` went on
+`check.FunctionGeneric` rather than `check.Function` because the bootstrap
+miscompiled generic instantiation on Windows once `check.Function` grew by three
+`usize` fields. Section 7.6 fixed that, so the placement is now a free choice
+rather than a constraint.
+
+### 7.6 Bootstrap frames sized by measurement
+
+`bootstrap/neper.c` sized every stack frame as
+`align16(locals_end + 32 * 8 + 64)` — a fixed 320-byte guess for the scratch a
+function might need. Temporaries are allocated per statement from `call_base`
+downward, and outgoing stack arguments sit at the bottom of the same frame, so any
+statement needing more than the guess addressed memory below `rsp`.
+
+At the commit before the fix, 11 of the 811 emitted functions did this on both
+platforms. `resolve_reserved` was the worst: a single `ret same(...) || same(...)`
+chain reached `[rbp-736]` inside a 352-byte frame, 384 bytes past the stack
+pointer. Writing below `rsp` is undefined rather than reliably fatal, which is why
+it went unnoticed — it corrupted nothing most of the time, and adding fields to a
+hot struct just moved which statement landed on something that mattered. That is
+what made a third `usize` on `check.Function` segfault the stage-1 compiler on
+Windows on any module that instantiated a generic.
+
+`emit_function` now emits each function twice: once to the platform's null device
+to measure the temporary high-water mark and the widest outgoing argument area,
+then for real with `frame_size = align16(max_temp + outgoing_bytes + 16)`. Label
+and debug-label counters are saved and restored around the measuring pass so both
+passes produce identical labels, and the debug type and string tables are built
+after all functions are emitted, so the extra pass cannot disturb them. If the null
+device cannot be opened the old conservative size is kept.
+
+Both suites now assert the invariant directly over every function the bootstrap
+emits: build the compiler with `--emit-asm`, then check that no `[rbp-N]` in a
+function body exceeds that function's frame size. The check fails on assembly
+produced before the fix and passes after.
+
+The constraint this placed on compiler state is lifted. `check.Function` was
+verified to take 24 extra `usize` fields with no failure; `source_start` and
+`source_end` may be moved back onto it whenever that reads better.
 
 ## 8. Working-tree boundaries
 
@@ -603,12 +638,11 @@ needs general `T.cmp` protocol resolution first.
   code, which for a generic instance is the instantiating module, not the module
   that declares the template. `em.checked_function_for_nir` therefore cannot look
   a template up by module and name.
-- The bootstrap miscompiles the self-hosted compiler on Windows once
-  `check.Function` grows by three `usize` fields: the resulting stage-1 binary
-  segfaults on any module that instantiates a generic function. Two fields are
-  fine, Linux is unaffected, and a stage-2 built by the self-hosted compiler
-  handles the same source correctly, so the defect is in `bootstrap/neper.c`. Put
-  new per-function state on `check.FunctionGeneric` until it is fixed.
+- Bootstrap frame sizes are measured, not guessed (section 7.6). Anything that
+  adds a new kind of stack temporary to `bootstrap/neper.c` must allocate it
+  through `alloc_temp`, and anything that writes a new outgoing argument must go
+  through `emit_argument_lane`; otherwise the measuring pass will not see it and
+  the frame will be too small again. Both suites check the invariant.
 - The compiled-module format is version 2. Artifacts written by an earlier
   compiler are rejected with `UnsupportedVersion`; delete stale `.em` files
   rather than trying to read them.
