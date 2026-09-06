@@ -536,6 +536,31 @@ fn find_checked_function(c: *check.Checker, module_index: usize, name: str) -> (
     ret (0usize, false)
 }
 
+fn dependency_reference_name(name: str) -> (str, bool) {
+    // Lowering uses linker symbols for host intrinsics, while dependency hashes
+    // identify their source declarations. Keep this table aligned with
+    // lower.intrinsic_symbol. mem.alloc is compiler-owned and has no declaration.
+    if same(name, "neper_mem_alloc") { ret ("", false) }
+    if same(name, "neper_mem_mark") { ret ("mark", true) }
+    if same(name, "neper_mem_reset") { ret ("reset", true) }
+    if same(name, "neper_mem_stats") { ret ("stats", true) }
+    if same(name, "neper_os_open") { ret ("open", true) }
+    if same(name, "neper_os_read") { ret ("read", true) }
+    if same(name, "neper_os_write") { ret ("write", true) }
+    if same(name, "neper_os_close") { ret ("close", true) }
+    if same(name, "neper_os_stdout") { ret ("stdout", true) }
+    if same(name, "neper_os_stderr") { ret ("stderr", true) }
+    if same(name, "neper_os_readdir") { ret ("readdir", true) }
+    if same(name, "neper_os_spawn") { ret ("spawn", true) }
+    if same(name, "neper_os_wait") { ret ("wait", true) }
+    if same(name, "neper_os_exit") { ret ("exit", true) }
+    if same(name, "neper_os_args") { ret ("args", true) }
+    if same(name, "neper_os_reserve") { ret ("reserve", true) }
+    if same(name, "neper_os_commit") { ret ("commit", true) }
+    if same(name, "neper_os_clock") { ret ("clock", true) }
+    ret (name, true)
+}
+
 fn checked_function_for_nir(c: *check.Checker, builder: *nir.Builder, nir_function: usize) -> (usize, bool) {
     if nir_function >= builder.function_count { ret (0usize, false) }
     let lowered = builder.functions[nir_function]
@@ -608,7 +633,12 @@ fn write_nir_canonical(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
         try binary.byte(output, opcode)
         if instruction.has_result { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
         try binary.little_u16(output, 0usize)
-        try write_type_canonical(c, g, instruction.ty, output)
+        var instruction_type = instruction.ty
+        if instruction_type.kind == .Invalid {
+            if instruction.has_result { ret InvalidArtifact }
+            instruction_type = check.make_type(.Void, "void", function.module_index)
+        }
+        try write_type_canonical(c, g, instruction_type, output)
         if instruction.has_result { try binary.little_u32(output, instruction.result) } else { try binary.little_u32(output, 0usize) }
         try binary.little_u32(output, instruction.operand_count)
         if instruction.first_operand + instruction.operand_count > builder.operand_count { ret InvalidArtifact }
@@ -783,6 +813,11 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
                     if target_module_error != ok { ret target_module_error }
                     let (target_name, target_name_error) = intern(table, reference.name)
                     if target_name_error != ok { ret target_name_error }
+                    let (dependency_name, records_dependency) = dependency_reference_name(reference.name)
+                    if records_dependency {
+                        let (stored_dependency_name, dependency_name_error) = intern(table, dependency_name)
+                        if dependency_name_error != ok { ret dependency_name_error }
+                    }
                 }
                 instruction_at += 1usize
             }
@@ -1147,7 +1182,9 @@ fn dependency_count(builder: *nir.Builder, module_index: usize) -> usize {
     var count = 0usize
     var at = 0usize
     while at < builder.function_ref_count {
-        if builder.function_refs[at].module_index != module_index && reference_used_by_module(builder, module_index, at) { count += 1usize }
+        let reference = builder.function_refs[at]
+        let (dependency_name, records_dependency) = dependency_reference_name(reference.name)
+        if records_dependency && reference.module_index != module_index && reference_used_by_module(builder, module_index, at) { count += 1usize }
         at += 1usize
     }
     ret count
@@ -1172,15 +1209,16 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     var at = 0usize
     while at < builder.function_ref_count {
         let reference = builder.function_refs[at]
-        if reference.module_index != module_index && reference_used_by_module(builder, module_index, at) {
+        let (dependency_name, records_dependency) = dependency_reference_name(reference.name)
+        if records_dependency && reference.module_index != module_index && reference_used_by_module(builder, module_index, at) {
             if reference.module_index >= g.count { ret InvalidArtifact }
-            let (checked_function, found_function) = find_checked_function(c, reference.module_index, reference.name)
+            let (checked_function, found_function) = find_checked_function(c, reference.module_index, dependency_name)
             if !found_function { ret InvalidArtifact }
             let (hash, hash_error) = signature_hash(c, g, checked_function, scratch)
             if hash_error != ok { ret hash_error }
             let (target_module, target_module_error) = string_index(table, g.modules[reference.module_index].name)
             if target_module_error != ok { ret target_module_error }
-            let (target_name, target_name_error) = string_index(table, reference.name)
+            let (target_name, target_name_error) = string_index(table, dependency_name)
             if target_name_error != ok { ret target_name_error }
             try binary.byte(output, dependency_signature_kind())
             try binary.zeroes(output, 3usize)

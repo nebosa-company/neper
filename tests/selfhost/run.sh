@@ -546,6 +546,32 @@ interface_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhos
 interface_offset=$(od -An -tu8 -j64 -N8 "$interface_artifact_path" | tr -d ' ')
 [ "$(od -An -tu4 -j$((interface_offset + 8)) -N4 "$interface_artifact_path" | tr -d ' ')" = '6' ]
 [ "$(od -An -tu8 -j$((interface_offset + 28)) -N8 "$interface_artifact_path" | tr -d ' ')" -ne 0 ]
+hash_module_artifacts="$test_build/hash-module"
+mkdir -p "$hash_module_artifacts"
+hash_module_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/em/hash_module/src/main.e" "$repo" x64 linux "$hash_module_artifacts")
+[ "$hash_module_artifacts_written" = 'compiled modules written' ]
+[ -f "$hash_module_artifacts/main.x64-linux.em" ]
+[ -f "$hash_module_artifacts/algo.hash.x64-linux.em" ]
+hash_module_validation=$($test_build/neper-self validate-em "$hash_module_artifacts/main.x64-linux.em")
+[ "$hash_module_validation" = 'compiled module valid' ]
+hash_module_interface_offset=$(od -An -tu8 -j64 -N8 "$hash_module_artifacts/algo.hash.x64-linux.em" | tr -d ' ')
+[ "$(od -An -tu4 -j$((hash_module_interface_offset + 8)) -N4 "$hash_module_artifacts/algo.hash.x64-linux.em" | tr -d ' ')" = '13' ]
+hash_runtime_artifacts="$test_build/hash-runtime"
+mkdir -p "$hash_runtime_artifacts"
+hash_runtime_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/algo_hash/src/main.e" "$repo" x64 linux "$hash_runtime_artifacts")
+[ "$hash_runtime_artifacts_written" = 'compiled modules written' ]
+for artifact_name in main algo.hash e.io e.mem e.os; do
+    artifact_path="$hash_runtime_artifacts/$artifact_name.x64-linux.em"
+    [ -f "$artifact_path" ]
+    artifact_validation=$($test_build/neper-self validate-em "$artifact_path")
+    [ "$artifact_validation" = 'compiled module valid' ]
+done
+host_dependency_artifacts="$test_build/host-dependency"
+mkdir -p "$host_dependency_artifacts"
+host_dependency_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/em/host_dependency/src/main.e" "$repo" x64 linux "$host_dependency_artifacts")
+[ "$host_dependency_artifacts_written" = 'compiled modules written' ]
+runtime_host_edge=$($test_build/neper-self check-em-edge "$host_dependency_artifacts/main.x64-linux.em" "$host_dependency_artifacts/e.os.x64-linux.em")
+[ "$runtime_host_edge" = 'dependency current' ]
 all_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$test_build")
 [ "$all_artifacts_written" = 'compiled modules written' ]
 [ -f "$test_build/main.x64-linux.em" ]

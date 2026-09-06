@@ -292,7 +292,8 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
     if return_layout.via_slot && results.count != 0usize {
         var slots = (return_layout.size + 7usize) / 8usize
         if slots == 0usize { slots = 1usize }
-        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, zero, true, slots, token)
+        let slot_type = check.make_type(.Other, "return-slot", call.function.module_index)
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, slot_type, true, slots, token)
         if stack_error != ok { ret stack_error }
         slot = stack
     }
@@ -318,6 +319,8 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
             let (single_type, single_type_error) = check.call_return(c, call, 0usize)
             if single_type_error != ok { ret single_type_error }
             call_type = single_type
+        } else {
+            call_type = check.make_type(.Other, "return-values", call.function.module_index)
         }
     }
     let (instruction, call_result, emit_error) = nir.emit(builder, .Call, call_type, call_has_result, function_ref, token)

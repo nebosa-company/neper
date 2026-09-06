@@ -767,7 +767,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     let (call_displacement, call_error) = emit_x64.call(output)
                     if call_error != ok { ret call_error }
                     try add_relocation(relocations, relocation_count, call_displacement, instruction.immediate)
-                    let multiple_results = instruction.has_result && instruction.ty.kind == .Invalid
+                    let multiple_results = instruction.has_result && (instruction.ty.kind == .Invalid || (instruction.ty.kind == .Other && check.same(instruction.ty.name, "return-values")))
                     if instruction.has_result {
                         try emit_x64.mov_register(output, 10usize, 0usize)
                         if multiple_results { try emit_x64.mov_register(output, 11usize, 2usize) }

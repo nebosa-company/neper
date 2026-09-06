@@ -419,6 +419,34 @@ $interfaceArtifactBytes = [IO.File]::ReadAllBytes($interfaceArtifactPath)
 $interfaceOffset = [BitConverter]::ToUInt64($interfaceArtifactBytes, 64)
 if ([BitConverter]::ToUInt32($interfaceArtifactBytes, [int]$interfaceOffset + 8) -ne 6) { throw 'compiled-module interface omitted a declaration kind' }
 if ([BitConverter]::ToUInt64($interfaceArtifactBytes, [int]$interfaceOffset + 28) -eq 0) { throw 'compiled-module function signature hash is zero' }
+$hashModuleArtifacts = Join-Path $testBuild 'hash-module'
+New-Item -ItemType Directory -Force -Path $hashModuleArtifacts | Out-Null
+$hashModuleArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\em\hash_module\src\main.e') $repo 'x64' 'windows' $hashModuleArtifacts
+if ($LASTEXITCODE -ne 0 -or $hashModuleArtifactsWritten -ne 'compiled modules written') { throw 'void-return hash-module artifact emission failed' }
+$hashModuleRootPath = Join-Path $hashModuleArtifacts 'main.x64-windows.em'
+$hashModuleLibraryPath = Join-Path $hashModuleArtifacts 'algo.hash.x64-windows.em'
+if (-not (Test-Path -LiteralPath $hashModuleRootPath) -or -not (Test-Path -LiteralPath $hashModuleLibraryPath)) { throw 'hash-module artifact set is incomplete' }
+$hashModuleValidation = & $compiler validate-em $hashModuleRootPath
+if ($LASTEXITCODE -ne 0 -or $hashModuleValidation -ne 'compiled module valid') { throw 'void-return root artifact is invalid' }
+$hashModuleLibraryBytes = [IO.File]::ReadAllBytes($hashModuleLibraryPath)
+$hashModuleInterfaceOffset = [BitConverter]::ToUInt64($hashModuleLibraryBytes, 64)
+if ([BitConverter]::ToUInt32($hashModuleLibraryBytes, [int]$hashModuleInterfaceOffset + 8) -ne 13) { throw 'algo.hash artifact interface is incomplete' }
+$hashRuntimeArtifacts = Join-Path $testBuild 'hash-runtime'
+New-Item -ItemType Directory -Force -Path $hashRuntimeArtifacts | Out-Null
+$hashRuntimeArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\algo_hash\src\main.e') $repo 'x64' 'windows' $hashRuntimeArtifacts
+if ($LASTEXITCODE -ne 0 -or $hashRuntimeArtifactsWritten -ne 'compiled modules written') { throw 'runtime-backed hash artifact emission failed' }
+foreach ($artifactName in @('main', 'algo.hash', 'e.io', 'e.mem', 'e.os')) {
+    $artifactPath = Join-Path $hashRuntimeArtifacts ($artifactName + '.x64-windows.em')
+    if (-not (Test-Path -LiteralPath $artifactPath)) { throw "runtime-backed hash artifact set omitted $artifactName" }
+    $artifactValidation = & $compiler validate-em $artifactPath
+    if ($LASTEXITCODE -ne 0 -or $artifactValidation -ne 'compiled module valid') { throw "runtime-backed hash artifact is invalid: $artifactName" }
+}
+$hostDependencyArtifacts = Join-Path $testBuild 'host-dependency'
+New-Item -ItemType Directory -Force -Path $hostDependencyArtifacts | Out-Null
+$hostDependencyArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\em\host_dependency\src\main.e') $repo 'x64' 'windows' $hostDependencyArtifacts
+if ($LASTEXITCODE -ne 0 -or $hostDependencyArtifactsWritten -ne 'compiled modules written') { throw 'host-intrinsic dependency artifact emission failed' }
+$runtimeHostEdge = & $compiler check-em-edge (Join-Path $hostDependencyArtifacts 'main.x64-windows.em') (Join-Path $hostDependencyArtifacts 'e.os.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $runtimeHostEdge -ne 'dependency current') { throw 'lowered host intrinsic did not retain its source-level dependency edge' }
 $allArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $testBuild
 if ($LASTEXITCODE -ne 0 -or $allArtifactsWritten -ne 'compiled modules written') { throw 'per-module artifact emission failed' }
 $rootModuleArtifactPath = Join-Path $testBuild 'main.x64-windows.em'
