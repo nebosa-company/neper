@@ -784,6 +784,34 @@ Two things worth knowing:
   `lex.token`. Section 5's own rule caught it, through the same diagnostic path
   this session added earlier.
 
+### 7.15 `docs/llm-mcp-server.md`
+
+`docs/docs_llm-mcp-server.md` was untracked, referenced by nothing, carried a
+`docs_` prefix that reads as a download artifact, and declared itself a "normative
+extension to `docs/spec.md` and `docs/tooling.md`" -- authority no other file in the
+set grants it, and which contradicts `spec.md`'s own preamble, where the post-M2
+design revision changes no current rule until versioned amendments land in M2.5.
+
+It is renamed to `docs/llm-mcp-server.md`, tracked, and re-statused as a proposal.
+The body is unchanged; the whole edit is the Status block. That block records the
+three open points of contact with the adopted set, which is the substance of why it
+could not stand as written:
+
+- `neper patch` conflicts with R11/H29, which demotes byte spans to the lossless and
+  trivia cases and requires a snapshot precondition the proposed payload lacks.
+- `neper header` overlaps R05, the retrievable API catalogue, under another name.
+- The section 5 targets are unadopted numbers; R03 owns token-cost measurement and
+  R07 owns the evidence gate.
+
+Sections 1-3, the MCP server itself, are the part with no counterpart elsewhere. It
+is a client over `neper index --json`, `neper parse --json` and `neper check`, so it
+needs an owning milestone rather than a place in the specification.
+
+Still to do, and deliberately not done here: a cross-reference from `tooling.md` or
+`post-m2-llm-hardening.md`, so the file stops being an orphan. Both were uncommitted
+work in another session's hands at the time (section 8), and this tree is shared
+rather than branched, so editing them would have raced that session.
+
 ## 8. Working-tree boundaries
 
 No compiler or test change is intentionally uncommitted now. Everything in
