@@ -266,6 +266,11 @@ $deferExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests\ne
 if ($LASTEXITCODE -ne 0 -or $deferExecutableWritten -ne 'executable written') { throw 'defer cleanup did not lower into a PE executable' }
 $deferOutput = & $deferExecutablePath
 if ($LASTEXITCODE -ne 0 -or $deferOutput -ne 'defer ok') { throw 'defer capture, ordering, or control-flow cleanup failed' }
+$protocolExecutablePath = Join-Path $testBuild 'protocol-iteration-selfhost.exe'
+$protocolExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests\neper0\protocol-iteration.e') $repo 'x64' 'windows' $protocolExecutablePath
+if ($LASTEXITCODE -ne 0 -or $protocolExecutableWritten -ne 'executable written') { throw 'custom iterator protocol did not lower into a PE executable' }
+$protocolOutput = & $protocolExecutablePath
+if ($LASTEXITCODE -ne 0 -or $protocolOutput -ne 'protocol iteration ok') { throw 'custom iterator protocol call, aggregate result, or cleanup failed' }
 $ownCompilerPath = Join-Path $testBuild 'neper-own.exe'
 & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $ownCompilerPath | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownCompilerPath)) { throw 'compiler-owned PE linker did not emit the compiler' }

@@ -1684,6 +1684,87 @@ fn lower_iterable_parts(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     ret ok
 }
 
+fn protocol_next_function(c: *check.Checker, iterator: check.Type) -> (check.Function, err) {
+    var empty: check.Function = zero
+    var at = 0usize
+    while at < c.signature_function_count {
+        let candidate = c.functions[at]
+        if candidate.module_index == iterator.module_index && check.iterator_next_name_matches(iterator.name, candidate.name) { ret (candidate, ok) }
+        at += 1usize
+    }
+    ret (empty, check.UnknownCallable)
+}
+
+fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, subject_index: usize, body_index: usize, name: lex.Token, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
+    let token = c.tokens[node.token_start]
+    let (subject_type, subject_type_error) = check.check_expr(c, g, tree, module_index, subject_index, check.invalid_type())
+    if subject_type_error != ok { ret subject_type_error }
+    var iterator_type = subject_type
+    var iterator_pointer = 0usize
+    if subject_type.kind == .Pointer {
+        if !subject_type.has_element || subject_type.element >= c.type_count { ret check.InvalidType }
+        iterator_type = c.types[subject_type.element]
+        let (pointer, pointer_type, pointer_error) = lower_expression(c, g, tree, module_index, subject_index, subject_type, builder, bindings, *binding_count)
+        if pointer_error != ok { ret pointer_error }
+        iterator_pointer = pointer
+    } else {
+        let (address, place_type, place_error) = lower_place(c, g, tree, module_index, subject_index, builder, bindings, *binding_count)
+        if place_error != ok { ret place_error }
+        iterator_pointer = address
+    }
+    let (canonical_iterator, canonical_error) = check.canonical_type(c, iterator_type)
+    if canonical_error != ok { ret canonical_error }
+    let (next, next_error) = protocol_next_function(c, canonical_iterator)
+    if next_error != ok { ret next_error }
+    var call: check.CallInfo = zero
+    call.function = next
+    let (entry_branch, entry_error) = emit_branch(builder, token)
+    if entry_error != ok { ret entry_error }
+    let condition_block = builder.block_count
+    let (condition_index, condition_error) = nir.begin_block(builder)
+    if condition_error != ok || condition_index != condition_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, entry_branch, condition_block, 0usize)
+    var arguments: [1]usize = zero
+    arguments[0usize] = iterator_pointer
+    var results: CallResults = zero
+    try emit_call_results(c, call, arguments[..], 1usize, builder, token, &results)
+    if results.count != 2usize { ret check.InvalidType }
+    let (element_type, element_type_error) = check.call_return(c, call, 0usize)
+    if element_type_error != ok { ret element_type_error }
+    let (has_value_type, has_value_type_error) = check.call_return(c, call, 1usize)
+    if has_value_type_error != ok || has_value_type.kind != .Bool { ret check.InvalidType }
+    let (decision, ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, results.values[1usize])
+    let body_block = builder.block_count
+    let (body_index_value, body_error) = nir.begin_block(builder)
+    if body_error != ok || body_index_value != body_block { ret nir.InvalidControlFlow }
+    let local_checkpoint = c.local_count
+    let binding_checkpoint = *binding_count
+    try bind_value(c, g, module_index, name, element_type, results.values[0usize], results.addresses[0usize], false, builder, bindings, binding_count)
+    var break_storage: [256]usize = zero
+    var control = LoopControl { active: true, continue_target: condition_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
+    let lowered_body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
+    c.local_count = local_checkpoint
+    *binding_count = binding_checkpoint
+    if lowered_body_error != ok { ret lowered_body_error }
+    if !builder.blocks[builder.current_block].terminated {
+        let (back_edge, back_edge_error) = emit_branch(builder, token)
+        if back_edge_error != ok { ret back_edge_error }
+        try nir.set_branch_targets(builder, back_edge, condition_block, 0usize)
+    }
+    let exit_block = builder.block_count
+    let (exit_index, exit_error) = nir.begin_block(builder)
+    if exit_error != ok || exit_index != exit_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, decision, body_block, exit_block)
+    var break_at = 0usize
+    while break_at < control.break_count {
+        try nir.set_branch_targets(builder, control.breaks[break_at], exit_block, 0usize)
+        break_at += 1usize
+    }
+    ret ok
+}
+
 fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
     var names: [2]lex.Token = zero
     var name_count = 0usize
@@ -1720,6 +1801,14 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         at += 1usize
     }
     if !found_body || expression_count == 0usize { ret parse.InvalidSyntax }
+    if expression_count == 1usize {
+        let (iterable_type, iterable_type_error) = check.check_expr(c, g, tree, module_index, expressions[0usize], check.invalid_type())
+        if iterable_type_error != ok { ret iterable_type_error }
+        if iterable_type.kind != .Array && iterable_type.kind != .Slice && iterable_type.kind != .String {
+            if name_count != 1usize { ret check.ArgumentCount }
+            ret lower_protocol_for(c, g, tree, module_index, function, node, expressions[0usize], body_index, names[0usize], builder, bindings, binding_count, defers)
+        }
+    }
     let token = c.tokens[node.token_start]
     var counter_type = check.make_type(.Integer, "usize", module_index)
     var initial = 0usize

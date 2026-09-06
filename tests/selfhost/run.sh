@@ -349,6 +349,12 @@ defer_executable_written=$($test_build/neper-self emit-executable "$repo/tests/n
 chmod +x "$defer_executable_path"
 defer_output=$("$defer_executable_path")
 [ "$defer_output" = 'defer ok' ]
+protocol_executable_path="$test_build/protocol-iteration-selfhost"
+protocol_executable_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/protocol-iteration.e" "$repo" x64 linux "$protocol_executable_path")
+[ "$protocol_executable_written" = 'executable written' ]
+chmod +x "$protocol_executable_path"
+protocol_output=$("$protocol_executable_path")
+[ "$protocol_output" = 'protocol iteration ok' ]
 own_compiler_path="$test_build/neper-own"
 own_compiler_written=$($test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$own_compiler_path")
 [ "$own_compiler_written" = 'executable written' ]
