@@ -618,6 +618,42 @@ over integers, a user struct dispatching to its own declared `task_cmp`, and a
 `heapify_in_place_by` and `iter_by`. The fixture asserts the context was actually
 reached and written.
 
+### 7.10 e.data.sort
+
+All seven declarations of the frozen API, in the order `docs/module-apis.md` lists
+them, so the module is `source`. It is an M1 module, so this is the second M1
+library after `e.data.list`.
+
+It needed no compiler work: sections 7.7 through 7.9 had already delivered
+everything it uses. That is the first module this session to compile on the first
+attempt.
+
+Algorithm choices, none of which the API document fixes:
+
+- `in_place` and `in_place_by` are heapsort. Every module-scope declaration is
+  exported, so a private recursive partition helper would widen the public surface;
+  heapsort is iterative, in place, and O(n log n) in the worst case rather than
+  quicksort's O(n squared). It is not stable, and nothing claims it is.
+- `stable_in_place` and `stable_in_place_by` are bottom-up merge sort over one
+  arena scratch buffer, taken and released around a `mem.mark`/`mem.reset` pair.
+  Ties go to the left run, which is what makes them stable.
+- `radix_u32_in_place` and `radix_u64_in_place` are LSD radix, one byte per pass,
+  four and eight passes. Each pass is a counting sort, so they are stable too.
+
+`fixtures/link/data_sort` covers duplicates and negatives, empty and single-element
+slices, already-sorted and exactly-reversed inputs, a user struct dispatching to its
+declared `rec_cmp`, a context-mutating comparison in both orderings, and radix over
+values with the high bit set that a signed comparison would order wrongly. Two
+assertions are worth keeping:
+
+- The stability checks pin the exact sequence numbers within each equal-key run. I
+  confirmed separately that heapsort produces a different order on the same input,
+  so these assertions distinguish a stable sort from an unstable one rather than
+  passing for both.
+- The fixture compares `mem.stats` before and after a further `stable_in_place` and
+  `radix_u32_in_place`, so a scratch buffer that was allocated but never released
+  fails the run.
+
 ## 8. Working-tree boundaries
 
 No compiler or test change is intentionally uncommitted now. Everything in
@@ -677,6 +713,7 @@ The machine plan currently has ten planned M2 modules:
 | Module | Immediate prerequisite or implementation gap |
 | --- | --- |
 | `e.data.heap` | delivered, `surface:"source"` (section 7.9) |
+| `e.data.sort` | delivered, `surface:"source"` (section 7.10). An M1 module, not one of the ten M2 rows |
 | `algo.rand` | Exact API includes `f64`; scalar float lowering and ABI support are incomplete |
 | `algo.uuid` | Depends on `algo.hash` and source-complete `e.str`; `e.str` is not source-complete |
 | `e.fs` | Depends on complete `e.path`, `e.str`, memory, and filesystem `e.os` behavior |
