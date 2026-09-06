@@ -377,6 +377,16 @@ $memViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $memViewWritten -ne 'executable written') { throw 'mem.view executable emission failed' }
 & $memViewPath
 if ($LASTEXITCODE -ne 0) { throw 'mem.view did not alias the arena storage it was given' }
+# The builder owns the top of an arena and grows in place. The fixture pins that the
+# initial reservation is not a limit, that a foreign allocation turns the next push
+# into `str.NotOnTop` rather than an overwrite, that `done` gives the unwritten tail
+# back, that every integer form writes what its verb writes, and that a builder with
+# a sink drains through it instead of reporting `mem.Exhausted`.
+$strBuilderPath = Join-Path $testBuild 'str-builder-selfhost.exe'
+$strBuilderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_builder\src\main.e') $repo 'x64' 'windows' $strBuilderPath
+if ($LASTEXITCODE -ne 0 -or $strBuilderWritten -ne 'executable written') { throw 'str builder executable emission failed' }
+& $strBuilderPath
+if ($LASTEXITCODE -ne 0) { throw 'the string builder or one of its pushes is wrong' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

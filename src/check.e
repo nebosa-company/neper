@@ -770,6 +770,18 @@ fn scalar_type(name: str, module_index: usize) -> Type {
     ret invalid_type()
 }
 
+// `str` names both a builtin type and the qualifier `use e.str` binds, so a dotted
+// path under that name is the module's — `str.Builder`, which section 9 requires in
+// every declared `format` — and never the scalar.
+fn named_type_is_path(c: *Checker, node: syntax.Node) -> bool {
+    var at = node.token_start + 1usize
+    while at < node.token_end {
+        if c.tokens[at].kind == .PunctDot { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn active_comptime_parameter(c: *Checker, name: str) -> (usize, bool) {
     var at = 0usize
     while at < c.active_comptime_count {
@@ -1173,7 +1185,10 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     if first.kind != .Identifier { ret (make_type(.Other, "", module_index), Unsupported) }
     let base = g.modules[module_index].text[first.start..first.end]
     let scalar = scalar_type(base, module_index)
-    if scalar.kind != .Invalid { ret (scalar, ok) }
+    if scalar.kind != .Invalid {
+        let (scalar_module, scalar_qualified) = resolve.qualifier(r, module_index, base)
+        if !scalar_qualified || !named_type_is_path(c, node) { ret (scalar, ok) }
+    }
     let (parameter_index, parameter_found) = active_comptime_parameter(c, base)
     if parameter_found {
         if c.comptime_parameters[parameter_index].kind != .Type { ret (invalid_type(), InvalidType) }

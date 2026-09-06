@@ -419,6 +419,15 @@ mem_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$mem_view_written" = 'executable written' ]
 chmod +x "$test_build/mem-view-selfhost"
 "$test_build/mem-view-selfhost"
+# The builder owns the top of an arena and grows in place. The fixture pins that the
+# initial reservation is not a limit, that a foreign allocation turns the next push
+# into `str.NotOnTop` rather than an overwrite, that `done` gives the unwritten tail
+# back, that every integer form writes what its verb writes, and that a builder with
+# a sink drains through it instead of reporting `mem.Exhausted`.
+str_builder_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/str_builder/src/main.e" "$repo" x64 linux "$test_build/str-builder-selfhost")
+[ "$str_builder_written" = 'executable written' ]
+chmod +x "$test_build/str-builder-selfhost"
+"$test_build/str-builder-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {
