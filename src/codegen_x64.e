@@ -1,5 +1,6 @@
 // x64 instruction selection from allocated scalar NIR.
 
+use check
 use emit_x64
 use nir
 use regalloc
@@ -58,6 +59,43 @@ fn store_result(allocations: []regalloc.Allocation, value: usize, source: usize,
     ret ok
 }
 
+fn comparison(opcode: nir.Opcode) -> bool {
+    ret opcode == .Equal || opcode == .NotEqual || opcode == .Less || opcode == .LessEqual || opcode == .Greater || opcode == .GreaterEqual
+}
+
+fn value_type(builder: *nir.Builder, current: nir.Function, value: usize) -> (check.Type, err) {
+    let end = current.first_instruction + current.instruction_count
+    var at = current.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        if instruction.has_result && instruction.result == value { ret (instruction.ty, ok) }
+        at += 1usize
+    }
+    ret (zero, Unsupported)
+}
+
+fn comparison_condition(opcode: nir.Opcode, unsigned: bool) -> (usize, err) {
+    if opcode == .Equal { ret (4usize, ok) }
+    if opcode == .NotEqual { ret (5usize, ok) }
+    if opcode == .Less {
+        if unsigned { ret (2usize, ok) }
+        ret (12usize, ok)
+    }
+    if opcode == .LessEqual {
+        if unsigned { ret (6usize, ok) }
+        ret (14usize, ok)
+    }
+    if opcode == .Greater {
+        if unsigned { ret (7usize, ok) }
+        ret (15usize, ok)
+    }
+    if opcode == .GreaterEqual {
+        if unsigned { ret (3usize, ok) }
+        ret (13usize, ok)
+    }
+    ret (0usize, Unsupported)
+}
+
 fn function(builder: *nir.Builder, function_index: usize, allocations: []regalloc.Allocation, stack_slots: usize, block_offsets: []usize, fixups: []Fixup, output: *emit_x64.Buffer) -> err {
     if function_index >= builder.function_count { ret Unsupported }
     let current = builder.functions[function_index]
@@ -80,7 +118,7 @@ fn function(builder: *nir.Builder, function_index: usize, allocations: []regallo
             try emit_x64.mov_immediate(output, destination, instruction.immediate)
             try store_result(allocations, instruction.result, destination, output)
         } else {
-            if instruction.opcode == .Add || instruction.opcode == .Subtract || instruction.opcode == .Multiply {
+            if instruction.opcode == .Add || instruction.opcode == .Subtract || instruction.opcode == .Multiply || comparison(instruction.opcode) {
                 if instruction.operand_count != 2usize { ret Unsupported }
                 let left_value = builder.operands[instruction.first_operand]
                 let right_value = builder.operands[instruction.first_operand + 1usize]
@@ -90,10 +128,21 @@ fn function(builder: *nir.Builder, function_index: usize, allocations: []regallo
                 if left_error != ok { ret left_error }
                 let (right, right_error) = read_value(allocations, right_value, 11usize, output)
                 if right_error != ok { ret right_error }
-                if destination != left { try emit_x64.mov_register(output, destination, left) }
-                if instruction.opcode == .Add { try emit_x64.add_register(output, destination, right) }
-                if instruction.opcode == .Subtract { try emit_x64.subtract_register(output, destination, right) }
-                if instruction.opcode == .Multiply { try emit_x64.multiply_register(output, destination, right) }
+                if comparison(instruction.opcode) {
+                    let (operand_type, operand_type_error) = value_type(builder, current, left_value)
+                    if operand_type_error != ok { ret operand_type_error }
+                    let unsigned = operand_type.kind == .Integer && operand_type.name.len > 0usize && operand_type.name[0usize] == 117u8
+                    let (condition, condition_error) = comparison_condition(instruction.opcode, unsigned)
+                    if condition_error != ok { ret condition_error }
+                    try emit_x64.compare_register(output, left, right)
+                    try emit_x64.mov_immediate(output, destination, 0usize)
+                    try emit_x64.set_condition(output, destination, condition)
+                } else {
+                    if destination != left { try emit_x64.mov_register(output, destination, left) }
+                    if instruction.opcode == .Add { try emit_x64.add_register(output, destination, right) }
+                    if instruction.opcode == .Subtract { try emit_x64.subtract_register(output, destination, right) }
+                    if instruction.opcode == .Multiply { try emit_x64.multiply_register(output, destination, right) }
+                }
                 try store_result(allocations, instruction.result, destination, output)
             } else {
                 if instruction.opcode == .Branch {
@@ -150,8 +199,8 @@ fn function(builder: *nir.Builder, function_index: usize, allocations: []regallo
 fn self_test() -> err {
     var functions: [2]nir.Function = zero
     var blocks: [4]nir.Block = zero
-    var instructions: [8]nir.Instruction = zero
-    var operands: [8]usize = zero
+    var instructions: [12]nir.Instruction = zero
+    var operands: [12]usize = zero
     var references: [1]nir.FunctionRef = zero
     var strings: [1]nir.StringConstant = zero
     var builder: nir.Builder = zero
@@ -189,8 +238,14 @@ fn self_test() -> err {
     if branch_function_error != ok || branch_function != 1usize { ret Unsupported }
     let (entry_block, entry_block_error) = nir.begin_block(&builder)
     if entry_block_error != ok { ret entry_block_error }
-    let (condition_instruction, condition, condition_error) = nir.emit(&builder, .ConstBool, zero, true, 1usize, zero)
-    if condition_error != ok { ret condition_error }
+    let (left_instruction, left_value, left_constant_error) = nir.emit(&builder, .ConstInteger, zero, true, 1usize, zero)
+    if left_constant_error != ok { ret left_constant_error }
+    let (right_instruction, right_value, right_constant_error) = nir.emit(&builder, .ConstInteger, zero, true, 2usize, zero)
+    if right_constant_error != ok { ret right_constant_error }
+    let (comparison_instruction, condition, comparison_error) = nir.emit(&builder, .Less, zero, true, 0usize, zero)
+    if comparison_error != ok { ret comparison_error }
+    try nir.add_operand(&builder, comparison_instruction, left_value)
+    try nir.add_operand(&builder, comparison_instruction, right_value)
     let (decision, decision_value, decision_error) = nir.emit(&builder, .BranchIf, zero, false, 0usize, zero)
     if decision_error != ok { ret decision_error }
     try nir.add_operand(&builder, decision, condition)
@@ -212,14 +267,14 @@ fn self_test() -> err {
     try nir.add_operand(&builder, false_return, false_value)
     try nir.set_branch_targets(&builder, decision, true_block, false_block)
     try nir.end_function(&builder)
-    var branch_ranges: [3]regalloc.LiveRange = zero
-    var branch_allocations: [3]regalloc.Allocation = zero
-    let (branch_stack_slots, branch_allocation_error) = regalloc.allocate(&builder, 1usize, 2usize, branch_ranges[..], branch_allocations[..])
+    var branch_ranges: [5]regalloc.LiveRange = zero
+    var branch_allocations: [5]regalloc.Allocation = zero
+    let (branch_stack_slots, branch_allocation_error) = regalloc.allocate(&builder, 1usize, 3usize, branch_ranges[..], branch_allocations[..])
     if branch_allocation_error != ok || branch_stack_slots != 0usize { ret Unsupported }
-    var branch_storage: [64]usize = zero
+    var branch_storage: [96]usize = zero
     var branch_output: emit_x64.Buffer = zero
     try emit_x64.init(&branch_output, branch_storage[..])
     try function(&builder, 1usize, branch_allocations[..], 0usize, block_offsets[..], fixups[..], &branch_output)
-    if branch_output.count != 46usize || branch_output.bytes[13usize] != 15usize || branch_output.bytes[14usize] != 133usize || branch_output.bytes[15usize] != 5usize || branch_output.bytes[20usize] != 11usize || branch_output.bytes[45usize] != 195usize { ret Unsupported }
+    if branch_output.count != 73usize || branch_output.bytes[20usize] != 72usize || branch_output.bytes[21usize] != 57usize || branch_output.bytes[22usize] != 200usize || branch_output.bytes[40usize] != 15usize || branch_output.bytes[41usize] != 133usize || branch_output.bytes[42usize] != 5usize || branch_output.bytes[47usize] != 11usize || branch_output.bytes[72usize] != 195usize { ret Unsupported }
     ret ok
 }

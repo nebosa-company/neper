@@ -101,6 +101,19 @@ fn subtract_register(buffer: *Buffer, destination: usize, source: usize) -> err 
     ret binary_register(buffer, 41usize, destination, source)
 }
 
+fn compare_register(buffer: *Buffer, left: usize, right: usize) -> err {
+    ret binary_register(buffer, 57usize, left, right)
+}
+
+fn set_condition(buffer: *Buffer, destination: usize, condition: usize) -> err {
+    try check_register(destination)
+    if condition >= 16usize { ret InvalidByte }
+    try byte(buffer, 64usize + destination / 8usize)
+    try byte(buffer, 15usize)
+    try byte(buffer, 144usize + condition)
+    ret byte(buffer, 192usize + destination % 8usize)
+}
+
 fn multiply_register(buffer: *Buffer, destination: usize, source: usize) -> err {
     try rex(buffer, destination, source)
     try byte(buffer, 15usize)
@@ -206,13 +219,17 @@ fn self_test() -> err {
     try add_register(&buffer, 9usize, 10usize)
     try subtract_register(&buffer, 9usize, 10usize)
     try multiply_register(&buffer, 9usize, 10usize)
+    try compare_register(&buffer, 9usize, 10usize)
+    try set_condition(&buffer, 9usize, 12usize)
     try return_instruction(&buffer)
-    let expected = [24]usize{
+    let expected = [31]usize{
         72usize, 184usize, 8usize, 7usize, 6usize, 5usize, 4usize, 3usize, 2usize, 1usize,
         77usize, 137usize, 209usize,
         77usize, 1usize, 209usize,
         77usize, 41usize, 209usize,
         77usize, 15usize, 175usize, 202usize,
+        77usize, 57usize, 209usize,
+        65usize, 15usize, 156usize, 193usize,
         195usize,
     }
     if buffer.count != expected.len { ret InvalidRegister }
