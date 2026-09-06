@@ -47,6 +47,18 @@ fn little_u32(buffer: *Buffer, value: usize) -> err {
     ret ok
 }
 
+fn patch_little_u32(buffer: *Buffer, at: usize, value: usize) -> err {
+    if at + 4usize > buffer.count { ret Capacity }
+    var remaining = value
+    var offset = 0usize
+    while offset < 4usize {
+        buffer.bytes[at + offset] = remaining % 256usize
+        remaining = remaining / 256usize
+        offset += 1usize
+    }
+    ret ok
+}
+
 fn check_register(index: usize) -> err {
     if index >= 16usize { ret InvalidRegister }
     ret ok
@@ -141,6 +153,44 @@ fn store_stack(buffer: *Buffer, slot: usize, source: usize) -> err {
     try byte(buffer, 137usize)
     try byte(buffer, 133usize + source % 8usize * 8usize)
     ret little_u32(buffer, stack_displacement(slot))
+}
+
+fn test_register(buffer: *Buffer, value: usize) -> err {
+    try rex(buffer, value, value)
+    try byte(buffer, 133usize)
+    ret modrm(buffer, value, value)
+}
+
+fn jump(buffer: *Buffer) -> (usize, err) {
+    let displacement = buffer.count + 1usize
+    let byte_error = byte(buffer, 233usize)
+    if byte_error != ok { ret (0usize, byte_error) }
+    let displacement_error = little_u32(buffer, 0usize)
+    ret (displacement, displacement_error)
+}
+
+fn jump_nonzero(buffer: *Buffer, value: usize) -> (usize, err) {
+    let test_error = test_register(buffer, value)
+    if test_error != ok { ret (0usize, test_error) }
+    let first_error = byte(buffer, 15usize)
+    if first_error != ok { ret (0usize, first_error) }
+    let second_error = byte(buffer, 133usize)
+    if second_error != ok { ret (0usize, second_error) }
+    let displacement = buffer.count
+    let displacement_error = little_u32(buffer, 0usize)
+    ret (displacement, displacement_error)
+}
+
+fn patch_relative32(buffer: *Buffer, displacement_at: usize, destination: usize) -> err {
+    let following = displacement_at + 4usize
+    var displacement = 0usize
+    if destination >= following {
+        displacement = destination - following
+    } else {
+        let magnitude = following - destination
+        displacement = 4294967296usize - magnitude
+    }
+    ret patch_little_u32(buffer, displacement_at, displacement)
 }
 
 fn return_instruction(buffer: *Buffer) -> err {

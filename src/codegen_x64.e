@@ -6,6 +6,18 @@ use regalloc
 
 error Unsupported
 
+type Fixup = struct {
+    displacement_at: usize,
+    block: usize,
+}
+
+fn add_fixup(fixups: []Fixup, count: *usize, displacement_at: usize, block: usize) -> err {
+    if *count == fixups.len { ret Unsupported }
+    fixups[*count] = Fixup { displacement_at: displacement_at, block: block }
+    *count += 1usize
+    ret ok
+}
+
 fn hardware_register(index: usize) -> (usize, err) {
     if index == 0usize { ret (0usize, ok) }
     if index == 1usize { ret (1usize, ok) }
@@ -46,13 +58,21 @@ fn store_result(allocations: []regalloc.Allocation, value: usize, source: usize,
     ret ok
 }
 
-fn function(builder: *nir.Builder, function_index: usize, allocations: []regalloc.Allocation, stack_slots: usize, output: *emit_x64.Buffer) -> err {
+fn function(builder: *nir.Builder, function_index: usize, allocations: []regalloc.Allocation, stack_slots: usize, block_offsets: []usize, fixups: []Fixup, output: *emit_x64.Buffer) -> err {
     if function_index >= builder.function_count { ret Unsupported }
-    if stack_slots != 0usize { try emit_x64.function_prologue(output, stack_slots) }
     let current = builder.functions[function_index]
+    if current.block_count > block_offsets.len { ret Unsupported }
+    if stack_slots != 0usize { try emit_x64.function_prologue(output, stack_slots) }
     let end = current.first_instruction + current.instruction_count
+    var fixup_count = 0usize
     var at = current.first_instruction
     while at < end {
+        var block_at = 0usize
+        while block_at < current.block_count {
+            let block = builder.blocks[current.first_block + block_at]
+            if block.first_instruction == at { block_offsets[block_at] = output.count }
+            block_at += 1usize
+        }
         let instruction = builder.instructions[at]
         if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError {
             let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
@@ -76,6 +96,24 @@ fn function(builder: *nir.Builder, function_index: usize, allocations: []regallo
                 if instruction.opcode == .Multiply { try emit_x64.multiply_register(output, destination, right) }
                 try store_result(allocations, instruction.result, destination, output)
             } else {
+                if instruction.opcode == .Branch {
+                    if instruction.target < current.first_block || instruction.target >= current.first_block + current.block_count { ret Unsupported }
+                    let (displacement, jump_error) = emit_x64.jump(output)
+                    if jump_error != ok { ret jump_error }
+                    try add_fixup(fixups, &fixup_count, displacement, instruction.target - current.first_block)
+                } else {
+                    if instruction.opcode == .BranchIf {
+                        if instruction.operand_count != 1usize || instruction.target < current.first_block || instruction.target >= current.first_block + current.block_count || instruction.target2 < current.first_block || instruction.target2 >= current.first_block + current.block_count { ret Unsupported }
+                        let condition_value = builder.operands[instruction.first_operand]
+                        let (condition, condition_error) = read_value(allocations, condition_value, 10usize, output)
+                        if condition_error != ok { ret condition_error }
+                        let (true_displacement, true_error) = emit_x64.jump_nonzero(output, condition)
+                        if true_error != ok { ret true_error }
+                        try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                        let (false_displacement, false_error) = emit_x64.jump(output)
+                        if false_error != ok { ret false_error }
+                        try add_fixup(fixups, &fixup_count, false_displacement, instruction.target2 - current.first_block)
+                    } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {
                         let value = builder.operands[instruction.first_operand]
@@ -93,18 +131,27 @@ fn function(builder: *nir.Builder, function_index: usize, allocations: []regallo
                 } else {
                     ret Unsupported
                 }
+                    }
+                }
             }
         }
         at += 1usize
+    }
+    var fixup_at = 0usize
+    while fixup_at < fixup_count {
+        let fixup = fixups[fixup_at]
+        if fixup.block >= current.block_count { ret Unsupported }
+        try emit_x64.patch_relative32(output, fixup.displacement_at, block_offsets[fixup.block])
+        fixup_at += 1usize
     }
     ret ok
 }
 
 fn self_test() -> err {
-    var functions: [1]nir.Function = zero
-    var blocks: [1]nir.Block = zero
-    var instructions: [2]nir.Instruction = zero
-    var operands: [1]usize = zero
+    var functions: [2]nir.Function = zero
+    var blocks: [4]nir.Block = zero
+    var instructions: [8]nir.Instruction = zero
+    var operands: [8]usize = zero
     var references: [1]nir.FunctionRef = zero
     var strings: [1]nir.StringConstant = zero
     var builder: nir.Builder = zero
@@ -126,14 +173,53 @@ fn self_test() -> err {
     var storage: [16]usize = zero
     var output: emit_x64.Buffer = zero
     try emit_x64.init(&output, storage[..])
-    try function(&builder, 0usize, allocations[..], stack_slots, &output)
+    var block_offsets: [4]usize = zero
+    var fixups: [4]Fixup = zero
+    try function(&builder, 0usize, allocations[..], stack_slots, block_offsets[..], fixups[..], &output)
     if output.count != 11usize || output.bytes[0usize] != 72usize || output.bytes[1usize] != 184usize || output.bytes[2usize] != 7usize || output.bytes[10usize] != 195usize { ret Unsupported }
     allocations[0usize].kind = .Stack
     allocations[0usize].index = 0usize
     var spill_storage: [64]usize = zero
     var spill_output: emit_x64.Buffer = zero
     try emit_x64.init(&spill_output, spill_storage[..])
-    try function(&builder, 0usize, allocations[..], 1usize, &spill_output)
+    try function(&builder, 0usize, allocations[..], 1usize, block_offsets[..], fixups[..], &spill_output)
     if spill_output.count != 43usize || spill_output.bytes[0usize] != 85usize || spill_output.bytes[11usize] != 73usize || spill_output.bytes[42usize] != 195usize { ret Unsupported }
+
+    let (branch_function, branch_function_error) = nir.begin_function(&builder, 0usize, "branch")
+    if branch_function_error != ok || branch_function != 1usize { ret Unsupported }
+    let (entry_block, entry_block_error) = nir.begin_block(&builder)
+    if entry_block_error != ok { ret entry_block_error }
+    let (condition_instruction, condition, condition_error) = nir.emit(&builder, .ConstBool, zero, true, 1usize, zero)
+    if condition_error != ok { ret condition_error }
+    let (decision, decision_value, decision_error) = nir.emit(&builder, .BranchIf, zero, false, 0usize, zero)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(&builder, decision, condition)
+    let true_block = builder.block_count
+    let (true_index, true_error) = nir.begin_block(&builder)
+    if true_error != ok { ret true_error }
+    let (true_constant_instruction, true_value, true_constant_error) = nir.emit(&builder, .ConstInteger, zero, true, 7usize, zero)
+    if true_constant_error != ok { ret true_constant_error }
+    let (true_return, true_return_value, true_return_error) = nir.emit(&builder, .Return, zero, false, 0usize, zero)
+    if true_return_error != ok { ret true_return_error }
+    try nir.add_operand(&builder, true_return, true_value)
+    let false_block = builder.block_count
+    let (false_index, false_error) = nir.begin_block(&builder)
+    if false_error != ok { ret false_error }
+    let (false_constant_instruction, false_value, false_constant_error) = nir.emit(&builder, .ConstInteger, zero, true, 9usize, zero)
+    if false_constant_error != ok { ret false_constant_error }
+    let (false_return, false_return_value, false_return_error) = nir.emit(&builder, .Return, zero, false, 0usize, zero)
+    if false_return_error != ok { ret false_return_error }
+    try nir.add_operand(&builder, false_return, false_value)
+    try nir.set_branch_targets(&builder, decision, true_block, false_block)
+    try nir.end_function(&builder)
+    var branch_ranges: [3]regalloc.LiveRange = zero
+    var branch_allocations: [3]regalloc.Allocation = zero
+    let (branch_stack_slots, branch_allocation_error) = regalloc.allocate(&builder, 1usize, 2usize, branch_ranges[..], branch_allocations[..])
+    if branch_allocation_error != ok || branch_stack_slots != 0usize { ret Unsupported }
+    var branch_storage: [64]usize = zero
+    var branch_output: emit_x64.Buffer = zero
+    try emit_x64.init(&branch_output, branch_storage[..])
+    try function(&builder, 1usize, branch_allocations[..], 0usize, block_offsets[..], fixups[..], &branch_output)
+    if branch_output.count != 46usize || branch_output.bytes[13usize] != 15usize || branch_output.bytes[14usize] != 133usize || branch_output.bytes[15usize] != 5usize || branch_output.bytes[20usize] != 11usize || branch_output.bytes[45usize] != 195usize { ret Unsupported }
     ret ok
 }
