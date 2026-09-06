@@ -211,6 +211,13 @@ if ($LASTEXITCODE -ne 0 -or $shiftExecutableWritten -ne 'executable written') { 
 if ($LASTEXITCODE -ne 0) { throw 'left or signed-right shift semantics failed in the self-hosted PE executable' }
 $localsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\locals\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $localsLowered -ne 'module nir ok') { throw 'parameters and local storage did not lower to canonical NIR' }
+$localsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\locals\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $localsGenerated -ne 'module codegen ok') { throw 'scalar local storage did not select x64 instructions' }
+$storageExecutablePath = Join-Path $testBuild 'storage-selfhost.exe'
+$storageExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\storage\src\main.e') $repo 'x64' 'windows' $storageExecutablePath
+if ($LASTEXITCODE -ne 0 -or $storageExecutableWritten -ne 'executable written') { throw 'storage PE executable emission failed' }
+& $storageExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'mutable local storage failed in the self-hosted PE executable' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $loopsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\loops\src\main.e') $repo 'x64' 'windows'

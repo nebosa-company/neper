@@ -294,6 +294,13 @@ chmod +x "$shift_executable_path"
 "$shift_executable_path"
 locals_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/locals/src/main.e" "$repo" x64 linux)
 [ "$locals_lowered" = 'module nir ok' ]
+locals_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/locals/src/main.e" "$repo" x64 linux)
+[ "$locals_generated" = 'module codegen ok' ]
+storage_executable_path="$test_build/storage-selfhost"
+storage_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/storage/src/main.e" "$repo" x64 linux "$storage_executable_path")
+[ "$storage_executable_written" = 'executable written' ]
+chmod +x "$storage_executable_path"
+"$storage_executable_path"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 loops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/loops/src/main.e" "$repo" x64 linux)

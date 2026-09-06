@@ -220,6 +220,32 @@ fn needs_fixed_registers(builder: *nir.Builder, current: nir.Function) -> bool {
     ret false
 }
 
+fn stack_object_count(builder: *nir.Builder, current: nir.Function) -> usize {
+    let end = current.first_instruction + current.instruction_count
+    var count = 0usize
+    var at = current.first_instruction
+    while at < end {
+        if builder.instructions[at].opcode == .Stack { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn stack_object_slot(builder: *nir.Builder, current: nir.Function, value: usize, base: usize) -> (usize, err) {
+    let end = current.first_instruction + current.instruction_count
+    var count = 0usize
+    var at = current.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        if instruction.opcode == .Stack {
+            if instruction.has_result && instruction.result == value { ret (base + count, ok) }
+            count += 1usize
+        }
+        at += 1usize
+    }
+    ret (0usize, Unsupported)
+}
+
 fn save_allocated_registers(output: *emit_x64.Buffer, base: usize, count: usize) -> err {
     var at = 0usize
     while at < count {
@@ -255,8 +281,10 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     if current.block_count > block_offsets.len { ret Unsupported }
     let (parameters, parameters_error) = parameter_count(builder, current)
     if parameters_error != ok { ret parameters_error }
+    let local_count = stack_object_count(builder, current)
+    let local_base = stack_slots + parameters
     let outgoing = max_call_arguments(builder, current)
-    let outgoing_base = stack_slots + parameters
+    let outgoing_base = local_base + local_count
     let preserve_base = outgoing_base + outgoing
     var preserve_count = 0usize
     var shadow_count = 0usize
@@ -293,6 +321,31 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             try emit_x64.load_stack(output, destination, stack_slots + instruction.immediate)
             try store_result(allocations, instruction.result, destination, output)
         } else {
+            if instruction.opcode == .Stack {
+                if !instruction.has_result || instruction.operand_count != 0usize { ret Unsupported }
+                let (ignored_slot, slot_error) = stack_object_slot(builder, current, instruction.result, local_base)
+                if slot_error != ok { ret slot_error }
+            } else {
+            if instruction.opcode == .Store {
+                if instruction.has_result || instruction.operand_count != 2usize { ret Unsupported }
+                let address = builder.operands[instruction.first_operand]
+                let value = builder.operands[instruction.first_operand + 1usize]
+                let (slot, slot_error) = stack_object_slot(builder, current, address, local_base)
+                if slot_error != ok { ret slot_error }
+                let (source, source_error) = read_value(allocations, value, 10usize, output)
+                if source_error != ok { ret source_error }
+                try emit_x64.store_stack(output, slot, source)
+            } else {
+            if instruction.opcode == .Load {
+                if !instruction.has_result || instruction.operand_count != 1usize { ret Unsupported }
+                let address = builder.operands[instruction.first_operand]
+                let (slot, slot_error) = stack_object_slot(builder, current, address, local_base)
+                if slot_error != ok { ret slot_error }
+                let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+                if destination_error != ok { ret destination_error }
+                try emit_x64.load_stack(output, destination, slot)
+                try store_result(allocations, instruction.result, destination, output)
+            } else {
             if instruction.opcode == .Cast || instruction.opcode == .Negate || instruction.opcode == .BitNot {
                 if instruction.operand_count != 1usize || instruction.ty.kind != .Integer { ret Unsupported }
                 let operand_value = builder.operands[instruction.first_operand]
@@ -468,6 +521,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 }
                 }
             }
+        }
+        }
+        }
         }
         }
         }
