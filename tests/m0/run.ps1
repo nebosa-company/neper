@@ -1,8 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$neper = Join-Path $repo 'build\neper.exe'
-$testBuild = Join-Path $repo 'build\tests'
+$neper = Join-Path $repo 'build\windows\neper.exe'
+$testBuild = Join-Path $repo 'build\windows\tests'
 if (-not (Test-Path -LiteralPath $neper)) {
     & (Join-Path $repo 'scripts\build-bootstrap.ps1') | Out-Null
 }

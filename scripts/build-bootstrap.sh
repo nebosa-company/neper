@@ -2,7 +2,7 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-build="$repo/build-linux"
+build="$repo/build/linux"
 
 mkdir -p "$build/lib/e"
 ${CC:-cc} -std=c99 -Wall -Wextra -Wpedantic -O2 -fno-stack-protector \

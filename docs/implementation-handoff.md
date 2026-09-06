@@ -745,48 +745,76 @@ The following changes predate that work and must be preserved and handled as a
 separate documentation/design/site effort:
 
 ```text
-D  DECISIONS.md
-M  README.md
-M  benchmarks/llm_edit/README.md
-M  docs/general-purpose-verification.md
-M  docs/module-apis.md
-M  docs/modules.json
-M  docs/modules.md
-M  docs/roadmap.md
-M  docs/schemas/neper-v1.schema.json
-M  docs/spec.md
-M  docs/tooling.md
-M  docs/ui-framework.md
-?? docs/decisions.md
-?? docs/post-m2-llm-hardening.md
-?? docs/stdlib-hardening.md
+ M benchmarks/llm_edit/README.md
+ M docs/general-purpose-verification.md
+ M docs/roadmap.md
+ M docs/schemas/neper-v1.schema.json
+ M docs/tooling.md
+ M docs/ui-framework.md
+?? docs/docs_llm-mcp-server.md
 ?? scripts/check_module_plan.py
 ?? scripts/render_module_apis.py
 ?? tests/test_module_plan.py
 ```
 
-`DECISIONS.md` plus `docs/decisions.md` represents a case/path move in progress.
-Do not restore or delete either side without reviewing the documentation set as a
-whole.
+The `DECISIONS.md` to `docs/decisions.md` case/path move is finished: `DECISIONS.md`
+is deleted, `docs/decisions.md` is tracked, and both sides are committed. The former
+`README.md`, `docs/module-apis.md`, `docs/modules.json`, `docs/modules.md` and
+`docs/spec.md` edits are committed too, as are `docs/post-m2-llm-hardening.md` and
+`docs/stdlib-hardening.md`. Nothing in that move is still pending.
 
-The following are scratch, rendered, packaging, or deployment work products. They
-are not part of the current compiler feature and should remain unstaged until their
-ownership and retention policy are decided:
+### Build output layout
+
+Build outputs live under one ignored `build/` tree, split by target platform:
 
 ```text
-.tmp-linux-runtime.bin
-.tmp-linux-startup.bin
-.tmp-runtime-ext.bin
-.tmp-sites-packager/
-docs/module-apis.pdf
-package-site.sh
-prepare-site-build.cjs
-progress-site-*.tar.gz
-site-package-stage-20260905/
+build/windows/    MSVC output: neper.exe, neper-self.exe, runtime-embed/, tests/
+build/linux/      cc output:   neper, neper-self, lib/, tests/
 ```
 
-There may be additional ignored build outputs under `build/` and `build-linux/`.
-Do not clean broad directories destructively while this handoff is being resumed.
+This replaced the earlier sibling `build/` and `build-linux/` directories on
+2026-09-06. `.gitignore` now needs the single entry `/build/`. The paths are named
+in `scripts/build-bootstrap.{ps1,sh}`, `scripts/build-selfhost.{ps1,sh}`,
+`scripts/embed-pe-runtime.ps1`, `scripts/embed-elf-runtime-ext.ps1`, the three
+`tests/*/run.ps1` and the three `tests/*/run.sh`, and in `README.md`. Both halves
+are fully regenerable -- `scripts/build-selfhost.ps1` rebuilds the Windows chain
+from `bootstrap/neper.c` and `src/` (it needs MSVC via `NEPER_VSDEVCMD` or
+`vswhere`), `scripts/build-selfhost.sh` the Linux one -- so neither directory holds
+an input that exists nowhere else, and either may be deleted whole.
+
+### Scratch and packaging work products, removed 2026-09-06
+
+The scratch, rendered and site-packaging files this section used to list are gone.
+Each was confirmed untracked and either regenerable or already superseded before it
+was deleted:
+
+```text
+.tmp-debug-launch.obj         .tmp-linux-runtime.bin    .tmp-linux-runtime.o
+.tmp-linux-startup.bin        .tmp-linux-startup.o      .tmp-runtime-ext.bin
+neper.obj                     vc140.pdb                 readme-pdf.patch
+neper-progress-site.tar.gz    progress-site-*.tar.gz    site-package-stage-20260905/
+package-site.sh               prepare-site-build.cjs    .tmp-sites-packager/
+```
+
+`readme-pdf.patch` had already been applied -- its text is in `README.md` and
+`scripts/build-docs-pdf.{ps1,sh,py}` exist -- and it no longer applied cleanly.
+`docs/module-apis.pdf` is likewise absent; `scripts/render_module_apis.py`
+regenerates it from `docs/module-apis.md`. The six `dist/` tarballs and the staging
+directory were builds of `progress-site` commits that are all still in that
+repository's history.
+
+`package-site.sh` and `prepare-site-build.cjs` -- the two-file packager that turned
+`progress-site` into a deployable `dist/` tarball, checked for
+`.openai/hosting.json` and folded in `drizzle/` -- were untracked everywhere and no
+copy survives. Producing a site archive again means writing that step from
+`progress-site`'s own `package.json`, `vite.config.ts` and `.openai/hosting.json`.
+
+### What is deliberately still here
+
+`progress-site/` is a self-contained git repository: ten commits, clean tree, no
+remote and no upstream. It is the only copy of the progress site source, and the
+source every deleted tarball was built from. Do not delete or clean it. It needs a
+remote.
 
 ## 9. Remaining M2 libraries and blockers
 

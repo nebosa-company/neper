@@ -2,8 +2,8 @@
 set -eu
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
-neper="$repo/build-linux/neper"
-test_build="$repo/build-linux/tests/neper0"
+neper="$repo/build/linux/neper"
+test_build="$repo/build/linux/tests/neper0"
 "$repo/scripts/build-bootstrap.sh" >/dev/null
 mkdir -p "$test_build"
 

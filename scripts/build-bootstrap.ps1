@@ -1,7 +1,7 @@
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
-$build = Join-Path $repo 'build'
+$build = Join-Path $repo 'build\windows'
 $source = Join-Path $repo 'bootstrap\neper.c'
 $runtimeSource = Join-Path $repo 'bootstrap\runtime.c'
 $vsDevCmd = $env:NEPER_VSDEVCMD

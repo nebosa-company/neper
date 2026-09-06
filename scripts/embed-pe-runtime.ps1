@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $repo 'src\runtime_pe_x64.asm'
 $output = Join-Path $repo 'src\runtime_pe_x64.e'
-$build = Join-Path $repo 'build\runtime-embed'
+$build = Join-Path $repo 'build\windows\runtime-embed'
 $object = Join-Path $build 'runtime_pe_x64.obj'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 

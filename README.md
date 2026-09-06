@@ -317,7 +317,7 @@ On Windows with the Visual Studio C++ tools installed:
 ```powershell
 ./scripts/build-bootstrap.ps1
 ./scripts/build-selfhost.ps1
-./build/neper.exe run ./examples/hello.e
+./build/windows/neper.exe run ./examples/hello.e
 ./tests/m0/run.ps1
 ./tests/neper0/run.ps1
 ./tests/selfhost/run.ps1
@@ -328,7 +328,7 @@ On Linux:
 ```sh
 ./scripts/build-bootstrap.sh
 ./scripts/build-selfhost.sh
-./build-linux/neper run ./examples/hello.e
+./build/linux/neper run ./examples/hello.e
 ./tests/m0/run.sh
 ./tests/neper0/run.sh
 ./tests/selfhost/run.sh

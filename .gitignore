@@ -1,5 +1,4 @@
 /build/
-/build-linux/
 /progress-site/
 /.pytest_cache/
 **/__pycache__/

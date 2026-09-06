@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 $source = Join-Path $repo 'src\runtime_elf_x64_ext.s'
 $output = Join-Path $repo 'src\runtime_elf_x64_ext.e'
-$build = Join-Path $repo 'build\runtime-embed'
+$build = Join-Path $repo 'build\windows\runtime-embed'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
 function Convert-ToWslPath([string]$Path) {
