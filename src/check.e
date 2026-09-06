@@ -119,6 +119,7 @@ type Function = struct {
     parameter_count: usize,
     first_return: usize,
     return_count: usize,
+    instance_id: usize,
     generic: bool,
     external: bool,
     intrinsic: bool,
@@ -3025,6 +3026,17 @@ fn generic_arguments_equal(c: *Checker, function_index: usize, first: usize, sec
     ret true
 }
 
+fn template_instance_count(c: *Checker, template_index: usize) -> usize {
+    var count = 0usize
+    var at = c.signature_function_count
+    while at < c.function_count {
+        let candidate = c.function_generics[at]
+        if candidate.instance && candidate.template_index == template_index { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
 fn find_function_instance(c: *Checker, template_index: usize, first_argument: usize) -> (usize, bool) {
     var at = c.signature_function_count
     while at < c.function_count {
@@ -3058,6 +3070,7 @@ fn instantiate_function(c: *Checker, template_index: usize, first_argument: usiz
     var instance: Function = zero
     instance.name = template.name
     instance.module_index = template.module_index
+    instance.instance_id = template_instance_count(c, template_index) + 1usize
     instance.first_parameter = c.parameter_count
     instance.parameter_count = template.parameter_count
     instance.first_return = c.return_type_count

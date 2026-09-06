@@ -156,6 +156,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             var assembled_function: nir.Function = zero
             assembled_function.name = name
             assembled_function.module_index = artifact_at
+            assembled_function.instance = function.instance
             functions[global_function] = assembled_function
             program.function_offsets[global_function] = program.machine.count
             program.builder.function_count += 1usize
@@ -176,6 +177,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
                 var assembled_reference: nir.FunctionRef = zero
                 assembled_reference.module_index = module_index
                 assembled_reference.name = target_name
+                assembled_reference.instance = stored.instance
                 references[reference_index] = assembled_reference
                 program.builder.function_ref_count += 1usize
                 var assembled_relocation: codegen_x64.Relocation = zero

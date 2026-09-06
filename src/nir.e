@@ -78,6 +78,7 @@ type Block = struct {
 type Function = struct {
     name: str,
     module_index: usize,
+    instance: usize,
     first_block: usize,
     block_count: usize,
     first_instruction: usize,
@@ -95,6 +96,7 @@ type Signature = struct {
 type FunctionRef = struct {
     module_index: usize,
     name: str,
+    instance: usize,
 }
 
 type StringConstant = struct {
@@ -161,16 +163,16 @@ fn init_signatures(signatures: *Signatures, entries: []Signature, types: []check
     ret ok
 }
 
-fn intern_function(builder: *Builder, module_index: usize, name: str) -> (usize, err) {
+fn intern_function(builder: *Builder, module_index: usize, name: str, instance: usize) -> (usize, err) {
     var at = 0usize
     while at < builder.function_ref_count {
         let reference = builder.function_refs[at]
-        if reference.module_index == module_index && check.same(reference.name, name) { ret (at, ok) }
+        if reference.module_index == module_index && reference.instance == instance && check.same(reference.name, name) { ret (at, ok) }
         at += 1usize
     }
     if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
     let index = builder.function_ref_count
-    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name }
+    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance }
     builder.function_ref_count += 1usize
     ret (index, ok)
 }
@@ -188,13 +190,14 @@ fn intern_string(builder: *Builder, spelling: str) -> (usize, err) {
     ret (index, ok)
 }
 
-fn begin_function(builder: *Builder, module_index: usize, name: str) -> (usize, err) {
+fn begin_function(builder: *Builder, module_index: usize, name: str, instance: usize) -> (usize, err) {
     if builder.function_active { ret (0usize, InvalidControlFlow) }
     if builder.function_count == builder.functions.len { ret (0usize, Capacity) }
     let index = builder.function_count
     builder.functions[index] = Function {
         name: name,
         module_index: module_index,
+        instance: instance,
         first_block: builder.block_count,
         block_count: 0usize,
         first_instruction: builder.instruction_count,
@@ -338,15 +341,15 @@ fn self_test() -> err {
     var strings: [1]StringConstant = zero
     var builder: Builder = zero
     try init(&builder, functions[..], blocks[..], instructions[..], operands[..], function_refs[..], strings[..])
-    let (function_ref, function_ref_error) = intern_function(&builder, 1usize, "callee")
+    let (function_ref, function_ref_error) = intern_function(&builder, 1usize, "callee", 0usize)
     if function_ref_error != ok || function_ref != 0usize { ret InvalidValue }
-    let (same_function_ref, same_function_ref_error) = intern_function(&builder, 1usize, "callee")
+    let (same_function_ref, same_function_ref_error) = intern_function(&builder, 1usize, "callee", 0usize)
     if same_function_ref_error != ok || same_function_ref != function_ref || builder.function_ref_count != 1usize { ret InvalidValue }
     let (string_index, string_error) = intern_string(&builder, "\"value\"")
     if string_error != ok || string_index != 0usize { ret InvalidValue }
     let (same_string_index, same_string_error) = intern_string(&builder, "\"value\"")
     if same_string_error != ok || same_string_index != string_index || builder.string_count != 1usize { ret InvalidValue }
-    let (function_index, function_error) = begin_function(&builder, 0usize, "main")
+    let (function_index, function_error) = begin_function(&builder, 0usize, "main", 0usize)
     if function_error != ok || function_index != 0usize { ret InvalidControlFlow }
     let (block_index, block_error) = begin_block(&builder)
     if block_error != ok || block_index != 0usize { ret InvalidControlFlow }
@@ -388,7 +391,7 @@ fn signature_self_test() -> err {
     var integer: check.Type = zero
     integer.kind = .Integer
     integer.name = "i64"
-    let (function_index, function_error) = begin_function(&builder, 0usize, "main")
+    let (function_index, function_error) = begin_function(&builder, 0usize, "main", 0usize)
     if function_error != ok { ret function_error }
     try begin_signature(&builder, function_index, &signatures)
     try add_parameter_type(&builder, function_index, &signatures, integer)

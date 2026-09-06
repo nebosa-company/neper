@@ -1325,14 +1325,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if target_error != ok { ret target_error }
         let (count, count_error) = em.artifact_dependency_count(dependent)
         if count_error != ok { ret count_error }
-        if count != 1usize { ret em.InvalidArtifact }
-        let (matches, match_error) = em.dependency_matches(dependent, 0usize, target_artifact)
-        if match_error != ok { ret match_error }
-        if !matches {
-            try io.print("dependency stale\n")
-            os.exit(1i32)
-            ret ok
+        // A dependent may hold several edges into one module, so every edge
+        // that targets this artifact has to be current.
+        var edge_count = 0usize
+        var edge_at = 0usize
+        while edge_at < count {
+            let (targets_module, targets_error) = em.dependency_targets_module(dependent, edge_at, target_artifact)
+            if targets_error != ok { ret targets_error }
+            if targets_module {
+                edge_count += 1usize
+                let (matches, match_error) = em.dependency_matches(dependent, edge_at, target_artifact)
+                if match_error != ok { ret match_error }
+                if !matches {
+                    try io.print("dependency stale\n")
+                    os.exit(1i32)
+                    ret ok
+                }
+            }
+            edge_at += 1usize
         }
+        if edge_count == 0usize { ret em.InvalidArtifact }
         try io.print("dependency current\n")
         ret ok
     }

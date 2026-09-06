@@ -65,7 +65,7 @@ fn resolve_calls(builder: *nir.Builder, function_offsets: []usize, relocations: 
         var found = false
         while function_at < builder.function_count {
             let candidate = builder.functions[function_at]
-            if candidate.module_index == reference.module_index && check.same(candidate.name, reference.name) {
+            if candidate.module_index == reference.module_index && candidate.instance == reference.instance && check.same(candidate.name, reference.name) {
                 try emit_x64.patch_relative32(output, relocations[relocation_at].displacement_at, function_offsets[function_at])
                 relocations[relocation_at].resolved = true
                 found = true
@@ -883,7 +883,7 @@ fn self_test() -> err {
     var strings: [1]nir.StringConstant = zero
     var builder: nir.Builder = zero
     try nir.init(&builder, functions[..], blocks[..], instructions[..], operands[..], references[..], strings[..])
-    let (function_index, function_error) = nir.begin_function(&builder, 0usize, "constant")
+    let (function_index, function_error) = nir.begin_function(&builder, 0usize, "constant", 0usize)
     if function_error != ok { ret function_error }
     let (block_index, block_error) = nir.begin_block(&builder)
     if block_error != ok { ret block_error }
@@ -916,7 +916,7 @@ fn self_test() -> err {
     try function(&builder, 0usize, 1usize, &context)
     if spill_output.count != 43usize || spill_output.bytes[0usize] != 85usize || spill_output.bytes[11usize] != 73usize || spill_output.bytes[42usize] != 195usize { ret Unsupported }
 
-    let (branch_function, branch_function_error) = nir.begin_function(&builder, 0usize, "branch")
+    let (branch_function, branch_function_error) = nir.begin_function(&builder, 0usize, "branch", 0usize)
     if branch_function_error != ok || branch_function != 1usize { ret Unsupported }
     let (entry_block, entry_block_error) = nir.begin_block(&builder)
     if entry_block_error != ok { ret entry_block_error }
@@ -960,7 +960,7 @@ fn self_test() -> err {
     context.output = &branch_output
     try function(&builder, 1usize, 0usize, &context)
     if branch_output.count != 73usize || branch_output.bytes[20usize] != 72usize || branch_output.bytes[21usize] != 57usize || branch_output.bytes[22usize] != 200usize || branch_output.bytes[40usize] != 15usize || branch_output.bytes[41usize] != 133usize || branch_output.bytes[42usize] != 5usize || branch_output.bytes[47usize] != 11usize || branch_output.bytes[72usize] != 195usize { ret Unsupported }
-    let (reference_index, reference_error) = nir.intern_function(&builder, 0usize, "constant")
+    let (reference_index, reference_error) = nir.intern_function(&builder, 0usize, "constant", 0usize)
     if reference_error != ok { ret reference_error }
     var call_storage: [32]usize = zero
     var call_output: emit_x64.Buffer = zero

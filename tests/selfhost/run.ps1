@@ -212,6 +212,36 @@ if ($LASTEXITCODE -ne 0 -or $genericArtifactExecutableWritten -ne 'artifact exec
 & $genericArtifactExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'generic compiled-module executable failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericArtifactExecutablePath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $genericExecutablePath).Hash) { throw 'generic compiled-module and source links differ' }
+$genericInstancesExecutablePath = Join-Path $testBuild 'generic-instances-selfhost.exe'
+$genericInstancesExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesExecutablePath
+if ($LASTEXITCODE -ne 0 -or $genericInstancesExecutableWritten -ne 'executable written') { throw 'multi-instance generic PE executable emission failed' }
+& $genericInstancesExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'distinct generic instances of one template did not keep distinct code' }
+$genericInstancesArtifacts = Join-Path $testBuild 'generic-instances'
+$genericInstancesCopy = Join-Path $testBuild 'generic-instances-copy'
+New-Item -ItemType Directory -Force -Path $genericInstancesArtifacts | Out-Null
+New-Item -ItemType Directory -Force -Path $genericInstancesCopy | Out-Null
+$genericInstancesArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesArtifacts
+if ($LASTEXITCODE -ne 0 -or $genericInstancesArtifactsWritten -ne 'compiled modules written') { throw 'multi-instance generic artifact emission failed' }
+$genericInstancesCopyWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesCopy
+if ($LASTEXITCODE -ne 0 -or $genericInstancesCopyWritten -ne 'compiled modules written') { throw 'repeated multi-instance generic artifact emission failed' }
+$genericInstancesRootPath = Join-Path $genericInstancesArtifacts 'main.x64-windows.em'
+$genericInstancesDepPath = Join-Path $genericInstancesArtifacts 'dep.x64-windows.em'
+foreach ($artifactPath in @($genericInstancesRootPath, $genericInstancesDepPath)) {
+    if (-not (Test-Path -LiteralPath $artifactPath)) { throw 'multi-instance generic artifact set is incomplete' }
+    $artifactValidation = & $compiler validate-em $artifactPath
+    if ($LASTEXITCODE -ne 0 -or $artifactValidation -ne 'compiled module valid') { throw "multi-instance generic artifact is invalid: $artifactPath" }
+    $copyPath = Join-Path $genericInstancesCopy (Split-Path -Leaf $artifactPath)
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $artifactPath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $copyPath).Hash) { throw 'multi-instance generic artifact emission is not deterministic' }
+}
+$genericInstancesEdge = & $compiler check-em-edge $genericInstancesRootPath $genericInstancesDepPath
+if ($LASTEXITCODE -ne 0 -or $genericInstancesEdge -ne 'dependency current') { throw 'multi-edge generic dependency was rejected' }
+$genericInstancesArtifactExecutable = Join-Path $testBuild 'generic-instances-from-artifacts.exe'
+$genericInstancesArtifactWritten = & $compiler link-em $genericInstancesArtifactExecutable $genericInstancesRootPath $genericInstancesDepPath
+if ($LASTEXITCODE -ne 0 -or $genericInstancesArtifactWritten -ne 'artifact executable written') { throw 'multi-instance generic compiled modules did not link' }
+& $genericInstancesArtifactExecutable
+if ($LASTEXITCODE -ne 0) { throw 'multi-instance generic compiled-module executable failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericInstancesArtifactExecutable).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $genericInstancesExecutablePath).Hash) { throw 'multi-instance generic compiled-module and source links differ' }
 $bitwiseExecutablePath = Join-Path $testBuild 'bitwise-selfhost.exe'
 $bitwiseExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\bitwise\src\main.e') $repo 'x64' 'windows' $bitwiseExecutablePath
 if ($LASTEXITCODE -ne 0 -or $bitwiseExecutableWritten -ne 'executable written') { throw 'bitwise PE executable emission failed' }
@@ -409,7 +439,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 1 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 2 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 6) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'

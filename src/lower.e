@@ -277,16 +277,19 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
     let return_layout_error = call_return_layout(c, call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
     var symbol = call.function.name
+    var symbol_instance = call.function.instance_id
     if call.mem_alloc {
         symbol = "neper_mem_alloc"
+        symbol_instance = 0usize
     } else {
         if call.function.intrinsic {
             let (mapped_symbol, mapped_error) = intrinsic_symbol(symbol)
             if mapped_error != ok { ret mapped_error }
             symbol = mapped_symbol
+            symbol_instance = 0usize
         }
     }
-    let (function_ref, function_ref_error) = nir.intern_function(builder, call.function.module_index, symbol)
+    let (function_ref, function_ref_error) = nir.intern_function(builder, call.function.module_index, symbol, symbol_instance)
     if function_ref_error != ok { ret function_ref_error }
     var slot = 0usize
     if return_layout.via_slot && results.count != 0usize {
@@ -2275,7 +2278,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if function_index >= c.function_count { ret FunctionNotFound }
     let function = c.functions[function_index]
     if function.generic { ret check.Unsupported }
-    let (nir_function, begin_error) = nir.begin_function(builder, module_index, name)
+    let (nir_function, begin_error) = nir.begin_function(builder, module_index, name, function.instance_id)
     if begin_error != ok { ret begin_error }
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_parameter_at = 0usize

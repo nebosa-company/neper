@@ -67,6 +67,7 @@ type InterfaceErrors = struct {
 
 type CodeFunction = struct {
     name_index: usize,
+    instance: usize,
     content_hash: usize,
     code_start: usize,
     code_length: usize,
@@ -78,9 +79,10 @@ type CodeRelocation = struct {
     displacement_at: usize,
     module_index: usize,
     name_index: usize,
+    instance: usize,
 }
 
-fn format_version() -> usize { ret 1usize }
+fn format_version() -> usize { ret 2usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -567,28 +569,23 @@ fn checked_function_for_nir(c: *check.Checker, builder: *nir.Builder, nir_functi
     let (template_index, found_template) = find_checked_function(c, lowered.module_index, lowered.name)
     if !found_template { ret (0usize, false) }
     if !c.functions[template_index].generic { ret (template_index, true) }
-    var ordinal = 0usize
-    var prior = 0usize
-    while prior < nir_function {
-        if builder.functions[prior].module_index == lowered.module_index && same(builder.functions[prior].name, lowered.name) { ordinal += 1usize }
-        prior += 1usize
-    }
+    // Generic instances share the template name, so the instance discriminator
+    // carried by NIR is the only exact identity.
     var instance = c.signature_function_count
     while instance < c.function_count {
         let generic = c.function_generics[instance]
         if c.functions[instance].module_index == lowered.module_index && same(c.functions[instance].name, lowered.name) && generic.instance && generic.template_index == template_index && !c.functions[instance].generic {
-            if ordinal == 0usize { ret (instance, true) }
-            ordinal = ordinal - 1usize
+            if c.functions[instance].instance_id == lowered.instance { ret (instance, true) }
         }
         instance += 1usize
     }
     ret (0usize, false)
 }
 
-fn find_nir_function(builder: *nir.Builder, module_index: usize, name: str) -> (usize, bool) {
+fn find_nir_function(builder: *nir.Builder, module_index: usize, name: str, instance: usize) -> (usize, bool) {
     var at = 0usize
     while at < builder.function_count {
-        if builder.functions[at].module_index == module_index && same(builder.functions[at].name, name) { ret (at, true) }
+        if builder.functions[at].module_index == module_index && builder.functions[at].instance == instance && same(builder.functions[at].name, name) { ret (at, true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -601,7 +598,8 @@ fn write_instruction_immediate_canonical(g: *graph.Graph, builder: *nir.Builder,
         if reference.module_index >= g.count { ret InvalidArtifact }
         try binary.byte(output, 1usize)
         try canonical_text(output, g.modules[reference.module_index].name)
-        ret canonical_text(output, reference.name)
+        try canonical_text(output, reference.name)
+        ret binary.little_u32(output, reference.instance)
     }
     if instruction.opcode == .ConstString {
         if instruction.immediate >= builder.string_count { ret InvalidArtifact }
@@ -898,7 +896,7 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     var nir_function = 0usize
     var has_nir = false
     if !function.generic {
-        let (found_nir, found) = find_nir_function(builder, function.module_index, function.name)
+        let (found_nir, found) = find_nir_function(builder, function.module_index, function.name, function.instance_id)
         nir_function = found_nir
         has_nir = found
     }
@@ -1178,13 +1176,32 @@ fn foreign_constant_used_by_module(c: *check.Checker, module_index: usize, targe
     ret (false, ok)
 }
 
+fn module_dependency_reference(builder: *nir.Builder, module_index: usize, at: usize) -> (str, bool) {
+    if at >= builder.function_ref_count { ret ("", false) }
+    let reference = builder.function_refs[at]
+    let (dependency_name, records_dependency) = dependency_reference_name(reference.name)
+    if !records_dependency || reference.module_index == module_index { ret ("", false) }
+    if !reference_used_by_module(builder, module_index, at) { ret ("", false) }
+    // Distinct generic instances intern distinct references but resolve to one
+    // source declaration, so only the first reference records the edge.
+    var prior = 0usize
+    while prior < at {
+        let earlier = builder.function_refs[prior]
+        if earlier.module_index == reference.module_index && reference_used_by_module(builder, module_index, prior) {
+            let (earlier_name, earlier_records) = dependency_reference_name(earlier.name)
+            if earlier_records && same(earlier_name, dependency_name) { ret ("", false) }
+        }
+        prior += 1usize
+    }
+    ret (dependency_name, true)
+}
+
 fn dependency_count(builder: *nir.Builder, module_index: usize) -> usize {
     var count = 0usize
     var at = 0usize
     while at < builder.function_ref_count {
-        let reference = builder.function_refs[at]
-        let (dependency_name, records_dependency) = dependency_reference_name(reference.name)
-        if records_dependency && reference.module_index != module_index && reference_used_by_module(builder, module_index, at) { count += 1usize }
+        let (dependency_name, records_dependency) = module_dependency_reference(builder, module_index, at)
+        if records_dependency { count += 1usize }
         at += 1usize
     }
     ret count
@@ -1209,8 +1226,8 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     var at = 0usize
     while at < builder.function_ref_count {
         let reference = builder.function_refs[at]
-        let (dependency_name, records_dependency) = dependency_reference_name(reference.name)
-        if records_dependency && reference.module_index != module_index && reference_used_by_module(builder, module_index, at) {
+        let (dependency_name, records_dependency) = module_dependency_reference(builder, module_index, at)
+        if records_dependency {
             if reference.module_index >= g.count { ret InvalidArtifact }
             let (checked_function, found_function) = find_checked_function(c, reference.module_index, dependency_name)
             if !found_function { ret InvalidArtifact }
@@ -1267,6 +1284,7 @@ fn write_nir(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_i
             let (name_index, name_error) = string_index(table, function.name)
             if name_error != ok { ret name_error }
             try binary.little_u32(output, name_index)
+            try binary.little_u32(output, function.instance)
             try binary.little_u64(output, hash)
             try binary.little_u32(output, scratch.count)
             try binary.copy(output, scratch.bytes[0usize..scratch.count])
@@ -1317,6 +1335,7 @@ fn write_code_hash_input(g: *graph.Graph, builder: *nir.Builder, machine: *emit_
             try binary.little_u32(output, relocation.displacement_at - start)
             try canonical_text(output, g.modules[reference.module_index].name)
             try canonical_text(output, reference.name)
+            try binary.little_u32(output, reference.instance)
         }
         at += 1usize
     }
@@ -1342,6 +1361,7 @@ fn write_code(g: *graph.Graph, builder: *nir.Builder, module_index: usize, table
             let (name_index, name_error) = string_index(table, function.name)
             if name_error != ok { ret name_error }
             try binary.little_u32(output, name_index)
+            try binary.little_u32(output, function.instance)
             try binary.little_u64(output, content_hash)
             try binary.little_u32(output, end - start)
             try binary.little_u32(output, count)
@@ -1360,6 +1380,7 @@ fn write_code(g: *graph.Graph, builder: *nir.Builder, module_index: usize, table
                     try binary.little_u32(output, relocation.displacement_at - start)
                     try binary.little_u32(output, target_module)
                     try binary.little_u32(output, target_name)
+                    try binary.little_u32(output, reference.instance)
                 }
                 relocation_at += 1usize
             }
@@ -1688,7 +1709,7 @@ fn artifact_error_at(bytes: []const usize, index: usize) -> (ErrorValue, err) {
 }
 
 fn code_function_at_unchecked(bytes: []const usize, query: usize) -> (CodeFunction, usize, err) {
-    let empty = CodeFunction { name_index: 0usize, content_hash: 0usize, code_start: 0usize, code_length: 0usize, relocations: 0usize, relocation_count: 0usize }
+    let empty = CodeFunction { name_index: 0usize, instance: 0usize, content_hash: 0usize, code_start: 0usize, code_length: 0usize, relocations: 0usize, relocation_count: 0usize }
     let (code, found_code, section_error) = find_section_unchecked(bytes, code_kind())
     if section_error != ok || !found_code || code.length < 4usize { ret (empty, 0usize, InvalidArtifact) }
     let (count, count_error) = binary.read_u32(bytes, code.offset)
@@ -1697,33 +1718,35 @@ fn code_function_at_unchecked(bytes: []const usize, query: usize) -> (CodeFuncti
     var cursor = code.offset + 4usize
     var at = 0usize
     while at < count {
-        if cursor > end || 20usize > end - cursor { ret (empty, count, InvalidArtifact) }
+        if cursor > end || 24usize > end - cursor { ret (empty, count, InvalidArtifact) }
         let (name_index, name_error) = binary.read_u32(bytes, cursor)
-        let (content_hash, hash_error) = binary.read_u64(bytes, cursor + 4usize)
-        let (code_length, length_error) = binary.read_u32(bytes, cursor + 12usize)
-        let (relocation_count, relocation_count_error) = binary.read_u32(bytes, cursor + 16usize)
-        if name_error != ok || hash_error != ok || length_error != ok || relocation_count_error != ok { ret (empty, count, InvalidArtifact) }
+        let (instance, instance_error) = binary.read_u32(bytes, cursor + 4usize)
+        let (content_hash, hash_error) = binary.read_u64(bytes, cursor + 8usize)
+        let (code_length, length_error) = binary.read_u32(bytes, cursor + 16usize)
+        let (relocation_count, relocation_count_error) = binary.read_u32(bytes, cursor + 20usize)
+        if name_error != ok || instance_error != ok || hash_error != ok || length_error != ok || relocation_count_error != ok { ret (empty, count, InvalidArtifact) }
         let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
         if name_bounds_error != ok || name_length == 0usize || name_start >= bytes.len { ret (empty, count, InvalidArtifact) }
-        let code_start = cursor + 20usize
+        let code_start = cursor + 24usize
         if code_start > end || code_length > end - code_start { ret (empty, count, InvalidArtifact) }
         let relocations = code_start + code_length
-        if relocations > end || relocation_count > (end - relocations) / 12usize { ret (empty, count, InvalidArtifact) }
+        if relocations > end || relocation_count > (end - relocations) / 16usize { ret (empty, count, InvalidArtifact) }
         var relocation_at = 0usize
         while relocation_at < relocation_count {
-            let relocation = relocations + relocation_at * 12usize
+            let relocation = relocations + relocation_at * 16usize
             let (displacement, displacement_error) = binary.read_u32(bytes, relocation)
             let (target_module, target_module_error) = binary.read_u32(bytes, relocation + 4usize)
             let (target_name, target_name_error) = binary.read_u32(bytes, relocation + 8usize)
-            if displacement_error != ok || target_module_error != ok || target_name_error != ok || displacement > code_length || 4usize > code_length - displacement { ret (empty, count, InvalidArtifact) }
+            let (target_instance, target_instance_error) = binary.read_u32(bytes, relocation + 12usize)
+            if displacement_error != ok || target_module_error != ok || target_name_error != ok || target_instance_error != ok || displacement > code_length || 4usize > code_length - displacement { ret (empty, count, InvalidArtifact) }
             let (module_start, module_length, module_bounds_error) = string_bounds(bytes, target_module)
             let (target_start, target_length, target_bounds_error) = string_bounds(bytes, target_name)
             if module_bounds_error != ok || target_bounds_error != ok || module_length == 0usize || target_length == 0usize || module_start >= bytes.len || target_start >= bytes.len { ret (empty, count, InvalidArtifact) }
             relocation_at += 1usize
         }
-        let next = relocations + relocation_count * 12usize
+        let next = relocations + relocation_count * 16usize
         if at == query {
-            ret (CodeFunction { name_index: name_index, content_hash: content_hash, code_start: code_start, code_length: code_length, relocations: relocations, relocation_count: relocation_count }, count, ok)
+            ret (CodeFunction { name_index: name_index, instance: instance, content_hash: content_hash, code_start: code_start, code_length: code_length, relocations: relocations, relocation_count: relocation_count }, count, ok)
         }
         cursor = next
         at += 1usize
@@ -1744,13 +1767,13 @@ fn artifact_code_count(bytes: []const usize) -> (usize, err) {
     }
     let (last, parsed_count, last_error) = code_function_at_unchecked(bytes, count - 1usize)
     if last_error != ok || parsed_count != count { ret (0usize, InvalidArtifact) }
-    let end = last.relocations + last.relocation_count * 12usize
+    let end = last.relocations + last.relocation_count * 16usize
     if end != code.offset + code.length { ret (0usize, InvalidArtifact) }
     ret (count, ok)
 }
 
 fn artifact_code_function_at(bytes: []const usize, index: usize) -> (CodeFunction, err) {
-    let empty = CodeFunction { name_index: 0usize, content_hash: 0usize, code_start: 0usize, code_length: 0usize, relocations: 0usize, relocation_count: 0usize }
+    let empty = CodeFunction { name_index: 0usize, instance: 0usize, content_hash: 0usize, code_start: 0usize, code_length: 0usize, relocations: 0usize, relocation_count: 0usize }
     let (count, count_error) = artifact_code_count(bytes)
     if count_error != ok || index >= count { ret (empty, InvalidArtifact) }
     let (function, parsed_count, function_error) = code_function_at_unchecked(bytes, index)
@@ -1759,18 +1782,19 @@ fn artifact_code_function_at(bytes: []const usize, index: usize) -> (CodeFunctio
 }
 
 fn artifact_code_relocation_at(bytes: []const usize, function: CodeFunction, index: usize) -> (CodeRelocation, err) {
-    let empty = CodeRelocation { displacement_at: 0usize, module_index: 0usize, name_index: 0usize }
+    let empty = CodeRelocation { displacement_at: 0usize, module_index: 0usize, name_index: 0usize, instance: 0usize }
     if index >= function.relocation_count { ret (empty, InvalidArtifact) }
-    let relocation = function.relocations + index * 12usize
-    if relocation > bytes.len || 12usize > bytes.len - relocation { ret (empty, InvalidArtifact) }
+    let relocation = function.relocations + index * 16usize
+    if relocation > bytes.len || 16usize > bytes.len - relocation { ret (empty, InvalidArtifact) }
     let (displacement, displacement_error) = binary.read_u32(bytes, relocation)
     let (module_index, module_error) = binary.read_u32(bytes, relocation + 4usize)
     let (name_index, name_error) = binary.read_u32(bytes, relocation + 8usize)
-    if displacement_error != ok || module_error != ok || name_error != ok || displacement > function.code_length || 4usize > function.code_length - displacement { ret (empty, InvalidArtifact) }
+    let (instance, instance_error) = binary.read_u32(bytes, relocation + 12usize)
+    if displacement_error != ok || module_error != ok || name_error != ok || instance_error != ok || displacement > function.code_length || 4usize > function.code_length - displacement { ret (empty, InvalidArtifact) }
     let (module_start, module_length, module_bounds_error) = string_bounds(bytes, module_index)
     let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
     if module_bounds_error != ok || name_bounds_error != ok || module_length == 0usize || name_length == 0usize || module_start >= bytes.len || name_start >= bytes.len { ret (empty, InvalidArtifact) }
-    ret (CodeRelocation { displacement_at: displacement, module_index: module_index, name_index: name_index }, ok)
+    ret (CodeRelocation { displacement_at: displacement, module_index: module_index, name_index: name_index, instance: instance }, ok)
 }
 
 fn artifact_code_hash_input_size(bytes: []const usize, function: CodeFunction) -> (usize, err) {
@@ -1783,7 +1807,7 @@ fn artifact_code_hash_input_size(bytes: []const usize, function: CodeFunction) -
         let (module_start, module_length, module_error) = string_bounds(bytes, relocation.module_index)
         let (name_start, name_length, name_error) = string_bounds(bytes, relocation.name_index)
         if module_error != ok || name_error != ok || module_start >= bytes.len || name_start >= bytes.len { ret (0usize, InvalidArtifact) }
-        size += 12usize + module_length + name_length
+        size += 16usize + module_length + name_length
         relocation_at += 1usize
     }
     ret (size, ok)
@@ -1817,6 +1841,8 @@ fn artifact_code_content_hash(bytes: []const usize, function: CodeFunction, scra
         if module_write_error != ok { ret (0usize, module_write_error) }
         let name_write_error = write_indexed_canonical_text(bytes, relocation.name_index, scratch)
         if name_write_error != ok { ret (0usize, name_write_error) }
+        let instance_write_error = binary.little_u32(scratch, relocation.instance)
+        if instance_write_error != ok { ret (0usize, instance_write_error) }
         relocation_at += 1usize
     }
     if scratch.count != required { ret (0usize, InvalidArtifact) }
@@ -1943,6 +1969,15 @@ fn find_declaration_indexed(bytes: []const usize, query: []const usize, query_na
     ret (empty, false, ok)
 }
 
+fn dependency_targets_module(dependent: []const usize, dependency_index: usize, target_artifact: []const usize) -> (bool, err) {
+    let (dependency, dependency_error) = dependency_at(dependent, dependency_index)
+    if dependency_error != ok { ret (false, dependency_error) }
+    let (target_module_index, target_module_error) = interface_module_index(target_artifact)
+    if target_module_error != ok { ret (false, target_module_error) }
+    let (same_module, module_error) = strings_equal(dependent, dependency.module_index, target_artifact, target_module_index)
+    ret (same_module, module_error)
+}
+
 fn dependency_matches(dependent: []const usize, dependency_index: usize, target_artifact: []const usize) -> (bool, err) {
     let (dependency, dependency_error) = dependency_at(dependent, dependency_index)
     if dependency_error != ok { ret (false, dependency_error) }
@@ -2060,6 +2095,7 @@ fn self_test() -> err {
     if code_hash_error != ok { ret code_hash_error }
     try binary.little_u32(&output, 1usize)
     try binary.little_u32(&output, module_name)
+    try binary.little_u32(&output, 0usize)
     try binary.little_u64(&output, code_hash)
     try binary.little_u32(&output, 1usize)
     try binary.little_u32(&output, 0usize)

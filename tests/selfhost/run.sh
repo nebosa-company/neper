@@ -291,6 +291,35 @@ generic_artifact_executable_written=$($test_build/neper-self link-em "$generic_a
 chmod +x "$generic_artifact_executable_path"
 "$generic_artifact_executable_path"
 cmp "$generic_artifact_executable_path" "$generic_executable_path"
+generic_instances_executable_path="$test_build/generic-instances-selfhost"
+generic_instances_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_instances/src/main.e" "$repo" x64 linux "$generic_instances_executable_path")
+[ "$generic_instances_executable_written" = 'executable written' ]
+chmod +x "$generic_instances_executable_path"
+"$generic_instances_executable_path"
+generic_instances_artifacts="$test_build/generic-instances"
+generic_instances_copy="$test_build/generic-instances-copy"
+mkdir -p "$generic_instances_artifacts" "$generic_instances_copy"
+generic_instances_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/generic_instances/src/main.e" "$repo" x64 linux "$generic_instances_artifacts")
+[ "$generic_instances_written" = 'compiled modules written' ]
+generic_instances_copy_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/generic_instances/src/main.e" "$repo" x64 linux "$generic_instances_copy")
+[ "$generic_instances_copy_written" = 'compiled modules written' ]
+generic_instances_root_path="$generic_instances_artifacts/main.x64-linux.em"
+generic_instances_dep_path="$generic_instances_artifacts/dep.x64-linux.em"
+for artifact_name in main dep; do
+    artifact_path="$generic_instances_artifacts/$artifact_name.x64-linux.em"
+    [ -f "$artifact_path" ]
+    artifact_validation=$($test_build/neper-self validate-em "$artifact_path")
+    [ "$artifact_validation" = 'compiled module valid' ]
+    cmp "$artifact_path" "$generic_instances_copy/$artifact_name.x64-linux.em"
+done
+generic_instances_edge=$($test_build/neper-self check-em-edge "$generic_instances_root_path" "$generic_instances_dep_path")
+[ "$generic_instances_edge" = 'dependency current' ]
+generic_instances_artifact_executable="$test_build/generic-instances-from-artifacts"
+generic_instances_artifact_written=$($test_build/neper-self link-em "$generic_instances_artifact_executable" "$generic_instances_root_path" "$generic_instances_dep_path")
+[ "$generic_instances_artifact_written" = 'artifact executable written' ]
+chmod +x "$generic_instances_artifact_executable"
+"$generic_instances_artifact_executable"
+cmp "$generic_instances_artifact_executable" "$generic_instances_executable_path"
 bitwise_executable_path="$test_build/bitwise-selfhost"
 bitwise_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/bitwise/src/main.e" "$repo" x64 linux "$bitwise_executable_path")
 [ "$bitwise_executable_written" = 'executable written' ]
@@ -536,7 +565,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '1' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '2' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '6' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
