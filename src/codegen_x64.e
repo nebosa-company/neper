@@ -115,6 +115,10 @@ fn comparison(opcode: nir.Opcode) -> bool {
     ret opcode == .Equal || opcode == .NotEqual || opcode == .Less || opcode == .LessEqual || opcode == .Greater || opcode == .GreaterEqual
 }
 
+fn register_binary(opcode: nir.Opcode) -> bool {
+    ret opcode == .Add || opcode == .Subtract || opcode == .Multiply || opcode == .AddWrap || opcode == .SubtractWrap || opcode == .MultiplyWrap || opcode == .BitAnd || opcode == .BitXor || opcode == .BitOr || comparison(opcode)
+}
+
 fn integer_width(ty: check.Type) -> usize {
     if ty.kind != .Integer { ret 0usize }
     if check.same(ty.name, "i8") || check.same(ty.name, "u8") { ret 8usize }
@@ -281,7 +285,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             try emit_x64.mov_immediate(output, destination, instruction.immediate)
             try store_result(allocations, instruction.result, destination, output)
         } else {
-            if instruction.opcode == .Add || instruction.opcode == .Subtract || instruction.opcode == .Multiply || comparison(instruction.opcode) {
+            if register_binary(instruction.opcode) {
                 if instruction.operand_count != 2usize { ret Unsupported }
                 let left_value = builder.operands[instruction.first_operand]
                 let right_value = builder.operands[instruction.first_operand + 1usize]
@@ -302,9 +306,13 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     try emit_x64.set_condition(output, destination, condition)
                 } else {
                     if destination != left { try emit_x64.mov_register(output, destination, left) }
-                    if instruction.opcode == .Add { try emit_x64.add_register(output, destination, right) }
-                    if instruction.opcode == .Subtract { try emit_x64.subtract_register(output, destination, right) }
-                    if instruction.opcode == .Multiply { try emit_x64.multiply_register(output, destination, right) }
+                    if instruction.opcode == .Add || instruction.opcode == .AddWrap { try emit_x64.add_register(output, destination, right) }
+                    if instruction.opcode == .Subtract || instruction.opcode == .SubtractWrap { try emit_x64.subtract_register(output, destination, right) }
+                    if instruction.opcode == .Multiply || instruction.opcode == .MultiplyWrap { try emit_x64.multiply_register(output, destination, right) }
+                    if instruction.opcode == .BitAnd { try emit_x64.bit_and_register(output, destination, right) }
+                    if instruction.opcode == .BitXor { try emit_x64.bit_xor_register(output, destination, right) }
+                    if instruction.opcode == .BitOr { try emit_x64.bit_or_register(output, destination, right) }
+                    if instruction.ty.kind == .Integer { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
                 try store_result(allocations, instruction.result, destination, output)
             } else {

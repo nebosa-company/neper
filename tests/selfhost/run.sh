@@ -277,6 +277,11 @@ scalar_executable_written=$($test_build/neper-self emit-executable "$repo/tests/
 [ "$scalar_executable_written" = 'executable written' ]
 chmod +x "$scalar_executable_path"
 "$scalar_executable_path"
+bitwise_executable_path="$test_build/bitwise-selfhost"
+bitwise_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/bitwise/src/main.e" "$repo" x64 linux "$bitwise_executable_path")
+[ "$bitwise_executable_written" = 'executable written' ]
+chmod +x "$bitwise_executable_path"
+"$bitwise_executable_path"
 locals_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/locals/src/main.e" "$repo" x64 linux)
 [ "$locals_lowered" = 'module nir ok' ]
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

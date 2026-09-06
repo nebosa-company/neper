@@ -111,6 +111,18 @@ fn subtract_register(buffer: *Buffer, destination: usize, source: usize) -> err 
     ret binary_register(buffer, 41usize, destination, source)
 }
 
+fn bit_and_register(buffer: *Buffer, destination: usize, source: usize) -> err {
+    ret binary_register(buffer, 33usize, destination, source)
+}
+
+fn bit_xor_register(buffer: *Buffer, destination: usize, source: usize) -> err {
+    ret binary_register(buffer, 49usize, destination, source)
+}
+
+fn bit_or_register(buffer: *Buffer, destination: usize, source: usize) -> err {
+    ret binary_register(buffer, 9usize, destination, source)
+}
+
 fn compare_register(buffer: *Buffer, left: usize, right: usize) -> err {
     ret binary_register(buffer, 57usize, left, right)
 }
@@ -307,7 +319,10 @@ fn self_test() -> err {
     try bit_not_register(&scalar, 9usize)
     try normalize_integer(&scalar, 10usize, 9usize, 32usize, true)
     try normalize_integer(&scalar, 9usize, 10usize, 8usize, false)
-    let scalar_expected = [13]usize{ 72usize, 247usize, 216usize, 73usize, 247usize, 209usize, 77usize, 99usize, 209usize, 77usize, 15usize, 182usize, 202usize }
+    try bit_and_register(&scalar, 9usize, 10usize)
+    try bit_xor_register(&scalar, 9usize, 10usize)
+    try bit_or_register(&scalar, 9usize, 10usize)
+    let scalar_expected = [22]usize{ 72usize, 247usize, 216usize, 73usize, 247usize, 209usize, 77usize, 99usize, 209usize, 77usize, 15usize, 182usize, 202usize, 77usize, 33usize, 209usize, 77usize, 49usize, 209usize, 77usize, 9usize, 209usize }
     if scalar.count != scalar_expected.len { ret InvalidRegister }
     at = 0usize
     while at < scalar_expected.len {
