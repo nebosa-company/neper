@@ -452,6 +452,30 @@ deque_executable_written=$($test_build/neper-self emit-executable "$repo/tests/s
 chmod +x "$deque_executable_path"
 deque_output=$("$deque_executable_path")
 [ "$deque_output" = 'data deque ok' ]
+list_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/e/data/list.e")
+expected_list_surface='List
+Iter
+init
+from_slice
+slice
+slice_const
+reserve
+push
+pop
+insert
+remove
+clear
+iter
+iter_next'
+[ "$list_surface" = "$expected_list_surface" ]
+list_parsed=$($test_build/neper-self parse-file "$repo/lib/e/data/list.e")
+[ "$list_parsed" = 'parse file ok' ]
+list_executable_path="$test_build/data-list-selfhost"
+list_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_list/src/main.e" "$repo" x64 linux "$list_executable_path")
+[ "$list_executable_written" = 'executable written' ]
+chmod +x "$list_executable_path"
+list_output=$("$list_executable_path")
+[ "$list_output" = 'data list ok' ]
 os_helper_path="$test_build/os-spawn-helper-selfhost"
 os_helper_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/os-spawn-helper.e" "$repo" x64 linux "$os_helper_path")
 [ "$os_helper_written" = 'executable written' ]

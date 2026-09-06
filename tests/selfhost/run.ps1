@@ -331,6 +331,21 @@ $dequeExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot '
 if ($LASTEXITCODE -ne 0 -or $dequeExecutableWritten -ne 'executable written') { throw 'e.data.deque did not compile into a PE executable' }
 $dequeOutput = & $dequeExecutablePath
 if ($LASTEXITCODE -ne 0 -or $dequeOutput -ne 'data deque ok') { throw 'e.data.deque growth, wraparound, iteration, or empty-capacity behavior failed' }
+$listSurface = Get-Content (Join-Path $repo 'lib\e\data\list.e') |
+    Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
+    ForEach-Object {
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.list contains an unreadable public declaration' }
+        $Matches[1]
+    }
+$expectedListSurface = @('List', 'Iter', 'init', 'from_slice', 'slice', 'slice_const', 'reserve', 'push', 'pop', 'insert', 'remove', 'clear', 'iter', 'iter_next')
+if (($listSurface -join "`n") -ne ($expectedListSurface -join "`n")) { throw 'e.data.list public declarations differ from module-apis.md' }
+$listParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\list.e')
+if ($LASTEXITCODE -ne 0 -or $listParsed -ne 'parse file ok') { throw 'e.data.list failed CLI parsing' }
+$listExecutablePath = Join-Path $testBuild 'data-list-selfhost.exe'
+$listExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_list\src\main.e') $repo 'x64' 'windows' $listExecutablePath
+if ($LASTEXITCODE -ne 0 -or $listExecutableWritten -ne 'executable written') { throw 'e.data.list did not compile into a PE executable' }
+$listOutput = & $listExecutablePath
+if ($LASTEXITCODE -ne 0 -or $listOutput -ne 'data list ok') { throw 'e.data.list growth, insertion, removal, copy, view, or iteration behavior failed' }
 $hostExecutablePath = Join-Path $testBuild 'host-memory-clock-selfhost.exe'
 $hostExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\host-memory-clock.e') $repo 'x64' 'windows' $hostExecutablePath
 if ($LASTEXITCODE -ne 0 -or $hostExecutableWritten -ne 'executable written') { throw 'Windows args, memory, or clock intrinsics did not link' }
