@@ -673,6 +673,37 @@ assertion stops holding. That assertion is only meaningful while no two function
 in the fixture fold together, which is worth remembering when adding to any fixture
 that makes it.
 
+### 7.12 Enum ordering, and the supplied `cmp` for enums
+
+An enum orders by its backing integer, and only the backing integer says whether
+that ordering is signed. Codegen decides comparison signedness from the operand
+value's type, which for an enum is the named type -- it carries no signedness and
+no route back to the aggregate, because a non-generic `.Named` leaves `has_element`
+false. So every enum comparison used the signed condition codes. On a `u64` enum a
+member above `2^63` reads as negative and orders below every other member:
+`Big.Low < Big.Huge` was false. This was wrong in committed code, on both
+platforms, and the reason section 7.7 left the enum `cmp` fallback out.
+
+The resolution happens in lowering, which has the checker. `check.enum_backing_type`
+maps a named type to its enum's backing integer; `lower.coerce_ordering_operand`
+emits a `Cast` to that type ahead of each operand of `<`, `<=`, `>` and `>=`, and
+ahead of the two comparisons inside `emit_supplied_cmp`. Codegen then reads an
+ordinary integer type and picks the condition it already picked correctly for
+integers. Its only change is to accept a `.Named` source for `Cast`, taking the
+width and signedness from the target, which lowering has already resolved.
+
+With ordering correct, `supplied_protocol` adds the enum shape to `cmp`, so
+`T.cmp` works on an enum with no declared `fn <t>_cmp`. `fixtures/link/enum_ordering`
+covers a `u64`, a `u8` and an `i32` enum through both the operators and `T.cmp`;
+its `u64` assertions all fail under a signed comparison.
+
+Not covered, and unrelated to this: a *negative* enum member does not lower at all.
+`lower.e` refuses `member.enum_negative` outright, so `Signed.Under` for
+`enum i32 { Under = 0i32 - 3i32 }` is rejected with the generic "construct is not
+implemented in self-hosted lowering". That is why the fixture's signed enum uses
+positive members. Rule 4's remaining `cmp` shapes are floats and the recursive ones
+(slices, arrays, vectors, tagged unions); `hash`, `eq` and `format` are untouched.
+
 ## 8. Working-tree boundaries
 
 No compiler or test change is intentionally uncommitted now. Everything in

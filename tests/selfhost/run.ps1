@@ -287,6 +287,14 @@ $protocolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $protocolWritten -ne 'executable written') { throw 'protocol call executable emission failed' }
 & $protocolExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'T.cmp did not resolve to each receiver type own protocol function' }
+# An enum orders by its backing integer. Codegen sees only the named type, so a
+# `u64` enum whose top member sets the sign bit orders backwards unless lowering
+# resolves the backing type first.
+$enumOrderingPath = Join-Path $testBuild 'enum-ordering-selfhost.exe'
+$enumOrderingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\enum_ordering\src\main.e') $repo 'x64' 'windows' $enumOrderingPath
+if ($LASTEXITCODE -ne 0 -or $enumOrderingWritten -ne 'executable written') { throw 'enum ordering executable emission failed' }
+& $enumOrderingPath
+if ($LASTEXITCODE -ne 0) { throw 'enum ordering or the supplied enum cmp is wrong' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

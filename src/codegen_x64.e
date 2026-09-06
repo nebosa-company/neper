@@ -641,14 +641,19 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if instruction.operand_count != 1usize || instruction.ty.kind != .Integer { ret Unsupported }
                 let operand_value = builder.operands[instruction.first_operand]
                 let (source_type, source_type_error) = value_type(builder, current, operand_value)
-                if source_type_error != ok || source_type.kind != .Integer { ret Unsupported }
+                if source_type_error != ok { ret Unsupported }
+                // A cast out of an enum reaches here with the named source type;
+                // its width and signedness come from the target, which lowering
+                // has already resolved to the enum's backing integer.
+                let named_source = source_type.kind == .Named && instruction.opcode == .Cast
+                if source_type.kind != .Integer && !named_source { ret Unsupported }
                 let (source, source_error) = read_value(allocations, operand_value, 10usize, output)
                 if source_error != ok { ret source_error }
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                 if destination_error != ok { ret destination_error }
                 if instruction.opcode == .Cast {
                     var normalize_type = instruction.ty
-                    if integer_width(normalize_type) == 64usize { normalize_type = source_type }
+                    if source_type.kind == .Integer && integer_width(normalize_type) == 64usize { normalize_type = source_type }
                     try emit_x64.normalize_integer(output, destination, source, integer_width(normalize_type), signed_integer(normalize_type))
                 } else {
                     if destination != source { try emit_x64.mov_register(output, destination, source) }

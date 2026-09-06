@@ -300,6 +300,23 @@ fn store_supplied_cmp_result(builder: *nir.Builder, slot: usize, result_type: ch
     ret (exit_branch, exit_error)
 }
 
+fn ordering_opcode(opcode: nir.Opcode) -> bool {
+    ret opcode == .Less || opcode == .LessEqual || opcode == .Greater || opcode == .GreaterEqual
+}
+
+// An enum orders by its backing integer, and only the backing integer says
+// whether that ordering is signed. Codegen sees the named type, which does not,
+// so the conversion is made explicit here rather than resolved down there.
+fn coerce_ordering_operand(c: *check.Checker, ty: check.Type, value: usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (backing, is_enum) = check.enum_backing_type(c, ty)
+    if !is_enum { ret (value, ok) }
+    let (instruction, converted, emit_error) = nir.emit(builder, .Cast, backing, true, 0usize, token)
+    if emit_error != ok { ret (0usize, emit_error) }
+    let operand_error = nir.add_operand(builder, instruction, value)
+    if operand_error != ok { ret (0usize, operand_error) }
+    ret (converted, ok)
+}
+
 fn emit_supplied_compare(builder: *nir.Builder, opcode: nir.Opcode, boolean: check.Type, left: usize, right: usize, token: lex.Token) -> (usize, err) {
     let (instruction, value, emit_error) = nir.emit(builder, opcode, boolean, true, 0usize, token)
     if emit_error != ok { ret (0usize, emit_error) }
@@ -319,7 +336,11 @@ fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize
     let result_type = check.make_type(.Integer, "i32", call.protocol_type.module_index)
     let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, result_type, true, 0usize, token)
     if slot_error != ok { ret slot_error }
-    let (less, less_error) = emit_supplied_compare(builder, .Less, boolean, arguments[0usize], arguments[1usize], token)
+    let (left, left_coerce_error) = coerce_ordering_operand(c, call.protocol_type, arguments[0usize], builder, token)
+    if left_coerce_error != ok { ret left_coerce_error }
+    let (right, right_coerce_error) = coerce_ordering_operand(c, call.protocol_type, arguments[1usize], builder, token)
+    if right_coerce_error != ok { ret right_coerce_error }
+    let (less, less_error) = emit_supplied_compare(builder, .Less, boolean, left, right, token)
     if less_error != ok { ret less_error }
     let (less_decision, less_decision_ignored, less_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
     if less_decision_error != ok { ret less_decision_error }
@@ -335,7 +356,7 @@ fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize
     let rest_block = builder.block_count
     let (rest_index, rest_error) = nir.begin_block(builder)
     if rest_error != ok || rest_index != rest_block { ret nir.InvalidControlFlow }
-    let (greater, greater_error) = emit_supplied_compare(builder, .Greater, boolean, arguments[0usize], arguments[1usize], token)
+    let (greater, greater_error) = emit_supplied_compare(builder, .Greater, boolean, left, right, token)
     if greater_error != ok { ret greater_error }
     let (greater_decision, greater_decision_ignored, greater_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
     if greater_decision_error != ok { ret greater_decision_error }
@@ -1336,11 +1357,21 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if right_type_error != ok { ret (0usize, right_type, right_type_error) }
         let (right, lowered_right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], right_type, builder, bindings, binding_count)
         if right_error != ok { ret (0usize, lowered_right_type, right_error) }
+        var left_ordered = left
+        var right_ordered = right
+        if ordering_opcode(opcode) {
+            let (left_operand, left_coerce_error) = coerce_ordering_operand(c, left_type, left, builder, c.tokens[node.token_start])
+            if left_coerce_error != ok { ret (0usize, result_type, left_coerce_error) }
+            let (right_operand, right_coerce_error) = coerce_ordering_operand(c, right_type, right, builder, c.tokens[node.token_start])
+            if right_coerce_error != ok { ret (0usize, result_type, right_coerce_error) }
+            left_ordered = left_operand
+            right_ordered = right_operand
+        }
         let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, c.tokens[node.token_start])
         if emit_error != ok { ret (0usize, result_type, emit_error) }
-        let left_operand_error = nir.add_operand(builder, instruction, left)
+        let left_operand_error = nir.add_operand(builder, instruction, left_ordered)
         if left_operand_error != ok { ret (0usize, result_type, left_operand_error) }
-        let right_operand_error = nir.add_operand(builder, instruction, right)
+        let right_operand_error = nir.add_operand(builder, instruction, right_ordered)
         if right_operand_error != ok { ret (0usize, result_type, right_operand_error) }
         ret (result, result_type, ok)
     }

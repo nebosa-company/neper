@@ -1450,6 +1450,18 @@ fn is_enum_type(c: *Checker, ty: Type) -> bool {
     ret found && c.aggregates[aggregate_index].kind == .Enum
 }
 
+// An enum's ordering is its backing integer's ordering, so the backing type has
+// to be reachable from a value's type. Nothing else about an enum survives past
+// lowering.
+fn enum_backing_type(c: *Checker, ty: Type) -> (Type, bool) {
+    if ty.kind != .Named { ret (invalid_type(), false) }
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found || c.aggregates[aggregate_index].kind != .Enum { ret (invalid_type(), false) }
+    let backing = c.aggregates[aggregate_index].backing_type
+    if backing.kind != .Integer { ret (invalid_type(), false) }
+    ret (backing, true)
+}
+
 fn tagged_union_tag_type(c: *Checker, ty: Type) -> (Type, bool) {
     var subject = ty
     while subject.kind == .Pointer {
@@ -3920,6 +3932,8 @@ fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool
 fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBuiltin {
     if !same(protocol, "cmp") { ret .None }
     if canonical.kind == .Integer || canonical.kind == .Bool || canonical.kind == .Err { ret .Cmp }
+    let (enum_backing, is_enum) = enum_backing_type(c, canonical)
+    if is_enum && enum_backing.kind == .Integer { ret .Cmp }
     ret .None
 }
 

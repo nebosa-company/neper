@@ -337,6 +337,13 @@ protocol_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$protocol_written" = 'executable written' ]
 chmod +x "$protocol_executable_path"
 "$protocol_executable_path"
+# An enum orders by its backing integer. Codegen sees only the named type, so a
+# `u64` enum whose top member sets the sign bit orders backwards unless lowering
+# resolves the backing type first.
+enum_ordering_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/enum_ordering/src/main.e" "$repo" x64 linux "$test_build/enum-ordering-selfhost")
+[ "$enum_ordering_written" = 'executable written' ]
+chmod +x "$test_build/enum-ordering-selfhost"
+"$test_build/enum-ordering-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {
