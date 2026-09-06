@@ -415,6 +415,51 @@ These are the first emitters of `E-NAME-0001` through `E-NAME-0003` from the
 resolver. `docs/diagnostics.md` already registered all three, so no
 specification change was needed.
 
+### 7.5 Generic instance ownership
+
+The other half of the section 10 contract. A concrete instance is now code in the
+module that instantiated it, not in the module that declares the template, so a
+library artifact no longer depends on its consumers. Emitting
+`fixtures/link/generic_instances` used to put all four `dep` instances in
+`dep.x64-*.em`; it now puts all seven functions in `main.x64-*.em` and leaves
+`dep.x64-*.em` with no code at all.
+
+- `check.Function` carries `owner_module_index`. `find_function_instance` and the
+  per-template instance ordinal are keyed by owner, so every instantiating module
+  gets its own copy.
+- The `Checker` carries an active owner. A template body is walked in its
+  declaring module's tree, so without it a nested instantiation
+  (`list.from_slice` calling `list.init`) would be attributed to the library.
+  Both `check.check_instance` and `lower.lower_owned_instances` set it.
+- `lower.module` lowers the instances its module owns by parsing the declaring
+  module's tree on demand, and repeats until no pending instance is left, because
+  lowering an instance can create more.
+- `nir.begin_function` and `nir.intern_function` take the owner, so instance calls
+  are module-local.
+- A module that instantiates a foreign template holds a copy of that template's
+  code, so it records a `dependency_body_kind()` edge on the template instead of
+  the signature edge it loses. A template has no NIR, so `em.body_hash` takes its
+  body hash over the token spellings of its declaration: an edit to the template's
+  code makes the edge stale, an edit to its comments does not.
+- `em_link.assemble` folds functions with equal content hashes onto one body. The
+  content hash already covers the code bytes and every relocation target, so equal
+  hashes mean the same function.
+- `main.init_cli_nir` needed larger pools. Per-module copies scale the NIR function
+  count with instantiation sites rather than declarations, and the self-host build
+  exhausted NIR capacity while lowering `src/layout.e` until the function, block,
+  instruction and operand capacities were raised.
+
+`fixtures/link/generic_folding` is the folding case: `one` and `two` both
+instantiate `lib.pick[i64]`, so both artifacts carry that instance with an
+identical content hash while `lib.x64-*.em` carries no code. Both suites assert
+the code counts, the instance discriminators, the shared content hash, and that
+the executable linked from the folded artifacts runs.
+
+Note for anyone adding compiler state: `source_start` and `source_end` live on
+`check.FunctionGeneric` rather than `check.Function` only because the bootstrap
+miscompiles generic instantiation on Windows once `check.Function` grows by three
+`usize` fields. See section 11.
+
 ## 8. Working-tree boundaries
 
 No compiler or test change is intentionally uncommitted now. Everything in
@@ -505,7 +550,7 @@ behavior that the simple artifact fixtures do not cover. The target contract is:
 
 - templates and required NIR are represented deterministically (done);
 - concrete instances are emitted into the instantiating module with module-local
-  linkage (open: instances are still owned by the template's module);
+  linkage (done);
 - dependency/body hashes invalidate exactly the consumers that need rebuilding;
 - the own linker folds equivalent copies by content hash;
 - clean and repeated emission is byte-identical on Windows and Linux.
@@ -554,6 +599,16 @@ needs general `T.cmp` protocol resolution first.
 - A function is identified in NIR, in relocations and in `.em` code records by
   module, name **and** instance discriminator. Anything that matches functions by
   module and name alone will bind calls to the wrong generic instance.
+- The module named by a NIR function or reference is the module that **owns** the
+  code, which for a generic instance is the instantiating module, not the module
+  that declares the template. `em.checked_function_for_nir` therefore cannot look
+  a template up by module and name.
+- The bootstrap miscompiles the self-hosted compiler on Windows once
+  `check.Function` grows by three `usize` fields: the resulting stage-1 binary
+  segfaults on any module that instantiates a generic function. Two fields are
+  fine, Linux is unaffected, and a stage-2 built by the self-hosted compiler
+  handles the same source correctly, so the defect is in `bootstrap/neper.c`. Put
+  new per-function state on `check.FunctionGeneric` until it is fixed.
 - The compiled-module format is version 2. Artifacts written by an earlier
   compiler are rejected with `UnsupportedVersion`; delete stale `.em` files
   rather than trying to read them.

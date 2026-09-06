@@ -6,6 +6,7 @@ use check
 use codegen_x64
 use emit_x64
 use graph
+use lex
 use nir
 use resolve
 
@@ -563,21 +564,17 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     ret (name, true)
 }
 
+// A NIR function is named by the module that owns its code, its name and its
+// instance discriminator. A generic instance is owned by the module that
+// instantiated it, so this cannot look the template up by module and name.
 fn checked_function_for_nir(c: *check.Checker, builder: *nir.Builder, nir_function: usize) -> (usize, bool) {
     if nir_function >= builder.function_count { ret (0usize, false) }
     let lowered = builder.functions[nir_function]
-    let (template_index, found_template) = find_checked_function(c, lowered.module_index, lowered.name)
-    if !found_template { ret (0usize, false) }
-    if !c.functions[template_index].generic { ret (template_index, true) }
-    // Generic instances share the template name, so the instance discriminator
-    // carried by NIR is the only exact identity.
-    var instance = c.signature_function_count
-    while instance < c.function_count {
-        let generic = c.function_generics[instance]
-        if c.functions[instance].module_index == lowered.module_index && same(c.functions[instance].name, lowered.name) && generic.instance && generic.template_index == template_index && !c.functions[instance].generic {
-            if c.functions[instance].instance_id == lowered.instance { ret (instance, true) }
-        }
-        instance += 1usize
+    var at = 0usize
+    while at < c.function_count {
+        let candidate = c.functions[at]
+        if candidate.owner_module_index == lowered.module_index && candidate.instance_id == lowered.instance && !candidate.generic && same(candidate.name, lowered.name) { ret (at, true) }
+        at += 1usize
     }
     ret (0usize, false)
 }
@@ -663,6 +660,24 @@ fn write_nir_canonical(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     ret ok
 }
 
+// A generic template has no NIR of its own, so its body hash is taken over the
+// token spellings of its declaration. Trivia and formatting are excluded, and a
+// consumer that instantiated the template can hold a body edge that goes stale
+// exactly when the template's code changes.
+fn write_declaration_tokens_canonical(text: str, start: usize, end: usize, output: *binary.Buffer) -> err {
+    if start > end || end > text.len { ret InvalidArtifact }
+    let body = text[start..end]
+    var scanner = lex.init(body)
+    while true {
+        let token = lex.next(&scanner)
+        if token.kind == .Invalid { ret InvalidArtifact }
+        if token.kind == .Eof { ret ok }
+        if token.start > token.end || token.end > body.len { ret InvalidArtifact }
+        try canonical_text(output, body[token.start..token.end])
+    }
+    ret ok
+}
+
 fn body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_function: usize, nir_function: usize, has_nir: bool, scratch: *binary.Buffer) -> (usize, err) {
     let (signature, signature_error) = signature_hash(c, g, checked_function, scratch)
     if signature_error != ok { ret (0usize, signature_error) }
@@ -675,8 +690,18 @@ fn body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_
         let nir_error = write_nir_canonical(c, g, builder, nir_function, scratch)
         if nir_error != ok { ret (0usize, nir_error) }
     } else {
-        let marker_error = binary.byte(scratch, 0usize)
-        if marker_error != ok { ret (0usize, marker_error) }
+        if checked_function >= c.function_count { ret (0usize, InvalidArtifact) }
+        let function = c.functions[checked_function]
+        let generic = c.function_generics[checked_function]
+        if function.generic && generic.source_end > generic.source_start && function.module_index < g.count {
+            let marker_error = binary.byte(scratch, 2usize)
+            if marker_error != ok { ret (0usize, marker_error) }
+            let tokens_error = write_declaration_tokens_canonical(g.modules[function.module_index].text, generic.source_start, generic.source_end, scratch)
+            if tokens_error != ok { ret (0usize, tokens_error) }
+        } else {
+            let marker_error = binary.byte(scratch, 0usize)
+            if marker_error != ok { ret (0usize, marker_error) }
+        }
     }
     let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
     ret (hash, hash_error)
@@ -721,6 +746,19 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
             }
         }
         function_at += 1usize
+    }
+    var template_at = c.signature_function_count
+    while template_at < c.function_count {
+        let (template_index, records_template) = owned_template_dependency(c, module_index, template_at)
+        if records_template {
+            let template = c.functions[template_index]
+            if template.module_index >= g.count { ret InvalidArtifact }
+            let (template_module_name, template_module_error) = intern(table, g.modules[template.module_index].name)
+            if template_module_error != ok { ret template_module_error }
+            let (template_name, template_name_error) = intern(table, template.name)
+            if template_name_error != ok { ret template_name_error }
+        }
+        template_at += 1usize
     }
     var aggregate_at = 0usize
     while aggregate_at < c.aggregate_count {
@@ -1196,6 +1234,33 @@ fn module_dependency_reference(builder: *nir.Builder, module_index: usize, at: u
     ret (dependency_name, true)
 }
 
+fn owned_template_dependency(c: *check.Checker, module_index: usize, at: usize) -> (usize, bool) {
+    if at >= c.function_count { ret (0usize, false) }
+    let generic = c.function_generics[at]
+    if !generic.instance || c.functions[at].generic { ret (0usize, false) }
+    if c.functions[at].owner_module_index != module_index { ret (0usize, false) }
+    let template_index = generic.template_index
+    if template_index >= c.function_count || c.functions[template_index].module_index == module_index { ret (0usize, false) }
+    var prior = c.signature_function_count
+    while prior < at {
+        let earlier = c.function_generics[prior]
+        if earlier.instance && !c.functions[prior].generic && c.functions[prior].owner_module_index == module_index && earlier.template_index == template_index { ret (0usize, false) }
+        prior += 1usize
+    }
+    ret (template_index, true)
+}
+
+fn template_dependency_count(c: *check.Checker, module_index: usize) -> usize {
+    var count = 0usize
+    var at = c.signature_function_count
+    while at < c.function_count {
+        let (template_index, records) = owned_template_dependency(c, module_index, at)
+        if records { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
 fn dependency_count(builder: *nir.Builder, module_index: usize) -> usize {
     var count = 0usize
     var at = 0usize
@@ -1222,7 +1287,7 @@ fn value_dependency_count(c: *check.Checker, module_index: usize) -> (usize, err
 fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     let (value_count, value_count_error) = value_dependency_count(c, module_index)
     if value_count_error != ok { ret value_count_error }
-    try binary.little_u32(output, dependency_count(builder, module_index) + value_count)
+    try binary.little_u32(output, dependency_count(builder, module_index) + template_dependency_count(c, module_index) + value_count)
     var at = 0usize
     while at < builder.function_ref_count {
         let reference = builder.function_refs[at]
@@ -1238,6 +1303,26 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
             let (target_name, target_name_error) = string_index(table, dependency_name)
             if target_name_error != ok { ret target_name_error }
             try binary.byte(output, dependency_signature_kind())
+            try binary.zeroes(output, 3usize)
+            try binary.little_u32(output, target_module)
+            try binary.little_u32(output, target_name)
+            try binary.little_u64(output, hash)
+        }
+        at += 1usize
+    }
+    at = c.signature_function_count
+    while at < c.function_count {
+        let (template_index, records_template) = owned_template_dependency(c, module_index, at)
+        if records_template {
+            let template = c.functions[template_index]
+            if template.module_index >= g.count { ret InvalidArtifact }
+            let (hash, hash_error) = body_hash(c, g, builder, template_index, 0usize, false, scratch)
+            if hash_error != ok { ret hash_error }
+            let (target_module, target_module_error) = string_index(table, g.modules[template.module_index].name)
+            if target_module_error != ok { ret target_module_error }
+            let (target_name, target_name_error) = string_index(table, template.name)
+            if target_name_error != ok { ret target_name_error }
+            try binary.byte(output, dependency_body_kind())
             try binary.zeroes(output, 3usize)
             try binary.little_u32(output, target_module)
             try binary.little_u32(output, target_name)

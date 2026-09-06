@@ -830,16 +830,20 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
 }
 
 fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, compiler_scale: bool) -> err {
-    let (functions, functions_error) = mem.alloc[nir.Function](a, 1024usize)
-    if functions_error != ok { ret functions_error }
+    // Every module carries its own copy of the generic instances it uses, so the
+    // NIR function count scales with instantiation sites, not with declarations.
+    var function_capacity = 1024usize
     var block_capacity = 8192usize
     var instruction_capacity = 32768usize
     var operand_capacity = 131072usize
     if compiler_scale {
-        block_capacity = 32768usize
-        instruction_capacity = 131072usize
-        operand_capacity = 524288usize
+        function_capacity = 16384usize
+        block_capacity = 131072usize
+        instruction_capacity = 524288usize
+        operand_capacity = 2097152usize
     }
+    let (functions, functions_error) = mem.alloc[nir.Function](a, function_capacity)
+    if functions_error != ok { ret functions_error }
     let (blocks, blocks_error) = mem.alloc[nir.Block](a, block_capacity)
     if blocks_error != ok { ret blocks_error }
     let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, instruction_capacity)

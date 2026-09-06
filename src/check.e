@@ -115,6 +115,7 @@ type Parameter = struct {
 type Function = struct {
     name: str,
     module_index: usize,
+    owner_module_index: usize,
     first_parameter: usize,
     parameter_count: usize,
     first_return: usize,
@@ -132,6 +133,9 @@ type FunctionGeneric = struct {
     first_argument: usize,
     instance: bool,
     checked: bool,
+    lowered: bool,
+    source_start: usize,
+    source_end: usize,
 }
 
 type AggregateKind = enum u8 {
@@ -285,6 +289,8 @@ type Checker = struct {
     active_comptime_count: usize,
     active_first_argument: usize,
     active_arguments: bool,
+    active_owner_module: usize,
+    active_owner_set: bool,
     generic_declaration: bool,
     loop_depth: usize,
     break_depth: usize,
@@ -375,6 +381,8 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.active_comptime_count = 0usize
     c.active_first_argument = 0usize
     c.active_arguments = false
+    c.active_owner_module = 0usize
+    c.active_owner_set = false
     c.generic_declaration = false
     c.loop_depth = 0usize
     c.break_depth = 0usize
@@ -1831,10 +1839,15 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     var item: Function = zero
     item.name = name
     item.module_index = module_index
+    item.owner_module_index = module_index
     item.first_parameter = c.parameter_count
     item.first_return = c.return_type_count
     item.external = node.kind == .ExternDecl
     var generic: FunctionGeneric = zero
+    if node.token_start < node.token_end && node.token_end <= c.token_count {
+        generic.source_start = c.tokens[node.token_start].start
+        generic.source_end = c.tokens[node.token_end - 1usize].end
+    }
     generic.first_comptime = c.comptime_parameter_count
     let end = node.first_child + node.child_count
     var at = node.first_child
@@ -1926,6 +1939,7 @@ fn add_seeded_function(c: *Checker, module_index: usize, name: str, return_type:
     var item: Function = zero
     item.name = name
     item.module_index = module_index
+    item.owner_module_index = module_index
     item.first_parameter = c.parameter_count
     item.first_return = first_return
     item.return_count = return_count
@@ -3026,22 +3040,27 @@ fn generic_arguments_equal(c: *Checker, function_index: usize, first: usize, sec
     ret true
 }
 
-fn template_instance_count(c: *Checker, template_index: usize) -> usize {
+fn template_instance_count(c: *Checker, owner_module_index: usize, template_index: usize) -> usize {
     var count = 0usize
     var at = c.signature_function_count
     while at < c.function_count {
         let candidate = c.function_generics[at]
-        if candidate.instance && candidate.template_index == template_index { count += 1usize }
+        if candidate.instance && candidate.template_index == template_index && c.functions[at].owner_module_index == owner_module_index { count += 1usize }
         at += 1usize
     }
     ret count
 }
 
-fn find_function_instance(c: *Checker, template_index: usize, first_argument: usize) -> (usize, bool) {
+fn instance_owner(c: *Checker, module_index: usize) -> usize {
+    if c.active_owner_set { ret c.active_owner_module }
+    ret module_index
+}
+
+fn find_function_instance(c: *Checker, owner_module_index: usize, template_index: usize, first_argument: usize) -> (usize, bool) {
     var at = c.signature_function_count
     while at < c.function_count {
         let candidate = c.function_generics[at]
-        if candidate.instance && candidate.template_index == template_index && generic_arguments_equal(c, template_index, candidate.first_argument, first_argument) { ret (at, true) }
+        if candidate.instance && candidate.template_index == template_index && c.functions[at].owner_module_index == owner_module_index && generic_arguments_equal(c, template_index, candidate.first_argument, first_argument) { ret (at, true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -3062,15 +3081,16 @@ fn function_arguments_concrete(c: *Checker, function_index: usize, first_argumen
     ret true
 }
 
-fn instantiate_function(c: *Checker, template_index: usize, first_argument: usize) -> (usize, err) {
-    let (cached, found) = find_function_instance(c, template_index, first_argument)
+fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: usize, first_argument: usize) -> (usize, err) {
+    let (cached, found) = find_function_instance(c, owner_module_index, template_index, first_argument)
     if found { ret (cached, ok) }
     if template_index >= c.signature_function_count || c.function_count == c.functions.len { ret (0usize, Capacity) }
     let template = c.functions[template_index]
     var instance: Function = zero
     instance.name = template.name
     instance.module_index = template.module_index
-    instance.instance_id = template_instance_count(c, template_index) + 1usize
+    instance.owner_module_index = owner_module_index
+    instance.instance_id = template_instance_count(c, owner_module_index, template_index) + 1usize
     instance.first_parameter = c.parameter_count
     instance.parameter_count = template.parameter_count
     instance.first_return = c.return_type_count
@@ -3079,6 +3099,10 @@ fn instantiate_function(c: *Checker, template_index: usize, first_argument: usiz
     var generic: FunctionGeneric = zero
     generic.first_comptime = c.function_generics[template_index].first_comptime
     generic.comptime_count = c.function_generics[template_index].comptime_count
+    // The instance is code in the instantiating module, but its body is still the
+    // template's source, so it keeps the template's source range.
+    generic.source_start = c.function_generics[template_index].source_start
+    generic.source_end = c.function_generics[template_index].source_end
     generic.template_index = template_index
     generic.first_argument = first_argument
     generic.instance = true
@@ -3216,7 +3240,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         at += 1usize
     }
     if c.generic_declaration && !function_arguments_concrete(c, template_index, first_argument) { ret (template_index, ok) }
-    let (instance_index, instance_error) = instantiate_function(c, template_index, first_argument)
+    let (instance_index, instance_error) = instantiate_function(c, instance_owner(c, module_index), template_index, first_argument)
     ret (instance_index, instance_error)
 }
 
@@ -5428,6 +5452,10 @@ fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_i
     c.active_comptime_count = template_generic.comptime_count
     c.active_first_argument = instance_generic.first_argument
     c.active_arguments = true
+    // A template body walked here belongs to the declaring module, but anything it
+    // instantiates is code in the module that asked for this instance.
+    c.active_owner_module = instance.owner_module_index
+    c.active_owner_set = true
     var result = UnknownCallable
     var node_index = 1usize
     while node_index < tree.count {
@@ -5446,6 +5474,8 @@ fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_i
     c.active_comptime_count = 0usize
     c.active_first_argument = 0usize
     c.active_arguments = false
+    c.active_owner_set = false
+    c.active_owner_module = 0usize
     if result != ok {
         c.failure_module = instance.module_index
         c.failure_name = template.name

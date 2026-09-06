@@ -139,6 +139,15 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     if relocations_error != ok { ret relocations_error }
     program.relocations = relocations
     program.relocation_count = 0usize
+    // Every module owns its own copy of the generic instances it uses, so the same
+    // concrete function arrives from several artifacts. A content hash covers both
+    // the code bytes and each relocation target, so equal hashes are the same
+    // function and share one copy.
+    let (folded_hashes, folded_hashes_error) = mem.alloc[usize](a, function_count)
+    if folded_hashes_error != ok { ret folded_hashes_error }
+    let (folded_offsets, folded_offsets_error) = mem.alloc[usize](a, function_count)
+    if folded_offsets_error != ok { ret folded_offsets_error }
+    var folded_count = 0usize
 
     artifact_at = 0usize
     while artifact_at < artifacts.len {
@@ -158,8 +167,26 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             assembled_function.module_index = artifact_at
             assembled_function.instance = function.instance
             functions[global_function] = assembled_function
-            program.function_offsets[global_function] = program.machine.count
             program.builder.function_count += 1usize
+            var folded = false
+            var fold_at = 0usize
+            while fold_at < folded_count {
+                if folded_hashes[fold_at] == function.content_hash {
+                    program.function_offsets[global_function] = folded_offsets[fold_at]
+                    folded = true
+                    break
+                }
+                fold_at += 1usize
+            }
+            if folded {
+                function_at += 1usize
+                continue
+            }
+            program.function_offsets[global_function] = program.machine.count
+            if folded_count == folded_hashes.len { ret InvalidInput }
+            folded_hashes[folded_count] = function.content_hash
+            folded_offsets[folded_count] = program.machine.count
+            folded_count += 1usize
             var code_at = 0usize
             while code_at < function.code_length {
                 try emit_x64.byte(&program.machine, artifacts[artifact_at].bytes[function.code_start + code_at])

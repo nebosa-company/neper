@@ -289,7 +289,7 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize
             symbol_instance = 0usize
         }
     }
-    let (function_ref, function_ref_error) = nir.intern_function(builder, call.function.module_index, symbol, symbol_instance)
+    let (function_ref, function_ref_error) = nir.intern_function(builder, call.function.owner_module_index, symbol, symbol_instance)
     if function_ref_error != ok { ret function_ref_error }
     var slot = 0usize
     if return_layout.via_slot && results.count != 0usize {
@@ -2278,7 +2278,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if function_index >= c.function_count { ret FunctionNotFound }
     let function = c.functions[function_index]
     if function.generic { ret check.Unsupported }
-    let (nir_function, begin_error) = nir.begin_function(builder, module_index, name, function.instance_id)
+    let (nir_function, begin_error) = nir.begin_function(builder, function.owner_module_index, name, function.instance_id)
     if begin_error != ok { ret begin_error }
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_parameter_at = 0usize
@@ -2383,6 +2383,49 @@ fn lower_instance(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
     ret FunctionNotFound
 }
 
+fn pending_instance(c: *check.Checker, owner_module_index: usize) -> (usize, bool) {
+    var at = c.signature_function_count
+    while at < c.function_count {
+        let generic = c.function_generics[at]
+        if generic.instance && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// A concrete instance is code in the module that instantiated it, but its body is
+// the template's source, so lowering it needs the declaring module's tree. Each
+// pass parses one declaring module and lowers every pending instance from it;
+// instances that pass creates in turn are picked up by the next one.
+fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+    while true {
+        let (first, found) = pending_instance(c, module_index)
+        if !found { ret ok }
+        let template_module = c.functions[c.function_generics[first].template_index].module_index
+        if template_module >= g.count { ret FunctionNotFound }
+        var tree: parse.Tree = zero
+        try parse.init_tree(&tree, g.nodes, g.children)
+        try parse.parse(&tree, g.modules[template_module].text)
+        try check.tokenize(c, g.modules[template_module].text)
+        var at = first
+        let end = c.function_count
+        while at < end {
+            let generic = c.function_generics[at]
+            if generic.instance && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == module_index && c.functions[generic.template_index].module_index == template_module {
+                c.function_generics[at].lowered = true
+                c.active_owner_module = module_index
+                c.active_owner_set = true
+                let lower_error = lower_instance(c, g, &tree, template_module, at, builder, signatures, bindings)
+                c.active_owner_set = false
+                c.active_owner_module = 0usize
+                if lower_error != ok { ret lower_error }
+            }
+            at += 1usize
+        }
+    }
+    ret ok
+}
+
 fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     if module_index >= g.count { ret FunctionNotFound }
     var tree: parse.Tree = zero
@@ -2395,14 +2438,7 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
         if node.top_level && node.kind == .FnDecl { try lower_declaration(c, g, &tree, module_index, node, builder, signatures, bindings) }
         node_index += 1usize
     }
-    var instance_index = c.signature_function_count
-    while instance_index < c.function_count {
-        if c.functions[instance_index].module_index == module_index && c.function_generics[instance_index].instance && !c.functions[instance_index].generic {
-            try lower_instance(c, g, &tree, module_index, instance_index, builder, signatures, bindings)
-        }
-        instance_index += 1usize
-    }
-    ret ok
+    ret lower_owned_instances(c, g, module_index, builder, signatures, bindings)
 }
 
 fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {

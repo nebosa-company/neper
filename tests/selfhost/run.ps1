@@ -212,6 +212,26 @@ if ($LASTEXITCODE -ne 0 -or $genericArtifactExecutableWritten -ne 'artifact exec
 & $genericArtifactExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'generic compiled-module executable failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericArtifactExecutablePath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $genericExecutablePath).Hash) { throw 'generic compiled-module and source links differ' }
+# Walk a compiled module's code section. The section directory is fixed, so the
+# code section offset is at byte 136; each record is a 24-byte header followed by
+# its machine code and its relocations.
+function Get-EmCodeRecords([string]$path) {
+    $bytes = [IO.File]::ReadAllBytes($path)
+    $code = [int][BitConverter]::ToUInt64($bytes, 136)
+    $count = [int][BitConverter]::ToUInt32($bytes, $code)
+    $records = @()
+    $cursor = $code + 4
+    for ($i = 0; $i -lt $count; $i++) {
+        $length = [int][BitConverter]::ToUInt32($bytes, $cursor + 16)
+        $relocations = [int][BitConverter]::ToUInt32($bytes, $cursor + 20)
+        $records += [pscustomobject]@{
+            Instance = [BitConverter]::ToUInt32($bytes, $cursor + 4)
+            ContentHash = [BitConverter]::ToUInt64($bytes, $cursor + 8)
+        }
+        $cursor += 24 + $length + $relocations * 16
+    }
+    return ,$records
+}
 $genericInstancesExecutablePath = Join-Path $testBuild 'generic-instances-selfhost.exe'
 $genericInstancesExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesExecutableWritten -ne 'executable written') { throw 'multi-instance generic PE executable emission failed' }
@@ -236,12 +256,37 @@ foreach ($artifactPath in @($genericInstancesRootPath, $genericInstancesDepPath)
 }
 $genericInstancesEdge = & $compiler check-em-edge $genericInstancesRootPath $genericInstancesDepPath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesEdge -ne 'dependency current') { throw 'multi-edge generic dependency was rejected' }
+$genericInstancesRootRecords = Get-EmCodeRecords $genericInstancesRootPath
+$genericInstancesDepRecords = Get-EmCodeRecords $genericInstancesDepPath
+if ($genericInstancesDepRecords.Count -ne 0) { throw 'the module declaring a generic template still owns its instances' }
+if ($genericInstancesRootRecords.Count -ne 7) { throw 'the instantiating module did not receive every instance it uses' }
 $genericInstancesArtifactExecutable = Join-Path $testBuild 'generic-instances-from-artifacts.exe'
 $genericInstancesArtifactWritten = & $compiler link-em $genericInstancesArtifactExecutable $genericInstancesRootPath $genericInstancesDepPath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesArtifactWritten -ne 'artifact executable written') { throw 'multi-instance generic compiled modules did not link' }
 & $genericInstancesArtifactExecutable
 if ($LASTEXITCODE -ne 0) { throw 'multi-instance generic compiled-module executable failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericInstancesArtifactExecutable).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $genericInstancesExecutablePath).Hash) { throw 'multi-instance generic compiled-module and source links differ' }
+$foldingFixture = Join-Path $PSScriptRoot 'fixtures\link\generic_folding\src\main.e'
+$foldingDirect = Join-Path $testBuild 'generic-folding-selfhost.exe'
+$foldingDirectWritten = & $compiler emit-executable $foldingFixture $repo 'x64' 'windows' $foldingDirect
+if ($LASTEXITCODE -ne 0 -or $foldingDirectWritten -ne 'executable written') { throw 'shared generic instance executable emission failed' }
+& $foldingDirect
+if ($LASTEXITCODE -ne 0) { throw 'two modules sharing one generic instance produced wrong results' }
+$foldingArtifacts = Join-Path $testBuild 'generic-folding'
+New-Item -ItemType Directory -Force -Path $foldingArtifacts | Out-Null
+$foldingWritten = & $compiler emit-em-all $foldingFixture $repo 'x64' 'windows' $foldingArtifacts
+if ($LASTEXITCODE -ne 0 -or $foldingWritten -ne 'compiled modules written') { throw 'shared generic instance artifact emission failed' }
+if ((Get-EmCodeRecords (Join-Path $foldingArtifacts 'lib.x64-windows.em')).Count -ne 0) { throw 'a template-only module still owns compiled code' }
+$foldingOne = Get-EmCodeRecords (Join-Path $foldingArtifacts 'one.x64-windows.em')
+$foldingTwo = Get-EmCodeRecords (Join-Path $foldingArtifacts 'two.x64-windows.em')
+if ($foldingOne.Count -ne 2 -or $foldingTwo.Count -ne 2) { throw 'an instantiating module did not receive its own instance copy' }
+if ($foldingOne[1].Instance -ne 1 -or $foldingTwo[1].Instance -ne 1) { throw 'an owned instance carries the wrong discriminator' }
+if ($foldingOne[1].ContentHash -ne $foldingTwo[1].ContentHash) { throw 'identical instances in two modules do not share a content hash' }
+$foldedExecutable = Join-Path $testBuild 'generic-folding-from-artifacts.exe'
+$foldedWritten = & $compiler link-em $foldedExecutable (Join-Path $foldingArtifacts 'main.x64-windows.em') (Join-Path $foldingArtifacts 'one.x64-windows.em') (Join-Path $foldingArtifacts 'two.x64-windows.em') (Join-Path $foldingArtifacts 'lib.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $foldedWritten -ne 'artifact executable written') { throw 'compiled modules with a shared instance did not link' }
+& $foldedExecutable
+if ($LASTEXITCODE -ne 0) { throw 'executable linked from folded compiled modules failed' }
 $bitwiseExecutablePath = Join-Path $testBuild 'bitwise-selfhost.exe'
 $bitwiseExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\bitwise\src\main.e') $repo 'x64' 'windows' $bitwiseExecutablePath
 if ($LASTEXITCODE -ne 0 -or $bitwiseExecutableWritten -ne 'executable written') { throw 'bitwise PE executable emission failed' }

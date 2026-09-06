@@ -320,6 +320,52 @@ generic_instances_artifact_written=$($test_build/neper-self link-em "$generic_in
 chmod +x "$generic_instances_artifact_executable"
 "$generic_instances_artifact_executable"
 cmp "$generic_instances_artifact_executable" "$generic_instances_executable_path"
+# Walk a compiled module's code section. The section directory is fixed, so the
+# code section offset is at byte 136; each record is a 24-byte header followed by
+# its machine code and its relocations.
+em_code_count() {
+    em_code=$(od -An -tu8 -j136 -N8 "$1" | tr -d ' ')
+    od -An -tu4 -j"$em_code" -N4 "$1" | tr -d ' '
+}
+em_code_field() {
+    em_code=$(od -An -tu8 -j136 -N8 "$1" | tr -d ' ')
+    em_cursor=$((em_code + 4))
+    em_index=0
+    while [ "$em_index" -lt "$2" ]; do
+        em_length=$(od -An -tu4 -j$((em_cursor + 16)) -N4 "$1" | tr -d ' ')
+        em_relocations=$(od -An -tu4 -j$((em_cursor + 20)) -N4 "$1" | tr -d ' ')
+        em_cursor=$((em_cursor + 24 + em_length + em_relocations * 16))
+        em_index=$((em_index + 1))
+    done
+    if [ "$3" = 'instance' ]; then
+        od -An -tu4 -j$((em_cursor + 4)) -N4 "$1" | tr -d ' '
+    else
+        od -An -tu8 -j$((em_cursor + 8)) -N8 "$1" | tr -d ' '
+    fi
+}
+[ "$(em_code_count "$generic_instances_dep_path")" = '0' ]
+[ "$(em_code_count "$generic_instances_root_path")" = '7' ]
+folding_fixture="$repo/tests/selfhost/fixtures/link/generic_folding/src/main.e"
+folding_direct="$test_build/generic-folding-selfhost"
+folding_direct_written=$($test_build/neper-self emit-executable "$folding_fixture" "$repo" x64 linux "$folding_direct")
+[ "$folding_direct_written" = 'executable written' ]
+chmod +x "$folding_direct"
+"$folding_direct"
+folding_artifacts="$test_build/generic-folding"
+mkdir -p "$folding_artifacts"
+folding_written=$($test_build/neper-self emit-em-all "$folding_fixture" "$repo" x64 linux "$folding_artifacts")
+[ "$folding_written" = 'compiled modules written' ]
+[ "$(em_code_count "$folding_artifacts/lib.x64-linux.em")" = '0' ]
+[ "$(em_code_count "$folding_artifacts/one.x64-linux.em")" = '2' ]
+[ "$(em_code_count "$folding_artifacts/two.x64-linux.em")" = '2' ]
+[ "$(em_code_field "$folding_artifacts/one.x64-linux.em" 1 instance)" = '1' ]
+[ "$(em_code_field "$folding_artifacts/two.x64-linux.em" 1 instance)" = '1' ]
+[ "$(em_code_field "$folding_artifacts/one.x64-linux.em" 1 hash)" = "$(em_code_field "$folding_artifacts/two.x64-linux.em" 1 hash)" ]
+folded_executable="$test_build/generic-folding-from-artifacts"
+folded_written=$($test_build/neper-self link-em "$folded_executable" "$folding_artifacts/main.x64-linux.em" "$folding_artifacts/one.x64-linux.em" "$folding_artifacts/two.x64-linux.em" "$folding_artifacts/lib.x64-linux.em")
+[ "$folded_written" = 'artifact executable written' ]
+chmod +x "$folded_executable"
+"$folded_executable"
 bitwise_executable_path="$test_build/bitwise-selfhost"
 bitwise_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/bitwise/src/main.e" "$repo" x64 linux "$bitwise_executable_path")
 [ "$bitwise_executable_written" = 'executable written' ]
