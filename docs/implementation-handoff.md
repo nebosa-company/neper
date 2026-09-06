@@ -962,10 +962,7 @@ describes *is* the memory, so hashing the whole run in one pass gives the same
 answer as walking it. A scalar has no address of its own and is spilled to a slot
 to get one.
 
-Not supplied, and the reason is the same one: a nested slice's bytes are a pointer
-rather than its contents, and a tagged union's payload is padded. Both need the
-streaming form of xxHash64 -- init, update per component, done -- rather than one
-call, which is the next increment and would reuse `emit_cmp_into`'s dispatch shape.
+The indirect shapes are section 7.21.
 
 Two things this broke, both pre-existing and neither about hashing:
 
@@ -1021,6 +1018,38 @@ does not build today. Both wait on `e.str`.
 With this, rule 4 is delivered for `cmp`, `hash` and `eq` across every shape that
 exists. What remains of it is floats and `Vec`/`Mask`, blocked on scalar floating
 point and on vectors existing at all, and `format`, blocked above.
+
+### 7.21 Hashing the shapes whose bytes are not contiguous
+
+A nested slice's bytes are a pointer, and a tagged union's payload is padded, so
+neither can be hashed by the single pass section 7.19 uses. Rather than add streaming
+xxHash64 -- init, update, done -- as three more intrinsics across three runtimes, the
+recursion folds one hash per component: `acc = H(acc || h)` over the two as
+little-endian words from zero, where `H` is the same `neper_hash_bytes`. Sixteen
+bytes of stack per level, no new runtime symbol, and no second hash construction.
+D88 records the choice and why concatenating bytes instead would need an arena the
+protocol does not have.
+
+`hash_packed_shape` names the fast path's exact condition once, so the emitter and
+the shape predicate cannot drift; `emit_hash_component` dispatches on it, then on a
+declared `fn <t>_hash`, then sequence, then tagged union. The contiguous case is
+byte-identical to before, which the fixture pins by comparing it against
+`e.algo.hash.xxhash64` over the same bytes.
+
+`component_protocol_function` gained an arity parameter, because `hash` takes one
+value where `cmp` and `eq` take two.
+
+`fixtures/link/folded_hash` covers a slice of slices, a slice of slices whose outer
+length differs, a four-arm tagged union with a void arm and a `str` payload, and a
+sequence of tagged unions -- the union path nested inside the sequence path. Two of
+its assertions are the ones worth keeping: equal contents reached through different
+backing storage hash equally, and `[[1], [2, 3]]` does not collide with
+`[[1, 2], [3]]`, which a byte-flattening would.
+
+Writing that fixture cost a bisect worth remembering. A run failed at the eighth
+assertion, and the fault was the fixture: it compared two values it had perturbed
+twenty lines earlier. Numbering each check with a distinct `os.exit` code found it in
+one build, which is worth doing before suspecting the compiler.
 
 ## 8. Working-tree boundaries
 

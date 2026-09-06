@@ -224,6 +224,38 @@ Rows above this one name modules under the pre-consolidation roots and are left 
 written, as D71's superseded `algo.text` and `algo.crypt` buckets show why: those names
 never existed under an `e.` root, and rewriting them would falsify the record.
 
+## D88 — the supplied `hash` folds components where bytes are not contiguous
+
+Spec section 9 rule 4 says arrays, slices, vectors and tagged unions "recurse in
+index or declaration order" for `hash`, without saying what recursing produces. Fix
+it as two cases. Where a value is already one contiguous run of its canonical
+little-endian bytes -- a scalar, an enum, an array of those, a slice or `str` over
+those -- it is hashed in a single xxHash64 pass over that run, which is what the
+implementation already did. Where it is not -- a nested slice, whose bytes are a
+pointer rather than its contents, or a tagged union, whose payload is padded -- one
+hash per component is folded in order, `acc = H(acc || h)` over the two as
+little-endian words starting from zero, where `H` is the same one-shot pass.
+
+The alternative reading, concatenating the components' bytes into one pass, needs a
+buffer whose size is not known until the value is walked, so it needs allocation the
+protocol has no arena for. The fold needs sixteen bytes of stack per level and no
+second hash construction, so `neper_hash_bytes` remains the only hash symbol any
+runtime provides.
+
+Folding one hash per component rather than flattening bytes also separates values
+that a flattening would collide. `[[1], [2, 3]]` and `[[1, 2], [3]]` are the same
+flat bytes and hash differently, because each element is hashed as a unit before it
+is folded. Nothing requires a nested shape's hash to relate to the flat shape's, and
+the two are different types.
+
+What this does not change: the contiguous case is byte-identical to before, so no
+already-computed hash moves; `eq` and `hash` still agree, because both recurse over
+the same components in the same order; and rule 4's leaf requirement, canonical
+little-endian bytes under xxHash64 seed 0, is untouched.
+
+D87's consolidation is unrelated except that the library this must agree with is now
+`e.algo.hash`. This adds to rule 4's implementation rather than superseding a row.
+
 ## Consequences accepted
 
 - **We own the optimiser.** v1 targets roughly `-O1` quality: inlining, constant

@@ -361,6 +361,15 @@ $suppliedEqWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $suppliedEqWritten -ne 'executable written') { throw 'supplied eq executable emission failed' }
 & $suppliedEqPath
 if ($LASTEXITCODE -ne 0) { throw 'the supplied eq is wrong for a scalar, pointer, sequence, tagged union or declared component' }
+# A value whose bytes are not contiguous folds one hash per component instead of
+# hashing one run. The fixture pins that the contiguous path is unchanged, that equal
+# contents through different storage agree, and that regrouping the same flat bytes
+# does not collide.
+$foldedHashPath = Join-Path $testBuild 'folded-hash-selfhost.exe'
+$foldedHashWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\folded_hash\src\main.e') $repo 'x64' 'windows' $foldedHashPath
+if ($LASTEXITCODE -ne 0 -or $foldedHashWritten -ne 'executable written') { throw 'folded hash executable emission failed' }
+& $foldedHashPath
+if ($LASTEXITCODE -ne 0) { throw 'the folded hash is wrong for a nested slice or a tagged union' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

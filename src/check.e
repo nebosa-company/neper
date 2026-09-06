@@ -3948,25 +3948,33 @@ fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool
 // this synthesizes. A receiver's own `cmp` never reaches here: `check_protocol_call`
 // resolves a declared one before any fallback is considered.
 fn element_cmp_function(c: *Checker, ty: Type) -> (usize, bool) {
-    let (index, found) = component_protocol_function(c, ty, "cmp", make_type(.Integer, "i32", ty.module_index))
+    let (index, found) = component_protocol_function(c, ty, "cmp", make_type(.Integer, "i32", ty.module_index), 2usize)
     ret (index, found)
 }
 
 fn element_eq_function(c: *Checker, ty: Type) -> (usize, bool) {
-    let (index, found) = component_protocol_function(c, ty, "eq", make_type(.Bool, "bool", ty.module_index))
+    let (index, found) = component_protocol_function(c, ty, "eq", make_type(.Bool, "bool", ty.module_index), 2usize)
     ret (index, found)
 }
 
-fn component_protocol_function(c: *Checker, ty: Type, protocol: str, expected_return: Type) -> (usize, bool) {
+fn element_hash_function(c: *Checker, ty: Type) -> (usize, bool) {
+    let (index, found) = component_protocol_function(c, ty, "hash", make_type(.Integer, "u64", ty.module_index), 1usize)
+    ret (index, found)
+}
+
+fn component_protocol_function(c: *Checker, ty: Type, protocol: str, expected_return: Type, arity: usize) -> (usize, bool) {
     let (canonical, canonical_error) = canonical_type(c, ty)
     if canonical_error != ok || canonical.kind != .Named { ret (0usize, false) }
     let (function_index, found, lookup_error) = protocol_function(c, ty, protocol)
     if lookup_error != ok || !found { ret (0usize, false) }
     let function = c.functions[function_index]
-    if function.generic || function.parameter_count != 2usize || function.return_count != 1usize { ret (0usize, false) }
-    if function.first_parameter + 1usize >= c.parameter_count { ret (0usize, false) }
-    if !type_equal(c, c.parameters[function.first_parameter].ty, canonical) { ret (0usize, false) }
-    if !type_equal(c, c.parameters[function.first_parameter + 1usize].ty, canonical) { ret (0usize, false) }
+    if function.generic || function.parameter_count != arity || function.return_count != 1usize { ret (0usize, false) }
+    if function.first_parameter + arity > c.parameter_count { ret (0usize, false) }
+    var at = 0usize
+    while at < arity {
+        if !type_equal(c, c.parameters[function.first_parameter + at].ty, canonical) { ret (0usize, false) }
+        at += 1usize
+    }
     let (return_type, return_error) = function_return(c, function, 0usize)
     if return_error != ok || !type_equal(c, return_type, expected_return) { ret (0usize, false) }
     ret (function_index, true)
@@ -4048,8 +4056,10 @@ fn packed_hash_bytes(c: *Checker, ty: Type, depth: usize) -> bool {
     ret packed_hash_bytes(c, canonical_element, depth + 1usize)
 }
 
-// A slice hashes over its contents, which rule 4 states outright for `str`.
-fn supplied_hash_shape(c: *Checker, ty: Type) -> bool {
+// A slice hashes over its contents, which rule 4 states outright for `str`. This is
+// the exact condition under which the whole value is one contiguous run of canonical
+// bytes and can be hashed in a single pass.
+fn hash_packed_shape(c: *Checker, ty: Type) -> bool {
     if packed_hash_bytes(c, ty, 0usize) { ret true }
     if ty.kind != .Slice && ty.kind != .String { ret false }
     let (element, element_error) = index_element_type(c, ty, ty.module_index)
@@ -4057,6 +4067,46 @@ fn supplied_hash_shape(c: *Checker, ty: Type) -> bool {
     let (canonical_element, canonical_error) = canonical_type(c, element)
     if canonical_error != ok { ret false }
     ret packed_hash_bytes(c, canonical_element, 1usize)
+}
+
+// Everything else recurses in index or declaration order the way rule 4's other
+// shapes do, folding one hash per component rather than hashing one byte run.
+fn supplied_hash_shape(c: *Checker, ty: Type, depth: usize) -> bool {
+    if depth > 8usize { ret false }
+    if hash_packed_shape(c, ty) { ret true }
+    if ty.kind == .Named { ret tagged_union_hashable(c, ty, depth) }
+    if ty.kind != .Array && ty.kind != .Slice && ty.kind != .String { ret false }
+    let (element, element_error) = index_element_type(c, ty, ty.module_index)
+    if element_error != ok { ret false }
+    let (canonical_element, canonical_error) = canonical_type(c, element)
+    if canonical_error != ok { ret false }
+    ret hashable_component(c, element, canonical_element, depth + 1usize)
+}
+
+fn hashable_component(c: *Checker, ty: Type, canonical: Type, depth: usize) -> bool {
+    if supplied_hash_shape(c, canonical, depth) { ret true }
+    let (component_function, has_component_function) = element_hash_function(c, ty)
+    ret has_component_function
+}
+
+fn tagged_union_hashable(c: *Checker, ty: Type, depth: usize) -> bool {
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found || c.aggregates[aggregate_index].kind != .TaggedUnion { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.backing_type.kind != .Integer { ret false }
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index >= c.aggregate_field_count { ret false }
+        let arm = c.aggregate_fields[field_index]
+        if arm.ty.kind != .Void {
+            let (canonical_arm, canonical_arm_error) = canonical_type(c, arm.ty)
+            if canonical_arm_error != ok { ret false }
+            if !hashable_component(c, arm.ty, canonical_arm, depth + 1usize) { ret false }
+        }
+        at += 1usize
+    }
+    ret true
 }
 
 fn supplied_eq_shape(c: *Checker, ty: Type, depth: usize) -> bool {
@@ -4105,7 +4155,7 @@ fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBui
         ret .None
     }
     if same(protocol, "hash") {
-        if supplied_hash_shape(c, canonical) { ret .Hash }
+        if supplied_hash_shape(c, canonical, 0usize) { ret .Hash }
         ret .None
     }
     if same(protocol, "eq") {

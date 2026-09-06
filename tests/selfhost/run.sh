@@ -405,6 +405,14 @@ supplied_eq_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$supplied_eq_written" = 'executable written' ]
 chmod +x "$test_build/supplied-eq-selfhost"
 "$test_build/supplied-eq-selfhost"
+# A value whose bytes are not contiguous folds one hash per component instead of
+# hashing one run. The fixture pins that the contiguous path is unchanged, that equal
+# contents through different storage agree, and that regrouping the same flat bytes
+# does not collide.
+folded_hash_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/folded_hash/src/main.e" "$repo" x64 linux "$test_build/folded-hash-selfhost")
+[ "$folded_hash_written" = 'executable written' ]
+chmod +x "$test_build/folded-hash-selfhost"
+"$test_build/folded-hash-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {

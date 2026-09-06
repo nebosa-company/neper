@@ -727,63 +727,340 @@ fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize
 // canonical little-endian bytes. The compiler does not carry the algorithm; the
 // runtime does, as `neper_hash_bytes`, which is the same one-shot form the C
 // bootstrap runtime and both embedded runtimes provide and which must agree with
-// `algo.hash.xxhash64`. Where the shape is supplied, its bytes are already
-// contiguous, so one call over the whole run is the whole recursion.
+// `e.algo.hash.xxhash64`.
+fn emit_hash_bytes(c: *check.Checker, module_index: usize, data: usize, byte_length: usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let result_type = check.make_type(.Integer, "u64", module_index)
+    let (function_ref, reference_error) = nir.intern_function(builder, module_index, "neper_hash_bytes", 0usize)
+    if reference_error != ok { ret (0usize, reference_error) }
+    let (instruction, result, emit_error) = nir.emit(builder, .Call, result_type, true, function_ref, token)
+    if emit_error != ok { ret (0usize, emit_error) }
+    let data_operand_error = nir.add_operand(builder, instruction, data)
+    if data_operand_error != ok { ret (0usize, data_operand_error) }
+    let length_operand_error = nir.add_operand(builder, instruction, byte_length)
+    if length_operand_error != ok { ret (0usize, length_operand_error) }
+    ret (result, ok)
+}
+
+// The address and byte length of a value that is already one contiguous run of its
+// canonical bytes. A scalar has no address of its own, so it is spilled to get one.
+fn packed_hash_bytes_of(c: *check.Checker, ty: check.Type, value: usize, builder: *nir.Builder, token: lex.Token) -> (usize, usize, err) {
+    let usize_type = check.make_type(.Integer, "usize", ty.module_index)
+    if ty.kind == .Slice || ty.kind == .String {
+        let (element_type, element_type_error) = check.index_element_type(c, ty, ty.module_index)
+        if element_type_error != ok { ret (0usize, 0usize, element_type_error) }
+        let (element_info, element_info_error) = layout.type_info(c, element_type)
+        if element_info_error != ok { ret (0usize, 0usize, element_info_error) }
+        let (parts_data, parts_length, parts_error) = sequence_parts(c, ty, value, builder, token)
+        if parts_error != ok { ret (0usize, 0usize, parts_error) }
+        if element_info.size == 1usize { ret (parts_data, parts_length, ok) }
+        let (stride_instruction, stride, stride_error) = nir.emit(builder, .ConstInteger, usize_type, true, element_info.size, token)
+        if stride_error != ok { ret (0usize, 0usize, stride_error) }
+        let (scale_instruction, scaled, scale_error) = nir.emit(builder, .Multiply, usize_type, true, 0usize, token)
+        if scale_error != ok { ret (0usize, 0usize, scale_error) }
+        let length_operand_error = nir.add_operand(builder, scale_instruction, parts_length)
+        if length_operand_error != ok { ret (0usize, 0usize, length_operand_error) }
+        let stride_operand_error = nir.add_operand(builder, scale_instruction, stride)
+        if stride_operand_error != ok { ret (0usize, 0usize, stride_operand_error) }
+        ret (parts_data, scaled, ok)
+    }
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, 0usize, info_error) }
+    var data = value
+    if !aggregate_value(c, ty) {
+        let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, ty, true, 0usize, token)
+        if slot_error != ok { ret (0usize, 0usize, slot_error) }
+        let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, ty, false, info.size, token)
+        if store_error != ok { ret (0usize, 0usize, store_error) }
+        let address_error = nir.add_operand(builder, store_instruction, slot)
+        if address_error != ok { ret (0usize, 0usize, address_error) }
+        let value_error = nir.add_operand(builder, store_instruction, value)
+        if value_error != ok { ret (0usize, 0usize, value_error) }
+        data = slot
+    }
+    let (size_instruction, size_value, size_error) = nir.emit(builder, .ConstInteger, usize_type, true, info.size, token)
+    if size_error != ok { ret (0usize, 0usize, size_error) }
+    ret (data, size_value, ok)
+}
+
+// Where a value's bytes are not contiguous -- a nested slice is a pointer, a tagged
+// union payload is padded -- rule 4's recursion folds one hash per component instead
+// of hashing one byte run: `acc = H(acc || h)` over the two as little-endian words,
+// starting from zero. Every step is the same `neper_hash_bytes`, so no second hash
+// construction and no further runtime symbol is needed.
+fn emit_hash_mix(c: *check.Checker, module_index: usize, accumulator: usize, component: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let (pair_instruction, pair, pair_error) = nir.emit(builder, .Stack, u64_type, true, 2usize, token)
+    if pair_error != ok { ret pair_error }
+    let (accumulator_value_instruction, accumulator_value, accumulator_value_error) = nir.emit(builder, .Load, u64_type, true, 8usize, token)
+    if accumulator_value_error != ok { ret accumulator_value_error }
+    try nir.add_operand(builder, accumulator_value_instruction, accumulator)
+    let (low_store_instruction, low_store_ignored, low_store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+    if low_store_error != ok { ret low_store_error }
+    try nir.add_operand(builder, low_store_instruction, pair)
+    try nir.add_operand(builder, low_store_instruction, accumulator_value)
+    let (high_address_instruction, high_address, high_address_error) = nir.emit(builder, .FieldAddress, u64_type, true, 8usize, token)
+    if high_address_error != ok { ret high_address_error }
+    try nir.add_operand(builder, high_address_instruction, pair)
+    let (high_store_instruction, high_store_ignored, high_store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+    if high_store_error != ok { ret high_store_error }
+    try nir.add_operand(builder, high_store_instruction, high_address)
+    try nir.add_operand(builder, high_store_instruction, component)
+    let (width_instruction, width, width_error) = nir.emit(builder, .ConstInteger, usize_type, true, 16usize, token)
+    if width_error != ok { ret width_error }
+    let (mixed, mixed_error) = emit_hash_bytes(c, module_index, pair, width, builder, token)
+    if mixed_error != ok { ret mixed_error }
+    let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+    if store_error != ok { ret store_error }
+    try nir.add_operand(builder, store_instruction, accumulator)
+    ret nir.add_operand(builder, store_instruction, mixed)
+}
+
+fn emit_hash_seed(c: *check.Checker, module_index: usize, slot: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, u64_type, true, 0usize, token)
+    if zero_error != ok { ret zero_error }
+    let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+    if store_error != ok { ret store_error }
+    try nir.add_operand(builder, store_instruction, slot)
+    ret nir.add_operand(builder, store_instruction, zero_value)
+}
+
+fn emit_declared_hash(c: *check.Checker, function: check.Function, slot: usize, module_index: usize, value: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    let (function_ref, reference_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
+    if reference_error != ok { ret reference_error }
+    let (instruction, call_result, emit_error) = nir.emit(builder, .Call, u64_type, true, function_ref, token)
+    if emit_error != ok { ret emit_error }
+    let operand_error = nir.add_operand(builder, instruction, value)
+    if operand_error != ok { ret operand_error }
+    let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+    if store_error != ok { ret store_error }
+    let address_error = nir.add_operand(builder, store_instruction, slot)
+    if address_error != ok { ret address_error }
+    ret nir.add_operand(builder, store_instruction, call_result)
+}
+
+fn emit_sequence_hash(c: *check.Checker, ty: check.Type, slot: usize, value: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
+    let module_index = ty.module_index
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (element_type, element_type_error) = check.index_element_type(c, ty, module_index)
+    if element_type_error != ok { ret element_type_error }
+    let (element_info, element_info_error) = layout.type_info(c, element_type)
+    if element_info_error != ok { ret element_info_error }
+    let (data, length, parts_error) = sequence_parts(c, ty, value, builder, token)
+    if parts_error != ok { ret parts_error }
+    let seed_error = emit_hash_seed(c, module_index, slot, builder, token)
+    if seed_error != ok { ret seed_error }
+    let (component_slot_instruction, component_slot, component_slot_error) = nir.emit(builder, .Stack, u64_type, true, 0usize, token)
+    if component_slot_error != ok { ret component_slot_error }
+    let (counter_slot_instruction, counter_slot, counter_slot_error) = nir.emit(builder, .Stack, usize_type, true, 0usize, token)
+    if counter_slot_error != ok { ret counter_slot_error }
+    let (start_instruction, start, start_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+    if start_error != ok { ret start_error }
+    let (start_store_instruction, start_store_ignored, start_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if start_store_error != ok { ret start_store_error }
+    try nir.add_operand(builder, start_store_instruction, counter_slot)
+    try nir.add_operand(builder, start_store_instruction, start)
+    let (entry_branch, entry_branch_error) = emit_branch(builder, token)
+    if entry_branch_error != ok { ret entry_branch_error }
+
+    let condition_block = builder.block_count
+    let (condition_index, condition_error) = nir.begin_block(builder)
+    if condition_error != ok || condition_index != condition_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, entry_branch, condition_block, 0usize)
+    let (condition_load_instruction, condition_counter, condition_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if condition_load_error != ok { ret condition_load_error }
+    try nir.add_operand(builder, condition_load_instruction, counter_slot)
+    let (has_next, has_next_error) = emit_supplied_compare(builder, .Less, boolean, condition_counter, length, token)
+    if has_next_error != ok { ret has_next_error }
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, has_next)
+
+    let increment_block = builder.block_count
+    let (increment_index, increment_error) = nir.begin_block(builder)
+    if increment_error != ok || increment_index != increment_block { ret nir.InvalidControlFlow }
+    let (increment_load_instruction, increment_counter, increment_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if increment_load_error != ok { ret increment_load_error }
+    try nir.add_operand(builder, increment_load_instruction, counter_slot)
+    let (one_instruction, one, one_error) = nir.emit(builder, .ConstInteger, usize_type, true, 1usize, token)
+    if one_error != ok { ret one_error }
+    let (add_instruction, incremented, add_error) = nir.emit(builder, .Add, usize_type, true, 0usize, token)
+    if add_error != ok { ret add_error }
+    try nir.add_operand(builder, add_instruction, increment_counter)
+    try nir.add_operand(builder, add_instruction, one)
+    let (increment_store_instruction, increment_store_ignored, increment_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if increment_store_error != ok { ret increment_store_error }
+    try nir.add_operand(builder, increment_store_instruction, counter_slot)
+    try nir.add_operand(builder, increment_store_instruction, incremented)
+    let (back_edge, back_edge_error) = emit_branch(builder, token)
+    if back_edge_error != ok { ret back_edge_error }
+    try nir.set_branch_targets(builder, back_edge, condition_block, 0usize)
+
+    let body_block = builder.block_count
+    let (body_index, body_error) = nir.begin_block(builder)
+    if body_error != ok || body_index != body_block { ret nir.InvalidControlFlow }
+    let (body_load_instruction, body_counter, body_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if body_load_error != ok { ret body_load_error }
+    try nir.add_operand(builder, body_load_instruction, counter_slot)
+    let (element, element_error) = element_operand(c, element_type, element_info.size, data, body_counter, length, builder, token)
+    if element_error != ok { ret element_error }
+    let component_error = emit_hash_component(c, element_type, element, component_slot, builder, token, depth + 1usize)
+    if component_error != ok { ret component_error }
+    let (component_load_instruction, component_value, component_load_error) = nir.emit(builder, .Load, u64_type, true, 8usize, token)
+    if component_load_error != ok { ret component_load_error }
+    try nir.add_operand(builder, component_load_instruction, component_slot)
+    let mix_error = emit_hash_mix(c, module_index, slot, component_value, builder, token)
+    if mix_error != ok { ret mix_error }
+    let (body_edge, body_edge_error) = emit_branch(builder, token)
+    if body_edge_error != ok { ret body_edge_error }
+    try nir.set_branch_targets(builder, body_edge, increment_block, 0usize)
+
+    let exit_block = builder.block_count
+    let (exit_index, exit_error) = nir.begin_block(builder)
+    if exit_error != ok || exit_index != exit_block { ret nir.InvalidControlFlow }
+    ret nir.set_branch_targets(builder, decision, body_block, exit_block)
+}
+
+// Rule 4 again: the tag before the live payload. A void arm contributes nothing
+// beyond its tag, which already distinguishes it.
+fn emit_tagged_union_hash(c: *check.Checker, ty: check.Type, slot: usize, value: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
+    let module_index = ty.module_index
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (aggregate_index, found) = check.aggregate_for_type(c, ty)
+    if !found { ret check.InvalidType }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .TaggedUnion || aggregate.backing_type.kind != .Integer { ret check.InvalidType }
+    let tag_type = aggregate.backing_type
+    let (tag_value, tag_value_error) = component_at(c, tag_type, value, 0usize, builder, token)
+    if tag_value_error != ok { ret tag_value_error }
+    let (component_slot_instruction, component_slot, component_slot_error) = nir.emit(builder, .Stack, u64_type, true, 0usize, token)
+    if component_slot_error != ok { ret component_slot_error }
+    let seed_error = emit_hash_seed(c, module_index, slot, builder, token)
+    if seed_error != ok { ret seed_error }
+    let tag_component_error = emit_hash_component(c, tag_type, tag_value, component_slot, builder, token, depth + 1usize)
+    if tag_component_error != ok { ret tag_component_error }
+    let (tag_hash_instruction, tag_hash, tag_hash_error) = nir.emit(builder, .Load, u64_type, true, 8usize, token)
+    if tag_hash_error != ok { ret tag_hash_error }
+    try nir.add_operand(builder, tag_hash_instruction, component_slot)
+    let tag_mix_error = emit_hash_mix(c, module_index, slot, tag_hash, builder, token)
+    if tag_mix_error != ok { ret tag_mix_error }
+
+    var tests: [32]usize = zero
+    var decisions: [32]usize = zero
+    var bodies: [32]usize = zero
+    var exits: [32]usize = zero
+    var arm_count = 0usize
+    var at = 0usize
+    let (entry_branch, entry_branch_error) = emit_branch(builder, token)
+    if entry_branch_error != ok { ret entry_branch_error }
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index >= c.aggregate_field_count { ret check.InvalidType }
+        let arm = c.aggregate_fields[field_index]
+        if arm.ty.kind != .Void {
+            if arm_count == tests.len { ret check.Capacity }
+            let (payload, payload_error) = layout.field(c, ty, arm.name)
+            if payload_error != ok { ret payload_error }
+            let (arm_bits, arm_bits_error) = check.enum_member_bits(tag_type, arm.enum_value, arm.enum_negative)
+            if arm_bits_error != ok { ret arm_bits_error }
+            let test_block = builder.block_count
+            let (test_index, test_error) = nir.begin_block(builder)
+            if test_error != ok || test_index != test_block { ret nir.InvalidControlFlow }
+            if arm_count == 0usize { try nir.set_branch_targets(builder, entry_branch, test_block, 0usize) }
+            let (arm_constant_instruction, arm_constant, arm_constant_error) = nir.emit(builder, .ConstInteger, tag_type, true, arm_bits, token)
+            if arm_constant_error != ok { ret arm_constant_error }
+            let (matches, matches_error) = emit_supplied_compare(builder, .Equal, boolean, tag_value, arm_constant, token)
+            if matches_error != ok { ret matches_error }
+            let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+            if decision_error != ok { ret decision_error }
+            try nir.add_operand(builder, decision, matches)
+            let body_block = builder.block_count
+            let (body_index, body_error) = nir.begin_block(builder)
+            if body_error != ok || body_index != body_block { ret nir.InvalidControlFlow }
+            let (payload_value, payload_value_error) = component_at(c, payload.ty, value, payload.offset, builder, token)
+            if payload_value_error != ok { ret payload_value_error }
+            let payload_component_error = emit_hash_component(c, payload.ty, payload_value, component_slot, builder, token, depth + 1usize)
+            if payload_component_error != ok { ret payload_component_error }
+            let (payload_hash_instruction, payload_hash, payload_hash_error) = nir.emit(builder, .Load, u64_type, true, 8usize, token)
+            if payload_hash_error != ok { ret payload_hash_error }
+            try nir.add_operand(builder, payload_hash_instruction, component_slot)
+            let payload_mix_error = emit_hash_mix(c, module_index, slot, payload_hash, builder, token)
+            if payload_mix_error != ok { ret payload_mix_error }
+            let (exit, exit_error) = emit_branch(builder, token)
+            if exit_error != ok { ret exit_error }
+            tests[arm_count] = test_block
+            decisions[arm_count] = decision
+            bodies[arm_count] = body_block
+            exits[arm_count] = exit
+            arm_count += 1usize
+        }
+        at += 1usize
+    }
+
+    let default_block = builder.block_count
+    let (default_index, default_error) = nir.begin_block(builder)
+    if default_error != ok || default_index != default_block { ret nir.InvalidControlFlow }
+    if arm_count == 0usize { try nir.set_branch_targets(builder, entry_branch, default_block, 0usize) }
+    let (default_exit, default_exit_error) = emit_branch(builder, token)
+    if default_exit_error != ok { ret default_exit_error }
+
+    let done_block = builder.block_count
+    let (done_index, done_error) = nir.begin_block(builder)
+    if done_error != ok || done_index != done_block { ret nir.InvalidControlFlow }
+    var patch_at = 0usize
+    while patch_at < arm_count {
+        var next_block = default_block
+        if patch_at + 1usize < arm_count { next_block = tests[patch_at + 1usize] }
+        try nir.set_branch_targets(builder, decisions[patch_at], bodies[patch_at], next_block)
+        try nir.set_branch_targets(builder, exits[patch_at], done_block, 0usize)
+        patch_at += 1usize
+    }
+    ret nir.set_branch_targets(builder, default_exit, done_block, 0usize)
+}
+
+fn emit_hash_component(c: *check.Checker, ty: check.Type, value: usize, slot: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
+    if depth > 8usize { ret check.Unsupported }
+    let module_index = ty.module_index
+    let u64_type = check.make_type(.Integer, "u64", module_index)
+    let (function_index, has_function) = check.element_hash_function(c, ty)
+    if has_function { ret emit_declared_hash(c, c.functions[function_index], slot, module_index, value, builder, token) }
+    if check.hash_packed_shape(c, ty) {
+        let (data, byte_length, bytes_error) = packed_hash_bytes_of(c, ty, value, builder, token)
+        if bytes_error != ok { ret bytes_error }
+        let (hashed, hash_error) = emit_hash_bytes(c, module_index, data, byte_length, builder, token)
+        if hash_error != ok { ret hash_error }
+        let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, u64_type, false, 8usize, token)
+        if store_error != ok { ret store_error }
+        let address_error = nir.add_operand(builder, store_instruction, slot)
+        if address_error != ok { ret address_error }
+        ret nir.add_operand(builder, store_instruction, hashed)
+    }
+    if ty.kind == .Array || ty.kind == .Slice || ty.kind == .String {
+        ret emit_sequence_hash(c, ty, slot, value, builder, token, depth)
+    }
+    if check.is_tagged_union_type(c, ty) {
+        ret emit_tagged_union_hash(c, ty, slot, value, builder, token, depth)
+    }
+    ret check.Unsupported
+}
+
 fn emit_supplied_hash(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     if argument_count != 1usize { ret check.ArgumentCount }
     let ty = call.protocol_type
-    let usize_type = check.make_type(.Integer, "usize", ty.module_index)
-    let result_type = check.make_type(.Integer, "u64", ty.module_index)
-    var data = 0usize
-    var byte_length = 0usize
-    if ty.kind == .Slice || ty.kind == .String {
-        let (element_type, element_type_error) = check.index_element_type(c, ty, ty.module_index)
-        if element_type_error != ok { ret element_type_error }
-        let (element_info, element_info_error) = layout.type_info(c, element_type)
-        if element_info_error != ok { ret element_info_error }
-        let (parts_data, parts_length, parts_error) = sequence_parts(c, ty, arguments[0usize], builder, token)
-        if parts_error != ok { ret parts_error }
-        data = parts_data
-        byte_length = parts_length
-        if element_info.size != 1usize {
-            let (stride_instruction, stride, stride_error) = nir.emit(builder, .ConstInteger, usize_type, true, element_info.size, token)
-            if stride_error != ok { ret stride_error }
-            let (scale_instruction, scaled, scale_error) = nir.emit(builder, .Multiply, usize_type, true, 0usize, token)
-            if scale_error != ok { ret scale_error }
-            let length_operand_error = nir.add_operand(builder, scale_instruction, parts_length)
-            if length_operand_error != ok { ret length_operand_error }
-            let stride_operand_error = nir.add_operand(builder, scale_instruction, stride)
-            if stride_operand_error != ok { ret stride_operand_error }
-            byte_length = scaled
-        }
-    } else {
-        let (info, info_error) = layout.type_info(c, ty)
-        if info_error != ok { ret info_error }
-        data = arguments[0usize]
-        if !aggregate_value(c, ty) {
-            // A scalar has no address of its own, so it is spilled to get one.
-            let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, ty, true, 0usize, token)
-            if slot_error != ok { ret slot_error }
-            let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, ty, false, info.size, token)
-            if store_error != ok { ret store_error }
-            let address_error = nir.add_operand(builder, store_instruction, slot)
-            if address_error != ok { ret address_error }
-            let value_error = nir.add_operand(builder, store_instruction, arguments[0usize])
-            if value_error != ok { ret value_error }
-            data = slot
-        }
-        let (size_instruction, size_value, size_error) = nir.emit(builder, .ConstInteger, usize_type, true, info.size, token)
-        if size_error != ok { ret size_error }
-        byte_length = size_value
-    }
-    let (function_ref, reference_error) = nir.intern_function(builder, ty.module_index, "neper_hash_bytes", 0usize)
-    if reference_error != ok { ret reference_error }
-    let (instruction, result, emit_error) = nir.emit(builder, .Call, result_type, true, function_ref, token)
-    if emit_error != ok { ret emit_error }
-    let data_operand_error = nir.add_operand(builder, instruction, data)
-    if data_operand_error != ok { ret data_operand_error }
-    let length_operand_error = nir.add_operand(builder, instruction, byte_length)
-    if length_operand_error != ok { ret length_operand_error }
+    let u64_type = check.make_type(.Integer, "u64", ty.module_index)
+    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, u64_type, true, 0usize, token)
+    if slot_error != ok { ret slot_error }
+    let component_error = emit_hash_component(c, ty, arguments[0usize], slot, builder, token, 0usize)
+    if component_error != ok { ret component_error }
+    let (load_instruction, result, load_error) = nir.emit(builder, .Load, u64_type, true, 8usize, token)
+    if load_error != ok { ret load_error }
+    let load_operand_error = nir.add_operand(builder, load_instruction, slot)
+    if load_operand_error != ok { ret load_operand_error }
     results.call = call
     results.count = 1usize
     results.values[0usize] = result
