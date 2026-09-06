@@ -848,8 +848,9 @@ Lowering splits into four pieces where there was one inline emitter:
 unsigned element comparison), an enum element, empty and prefix slices, `[3]i32`,
 `str`, and the two nested shapes.
 
-An element with a *declared* `fn <t>_cmp` is section 7.17. Floats and vectors
-remain blocked on scalar floating point and on vectors existing at all.
+An element with a *declared* `fn <t>_cmp` is section 7.17, tagged unions are
+section 7.18. That leaves floats and vectors, blocked on scalar floating point and
+on vectors existing at all, and `hash`, `eq` and `format` entirely.
 
 ### 7.17 An element that declares its own `cmp`
 
@@ -886,9 +887,43 @@ so `[]Point` reports `ProtocolMissing` on the sequence rather than
 `ProtocolSignature` on the element. `Point.cmp(p, q)` on its own still reports the
 precise error, so the information is reachable, just not from the sequence.
 
-The machinery a tagged union needs is now all here: its payload arm compares
-whatever the live variant holds, which is the same dispatch `emit_cmp_into` does,
-and its tag is an integer compared before the payload.
+That machinery is what section 7.18 builds the tagged union on.
+
+### 7.18 Tagged-union `cmp`
+
+Rule 4 orders a tagged union "in declaration order, including the tag before the
+live payload". `check.tagged_union_comparable` accepts one whose every non-void arm
+is comparable, through `comparable_component`, which is now the shared answer to
+"can this thing be compared" for a sequence element and a payload arm alike: a
+shape rule 4 supplies, or the component's own declared `cmp`.
+
+`lower.emit_tagged_union_cmp` compares the two tags through `emit_scalar_cmp` and
+branches out if they differ -- the slot already holds the answer. Where they match,
+it walks the arms in declaration order emitting a `tag == constant` test per arm
+with a payload, each falling through to the next, and the arm that matches compares
+its payload through `emit_cmp_into`. Arms with a void payload get no test; they
+fall to the default arm, which stores zero, which is also the right answer for
+them. `layout.field` supplies both halves of the addressing -- `"tag"` gives offset
+zero and the backing type, an arm's own name gives its payload offset and type --
+so nothing here recomputes a layout. The arm constants come from
+`check.enum_member_bits` (section 7.13), so a negative tag would encode correctly
+even though nothing can currently declare one.
+
+Block bookkeeping is the only awkward part. A test and its body are created in
+pairs, but a body may contain nested blocks from the payload comparison, so the
+next test's index is not predictable from the previous body's; the four fixed
+arrays hold each arm's test, decision, body and exit, and everything is patched
+after the merge block exists. Thirty-two arms is the cap and returns `Capacity`.
+
+`component_at` replaces what `emit_sequence_cmp` was doing inline for its element:
+`FieldAddress` plus a load for anything that is not an aggregate. Sequences index,
+tagged unions offset, and both then want the same thing.
+
+`fixtures/link/tagged_union_cmp` covers a four-arm union with a void arm, an `i64`,
+a `str` and a `[]i64`: tag ordering across every pair, two void arms equal, payload
+ordering within each arm, a payload that is itself a sequence, and `[]Node` -- a
+sequence *of* tagged unions, which exercises the recursion in both directions. A
+negative control confirms the payload assertions fail when flipped.
 
 ## 8. Working-tree boundaries
 

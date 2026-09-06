@@ -375,6 +375,12 @@ element_cmp_link_written=$($test_build/neper-self link-em "$test_build/element-c
 [ "$element_cmp_link_written" = 'artifact executable written' ]
 chmod +x "$test_build/element-cmp-from-artifacts"
 "$test_build/element-cmp-from-artifacts"
+# Rule 4 orders a tagged union by its tag before the live payload, and a void arm is
+# equal to itself once the tags match.
+tagged_union_cmp_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/tagged_union_cmp/src/main.e" "$repo" x64 linux "$test_build/tagged-union-cmp-selfhost")
+[ "$tagged_union_cmp_written" = 'executable written' ]
+chmod +x "$test_build/tagged-union-cmp-selfhost"
+"$test_build/tagged-union-cmp-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {

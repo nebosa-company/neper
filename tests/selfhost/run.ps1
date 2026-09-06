@@ -328,6 +328,13 @@ $elementCmpLinkWritten = & $compiler link-em $elementCmpLinked (Join-Path $eleme
 if ($LASTEXITCODE -ne 0 -or $elementCmpLinkWritten -ne 'artifact executable written') { throw 'declared element cmp compiled modules did not link' }
 & $elementCmpLinked
 if ($LASTEXITCODE -ne 0) { throw 'executable linked from declared element cmp compiled modules failed' }
+# Rule 4 orders a tagged union by its tag before the live payload, and a void arm is
+# equal to itself once the tags match.
+$taggedUnionCmpPath = Join-Path $testBuild 'tagged-union-cmp-selfhost.exe'
+$taggedUnionCmpWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\tagged_union_cmp\src\main.e') $repo 'x64' 'windows' $taggedUnionCmpPath
+if ($LASTEXITCODE -ne 0 -or $taggedUnionCmpWritten -ne 'executable written') { throw 'tagged union cmp executable emission failed' }
+& $taggedUnionCmpPath
+if ($LASTEXITCODE -ne 0) { throw 'a tagged union ordered its tag or its live payload wrongly' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

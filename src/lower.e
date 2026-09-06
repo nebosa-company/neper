@@ -576,12 +576,132 @@ fn emit_declared_cmp(c: *check.Checker, function: check.Function, slot: usize, r
     ret nir.add_operand(builder, store_instruction, call_result)
 }
 
+// A component reaches its comparison the way the rest of lowering passes one: an
+// aggregate by address, everything else loaded.
+fn component_at(c: *check.Checker, ty: check.Type, base: usize, offset: usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, ty, true, offset, token)
+    if address_error != ok { ret (0usize, address_error) }
+    let base_operand_error = nir.add_operand(builder, address_instruction, base)
+    if base_operand_error != ok { ret (0usize, base_operand_error) }
+    if aggregate_value(c, ty) { ret (address, ok) }
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, info_error) }
+    let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, ty, true, info.size, token)
+    if load_error != ok { ret (0usize, load_error) }
+    let load_operand_error = nir.add_operand(builder, load_instruction, address)
+    if load_operand_error != ok { ret (0usize, load_operand_error) }
+    ret (loaded, ok)
+}
+
+// Rule 4 again: a tagged union compares its tag before the live payload. The tags
+// decide outright where they differ; where they match, the arm they both name is
+// compared through the same dispatch every other component uses. A void arm has
+// nothing to compare and is equal to itself, which is what the default arm stores.
+fn emit_tagged_union_cmp(c: *check.Checker, ty: check.Type, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
+    if depth > 8usize { ret check.Unsupported }
+    let (aggregate_index, found) = check.aggregate_for_type(c, ty)
+    if !found { ret check.InvalidType }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .TaggedUnion || aggregate.backing_type.kind != .Integer { ret check.InvalidType }
+    let boolean = check.make_type(.Bool, "bool", ty.module_index)
+    let tag_type = aggregate.backing_type
+    let (tag_info, tag_info_error) = layout.type_info(c, tag_type)
+    if tag_info_error != ok { ret tag_info_error }
+    let (left_tag, left_tag_error) = component_at(c, tag_type, left, 0usize, builder, token)
+    if left_tag_error != ok { ret left_tag_error }
+    let (right_tag, right_tag_error) = component_at(c, tag_type, right, 0usize, builder, token)
+    if right_tag_error != ok { ret right_tag_error }
+    let tag_cmp_error = emit_scalar_cmp(c, tag_type, slot, result_type, left_tag, right_tag, builder, token)
+    if tag_cmp_error != ok { ret tag_cmp_error }
+    let (tag_result_instruction, tag_result, tag_result_error) = nir.emit(builder, .Load, result_type, true, 0usize, token)
+    if tag_result_error != ok { ret tag_result_error }
+    try nir.add_operand(builder, tag_result_instruction, slot)
+    let (tag_zero_instruction, tag_zero, tag_zero_error) = nir.emit(builder, .ConstInteger, result_type, true, 0usize, token)
+    if tag_zero_error != ok { ret tag_zero_error }
+    let (tags_differ, tags_differ_error) = emit_supplied_compare(builder, .NotEqual, boolean, tag_result, tag_zero, token)
+    if tags_differ_error != ok { ret tags_differ_error }
+    let (tag_decision, tag_decision_ignored, tag_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if tag_decision_error != ok { ret tag_decision_error }
+    try nir.add_operand(builder, tag_decision, tags_differ)
+
+    var tests: [32]usize = zero
+    var decisions: [32]usize = zero
+    var bodies: [32]usize = zero
+    var exits: [32]usize = zero
+    var arm_count = 0usize
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index >= c.aggregate_field_count { ret check.InvalidType }
+        let arm = c.aggregate_fields[field_index]
+        if arm.ty.kind != .Void {
+            if arm_count == tests.len { ret check.Capacity }
+            let (payload, payload_error) = layout.field(c, ty, arm.name)
+            if payload_error != ok { ret payload_error }
+            let (arm_bits, arm_bits_error) = check.enum_member_bits(tag_type, arm.enum_value, arm.enum_negative)
+            if arm_bits_error != ok { ret arm_bits_error }
+            let test_block = builder.block_count
+            let (test_index, test_error) = nir.begin_block(builder)
+            if test_error != ok || test_index != test_block { ret nir.InvalidControlFlow }
+            let (arm_constant_instruction, arm_constant, arm_constant_error) = nir.emit(builder, .ConstInteger, tag_type, true, arm_bits, token)
+            if arm_constant_error != ok { ret arm_constant_error }
+            let (matches, matches_error) = emit_supplied_compare(builder, .Equal, boolean, left_tag, arm_constant, token)
+            if matches_error != ok { ret matches_error }
+            let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+            if decision_error != ok { ret decision_error }
+            try nir.add_operand(builder, decision, matches)
+            let body_block = builder.block_count
+            let (body_index, body_error) = nir.begin_block(builder)
+            if body_error != ok || body_index != body_block { ret nir.InvalidControlFlow }
+            let (left_payload, left_payload_error) = component_at(c, payload.ty, left, payload.offset, builder, token)
+            if left_payload_error != ok { ret left_payload_error }
+            let (right_payload, right_payload_error) = component_at(c, payload.ty, right, payload.offset, builder, token)
+            if right_payload_error != ok { ret right_payload_error }
+            let payload_cmp_error = emit_cmp_into(c, payload.ty, slot, result_type, left_payload, right_payload, builder, token, depth + 1usize)
+            if payload_cmp_error != ok { ret payload_cmp_error }
+            let (exit, exit_error) = emit_branch(builder, token)
+            if exit_error != ok { ret exit_error }
+            tests[arm_count] = test_block
+            decisions[arm_count] = decision
+            bodies[arm_count] = body_block
+            exits[arm_count] = exit
+            arm_count += 1usize
+        }
+        at += 1usize
+    }
+
+    let default_block = builder.block_count
+    let (default_index, default_error) = nir.begin_block(builder)
+    if default_error != ok || default_index != default_block { ret nir.InvalidControlFlow }
+    let (default_exit, default_exit_error) = store_supplied_cmp_result(builder, slot, result_type, 0usize, false, token)
+    if default_exit_error != ok { ret default_exit_error }
+
+    let done_block = builder.block_count
+    let (done_index, done_error) = nir.begin_block(builder)
+    if done_error != ok || done_index != done_block { ret nir.InvalidControlFlow }
+    var dispatch_block = default_block
+    if arm_count != 0usize { dispatch_block = tests[0usize] }
+    try nir.set_branch_targets(builder, tag_decision, done_block, dispatch_block)
+    var patch_at = 0usize
+    while patch_at < arm_count {
+        var next_block = default_block
+        if patch_at + 1usize < arm_count { next_block = tests[patch_at + 1usize] }
+        try nir.set_branch_targets(builder, decisions[patch_at], bodies[patch_at], next_block)
+        try nir.set_branch_targets(builder, exits[patch_at], done_block, 0usize)
+        patch_at += 1usize
+    }
+    ret nir.set_branch_targets(builder, default_exit, done_block, 0usize)
+}
+
 fn emit_cmp_into(c: *check.Checker, ty: check.Type, slot: usize, result_type: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
     if ty.kind == .Array || ty.kind == .Slice || ty.kind == .String {
         ret emit_sequence_cmp(c, ty, slot, result_type, left, right, builder, token, depth)
     }
     let (function_index, has_function) = check.element_cmp_function(c, ty)
     if has_function { ret emit_declared_cmp(c, c.functions[function_index], slot, result_type, left, right, builder, token) }
+    if check.is_tagged_union_type(c, ty) {
+        ret emit_tagged_union_cmp(c, ty, slot, result_type, left, right, builder, token, depth)
+    }
     ret emit_scalar_cmp(c, ty, slot, result_type, left, right, builder, token)
 }
 

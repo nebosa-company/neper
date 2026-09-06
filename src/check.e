@@ -3974,14 +3974,51 @@ fn supplied_cmp_shape(c: *Checker, ty: Type, depth: usize) -> bool {
     if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Err { ret true }
     let (enum_backing, is_enum) = enum_backing_type(c, ty)
     if is_enum && enum_backing.kind == .Integer { ret true }
+    if ty.kind == .Named { ret tagged_union_comparable(c, ty, depth) }
     if ty.kind != .Array && ty.kind != .Slice && ty.kind != .String { ret false }
     let (element, element_error) = index_element_type(c, ty, ty.module_index)
     if element_error != ok { ret false }
     let (canonical_element, canonical_error) = canonical_type(c, element)
     if canonical_error != ok { ret false }
-    if supplied_cmp_shape(c, canonical_element, depth + 1usize) { ret true }
-    let (element_function, has_element_function) = element_cmp_function(c, element)
-    ret has_element_function
+    ret comparable_component(c, element, canonical_element, depth + 1usize)
+}
+
+// A component inside a sequence or a tagged union compares either through a shape
+// rule 4 supplies or through its own module's declaration, in that order of
+// discovery but with the declaration winning at emission (rule 4 again).
+fn comparable_component(c: *Checker, ty: Type, canonical: Type, depth: usize) -> bool {
+    if supplied_cmp_shape(c, canonical, depth) { ret true }
+    let (component_function, has_component_function) = element_cmp_function(c, ty)
+    ret has_component_function
+}
+
+fn is_tagged_union_type(c: *Checker, ty: Type) -> bool {
+    if ty.kind != .Named { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    ret found && c.aggregates[aggregate_index].kind == .TaggedUnion
+}
+
+// Rule 4 orders a tagged union by its tag and then by the live payload, so every
+// arm that carries one has to be comparable. A void arm carries nothing and is
+// equal to itself once the tags match.
+fn tagged_union_comparable(c: *Checker, ty: Type, depth: usize) -> bool {
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found || c.aggregates[aggregate_index].kind != .TaggedUnion { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.backing_type.kind != .Integer { ret false }
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index >= c.aggregate_field_count { ret false }
+        let arm = c.aggregate_fields[field_index]
+        if arm.ty.kind != .Void {
+            let (canonical_arm, canonical_arm_error) = canonical_type(c, arm.ty)
+            if canonical_arm_error != ok { ret false }
+            if !comparable_component(c, arm.ty, canonical_arm, depth + 1usize) { ret false }
+        }
+        at += 1usize
+    }
+    ret true
 }
 
 fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBuiltin {
