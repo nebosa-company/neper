@@ -1163,6 +1163,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if fixups_error != ok { ret fixups_error }
         let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, 32768usize)
         if relocations_error != ok { ret relocations_error }
+        let (function_offsets, function_offsets_error) = mem.alloc[usize](a, 1024usize)
+        if function_offsets_error != ok { ret function_offsets_error }
         var relocation_count = 0usize
         var function_at = 0usize
         var machine_abi: codegen_x64.Abi = .SystemV
@@ -1178,10 +1180,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         while function_at < builder.function_count {
             let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 5usize, ranges, allocations)
             if allocation_error != ok { ret allocation_error }
-            if emit_machine_code { try codegen_x64.function(&builder, function_at, stack_slots, &codegen_context) }
+            if emit_machine_code {
+                function_offsets[function_at] = machine.count
+                try codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
+            }
             function_at += 1usize
         }
         if emit_machine_code {
+            try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
             try io.print("module codegen ok\n")
             ret ok
         }

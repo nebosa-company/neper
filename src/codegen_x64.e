@@ -20,6 +20,7 @@ type Fixup = struct {
 type Relocation = struct {
     displacement_at: usize,
     function_ref: usize,
+    resolved: bool,
 }
 
 type FunctionContext = struct {
@@ -41,8 +42,32 @@ fn add_fixup(fixups: []Fixup, count: *usize, displacement_at: usize, block: usiz
 
 fn add_relocation(relocations: []Relocation, count: *usize, displacement_at: usize, function_ref: usize) -> err {
     if *count == relocations.len { ret Unsupported }
-    relocations[*count] = Relocation { displacement_at: displacement_at, function_ref: function_ref }
+    relocations[*count] = Relocation { displacement_at: displacement_at, function_ref: function_ref, resolved: false }
     *count += 1usize
+    ret ok
+}
+
+fn resolve_calls(builder: *nir.Builder, function_offsets: []usize, relocations: []Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
+    if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret Unsupported }
+    var relocation_at = 0usize
+    while relocation_at < relocation_count {
+        let reference_index = relocations[relocation_at].function_ref
+        if reference_index >= builder.function_ref_count { ret Unsupported }
+        let reference = builder.function_refs[reference_index]
+        var function_at = 0usize
+        var found = false
+        while function_at < builder.function_count {
+            let candidate = builder.functions[function_at]
+            if candidate.module_index == reference.module_index && check.same(candidate.name, reference.name) {
+                try emit_x64.patch_relative32(output, relocations[relocation_at].displacement_at, function_offsets[function_at])
+                relocations[relocation_at].resolved = true
+                found = true
+                break
+            }
+            function_at += 1usize
+        }
+        relocation_at += 1usize
+    }
     ret ok
 }
 
@@ -430,5 +455,18 @@ fn self_test() -> err {
     context.output = &branch_output
     try function(&builder, 1usize, 0usize, &context)
     if branch_output.count != 73usize || branch_output.bytes[20usize] != 72usize || branch_output.bytes[21usize] != 57usize || branch_output.bytes[22usize] != 200usize || branch_output.bytes[40usize] != 15usize || branch_output.bytes[41usize] != 133usize || branch_output.bytes[42usize] != 5usize || branch_output.bytes[47usize] != 11usize || branch_output.bytes[72usize] != 195usize { ret Unsupported }
+    let (reference_index, reference_error) = nir.intern_function(&builder, 0usize, "constant")
+    if reference_error != ok { ret reference_error }
+    var call_storage: [32]usize = zero
+    var call_output: emit_x64.Buffer = zero
+    try emit_x64.init(&call_output, call_storage[..])
+    let (call_displacement, call_error) = emit_x64.call(&call_output)
+    if call_error != ok { ret call_error }
+    while call_output.count < 20usize { try emit_x64.byte(&call_output, 144usize) }
+    relocations[0usize] = Relocation { displacement_at: call_displacement, function_ref: reference_index, resolved: false }
+    var function_offsets: [2]usize = zero
+    function_offsets[0usize] = 20usize
+    try resolve_calls(&builder, function_offsets[..], relocations[..], 1usize, &call_output)
+    if !relocations[0usize].resolved || call_output.bytes[1usize] != 15usize { ret Unsupported }
     ret ok
 }
