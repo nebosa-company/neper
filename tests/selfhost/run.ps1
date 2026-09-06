@@ -276,6 +276,15 @@ $validatedArtifact = & $compiler validate-em $rootModuleArtifactPath
 if ($LASTEXITCODE -ne 0 -or $validatedArtifact -ne 'compiled module valid') { throw 'packed compiled-module validation failed' }
 $currentEdge = & $compiler check-em-edge $rootModuleArtifactPath $dependencyModuleArtifactPath
 if ($LASTEXITCODE -ne 0 -or $currentEdge -ne 'dependency current') { throw 'matching compiled-module dependency was rejected' }
+$mergedErrorTables = & $compiler check-em-errors $rootModuleArtifactPath $dependencyModuleArtifactPath
+if ($LASTEXITCODE -ne 0 -or $mergedErrorTables -ne 'error tables merged') { throw 'compatible compiled-module error tables were rejected' }
+$collisionArtifacts = Join-Path $testBuild 'error-collision'
+New-Item -ItemType Directory -Force -Path $collisionArtifacts | Out-Null
+$collisionArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\em\error_collision\src\main.e') $repo 'x64' 'windows' $collisionArtifacts
+if ($LASTEXITCODE -ne 0 -or $collisionArtifactsWritten -ne 'compiled modules written') { throw 'colliding error-table artifacts could not be emitted independently' }
+$artifactCollisionOutput = & $compiler check-em-errors (Join-Path $collisionArtifacts 'main.x64-windows.em') (Join-Path $collisionArtifacts 'dep.x64-windows.em') 2>&1
+$artifactCollisionExit = $LASTEXITCODE
+if ($artifactCollisionExit -ne 1 -or ($artifactCollisionOutput -join "`n") -notmatch 'main\.E08DED258' -or ($artifactCollisionOutput -join "`n") -notmatch 'dep\.E29EBB918') { throw 'compiled-module error table collision was not rejected with both qualified names' }
 $bodyEditArtifacts = Join-Path $testBuild 'body-edit'
 $signatureEditArtifacts = Join-Path $testBuild 'signature-edit'
 New-Item -ItemType Directory -Force -Path $bodyEditArtifacts, $signatureEditArtifacts | Out-Null

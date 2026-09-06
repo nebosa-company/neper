@@ -25,6 +25,10 @@ use syntax
 
 error DiagnosticWrite
 
+type LoadedArtifact = struct {
+    bytes: []usize,
+}
+
 fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize, column: usize) -> err {
     let current = lex.next(s)
     if current.kind != kind || current.start != start || current.end != end || current.line != line || current.column != column {
@@ -897,6 +901,37 @@ fn load_artifact(a: *mem.Arena, path: str) -> ([]usize, err) {
     ret (bytes, ok)
 }
 
+fn artifact_string(a: *mem.Arena, bytes: []const usize, index: usize) -> (str, err) {
+    let (start, length, bounds_error) = em.string_bounds(bytes, index)
+    if bounds_error != ok { ret ("", bounds_error) }
+    let (storage, storage_error) = mem.alloc[u8](a, length)
+    if storage_error != ok { ret ("", storage_error) }
+    var at = 0usize
+    while at < length {
+        if bytes[start + at] > 255usize { ret ("", em.InvalidArtifact) }
+        storage[at] = u8(bytes[start + at])
+        at += 1usize
+    }
+    ret (storage[..], ok)
+}
+
+fn print_artifact_error_collision(a: *mem.Arena, left_bytes: []const usize, left: em.ErrorValue, right_bytes: []const usize, right: em.ErrorValue) -> err {
+    let (left_module, left_module_error) = artifact_string(a, left_bytes, left.module_index)
+    if left_module_error != ok { ret left_module_error }
+    let (left_name, left_name_error) = artifact_string(a, left_bytes, left.name_index)
+    if left_name_error != ok { ret left_name_error }
+    let (right_module, right_module_error) = artifact_string(a, right_bytes, right.module_index)
+    if right_module_error != ok { ret right_module_error }
+    let (right_name, right_name_error) = artifact_string(a, right_bytes, right.name_index)
+    if right_name_error != ok { ret right_name_error }
+    let failure = os.stderr()
+    try write_all(failure, "error[E-LINK-9999]: error hash collision: `")
+    try write_qualified_error(failure, left_module, left_name)
+    try write_all(failure, "` and `")
+    try write_qualified_error(failure, right_module, right_name)
+    ret write_all(failure, "` have the same 32-bit FNV-1a value\n")
+}
+
 fn target_triple(a: *mem.Arena, arch: str, operating_system: str) -> (str, err) {
     let length = arch.len + 1usize + operating_system.len
     let (storage, storage_error) = mem.alloc[u8](a, length)
@@ -1176,6 +1211,57 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         try io.print("dependency current\n")
+        ret ok
+    }
+    if args.len >= 4usize && same(args[1usize], "check-em-errors") {
+        let (artifacts, artifacts_error) = mem.alloc[LoadedArtifact](a, args.len - 2usize)
+        if artifacts_error != ok { ret artifacts_error }
+        var artifact_at = 0usize
+        while artifact_at < artifacts.len {
+            let (bytes, load_error) = load_artifact(a, args[artifact_at + 2usize])
+            if load_error != ok { ret load_error }
+            artifacts[artifact_at].bytes = bytes
+            let (error_count, count_error) = em.artifact_error_count(bytes)
+            if count_error != ok { ret count_error }
+            artifact_at += 1usize
+        }
+        var left_artifact = 0usize
+        while left_artifact < artifacts.len {
+            let (left_count, left_count_error) = em.artifact_error_count(artifacts[left_artifact].bytes)
+            if left_count_error != ok { ret left_count_error }
+            var left_at = 0usize
+            while left_at < left_count {
+                let (left, left_error) = em.artifact_error_at(artifacts[left_artifact].bytes, left_at)
+                if left_error != ok { ret left_error }
+                var right_artifact = left_artifact
+                while right_artifact < artifacts.len {
+                    let (right_count, right_count_error) = em.artifact_error_count(artifacts[right_artifact].bytes)
+                    if right_count_error != ok { ret right_count_error }
+                    var right_at = 0usize
+                    if right_artifact == left_artifact { right_at = left_at + 1usize }
+                    while right_at < right_count {
+                        let (right, right_error) = em.artifact_error_at(artifacts[right_artifact].bytes, right_at)
+                        if right_error != ok { ret right_error }
+                        if left.value == right.value {
+                            let (same_module, module_error) = em.strings_equal(artifacts[left_artifact].bytes, left.module_index, artifacts[right_artifact].bytes, right.module_index)
+                            if module_error != ok { ret module_error }
+                            let (same_name, name_error) = em.strings_equal(artifacts[left_artifact].bytes, left.name_index, artifacts[right_artifact].bytes, right.name_index)
+                            if name_error != ok { ret name_error }
+                            if !same_module || !same_name {
+                                try print_artifact_error_collision(a, artifacts[left_artifact].bytes, left, artifacts[right_artifact].bytes, right)
+                                os.exit(1i32)
+                                ret ok
+                            }
+                        }
+                        right_at += 1usize
+                    }
+                    right_artifact += 1usize
+                }
+                left_at += 1usize
+            }
+            left_artifact += 1usize
+        }
+        try io.print("error tables merged\n")
         ret ok
     }
     if args.len == 3usize && same(args[1usize], "scan") {
@@ -1461,6 +1547,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
+    try io.print("usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
     ret ok
 }

@@ -53,6 +53,18 @@ type Dependency = struct {
     hash: usize,
 }
 
+type ErrorValue = struct {
+    value: usize,
+    module_index: usize,
+    name_index: usize,
+}
+
+type InterfaceErrors = struct {
+    entries: usize,
+    count: usize,
+    module_index: usize,
+}
+
 fn format_version() -> usize { ret 1usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
@@ -1496,6 +1508,98 @@ fn strings_equal(left: []const usize, left_index: usize, right: []const usize, r
     ret (true, ok)
 }
 
+fn indexed_error_value(bytes: []const usize, module_index: usize, name_index: usize) -> (usize, err) {
+    let (module_start, module_length, module_error) = string_bounds(bytes, module_index)
+    if module_error != ok || module_length == 0usize { ret (0usize, InvalidArtifact) }
+    let (name_start, name_length, name_error) = string_bounds(bytes, name_index)
+    if name_error != ok || name_length == 0usize { ret (0usize, InvalidArtifact) }
+    var hash = 2166136261usize
+    var at = 0usize
+    while at < module_length {
+        let (next, step_error) = artifact_hash.fnv1a32_step(hash, bytes[module_start + at])
+        if step_error != ok { ret (0usize, step_error) }
+        hash = next
+        at += 1usize
+    }
+    let (with_separator, separator_error) = artifact_hash.fnv1a32_step(hash, 46usize)
+    if separator_error != ok { ret (0usize, separator_error) }
+    hash = with_separator
+    at = 0usize
+    while at < name_length {
+        let (next, step_error) = artifact_hash.fnv1a32_step(hash, bytes[name_start + at])
+        if step_error != ok { ret (0usize, step_error) }
+        hash = next
+        at += 1usize
+    }
+    ret (hash, ok)
+}
+
+fn interface_errors_unchecked(bytes: []const usize) -> (InterfaceErrors, err) {
+    let empty = InterfaceErrors { entries: 0usize, count: 0usize, module_index: 0usize }
+    let (interface, found_interface, section_error) = find_section_unchecked(bytes, interface_kind())
+    if section_error != ok || !found_interface || interface.length < 20usize { ret (empty, InvalidArtifact) }
+    let (declaration_count, count_error) = binary.read_u32(bytes, interface.offset + 8usize)
+    let (module_index, module_error) = binary.read_u32(bytes, interface.offset + 12usize)
+    if count_error != ok || module_error != ok { ret (empty, InvalidArtifact) }
+    let (module_start, module_length, module_bounds_error) = string_bounds(bytes, module_index)
+    if module_bounds_error != ok || module_length == 0usize || module_start >= bytes.len { ret (empty, InvalidArtifact) }
+    let end = interface.offset + interface.length
+    var cursor = interface.offset + 16usize
+    var declared_errors = 0usize
+    var declaration_at = 0usize
+    while declaration_at < declaration_count {
+        if cursor > end || 8usize > end - cursor { ret (empty, InvalidArtifact) }
+        let kind = bytes[cursor]
+        if kind < declaration_function_kind() || kind > declaration_error_kind() || bytes[cursor + 1usize] > 255usize || bytes[cursor + 2usize] != 0usize || bytes[cursor + 3usize] != 0usize { ret (empty, InvalidArtifact) }
+        let (length, length_error) = binary.read_u32(bytes, cursor + 4usize)
+        if length_error != ok || length < 20usize { ret (empty, InvalidArtifact) }
+        let payload = cursor + 8usize
+        if payload > end || length > end - payload { ret (empty, InvalidArtifact) }
+        let (name_index, name_error) = binary.read_u32(bytes, payload)
+        let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
+        if name_error != ok || name_bounds_error != ok || name_length == 0usize || name_start >= bytes.len { ret (empty, InvalidArtifact) }
+        if kind == declaration_error_kind() {
+            if length != 24usize { ret (empty, InvalidArtifact) }
+            declared_errors += 1usize
+        }
+        cursor = payload + length
+        declaration_at += 1usize
+    }
+    if cursor > end || 4usize > end - cursor { ret (empty, InvalidArtifact) }
+    let (error_count, error_count_error) = binary.read_u32(bytes, cursor)
+    if error_count_error != ok || error_count != declared_errors { ret (empty, InvalidArtifact) }
+    let entries = cursor + 4usize
+    if entries > end || error_count > (end - entries) / 8usize || entries + error_count * 8usize != end { ret (empty, InvalidArtifact) }
+    ret (InterfaceErrors { entries: entries, count: error_count, module_index: module_index }, ok)
+}
+
+fn interface_errors(bytes: []const usize) -> (InterfaceErrors, err) {
+    let empty = InterfaceErrors { entries: 0usize, count: 0usize, module_index: 0usize }
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (empty, validation_error) }
+    let (table, table_error) = interface_errors_unchecked(bytes)
+    ret (table, table_error)
+}
+
+fn artifact_error_count(bytes: []const usize) -> (usize, err) {
+    let (table, table_error) = interface_errors(bytes)
+    if table_error != ok { ret (0usize, table_error) }
+    ret (table.count, ok)
+}
+
+fn artifact_error_at(bytes: []const usize, index: usize) -> (ErrorValue, err) {
+    let empty = ErrorValue { value: 0usize, module_index: 0usize, name_index: 0usize }
+    let (table, table_error) = interface_errors(bytes)
+    if table_error != ok || index >= table.count { ret (empty, InvalidArtifact) }
+    let entry = table.entries + index * 8usize
+    let (value, value_error) = binary.read_u32(bytes, entry)
+    let (name_index, name_error) = binary.read_u32(bytes, entry + 4usize)
+    if value_error != ok || name_error != ok || value == 0usize { ret (empty, InvalidArtifact) }
+    let (expected, expected_error) = indexed_error_value(bytes, table.module_index, name_index)
+    if expected_error != ok || expected != value { ret (empty, InvalidArtifact) }
+    ret (ErrorValue { value: value, module_index: table.module_index, name_index: name_index }, ok)
+}
+
 fn interface_module_index(bytes: []const usize) -> (usize, err) {
     let validation_error = validate(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
@@ -1660,7 +1764,11 @@ fn validate(bytes: []const usize) -> err {
         at += 1usize
     }
     if !found_strings { ret InvalidArtifact }
-    ret validate_strings(bytes, strings, target_index)
+    let strings_error = validate_strings(bytes, strings, target_index)
+    if strings_error != ok { ret strings_error }
+    let (errors, interface_error) = interface_errors_unchecked(bytes)
+    if interface_error != ok || errors.entries > bytes.len { ret InvalidArtifact }
+    ret ok
 }
 
 fn self_test() -> err {
@@ -1715,6 +1823,8 @@ fn self_test() -> err {
     try end_section(&writer)
     try finish(&writer)
     try validate(output.bytes[0usize..output.count])
+    let (error_count, error_count_error) = artifact_error_count(output.bytes[0usize..output.count])
+    if error_count_error != ok || error_count != 0usize { ret InvalidArtifact }
     let (declaration, found_declaration, declaration_error) = find_declaration(output.bytes[0usize..output.count], "main")
     if declaration_error != ok || !found_declaration || declaration.signature_hash != 123usize || declaration.body_hash != 456usize { ret InvalidArtifact }
     let (dependency, dependency_error) = dependency_at(output.bytes[0usize..output.count], 0usize)

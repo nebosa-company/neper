@@ -353,6 +353,17 @@ validated_artifact=$($test_build/neper-self validate-em "$test_build/main.x64-li
 [ "$validated_artifact" = 'compiled module valid' ]
 current_edge=$($test_build/neper-self check-em-edge "$test_build/main.x64-linux.em" "$test_build/dep.x64-linux.em")
 [ "$current_edge" = 'dependency current' ]
+merged_error_tables=$($test_build/neper-self check-em-errors "$test_build/main.x64-linux.em" "$test_build/dep.x64-linux.em")
+[ "$merged_error_tables" = 'error tables merged' ]
+collision_artifacts="$test_build/error-collision"
+mkdir -p "$collision_artifacts"
+collision_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/em/error_collision/src/main.e" "$repo" x64 linux "$collision_artifacts")
+[ "$collision_artifacts_written" = 'compiled modules written' ]
+if artifact_collision_output=$($test_build/neper-self check-em-errors "$collision_artifacts/main.x64-linux.em" "$collision_artifacts/dep.x64-linux.em" 2>&1); then
+    printf '%s\n' 'compiled-module error hash collision unexpectedly merged' >&2
+    exit 1
+fi
+case "$artifact_collision_output" in *'main.E08DED258'*'dep.E29EBB918'*) ;; *) printf '%s\n' 'compiled-module collision did not name both qualified errors' >&2; exit 1 ;; esac
 body_edit_artifacts="$test_build/body-edit"
 signature_edit_artifacts="$test_build/signature-edit"
 mkdir -p "$body_edit_artifacts" "$signature_edit_artifacts"
