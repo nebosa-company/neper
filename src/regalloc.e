@@ -27,7 +27,8 @@ fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRan
     if function.value_count > ranges.len { ret Capacity }
     var value_at = 0usize
     while value_at < function.value_count {
-        ranges[value_at] = zero
+        var empty_range: LiveRange = zero
+        ranges[value_at] = empty_range
         value_at += 1usize
     }
     let instruction_end = function.first_instruction + function.instruction_count
@@ -68,7 +69,8 @@ fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize,
     var value_at = 0usize
     var stack_slots = 0usize
     while value_at < function.value_count {
-        allocations[value_at] = zero
+        var empty_allocation: Allocation = zero
+        allocations[value_at] = empty_allocation
         var register = 0usize
         var found_register = false
         while register < register_count {
@@ -131,22 +133,27 @@ fn self_test() -> err {
     builder.function_count = 1usize
     builder.instruction_count = 4usize
     builder.operand_count = 3usize
-    builder.functions[0usize] = zero
-    builder.functions[0usize].first_instruction = 0usize
-    builder.functions[0usize].instruction_count = 4usize
-    builder.functions[0usize].value_count = 3usize
-    builder.instructions[0usize] = zero
-    builder.instructions[0usize].has_result = true
-    builder.instructions[0usize].result = 0usize
-    builder.instructions[1usize] = zero
-    builder.instructions[1usize].has_result = true
-    builder.instructions[1usize].result = 1usize
-    builder.instructions[2usize] = zero
-    builder.instructions[2usize].has_result = true
-    builder.instructions[2usize].result = 2usize
-    builder.instructions[3usize] = zero
-    builder.instructions[3usize].first_operand = 0usize
-    builder.instructions[3usize].operand_count = 3usize
+    var test_function: nir.Function = zero
+    test_function.first_instruction = 0usize
+    test_function.instruction_count = 4usize
+    test_function.value_count = 3usize
+    functions[0usize] = test_function
+    var instruction0: nir.Instruction = zero
+    instruction0.has_result = true
+    instruction0.result = 0usize
+    instructions[0usize] = instruction0
+    var instruction1: nir.Instruction = zero
+    instruction1.has_result = true
+    instruction1.result = 1usize
+    instructions[1usize] = instruction1
+    var instruction2: nir.Instruction = zero
+    instruction2.has_result = true
+    instruction2.result = 2usize
+    instructions[2usize] = instruction2
+    var instruction3: nir.Instruction = zero
+    instruction3.first_operand = 0usize
+    instruction3.operand_count = 3usize
+    instructions[3usize] = instruction3
     builder.operands[0usize] = 0usize
     builder.operands[1usize] = 1usize
     builder.operands[2usize] = 2usize

@@ -177,8 +177,9 @@ fn self_test() -> err {
     var builder: nir.Builder = zero
     try nir.init(&builder, functions[..], blocks[..], instructions[..], operands[..], references[..], strings[..])
     builder.function_count = 1usize
-    builder.functions[0usize] = zero
-    builder.functions[0usize].name = "constant"
+    var constant_function: nir.Function = zero
+    constant_function.name = "constant"
+    functions[0usize] = constant_function
     var machine_storage: [5]usize = zero
     var machine: emit_x64.Buffer = zero
     try emit_x64.init(&machine, machine_storage[..])
@@ -196,15 +197,17 @@ fn self_test() -> err {
     if object.bytes[36usize] != 1usize || object.bytes[40usize] != 60usize || object.bytes[56usize] != 32usize || object.bytes[59usize] != 96usize { ret InvalidObject }
     if object.bytes[60usize] != 195usize || object.bytes[61usize] != 99usize || object.bytes[68usize] != 116usize || object.bytes[73usize] != 1usize || object.bytes[75usize] != 32usize || object.bytes[77usize] != 2usize || object.bytes[79usize] != 4usize { ret InvalidObject }
     builder.function_ref_count = 1usize
-    builder.function_refs[0usize] = zero
-    builder.function_refs[0usize].module_index = 1usize
-    builder.function_refs[0usize].name = "external_long"
+    var external_reference: nir.FunctionRef = zero
+    external_reference.module_index = 1usize
+    external_reference.name = "external_long"
+    references[0usize] = external_reference
     try emit_x64.init(&machine, machine_storage[..])
     try emit_x64.byte(&machine, 232usize)
     try emit_x64.little_u32(&machine, 0usize)
-    relocations[0usize] = zero
-    relocations[0usize].displacement_at = 1usize
-    relocations[0usize].function_ref = 0usize
+    var external_relocation: codegen_x64.Relocation = zero
+    external_relocation.displacement_at = 1usize
+    external_relocation.function_ref = 0usize
+    relocations[0usize] = external_relocation
     try emit_x64.init(&object, object_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 1usize, symbols[..], &object)
     if object.count != 129usize || object.bytes[8usize] != 75usize || object.bytes[12usize] != 2usize || object.bytes[36usize] != 5usize || object.bytes[44usize] != 65usize || object.bytes[52usize] != 1usize { ret InvalidObject }

@@ -114,16 +114,18 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     var hash_scratch: binary.Buffer = zero
     try binary.init(&hash_scratch, hash_storage)
 
-    let (functions, functions_error) = mem.alloc[nir.Function](a, function_count)
+    let (function_storage, functions_error) = mem.alloc[nir.Function](a, function_count)
     if functions_error != ok { ret functions_error }
+    var functions = function_storage
     let (blocks, blocks_error) = mem.alloc[nir.Block](a, 1usize)
     if blocks_error != ok { ret blocks_error }
     let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, 1usize)
     if instructions_error != ok { ret instructions_error }
     let (operands, operands_error) = mem.alloc[usize](a, 1usize)
     if operands_error != ok { ret operands_error }
-    let (references, references_error) = mem.alloc[nir.FunctionRef](a, capacity(relocation_count))
+    let (reference_storage, references_error) = mem.alloc[nir.FunctionRef](a, capacity(relocation_count))
     if references_error != ok { ret references_error }
+    var references = reference_storage
     let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 1usize)
     if strings_error != ok { ret strings_error }
     try nir.init(&program.builder, functions, blocks, instructions, operands, references, strings)
@@ -151,9 +153,10 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             let (name, name_error) = copy_string(a, artifacts[artifact_at].bytes, function.name_index)
             if name_error != ok { ret name_error }
             let global_function = program.builder.function_count
-            program.builder.functions[global_function] = zero
-            program.builder.functions[global_function].name = name
-            program.builder.functions[global_function].module_index = artifact_at
+            var assembled_function: nir.Function = zero
+            assembled_function.name = name
+            assembled_function.module_index = artifact_at
+            functions[global_function] = assembled_function
             program.function_offsets[global_function] = program.machine.count
             program.builder.function_count += 1usize
             var code_at = 0usize
@@ -170,14 +173,16 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
                 let (target_name, target_name_error) = copy_string(a, artifacts[artifact_at].bytes, stored.name_index)
                 if target_name_error != ok { ret target_name_error }
                 let reference_index = program.builder.function_ref_count
-                program.builder.function_refs[reference_index] = zero
-                program.builder.function_refs[reference_index].module_index = module_index
-                program.builder.function_refs[reference_index].name = target_name
+                var assembled_reference: nir.FunctionRef = zero
+                assembled_reference.module_index = module_index
+                assembled_reference.name = target_name
+                references[reference_index] = assembled_reference
                 program.builder.function_ref_count += 1usize
-                program.relocations[program.relocation_count] = zero
-                program.relocations[program.relocation_count].displacement_at = program.function_offsets[global_function] + stored.displacement_at
-                program.relocations[program.relocation_count].function_ref = reference_index
-                program.relocations[program.relocation_count].resolved = false
+                var assembled_relocation: codegen_x64.Relocation = zero
+                assembled_relocation.displacement_at = program.function_offsets[global_function] + stored.displacement_at
+                assembled_relocation.function_ref = reference_index
+                assembled_relocation.resolved = false
+                program.relocations[program.relocation_count] = assembled_relocation
                 program.relocation_count += 1usize
                 relocation_at += 1usize
             }

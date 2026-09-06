@@ -102,8 +102,9 @@ fn self_test() -> err {
     var builder: nir.Builder = zero
     try nir.init(&builder, functions[..], blocks[..], instructions[..], operands[..], references[..], strings[..])
     builder.function_count = 1usize
-    builder.functions[0usize] = zero
-    builder.functions[0usize].name = "main"
+    var main_function: nir.Function = zero
+    main_function.name = "main"
+    functions[0usize] = main_function
     var machine_storage: [1]usize = zero
     var machine: emit_x64.Buffer = zero
     try emit_x64.init(&machine, machine_storage[..])
