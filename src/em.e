@@ -65,6 +65,21 @@ type InterfaceErrors = struct {
     module_index: usize,
 }
 
+type CodeFunction = struct {
+    name_index: usize,
+    content_hash: usize,
+    code_start: usize,
+    code_length: usize,
+    relocations: usize,
+    relocation_count: usize,
+}
+
+type CodeRelocation = struct {
+    displacement_at: usize,
+    module_index: usize,
+    name_index: usize,
+}
+
 fn format_version() -> usize { ret 1usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
@@ -1600,6 +1615,92 @@ fn artifact_error_at(bytes: []const usize, index: usize) -> (ErrorValue, err) {
     ret (ErrorValue { value: value, module_index: table.module_index, name_index: name_index }, ok)
 }
 
+fn code_function_at_unchecked(bytes: []const usize, query: usize) -> (CodeFunction, usize, err) {
+    let empty = CodeFunction { name_index: 0usize, content_hash: 0usize, code_start: 0usize, code_length: 0usize, relocations: 0usize, relocation_count: 0usize }
+    let (code, found_code, section_error) = find_section_unchecked(bytes, code_kind())
+    if section_error != ok || !found_code || code.length < 4usize { ret (empty, 0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, code.offset)
+    if count_error != ok || query >= count { ret (empty, count, InvalidArtifact) }
+    let end = code.offset + code.length
+    var cursor = code.offset + 4usize
+    var at = 0usize
+    while at < count {
+        if cursor > end || 20usize > end - cursor { ret (empty, count, InvalidArtifact) }
+        let (name_index, name_error) = binary.read_u32(bytes, cursor)
+        let (content_hash, hash_error) = binary.read_u64(bytes, cursor + 4usize)
+        let (code_length, length_error) = binary.read_u32(bytes, cursor + 12usize)
+        let (relocation_count, relocation_count_error) = binary.read_u32(bytes, cursor + 16usize)
+        if name_error != ok || hash_error != ok || length_error != ok || relocation_count_error != ok { ret (empty, count, InvalidArtifact) }
+        let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
+        if name_bounds_error != ok || name_length == 0usize || name_start >= bytes.len { ret (empty, count, InvalidArtifact) }
+        let code_start = cursor + 20usize
+        if code_start > end || code_length > end - code_start { ret (empty, count, InvalidArtifact) }
+        let relocations = code_start + code_length
+        if relocations > end || relocation_count > (end - relocations) / 12usize { ret (empty, count, InvalidArtifact) }
+        var relocation_at = 0usize
+        while relocation_at < relocation_count {
+            let relocation = relocations + relocation_at * 12usize
+            let (displacement, displacement_error) = binary.read_u32(bytes, relocation)
+            let (target_module, target_module_error) = binary.read_u32(bytes, relocation + 4usize)
+            let (target_name, target_name_error) = binary.read_u32(bytes, relocation + 8usize)
+            if displacement_error != ok || target_module_error != ok || target_name_error != ok || displacement > code_length || 4usize > code_length - displacement { ret (empty, count, InvalidArtifact) }
+            let (module_start, module_length, module_bounds_error) = string_bounds(bytes, target_module)
+            let (target_start, target_length, target_bounds_error) = string_bounds(bytes, target_name)
+            if module_bounds_error != ok || target_bounds_error != ok || module_length == 0usize || target_length == 0usize || module_start >= bytes.len || target_start >= bytes.len { ret (empty, count, InvalidArtifact) }
+            relocation_at += 1usize
+        }
+        let next = relocations + relocation_count * 12usize
+        if at == query {
+            ret (CodeFunction { name_index: name_index, content_hash: content_hash, code_start: code_start, code_length: code_length, relocations: relocations, relocation_count: relocation_count }, count, ok)
+        }
+        cursor = next
+        at += 1usize
+    }
+    ret (empty, count, InvalidArtifact)
+}
+
+fn artifact_code_count(bytes: []const usize) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (code, found_code, section_error) = find_section_unchecked(bytes, code_kind())
+    if section_error != ok || !found_code || code.length < 4usize { ret (0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, code.offset)
+    if count_error != ok { ret (0usize, InvalidArtifact) }
+    if count == 0usize {
+        if code.length != 4usize { ret (0usize, InvalidArtifact) }
+        ret (0usize, ok)
+    }
+    let (last, parsed_count, last_error) = code_function_at_unchecked(bytes, count - 1usize)
+    if last_error != ok || parsed_count != count { ret (0usize, InvalidArtifact) }
+    let end = last.relocations + last.relocation_count * 12usize
+    if end != code.offset + code.length { ret (0usize, InvalidArtifact) }
+    ret (count, ok)
+}
+
+fn artifact_code_function_at(bytes: []const usize, index: usize) -> (CodeFunction, err) {
+    let empty = CodeFunction { name_index: 0usize, content_hash: 0usize, code_start: 0usize, code_length: 0usize, relocations: 0usize, relocation_count: 0usize }
+    let (count, count_error) = artifact_code_count(bytes)
+    if count_error != ok || index >= count { ret (empty, InvalidArtifact) }
+    let (function, parsed_count, function_error) = code_function_at_unchecked(bytes, index)
+    if function_error != ok || parsed_count != count { ret (empty, InvalidArtifact) }
+    ret (function, ok)
+}
+
+fn artifact_code_relocation_at(bytes: []const usize, function: CodeFunction, index: usize) -> (CodeRelocation, err) {
+    let empty = CodeRelocation { displacement_at: 0usize, module_index: 0usize, name_index: 0usize }
+    if index >= function.relocation_count { ret (empty, InvalidArtifact) }
+    let relocation = function.relocations + index * 12usize
+    if relocation > bytes.len || 12usize > bytes.len - relocation { ret (empty, InvalidArtifact) }
+    let (displacement, displacement_error) = binary.read_u32(bytes, relocation)
+    let (module_index, module_error) = binary.read_u32(bytes, relocation + 4usize)
+    let (name_index, name_error) = binary.read_u32(bytes, relocation + 8usize)
+    if displacement_error != ok || module_error != ok || name_error != ok || displacement > function.code_length || 4usize > function.code_length - displacement { ret (empty, InvalidArtifact) }
+    let (module_start, module_length, module_bounds_error) = string_bounds(bytes, module_index)
+    let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
+    if module_bounds_error != ok || name_bounds_error != ok || module_length == 0usize || name_length == 0usize || module_start >= bytes.len || name_start >= bytes.len { ret (empty, InvalidArtifact) }
+    ret (CodeRelocation { displacement_at: displacement, module_index: module_index, name_index: name_index }, ok)
+}
+
 fn interface_module_index(bytes: []const usize) -> (usize, err) {
     let validation_error = validate(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
@@ -1825,6 +1926,8 @@ fn self_test() -> err {
     try validate(output.bytes[0usize..output.count])
     let (error_count, error_count_error) = artifact_error_count(output.bytes[0usize..output.count])
     if error_count_error != ok || error_count != 0usize { ret InvalidArtifact }
+    let (code_count, code_count_error) = artifact_code_count(output.bytes[0usize..output.count])
+    if code_count_error != ok || code_count != 0usize { ret InvalidArtifact }
     let (declaration, found_declaration, declaration_error) = find_declaration(output.bytes[0usize..output.count], "main")
     if declaration_error != ok || !found_declaration || declaration.signature_hash != 123usize || declaration.body_hash != 456usize { ret InvalidArtifact }
     let (dependency, dependency_error) = dependency_at(output.bytes[0usize..output.count], 0usize)

@@ -1192,6 +1192,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (bytes, load_error) = load_artifact(a, args[2usize])
         if load_error != ok { ret load_error }
         try em.validate(bytes)
+        let (code_count, code_count_error) = em.artifact_code_count(bytes)
+        if code_count_error != ok { ret code_count_error }
+        var function_at = 0usize
+        while function_at < code_count {
+            let (function, function_error) = em.artifact_code_function_at(bytes, function_at)
+            if function_error != ok { ret function_error }
+            var relocation_at = 0usize
+            while relocation_at < function.relocation_count {
+                let (relocation, relocation_error) = em.artifact_code_relocation_at(bytes, function, relocation_at)
+                if relocation_error != ok { ret relocation_error }
+                relocation_at += 1usize
+            }
+            function_at += 1usize
+        }
         try io.print("compiled module valid\n")
         ret ok
     }
