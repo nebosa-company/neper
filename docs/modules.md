@@ -17,37 +17,61 @@ exist. The catalogue currently has 128 modules: 33 core, 77 extended, 18 experim
 
 | Prefix | Meaning | Distribution |
 |---|---|---|
-| `e.*` | Stable facilities owned by the language and guaranteed by the applicable toolchain version | Toolchain |
-| `algo.*` | Concrete domain types and pure computation over caller-owned data | Toolchain |
-| `text.*` | Unicode and text processing | Toolchain |
-| `crypto.*` | Pure cryptographic primitives; entropy is caller-supplied | Toolchain |
-| `fmt.*` | Interchange-format parsers and writers | Toolchain |
-| `gfx.*` | Pure geometry/paint/image values and GPU scene rendering | Toolchain |
-| `ui.*` | Declarative, GPU-rendered application framework | Toolchain |
+| `e.*` | The standard library: every module the toolchain owns | Toolchain |
 | `x.<owner>.<package>.*` | Optional, platform, vendor or externally versioned package | Separate source package |
+| anything else | The project's own modules, from its `lib/` and `src/` | Project |
+
+**`e.` is the standard library, `x.` is an external package, anything else is the
+project's own.** The rule is generative rather than memorised: an import's origin
+reads off the line, without consulting the catalogue.
+
+It is also what keeps a project from silently overriding the toolchain. A project's
+`lib/` and `src/` are searched before the toolchain (§3), so any top-level name the
+toolchain claims is a name a project directory can shadow without a diagnostic. Only
+`e/` and `x/` are now hazardous, and both read as reserved; a project directory named
+`algo/`, `text/`, `fmt/`, `gfx/`, `ui/` or `crypto/` is its own module and nothing else.
+
+The toolchain's domains are branches of `e.*` rather than roots of their own:
+
+| Branch | Domain |
+|---|---|
+| `e.data.*` | Generic containers, parameterised by their element type |
+| `e.algo.*` | Concrete domain types and pure computation over caller-owned data |
+| `e.text.*` | Unicode and text processing |
+| `e.crypto.*` | Pure cryptographic primitives; entropy is caller-supplied |
+| `e.fmt.*` | Interchange-format parsers and writers |
+| `e.gfx.*` | Pure geometry/paint/image values and GPU scene rendering |
+| `e.ui.*` | Declarative, GPU-rendered application framework |
+
+**Ownership is the root; stability is the tier (§2).** `e.` says the toolchain owns
+the module, not that the module is stable or delivered: the 128 catalogued modules are
+all `e.*`, and they divide into 33 core, 77 extended and 18 experimental.
 
 Namespaces describe ownership and domain, not whether code is implemented with an
 intrinsic. `e.*` availability begins at the module's delivery milestone; it does not
 put every module into the bootstrap.
 
-### `e.data.*` against `algo.*`
+Only the `use` line carries the root. The import qualifier is the final segment either
+way, so call sites are unchanged: `hash.fnv1a64`, `paint.fill`, `tensor.matmul`.
+
+### `e.data.*` against `e.algo.*`
 
 Genericity decides which of the two a module belongs to:
 
 - **`e.data.*` is generic containers**, parameterised by the element type the caller
   puts in them: `List[T]`, `Map[K, V]`, `Ring[T]`, `Heap[T]`, `Tree[K, V]`,
   `SlotMap[T]`.
-- **`algo.*` is concrete domain types and pure computation over caller-owned data**:
+- **`e.algo.*` is concrete domain types and pure computation over caller-owned data**:
   `Uuid`, `Decimal`, `Bignum`, `BitSet`, `Pcg64`, and the sorting and traversal
-  functions. Where an `algo.*` type is generic it is over a numeric parameter, as
+  functions. Where an `e.algo.*` type is generic it is over a numeric parameter, as
   `Complex[F]`, `Matrix[F]` and `Tensor[F]` are, and not over an arbitrary `T`.
 
 **Storage ownership is not the test.** `e.data.ring` takes `init(storage: []T)` and
-`algo.disjoint_set` takes `init(parent: []u32, rank: []u8, ...)`. Both borrow caller
+`e.algo.disjoint_set` takes `init(parent: []u32, rank: []u8, ...)`. Both borrow caller
 storage; the first is a container and the second is not.
 
-A type that can never hold an arbitrary `T` belongs in `algo.*` even where general
-convention files it with the containers. `algo.bitset` is a bit vector over `[]u64`
+A type that can never hold an arbitrary `T` belongs in `e.algo.*` even where general
+convention files it with the containers. `e.algo.bitset` is a bit vector over `[]u64`
 words holding bit indices, which makes it kin to `Uuid` and `Decimal`; the generic
 `Set` in `e.data.map` is the contrast, a container over whatever key type the caller
 names. Same word, different thing.
@@ -94,7 +118,7 @@ applicable conformance workload and records a compatibility decision. Experiment
 modules never satisfy a dependency of a core or extended module. This conservative
 rule protects public-type stability transitively, not only import legality.
 
-`text.utf8` and `e.cancel` are core additions delivered through M2.5's cross-cutting
+`e.text.utf8` and `e.cancel` are core additions delivered through M2.5's cross-cutting
 library gate, with `schedule:"later", milestone:null` rather than inventing an
 unvalidated Mn value. Their gate is specified in `stdlib-hardening.md`; this does
 not change the preserved M2 completion criteria or imply they are already available.
@@ -182,21 +206,21 @@ Containers are one module per data structure, each generic over its element type
 
 Pure algorithm domains are:
 
-- `algo.rand`, `algo.uuid`, `algo.hash`, `algo.graph`, `algo.stat`, `algo.bitset`,
-  `algo.sort`, `algo.disjoint_set`, `algo.complex`, `algo.decimal`, `algo.bignum`,
-  `algo.deflate`.
-- `algo.linalg.matrix`, `algo.linalg.tensor`.
-- `text.encoding`, `text.utf8`, `text.unicode`, `text.normalize`, `text.collate`,
-  `text.regex`.
-- `crypto.hash`, `crypto.mac`, `crypto.kdf`, `crypto.aead`, `crypto.sign`, `crypto.kx`, `crypto.random`;
-  `crypto.x509` composes certificates and validation over the format layer.
-- `gfx.geometry`, `gfx.paint`, `gfx.image`; `ui.style` and `ui.layout` are pure value
+- `e.algo.rand`, `e.algo.uuid`, `e.algo.hash`, `e.algo.graph`, `e.algo.stat`, `e.algo.bitset`,
+  `e.algo.sort`, `e.algo.disjoint_set`, `e.algo.complex`, `e.algo.decimal`, `e.algo.bignum`,
+  `e.algo.deflate`.
+- `e.algo.linalg.matrix`, `e.algo.linalg.tensor`.
+- `e.text.encoding`, `e.text.utf8`, `e.text.unicode`, `e.text.normalize`, `e.text.collate`,
+  `e.text.regex`.
+- `e.crypto.hash`, `e.crypto.mac`, `e.crypto.kdf`, `e.crypto.aead`, `e.crypto.sign`, `e.crypto.kx`, `e.crypto.random`;
+  `e.crypto.x509` composes certificates and validation over the format layer.
+- `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.image`; `e.ui.style` and `e.ui.layout` are pure value
   and constraint engines despite their application-facing names.
-- `text.shape`, `text.layout`: deterministic font shaping and visual text layout over
+- `e.text.shape`, `e.text.layout`: deterministic font shaping and visual text layout over
   caller-provided font data.
 
 This separation keeps non-cryptographic table/checksum hashes out of the security
-namespace, decomposes the former `algo.text`, and prevents matrices and tensors from
+namespace, decomposes the former `e.algo.text`, and prevents matrices and tensors from
 becoming unrelated top-level buckets.
 
 ### Layer 3 — platform boundary
@@ -208,7 +232,7 @@ becoming unrelated top-level buckets.
 
 ### Layer 4 — host services
 
-- `e.cancel`, `e.io`, `text.io`, `e.fs`, `e.fs.mmap`, `e.fs.watch`, `e.proc`, `e.thread`,
+- `e.cancel`, `e.io`, `e.text.io`, `e.fs`, `e.fs.mmap`, `e.fs.watch`, `e.proc`, `e.thread`,
   `e.sync`, `e.channel`, `e.concurrent.queue`, `e.concurrent.map`,
   `e.task`, `e.time`, `e.time.calendar`, `e.tz`.
 
@@ -234,22 +258,22 @@ in `e.time`, not `e.debug`.
 
 ### Layer 6 — application and protocols
 
-- `e.metrics`, `e.log`, `e.cli`, `e.async`, `e.async.io`, `text.locale`,
-  `text.template`.
+- `e.metrics`, `e.log`, `e.cli`, `e.async`, `e.async.io`, `e.text.locale`,
+  `e.text.template`.
 - `e.net`, `e.net.tls`, `e.net.http`, `e.net.ws`.
 - `e.db`: generic SQL connections, transactions, prepared statements and streaming
   row readers; concrete drivers remain owner-qualified packages.
-- `e.gpu.tensor`: explicit GPU tensor operations over pure `algo.linalg.tensor` views.
-- `gfx.scene`: renderer-neutral display lists, retained scenes and GPU composition.
-- `ui.asset`: deterministic scale/theme/locale variant selection, fonts and bounded
+- `e.gpu.tensor`: explicit GPU tensor operations over pure `e.algo.linalg.tensor` views.
+- `e.gfx.scene`: renderer-neutral display lists, retained scenes and GPU composition.
+- `e.ui.asset`: deterministic scale/theme/locale variant selection, fonts and bounded
   decoded-image/GPU texture caching over `e.asset`.
-- `ui.window`, `ui.input`, `ui.widget`, `ui.animation`, `ui.accessibility`,
-  `ui.testing`, `ui.app`: the experimental declarative GPU application framework.
-- `fmt.json`, `fmt.csv`, `fmt.ini`, `fmt.uri`, `fmt.mime`, `fmt.asn1`, `fmt.pem`,
-  `fmt.multipart`, `fmt.mail`, `fmt.quoted_printable`, `fmt.gzip`, `fmt.zstd`,
-  `fmt.bzip2`, `fmt.lzw`, `fmt.zlib`, `fmt.zip`, `fmt.tar`, `fmt.yaml`, `fmt.xml`,
-  `fmt.html`, `fmt.html.template`, `fmt.png`, `fmt.jpeg`, `fmt.webp`, `fmt.bson`,
-  `fmt.msgpack`, `fmt.protobuf`.
+- `e.ui.window`, `e.ui.input`, `e.ui.widget`, `e.ui.animation`, `e.ui.accessibility`,
+  `e.ui.testing`, `e.ui.app`: the experimental declarative GPU application framework.
+- `e.fmt.json`, `e.fmt.csv`, `e.fmt.ini`, `e.fmt.uri`, `e.fmt.mime`, `e.fmt.asn1`, `e.fmt.pem`,
+  `e.fmt.multipart`, `e.fmt.mail`, `e.fmt.quoted_printable`, `e.fmt.gzip`, `e.fmt.zstd`,
+  `e.fmt.bzip2`, `e.fmt.lzw`, `e.fmt.zlib`, `e.fmt.zip`, `e.fmt.tar`, `e.fmt.yaml`, `e.fmt.xml`,
+  `e.fmt.html`, `e.fmt.html.template`, `e.fmt.png`, `e.fmt.jpeg`, `e.fmt.webp`, `e.fmt.bson`,
+  `e.fmt.msgpack`, `e.fmt.protobuf`.
 
 HTTP/1.1 is the initial `e.net.http` surface. HTTP/2 requires a separate future
 proposal because HPACK and multiplexed connection state are not an incremental flag.
@@ -257,26 +281,26 @@ proposal because HPACK and multiplexed connection state are not an incremental f
 coroutines; `e.async.io` composes typed, cancellation-aware operations over it.
 Streaming response bodies and bounded SSE parsing are part of `e.net.http`; they
 need no new namespace or HTTP/2 implementation. `e.path` owns pure bounded glob
-matching; `fmt.json` owns lossless numbers, Pointer and transactional in-memory Patch.
+matching; `e.fmt.json` owns lossless numbers, Pointer and transactional in-memory Patch.
 `e.proc` owns bounded child supervision, and `e.fs` exposes handle-relative root
 operations over reviewed `e.os` primitives. Exact semantics and delivery tests are
 in `stdlib-hardening.md`; none permits automatic retries of partial side effects.
 
-`fmt.html` is distinct from `fmt.xml`: it implements HTML error recovery and the
+`e.fmt.html` is distinct from `e.fmt.xml`: it implements HTML error recovery and the
 WHATWG tree-construction algorithm into a bounded, arena-owned tree. Like every
 format module it receives bytes or a reader and never opens a file or fetches a
 resource itself.
 
-`fmt.html.template` adds context-sensitive escaping over `text.template`; it is
+`e.fmt.html.template` adds context-sensitive escaping over `e.text.template`; it is
 separate from parsing because template execution generates a stream rather than an
-HTML tree. Image codecs decode into caller-owned `gfx.image` pixels. Certificate
-validation is split the same way: `fmt.asn1` and `fmt.pem` own encodings, while
-`crypto.x509` owns chain and identity policy used by `e.net.tls`.
+HTML tree. Image codecs decode into caller-owned `e.gfx.image` pixels. Certificate
+validation is split the same way: `e.fmt.asn1` and `e.fmt.pem` own encodings, while
+`e.crypto.x509` owns chain and identity policy used by `e.net.tls`.
 
 The UI family is specified in [`ui-framework.md`](ui-framework.md). Declarative
 widgets are immutable frame-arena descriptions, not runtime objects. Reconciliation
 stores persistent elements and state behind generation-checked identifiers;
-layout produces retained render nodes, and `gfx.scene` compiles them into explicit
+layout produces retained render nodes, and `e.gfx.scene` compiles them into explicit
 GPU work. Native windows, input, clipboard, IME and accessibility enter only through
 reviewed `e.os` primitives. There is no garbage collector, global widget registry,
 reflection-based property system or hidden allocation.

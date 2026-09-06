@@ -19,8 +19,8 @@ Callback context is always explicit; there are no closures. Read-only slices are
 
 Qualified names in signatures resolve through that module's `direct_dependencies`
 in `modules.json`. They use the dependency's final segment except
-`linalg_tensor`, the explicit alias for `algo.linalg.tensor`; `ui.widget` additionally
-uses `layout` for `text.layout` and `ui_layout` for `ui.layout`; `e.async.io` uses
+`linalg_tensor`, the explicit alias for `e.algo.linalg.tensor`; `e.ui.widget` additionally
+uses `layout` for `e.text.layout` and `ui_layout` for `e.ui.layout`; `e.async.io` uses
 `cancel_api` for `e.cancel` because it declares `cancel`. Imports themselves are
 not public declarations. The catalogue's declaration fragments intentionally omit
 function bodies and are not standalone modules.
@@ -293,7 +293,7 @@ fn push_f64_fixed(b: *Builder, v: f64, precision: u8) -> err
 
 All search indices and slices are byte offsets. The trim functions without an
 explicit byte set remove ASCII whitespace only; Unicode whitespace and case mapping
-belong to `text.unicode`. An empty `needle` is found at the requested valid starting
+belong to `e.text.unicode`. An empty `needle` is found at the requested valid starting
 offset, `rfind` returns `s.len`, and `count` returns `s.len + 1`; replacement follows
 the same non-overlapping boundary rule. `split` returns `InvalidSeparator` for an
 empty separator and otherwise preserves empty fields. `lines` recognizes LF and CRLF,
@@ -690,7 +690,7 @@ accumulator alongside an error. Ordinary for never silently consumes next_err.
 
 ## 4. Pure algorithms, text and cryptography
 
-### `algo.rand`
+### `e.algo.rand`
 
 ```neper
 type Pcg64 = struct { state: u64, stream: u64 }
@@ -711,7 +711,7 @@ fn mt19937_next(r: *Mt19937) -> u32
 
 `bounded(..., 0)` returns zero; otherwise it is unbiased rejection sampling.
 
-### `algo.uuid`
+### `e.algo.uuid`
 
 ```neper
 type Uuid = struct { bytes: [16]u8 }
@@ -732,7 +732,7 @@ fn uuid_format(uuid: Uuid, b: *str.Builder) -> err
 `format` writes the 36-byte lowercase hyphenated form. Entropy and time are supplied
 by the caller; this module never reads `e.os`.
 
-### `algo.hash`
+### `e.algo.hash`
 
 ```neper
 type XxHash64 = struct { seed: u64, total: u64, v1: u64, v2: u64, v3: u64, v4: u64, buffer: [32]u8, buffered: u8 }
@@ -751,7 +751,7 @@ fn crc32_done(h: *const Crc32) -> u32
 fn adler32(data: []const u8) -> u32
 ```
 
-### `algo.deflate`
+### `e.algo.deflate`
 
 ```neper
 type Encoder = struct { state: *void }
@@ -771,9 +771,9 @@ fn decoder_storage(window_limit: usize) -> (usize, err)
 
 The calls return consumed input and written output. State uses caller storage and
 performs no allocation. This module implements raw RFC 1951 DEFLATE only; gzip and
-ZIP framing belong to `fmt.gzip` and `fmt.zip`.
+ZIP framing belong to `e.fmt.gzip` and `e.fmt.zip`.
 
-### `algo.graph`
+### `e.algo.graph`
 
 ```neper
 type Traversal = struct { order: []const graph.NodeId, parent: []const graph.NodeId }
@@ -799,7 +799,7 @@ smallest node in each component. Dijkstra rejects negative, NaN and infinite wei
 as `InvalidWeight`; unreachable distance is positive infinity and its predecessor is
 `graph.NONE`. All returned slices are arena-owned.
 
-### `algo.disjoint_set`
+### `e.algo.disjoint_set`
 
 ```neper
 type DisjointSet = struct { parent: []u32, rank: []u8, sets: usize }
@@ -819,7 +819,7 @@ The caller supplies storage. `count` must fit `u32` and both slices. `find` perf
 path compression and `union` uses union by rank; indices outside `count` follow the
 ordinary bounds-trap rule.
 
-### `algo.stat`
+### `e.algo.stat`
 
 ```neper
 type Moments = struct { count: u64, mean: f64, m2: f64, min: f64, max: f64 }
@@ -839,7 +839,7 @@ fn regression_intercept(s: *const Regression) -> (f64, bool)
 fn correlation(s: *const Regression) -> (f64, bool)
 ```
 
-### `algo.bitset`
+### `e.algo.bitset`
 
 ```neper
 type BitSet = struct { words: []u64, len: usize }
@@ -868,7 +868,7 @@ Bits at indices `len..storage.len*64` are always zero. Operations requiring two
 sets require equal logical lengths; a mismatch is a debug bounds trap and release
 undefined behavior, like incompatible slice bounds in other pure primitives.
 
-### `algo.sort`
+### `e.algo.sort`
 
 ```neper
 fn in_place[T: type](items: []T)
@@ -880,7 +880,7 @@ fn radix_u64_in_place(a: *mem.Arena, items: []u64) -> err
 fn is_sorted[T: type](items: []const T) -> bool
 ```
 
-### `algo.complex`
+### `e.algo.complex`
 
 ```neper
 type Complex[F: type] = struct { re: F, im: F }
@@ -906,7 +906,7 @@ fn tan[F: type](z: Complex[F]) -> Complex[F]
 `F` is `f32` or `f64`. Branch cuts and signed-zero behavior follow C99 Annex G;
 operations inherit `e.math`'s NaN canonicalization and no-contraction rules.
 
-### `algo.decimal`
+### `e.algo.decimal`
 
 ```neper
 type Coefficient = struct { low: u64, high: i64 }
@@ -934,7 +934,7 @@ fn from_i64(value: i64, scale: u8) -> (Decimal, err)
 rounds: only operations carrying a `Rounding` argument may discard decimal digits.
 Parsing is locale-free and consumes the complete ordinary or scientific decimal.
 
-### `algo.bignum`
+### `e.algo.bignum`
 
 ```neper
 type Sign = enum u8 { Zero, Positive, Negative }
@@ -962,7 +962,7 @@ fn rat_cmp(a: Rat, b: Rat) -> i32
 fn rat_format(v: Rat, b: *str.Builder) -> err
 ```
 
-### `algo.linalg.matrix`
+### `e.algo.linalg.matrix`
 
 ```neper
 type Matrix[T: type] = struct { data: []T, rows: usize, cols: usize, stride: usize }
@@ -983,7 +983,7 @@ fn determinant_f64(a: *mem.Arena, m: ConstMatrix[f64]) -> (f64, err)
 fn inverse_f64(a: *mem.Arena, dst: Matrix[f64], src: ConstMatrix[f64]) -> err
 ```
 
-### `algo.linalg.tensor`
+### `e.algo.linalg.tensor`
 
 ```neper
 type Tensor[T: type] = struct { data: []T, shape: []const usize, stride: []const usize }
@@ -1001,7 +1001,7 @@ fn copy[T: type](dst: Tensor[T], src: ConstTensor[T]) -> err
 fn add[T: type](dst: Tensor[T], x: ConstTensor[T], y: ConstTensor[T]) -> err
 ```
 
-### `text.encoding`
+### `e.text.encoding`
 
 ```neper
 type Encoding = enum u8 { Utf8, Utf16Le, Utf16Be, Utf32Le, Utf32Be }
@@ -1029,7 +1029,7 @@ reports a trailing partial sequence as `Incomplete`; `Replace` emits U+FFFD for 
 maximal invalid subsequence. This toolchain module intentionally excludes locale and
 legacy code pages.
 
-### `text.utf8`
+### `e.text.utf8`
 
 ```neper
 type Decode = struct { scalar: u32, width: u8 }
@@ -1047,7 +1047,7 @@ fn iterator_next(it: *Iterator) -> (u32, bool)
 fn iterator_next_err(it: *Iterator) -> (u32, bool, err)
 ```
 
-### `text.unicode`
+### `e.text.unicode`
 
 ```neper
 type Category = enum u8 { Lu, Ll, Lt, Lm, Lo, Mn, Mc, Me, Nd, Nl, No, Pc, Pd, Ps, Pe, Pi, Pf, Po, Sm, Sc, Sk, So, Zs, Zl, Zp, Cc, Cf, Cs, Co, Cn }
@@ -1065,7 +1065,7 @@ fn graphemes(s: str) -> Graphemes
 fn graphemes_next(it: *Graphemes) -> (str, bool)
 ```
 
-### `text.normalize`
+### `e.text.normalize`
 
 ```neper
 type Form = enum u8 { Nfc, Nfd, Nfkc, Nfkd }
@@ -1075,7 +1075,7 @@ fn is_normalized(s: str, form: Form) -> (bool, err)
 fn normalize(a: *mem.Arena, s: str, form: Form) -> (str, err)
 ```
 
-### `text.collate`
+### `e.text.collate`
 
 ```neper
 type Options = struct { case_sensitive: bool, numeric: bool }
@@ -1084,10 +1084,10 @@ fn codepoint_cmp(a: str, b: str) -> i32
 fn natural_cmp(a: str, b: str, options: Options) -> i32
 ```
 
-Locale-aware collation is exposed by `text.locale`; this module remains the
+Locale-aware collation is exposed by `e.text.locale`; this module remains the
 locale-independent Unicode collation mechanism beneath it.
 
-### `text.locale`
+### `e.text.locale`
 
 ```neper
 type Database = struct { state: *void }
@@ -1118,7 +1118,7 @@ fn upper(a: *mem.Arena, selected_locale: Locale, value: str) -> (str, err)
 `load` accepts explicit compatible data. Parsing consumes the whole input. Currency
 codes are caller-supplied ISO 4217 identifiers. No process-global locale exists.
 
-### `text.template`
+### `e.text.template`
 
 ```neper
 type Template = struct { state: *void }
@@ -1138,9 +1138,9 @@ fn execute_typed[T: type](template: *const Template, writer: *io.Writer, value: 
 
 Templates provide deterministic interpolation, conditionals and bounded iteration
 over explicit values or compile-time-inspected structs. The core engine performs no
-contextual escaping; specialized output modules such as `fmt.html.template` own it.
+contextual escaping; specialized output modules such as `e.fmt.html.template` own it.
 
-### `text.regex`
+### `e.text.regex`
 
 ```neper
 type Regex = struct { state: *void }
@@ -1159,7 +1159,7 @@ fn replace_all(a: *mem.Arena, r: *const Regex, text: str, replacement: str) -> (
 
 The accepted syntax is regular only: no backreferences, recursion or lookbehind.
 
-### `gfx.geometry`
+### `e.gfx.geometry`
 
 ```neper
 type Point = struct { x: f32, y: f32 }
@@ -1198,7 +1198,7 @@ Coordinates are logical pixels. Values must be finite; rectangles and sizes have
 non-negative dimensions. Paths and transforms allocate nothing after builder
 creation and are independent of any rendering backend.
 
-### `gfx.paint`
+### `e.gfx.paint`
 
 ```neper
 type Color = struct { red: f32, green: f32, blue: f32, alpha: f32 }
@@ -1221,7 +1221,7 @@ fn validate(brush: *const Brush) -> err
 Colors are linear-light floating-point RGBA; `srgb8` performs the defined sRGB
 transfer. Gradient stops are borrowed, ordered and bounded to `0..1`.
 
-### `gfx.image`
+### `e.gfx.image`
 
 ```neper
 type Format = enum u8 { R8, Rgba8, Bgra8, Rgba16Float }
@@ -1241,9 +1241,9 @@ fn copy(dst: Image, src: ConstImage, dst_origin: geometry.Point) -> err
 ```
 
 Images are pixel views, not codecs or GPU resources. Encoders and decoders belong in
-`fmt.*`; upload and caching belong in `gfx.scene`.
+`e.fmt.*`; upload and caching belong in `e.gfx.scene`.
 
-### `text.shape`
+### `e.text.shape`
 
 ```neper
 type FontId = u32
@@ -1266,7 +1266,7 @@ Shaping is deterministic over caller-provided OpenType font bytes and the toolch
 pinned Unicode tables. It performs substitutions and positioning but no line
 breaking, font discovery, fallback, rasterization or hidden file access.
 
-### `text.layout`
+### `e.text.layout`
 
 ```neper
 type Align = enum u8 { Start, End, Center, Justify }
@@ -1290,7 +1290,7 @@ fn selection(a: *mem.Arena, value: *const Layout, start: usize, end: usize) -> (
 The module performs Unicode bidi resolution, line breaking, fallback and visual
 placement. Byte offsets always identify UTF-8 boundaries in `source`.
 
-### `ui.style`
+### `e.ui.style`
 
 ```neper
 type Length = union enum u8 { Auto, Px: f32, Percent: f32, Flex: f32 }
@@ -1308,7 +1308,7 @@ fn validate(value: *const Style) -> err
 Styles are ordinary immutable values. There is no selector engine, cascading global
 sheet or reflective property lookup in version 1.
 
-### `ui.layout`
+### `e.ui.layout`
 
 ```neper
 type Axis = enum u8 { Horizontal, Vertical }
@@ -1329,9 +1329,9 @@ fn grid(a: *mem.Arena, spec: Grid, limits: Constraints, children: []const Child)
 ```
 
 Layout is a deterministic pure constraint solver. Scroll state, widget measurement
-and render-tree traversal remain in `ui.widget`.
+and render-tree traversal remain in `e.ui.widget`.
 
-### `crypto.hash`
+### `e.crypto.hash`
 
 ```neper
 type Sha256 = struct { h: [8]u32, block: [64]u8, block_len: u8, total: u64 }
@@ -1360,7 +1360,7 @@ fn legacy_md5(data: []const u8) -> [16]u8
 fn equal_constant_time(a: []const u8, b: []const u8) -> bool
 ```
 
-### `crypto.mac`
+### `e.crypto.mac`
 
 ```neper
 type HmacSha256 = struct { inner: hash.Sha256, outer: hash.Sha256 }
@@ -1384,7 +1384,7 @@ No key generation, entropy read, truncation or secret logging is implicit.
 Streaming state lets HKDF process multiple input segments without concatenating
 unbounded caller data. done consumes the message state; reinitialize before reuse.
 
-### `crypto.kdf`
+### `e.crypto.kdf`
 
 ```neper
 error TooLarge
@@ -1401,7 +1401,7 @@ with key/info inputs are forbidden unless separately proven safe. HKDF is not a
 password-storage KDF; no password-hashing security claim or custom construction is
 introduced. Release requires published independent vectors and boundary tests.
 
-### `crypto.aead`
+### `e.crypto.aead`
 
 ```neper
 error InvalidKey
@@ -1419,7 +1419,7 @@ fn chacha20_poly1305_open(dst: []u8, key: [32]u8, nonce: [12]u8, aad: []const u8
 
 The sealed representation is ciphertext followed by the 16-byte authentication tag.
 
-### `crypto.sign`
+### `e.crypto.sign`
 
 ```neper
 type Ed25519PublicKey = struct { bytes: [32]u8 }
@@ -1436,7 +1436,7 @@ fn ed25519_verify(public: Ed25519PublicKey, message: []const u8, signature: Ed25
 `Ed25519SecretKey.bytes` is the 32-byte seed form. Verification rejects non-canonical
 encodings and small-order public keys.
 
-### `crypto.kx`
+### `e.crypto.kx`
 
 ```neper
 type X25519PublicKey = struct { bytes: [32]u8 }
@@ -1450,7 +1450,7 @@ fn x25519_exchange(secret: X25519SecretKey, peer: X25519PublicKey) -> (X25519Sha
 
 The scalar is clamped by the operation. An all-zero shared secret is `InvalidKey`.
 
-### `crypto.random`
+### `e.crypto.random`
 
 ```neper
 type ChaCha20 = struct { key: [32]u8, nonce: [12]u8, counter: u32, block: [64]u8, used: u8 }
@@ -1466,7 +1466,7 @@ The counter never wraps; a request that would do so returns `Exhausted` before
 reusing a block. `chacha20_bounded(..., 0)` returns zero and otherwise uses rejection
 sampling.
 
-### `crypto.x509`
+### `e.crypto.x509`
 
 ```neper
 type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey }
@@ -1740,7 +1740,7 @@ Partial writes retain only the unwritten suffix; a failed flush is not a rollbac
 Compression finish, protocol shutdown, and durable filesystem sync are distinct
 operations, never implied by generic flush. See stdlib-hardening.md SL02.
 
-### `text.io`
+### `e.text.io`
 
 ```neper
 type Reader = struct { state: *void }
@@ -2291,7 +2291,7 @@ fn matmul[T: type](queue: *gpu.Queue, dst: Tensor[T], x: Tensor[T], y: Tensor[T]
 fn release[T: type](queue: *gpu.Queue, tensor_view: Tensor[T]) -> err
 ```
 
-The import of `algo.linalg.tensor` uses the deterministic alias `linalg_tensor`.
+The import of `e.algo.linalg.tensor` uses the deterministic alias `linalg_tensor`.
 Every operation is an explicit queue submission; this module never opens a device or
 allocates a host arena implicitly.
 
@@ -2603,7 +2603,7 @@ and tested against published protocol and malformed-peer vectors.
 
 The release contract must name its cipher suites, signature/certificate algorithms,
 key schedule and entropy requirements; reporting merely TLS 1.3 is insufficient.
-HKDF/HMAC come from reviewed crypto.kdf/crypto.mac surfaces. SHA-384-based suites
+HKDF/HMAC come from reviewed e.crypto.kdf/e.crypto.mac surfaces. SHA-384-based suites
 cannot be advertised until SHA-384/HKDF-SHA384 exists. The current Ed25519-only public
 signature surface does not establish compatibility with typical RSA/ECDSA certificate
 chains; those profiles require explicit reviewed additions or remain unsupported.
@@ -2747,7 +2747,7 @@ does not discover drivers or allocate hidden connection pools.
 
 ## 8. Declarative GPU UI
 
-### `gfx.scene`
+### `e.gfx.scene`
 
 ```neper
 type TextureId = struct { slot: u32, generation: u32 }
@@ -2787,7 +2787,7 @@ returns. A renderer owns bounded generation-checked GPU caches. Compilation may
 retain tessellation and glyph data but never application widget pointers. Rendering
 is explicit queue work followed by presentation through the target surface.
 
-### `ui.asset`
+### `e.ui.asset`
 
 ```neper
 type Theme = enum u8 { Any, Light, Dark }
@@ -2820,7 +2820,7 @@ bounded cache by selected asset SHA-256 plus decoder identity. The cache owns it
 texture entries but not the renderer; eviction and closure explicitly release them.
 No image codec, filesystem lookup or unbounded global cache is hidden here.
 
-### `ui.window`
+### `e.ui.window`
 
 ```neper
 type Id = struct { slot: u32, generation: u32 }
@@ -2849,7 +2849,7 @@ Windows are logically linear handles backed only by reviewed `e.os` primitives.
 Coordinates exposed above the module are logical pixels; framebuffer dimensions are
 physical pixels. `target` is non-owning and becomes invalid when the window closes.
 
-### `ui.input`
+### `e.ui.input`
 
 ```neper
 type DeviceId = u32
@@ -2880,7 +2880,7 @@ Platform key codes are normalized into stable physical and Unicode-oriented logi
 values. Gesture recognition is built by widgets from pointer streams rather than
 being hidden in the OS boundary.
 
-### `ui.widget`
+### `e.ui.widget`
 
 ```neper
 type Key = u64
@@ -2931,7 +2931,7 @@ boundary and its size/alignment cell enters a bounded runtime free list. A reuse
 `Action.ctx` must outlive the element that retains it; passing frame-arena context is
 `InvalidTree` in debug validation and undefined in release.
 
-### `ui.animation`
+### `e.ui.animation`
 
 ```neper
 type Curve = enum u8 { Linear, EaseIn, EaseOut, EaseInOut }
@@ -2947,7 +2947,7 @@ fn request(runtime: *widget.Runtime, element: widget.ElementId)
 Animation state is explicit. Sampling never reads a clock; the application supplies
 `now`, making animation deterministic in tests.
 
-### `ui.accessibility`
+### `e.ui.accessibility`
 
 ```neper
 type Id = widget.ElementId
@@ -2968,7 +2968,7 @@ The semantics tree is separate from paint order but uses the same stable element
 identities. Publication crosses a reviewed `e.os` accessibility bridge and retains
 no caller strings after returning.
 
-### `ui.testing`
+### `e.ui.testing`
 
 ```neper
 type Harness = struct { state: *void }
@@ -2990,7 +2990,7 @@ fn close(h: *Harness) -> err
 The harness uses the deterministic CPU rendering backend and a synthetic window. It
 does not require a display server and never sleeps; tests supply frame time.
 
-### `ui.app`
+### `e.ui.app`
 
 ```neper
 type App = struct { state: *void }
@@ -3020,7 +3020,7 @@ call. Streaming readers retain only their documented scratch state. Every writer
 
 ## 9. Interchange formats
 
-### `fmt.json`
+### `e.fmt.json`
 
 ```neper
 type Number = struct { lexeme: str }
@@ -3077,7 +3077,7 @@ patch input are rejected. Numeric test equality is exact mathematical equality,
 not f64 equality. Limits, invalid array indices, move-into-descendant and missing
 targets fail explicitly. Source-file edits additionally require H09 transactions.
 
-### `fmt.csv`
+### `e.fmt.csv`
 
 ```neper
 type Dialect = struct { delimiter: u8, quote: u8, crlf: bool, header: bool }
@@ -3095,7 +3095,7 @@ fn decode_rows[T: type](a: *mem.Arena, source: io.Reader, dialect: Dialect) -> (
 fn encode_rows[T: type](writer: *io.Writer, rows: []const T, dialect: Dialect) -> err
 ```
 
-### `fmt.ini`
+### `e.fmt.ini`
 
 ```neper
 type Entry = struct { section: str, key: str, value: str }
@@ -3118,7 +3118,7 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err
 The accepted syntax is sections, `key=value`, `;`/`#` line comments, quoted values,
 and backslash escapes. It deliberately excludes interpolation and includes.
 
-### `fmt.uri`
+### `e.fmt.uri`
 
 ```neper
 type Uri = struct { scheme: str, authority: str, userinfo: str, host: str, port: str, path: str, query: str, fragment: str }
@@ -3137,7 +3137,7 @@ fn query_get(query: str, name: str) -> (str, bool, err)
 Parsing follows RFC 3986 and returns borrowed slices. Percent decoding never treats
 `+` as space; HTML form encoding is a separate concern.
 
-### `fmt.mime`
+### `e.fmt.mime`
 
 ```neper
 type Parameter = struct { name: str, value: str }
@@ -3155,7 +3155,7 @@ fn header(headers: []const Header, name: str) -> (str, bool)
 
 Header names compare by ASCII case folding. Obsolete line folding is rejected.
 
-### `fmt.asn1`
+### `e.fmt.asn1`
 
 ```neper
 type Class = enum u8 { Universal, Application, Context, Private }
@@ -3178,7 +3178,7 @@ fn encode[T: type](dst: []u8, value: *const T) -> ([]u8, err)
 The version-1 surface accepts and emits canonical DER only. Lengths, nesting and
 integer encodings are validated before typed decoding exposes a value.
 
-### `fmt.pem`
+### `e.fmt.pem`
 
 ```neper
 type Block = struct { label: str, headers: []const mime.Header, bytes: []const u8 }
@@ -3192,7 +3192,7 @@ fn encode(writer: *io.Writer, block: *const Block) -> err
 `decode` returns the first strict PEM block and the unconsumed suffix. Base64 is
 decoded through `e.bytes`; encrypted legacy PEM headers are not interpreted.
 
-### `fmt.multipart`
+### `e.fmt.multipart`
 
 ```neper
 type Part = struct { headers: []const mime.Header, body: io.Reader }
@@ -3212,7 +3212,7 @@ fn finish(sink_writer: *Writer) -> err
 Bodies stream without implicit buffering. Boundaries are caller-supplied for writing,
 making output reproducible; nested multipart content uses another explicit reader.
 
-### `fmt.quoted_printable`
+### `e.fmt.quoted_printable`
 
 ```neper
 type Reader = struct { state: *void }
@@ -3229,7 +3229,7 @@ fn finish(sink_writer: *Writer) -> err
 Decoding is strict RFC 2045. Encoding uses canonical uppercase hex escapes and
 caller-selected line limits.
 
-### `fmt.mail`
+### `e.fmt.mail`
 
 ```neper
 type Address = struct { name: str, address: str }
@@ -3249,10 +3249,10 @@ fn decode_header(a: *mem.Arena, source: str, output_limit: usize) -> (str, err)
 ```
 
 The module parses Internet message headers and addresses without SMTP transport.
-MIME bodies are consumed through `fmt.mime`, `fmt.multipart` and
-`fmt.quoted_printable`; charset conversion is explicit through `text.encoding`.
+MIME bodies are consumed through `e.fmt.mime`, `e.fmt.multipart` and
+`e.fmt.quoted_printable`; charset conversion is explicit through `e.text.encoding`.
 
-### `fmt.gzip`
+### `e.fmt.gzip`
 
 ```neper
 type Reader = struct { state: *void }
@@ -3271,7 +3271,7 @@ fn storage_required(level: deflate.Level) -> usize
 The reader validates RFC 1952 headers, trailer size and CRC32. The output limit is
 checked before exposing bytes. `finish` writes the final DEFLATE blocks and trailer.
 
-### `fmt.zstd`
+### `e.fmt.zstd`
 
 ```neper
 type Reader = struct { state: *void }
@@ -3294,7 +3294,7 @@ Version 1 supports standard frames without dictionaries. Window and decompressed
 output limits are mandatory; unsupported skippable or dictionary frames return
 `Unsupported`.
 
-### `fmt.bzip2`
+### `e.fmt.bzip2`
 
 ```neper
 type Reader = struct { state: *void }
@@ -3310,7 +3310,7 @@ fn storage_required(block_limit: usize) -> (usize, err)
 Version 1 provides bounded bzip2 decompression. Compression is deliberately omitted
 until a workload justifies its larger implementation and memory surface.
 
-### `fmt.lzw`
+### `e.fmt.lzw`
 
 ```neper
 type Order = enum u8 { LeastSignificant, MostSignificant }
@@ -3330,7 +3330,7 @@ fn storage_required(literal_width: u8) -> (usize, err)
 Bit order and literal width are explicit so GIF- and TIFF-style streams cannot be
 silently confused.
 
-### `fmt.zlib`
+### `e.fmt.zlib`
 
 ```neper
 type Reader = struct { state: *void }
@@ -3346,10 +3346,10 @@ fn finish(sink_writer: *Writer) -> err
 fn storage_required(level: deflate.Level) -> usize
 ```
 
-The reader and writer implement RFC 1950 framing around `algo.deflate` and validate
+The reader and writer implement RFC 1950 framing around `e.algo.deflate` and validate
 the Adler-32 trailer before successful completion.
 
-### `fmt.zip`
+### `e.fmt.zip`
 
 ```neper
 type Archive = struct { state: *void }
@@ -3370,7 +3370,7 @@ Version 1 reads stored and DEFLATE entries, ZIP64 sizes and UTF-8 names. It reje
 encrypted entries, absolute paths and names containing a `..` segment. CRC and all
 per-entry/aggregate limits are checked before successful extraction.
 
-### `fmt.tar`
+### `e.fmt.tar`
 
 ```neper
 type Reader = struct { state: *void }
@@ -3388,7 +3388,7 @@ fn skip(r: *Reader) -> err
 The reader supports POSIX ustar and PAX path/size records. Each entry's content must
 be consumed or skipped before `next`. Absolute paths and `..` segments are rejected.
 
-### `fmt.yaml`
+### `e.fmt.yaml`
 
 ```neper
 type Pair = struct { key: Value, value: Value }
@@ -3409,7 +3409,7 @@ The subset is block mappings/sequences, flow collections, plain/single/double-qu
 scalars, literal/folded blocks and `null`/boolean/integer/float core tags. Anchors,
 aliases, merge keys, directives, custom tags and multiple documents are `Unsupported`.
 
-### `fmt.xml`
+### `e.fmt.xml`
 
 ```neper
 type Attribute = struct { name: str, value: str }
@@ -3435,7 +3435,7 @@ fn end(w: *Writer, name: str) -> err
 XML 1.0 names, namespaces and entity escaping are supported. External entities and
 DTDs are always `Unsupported`; the module never performs hidden I/O.
 
-### `fmt.html`
+### `e.fmt.html`
 
 ```neper
 type NodeId = u32
@@ -3485,7 +3485,7 @@ construct a browser DOM or expose mutable tree operations. A caller loads a file
 through `e.fs` or supplies an `e.io.Reader`. Legacy encoding sniffing and conversion
 must occur before parsing and are outside the version-1 surface.
 
-### `fmt.html.template`
+### `e.fmt.html.template`
 
 ```neper
 type Template = struct { inner: template.Template }
@@ -3505,7 +3505,7 @@ HTML templates track text, attribute, URI, CSS and script contexts and apply the
 matching escaping rules. Ambiguous or unsafe context transitions fail at parse time;
 trusted raw insertion is intentionally absent from version 1.
 
-### `fmt.png`
+### `e.fmt.png`
 
 ```neper
 type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64, verify_crc: bool }
@@ -3524,7 +3524,7 @@ PNG decoding supports the standard grayscale, RGB, indexed and alpha color types
 rejects dimensions before pixel allocation. Encoding is deterministic for identical
 pixels and options.
 
-### `fmt.jpeg`
+### `e.fmt.jpeg`
 
 ```neper
 type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64 }
@@ -3541,7 +3541,7 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
 Version 1 supports baseline and progressive Huffman JPEG with bounded dimensions.
 Arithmetic coding and embedded color-profile conversion return `Unsupported`.
 
-### `fmt.webp`
+### `e.fmt.webp`
 
 ```neper
 type DecodeOptions = struct { max_width: u32, max_height: u32, max_pixels: u64, first_frame_only: bool }
@@ -3558,7 +3558,7 @@ fn encode(writer: *io.Writer, value: image.ConstImage, options: EncodeOptions) -
 The module supports lossy and lossless WebP. Animation is inspectable; decoding more
 than the first frame remains `Unsupported` until a frame-sequence image type exists.
 
-### `fmt.bson`
+### `e.fmt.bson`
 
 ```neper
 type Element = struct { key: str, value: Value }
@@ -3578,7 +3578,7 @@ fn encode[T: type](writer: *io.Writer, value: *const T) -> err
 Unsupported BSON element tags are `Invalid`; JavaScript, regex and deprecated tags
 are intentionally absent from the value model.
 
-### `fmt.msgpack`
+### `e.fmt.msgpack`
 
 ```neper
 type Pair = struct { key: Value, value: Value }
@@ -3596,7 +3596,7 @@ fn decode[T: type](a: *mem.Arena, source: io.Reader, max_depth: u16) -> (T, err)
 fn encode[T: type](writer: *io.Writer, value: *const T) -> err
 ```
 
-### `fmt.protobuf`
+### `e.fmt.protobuf`
 
 ```neper
 type WireType = enum u8 { Varint, Fixed64, Bytes, Fixed32 }
@@ -3643,6 +3643,6 @@ The `x.*` rows in `modules.md` are package reservations, not implicit toolchain
 modules. Each package publishes `docs/packages/<owner>/<package>.md` before
 implementation. That specification pins the upstream ABI/data version and lists
 every public declaration using the same format as this catalogue. `x.neper.*` is not
-a legal package namespace: Neper-owned facilities live in `e.*`, `algo.*`, `text.*`,
-`crypto.*`, `fmt.*`, `gfx.*` or `ui.*`. A remaining vendor reservation without a package specification
+a legal package namespace: Neper-owned facilities live in `e.*`, `e.algo.*`, `e.text.*`,
+`e.crypto.*`, `e.fmt.*`, `e.gfx.*` or `e.ui.*`. A remaining vendor reservation without a package specification
 promises zero functions and structures.

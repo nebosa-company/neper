@@ -33,7 +33,7 @@ their lifecycle and presentation contracts differ materially from desktop.
 application build function
         |
         v
-frame-local immutable ui.widget.Node tree
+frame-local immutable e.ui.widget.Node tree
         |
         v
 key/kind reconciliation ----> persistent Element + typed State slots
@@ -42,7 +42,7 @@ key/kind reconciliation ----> persistent Element + typed State slots
 constraint layout <--------------- invalidation/focus/actions
         |
         v
-retained render tree -> gfx.scene.DisplayList -> tessellation/glyph cache
+retained render tree -> e.gfx.scene.DisplayList -> tessellation/glyph cache
         |                                      |
         +-------------------------------> e.gpu queue
                                                 |
@@ -58,7 +58,7 @@ Three lifetimes are deliberately distinct:
    bounded generation-checked slots and size/alignment state cells in the
    application's arena. Retired cells return to bounded per-layout free lists.
 3. **GPU:** textures, glyph atlases, meshes and compiled scenes are resources owned
-   by `gfx.scene.Renderer` and explicitly released or closed.
+   by `e.gfx.scene.Renderer` and explicitly released or closed.
 
 No persistent layer stores a pointer into the frame arena. Debug builds poison the
 reset frame range, making violations visible under the existing arena rules.
@@ -70,15 +70,15 @@ reset frame range, making violations visible under the existing arena rules.
 bytes remain valid for the process lifetime and require no filesystem at runtime.
 Every input path, byte size and SHA-256 is recorded in the canonical build manifest.
 
-`ui.asset` groups physical entries by their `base` attribute and deterministically
+`e.ui.asset` groups physical entries by their `base` attribute and deterministically
 selects locale, theme and display-scale variants. Fonts become zero-copy
-`text.shape.Font` values. Images use a caller-supplied decoder so PNG, JPEG or a
+`e.text.shape.Font` values. Images use a caller-supplied decoder so PNG, JPEG or a
 project-specific format remains a separate concern; decoded pixels occupy a caller
 scratch arena and are uploaded before it resets. A caller-sized cache owns the GPU
 textures and explicitly evicts or releases them. There is no global asset manager.
 
 ```neper
-use ui.asset as ui_asset
+use e.ui.asset as ui_asset
 
 let request = ui_asset.Request{
     scale: window_metrics.scale,
@@ -96,12 +96,12 @@ new grammar form. A helper can return a complete value tree:
 
 ```neper
 use e.mem
-use gfx.paint
-use text.layout as text_layout
-use ui.input
-use ui.layout as ui_layout
-use ui.style
-use ui.widget
+use e.gfx.paint
+use e.text.layout as text_layout
+use e.ui.input
+use e.ui.layout as ui_layout
+use e.ui.style
+use e.ui.widget
 
 type Counter = struct { value: i64 }
 
@@ -169,7 +169,7 @@ bounded runtime storage or compiled into the retained render/semantics data; no
 persistent structure borrows a widget node.
 
 Rebuild is explicit invalidation. Dispatching an action may mutate application or
-widget state and call `widget.invalidate`; `ui.animation.request` schedules another
+widget state and call `widget.invalidate`; `e.ui.animation.request` schedules another
 frame. There is no observation graph, implicit setter interception or global event
 bus.
 
@@ -181,7 +181,7 @@ contradictory limits return `Invalid`. Flex and grid distribute only bounded
 remaining space, with deterministic sibling-order rounding.
 
 Painting emits a backend-neutral display list. Save/restore scopes transforms and
-clips; malformed nesting is `Invalid`. `gfx.scene` validates the whole list before
+clips; malformed nesting is `Invalid`. `e.gfx.scene` validates the whole list before
 submitting GPU work, tessellates paths, maintains bounded generation-checked texture
 and glyph caches, and rebuilds resources after a recoverable presentation change.
 Device loss remains `Lost` and is never silently hidden.
@@ -202,14 +202,14 @@ reviewed `e.os` primitive. This keeps tests reproducible and prevents hidden fil
 
 ## 6. Input, frames and accessibility
 
-`ui.input.Queue` preserves native event order. Pointer coordinates are logical
+`e.ui.input.Queue` preserves native event order. Pointer coordinates are logical
 pixels. Pointer capture, keyboard focus and IME composition are explicit. Dispatch
 performs hit testing from the last committed render tree, then runs capture and
 bubble phases internally; version 1 exposes one action at the target rather than a
 mutable event-object hierarchy. A close request is data—the application decides when
 to close the window.
 
-`ui.app.step` is the scheduling primitive. It waits up to the supplied duration,
+`e.ui.app.step` is the scheduling primitive. It waits up to the supplied duration,
 drains input, invokes actions, samples time once, rebuilds invalidated subtrees,
 reconciles, lays out and presents at most one frame per window. `run` merely repeats
 `step`, so games, editors and external event loops keep control.

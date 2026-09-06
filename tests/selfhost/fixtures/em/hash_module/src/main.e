@@ -1,3 +1,3 @@
-use algo.hash
+use e.algo.hash
 
 fn main() {}

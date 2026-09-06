@@ -182,8 +182,8 @@ committed:
 
 | Module | Commit | Notes |
 | --- | --- | --- |
-| `algo.hash` | `db50fcb` | FNV-1a 32/64, xxHash64 one-shot/streaming, CRC32 one-shot/streaming, Adler32 |
-| `algo.bitset` | `dcb70dd` | Fixed-length bit sets, tail-bit invariant, algebra, scans, empty-set behavior |
+| `e.algo.hash` | `db50fcb` | FNV-1a 32/64, xxHash64 one-shot/streaming, CRC32 one-shot/streaming, Adler32 |
+| `e.algo.bitset` | `dcb70dd` | Fixed-length bit sets, tail-bit invariant, algebra, scans, empty-set behavior |
 | `e.data.ring` | `c839c80` | Generic fixed ring, wraparound, overwrite, iteration, zero capacity |
 | `e.data.deque` | `7420f61` | Generic arena-grown deque, reserve/growth, wraparound, iteration |
 | `e.data.list` | `2de9314` | Generic arena-grown list, insert/remove, views, copy, iteration |
@@ -195,8 +195,8 @@ a real field named `len`.
 
 Current machine-plan status:
 
-- M2 `surface:"source"`: `e.data.deque`, `e.data.ring`, `algo.hash`,
-  `algo.bitset` (4 of 14 M2 modules).
+- M2 `surface:"source"`: `e.data.deque`, `e.data.ring`, `e.algo.hash`,
+  `e.algo.bitset` (4 of 14 M2 modules).
 - M2 `surface:"planned"`: 10 modules listed in section 9.
 - M1 `surface:"source"`: `e.data.list`.
 - `e.io` is `partial`; several compiler/runtime-owned M1 surfaces are marked
@@ -316,7 +316,7 @@ Not yet sufficient for an M2 completion claim:
 This is the feature the previous session left uncommitted. It is committed now.
 Do not redo it.
 
-Emitting all compiled modules for a real `algo.hash` program previously failed
+Emitting all compiled modules for a real `e.algo.hash` program previously failed
 with `em.InvalidArtifact` even though direct executable emission worked. Three
 representation mismatches caused it:
 
@@ -544,7 +544,7 @@ pin the three diagnostics exactly in both suites.
 
 `fn(A, B) -> R` is a type (spec section 5), but the compiler only parsed it:
 `check.e` had no handling and `lower.e` none at all. That blocked the `HeapBy`
-half of `e.data.heap` and the `_by` variants across `algo.sort`.
+half of `e.data.heap` and the `_by` variants across `e.algo.sort`.
 
 - `check.Kind.Function` with a `FunctionSignature` side table, because a parameter
   and return list does not fit the flat `Type` record. Structural equality, an
@@ -615,7 +615,7 @@ over integers, a user struct dispatching to its own declared `task_cmp`, and a
 `heapify_in_place_by` and `iter_by`. The fixture asserts the context was actually
 reached and written.
 
-### 7.10 algo.sort
+### 7.10 e.algo.sort
 
 All seven declarations of the frozen API, in the order `docs/module-apis.md` lists
 them, so the module is `source`. It is an M1 module, so this is the second M1
@@ -932,7 +932,7 @@ Rule 4 fixes the supplied `hash` as **xxHash64 with seed 0** over a value's
 canonical little-endian bytes. Unlike `cmp`, which is comparisons the compiler
 already emits, this needs an implementation the compiler did not have. Three
 options were live -- a host runtime symbol, emitting xxHash64 inline as NIR, or an
-implicit dependency on `algo.hash` -- and the runtime symbol was chosen: it is the
+implicit dependency on `e.algo.hash` -- and the runtime symbol was chosen: it is the
 pattern `neper_mem_*` and `neper_os_*` already follow, it needs no module-graph
 machinery, and one implementation serves every shape.
 
@@ -941,7 +941,7 @@ machinery, and one implementation serves every shape.
 `runtime_pe_x64.asm`. Both assemblers take Intel syntax, so the instruction text is
 one body differing only in directives, label prefixes and the ABI move that puts
 the two arguments in `r8` and `r9`. The C form was written first and checked
-against `algo.hash.xxhash64` over sixteen inputs covering every tail path (0, 1, 2,
+against `e.algo.hash.xxhash64` over sixteen inputs covering every tail path (0, 1, 2,
 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33 and 65 bytes); each assembly port was then
 checked against the C by linking it into the same harness. All four agree, and the
 empty and `"abc"` values match upstream xxHash64's published constants.
@@ -1072,16 +1072,16 @@ The machine plan currently has ten planned M2 modules:
 | Module | Immediate prerequisite or implementation gap |
 | --- | --- |
 | `e.data.heap` | delivered, `surface:"source"` (section 7.9) |
-| `algo.sort` | delivered, `surface:"source"` (section 7.10). An M1 module, not one of the ten M2 rows |
-| `algo.rand` | Exact API includes `f64`; scalar float lowering and ABI support are incomplete |
-| `algo.uuid` | Depends on `algo.hash` and source-complete `e.str`; `e.str` is not source-complete |
+| `e.algo.sort` | delivered, `surface:"source"` (section 7.10). An M1 module, not one of the ten M2 rows |
+| `e.algo.rand` | Exact API includes `f64`; scalar float lowering and ABI support are incomplete |
+| `e.algo.uuid` | Depends on `e.algo.hash` and source-complete `e.str`; `e.str` is not source-complete |
 | `e.fs` | Depends on complete `e.path`, `e.str`, memory, and filesystem `e.os` behavior |
 | `e.proc` | Depends on cancellation, memory, process OS calls, and time semantics |
 | `e.sync` | Depends on complete atomics plus OS wait/wake and time behavior |
 | `e.channel` | Depends on `e.sync` and memory ownership/concurrency contracts |
-| `fmt.json` | Depends on complete `e.io`, `e.mem`, `e.meta`, and `e.str` |
-| `fmt.csv` | Same reflection/string/I/O prerequisites as `fmt.json` |
-| `fmt.ini` | Same reflection/string/I/O prerequisites as `fmt.json` |
+| `e.fmt.json` | Depends on complete `e.io`, `e.mem`, `e.meta`, and `e.str` |
+| `e.fmt.csv` | Same reflection/string/I/O prerequisites as `e.fmt.json` |
+| `e.fmt.ini` | Same reflection/string/I/O prerequisites as `e.fmt.json` |
 
 Do not publish a partial public surface and mark it `source`. The established rule
 is that a module advances to `surface:"source"` only in the same revision that:
@@ -1119,7 +1119,7 @@ needs general `T.cmp` protocol resolution first.
    and `err`. Enums, floats, the recursive shapes, `hash`/`eq`/`format`, generic
    protocol functions and lookup edges remain.
 2. Scalar floating-point parsing/checking/NIR/x64 ABI and operations needed by
-   `algo.rand` and the M1 CPU language.
+   `e.algo.rand` and the M1 CPU language.
 3. Complete `e.str`, `e.path`, `e.meta`, `e.atomic`, `e.thread`, `e.time`, and
    `e.io` surfaces with exact API fences.
 4. Remaining OS surface: threads, wait/wake, sockets, polling, and dynamic loading.
@@ -1210,7 +1210,7 @@ source module. What remains:
    for that increment, and commit it independently.
 4. Consider fixing the shadowing/name-resolution finding in section 7.4.
 5. Choose the next prerequisite by dependency order—general protocols before
-   `e.data.heap`, floats before `algo.rand`, and core string/path/meta/atomic work
+   `e.data.heap`, floats before `e.algo.rand`, and core string/path/meta/atomic work
    before the modules that depend on them.
 6. Update the machine module plan and progress site only when an exact surface is
    actually delivered and verified.

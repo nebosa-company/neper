@@ -2,7 +2,7 @@
 
 Status: approved architecture for roadmap M6. This document fixes the package
 manager contract before implementation. It does not change neper v1 source semantics:
-`e.*`, `algo.*`, `text.*`, `crypto.*`, `fmt.*`, `gfx.*` and `ui.*` still ship with the toolchain,
+`e.*`, `e.algo.*`, `e.text.*`, `e.crypto.*`, `e.fmt.*`, `e.gfx.*` and `e.ui.*` still ship with the toolchain,
 while pacman primarily acquires external `x.*` source.
 
 ## 1. Boundary and principles
@@ -36,7 +36,7 @@ launcher that forwards to the same command group.
 
 - `e.*` is inseparable from a specific neper toolchain version. Pacman must reject a
   package that exports or replaces an `e.*` module.
-- The toolchain's `algo.*`, `text.*`, `crypto.*`, `fmt.*`, `gfx.*` and `ui.*` modules follow the same
+- The toolchain's `e.algo.*`, `e.text.*`, `e.crypto.*`, `e.fmt.*`, `e.gfx.*` and `e.ui.*` modules follow the same
   rule. Their version is the language/toolchain version, not an independently
   resolved package version.
 - Public third-party packages export modules beneath `x.<owner>.*`. The public
@@ -150,7 +150,7 @@ unchanged; executable-section compression is deliberately outside version 1 so
 
 The conventional UI attributes are `base`, positive finite decimal `scale`, `theme`
 (`any`, `light` or `dark`) and a canonical BCP 47 `locale` or the empty fallback.
-`ui.asset` ignores unknown attributes but rejects malformed conventional ones.
+`e.ui.asset` ignores unknown attributes but rejects malformed conventional ones.
 Ordinary `e.asset` callers may define other attributes. Asset names, metadata, sizes
 and SHA-256 values enter incremental and final link identity. Direct `neper build`
 outside a project embeds no assets. Dependency-package assets and external runtime

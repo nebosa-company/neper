@@ -1,4 +1,4 @@
-use algo.sort
+use e.algo.sort
 use e.io
 use e.mem
 

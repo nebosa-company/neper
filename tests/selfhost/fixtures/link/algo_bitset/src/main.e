@@ -1,4 +1,4 @@
-use algo.bitset as bitset
+use e.algo.bitset as bitset
 use e.io
 use e.mem
 

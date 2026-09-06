@@ -11,7 +11,7 @@ use e.str
 use e.math
 use e.simd
 use e.meta
-use algo.sort
+use e.algo.sort
 use e.data.map
 use e.time
 use e.thread

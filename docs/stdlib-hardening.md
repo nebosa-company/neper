@@ -10,7 +10,7 @@ This document owns the composition, migration and acceptance obligations below.
 
 Complete M2 against its preserved contract. During M2.5 H01/H02/H07/H11/H17/H18,
 migrate delivered CPU surfaces to this contract, implement the common `e.cancel`
-primitive and basic `text.utf8`, and validate the whole next-contract catalogue.
+primitive and basic `e.text.utf8`, and validate the whole next-contract catalogue.
 These two core additions retain `schedule:"later", milestone:null` because M2.5
 is a cross-cutting gate, not an added Mn module milestone; this document explicitly
 schedules their CPU delivery within that gate. Do not retroactively claim them in
@@ -177,7 +177,7 @@ many events. Neither SSE nor streaming HTTP requires HTTP/2 implementation.
 
 ## SL08 — reusable cryptographic composition
 
-Add `crypto.mac` (HMAC-SHA256/SHA512) and `crypto.kdf` (HKDF-SHA256/SHA512), with
+Add `e.crypto.mac` (HMAC-SHA256/SHA512) and `e.crypto.kdf` (HKDF-SHA256/SHA512), with
 independent vectors, fixed-length verification and no hidden entropy. HKDF uses
 [RFC 5869](https://www.rfc-editor.org/rfc/rfc5869); it is not a password hashing API.
 Key material must not appear in diagnostics; define secret lifetime/zeroization
@@ -212,8 +212,8 @@ fake-clock overflow and deterministic replay of I/O/schedule scripts.
 
 ## SL10 — stable pure image and codec cohort
 
-Promote `gfx.geometry`, `gfx.paint` and `gfx.image` to extended alongside existing
-extended `fmt.png`, `fmt.jpeg` and `fmt.webp`. The complete public-type dependency
+Promote `e.gfx.geometry`, `e.gfx.paint` and `e.gfx.image` to extended alongside existing
+extended `e.fmt.png`, `e.fmt.jpeg` and `e.fmt.webp`. The complete public-type dependency
 closure shares the `image-codec-conformance` gate. Implement/review them as one
 coordinated wave and publish compatibility guarantees together. This is promotion
 of a planned contract, not evidence that the code exists today.

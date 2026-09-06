@@ -383,7 +383,7 @@ chmod +x "$test_build/tagged-union-cmp-selfhost"
 "$test_build/tagged-union-cmp-selfhost"
 # The supplied `hash` is xxHash64 seed 0 over a value's canonical little-endian
 # bytes, computed by the host runtime, and the fixture checks it against
-# algo.hash.xxhash64 over those same bytes. The artifact link matters here as well:
+# e.algo.hash.xxhash64 over those same bytes. The artifact link matters here as well:
 # the call is the first host runtime symbol to reach the compiled-module linker.
 supplied_hash_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/supplied_hash/src/main.e" "$repo" x64 linux "$test_build/supplied-hash-selfhost")
 [ "$supplied_hash_written" = 'executable written' ]
@@ -394,7 +394,7 @@ rm -rf "$supplied_hash_artifacts"
 mkdir -p "$supplied_hash_artifacts"
 supplied_hash_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/supplied_hash/src/main.e" "$repo" x64 linux "$supplied_hash_artifacts")
 [ "$supplied_hash_artifacts_written" = 'compiled modules written' ]
-supplied_hash_link_written=$($test_build/neper-self link-em "$test_build/supplied-hash-from-artifacts" "$supplied_hash_artifacts/main.x64-linux.em" "$supplied_hash_artifacts/algo.hash.x64-linux.em")
+supplied_hash_link_written=$($test_build/neper-self link-em "$test_build/supplied-hash-from-artifacts" "$supplied_hash_artifacts/main.x64-linux.em" "$supplied_hash_artifacts/e.algo.hash.x64-linux.em")
 [ "$supplied_hash_link_written" = 'artifact executable written' ]
 chmod +x "$test_build/supplied-hash-from-artifacts"
 "$test_build/supplied-hash-from-artifacts"
@@ -552,7 +552,7 @@ protocol_executable_written=$($test_build/neper-self emit-executable "$repo/test
 chmod +x "$protocol_executable_path"
 protocol_output=$("$protocol_executable_path")
 [ "$protocol_output" = 'protocol iteration ok' ]
-hash_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/algo/hash.e")
+hash_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/e/algo/hash.e")
 expected_hash_surface='XxHash64
 Crc32
 fnv1a32
@@ -567,7 +567,7 @@ crc32_update
 crc32_done
 adler32'
 [ "$hash_surface" = "$expected_hash_surface" ]
-hash_parsed=$($test_build/neper-self parse-file "$repo/lib/algo/hash.e")
+hash_parsed=$($test_build/neper-self parse-file "$repo/lib/e/algo/hash.e")
 [ "$hash_parsed" = 'parse file ok' ]
 hash_executable_path="$test_build/algo-hash-selfhost"
 hash_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_hash/src/main.e" "$repo" x64 linux "$hash_executable_path")
@@ -575,7 +575,7 @@ hash_executable_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$hash_executable_path"
 hash_output=$("$hash_executable_path")
 [ "$hash_output" = 'algo hash ok' ]
-bitset_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/algo/bitset.e")
+bitset_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/e/algo/bitset.e")
 expected_bitset_surface='BitSet
 TooSmall
 init
@@ -596,7 +596,7 @@ complement_in_place
 is_subset
 eq'
 [ "$bitset_surface" = "$expected_bitset_surface" ]
-bitset_parsed=$($test_build/neper-self parse-file "$repo/lib/algo/bitset.e")
+bitset_parsed=$($test_build/neper-self parse-file "$repo/lib/e/algo/bitset.e")
 [ "$bitset_parsed" = 'parse file ok' ]
 bitset_executable_path="$test_build/algo-bitset-selfhost"
 bitset_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_bitset/src/main.e" "$repo" x64 linux "$bitset_executable_path")
@@ -673,7 +673,7 @@ list_executable_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$list_executable_path"
 list_output=$("$list_executable_path")
 [ "$list_output" = 'data list ok' ]
-sort_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/algo/sort.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
+sort_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/e/algo/sort.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
 expected_sort_surface='in_place
 in_place_by
 stable_in_place
@@ -682,7 +682,7 @@ radix_u32_in_place
 radix_u64_in_place
 is_sorted'
 [ "$sort_surface" = "$expected_sort_surface" ]
-sort_parsed=$($test_build/neper-self parse-file "$repo/lib/algo/sort.e")
+sort_parsed=$($test_build/neper-self parse-file "$repo/lib/e/algo/sort.e")
 [ "$sort_parsed" = 'parse file ok' ]
 sort_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sort/src/main.e" "$repo" x64 linux "$test_build/algo-sort-selfhost")
 [ "$sort_executable_written" = 'executable written' ]
@@ -799,16 +799,16 @@ mkdir -p "$hash_module_artifacts"
 hash_module_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/em/hash_module/src/main.e" "$repo" x64 linux "$hash_module_artifacts")
 [ "$hash_module_artifacts_written" = 'compiled modules written' ]
 [ -f "$hash_module_artifacts/main.x64-linux.em" ]
-[ -f "$hash_module_artifacts/algo.hash.x64-linux.em" ]
+[ -f "$hash_module_artifacts/e.algo.hash.x64-linux.em" ]
 hash_module_validation=$($test_build/neper-self validate-em "$hash_module_artifacts/main.x64-linux.em")
 [ "$hash_module_validation" = 'compiled module valid' ]
-hash_module_interface_offset=$(od -An -tu8 -j64 -N8 "$hash_module_artifacts/algo.hash.x64-linux.em" | tr -d ' ')
-[ "$(od -An -tu4 -j$((hash_module_interface_offset + 8)) -N4 "$hash_module_artifacts/algo.hash.x64-linux.em" | tr -d ' ')" = '13' ]
+hash_module_interface_offset=$(od -An -tu8 -j64 -N8 "$hash_module_artifacts/e.algo.hash.x64-linux.em" | tr -d ' ')
+[ "$(od -An -tu4 -j$((hash_module_interface_offset + 8)) -N4 "$hash_module_artifacts/e.algo.hash.x64-linux.em" | tr -d ' ')" = '13' ]
 hash_runtime_artifacts="$test_build/hash-runtime"
 mkdir -p "$hash_runtime_artifacts"
 hash_runtime_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/algo_hash/src/main.e" "$repo" x64 linux "$hash_runtime_artifacts")
 [ "$hash_runtime_artifacts_written" = 'compiled modules written' ]
-for artifact_name in main algo.hash e.io e.mem e.os; do
+for artifact_name in main e.algo.hash e.io e.mem e.os; do
     artifact_path="$hash_runtime_artifacts/$artifact_name.x64-linux.em"
     [ -f "$artifact_path" ]
     artifact_validation=$($test_build/neper-self validate-em "$artifact_path")

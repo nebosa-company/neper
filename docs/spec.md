@@ -842,7 +842,7 @@ callers do not replace them.
 | `trim`, `trim_start`, `trim_end`, `trim_bytes` | borrowed subslices; the first three remove ASCII whitespace |
 | `split_once`, `split`, `split_next`, `lines` | borrowed, non-copyable traversal preserving empty fields; empty explicit separators return `InvalidSeparator`; lines accept LF and CRLF and omit terminators |
 | `replace`, `repeat` | checked arena allocation and non-overlapping replacement |
-| `ascii_lower_in_place`, `ascii_upper_in_place`, `is_ascii_space`, `is_ascii_digit`, `is_ascii_alpha`, `is_ascii_alnum` | locale-free ASCII operations; Unicode equivalents remain in `text.*` |
+| `ascii_lower_in_place`, `ascii_upper_in_place`, `is_ascii_space`, `is_ascii_digit`, `is_ascii_alpha`, `is_ascii_alnum` | locale-free ASCII operations; Unicode equivalents remain in `e.text.*` |
 
 Fixed precision `N` is in `0..=99`; a larger runtime `prec` returns `BadNumber`, and
 a larger format-literal precision is a compile error. Fixed conversion rounds ties to
@@ -2341,7 +2341,7 @@ The names the standard library looks for, by convention rather than by rule:
 |---|---|
 | `fn sensor_hash(v: Sensor) -> u64` | `e.data.map`, hash-based containers |
 | `fn sensor_eq(a: Sensor, b: Sensor) -> bool` | `e.data.map`, containers, `e.test` |
-| `fn sensor_cmp(a: Sensor, b: Sensor) -> i32` | `algo.sort`, ordered containers |
+| `fn sensor_cmp(a: Sensor, b: Sensor) -> i32` | `e.algo.sort`, ordered containers |
 | `fn sensor_format(v: Sensor, b: *str.Builder) -> err` | `printf`/`format` on a user type (§4), `e.log` |
 | `fn window_next(it: *Window) -> (T, bool)` | `for` (§6), `e.data.iter` |
 | `fn window_next_err(it: *Window) -> (T, bool, err)` | fallible iterator algorithms; never implicit language `for` |
@@ -2470,7 +2470,7 @@ load at `f.offset`, which is why it may run at runtime while `meta.fields[T]()` 
 not. And `f.ty.format(...)` is a protocol call whose receiver is a comptime type
 value, which is exactly what rule 1 admits and what §14 invariant 4 excepts.
 
-`fmt.json`, `e.cli` filling a config struct from `argv`, `e.log` writing structured
+`e.fmt.json`, `e.cli` filling a config struct from `argv`, `e.log` writing structured
 fields and an `x.<owner>.db.*` driver mapping a row are the same shape. Without this each of them needs
 hand-written marshalling per type, which is the boilerplate generated code gets wrong
 most often.
@@ -4258,7 +4258,7 @@ server would grow from; none is scheduled.
 
 ### Standard library
 
-The library surfaces this document does not write — `algo.sort`, `e.data.map`,
+The library surfaces this document does not write — `e.algo.sort`, `e.data.map`,
 the rest of `e.thread` beyond `spawn`, `join`, `detach` and `DEFAULT_STACK` (§8) — are
 specified by their library source and indexed by `neper index` (§14). This
 document is authoritative only where it writes a signature; where it does not, the
@@ -4497,7 +4497,7 @@ The rest of the surface, every function pure and allocation-free:
 spelled `<t>_<op>` — `timestamp_cmp`, `instant_add`, `duration_scale` — because that
 is §9's protocol convention (D52) and not merely a way around having no overloading
 (§14): the three clock types are distinct on purpose, and under this spelling
-`timestamp_cmp`, `instant_cmp` and `duration_cmp` are exactly what `algo.sort` and every
+`timestamp_cmp`, `instant_cmp` and `duration_cmp` are exactly what `e.algo.sort` and every
 ordered container find when they look up `fn <t>_cmp` in the module that declares the
 type, where a bare `cmp` would resolve to nothing and leave a `Timestamp` unsortable.
 The constructors, accessors and conversions — `days`, `as_millis`, `to_date`,

@@ -337,19 +337,19 @@ if ($LASTEXITCODE -ne 0 -or $taggedUnionCmpWritten -ne 'executable written') { t
 if ($LASTEXITCODE -ne 0) { throw 'a tagged union ordered its tag or its live payload wrongly' }
 # The supplied `hash` is xxHash64 seed 0 over a value's canonical little-endian
 # bytes, computed by the host runtime, and the fixture checks it against
-# algo.hash.xxhash64 over those same bytes. The artifact link matters here as well:
+# e.algo.hash.xxhash64 over those same bytes. The artifact link matters here as well:
 # the call is the first host runtime symbol to reach the compiled-module linker.
 $suppliedHashPath = Join-Path $testBuild 'supplied-hash-selfhost.exe'
 $suppliedHashWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\supplied_hash\src\main.e') $repo 'x64' 'windows' $suppliedHashPath
 if ($LASTEXITCODE -ne 0 -or $suppliedHashWritten -ne 'executable written') { throw 'supplied hash executable emission failed' }
 & $suppliedHashPath
-if ($LASTEXITCODE -ne 0) { throw 'the supplied hash disagrees with algo.hash.xxhash64' }
+if ($LASTEXITCODE -ne 0) { throw 'the supplied hash disagrees with e.algo.hash.xxhash64' }
 $suppliedHashArtifacts = Join-Path $testBuild 'supplied-hash-artifacts'
 New-Item -ItemType Directory -Force -Path $suppliedHashArtifacts | Out-Null
 $suppliedHashArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\supplied_hash\src\main.e') $repo 'x64' 'windows' $suppliedHashArtifacts
 if ($LASTEXITCODE -ne 0 -or $suppliedHashArtifactsWritten -ne 'compiled modules written') { throw 'supplied hash artifact emission failed' }
 $suppliedHashLinked = Join-Path $testBuild 'supplied-hash-from-artifacts.exe'
-$suppliedHashLinkWritten = & $compiler link-em $suppliedHashLinked (Join-Path $suppliedHashArtifacts 'main.x64-windows.em') (Join-Path $suppliedHashArtifacts 'algo.hash.x64-windows.em')
+$suppliedHashLinkWritten = & $compiler link-em $suppliedHashLinked (Join-Path $suppliedHashArtifacts 'main.x64-windows.em') (Join-Path $suppliedHashArtifacts 'e.algo.hash.x64-windows.em')
 if ($LASTEXITCODE -ne 0 -or $suppliedHashLinkWritten -ne 'artifact executable written') { throw 'supplied hash compiled modules did not link' }
 & $suppliedHashLinked
 if ($LASTEXITCODE -ne 0) { throw 'executable linked from supplied hash compiled modules failed' }
@@ -480,36 +480,36 @@ $protocolExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests
 if ($LASTEXITCODE -ne 0 -or $protocolExecutableWritten -ne 'executable written') { throw 'custom iterator protocol did not lower into a PE executable' }
 $protocolOutput = & $protocolExecutablePath
 if ($LASTEXITCODE -ne 0 -or $protocolOutput -ne 'protocol iteration ok') { throw 'custom iterator protocol call, aggregate result, or cleanup failed' }
-$hashSurface = Get-Content (Join-Path $repo 'lib\algo\hash.e') |
+$hashSurface = Get-Content (Join-Path $repo 'lib\e\algo\hash.e') |
     Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
     ForEach-Object {
-        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'algo.hash contains an unreadable public declaration' }
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.algo.hash contains an unreadable public declaration' }
         $Matches[1]
     }
 $expectedHashSurface = @('XxHash64', 'Crc32', 'fnv1a32', 'fnv1a64', 'xxhash64', 'xxhash64_init', 'xxhash64_update', 'xxhash64_done', 'crc32', 'crc32_init', 'crc32_update', 'crc32_done', 'adler32')
-if (($hashSurface -join "`n") -ne ($expectedHashSurface -join "`n")) { throw 'algo.hash public declarations differ from module-apis.md' }
-$hashParsed = & $compiler parse-file (Join-Path $repo 'lib\algo\hash.e')
-if ($LASTEXITCODE -ne 0 -or $hashParsed -ne 'parse file ok') { throw 'algo.hash exceeded or failed CLI parser storage' }
+if (($hashSurface -join "`n") -ne ($expectedHashSurface -join "`n")) { throw 'e.algo.hash public declarations differ from module-apis.md' }
+$hashParsed = & $compiler parse-file (Join-Path $repo 'lib\e\algo\hash.e')
+if ($LASTEXITCODE -ne 0 -or $hashParsed -ne 'parse file ok') { throw 'e.algo.hash exceeded or failed CLI parser storage' }
 $hashExecutablePath = Join-Path $testBuild 'algo-hash-selfhost.exe'
 $hashExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_hash\src\main.e') $repo 'x64' 'windows' $hashExecutablePath
-if ($LASTEXITCODE -ne 0 -or $hashExecutableWritten -ne 'executable written') { throw 'algo.hash did not compile into a PE executable' }
+if ($LASTEXITCODE -ne 0 -or $hashExecutableWritten -ne 'executable written') { throw 'e.algo.hash did not compile into a PE executable' }
 $hashOutput = & $hashExecutablePath
-if ($LASTEXITCODE -ne 0 -or $hashOutput -ne 'algo hash ok') { throw 'algo.hash one-shot or streaming behavior failed' }
-$bitsetSurface = Get-Content (Join-Path $repo 'lib\algo\bitset.e') |
+if ($LASTEXITCODE -ne 0 -or $hashOutput -ne 'algo hash ok') { throw 'e.algo.hash one-shot or streaming behavior failed' }
+$bitsetSurface = Get-Content (Join-Path $repo 'lib\e\algo\bitset.e') |
     Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
     ForEach-Object {
-        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'algo.bitset contains an unreadable public declaration' }
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.algo.bitset contains an unreadable public declaration' }
         $Matches[1]
     }
 $expectedBitsetSurface = @('BitSet', 'TooSmall', 'init', 'len', 'clear_all', 'fill_all', 'get', 'set', 'unset', 'toggle', 'count', 'first_set', 'next_set', 'union_in_place', 'intersect_in_place', 'difference_in_place', 'complement_in_place', 'is_subset', 'eq')
-if (($bitsetSurface -join "`n") -ne ($expectedBitsetSurface -join "`n")) { throw 'algo.bitset public declarations differ from module-apis.md' }
-$bitsetParsed = & $compiler parse-file (Join-Path $repo 'lib\algo\bitset.e')
-if ($LASTEXITCODE -ne 0 -or $bitsetParsed -ne 'parse file ok') { throw 'algo.bitset failed CLI parsing' }
+if (($bitsetSurface -join "`n") -ne ($expectedBitsetSurface -join "`n")) { throw 'e.algo.bitset public declarations differ from module-apis.md' }
+$bitsetParsed = & $compiler parse-file (Join-Path $repo 'lib\e\algo\bitset.e')
+if ($LASTEXITCODE -ne 0 -or $bitsetParsed -ne 'parse file ok') { throw 'e.algo.bitset failed CLI parsing' }
 $bitsetExecutablePath = Join-Path $testBuild 'algo-bitset-selfhost.exe'
 $bitsetExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_bitset\src\main.e') $repo 'x64' 'windows' $bitsetExecutablePath
-if ($LASTEXITCODE -ne 0 -or $bitsetExecutableWritten -ne 'executable written') { throw 'algo.bitset did not compile into a PE executable' }
+if ($LASTEXITCODE -ne 0 -or $bitsetExecutableWritten -ne 'executable written') { throw 'e.algo.bitset did not compile into a PE executable' }
 $bitsetOutput = & $bitsetExecutablePath
-if ($LASTEXITCODE -ne 0 -or $bitsetOutput -ne 'algo bitset ok') { throw 'algo.bitset behavior or storage invariants failed' }
+if ($LASTEXITCODE -ne 0 -or $bitsetOutput -ne 'algo bitset ok') { throw 'e.algo.bitset behavior or storage invariants failed' }
 $ringSurface = Get-Content (Join-Path $repo 'lib\e\data\ring.e') |
     Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
     ForEach-Object {
@@ -555,21 +555,21 @@ $listExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $listExecutableWritten -ne 'executable written') { throw 'e.data.list did not compile into a PE executable' }
 $listOutput = & $listExecutablePath
 if ($LASTEXITCODE -ne 0 -or $listOutput -ne 'data list ok') { throw 'e.data.list growth, insertion, removal, copy, view, or iteration behavior failed' }
-$sortSurface = Get-Content (Join-Path $repo 'lib\algo\sort.e') |
+$sortSurface = Get-Content (Join-Path $repo 'lib\e\algo\sort.e') |
     Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
     ForEach-Object {
-        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'algo.sort contains an unreadable public declaration' }
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.algo.sort contains an unreadable public declaration' }
         $Matches[1]
     }
 $expectedSortSurface = @('in_place', 'in_place_by', 'stable_in_place', 'stable_in_place_by', 'radix_u32_in_place', 'radix_u64_in_place', 'is_sorted')
-if (($sortSurface -join "`n") -ne ($expectedSortSurface -join "`n")) { throw 'algo.sort public declarations differ from module-apis.md' }
-$sortParsed = & $compiler parse-file (Join-Path $repo 'lib\algo\sort.e')
-if ($LASTEXITCODE -ne 0 -or $sortParsed -ne 'parse file ok') { throw 'algo.sort failed CLI parsing' }
+if (($sortSurface -join "`n") -ne ($expectedSortSurface -join "`n")) { throw 'e.algo.sort public declarations differ from module-apis.md' }
+$sortParsed = & $compiler parse-file (Join-Path $repo 'lib\e\algo\sort.e')
+if ($LASTEXITCODE -ne 0 -or $sortParsed -ne 'parse file ok') { throw 'e.algo.sort failed CLI parsing' }
 $sortExecutablePath = Join-Path $testBuild 'algo-sort-selfhost.exe'
 $sortExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_sort\src\main.e') $repo 'x64' 'windows' $sortExecutablePath
-if ($LASTEXITCODE -ne 0 -or $sortExecutableWritten -ne 'executable written') { throw 'algo.sort did not compile into a PE executable' }
+if ($LASTEXITCODE -ne 0 -or $sortExecutableWritten -ne 'executable written') { throw 'e.algo.sort did not compile into a PE executable' }
 $sortOutput = & $sortExecutablePath
-if ($LASTEXITCODE -ne 0 -or $sortOutput -ne 'algo sort ok') { throw 'algo.sort ordering, stability, radix, or arena behavior failed' }
+if ($LASTEXITCODE -ne 0 -or $sortOutput -ne 'algo sort ok') { throw 'e.algo.sort ordering, stability, radix, or arena behavior failed' }
 $heapSurface = Get-Content (Join-Path $repo 'lib\e\data\heap.e') |
     Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
     ForEach-Object {
@@ -668,18 +668,18 @@ New-Item -ItemType Directory -Force -Path $hashModuleArtifacts | Out-Null
 $hashModuleArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\em\hash_module\src\main.e') $repo 'x64' 'windows' $hashModuleArtifacts
 if ($LASTEXITCODE -ne 0 -or $hashModuleArtifactsWritten -ne 'compiled modules written') { throw 'void-return hash-module artifact emission failed' }
 $hashModuleRootPath = Join-Path $hashModuleArtifacts 'main.x64-windows.em'
-$hashModuleLibraryPath = Join-Path $hashModuleArtifacts 'algo.hash.x64-windows.em'
+$hashModuleLibraryPath = Join-Path $hashModuleArtifacts 'e.algo.hash.x64-windows.em'
 if (-not (Test-Path -LiteralPath $hashModuleRootPath) -or -not (Test-Path -LiteralPath $hashModuleLibraryPath)) { throw 'hash-module artifact set is incomplete' }
 $hashModuleValidation = & $compiler validate-em $hashModuleRootPath
 if ($LASTEXITCODE -ne 0 -or $hashModuleValidation -ne 'compiled module valid') { throw 'void-return root artifact is invalid' }
 $hashModuleLibraryBytes = [IO.File]::ReadAllBytes($hashModuleLibraryPath)
 $hashModuleInterfaceOffset = [BitConverter]::ToUInt64($hashModuleLibraryBytes, 64)
-if ([BitConverter]::ToUInt32($hashModuleLibraryBytes, [int]$hashModuleInterfaceOffset + 8) -ne 13) { throw 'algo.hash artifact interface is incomplete' }
+if ([BitConverter]::ToUInt32($hashModuleLibraryBytes, [int]$hashModuleInterfaceOffset + 8) -ne 13) { throw 'e.algo.hash artifact interface is incomplete' }
 $hashRuntimeArtifacts = Join-Path $testBuild 'hash-runtime'
 New-Item -ItemType Directory -Force -Path $hashRuntimeArtifacts | Out-Null
 $hashRuntimeArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\algo_hash\src\main.e') $repo 'x64' 'windows' $hashRuntimeArtifacts
 if ($LASTEXITCODE -ne 0 -or $hashRuntimeArtifactsWritten -ne 'compiled modules written') { throw 'runtime-backed hash artifact emission failed' }
-foreach ($artifactName in @('main', 'algo.hash', 'e.io', 'e.mem', 'e.os')) {
+foreach ($artifactName in @('main', 'e.algo.hash', 'e.io', 'e.mem', 'e.os')) {
     $artifactPath = Join-Path $hashRuntimeArtifacts ($artifactName + '.x64-windows.em')
     if (-not (Test-Path -LiteralPath $artifactPath)) { throw "runtime-backed hash artifact set omitted $artifactName" }
     $artifactValidation = & $compiler validate-em $artifactPath

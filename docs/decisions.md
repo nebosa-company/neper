@@ -178,6 +178,52 @@ sharpens D51's namespace definitions and D78's namespace-ownership clause withou
 changing what either assigns; D85 moved `sort` on the same rule, before the rule was
 written down.
 
+## D87 — every toolchain namespace consolidates under `e.*`
+
+Move `algo.*`, `text.*`, `crypto.*`, `fmt.*`, `gfx.*` and `ui.*` to `e.algo.*`,
+`e.text.*`, `e.crypto.*`, `e.fmt.*`, `e.gfx.*` and `e.ui.*`. `e.*` and
+`x.<owner>.<package>.*` are unchanged, and all 128 catalogued modules are now `e.*`.
+The rule becomes: `e.` is the standard library, `x.` is an external package, anything
+else is the project's own. On disk `lib/algo/` becomes `lib/e/algo/`; no other module
+has source yet.
+
+It closes a silent shadowing hole, which is a demonstrated defect rather than a
+tidiness argument. `graph.resolve_source` searches a project's `lib/` and `src/`
+before the toolchain, and its `DuplicateModule` check only fires when a project holds
+a module in both of its own directories -- never project against toolchain. A project
+directory named `algo/` therefore overrode `algo.hash` with no diagnostic: a stub
+`fn fnv1a64` returning `12345u64` compiled clean and ran instead of the library's.
+The toolchain claimed six bare top-level names, and `algo`, `text`, `crypto`, `fmt`,
+`gfx` and `ui` are among the most natural directory names a project invents. Only
+`e/` and `x/` are hazardous now, and both read as reserved. The resolver is unchanged;
+the fix is that the toolchain no longer claims names a project will reach for.
+
+It also serves the language's purpose. A model writing neper had to have memorised six
+arbitrary roots, and one that half-learned them invents a seventh -- `use net.http`
+reads exactly as legitimate as `use fmt.json` did. A single generative rule
+generalises where a memorised list gets extrapolated wrong, makes a hallucinated
+import visible from the line alone rather than only against the catalogue, and matches
+the single-root prior of `std::`, `java.*` and `System.*`.
+
+The cost, stated rather than waved away: every `use` line for those six domains grows
+by one path segment. It is bounded to import blocks -- the qualifier is the final
+segment either way, so `hash.fnv1a64`, `paint.fill` and `tensor.matmul` are untouched.
+R03 and R08 of `llm-hardening-recommendations.md` hold that token cost steers syntax
+and that character count is not token count, so the delta is for `benchmarks/llm_edit/`
+to measure rather than for this row to assert.
+
+This supersedes D51's namespace list, which named `algo.*`, `text.*`, `crypto.*`,
+`fmt.*`, `gfx.*` and `ui.*` as roots; their meanings are unchanged and now hang off
+`e.`. D78's namespace-ownership rule is untouched: neper-owned APIs still live under
+toolchain domain namespaces, `x.neper.*` is still forbidden, and `x.*` still requires a
+real external owner. `modules.md` §1 additionally records that ownership is the root
+while stability is the tier -- `e.` says the toolchain owns a module, not that it is
+stable, since `e.*` now spans 33 core, 77 extended and 18 experimental modules.
+
+Rows above this one name modules under the pre-consolidation roots and are left as
+written, as D71's superseded `algo.text` and `algo.crypt` buckets show why: those names
+never existed under an `e.` root, and rewriting them would falsify the record.
+
 ## Consequences accepted
 
 - **We own the optimiser.** v1 targets roughly `-O1` quality: inlining, constant

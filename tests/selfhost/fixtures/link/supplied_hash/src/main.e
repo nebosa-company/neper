@@ -2,7 +2,7 @@
 // canonical little-endian bytes, so it must agree with algo.hash.xxhash64 over
 // those same bytes.
 
-use algo.hash
+use e.algo.hash
 
 error Failed
 

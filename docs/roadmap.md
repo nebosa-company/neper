@@ -523,11 +523,11 @@ compiler, so M1 completes after M2's rewrite compiles itself, not before.
 - Builtin `Atomic[T]` and orderings; `e.thread` over OS threads
 - Protocols and `e.meta` (spec §9, D52, D53): `T.f(...)` resolution at
   instantiation, `for` over a `next`, the comptime-unrolled `for`, and
-  `fields`/`members`/`type_name`/`get`/`set`. **`e.data.map`, `algo.sort` and every
-  `fmt.*` module depend on these**
+  `fields`/`members`/`type_name`/`get`/`set`. **`e.data.map`, `e.algo.sort` and every
+  `e.fmt.*` module depend on these**
 - M1 library set, using canonical qualified names from `docs/modules.json`:
   `e.mem`, `e.meta`, `e.math`, `e.simd`, `e.atomic`, `e.bytes`, `e.str`, `e.path`,
-  `e.data.list`, `e.data.map`, `algo.sort`, `e.data.iter`, `e.os`, `e.io`,
+  `e.data.list`, `e.data.map`, `e.algo.sort`, `e.data.iter`, `e.os`, `e.io`,
   `e.thread`, `e.time`, `e.test`. Implement exactly the M1 declarations frozen in
   `module-apis.md`; a module is not delivered while a declared surface is missing
 
@@ -559,9 +559,9 @@ S0 generated-code benchmark has been rerun with no unexplained regression.
   instantiating module's `.em` with module-local linkage; the own linker folds
   copies by content hash
 - M2 library set from the machine plan: `e.data.deque`, `e.data.ring`,
-  `e.data.heap`, `algo.rand`, `algo.uuid`, `algo.hash`, `algo.bitset`, `e.fs`,
+  `e.data.heap`, `e.algo.rand`, `e.algo.uuid`, `e.algo.hash`, `e.algo.bitset`, `e.fs`,
   `e.proc`, `e.sync`, `e.channel`,
-  `fmt.json`, `fmt.csv` and `fmt.ini`, with the exact frozen APIs and only their
+  `e.fmt.json`, `e.fmt.csv` and `e.fmt.ini`, with the exact frozen APIs and only their
   declared direct dependencies
 - Module-plan validation in CI: source imports are a subset of each module's
   `direct_dependencies`; no layer violation, cycle, undeclared public symbol or
@@ -665,44 +665,44 @@ Their position here does not order them before M5 or M6; independent waves may r
 in parallel once their prerequisites and specifications are ready.
 
 - **Extended containers and graph algorithms:** `e.data.tree`, `e.data.graph`,
-  `e.data.slot_map`, `algo.disjoint_set` and `algo.graph`. Existing
+  `e.data.slot_map`, `e.algo.disjoint_set` and `e.algo.graph`. Existing
   collections gain deterministic non-mutating iterators; `e.data.heap` also gains
   comparator/context and linear-time bulk construction. Graph delivery covers BFS,
   DFS, deterministic topological sorting, weak/strong components and Dijkstra over
   immutable CSR views.
-- **Extended pure algorithms, text and cryptography:** `algo.stat`, `algo.complex`,
-  `algo.decimal`, `algo.bignum`, `algo.deflate`,
-  `algo.linalg.matrix`, `algo.linalg.tensor`, `text.utf8`, `text.unicode`,
-  `text.encoding`, `text.normalize`, `text.collate`, `text.regex`, `text.locale`,
-  `crypto.hash`, `crypto.aead`,
-  `crypto.sign`, `crypto.kx` and `crypto.random`. Preserve caller-owned allocation,
+- **Extended pure algorithms, text and cryptography:** `e.algo.stat`, `e.algo.complex`,
+  `e.algo.decimal`, `e.algo.bignum`, `e.algo.deflate`,
+  `e.algo.linalg.matrix`, `e.algo.linalg.tensor`, `e.text.utf8`, `e.text.unicode`,
+  `e.text.encoding`, `e.text.normalize`, `e.text.collate`, `e.text.regex`, `e.text.locale`,
+  `e.crypto.hash`, `e.crypto.aead`,
+  `e.crypto.sign`, `e.crypto.kx` and `e.crypto.random`. Preserve caller-owned allocation,
   caller-supplied entropy and the declared dependency edges. Cryptographic delivery
   requires published standard vectors, malformed-input cases and verification of
   every API that explicitly promises constant-time behavior.
-- **Extended host and application services:** `text.io`, `e.task`, `e.time.calendar`, `e.tz`,
+- **Extended host and application services:** `e.text.io`, `e.task`, `e.time.calendar`, `e.tz`,
   `e.fs.mmap`, `e.fs.watch`, `e.concurrent.queue`, `e.concurrent.map`, `e.debug`,
   `e.metrics`, `e.log`, `e.cli`, `e.async`, `e.async.io`, `e.net`, `e.net.tls`,
   `e.net.http` and `e.net.ws`.
   These build over the M1/M2 platform boundary and must demonstrate cancellation,
   backpressure, bounded buffers, partial I/O, deterministic shutdown and no hidden
   allocation or entropy. They unlock the GP-04 service workload.
-- **Interchange formats:** `fmt.uri`, `fmt.mime`, `fmt.gzip`, `fmt.zstd`, `fmt.zip`,
-  `fmt.tar`, `fmt.yaml`, `fmt.xml`, `fmt.html`, `fmt.bson`, `fmt.msgpack` and
-  `fmt.protobuf`. These consume caller-provided slices/readers and writers, never
+- **Interchange formats:** `e.fmt.uri`, `e.fmt.mime`, `e.fmt.gzip`, `e.fmt.zstd`, `e.fmt.zip`,
+  `e.fmt.tar`, `e.fmt.yaml`, `e.fmt.xml`, `e.fmt.html`, `e.fmt.bson`, `e.fmt.msgpack` and
+  `e.fmt.protobuf`. These consume caller-provided slices/readers and writers, never
   open resources themselves, and require malformed, streaming, bounds and round-trip
-  corpora in addition to API equality. `fmt.html` additionally runs the pinned
+  corpora in addition to API equality. `e.fmt.html` additionally runs the pinned
   html5lib tokenizer and tree-construction fixtures for the WHATWG behavior frozen by
   that toolchain release.
 - **Experimental collection conveniences:** `e.data.stack`, `e.data.queue` and
   `e.data.linked` remain available for workload evaluation but have no compatibility
   promise. `e.gpu.tensor` is likewise experimental, follows both M3 `e.gpu` and
-  extended `algo.linalg.tensor`, and keeps every operation as an explicit queue
+  extended `e.algo.linalg.tensor`, and keeps every operation as an explicit queue
   submission. Promotion requires an applicable general-purpose workload and a
   recorded compatibility decision.
-- **Experimental declarative GPU UI:** pure `gfx.geometry`, `gfx.paint`, `gfx.image`,
-  `text.shape`, `text.layout`, `ui.style` and `ui.layout` support `gfx.scene`,
-  `e.asset`, `ui.asset`, `ui.window`, `ui.input`, `ui.widget`, `ui.animation`,
-  `ui.accessibility`, `ui.testing` and `ui.app`. Delivery follows the staged vertical slice and exact
+- **Experimental declarative GPU UI:** pure `e.gfx.geometry`, `e.gfx.paint`, `e.gfx.image`,
+  `e.text.shape`, `e.text.layout`, `e.ui.style` and `e.ui.layout` support `e.gfx.scene`,
+  `e.asset`, `e.ui.asset`, `e.ui.window`, `e.ui.input`, `e.ui.widget`, `e.ui.animation`,
+  `e.ui.accessibility`, `e.ui.testing` and `e.ui.app`. Delivery follows the staged vertical slice and exact
   lifetime/reconciliation contracts in `ui-framework.md`; implementation remains
   blocked on reviewed embedded-asset linking, native-window, GPU-presentation and
   accessibility primitives.
@@ -761,8 +761,8 @@ network. The normative design is [`pacman.md`](pacman.md).
   `task`, `vendor`, `publish`, `cache`, and `info`, all with the toolchain's versioned
   JSON output conventions, shared diagnostic registry, deterministic record ordering
   and schema validation
-- The public namespace policy reserves `e.*`, `algo.*`, `text.*`, `crypto.*`,
-  `fmt.*`, `gfx.*` and `ui.*` to the toolchain;
+- The public namespace policy reserves `e.*`, `e.algo.*`, `e.text.*`, `e.crypto.*`,
+  `e.fmt.*`, `e.gfx.*` and `e.ui.*` to the toolchain;
   registry packages normally export `x.<owner>.*`
 
 **Done when:** GP-12 passes; the same manifest and signed registry snapshot resolve to
@@ -790,7 +790,7 @@ when a relevant backend, ABI, module, package or protocol changes.
 | GP-11 terminal application | platform support plus a separately specified terminal package owned by its actual provider |
 | GP-12 multi-package application | M6 |
 | GP-14 image/audio pipeline | M2 concurrency, M4 target/FFI coverage and a separately specified media package |
-| GP-15 declarative GPU desktop app | experimental `e.asset`/`gfx.*`/`ui.*` family plus asset linking, native window, presentation and accessibility blockers |
+| GP-15 declarative GPU desktop app | experimental `e.asset`/`e.gfx.*`/`e.ui.*` family plus asset linking, native window, presentation and accessibility blockers |
 
 The four named release gates are cumulative:
 

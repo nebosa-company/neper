@@ -475,7 +475,7 @@ The adopted [standard-library review](stdlib-hardening.md) (D84, SL01–SL11) is
 of this closure: fix catalogue shadowing/import collisions without new syntax,
 validate extracted declarations with the real resolver, migrate delivered CPU I/O,
 JSON, filesystem/process and iteration surfaces, and deliver `e.cancel` and basic
-`text.utf8` through this cross-cutting gate. H01/H02/H07 control ownership and native
+`e.text.utf8` through this cross-cutting gate. H01/H02/H07 control ownership and native
 error-detail migration; H17 controls naming/refactor impact and H18 the installed
 capability inventory. Later crypto/network/image/test-support libraries require
 frozen contracts and named future fixtures, not premature implementation claims.

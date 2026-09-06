@@ -1,4 +1,4 @@
-use algo.hash as hash
+use e.algo.hash as hash
 use e.io
 use e.mem
 
