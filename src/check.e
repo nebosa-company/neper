@@ -1450,6 +1450,20 @@ fn is_enum_type(c: *Checker, ty: Type) -> bool {
     ret found && c.aggregates[aggregate_index].kind == .Enum
 }
 
+// An enum member is stored as its backing integer's bits, so a negative member
+// is its two's complement at the backing width. Written as `(mask - magnitude) + 1`
+// rather than `2^width - magnitude`, which overflows a `usize` at width 64.
+fn enum_member_bits(backing: Type, magnitude: usize, negative: bool) -> (usize, err) {
+    if !negative { ret (magnitude, ok) }
+    if backing.kind != .Integer { ret (0usize, InvalidType) }
+    var mask = 18446744073709551615usize
+    if same(backing.name, "i8") || same(backing.name, "u8") { mask = 255usize }
+    if same(backing.name, "i16") || same(backing.name, "u16") { mask = 65535usize }
+    if same(backing.name, "i32") || same(backing.name, "u32") { mask = 4294967295usize }
+    if magnitude == 0usize || magnitude > mask { ret (0usize, InvalidType) }
+    ret ((mask - magnitude) + 1usize, ok)
+}
+
 // An enum's ordering is its backing integer's ordering, so the backing type has
 // to be reachable from a value's type. Nothing else about an enum survives past
 // lowering.

@@ -295,6 +295,13 @@ $enumOrderingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $enumOrderingWritten -ne 'executable written') { throw 'enum ordering executable emission failed' }
 & $enumOrderingPath
 if ($LASTEXITCODE -ne 0) { throw 'enum ordering or the supplied enum cmp is wrong' }
+# A negative member is the backing integer's two's complement at the backing
+# width, so it has to compare, match and order like that integer.
+$enumNegativePath = Join-Path $testBuild 'enum-negative-selfhost.exe'
+$enumNegativeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\enum_negative\src\main.e') $repo 'x64' 'windows' $enumNegativePath
+if ($LASTEXITCODE -ne 0 -or $enumNegativeWritten -ne 'executable written') { throw 'negative enum member executable emission failed' }
+& $enumNegativePath
+if ($LASTEXITCODE -ne 0) { throw 'a negative enum member compares, matches or orders wrongly' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

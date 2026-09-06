@@ -870,7 +870,6 @@ fn lower_member(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         if field_index < c.aggregate_field_count {
             let member = c.aggregate_fields[field_index]
             if check.same(member.name, member_name) {
-                if member.enum_negative { ret (0usize, result_type, check.Unsupported) }
                 if aggregate.kind == .TaggedUnion && result_type.kind == .Named {
                     let (info, info_error) = layout.type_info(c, result_type)
                     if info_error != ok { ret (0usize, result_type, info_error) }
@@ -886,7 +885,9 @@ fn lower_member(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
                     let tag_error = store_tag(c, aggregate, field_index, stack, token, builder)
                     ret (stack, result_type, tag_error)
                 }
-                let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, member.enum_value, c.tokens[node.token_start])
+                let (member_bits, member_bits_error) = check.enum_member_bits(aggregate.backing_type, member.enum_value, member.enum_negative)
+                if member_bits_error != ok { ret (0usize, result_type, member_bits_error) }
+                let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, member_bits, c.tokens[node.token_start])
                 ret (result, result_type, emit_error)
             }
         }
@@ -951,10 +952,11 @@ fn lower_unary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 fn store_tag(c: *check.Checker, aggregate: check.Aggregate, field_index: usize, destination: usize, token: lex.Token, builder: *nir.Builder) -> err {
     if field_index >= c.aggregate_field_count { ret check.InvalidType }
     let field = c.aggregate_fields[field_index]
-    if field.enum_negative { ret check.Unsupported }
+    let (tag_bits, tag_bits_error) = check.enum_member_bits(aggregate.backing_type, field.enum_value, field.enum_negative)
+    if tag_bits_error != ok { ret tag_bits_error }
     let (tag_info, tag_info_error) = layout.type_info(c, aggregate.backing_type)
     if tag_info_error != ok { ret tag_info_error }
-    let (constant_instruction, tag_value, constant_error) = nir.emit(builder, .ConstInteger, aggregate.backing_type, true, field.enum_value, token)
+    let (constant_instruction, tag_value, constant_error) = nir.emit(builder, .ConstInteger, aggregate.backing_type, true, tag_bits, token)
     if constant_error != ok { ret constant_error }
     let (address_instruction, tag_address, address_error) = nir.emit(builder, .FieldAddress, aggregate.backing_type, true, 0usize, token)
     if address_error != ok { ret address_error }
@@ -2320,7 +2322,9 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
                                     let (key, field_index, has_field, key_error) = check.switch_case_key(c, g, tree, module_index, case_index, subject_type, aggregate_index, true)
                                     if key_error != ok || !has_field || field_index >= c.aggregate_field_count { ret check.InvalidSwitch }
                                     let field = c.aggregate_fields[field_index]
-                                    let (case_instruction, value, case_error) = nir.emit(builder, .ConstInteger, compare_type, true, field.enum_value, c.tokens[arm.token_start])
+                                    let (case_bits, case_bits_error) = check.enum_member_bits(c.aggregates[aggregate_index].backing_type, field.enum_value, field.enum_negative)
+                                    if case_bits_error != ok { ret case_bits_error }
+                                    let (case_instruction, value, case_error) = nir.emit(builder, .ConstInteger, compare_type, true, case_bits, c.tokens[arm.token_start])
                                     if case_error != ok { ret case_error }
                                     case_value = value
                                 } else {

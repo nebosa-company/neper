@@ -344,6 +344,12 @@ enum_ordering_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$enum_ordering_written" = 'executable written' ]
 chmod +x "$test_build/enum-ordering-selfhost"
 "$test_build/enum-ordering-selfhost"
+# A negative member is the backing integer's two's complement at the backing
+# width, so it has to compare, match and order like that integer.
+enum_negative_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/enum_negative/src/main.e" "$repo" x64 linux "$test_build/enum-negative-selfhost")
+[ "$enum_negative_written" = 'executable written' ]
+chmod +x "$test_build/enum-negative-selfhost"
+"$test_build/enum-negative-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {

@@ -697,12 +697,44 @@ With ordering correct, `supplied_protocol` adds the enum shape to `cmp`, so
 covers a `u64`, a `u8` and an `i32` enum through both the operators and `T.cmp`;
 its `u64` assertions all fail under a signed comparison.
 
-Not covered, and unrelated to this: a *negative* enum member does not lower at all.
-`lower.e` refuses `member.enum_negative` outright, so `Signed.Under` for
-`enum i32 { Under = 0i32 - 3i32 }` is rejected with the generic "construct is not
-implemented in self-hosted lowering". That is why the fixture's signed enum uses
-positive members. Rule 4's remaining `cmp` shapes are floats and the recursive ones
-(slices, arrays, vectors, tagged unions); `hash`, `eq` and `format` are untouched.
+Negative enum members, which this turned up, are section 7.13. Rule 4's remaining
+`cmp` shapes are floats and the recursive ones (slices, arrays, vectors, tagged
+unions); `hash`, `eq` and `format` are untouched.
+
+### 7.13 Negative enum members
+
+A negative enum member did not lower at all. `check.e` collected it correctly --
+the magnitude and an `enum_negative` flag, range-checked against the backing type,
+auto-incrementing up through zero, and serialized in `.em` -- but all three places
+in `lower.e` that turn a member into a constant refused `enum_negative` outright
+or would have emitted the bare magnitude. `Under` in `enum i32 { Under = 0i32 - 3i32 }`
+was rejected with the generic "construct is not implemented in self-hosted lowering".
+
+A member is stored as its backing integer's bits, so a negative one is its two's
+complement at the backing width. `check.enum_member_bits` computes that as
+`(mask - magnitude) + 1` rather than `2^width - magnitude`, which overflows a
+`usize` at width 64. The member expression, `store_tag` and the tagged-union
+switch case all go through it.
+
+The register form follows from what was already there: an enum load has no
+signedness (`signed_integer` is false for a `.Named` type), so it zero-extends the
+backing width, and the constant is the truncated two's complement -- the two agree
+bit for bit, which is what `==` and `switch` compare. Ordering is section 7.12's
+cast to the backing type, which sign-extends both sides before the comparison.
+
+`fixtures/link/enum_negative` covers `i8`, `i32` and `i64` backings at both
+extremes, auto-increment walking -3 up through 0, `==`, ordering, `switch`, and
+`T.cmp`.
+
+Two things this ran into, neither of them about enums:
+
+- The most negative value of a backing type cannot be written directly, because
+  `128i8` is out of range for `i8` and there is no unary minus. `0i8 - 127i8 - 1i8`
+  reaches it through constant folding, which is what the fixture uses.
+- `let zero = ...` is rejected with a position-less `error: parse.InvalidSyntax`.
+  `zero` is the reserved zero-value literal, so the rejection is right, but the
+  diagnostic names neither the position nor the reason -- unlike the module-scope
+  reserved-name case, which `fixtures/check/reserved_declaration` covers.
 
 ## 8. Working-tree boundaries
 
