@@ -24,6 +24,16 @@ fn byte(buffer: *Buffer, value: usize) -> err {
     ret ok
 }
 
+fn pack(buffer: *Buffer, destination: []u8) -> err {
+    if buffer.count > destination.len { ret Capacity }
+    var at = 0usize
+    while at < buffer.count {
+        destination[at] = u8(buffer.bytes[at])
+        at += 1usize
+    }
+    ret ok
+}
+
 fn little_u64(buffer: *Buffer, value: usize) -> err {
     var remaining = value
     var count = 0usize

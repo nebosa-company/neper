@@ -181,6 +181,9 @@ $callsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\ni
 if ($LASTEXITCODE -ne 0 -or $callsGenerated -ne 'module codegen ok') { throw 'Windows x64 calls did not emit ABI moves and relocations' }
 $objectGenerated = & $compiler object-file (Join-Path $PSScriptRoot 'fixtures\nir\calls\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $objectGenerated -ne 'module object ok') { throw 'source-to-COFF object pipeline failed' }
+$coffPath = Join-Path $testBuild 'calls.obj'
+$objectWritten = & $compiler emit-object (Join-Path $PSScriptRoot 'fixtures\nir\calls\src\main.e') $repo 'x64' 'windows' $coffPath
+if ($LASTEXITCODE -ne 0 -or $objectWritten -ne 'object written' -or -not (Test-Path -LiteralPath $coffPath) -or (Get-Item -LiteralPath $coffPath).Length -le 60) { throw 'COFF object file emission failed' }
 $localsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\locals\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $localsLowered -ne 'module nir ok') { throw 'parameters and local storage did not lower to canonical NIR' }
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'

@@ -840,6 +840,27 @@ fn write_all(file: os.File, text: str) -> err {
     ret ok
 }
 
+fn write_bytes(file: os.File, bytes: []u8) -> err {
+    var at = 0usize
+    while at < bytes.len {
+        let (written, write_error) = os.write(file, bytes[at..])
+        if write_error != ok { ret write_error }
+        if written == 0usize { ret DiagnosticWrite }
+        at += written
+    }
+    ret ok
+}
+
+fn save_bytes(a: *mem.Arena, path: str, bytes: []u8) -> err {
+    let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
+    let (file, open_error) = os.open(a, path, flags)
+    if open_error != ok { ret open_error }
+    let write_error = write_bytes(file, bytes)
+    let close_error = os.close(file)
+    if write_error != ok { ret write_error }
+    ret close_error
+}
+
 fn write_digit(file: os.File, digit: usize) -> err {
     if digit == 0usize { ret write_all(file, "0") }
     if digit == 1usize { ret write_all(file, "1") }
@@ -1118,8 +1139,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module check ok\n")
         ret ok
     }
-    if args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file")) {
-        let emit_object = same(args[1usize], "object-file")
+    let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
+    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object {
+        let emit_object = same(args[1usize], "object-file") || writes_object
         let emit_machine_code = same(args[1usize], "codegen-file") || emit_object
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
@@ -1207,6 +1229,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     if symbols_error != ok { ret symbols_error }
                     try object_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, symbols, &object)
                 }
+                if writes_object {
+                    let (packed, packed_error) = mem.alloc[u8](a, object.count)
+                    if packed_error != ok { ret packed_error }
+                    try emit_x64.pack(&object, packed)
+                    try save_bytes(a, args[6usize], packed)
+                    try io.print("object written\n")
+                    ret ok
+                }
                 try io.print("module object ok\n")
                 ret ok
             }
@@ -1216,6 +1246,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS\n")
+    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
     ret ok
 }

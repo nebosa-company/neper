@@ -262,6 +262,10 @@ calls_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixt
 [ "$calls_generated" = 'module codegen ok' ]
 object_generated=$($test_build/neper-self object-file "$repo/tests/selfhost/fixtures/nir/calls/src/main.e" "$repo" x64 linux)
 [ "$object_generated" = 'module object ok' ]
+elf_path="$test_build/calls.o"
+object_written=$($test_build/neper-self emit-object "$repo/tests/selfhost/fixtures/nir/calls/src/main.e" "$repo" x64 linux "$elf_path")
+[ "$object_written" = 'object written' ]
+readelf -h "$elf_path" >/dev/null
 locals_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/locals/src/main.e" "$repo" x64 linux)
 [ "$locals_lowered" = 'module nir ok' ]
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

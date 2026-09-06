@@ -36,7 +36,7 @@
 #define PATH_SEP '/'
 #endif
 
-#define NEPER_VERSION "0.0.95-neper0"
+#define NEPER_VERSION "0.0.96-neper0"
 #define MAX_TOKENS 65536
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
@@ -207,6 +207,7 @@ struct Expr {
     int field_path_count;
     int place_mutable;
     int is_len;
+    int is_cast;
     Type place_type;
     union {
         int64_t integer;
@@ -3356,6 +3357,17 @@ static Function *check_declared_call(Compiler *c, Function *fn, Expr *e) {
     return callee;
 }
 
+static Type scalar_cast_type(const char *name) {
+    if (strcmp(name, "bool") == 0) return type_make(TY_BOOL, name);
+    if (strcmp(name, "i8") == 0 || strcmp(name, "i16") == 0 ||
+        strcmp(name, "i32") == 0 || strcmp(name, "i64") == 0 ||
+        strcmp(name, "u8") == 0 || strcmp(name, "u16") == 0 ||
+        strcmp(name, "u32") == 0 || strcmp(name, "u64") == 0 ||
+        strcmp(name, "isize") == 0 || strcmp(name, "usize") == 0)
+        return type_make(TY_INT, name);
+    return type_make(TY_INVALID, 0);
+}
+
 static Type check_expr(Compiler *c, Function *fn, Expr *e) {
     int i;
     switch (e->kind) {
@@ -3614,7 +3626,22 @@ static Type check_expr(Compiler *c, Function *fn, Expr *e) {
         }
         case EX_CALL: {
             Type result;
-            if (strcmp(e->as.call.callee, "io.print") == 0) {
+            Type cast = scalar_cast_type(e->as.call.callee);
+            if (cast.kind != TY_INVALID) {
+                if (e->as.call.arg_count != 1) {
+                    diagnostic_at(c, &e->token, "E-TYPE-0003", "scalar cast expects one argument");
+                    result = type_make(TY_INVALID, 0);
+                } else {
+                    Type source = check_expr(c, fn, e->as.call.args[0]);
+                    if (!((source.kind == TY_INT || source.kind == TY_BOOL) &&
+                          (cast.kind == TY_INT || cast.kind == TY_BOOL))) {
+                        diagnostic_at(c, &e->as.call.args[0]->token, "E-TYPE-9999",
+                                      "invalid scalar cast");
+                        result = type_make(TY_INVALID, 0);
+                    } else result = cast;
+                }
+                e->is_cast = 1;
+            } else if (strcmp(e->as.call.callee, "io.print") == 0) {
                 if (e->as.call.arg_count != 1) diagnostic_at(c, &e->token, "E-TYPE-0003", "io.print expects one argument");
                 else if (!type_equal(check_expr(c, fn, e->as.call.args[0]), type_make(TY_STR, "str")))
                     diagnostic_at(c, &e->as.call.args[0]->token, "E-TYPE-0003", "io.print expects str");
@@ -5467,7 +5494,24 @@ static void emit_expr(Emitter *e, Expr *x) {
             }
             break;
         }
-        case EX_CALL: emit_call(e, x, 0); break;
+        case EX_CALL:
+            if (x->is_cast) {
+                size_t size;
+                emit_expr(e, x->as.call.args[0]);
+                size = type_size(e->compiler, x->type);
+                if (x->type.kind == TY_BOOL)
+                    fputs("    test rax, rax\n    setne al\n    movzx eax, al\n", e->out);
+                else if (size == 1)
+                    fputs(x->type.name[0] == 'i' ? "    movsx rax, al\n" :
+                                                   "    movzx eax, al\n", e->out);
+                else if (size == 2)
+                    fputs(x->type.name[0] == 'i' ? "    movsx rax, ax\n" :
+                                                   "    movzx eax, ax\n", e->out);
+                else if (size == 4)
+                    fputs(x->type.name[0] == 'i' ? "    movsxd rax, eax\n" :
+                                                   "    mov eax, eax\n", e->out);
+            } else emit_call(e, x, 0);
+            break;
         case EX_INDEX: {
             Type element = index_element_type(x->as.index.base->type);
             int address_slot = emit_index_address(e, x);
