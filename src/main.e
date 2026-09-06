@@ -1180,7 +1180,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try init_cli_nir(a, &builder)
         let (bindings, bindings_error) = mem.alloc[lower.Binding](a, 16384usize)
         if bindings_error != ok { ret bindings_error }
-        try lower.module(&checker, &loaded, 0usize, &builder, bindings)
+        let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, 128usize)
+        if lowered_modules_error != ok { ret lowered_modules_error }
+        try lower.reachable_modules(&checker, &loaded, &builder, bindings, lowered_modules)
         let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, 32768usize)
         if ranges_error != ok { ret ranges_error }
         let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, 32768usize)

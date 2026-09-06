@@ -231,6 +231,11 @@ $controlExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $controlExecutableWritten -ne 'executable written') { throw 'control-flow PE executable emission failed' }
 & $controlExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'branches, loops, or direct calls failed in the self-hosted PE executable' }
+$moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
+$moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
+if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }
+& $moduleExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'cross-module calls failed in the self-hosted PE executable' }
 $scalarOpsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $scalarOpsLowered -ne 'module nir ok') { throw 'casts, unary operators, and call statements did not lower to canonical NIR' }
 $scalarOpsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'

@@ -678,3 +678,34 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
     }
     ret ok
 }
+
+fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, bindings: []Binding) -> err {
+    var module_index = 0usize
+    while module_index < g.count {
+        try module(c, g, module_index, builder, bindings)
+        module_index += 1usize
+    }
+    ret ok
+}
+
+fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, bindings: []Binding, lowered: []bool) -> err {
+    if g.count == 0usize || g.count > lowered.len { ret FunctionNotFound }
+    var module_index = 0usize
+    while module_index < g.count {
+        lowered[module_index] = false
+        module_index += 1usize
+    }
+    try module(c, g, 0usize, builder, bindings)
+    lowered[0usize] = true
+    var reference_at = 0usize
+    while reference_at < builder.function_ref_count {
+        let target_module = builder.function_refs[reference_at].module_index
+        if target_module >= g.count { ret FunctionNotFound }
+        if !lowered[target_module] {
+            try module(c, g, target_module, builder, bindings)
+            lowered[target_module] = true
+        }
+        reference_at += 1usize
+    }
+    ret ok
+}
