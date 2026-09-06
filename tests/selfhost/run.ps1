@@ -377,6 +377,13 @@ $memViewWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $memViewWritten -ne 'executable written') { throw 'mem.view executable emission failed' }
 & $memViewPath
 if ($LASTEXITCODE -ne 0) { throw 'mem.view did not alias the arena storage it was given' }
+# `mem.cast` is the only route between pointer types, and the only route to `*void`
+# at all. It must retype without moving: the address in is the address out.
+$memCastPath = Join-Path $testBuild 'mem-cast-selfhost.exe'
+$memCastWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_cast\src\main.e') $repo 'x64' 'windows' $memCastPath
+if ($LASTEXITCODE -ne 0 -or $memCastWritten -ne 'executable written') { throw 'mem.cast executable emission failed' }
+& $memCastPath
+if ($LASTEXITCODE -ne 0) { throw 'mem.cast did not give back the pointer it was handed' }
 # The builder owns the top of an arena and grows in place. The fixture pins that the
 # initial reservation is not a limit, that a foreign allocation turns the next push
 # into `str.NotOnTop` rather than an overwrite, that `done` gives the unwritten tail

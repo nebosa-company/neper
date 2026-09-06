@@ -3623,6 +3623,7 @@ type CallInfo = struct {
     alloc_return: Type,
     alloc_arena: Type,
     mem_alloc: bool,
+    mem_cast: bool,
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
@@ -3635,6 +3636,12 @@ type AllocInfo = struct {
     function: Function,
     return_type: Type,
     arena_type: Type,
+}
+
+type CastInfo = struct {
+    matched: bool,
+    function: Function,
+    target: Type,
 }
 
 fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
@@ -3689,6 +3696,50 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         ret (pointer, ok)
     }
     ret (invalid_type(), InvalidType)
+}
+
+// Spec section 8: a pointer type -- `*void` included -- is only reached through
+// `mem.cast[*Foo](p)`. The call names no declared function, so it is recognised
+// here the way `mem.alloc[T]` is, and both its argument and its comptime type have
+// to be pointers. The value itself is unchanged: lowering hands the operand back.
+fn cast_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (CastInfo, err) {
+    var info: CastInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.mem") || !same(member, "cast") { ret (info, ok) }
+    info.matched = true
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let (pointer, pointer_error) = comptime_type(c, g, tree, module_index, type_index)
+    if pointer_error != ok { ret (info, pointer_error) }
+    if pointer.kind != .Pointer { ret (info, InvalidType) }
+    var function: Function = zero
+    function.name = "cast"
+    function.module_index = target_module
+    function.parameter_count = 1usize
+    function.return_count = 1usize
+    function.intrinsic = true
+    info.function = function
+    info.target = pointer
+    ret (info, ok)
 }
 
 fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (AllocInfo, err) {
@@ -3800,11 +3851,19 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.alloc_arena = allocation.arena_type
                             info.mem_alloc = true
                         } else {
+                        let (conversion, conversion_error) = cast_info(c, g, tree, module_index, receiver)
+                        if conversion_error != ok { ret (info, conversion_error) }
+                        if conversion.matched {
+                            info.function = conversion.function
+                            info.cast = conversion.target
+                            info.mem_cast = true
+                        } else {
                             let (template_index, template_error) = bracket_function(c, g, tree, module_index, receiver)
                             if template_error != ok { ret (info, template_error) }
                             let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, template_index)
                             if specialize_error != ok { ret (info, specialize_error) }
                             info.function = c.functions[specialized_index]
+                        }
                         }
                         has_function = true
                     } else {
@@ -3891,6 +3950,14 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         parameter_type = info.protocol_type
                         let (supplied_argument, supplied_argument_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
                         if supplied_argument_error != ok { ret (info, supplied_argument_error) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
+                    if info.mem_cast {
+                        let (source, source_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                        if source_error != ok { ret (info, source_error) }
+                        if source.kind != .Pointer { ret (info, TypeMismatch) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -4263,6 +4330,10 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         ret (make_type(.TypeParameter, "", 0usize), ok)
     }
     if index >= call.function.return_count { ret (invalid_type(), InvalidType) }
+    if call.mem_cast {
+        if index != 0usize { ret (invalid_type(), InvalidType) }
+        ret (call.cast, ok)
+    }
     if call.mem_alloc {
         if index == 0usize { ret (call.alloc_return, ok) }
         if index == 1usize { ret (make_type(.Err, "err", call.function.module_index), ok) }

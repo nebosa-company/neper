@@ -18,15 +18,23 @@ fn same(x: str, y: str) -> bool {
     ret true
 }
 
-// A sink that keeps no state, because a `Sink` context cannot be made without a
-// pointer cast. It checks the bytes it is handed instead of recording them.
-fn only_x(ctx: *void, bytes: []const u8) -> err {
+type Drained = struct {
+    bytes: usize,
+    calls: usize,
+}
+
+// The sink records into a context of its own, which `mem.cast` is what makes
+// reachable: the erased pointer the builder carries becomes a `*Drained` again here.
+fn record_x(ctx: *void, bytes: []const u8) -> err {
     if bytes.len == 0usize { ret Failed }
     var at = 0usize
     while at < bytes.len {
         if bytes[at] != 120u8 { ret Failed }
         at += 1usize
     }
+    let seen = mem.cast[*Drained](ctx)
+    seen.bytes += bytes.len
+    seen.calls += 1usize
     ret ok
 }
 
@@ -165,7 +173,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     var storage: [64]u8 = zero
     let room = storage[0usize..64usize]
     var small = mem.arena_from(room)
-    let sink = str.Sink { ctx: zero, write: only_x }
+    var drained = Drained { bytes: 0usize, calls: 0usize }
+    let sink = str.Sink { ctx: mem.cast[*void](&drained), write: record_x }
     var (streamed, streamed_error) = str.builder_to(&small, 16usize, sink)
     if streamed_error != ok { ret streamed_error }
     at = 0usize
@@ -176,5 +185,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let leftover = str.done(&streamed)
     if leftover.len == 0usize || leftover.len > 64usize { ret Failed }
     if leftover[0usize] != 120u8 { ret Failed }
+    // `done` does not flush, so every byte is either drained or still held.
+    if drained.calls == 0usize { ret Failed }
+    if drained.bytes + leftover.len != 200usize { ret Failed }
     ret ok
 }

@@ -419,6 +419,12 @@ mem_view_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$mem_view_written" = 'executable written' ]
 chmod +x "$test_build/mem-view-selfhost"
 "$test_build/mem-view-selfhost"
+# `mem.cast` is the only route between pointer types, and the only route to `*void`
+# at all. It must retype without moving: the address in is the address out.
+mem_cast_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mem_cast/src/main.e" "$repo" x64 linux "$test_build/mem-cast-selfhost")
+[ "$mem_cast_written" = 'executable written' ]
+chmod +x "$test_build/mem-cast-selfhost"
+"$test_build/mem-cast-selfhost"
 # The builder owns the top of an arena and grows in place. The fixture pins that the
 # initial reservation is not a limit, that a foreign allocation turns the next push
 # into `str.NotOnTop` rather than an overwrite, that `done` gives the unwritten tail
