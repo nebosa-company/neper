@@ -378,6 +378,35 @@ hash_executable_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$hash_executable_path"
 hash_output=$("$hash_executable_path")
 [ "$hash_output" = 'algo hash ok' ]
+bitset_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/algo/bitset.e")
+expected_bitset_surface='BitSet
+TooSmall
+init
+len
+clear_all
+fill_all
+get
+set
+unset
+toggle
+count
+first_set
+next_set
+union_in_place
+intersect_in_place
+difference_in_place
+complement_in_place
+is_subset
+eq'
+[ "$bitset_surface" = "$expected_bitset_surface" ]
+bitset_parsed=$($test_build/neper-self parse-file "$repo/lib/algo/bitset.e")
+[ "$bitset_parsed" = 'parse file ok' ]
+bitset_executable_path="$test_build/algo-bitset-selfhost"
+bitset_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_bitset/src/main.e" "$repo" x64 linux "$bitset_executable_path")
+[ "$bitset_executable_written" = 'executable written' ]
+chmod +x "$bitset_executable_path"
+bitset_output=$("$bitset_executable_path")
+[ "$bitset_output" = 'algo bitset ok' ]
 os_helper_path="$test_build/os-spawn-helper-selfhost"
 os_helper_written=$($test_build/neper-self emit-executable "$repo/tests/neper0/os-spawn-helper.e" "$repo" x64 linux "$os_helper_path")
 [ "$os_helper_written" = 'executable written' ]

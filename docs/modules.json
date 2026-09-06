@@ -44,7 +44,7 @@
     {"name":"algo.hash","layer":2,"surface":"source","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"algo.graph","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.data.graph","e.data.heap","e.mem"],"blocked_by":[]},
     {"name":"algo.stat","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":[],"blocked_by":[]},
-    {"name":"algo.bitset","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
+    {"name":"algo.bitset","layer":2,"surface":"source","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"algo.complex","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.math"],"blocked_by":[]},
     {"name":"algo.decimal","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.str"],"blocked_by":[]},
     {"name":"algo.bignum","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.mem","e.str"],"blocked_by":[]},

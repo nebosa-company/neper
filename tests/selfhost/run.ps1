@@ -286,6 +286,21 @@ $hashExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $hashExecutableWritten -ne 'executable written') { throw 'algo.hash did not compile into a PE executable' }
 $hashOutput = & $hashExecutablePath
 if ($LASTEXITCODE -ne 0 -or $hashOutput -ne 'algo hash ok') { throw 'algo.hash one-shot or streaming behavior failed' }
+$bitsetSurface = Get-Content (Join-Path $repo 'lib\algo\bitset.e') |
+    Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
+    ForEach-Object {
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'algo.bitset contains an unreadable public declaration' }
+        $Matches[1]
+    }
+$expectedBitsetSurface = @('BitSet', 'TooSmall', 'init', 'len', 'clear_all', 'fill_all', 'get', 'set', 'unset', 'toggle', 'count', 'first_set', 'next_set', 'union_in_place', 'intersect_in_place', 'difference_in_place', 'complement_in_place', 'is_subset', 'eq')
+if (($bitsetSurface -join "`n") -ne ($expectedBitsetSurface -join "`n")) { throw 'algo.bitset public declarations differ from module-apis.md' }
+$bitsetParsed = & $compiler parse-file (Join-Path $repo 'lib\algo\bitset.e')
+if ($LASTEXITCODE -ne 0 -or $bitsetParsed -ne 'parse file ok') { throw 'algo.bitset failed CLI parsing' }
+$bitsetExecutablePath = Join-Path $testBuild 'algo-bitset-selfhost.exe'
+$bitsetExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_bitset\src\main.e') $repo 'x64' 'windows' $bitsetExecutablePath
+if ($LASTEXITCODE -ne 0 -or $bitsetExecutableWritten -ne 'executable written') { throw 'algo.bitset did not compile into a PE executable' }
+$bitsetOutput = & $bitsetExecutablePath
+if ($LASTEXITCODE -ne 0 -or $bitsetOutput -ne 'algo bitset ok') { throw 'algo.bitset behavior or storage invariants failed' }
 $hostExecutablePath = Join-Path $testBuild 'host-memory-clock-selfhost.exe'
 $hostExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\host-memory-clock.e') $repo 'x64' 'windows' $hostExecutablePath
 if ($LASTEXITCODE -ne 0 -or $hostExecutableWritten -ne 'executable written') { throw 'Windows args, memory, or clock intrinsics did not link' }

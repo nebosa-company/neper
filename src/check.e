@@ -3948,10 +3948,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         if !has_field { ret (invalid_type(), parse.InvalidSyntax) }
         let (base, base_error) = check_expr(c, g, tree, module_index, base_index, invalid_type())
         if base_error != ok { ret (invalid_type(), base_error) }
-        if same(field, "len") {
-            if base.kind != .Array && base.kind != .Slice && base.kind != .String {
-                if !c.generic_declaration || !type_shape_unknown(base) { ret (invalid_type(), InvalidOperator) }
-            }
+        if same(field, "len") && (base.kind == .Array || base.kind == .Slice || base.kind == .String) {
             let (length_type, context_error) = apply_context(c, make_type(.Integer, "usize", module_index), expected)
             ret (length_type, context_error)
         }
