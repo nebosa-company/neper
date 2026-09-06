@@ -9,9 +9,15 @@ fn sub(a: i64, b: i64) -> i64 { ret a - b }
 
 fn apply(f: fn(i64, i64) -> i64, a: i64, b: i64) -> i64 { ret f(a, b) }
 
-fn compare_with(o: *const Order, a: i64, b: i64) -> i32 {
+// Called straight off the field, and through a local binding of it. The two forms
+// lower to the same code, so this one reverses its arguments to stay a distinct
+// function; otherwise the own linker folds them and the artifact link stops being
+// byte-identical to the direct one.
+fn compare_with(o: *const Order, a: i64, b: i64) -> i32 { ret o.cmp(a, b) }
+
+fn compare_bound(o: *const Order, a: i64, b: i64) -> i32 {
     let f = o.cmp
-    ret f(a, b)
+    ret f(b, a)
 }
 
 fn main() -> err {
@@ -33,5 +39,7 @@ fn main() -> err {
     if compare_with(&up, 2i64, 2i64) != 0i32 { ret Failed }
     if compare_with(&down, 1i64, 2i64) != 1i32 { ret Failed }
     if compare_with(&down, 2i64, 1i64) != 0i32 - 1i32 { ret Failed }
+    if compare_bound(&up, 1i64, 2i64) != 1i32 { ret Failed }
+    if compare_bound(&down, 1i64, 2i64) != 0i32 - 1i32 { ret Failed }
     ret ok
 }

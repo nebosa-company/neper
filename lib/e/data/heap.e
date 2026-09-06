@@ -94,14 +94,12 @@ fn len_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> usize { ret h.items.l
 
 fn push_by[T: type, Ctx: type](h: *HeapBy[T, Ctx], value: T) -> err {
     try list.push[T](&h.items, value)
-    let compare = h.cmp
-    let context = h.ctx
     let items = list.slice[T](&h.items)
     var at = items.len - 1usize
     while at != 0usize {
         let above = at - 1usize
         let parent = above / 2usize
-        if compare(context, items[at], items[parent]) >= 0i32 { break }
+        if h.cmp(h.ctx, items[at], items[parent]) >= 0i32 { break }
         let carried = items[at]
         items[at] = items[parent]
         items[parent] = carried
@@ -118,8 +116,6 @@ fn peek_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> (T, bool) {
 
 fn pop_by[T: type, Ctx: type](h: *HeapBy[T, Ctx]) -> (T, bool) {
     if h.items.len == 0usize { ret (zero, false) }
-    let compare = h.cmp
-    let context = h.ctx
     let full = list.slice[T](&h.items)
     let smallest = full[0usize]
     full[0usize] = full[full.len - 1usize]
@@ -132,8 +128,8 @@ fn pop_by[T: type, Ctx: type](h: *HeapBy[T, Ctx]) -> (T, bool) {
         if left >= items.len { break }
         var next = left
         let right = left + 1usize
-        if right < items.len && compare(context, items[right], items[left]) < 0i32 { next = right }
-        if compare(context, items[next], items[at]) >= 0i32 { break }
+        if right < items.len && h.cmp(h.ctx, items[right], items[left]) < 0i32 { next = right }
+        if h.cmp(h.ctx, items[next], items[at]) >= 0i32 { break }
         let carried = items[at]
         items[at] = items[next]
         items[next] = carried

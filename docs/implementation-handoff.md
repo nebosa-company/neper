@@ -567,10 +567,8 @@ taken from another module. Both suites also emit the artifact set, link it, and
 require the result to be byte-identical to the direct link.
 
 Not covered: `extern fn(...) -> R` and the `@cc(CONV)` conventions of section 5,
-and the GPU profile's ban on function pointers. A function value is currently
-only callable from a local or parameter binding; calling one directly out of a
-struct field (`s.cmp(a, b)`) is not wired, which is why the fixture binds it to a
-local first.
+and the GPU profile's ban on function pointers. Calling a function value out of a
+struct field was wired separately in section 7.11.
 
 Two hazards this increment ran into, both caught by the suites:
 
@@ -606,10 +604,9 @@ checker gaps only appeared once `HeapBy` was written:
   structurally, which is the same leniency it already gave `Named`, `Pointer`,
   `Slice` and `Array` while a template body is being checked.
 
-The `_by` bodies bind `h.cmp` and `h.ctx` to locals before calling, because calling
-a function value directly out of a struct field is still not wired (section 7.8).
-That reads fine here and hoists the load out of the sift loop, but it is a
-workaround, not a preference.
+The `_by` bodies originally bound `h.cmp` and `h.ctx` to locals before calling,
+because a field was not directly callable. Section 7.11 wired that, and they now
+call `h.cmp(h.ctx, ...)` where it stands.
 
 `fixtures/link/data_heap` now covers both halves in one program: the supplied `cmp`
 over integers, a user struct dispatching to its own declared `task_cmp`, and a
@@ -653,6 +650,28 @@ assertions are worth keeping:
 - The fixture compares `mem.stats` before and after a further `stable_in_place` and
   `radix_u32_in_place`, so a scratch buffer that was allocated but never released
   fails the run.
+
+### 7.11 Calling a function value from a field
+
+`s.cmp(a, b)` now calls the function value in a field where it stands. Previously
+only a local or parameter binding was callable, so `e.data.heap`'s `_by` bodies had
+to bind `h.cmp` and `h.ctx` first; they no longer do.
+
+`check_call`'s qualified-receiver branch tries the module-qualifier lookup first and
+falls back to typing the receiver expression: if it is a function type, the call
+becomes indirect with the field load as its callee. Ordering matters -- a module
+qualifier keeps winning, so nothing about qualified calls changes. Lowering needed
+no work, because `lower_call_arguments` already lowers the receiver expression for
+an indirect call and a field load is an ordinary expression.
+
+One thing this turned up. `o.cmp(a, b)` and `let f = o.cmp` followed by `f(a, b)`
+lower to byte-identical code, relocations included, so the own linker folds them
+into one body. `fixtures/link/function_values` covers both forms, and its second
+one reverses its arguments deliberately: with identical bodies the fold makes the
+artifact link smaller than the direct link, and the fixture's byte-identity
+assertion stops holding. That assertion is only meaningful while no two functions
+in the fixture fold together, which is worth remembering when adding to any fixture
+that makes it.
 
 ## 8. Working-tree boundaries
 

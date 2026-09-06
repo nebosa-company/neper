@@ -3778,13 +3778,25 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             has_function = true
                         } else {
                             let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
-                            if !found { ret (info, UnknownCallable) }
-                            if c.functions[found_index].generic {
-                                let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, found_index)
-                                if specialize_error != ok { ret (info, specialize_error) }
-                                info.function = c.functions[specialized_index]
+                            if found {
+                                if c.functions[found_index].generic {
+                                    let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, found_index)
+                                    if specialize_error != ok { ret (info, specialize_error) }
+                                    info.function = c.functions[specialized_index]
+                                } else {
+                                    info.function = c.functions[found_index]
+                                }
                             } else {
-                                info.function = c.functions[found_index]
+                                let (field_type, field_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                                if field_error != ok { ret (info, UnknownCallable) }
+                                if field_type.kind != .Function { ret (info, UnknownCallable) }
+                                let (signature, has_signature) = function_signature_of(c, field_type)
+                                if !has_signature { ret (info, InvalidType) }
+                                info.indirect = true
+                                info.indirect_type = field_type
+                                info.function.module_index = module_index
+                                info.function.parameter_count = signature.parameter_count
+                                info.function.return_count = signature.return_count
                             }
                             has_function = true
                         }
