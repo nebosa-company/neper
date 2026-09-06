@@ -351,7 +351,7 @@ fn write_function_signature_canonical(c: *check.Checker, g: *graph.Graph, functi
         try binary.byte(output, kind)
         try binary.zeroes(output, 3usize)
         try canonical_text(output, parameter.name)
-        try write_type_canonical(c, g, parameter.ty, output)
+        if parameter.kind == .Integer { try write_type_canonical(c, g, parameter.ty, output) }
         at += 1usize
     }
     try binary.little_u32(output, function.parameter_count)
@@ -404,7 +404,7 @@ fn write_aggregate_signature_canonical(c: *check.Checker, g: *graph.Graph, aggre
         try binary.byte(output, parameter_kind)
         try binary.zeroes(output, 3usize)
         try canonical_text(output, parameter.name)
-        try write_type_canonical(c, g, parameter.ty, output)
+        if parameter.kind == .Integer { try write_type_canonical(c, g, parameter.ty, output) }
         at += 1usize
     }
     if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion {
@@ -532,6 +532,30 @@ fn find_checked_function(c: *check.Checker, module_index: usize, name: str) -> (
     while at < c.function_count {
         if c.functions[at].module_index == module_index && same(c.functions[at].name, name) { ret (at, true) }
         at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn checked_function_for_nir(c: *check.Checker, builder: *nir.Builder, nir_function: usize) -> (usize, bool) {
+    if nir_function >= builder.function_count { ret (0usize, false) }
+    let lowered = builder.functions[nir_function]
+    let (template_index, found_template) = find_checked_function(c, lowered.module_index, lowered.name)
+    if !found_template { ret (0usize, false) }
+    if !c.functions[template_index].generic { ret (template_index, true) }
+    var ordinal = 0usize
+    var prior = 0usize
+    while prior < nir_function {
+        if builder.functions[prior].module_index == lowered.module_index && same(builder.functions[prior].name, lowered.name) { ordinal += 1usize }
+        prior += 1usize
+    }
+    var instance = c.signature_function_count
+    while instance < c.function_count {
+        let generic = c.function_generics[instance]
+        if c.functions[instance].module_index == lowered.module_index && same(c.functions[instance].name, lowered.name) && generic.instance && generic.template_index == template_index && !c.functions[instance].generic {
+            if ordinal == 0usize { ret (instance, true) }
+            ordinal = ordinal - 1usize
+        }
+        instance += 1usize
     }
     ret (0usize, false)
 }
@@ -836,7 +860,13 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     let function = c.functions[function_index]
     let (name_index, name_error) = string_index(table, function.name)
     if name_error != ok { ret name_error }
-    let (nir_function, has_nir) = find_nir_function(builder, function.module_index, function.name)
+    var nir_function = 0usize
+    var has_nir = false
+    if !function.generic {
+        let (found_nir, found) = find_nir_function(builder, function.module_index, function.name)
+        nir_function = found_nir
+        has_nir = found
+    }
     let (signature, signature_error) = signature_hash(c, g, function_index, scratch)
     if signature_error != ok { ret signature_error }
     let (body, body_error) = body_hash(c, g, builder, function_index, nir_function, has_nir, scratch)
@@ -862,7 +892,7 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
         try binary.byte(output, kind)
         try binary.zeroes(output, 3usize)
         try binary.little_u32(output, parameter_name)
-        try write_type_indexed(c, g, table, parameter.ty, output)
+        if parameter.kind == .Integer { try write_type_indexed(c, g, table, parameter.ty, output) }
         at += 1usize
     }
     try binary.little_u32(output, function.parameter_count)
@@ -916,7 +946,7 @@ fn write_aggregate_interface(c: *check.Checker, g: *graph.Graph, table: *StringT
         try binary.byte(output, parameter_kind)
         try binary.zeroes(output, 3usize)
         try binary.little_u32(output, parameter_name)
-        try write_type_indexed(c, g, table, parameter.ty, output)
+        if parameter.kind == .Integer { try write_type_indexed(c, g, table, parameter.ty, output) }
         at += 1usize
     }
     if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion {
@@ -1190,7 +1220,7 @@ fn write_nir(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_i
     while at < builder.function_count {
         let function = builder.functions[at]
         if function.module_index == module_index {
-            let (checked_function, found_function) = find_checked_function(c, module_index, function.name)
+            let (checked_function, found_function) = checked_function_for_nir(c, builder, at)
             if !found_function { ret InvalidArtifact }
             let (hash, hash_error) = body_hash(c, g, builder, checked_function, at, true, scratch)
             if hash_error != ok { ret hash_error }
@@ -1328,22 +1358,26 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     try write_strings(&strings, output)
     try end_section(&writer)
     try begin_section(&writer, interface_kind(), required_flag())
-    try write_interface(c, g, builder, module_index, &strings, scratch, output)
+    let interface_error = write_interface(c, g, builder, module_index, &strings, scratch, output)
+    if interface_error != ok { ret interface_error }
     try end_section(&writer)
     try begin_section(&writer, deps_kind(), required_flag())
     try write_dependencies(c, g, builder, module_index, &strings, scratch, output)
     try end_section(&writer)
     try begin_section(&writer, nir_kind(), required_flag())
-    try write_nir(c, g, builder, module_index, &strings, scratch, output)
+    let nir_error = write_nir(c, g, builder, module_index, &strings, scratch, output)
+    if nir_error != ok { ret nir_error }
     try end_section(&writer)
     try begin_section(&writer, code_kind(), required_flag())
-    try write_code(g, builder, module_index, &strings, machine, function_offsets, relocations, relocation_count, scratch, output)
+    let code_error = write_code(g, builder, module_index, &strings, machine, function_offsets, relocations, relocation_count, scratch, output)
+    if code_error != ok { ret code_error }
     try end_section(&writer)
     try begin_section(&writer, debug_kind(), required_flag())
     try write_debug(g, module_index, &strings, scratch, output)
     try end_section(&writer)
     try finish(&writer)
-    ret validate(output.bytes[0usize..output.count])
+    let validation_error = validate(output.bytes[0usize..output.count])
+    ret validation_error
 }
 
 fn begin(writer: *Writer, output: *binary.Buffer, sections: []Section, target_triple_index: usize, flags: usize, mode: BuildMode) -> err {

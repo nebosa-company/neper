@@ -617,12 +617,11 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     ret ok
 }
 
-fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     let text = g.modules[module_index].text
     let (name, name_error) = declaration_name(c, text, node)
     if name_error != ok { ret name_error }
-    let (function_index, found) = check.find_function(c, module_index, name)
-    if !found { ret FunctionNotFound }
+    if function_index >= c.function_count { ret FunctionNotFound }
     let function = c.functions[function_index]
     if function.generic { ret check.Unsupported }
     let (nir_function, begin_error) = nir.begin_function(builder, module_index, name)
@@ -675,6 +674,46 @@ fn lower_function(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
     ret end_error
 }
 
+fn lower_declaration(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+    let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
+    if name_error != ok { ret name_error }
+    let (function_index, found) = check.find_function(c, module_index, name)
+    if !found { ret FunctionNotFound }
+    if c.functions[function_index].generic { ret ok }
+    ret lower_function_index(c, g, tree, module_index, node, function_index, builder, signatures, bindings)
+}
+
+fn lower_instance(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, instance_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+    if instance_index >= c.function_count { ret FunctionNotFound }
+    let instance = c.functions[instance_index]
+    let instance_generic = c.function_generics[instance_index]
+    if !instance_generic.instance || instance_generic.template_index >= c.signature_function_count || instance.generic { ret check.Unsupported }
+    let template = c.functions[instance_generic.template_index]
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .FnDecl {
+            let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
+            if name_error != ok { ret name_error }
+            if check.same(name, template.name) {
+                let template_generic = c.function_generics[instance_generic.template_index]
+                c.active_first_comptime = template_generic.first_comptime
+                c.active_comptime_count = template_generic.comptime_count
+                c.active_first_argument = instance_generic.first_argument
+                c.active_arguments = true
+                let lower_error = lower_function_index(c, g, tree, module_index, node, instance_index, builder, signatures, bindings)
+                c.active_first_comptime = 0usize
+                c.active_comptime_count = 0usize
+                c.active_first_argument = 0usize
+                c.active_arguments = false
+                ret lower_error
+            }
+        }
+        node_index += 1usize
+    }
+    ret FunctionNotFound
+}
+
 fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     if module_index >= g.count { ret FunctionNotFound }
     var tree: parse.Tree = zero
@@ -684,8 +723,15 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl { try lower_function(c, g, &tree, module_index, node, builder, signatures, bindings) }
+        if node.top_level && node.kind == .FnDecl { try lower_declaration(c, g, &tree, module_index, node, builder, signatures, bindings) }
         node_index += 1usize
+    }
+    var instance_index = c.signature_function_count
+    while instance_index < c.function_count {
+        if c.functions[instance_index].module_index == module_index && c.function_generics[instance_index].instance && !c.functions[instance_index].generic {
+            try lower_instance(c, g, &tree, module_index, instance_index, builder, signatures, bindings)
+        }
+        instance_index += 1usize
     }
     ret ok
 }

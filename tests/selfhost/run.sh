@@ -277,6 +277,20 @@ scalar_executable_written=$($test_build/neper-self emit-executable "$repo/tests/
 [ "$scalar_executable_written" = 'executable written' ]
 chmod +x "$scalar_executable_path"
 "$scalar_executable_path"
+generic_executable_path="$test_build/generic-selfhost"
+generic_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic/src/main.e" "$repo" x64 linux "$generic_executable_path")
+[ "$generic_executable_written" = 'executable written' ]
+chmod +x "$generic_executable_path"
+"$generic_executable_path"
+generic_artifact_path="$test_build/generic.x64-linux.em"
+generic_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/link/generic/src/main.e" "$repo" x64 linux "$generic_artifact_path")
+[ "$generic_artifact_written" = 'compiled module written' ]
+generic_artifact_executable_path="$test_build/generic-from-artifact"
+generic_artifact_executable_written=$($test_build/neper-self link-em "$generic_artifact_executable_path" "$generic_artifact_path")
+[ "$generic_artifact_executable_written" = 'artifact executable written' ]
+chmod +x "$generic_artifact_executable_path"
+"$generic_artifact_executable_path"
+cmp "$generic_artifact_executable_path" "$generic_executable_path"
 bitwise_executable_path="$test_build/bitwise-selfhost"
 bitwise_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/bitwise/src/main.e" "$repo" x64 linux "$bitwise_executable_path")
 [ "$bitwise_executable_written" = 'executable written' ]

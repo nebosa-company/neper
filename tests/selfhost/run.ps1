@@ -198,6 +198,20 @@ $scalarExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $scalarExecutableWritten -ne 'executable written') { throw 'scalar PE executable emission failed' }
 & $scalarExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'integer cast semantics failed in the self-hosted PE executable' }
+$genericExecutablePath = Join-Path $testBuild 'generic-selfhost.exe'
+$genericExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic\src\main.e') $repo 'x64' 'windows' $genericExecutablePath
+if ($LASTEXITCODE -ne 0 -or $genericExecutableWritten -ne 'executable written') { throw 'generic function instance did not lower into a PE executable' }
+& $genericExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'generic function instance failed in the self-hosted PE executable' }
+$genericArtifactPath = Join-Path $testBuild 'generic.x64-windows.em'
+$genericArtifactWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\link\generic\src\main.e') $repo 'x64' 'windows' $genericArtifactPath
+if ($LASTEXITCODE -ne 0 -or $genericArtifactWritten -ne 'compiled module written') { throw 'generic function instance was not serialized into a compiled module' }
+$genericArtifactExecutablePath = Join-Path $testBuild 'generic-from-artifact.exe'
+$genericArtifactExecutableWritten = & $compiler link-em $genericArtifactExecutablePath $genericArtifactPath
+if ($LASTEXITCODE -ne 0 -or $genericArtifactExecutableWritten -ne 'artifact executable written') { throw 'generic compiled module did not link' }
+& $genericArtifactExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'generic compiled-module executable failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericArtifactExecutablePath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $genericExecutablePath).Hash) { throw 'generic compiled-module and source links differ' }
 $bitwiseExecutablePath = Join-Path $testBuild 'bitwise-selfhost.exe'
 $bitwiseExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\bitwise\src\main.e') $repo 'x64' 'windows' $bitwiseExecutablePath
 if ($LASTEXITCODE -ne 0 -or $bitwiseExecutableWritten -ne 'executable written') { throw 'bitwise PE executable emission failed' }
