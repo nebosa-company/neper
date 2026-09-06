@@ -189,6 +189,10 @@ $executableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $executableWritten -ne 'executable written' -or -not (Test-Path -LiteralPath $executablePath) -or (Get-Item -LiteralPath $executablePath).Length -le 512) { throw 'PE executable emission failed' }
 & $executablePath
 if ($LASTEXITCODE -ne 0) { throw 'self-hosted PE executable did not run successfully' }
+$executableBytes = [IO.File]::ReadAllBytes($executablePath)
+$executableText = [Text.Encoding]::ASCII.GetString($executableBytes)
+if ([BitConverter]::ToUInt16($executableBytes, 134) -ne 2 -or [BitConverter]::ToUInt32($executableBytes, 272) -eq 0 -or [BitConverter]::ToUInt32($executableBytes, 360) -eq 0) { throw 'PE executable omitted its import directory or IAT' }
+if ($executableText -notmatch 'KERNEL32\.dll' -or $executableText -notmatch 'ExitProcess') { throw 'PE executable omitted its fixed kernel32 import' }
 $scalarExecutablePath = Join-Path $testBuild 'scalar-selfhost.exe'
 $scalarExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\scalar\src\main.e') $repo 'x64' 'windows' $scalarExecutablePath
 if ($LASTEXITCODE -ne 0 -or $scalarExecutableWritten -ne 'executable written') { throw 'scalar PE executable emission failed' }
