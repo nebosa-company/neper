@@ -1701,6 +1701,57 @@ fn artifact_code_relocation_at(bytes: []const usize, function: CodeFunction, ind
     ret (CodeRelocation { displacement_at: displacement, module_index: module_index, name_index: name_index }, ok)
 }
 
+fn artifact_code_hash_input_size(bytes: []const usize, function: CodeFunction) -> (usize, err) {
+    if function.code_start > bytes.len || function.code_length > bytes.len - function.code_start { ret (0usize, InvalidArtifact) }
+    var size = 8usize + function.code_length
+    var relocation_at = 0usize
+    while relocation_at < function.relocation_count {
+        let (relocation, relocation_error) = artifact_code_relocation_at(bytes, function, relocation_at)
+        if relocation_error != ok { ret (0usize, relocation_error) }
+        let (module_start, module_length, module_error) = string_bounds(bytes, relocation.module_index)
+        let (name_start, name_length, name_error) = string_bounds(bytes, relocation.name_index)
+        if module_error != ok || name_error != ok || module_start >= bytes.len || name_start >= bytes.len { ret (0usize, InvalidArtifact) }
+        size += 12usize + module_length + name_length
+        relocation_at += 1usize
+    }
+    ret (size, ok)
+}
+
+fn write_indexed_canonical_text(bytes: []const usize, index: usize, output: *binary.Buffer) -> err {
+    let (start, length, bounds_error) = string_bounds(bytes, index)
+    if bounds_error != ok { ret bounds_error }
+    try binary.little_u32(output, length)
+    ret binary.copy(output, bytes[start..start + length])
+}
+
+fn artifact_code_content_hash(bytes: []const usize, function: CodeFunction, scratch: *binary.Buffer) -> (usize, err) {
+    let (required, required_error) = artifact_code_hash_input_size(bytes, function)
+    if required_error != ok { ret (0usize, required_error) }
+    if required > scratch.bytes.len { ret (0usize, Capacity) }
+    scratch.count = 0usize
+    let length_write_error = binary.little_u32(scratch, function.code_length)
+    if length_write_error != ok { ret (0usize, length_write_error) }
+    let code_write_error = binary.copy(scratch, bytes[function.code_start..function.code_start + function.code_length])
+    if code_write_error != ok { ret (0usize, code_write_error) }
+    let count_write_error = binary.little_u32(scratch, function.relocation_count)
+    if count_write_error != ok { ret (0usize, count_write_error) }
+    var relocation_at = 0usize
+    while relocation_at < function.relocation_count {
+        let (relocation, relocation_error) = artifact_code_relocation_at(bytes, function, relocation_at)
+        if relocation_error != ok { ret (0usize, relocation_error) }
+        let displacement_error = binary.little_u32(scratch, relocation.displacement_at)
+        if displacement_error != ok { ret (0usize, displacement_error) }
+        let module_write_error = write_indexed_canonical_text(bytes, relocation.module_index, scratch)
+        if module_write_error != ok { ret (0usize, module_write_error) }
+        let name_write_error = write_indexed_canonical_text(bytes, relocation.name_index, scratch)
+        if name_write_error != ok { ret (0usize, name_write_error) }
+        relocation_at += 1usize
+    }
+    if scratch.count != required { ret (0usize, InvalidArtifact) }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
 fn interface_module_index(bytes: []const usize) -> (usize, err) {
     let validation_error = validate(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
@@ -1927,7 +1978,20 @@ fn self_test() -> err {
     try binary.little_u32(&output, 0usize)
     try end_section(&writer)
     try begin_section(&writer, code_kind(), required_flag())
+    var code_hash_storage: [16]usize = zero
+    var code_hash_input: binary.Buffer = zero
+    try binary.init(&code_hash_input, code_hash_storage[..])
+    try binary.little_u32(&code_hash_input, 1usize)
+    try binary.byte(&code_hash_input, 195usize)
+    try binary.little_u32(&code_hash_input, 0usize)
+    let (code_hash, code_hash_error) = artifact_hash.xxhash64(code_hash_input.bytes[0usize..code_hash_input.count])
+    if code_hash_error != ok { ret code_hash_error }
+    try binary.little_u32(&output, 1usize)
+    try binary.little_u32(&output, module_name)
+    try binary.little_u64(&output, code_hash)
+    try binary.little_u32(&output, 1usize)
     try binary.little_u32(&output, 0usize)
+    try binary.byte(&output, 195usize)
     try end_section(&writer)
     try begin_section(&writer, debug_kind(), required_flag())
     try binary.little_u64(&output, 0usize)
@@ -1937,7 +2001,11 @@ fn self_test() -> err {
     let (error_count, error_count_error) = artifact_error_count(output.bytes[0usize..output.count])
     if error_count_error != ok || error_count != 0usize { ret InvalidArtifact }
     let (code_count, code_count_error) = artifact_code_count(output.bytes[0usize..output.count])
-    if code_count_error != ok || code_count != 0usize { ret InvalidArtifact }
+    if code_count_error != ok || code_count != 1usize { ret InvalidArtifact }
+    let (code_function, code_function_error) = artifact_code_function_at(output.bytes[0usize..output.count], 0usize)
+    if code_function_error != ok || code_function.code_length != 1usize || code_function.relocation_count != 0usize { ret InvalidArtifact }
+    let (checked_code_hash, checked_code_hash_error) = artifact_code_content_hash(output.bytes[0usize..output.count], code_function, &code_hash_input)
+    if checked_code_hash_error != ok || checked_code_hash != code_hash { ret InvalidArtifact }
     let (declaration, found_declaration, declaration_error) = find_declaration(output.bytes[0usize..output.count], "main")
     if declaration_error != ok || !found_declaration || declaration.signature_hash != 123usize || declaration.body_hash != 456usize { ret InvalidArtifact }
     let (dependency, dependency_error) = dependency_at(output.bytes[0usize..output.count], 0usize)

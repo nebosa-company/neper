@@ -1,6 +1,7 @@
 // Deterministic assembly of cached .em machine code into own-linker input.
 
 use e.mem
+use binary
 use codegen_x64
 use em
 use emit_x64
@@ -87,6 +88,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     var function_count = 0usize
     var relocation_count = 0usize
     var code_size = 0usize
+    var hash_scratch_size = 0usize
     var artifact_at = 0usize
     while artifact_at < artifacts.len {
         let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
@@ -98,11 +100,19 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             if function_error != ok { ret function_error }
             code_size += function.code_length
             relocation_count += function.relocation_count
+            let (hash_size, hash_size_error) = em.artifact_code_hash_input_size(artifacts[artifact_at].bytes, function)
+            if hash_size_error != ok { ret hash_size_error }
+            if hash_size > hash_scratch_size { hash_scratch_size = hash_size }
             function_at += 1usize
         }
         artifact_at += 1usize
     }
     if function_count == 0usize { ret InvalidInput }
+
+    let (hash_storage, hash_storage_error) = mem.alloc[usize](a, capacity(hash_scratch_size))
+    if hash_storage_error != ok { ret hash_storage_error }
+    var hash_scratch: binary.Buffer = zero
+    try binary.init(&hash_scratch, hash_storage)
 
     let (functions, functions_error) = mem.alloc[nir.Function](a, function_count)
     if functions_error != ok { ret functions_error }
@@ -136,6 +146,8 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
         while function_at < count {
             let (function, function_error) = em.artifact_code_function_at(artifacts[artifact_at].bytes, function_at)
             if function_error != ok { ret function_error }
+            let (content_hash, content_hash_error) = em.artifact_code_content_hash(artifacts[artifact_at].bytes, function, &hash_scratch)
+            if content_hash_error != ok || content_hash != function.content_hash { ret InvalidInput }
             let (name, name_error) = copy_string(a, artifacts[artifact_at].bytes, function.name_index)
             if name_error != ok { ret name_error }
             let global_function = program.builder.function_count
