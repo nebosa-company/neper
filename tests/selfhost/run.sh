@@ -303,8 +303,17 @@ chmod +x "$storage_executable_path"
 "$storage_executable_path"
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
+branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
+[ "$branches_generated" = 'module codegen ok' ]
 loops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/loops/src/main.e" "$repo" x64 linux)
 [ "$loops_lowered" = 'module nir ok' ]
+loops_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/loops/src/main.e" "$repo" x64 linux)
+[ "$loops_generated" = 'module codegen ok' ]
+control_executable_path="$test_build/control-selfhost"
+control_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/control/src/main.e" "$repo" x64 linux "$control_executable_path")
+[ "$control_executable_written" = 'executable written' ]
+chmod +x "$control_executable_path"
+"$control_executable_path"
 scalar_ops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
 [ "$scalar_ops_lowered" = 'module nir ok' ]
 scalar_ops_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
