@@ -997,11 +997,9 @@ separate documentation/design/site effort:
  M benchmarks/llm_edit/README.md
  M docs/general-purpose-verification.md
  M docs/roadmap.md
- M docs/schemas/neper-v1.schema.json
  M docs/tooling.md
  M docs/ui-framework.md
 ?? scripts/render_module_apis.py
-?? tests/test_module_plan.py
 ```
 
 The `DECISIONS.md` to `docs/decisions.md` case/path move is finished: `DECISIONS.md`
@@ -1137,8 +1135,15 @@ needs general `T.cmp` protocol resolution first.
   scripts/check_module_plan.py` validates `modules.json` against `modules.md` and
   `module-apis.md`, taking an optional `--root`, and it caught two real mid-edit
   mismatches during the namespace work. `tests/test_module_plan.py` is its regression
-  suite -- it loads the script by path and passes, but is still untracked and belongs
-  to the session writing it.
+  suite and is tracked alongside it.
+- `test_package_blocker_schema_matches_policy` reads
+  `docs/schemas/neper-v1.schema.json` and asserts a `blocked_by` pattern that admits a
+  dotted module name. The committed pattern was `^[a-z][a-z0-9-]*$`, which cannot match
+  `e.db`, so the test was green only against the schema edit sitting uncommitted in the
+  working tree; that one line is committed with it. Its alternation still lists
+  `algo|text|crypto|fmt|gfx|ui` as roots, which section 7 of D87 consolidated away --
+  `e` alone now covers every toolchain module, and narrowing it is left to whoever owns
+  that schema work.
 - Regenerate/verify `docs/module-apis.pdf` only as a derived artifact; do not treat
   it as the normative source.
 - Reconcile the progress site with the committed compiler state after each grouped
