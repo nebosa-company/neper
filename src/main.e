@@ -2,6 +2,7 @@ use e.io
 use e.mem
 use e.os
 use check
+use codegen_x64
 use emit_x64
 use graph
 use lex
@@ -724,6 +725,7 @@ fn self_test() -> err {
     try nir.self_test()
     try regalloc.self_test()
     try emit_x64.self_test()
+    try codegen_x64.self_test()
     ret ok
 }
 
