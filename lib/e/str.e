@@ -5,7 +5,7 @@
 //
 // The searching, slicing and joining half is here too. It allocates only where the
 // frozen signature takes an arena: every search, trim and split result borrows the
-// input. What is still missing is the number parsers, the float pushes, `push_err`
+// input. What is still missing is the float pushes, the float parsers, `push_err`
 // and `format`.
 use e.mem
 
@@ -36,6 +36,7 @@ type Builder = struct {
 
 error NotOnTop
 error InvalidSeparator
+error BadNumber
 
 fn builder(a: *mem.Arena, cap: usize) -> (Builder, err) {
     var b: Builder = zero
@@ -299,6 +300,66 @@ fn eq(x: str, y: str) -> bool {
         at += 1usize
     }
     ret true
+}
+
+fn parse_i64(s: str) -> (i64, err) {
+    let (value, value_error) = parse_i64_radix(s, 10u8)
+    ret (value, value_error)
+}
+
+fn parse_u64(s: str) -> (u64, err) {
+    let (value, value_error) = parse_u64_radix(s, 10u8)
+    ret (value, value_error)
+}
+
+// The magnitude is parsed unsigned, because `i64`'s most negative value has no
+// positive counterpart to build and then negate. Its own magnitude is written out
+// rather than converted: section 4 makes `i64(x)` checked, so `i64` of 2**63 is a
+// `narrow` trap the moment section 11's check table is emitted, even though the
+// current back end truncates it to the answer this returns.
+fn parse_i64_radix(s: str, radix: u8) -> (i64, err) {
+    var digits = s
+    var negative = false
+    if s.len > 0usize && s[0usize] == 45u8 {
+        negative = true
+        digits = s[1usize..]
+    }
+    let (magnitude, magnitude_error) = parse_u64_radix(digits, radix)
+    if magnitude_error != ok { ret (0i64, magnitude_error) }
+    if negative {
+        if magnitude > 9223372036854775808u64 { ret (0i64, BadNumber) }
+        if magnitude == 9223372036854775808u64 { ret (-9223372036854775807i64 - 1i64, ok) }
+        ret (0i64 - i64(magnitude), ok)
+    }
+    if magnitude > 9223372036854775807u64 { ret (0i64, BadNumber) }
+    ret (i64(magnitude), ok)
+}
+
+// Every byte is a digit or the input is malformed: no sign, no prefix, no separators
+// and no surrounding space. Overflow is checked before the multiply rather than
+// after, because there is no wrapping arithmetic to detect it with.
+fn parse_u64_radix(s: str, radix: u8) -> (u64, err) {
+    if radix < 2u8 || radix > 36u8 { ret (0u64, BadNumber) }
+    if s.len == 0usize { ret (0u64, BadNumber) }
+    let base = u64(radix)
+    let limit = 18446744073709551615u64
+    var value = 0u64
+    var at = 0usize
+    while at < s.len {
+        let byte = s[at]
+        // 37 is past every radix, so a byte that is not a digit at all fails the
+        // same comparison as one that is out of range for this radix.
+        var digit = 37u8
+        if byte >= 48u8 && byte <= 57u8 { digit = byte - 48u8 }
+        if byte >= 65u8 && byte <= 90u8 { digit = byte - 55u8 }
+        if byte >= 97u8 && byte <= 122u8 { digit = byte - 87u8 }
+        if digit >= radix { ret (0u64, BadNumber) }
+        let scaled = u64(digit)
+        if value > (limit - scaled) / base { ret (0u64, BadNumber) }
+        value = value * base + scaled
+        at += 1usize
+    }
+    ret (value, ok)
 }
 
 fn compare(x: str, y: str) -> i32 {

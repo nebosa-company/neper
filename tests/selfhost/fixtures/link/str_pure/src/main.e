@@ -1,8 +1,9 @@
-// The half of `e.str` that only reads: comparison, search, trim, split, and the
-// three that allocate a fresh string through a builder. The fixture pins the edges
-// the signatures do not show -- what an empty needle matches, where a non-overlapping
-// count stops, which byte a trim keeps, and that `lines` takes CRLF but does not
-// invent a final empty line.
+// The half of `e.str` that only reads: comparison, search, trim, split, the integer
+// parsers, and the forms that allocate a fresh string through a builder. The fixture
+// pins the edges the signatures do not show -- what an empty needle matches, where a
+// non-overlapping count stops, which byte a trim keeps, that `lines` takes CRLF but
+// does not invent a final empty line, and that a parser rejects the value one past
+// each end of its range rather than wrapping into it.
 
 use e.mem
 use e.str
@@ -81,6 +82,58 @@ fn check_split(a: *mem.Arena, s: str, separator: str, want: str) -> err {
 fn check_lines(a: *mem.Arena, s: str, want: str) -> err {
     var it = str.lines(s)
     try walk(a, &it, want)
+    ret ok
+}
+
+fn want_u64(s: str, want: u64) -> err {
+    let (got, got_error) = str.parse_u64(s)
+    if got_error != ok { ret got_error }
+    if got != want { ret Failed }
+    ret ok
+}
+
+fn bad_u64(s: str) -> err {
+    let (_, got_error) = str.parse_u64(s)
+    if got_error != str.BadNumber { ret Failed }
+    ret ok
+}
+
+fn want_i64(s: str, want: i64) -> err {
+    let (got, got_error) = str.parse_i64(s)
+    if got_error != ok { ret got_error }
+    if got != want { ret Failed }
+    ret ok
+}
+
+fn bad_i64(s: str) -> err {
+    let (_, got_error) = str.parse_i64(s)
+    if got_error != str.BadNumber { ret Failed }
+    ret ok
+}
+
+fn want_u64_radix(s: str, radix: u8, want: u64) -> err {
+    let (got, got_error) = str.parse_u64_radix(s, radix)
+    if got_error != ok { ret got_error }
+    if got != want { ret Failed }
+    ret ok
+}
+
+fn bad_u64_radix(s: str, radix: u8) -> err {
+    let (_, got_error) = str.parse_u64_radix(s, radix)
+    if got_error != str.BadNumber { ret Failed }
+    ret ok
+}
+
+fn want_i64_radix(s: str, radix: u8, want: i64) -> err {
+    let (got, got_error) = str.parse_i64_radix(s, radix)
+    if got_error != ok { ret got_error }
+    if got != want { ret Failed }
+    ret ok
+}
+
+fn bad_i64_radix(s: str, radix: u8) -> err {
+    let (_, got_error) = str.parse_i64_radix(s, radix)
+    if got_error != str.BadNumber { ret Failed }
     ret ok
 }
 
@@ -248,5 +301,69 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.is_ascii_alnum(48u8) { ret Failed }
     if !str.is_ascii_alnum(90u8) { ret Failed }
     if str.is_ascii_alnum(95u8) { ret Failed }
+
+    // Parsing consumes every byte: no sign but a leading `-` on the signed forms, no
+    // prefix, no separators, no surrounding space.
+    let u64_max = 18446744073709551615u64
+    let i64_max = 9223372036854775807i64
+    let i64_min = -9223372036854775807i64 - 1i64
+    try want_u64("0", 0u64)
+    try want_u64("42", 42u64)
+    try want_u64("007", 7u64)
+    try want_u64("18446744073709551615", u64_max)
+    try bad_u64("")
+    try bad_u64("18446744073709551616")
+    try bad_u64("99999999999999999999999")
+    try bad_u64("-1")
+    try bad_u64("+1")
+    try bad_u64(" 1")
+    try bad_u64("1 ")
+    try bad_u64("1a")
+    try bad_u64("1_000")
+
+    try want_i64("0", 0i64)
+    try want_i64("-0", 0i64)
+    try want_i64("42", 42i64)
+    try want_i64("-42", -42i64)
+    // The two ends, and the value one past each of them. The negative end has no
+    // positive counterpart, which is the case a magnitude-then-negate parser drops.
+    try want_i64("9223372036854775807", i64_max)
+    try want_i64("-9223372036854775808", i64_min)
+    try bad_i64("9223372036854775808")
+    try bad_i64("-9223372036854775809")
+    try bad_i64("")
+    try bad_i64("-")
+    try bad_i64("--1")
+    try bad_i64("+1")
+    try bad_i64("4-2")
+
+    // Letters are case-insensitive, and a digit is checked against the radix rather
+    // than against 10.
+    try want_u64_radix("ff", 16u8, 255u64)
+    try want_u64_radix("FF", 16u8, 255u64)
+    try want_u64_radix("1010", 2u8, 10u64)
+    try want_u64_radix("777", 8u8, 511u64)
+    try want_u64_radix("z", 36u8, 35u64)
+    try want_u64_radix("Z", 36u8, 35u64)
+    try want_u64_radix("1111111111111111111111111111111111111111111111111111111111111111", 2u8, u64_max)
+    try bad_u64_radix("2", 2u8)
+    try bad_u64_radix("8", 8u8)
+    try bad_u64_radix("g", 16u8)
+    try bad_u64_radix("10000000000000000000000000000000000000000000000000000000000000000", 2u8)
+    // No prefix is recognized, so `x` is just a byte that is not a hex digit.
+    try bad_u64_radix("0x10", 16u8)
+    // Radices outside 2..36 are rejected before the input is looked at.
+    try bad_u64_radix("1", 0u8)
+    try bad_u64_radix("1", 1u8)
+    try bad_u64_radix("1", 37u8)
+    try bad_u64_radix("", 16u8)
+
+    try want_i64_radix("-ff", 16u8, -255i64)
+    try want_i64_radix("7fffffffffffffff", 16u8, i64_max)
+    try want_i64_radix("-8000000000000000", 16u8, i64_min)
+    try bad_i64_radix("8000000000000000", 16u8)
+    try bad_i64_radix("-8000000000000001", 16u8)
+    try bad_i64_radix("-", 16u8)
+    try bad_i64_radix("1", 1u8)
     ret ok
 }

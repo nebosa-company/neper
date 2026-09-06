@@ -434,10 +434,10 @@ str_builder_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$str_builder_written" = 'executable written' ]
 chmod +x "$test_build/str-builder-selfhost"
 "$test_build/str-builder-selfhost"
-# The read-only half of `e.str`: comparison, search, trim, split and the three forms
-# that allocate. The fixture pins what an empty needle matches, where a
-# non-overlapping count stops, and that `lines` takes CRLF without inventing a final
-# empty line.
+# The read-only half of `e.str`: comparison, search, trim, split, the integer parsers
+# and the forms that allocate. The fixture pins what an empty needle matches, where a
+# non-overlapping count stops, that `lines` takes CRLF without inventing a final empty
+# line, and that a parser rejects the value one past each end of its range.
 str_pure_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/str_pure/src/main.e" "$repo" x64 linux "$test_build/str-pure-selfhost")
 [ "$str_pure_written" = 'executable written' ]
 chmod +x "$test_build/str-pure-selfhost"
