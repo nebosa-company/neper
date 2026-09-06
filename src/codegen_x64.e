@@ -115,6 +115,19 @@ fn comparison(opcode: nir.Opcode) -> bool {
     ret opcode == .Equal || opcode == .NotEqual || opcode == .Less || opcode == .LessEqual || opcode == .Greater || opcode == .GreaterEqual
 }
 
+fn integer_width(ty: check.Type) -> usize {
+    if ty.kind != .Integer { ret 0usize }
+    if check.same(ty.name, "i8") || check.same(ty.name, "u8") { ret 8usize }
+    if check.same(ty.name, "i16") || check.same(ty.name, "u16") { ret 16usize }
+    if check.same(ty.name, "i32") || check.same(ty.name, "u32") { ret 32usize }
+    ret 64usize
+}
+
+fn signed_integer(ty: check.Type) -> bool {
+    if ty.kind != .Integer || ty.name.len == 0usize { ret false }
+    ret ty.name[0usize] == 105u8
+}
+
 fn value_type(builder: *nir.Builder, current: nir.Function, value: usize) -> (check.Type, err) {
     let end = current.first_instruction + current.instruction_count
     var at = current.first_instruction
@@ -241,6 +254,27 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             try emit_x64.load_stack(output, destination, stack_slots + instruction.immediate)
             try store_result(allocations, instruction.result, destination, output)
         } else {
+            if instruction.opcode == .Cast || instruction.opcode == .Negate || instruction.opcode == .BitNot {
+                if instruction.operand_count != 1usize || instruction.ty.kind != .Integer { ret Unsupported }
+                let operand_value = builder.operands[instruction.first_operand]
+                let (source_type, source_type_error) = value_type(builder, current, operand_value)
+                if source_type_error != ok || source_type.kind != .Integer { ret Unsupported }
+                let (source, source_error) = read_value(allocations, operand_value, 10usize, output)
+                if source_error != ok { ret source_error }
+                let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
+                if destination_error != ok { ret destination_error }
+                if instruction.opcode == .Cast {
+                    var normalize_type = instruction.ty
+                    if integer_width(normalize_type) == 64usize { normalize_type = source_type }
+                    try emit_x64.normalize_integer(output, destination, source, integer_width(normalize_type), signed_integer(normalize_type))
+                } else {
+                    if destination != source { try emit_x64.mov_register(output, destination, source) }
+                    if instruction.opcode == .Negate { try emit_x64.negate_register(output, destination) }
+                    if instruction.opcode == .BitNot { try emit_x64.bit_not_register(output, destination) }
+                    try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty))
+                }
+                try store_result(allocations, instruction.result, destination, output)
+            } else {
         if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError {
             let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
             if destination_error != ok { ret destination_error }
@@ -355,6 +389,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 }
                 }
             }
+        }
         }
         }
         at += 1usize

@@ -272,6 +272,11 @@ executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 chmod +x "$executable_path"
 "$executable_path"
 readelf -h -l "$executable_path" >/dev/null
+scalar_executable_path="$test_build/scalar-selfhost"
+scalar_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/scalar/src/main.e" "$repo" x64 linux "$scalar_executable_path")
+[ "$scalar_executable_written" = 'executable written' ]
+chmod +x "$scalar_executable_path"
+"$scalar_executable_path"
 locals_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/locals/src/main.e" "$repo" x64 linux)
 [ "$locals_lowered" = 'module nir ok' ]
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
@@ -280,6 +285,8 @@ loops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/n
 [ "$loops_lowered" = 'module nir ok' ]
 scalar_ops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
 [ "$scalar_ops_lowered" = 'module nir ok' ]
+scalar_ops_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
+[ "$scalar_ops_generated" = 'module codegen ok' ]
 composite_checked=$($test_build/neper-self check-file "$check_root/composite_valid/src/main.e" "$repo" x64 linux)
 [ "$composite_checked" = 'module check ok' ]
 qualified_checked=$($test_build/neper-self check-file "$check_root/qualified_valid/src/main.e" "$repo" x64 linux)

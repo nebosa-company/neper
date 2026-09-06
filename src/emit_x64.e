@@ -131,6 +131,50 @@ fn multiply_register(buffer: *Buffer, destination: usize, source: usize) -> err 
     ret modrm(buffer, destination, source)
 }
 
+fn negate_register(buffer: *Buffer, value: usize) -> err {
+    try check_register(value)
+    try rex(buffer, 3usize, value)
+    try byte(buffer, 247usize)
+    ret modrm(buffer, 3usize, value)
+}
+
+fn bit_not_register(buffer: *Buffer, value: usize) -> err {
+    try check_register(value)
+    try rex(buffer, 2usize, value)
+    try byte(buffer, 247usize)
+    ret modrm(buffer, 2usize, value)
+}
+
+fn normalize_integer(buffer: *Buffer, destination: usize, source: usize, width: usize, signed: bool) -> err {
+    try check_register(destination)
+    try check_register(source)
+    if width == 64usize {
+        if destination != source { ret mov_register(buffer, destination, source) }
+        ret ok
+    }
+    if width == 32usize {
+        if signed {
+            try rex(buffer, destination, source)
+            try byte(buffer, 99usize)
+            ret modrm(buffer, destination, source)
+        }
+        try byte(buffer, 64usize + destination / 8usize * 4usize + source / 8usize)
+        try byte(buffer, 139usize)
+        ret modrm(buffer, destination, source)
+    }
+    try rex(buffer, destination, source)
+    try byte(buffer, 15usize)
+    if width == 8usize {
+        if signed { try byte(buffer, 190usize) } else { try byte(buffer, 182usize) }
+        ret modrm(buffer, destination, source)
+    }
+    if width == 16usize {
+        if signed { try byte(buffer, 191usize) } else { try byte(buffer, 183usize) }
+        ret modrm(buffer, destination, source)
+    }
+    ret InvalidByte
+}
+
 fn frame_size(stack_slots: usize) -> usize {
     let bytes = stack_slots * 8usize
     let rounded = bytes + 15usize
@@ -254,6 +298,20 @@ fn self_test() -> err {
     var at = 0usize
     while at < expected.len {
         if buffer.bytes[at] != expected[at] { ret InvalidRegister }
+        at += 1usize
+    }
+    var scalar_storage: [32]usize = zero
+    var scalar: Buffer = zero
+    try init(&scalar, scalar_storage[..])
+    try negate_register(&scalar, 0usize)
+    try bit_not_register(&scalar, 9usize)
+    try normalize_integer(&scalar, 10usize, 9usize, 32usize, true)
+    try normalize_integer(&scalar, 9usize, 10usize, 8usize, false)
+    let scalar_expected = [13]usize{ 72usize, 247usize, 216usize, 73usize, 247usize, 209usize, 77usize, 99usize, 209usize, 77usize, 15usize, 182usize, 202usize }
+    if scalar.count != scalar_expected.len { ret InvalidRegister }
+    at = 0usize
+    while at < scalar_expected.len {
+        if scalar.bytes[at] != scalar_expected[at] { ret InvalidRegister }
         at += 1usize
     }
     var frame_storage: [64]usize = zero
