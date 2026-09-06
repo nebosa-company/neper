@@ -341,6 +341,20 @@ On Linux:
 - [`examples/sample.e`](examples/sample.e) — every construct in the language, once, in one program
 - [`examples/`](examples/) — what the language is meant to look like
 
+Those documents also render into one bookmarked PDF with a linked table of
+contents and a source manifest. It is generated on demand rather than tracked:
+
+```powershell
+./scripts/build-docs-pdf.ps1
+```
+
+```bash
+./scripts/build-docs-pdf.sh
+```
+
+Both wrappers provision a local virtual environment from pinned requirements and
+write `docs/neper.pdf`.
+
 ## Shape of the thing
 
 | | |
