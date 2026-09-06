@@ -48,20 +48,23 @@ fn append_name(output: *emit_x64.Buffer, name: str, width: usize) -> err {
 }
 
 fn append_thunks(output: *emit_x64.Buffer, idata_address: usize) -> err {
-    try emit_x64.little_u64(output, idata_address + 294usize)
-    try emit_x64.little_u64(output, idata_address + 308usize)
-    try emit_x64.little_u64(output, idata_address + 322usize)
-    try emit_x64.little_u64(output, idata_address + 336usize)
-    try emit_x64.little_u64(output, idata_address + 348usize)
-    try emit_x64.little_u64(output, idata_address + 366usize)
-    try emit_x64.little_u64(output, idata_address + 382usize)
-    try emit_x64.little_u64(output, idata_address + 400usize)
-    try emit_x64.little_u64(output, idata_address + 416usize)
-    try emit_x64.little_u64(output, idata_address + 432usize)
-    try emit_x64.little_u64(output, idata_address + 454usize)
-    try emit_x64.little_u64(output, idata_address + 466usize)
-    try emit_x64.little_u64(output, idata_address + 482usize)
-    try emit_x64.little_u64(output, idata_address + 504usize)
+    try emit_x64.little_u64(output, idata_address + 342usize)
+    try emit_x64.little_u64(output, idata_address + 356usize)
+    try emit_x64.little_u64(output, idata_address + 370usize)
+    try emit_x64.little_u64(output, idata_address + 384usize)
+    try emit_x64.little_u64(output, idata_address + 396usize)
+    try emit_x64.little_u64(output, idata_address + 414usize)
+    try emit_x64.little_u64(output, idata_address + 430usize)
+    try emit_x64.little_u64(output, idata_address + 448usize)
+    try emit_x64.little_u64(output, idata_address + 464usize)
+    try emit_x64.little_u64(output, idata_address + 480usize)
+    try emit_x64.little_u64(output, idata_address + 502usize)
+    try emit_x64.little_u64(output, idata_address + 514usize)
+    try emit_x64.little_u64(output, idata_address + 530usize)
+    try emit_x64.little_u64(output, idata_address + 552usize)
+    try emit_x64.little_u64(output, idata_address + 564usize)
+    try emit_x64.little_u64(output, idata_address + 590usize)
+    try emit_x64.little_u64(output, idata_address + 616usize)
     ret emit_x64.little_u64(output, 0usize)
 }
 
@@ -75,8 +78,8 @@ fn append_import_name(output: *emit_x64.Buffer, name: str) -> err {
 
 fn append_imports(output: *emit_x64.Buffer, raw_offset: usize, idata_address: usize) -> err {
     let lookup_address = idata_address + 40usize
-    let iat_address = idata_address + 160usize
-    let dll_address = idata_address + 280usize
+    let iat_address = idata_address + 184usize
+    let dll_address = idata_address + 328usize
     try emit_x64.little_u32(output, lookup_address)
     try emit_x64.little_u32(output, 0usize)
     try emit_x64.little_u32(output, 0usize)
@@ -100,7 +103,10 @@ fn append_imports(output: *emit_x64.Buffer, raw_offset: usize, idata_address: us
     try append_import_name(output, "ReadFile")
     try append_import_name(output, "VirtualAlloc")
     try append_import_name(output, "WideCharToMultiByte")
-    ret append_import_name(output, "WriteFile")
+    try append_import_name(output, "WriteFile")
+    try append_import_name(output, "GetSystemTimeAsFileTime")
+    try append_import_name(output, "QueryPerformanceCounter")
+    ret append_import_name(output, "QueryPerformanceFrequency")
 }
 
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
@@ -115,14 +121,14 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_address = text_address + text_virtual_size
-    let idata_size = 516usize
+    let idata_size = 644usize
     let (idata_raw_size, idata_raw_error) = align_up(idata_size, 512usize)
     if idata_raw_error != ok { ret idata_raw_error }
     let idata_raw_offset = headers_size + text_raw_size
     let (idata_virtual_size, idata_virtual_error) = align_up(idata_size, 4096usize)
     if idata_virtual_error != ok { ret idata_virtual_error }
     let image_size = idata_address + idata_virtual_size
-    let import_address_address = idata_address + 160usize
+    let import_address_address = idata_address + 184usize
 
     try emit_x64.byte(output, 77usize)
     try emit_x64.byte(output, 90usize)
@@ -255,8 +261,8 @@ fn self_test() -> err {
     if executable.bytes[0usize] != 77usize || executable.bytes[1usize] != 90usize || executable.bytes[60usize] != 128usize { ret InvalidExecutable }
     if executable.bytes[128usize] != 80usize || executable.bytes[129usize] != 69usize || executable.bytes[132usize] != 100usize || executable.bytes[133usize] != 134usize || executable.bytes[134usize] != 2usize { ret InvalidExecutable }
     if executable.bytes[168usize] != 0usize || executable.bytes[169usize] != 16usize || executable.bytes[272usize] != 0usize || executable.bytes[273usize] != 32usize { ret InvalidExecutable }
-    if executable.bytes[360usize] != 160usize || executable.bytes[361usize] != 32usize || executable.bytes[392usize] != 46usize || executable.bytes[432usize] != 46usize { ret InvalidExecutable }
-    if executable.bytes[512usize] != 83usize || executable.bytes[548usize] != 208usize || executable.bytes[549usize] != 16usize || executable.bytes[2676usize] != 195usize { ret InvalidExecutable }
-    if executable.bytes[3072usize] != 40usize || executable.bytes[3073usize] != 32usize || executable.bytes[3352usize] != 75usize || executable.bytes[3368usize] != 67usize { ret InvalidExecutable }
+    if executable.bytes[360usize] != 184usize || executable.bytes[361usize] != 32usize || executable.bytes[392usize] != 46usize || executable.bytes[432usize] != 46usize { ret InvalidExecutable }
+    if executable.bytes[512usize] != 83usize || executable.bytes[548usize] != 232usize || executable.bytes[549usize] != 16usize || executable.bytes[2960usize] != 195usize { ret InvalidExecutable }
+    if executable.bytes[3072usize] != 40usize || executable.bytes[3073usize] != 32usize || executable.bytes[3400usize] != 75usize || executable.bytes[3416usize] != 67usize { ret InvalidExecutable }
     ret ok
 }

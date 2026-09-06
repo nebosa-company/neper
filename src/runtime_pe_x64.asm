@@ -10,7 +10,10 @@ EXTERN __imp_FindNextFileW:QWORD
 EXTERN __imp_GetCommandLineW:QWORD
 EXTERN __imp_GetLastError:QWORD
 EXTERN __imp_GetStdHandle:QWORD
+EXTERN __imp_GetSystemTimeAsFileTime:QWORD
 EXTERN __imp_MultiByteToWideChar:QWORD
+EXTERN __imp_QueryPerformanceCounter:QWORD
+EXTERN __imp_QueryPerformanceFrequency:QWORD
 EXTERN __imp_ReadFile:QWORD
 EXTERN __imp_VirtualAlloc:QWORD
 EXTERN __imp_WideCharToMultiByte:QWORD
@@ -768,5 +771,105 @@ dir_done:
     pop rbx
     ret
 neper_os_readdir ENDP
+
+PUBLIC neper_os_args
+neper_os_args PROC
+    mov qword ptr [rcx], r12
+    mov qword ptr [rcx+8], r15
+    mov dword ptr [rcx+16], 0
+    ret
+neper_os_args ENDP
+
+PUBLIC neper_os_reserve
+neper_os_reserve PROC
+    sub rsp, 40
+    mov rdx, rcx
+    xor ecx, ecx
+    mov r8d, 2000h
+    mov r9d, 1
+    call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jz reserve_failed
+    xor edx, edx
+    add rsp, 40
+    ret
+reserve_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov edx, eax
+    xor eax, eax
+    add rsp, 40
+    ret
+neper_os_reserve ENDP
+
+PUBLIC neper_os_commit
+neper_os_commit PROC
+    sub rsp, 40
+    mov r8d, 1000h
+    mov r9d, 4
+    call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jz commit_failed
+    xor eax, eax
+    add rsp, 40
+    ret
+commit_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    add rsp, 40
+    ret
+neper_os_commit ENDP
+
+PUBLIC neper_os_clock
+neper_os_clock PROC
+    sub rsp, 56
+    cmp ecx, 1
+    ja clock_unsupported
+    test ecx, ecx
+    jnz clock_monotonic
+    lea rcx, [rsp+40]
+    call qword ptr [__imp_GetSystemTimeAsFileTime]
+    mov rax, qword ptr [rsp+40]
+    mov rcx, 116444736000000000
+    sub rax, rcx
+    imul rax, rax, 100
+    xor edx, edx
+    add rsp, 56
+    ret
+clock_monotonic:
+    lea rcx, [rsp+32]
+    call qword ptr [__imp_QueryPerformanceCounter]
+    test eax, eax
+    jz clock_failed
+    lea rcx, [rsp+40]
+    call qword ptr [__imp_QueryPerformanceFrequency]
+    test eax, eax
+    jz clock_failed
+    mov rax, qword ptr [rsp+32]
+    xor edx, edx
+    div qword ptr [rsp+40]
+    imul rax, rax, 1000000000
+    mov r8, rax
+    mov rax, rdx
+    imul rax, rax, 1000000000
+    xor edx, edx
+    div qword ptr [rsp+40]
+    add rax, r8
+    xor edx, edx
+    add rsp, 56
+    ret
+clock_unsupported:
+    xor eax, eax
+    mov edx, 02F8BB651h
+    add rsp, 56
+    ret
+clock_failed:
+    xor eax, eax
+    mov edx, 06F777EBFh
+    add rsp, 56
+    ret
+neper_os_clock ENDP
 
 END

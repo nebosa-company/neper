@@ -70,7 +70,7 @@ for ($index = 0; $index -lt $symbolCount;) {
     $index += 1 + $auxiliaryCount
 }
 
-$imports = @('CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile')
+$imports = @('CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile','GetSystemTimeAsFileTime','QueryPerformanceCounter','QueryPerformanceFrequency')
 $importIndices = @{}
 for ($index = 0; $index -lt $imports.Count; $index++) { $importIndices['__imp_' + $imports[$index]] = $index }
 $relocations = @()

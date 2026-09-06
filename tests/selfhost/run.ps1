@@ -271,6 +271,11 @@ $protocolExecutableWritten = & $compiler emit-executable (Join-Path $repo 'tests
 if ($LASTEXITCODE -ne 0 -or $protocolExecutableWritten -ne 'executable written') { throw 'custom iterator protocol did not lower into a PE executable' }
 $protocolOutput = & $protocolExecutablePath
 if ($LASTEXITCODE -ne 0 -or $protocolOutput -ne 'protocol iteration ok') { throw 'custom iterator protocol call, aggregate result, or cleanup failed' }
+$hostExecutablePath = Join-Path $testBuild 'host-memory-clock-selfhost.exe'
+$hostExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\host-memory-clock.e') $repo 'x64' 'windows' $hostExecutablePath
+if ($LASTEXITCODE -ne 0 -or $hostExecutableWritten -ne 'executable written') { throw 'Windows args, memory, or clock intrinsics did not link' }
+$hostOutput = & $hostExecutablePath 'alpha' 'beta'
+if ($LASTEXITCODE -ne 0 -or $hostOutput -ne 'host memory clock ok') { throw 'Windows args, memory, or clock intrinsic behavior failed' }
 $ownCompilerPath = Join-Path $testBuild 'neper-own.exe'
 & $compiler emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $ownCompilerPath | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $ownCompilerPath)) { throw 'compiler-owned PE linker did not emit the compiler' }
