@@ -394,6 +394,15 @@ $strBuilderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $strBuilderWritten -ne 'executable written') { throw 'str builder executable emission failed' }
 & $strBuilderPath
 if ($LASTEXITCODE -ne 0) { throw 'the string builder or one of its pushes is wrong' }
+# The read-only half of `e.str`: comparison, search, trim, split and the three forms
+# that allocate. The fixture pins what an empty needle matches, where a
+# non-overlapping count stops, and that `lines` takes CRLF without inventing a final
+# empty line.
+$strPurePath = Join-Path $testBuild 'str-pure-selfhost.exe'
+$strPureWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_pure\src\main.e') $repo 'x64' 'windows' $strPurePath
+if ($LASTEXITCODE -ne 0 -or $strPureWritten -ne 'executable written') { throw 'str pure executable emission failed' }
+& $strPurePath
+if ($LASTEXITCODE -ne 0) { throw 'a string search, trim, split or join is wrong' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(

@@ -3,13 +3,26 @@
 // one precondition the compiler cannot prove — that nothing else has allocated since
 // the builder was made — is checked on every push and reported as `NotOnTop`.
 //
-// The parsing, searching and slicing half of `e.str` is not here yet, and neither are
-// the float pushes, `push_err` or `format`.
+// The searching, slicing and joining half is here too. It allocates only where the
+// frozen signature takes an arena: every search, trim and split result borrows the
+// input. What is still missing is the number parsers, the float pushes, `push_err`
+// and `format`.
 use e.mem
 
 type Sink = struct {
     ctx: *void,
     write: fn(ctx: *void, bytes: []const u8) -> err,
+}
+
+// `Split` carries a whole traversal by value, so iterating allocates nothing. An
+// empty `separator` is the one state `split` cannot produce -- it returns
+// `InvalidSeparator` instead -- so `lines` marks its own mode with it, which is the
+// only spare bit a frozen four-field struct has.
+type Split = struct {
+    source: str,
+    separator: str,
+    off: usize,
+    finished: bool,
 }
 
 type Builder = struct {
@@ -22,6 +35,7 @@ type Builder = struct {
 }
 
 error NotOnTop
+error InvalidSeparator
 
 fn builder(a: *mem.Arena, cap: usize) -> (Builder, err) {
     var b: Builder = zero
@@ -238,4 +252,363 @@ fn push_bin_u64(b: *Builder, v: u64) -> err {
         rest = rest >> 1u64
     }
     ret push(b, digits[at..64usize])
+}
+
+fn concat(a: *mem.Arena, x: str, y: str) -> (str, err) {
+    var (b, builder_error) = builder(a, x.len + y.len)
+    if builder_error != ok { ret ("", builder_error) }
+    let x_error = push(&b, x)
+    if x_error != ok { ret ("", x_error) }
+    let y_error = push(&b, y)
+    if y_error != ok { ret ("", y_error) }
+    let out = done(&b)
+    ret (out, ok)
+}
+
+fn join(a: *mem.Arena, parts: []const str, sep: str) -> (str, err) {
+    // The exact size up front, so the one claim covers the whole result and the
+    // builder never has to grow.
+    var total = 0usize
+    var at = 0usize
+    while at < parts.len {
+        total += parts[at].len
+        at += 1usize
+    }
+    if parts.len > 1usize { total += sep.len * (parts.len - 1usize) }
+    var (b, builder_error) = builder(a, total)
+    if builder_error != ok { ret ("", builder_error) }
+    at = 0usize
+    while at < parts.len {
+        if at > 0usize {
+            let sep_error = push(&b, sep)
+            if sep_error != ok { ret ("", sep_error) }
+        }
+        let part_error = push(&b, parts[at])
+        if part_error != ok { ret ("", part_error) }
+        at += 1usize
+    }
+    let out = done(&b)
+    ret (out, ok)
+}
+
+fn eq(x: str, y: str) -> bool {
+    if x.len != y.len { ret false }
+    var at = 0usize
+    while at < x.len {
+        if x[at] != y[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn compare(x: str, y: str) -> i32 {
+    var at = 0usize
+    while at < x.len && at < y.len {
+        if x[at] != y[at] {
+            if x[at] < y[at] { ret -1i32 }
+            ret 1i32
+        }
+        at += 1usize
+    }
+    if x.len < y.len { ret -1i32 }
+    if x.len > y.len { ret 1i32 }
+    ret 0i32
+}
+
+fn compare_ascii_fold(x: str, y: str) -> i32 {
+    var at = 0usize
+    while at < x.len && at < y.len {
+        var xb = x[at]
+        var yb = y[at]
+        if xb >= 65u8 && xb <= 90u8 { xb += 32u8 }
+        if yb >= 65u8 && yb <= 90u8 { yb += 32u8 }
+        if xb != yb {
+            if xb < yb { ret -1i32 }
+            ret 1i32
+        }
+        at += 1usize
+    }
+    if x.len < y.len { ret -1i32 }
+    if x.len > y.len { ret 1i32 }
+    ret 0i32
+}
+
+fn starts_with(s: str, prefix: str) -> bool {
+    if prefix.len > s.len { ret false }
+    var at = 0usize
+    while at < prefix.len {
+        if s[at] != prefix[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn ends_with(s: str, suffix: str) -> bool {
+    if suffix.len > s.len { ret false }
+    let base = s.len - suffix.len
+    var at = 0usize
+    while at < suffix.len {
+        if s[base + at] != suffix[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn contains(s: str, needle: str) -> bool {
+    let (_, found) = find_from(s, needle, 0usize)
+    ret found
+}
+
+fn find(s: str, needle: str) -> (usize, bool) {
+    let (at, found) = find_from(s, needle, 0usize)
+    ret (at, found)
+}
+
+// An empty needle matches at every boundary, so it is found at `start` itself as long
+// as `start` is one. A `start` past the end is not a boundary and matches nothing.
+fn find_from(s: str, needle: str, start: usize) -> (usize, bool) {
+    if start > s.len { ret (0usize, false) }
+    if needle.len == 0usize { ret (start, true) }
+    if needle.len > s.len { ret (0usize, false) }
+    let last = s.len - needle.len
+    var at = start
+    while at <= last {
+        var k = 0usize
+        var matched = true
+        while k < needle.len {
+            if s[at + k] != needle[k] {
+                matched = false
+                break
+            }
+            k += 1usize
+        }
+        if matched { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn rfind(s: str, needle: str) -> (usize, bool) {
+    if needle.len == 0usize { ret (s.len, true) }
+    if needle.len > s.len { ret (0usize, false) }
+    var at = s.len - needle.len
+    while true {
+        var k = 0usize
+        var matched = true
+        while k < needle.len {
+            if s[at + k] != needle[k] {
+                matched = false
+                break
+            }
+            k += 1usize
+        }
+        if matched { ret (at, true) }
+        if at == 0usize { break }
+        at -= 1usize
+    }
+    ret (0usize, false)
+}
+
+// Non-overlapping, so `count("aaa", "aa")` is 1. An empty needle sits at every
+// boundary, which is one more than there are bytes.
+fn count(s: str, needle: str) -> usize {
+    if needle.len == 0usize { ret s.len + 1usize }
+    var total = 0usize
+    var at = 0usize
+    while true {
+        let (found_at, found) = find_from(s, needle, at)
+        if !found { break }
+        total += 1usize
+        at = found_at + needle.len
+    }
+    ret total
+}
+
+fn trim(s: str) -> str {
+    var at = 0usize
+    while at < s.len && is_ascii_space(s[at]) { at += 1usize }
+    var end = s.len
+    while end > at && is_ascii_space(s[end - 1usize]) { end -= 1usize }
+    ret s[at..end]
+}
+
+fn trim_start(s: str) -> str {
+    var at = 0usize
+    while at < s.len && is_ascii_space(s[at]) { at += 1usize }
+    ret s[at..]
+}
+
+fn trim_end(s: str) -> str {
+    var end = s.len
+    while end > 0usize && is_ascii_space(s[end - 1usize]) { end -= 1usize }
+    ret s[0usize..end]
+}
+
+fn trim_bytes(s: str, bytes: str) -> str {
+    var at = 0usize
+    while at < s.len {
+        var head_hit = false
+        var head_k = 0usize
+        while head_k < bytes.len {
+            if bytes[head_k] == s[at] {
+                head_hit = true
+                break
+            }
+            head_k += 1usize
+        }
+        if !head_hit { break }
+        at += 1usize
+    }
+    var end = s.len
+    while end > at {
+        var tail_hit = false
+        var tail_k = 0usize
+        while tail_k < bytes.len {
+            if bytes[tail_k] == s[end - 1usize] {
+                tail_hit = true
+                break
+            }
+            tail_k += 1usize
+        }
+        if !tail_hit { break }
+        end -= 1usize
+    }
+    ret s[at..end]
+}
+
+fn split_once(s: str, separator: str) -> (str, str, bool) {
+    let (at, found) = find_from(s, separator, 0usize)
+    if !found { ret (s, "", false) }
+    let head = s[0usize..at]
+    let tail = s[at + separator.len..]
+    ret (head, tail, true)
+}
+
+fn split(s: str, separator: str) -> (Split, err) {
+    var it: Split = zero
+    if separator.len == 0usize { ret (it, InvalidSeparator) }
+    it.source = s
+    it.separator = separator
+    ret (it, ok)
+}
+
+fn split_next(it: *Split) -> (str, bool) {
+    if it.finished { ret ("", false) }
+    // Line mode, which only `lines` produces. The terminator is LF; a CR directly
+    // before one goes with it; and the input's own trailing terminator ends the
+    // traversal rather than opening a final empty line.
+    if it.separator.len == 0usize {
+        if it.off >= it.source.len {
+            it.finished = true
+            ret ("", false)
+        }
+        var scan = it.off
+        while scan < it.source.len && it.source[scan] != 10u8 { scan += 1usize }
+        var end = scan
+        if scan < it.source.len && end > it.off && it.source[end - 1usize] == 13u8 { end -= 1usize }
+        let line = it.source[it.off..end]
+        it.off = scan + 1usize
+        if scan == it.source.len {
+            it.finished = true
+            it.off = scan
+        }
+        ret (line, true)
+    }
+    let (at, found) = find_from(it.source, it.separator, it.off)
+    if !found {
+        let last = it.source[it.off..]
+        it.off = it.source.len
+        it.finished = true
+        ret (last, true)
+    }
+    let field = it.source[it.off..at]
+    it.off = at + it.separator.len
+    ret (field, true)
+}
+
+fn lines(s: str) -> Split {
+    var it: Split = zero
+    it.source = s
+    ret it
+}
+
+// Non-overlapping, on the same boundaries `count` reports: an empty needle puts the
+// replacement at every one of them, which is between each pair of bytes and at both
+// ends.
+fn replace(a: *mem.Arena, s: str, needle: str, replacement: str) -> (str, err) {
+    var (b, builder_error) = builder(a, s.len)
+    if builder_error != ok { ret ("", builder_error) }
+    if needle.len == 0usize {
+        var boundary = 0usize
+        while true {
+            let empty_error = push(&b, replacement)
+            if empty_error != ok { ret ("", empty_error) }
+            if boundary == s.len { break }
+            let byte_error = push_byte(&b, s[boundary])
+            if byte_error != ok { ret ("", byte_error) }
+            boundary += 1usize
+        }
+        let spread = done(&b)
+        ret (spread, ok)
+    }
+    var at = 0usize
+    while at < s.len {
+        let (found_at, found) = find_from(s, needle, at)
+        if !found { break }
+        let head_error = push(&b, s[at..found_at])
+        if head_error != ok { ret ("", head_error) }
+        let replacement_error = push(&b, replacement)
+        if replacement_error != ok { ret ("", replacement_error) }
+        at = found_at + needle.len
+    }
+    let tail_error = push(&b, s[at..])
+    if tail_error != ok { ret ("", tail_error) }
+    let out = done(&b)
+    ret (out, ok)
+}
+
+fn repeat(a: *mem.Arena, s: str, repeat_count: usize) -> (str, err) {
+    var (b, builder_error) = builder(a, s.len * repeat_count)
+    if builder_error != ok { ret ("", builder_error) }
+    var at = 0usize
+    while at < repeat_count {
+        let push_error = push(&b, s)
+        if push_error != ok { ret ("", push_error) }
+        at += 1usize
+    }
+    let out = done(&b)
+    ret (out, ok)
+}
+
+fn ascii_lower_in_place(s: []u8) {
+    var at = 0usize
+    while at < s.len {
+        if s[at] >= 65u8 && s[at] <= 90u8 { s[at] += 32u8 }
+        at += 1usize
+    }
+}
+
+fn ascii_upper_in_place(s: []u8) {
+    var at = 0usize
+    while at < s.len {
+        if s[at] >= 97u8 && s[at] <= 122u8 { s[at] -= 32u8 }
+        at += 1usize
+    }
+}
+
+fn is_ascii_space(b: u8) -> bool {
+    ret b == 32u8 || (b >= 9u8 && b <= 13u8)
+}
+
+fn is_ascii_digit(b: u8) -> bool {
+    ret b >= 48u8 && b <= 57u8
+}
+
+fn is_ascii_alpha(b: u8) -> bool {
+    if b >= 65u8 && b <= 90u8 { ret true }
+    ret b >= 97u8 && b <= 122u8
+}
+
+fn is_ascii_alnum(b: u8) -> bool {
+    ret is_ascii_digit(b) || is_ascii_alpha(b)
 }

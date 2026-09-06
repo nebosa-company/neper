@@ -317,6 +317,28 @@ milestone; the page states this rather than reweighting to hide it.
 
 This supersedes every ad-hoc progress artifact. There is no second copy to keep in step.
 
+## D91 — `lines` marks its mode with the empty separator
+
+`str.Split` is frozen at four fields — `source`, `separator`, `off`, `finished` — and
+`lines` has to return one. But a line traversal is not a split on `"\n"`: it accepts
+CRLF as well as LF, and it does not open a final empty field for the input's own
+trailing terminator. `split_next` therefore has to tell the two apart, and the struct
+has no field left to say so.
+
+The empty separator is the state `split` cannot produce: it returns `InvalidSeparator`
+for one. So `lines` sets `separator` to the empty string, and `split_next` reads that
+as line mode. It costs one comparison per call and no field.
+
+Two alternatives were rejected. Widening `Split` with a `mode` or `crlf` flag edits a
+frozen type, which the delivery discipline treats as a contract. Overloading the
+separator `"\n"` to mean line mode makes `split(s, "\n")` silently strip carriage
+returns and swallow a trailing field, so an explicit separator would stop meaning what
+it says.
+
+The consequence accepted: the empty separator inside a `Split` is now spoken for, and
+`it.separator` on a `lines` iterator reads as `""` rather than as a terminator. Section
+14 makes the fields readable for diagnostics only, so no caller depends on the value.
+
 ## Consequences accepted
 
 - **We own the optimiser.** v1 targets roughly `-O1` quality: inlining, constant
