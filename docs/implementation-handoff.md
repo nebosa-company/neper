@@ -1140,10 +1140,12 @@ needs general `T.cmp` protocol resolution first.
   `docs/schemas/neper-v1.schema.json` and asserts a `blocked_by` pattern that admits a
   dotted module name. The committed pattern was `^[a-z][a-z0-9-]*$`, which cannot match
   `e.db`, so the test was green only against the schema edit sitting uncommitted in the
-  working tree; that one line is committed with it. Its alternation still lists
-  `algo|text|crypto|fmt|gfx|ui` as roots, which section 7 of D87 consolidated away --
-  `e` alone now covers every toolchain module, and narrowing it is left to whoever owns
-  that schema work.
+  working tree; that one line is committed with it. That pattern, and the four others in the same
+  schema governing tier lists, module names, `direct_dependencies` and module
+  `blocked_by`, all still admitted `algo|text|crypto|fmt|gfx|ui` as roots after D87
+  consolidated them away; all five are narrowed to `e`. The schema now rejects a
+  pre-consolidation name such as `algo.hash` instead of silently accepting it, and all
+  626 values those patterns govern in `modules.json` still validate.
 - Regenerate/verify `docs/module-apis.pdf` only as a derived artifact; do not treat
   it as the normative source.
 - Reconcile the progress site with the committed compiler state after each grouped
