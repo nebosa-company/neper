@@ -731,10 +731,58 @@ Two things this ran into, neither of them about enums:
 - The most negative value of a backing type cannot be written directly, because
   `128i8` is out of range for `i8` and there is no unary minus. `0i8 - 127i8 - 1i8`
   reaches it through constant folding, which is what the fixture uses.
-- `let zero = ...` is rejected with a position-less `error: parse.InvalidSyntax`.
-  `zero` is the reserved zero-value literal, so the rejection is right, but the
-  diagnostic names neither the position nor the reason -- unlike the module-scope
-  reserved-name case, which `fixtures/check/reserved_declaration` covers.
+- `let zero = ...` was rejected with a position-less `error: parse.InvalidSyntax`.
+  Section 7.14 fixed that.
+
+### 7.14 Positioned syntax diagnostics
+
+No syntax error had a position. `parse.parse` returned a bare `InvalidSyntax`,
+`graph.collect_imports` propagated it, and the four CLI commands that load a graph
+let it reach the runtime, which printed `error: parse.InvalidSyntax` and nothing
+else -- no file, no line, no token. Every other pass already reported properly;
+parsing was the one that did not.
+
+`parse.Tree` now carries `failure_token`, `failure_reserved_name` and
+`has_failure`, recorded by `parse.record_failure`. The first declaration to fail
+wins and is then frozen on the parser, so recovering past it cannot move the
+position the reader has to look at; within a declaration the earliest record wins,
+which is the token the parser stopped on. Three places record: the top-level item
+failure in `parse_file`, and the two in-block statement recoveries, which count an
+error without the enclosing declaration failing -- missing those was why the first
+attempt still reported nothing for a dangling operator inside a function body.
+
+`graph.Graph` carries the same three fields plus `failure_module`, set in
+`collect_imports`, which is where every module is parsed first and so the only
+place a syntax error is seen with its module still in hand. `main.load_graph`
+wraps `graph.load` at all four call sites and prints
+`path:line:column: error[E-SYNTAX-9999]: unexpected <token>`. The `parse` and
+`parse-file` commands report the same way.
+
+The reserved-binding case is the one reason worth naming, because a keyword reads
+as an ordinary name and "unexpected `zero`" explains nothing. `parse_binding_node`
+(both the single and the tuple form) and `parse_parameter_node` record
+`failure_reserved_name` when `lex.is_keyword` says the token in a name position is
+a keyword, and the report becomes
+`` `zero` is a keyword and cannot name a local or parameter `` under E-NAME-0003 --
+the same code and wording shape as the existing `reserved_local` case for `u8`,
+which is a reserved identifier rather than a keyword and so already reached
+`resolve.add_local`. `lex.is_keyword` re-derives the answer through `lex.keyword`
+rather than keeping a second list, so it cannot drift from the keyword table.
+
+Fixtures `scope/reserved_binding_let` and `scope/reserved_binding_parameter` pin
+the two reserved cases; the `graph/invalid` and `parse` assertions in both runners
+now pin the generic form, and the graph one also pins that the report names
+`broken.e`, the imported module holding the error, rather than the root.
+
+Two things worth knowing:
+
+- `tree.failure_token = zero` does not check: assigning the zero literal to a
+  struct-typed *field* is not supported, only to a declaration. The bootstrap
+  accepts it, so this only appears when the self-hosted compiler checks its own
+  source. Both sites use `var no_token: lex.Token = zero` and assign that.
+- The first version named the `is_keyword` parameter `token`, which shadows
+  `lex.token`. Section 5's own rule caught it, through the same diagnostic path
+  this session added earlier.
 
 ## 8. Working-tree boundaries
 

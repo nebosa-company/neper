@@ -11,6 +11,9 @@ type Tree = struct {
     count: usize,
     child_count: usize,
     errors: usize,
+    failure_token: lex.Token,
+    failure_reserved_name: bool,
+    has_failure: bool,
 }
 
 fn init_tree(tree: *Tree, nodes: []syntax.Node, children: []syntax.Child) -> err {
@@ -20,6 +23,10 @@ fn init_tree(tree: *Tree, nodes: []syntax.Node, children: []syntax.Child) -> err
     tree.count = 0usize
     tree.child_count = 0usize
     tree.errors = 0usize
+    var no_token: lex.Token = zero
+    tree.failure_token = no_token
+    tree.failure_reserved_name = false
+    tree.has_failure = false
     ret ok
 }
 
@@ -38,8 +45,21 @@ type Parser = struct {
     soft_top_barrier: bool,
     block_expression: bool,
     block_expression_soft_depth: usize,
+    failure_frozen: bool,
     last_node: usize,
     tree: *Tree,
+}
+
+// Spec section 3: a syntax error reports where it is. The first declaration to
+// fail wins and is then frozen, so recovering past it cannot move the position
+// the reader has to look at. Within one declaration the earliest record wins,
+// which is the token the parser actually stopped on.
+fn record_failure(p: *Parser, token: lex.Token, reserved_name: bool) {
+    if !p.failure_frozen && !p.tree.has_failure {
+        p.tree.failure_token = token
+        p.tree.failure_reserved_name = reserved_name
+        p.tree.has_failure = true
+    }
 }
 
 fn init(tree: *Tree, source: str) -> Parser {
@@ -51,6 +71,10 @@ fn init(tree: *Tree, source: str) -> Parser {
     p.tree.count = 1usize
     p.tree.child_count = 0usize
     p.tree.errors = 0usize
+    var no_token: lex.Token = zero
+    p.tree.failure_token = no_token
+    p.tree.failure_reserved_name = false
+    p.tree.has_failure = false
     p.tree.nodes[0usize] = syntax.node(.File, 0usize, 0usize, 1usize, 0usize)
     ret p
 }
@@ -245,6 +269,7 @@ fn parse_parameter_node(p: *Parser) -> err {
     if p.current.kind == .PunctEllipsis {
         try advance(p)
     } else {
+        if lex.is_keyword(p.scanner.source, p.current) { record_failure(p, p.current, true) }
         try require(p, .Identifier)
         try skip_soft(p)
         try require(p, .PunctColon)
@@ -922,12 +947,16 @@ fn parse_binding_node(p: *Parser) -> err {
     if p.current.kind == .Identifier || p.current.kind == .PunctUnderscore {
         try advance(p)
     } else {
+        if lex.is_keyword(p.scanner.source, p.current) { record_failure(p, p.current, true) }
         try require(p, .PunctLParen)
         enter_soft(p)
         try skip_separators(p)
         var items = 0usize
         while true {
-            if p.current.kind != .Identifier && p.current.kind != .PunctUnderscore { ret InvalidSyntax }
+            if p.current.kind != .Identifier && p.current.kind != .PunctUnderscore {
+                if lex.is_keyword(p.scanner.source, p.current) { record_failure(p, p.current, true) }
+                ret InvalidSyntax
+            }
             try advance(p)
             items += 1usize
             try skip_separators(p)
@@ -1306,6 +1335,10 @@ fn parse_switch_arm_node(p: *Parser) -> err {
             p.soft_depth = soft_checkpoint
             if p.soft_top_barrier { ret InvalidSyntax }
             p.tree.errors += 1usize
+            // A recovered statement is a final failure even though the
+            // declaration around it goes on to parse, so freeze it here too.
+            record_failure(p, p.current, false)
+            p.failure_frozen = true
             var error_end = p.token_index
             if p.current.kind == .Invalid || error_end == statement_start { error_end += 1usize }
             try add_node(p, .ErrorNode, statement_start, error_end)
@@ -1412,6 +1445,10 @@ fn parse_block_node(p: *Parser) -> err {
             p.soft_depth = soft_checkpoint
             if p.soft_top_barrier { ret InvalidSyntax }
             p.tree.errors += 1usize
+            // A recovered statement is a final failure even though the
+            // declaration around it goes on to parse, so freeze it here too.
+            record_failure(p, p.current, false)
+            p.failure_frozen = true
             var error_end = p.token_index
             if p.current.kind == .Invalid || error_end == statement_start { error_end += 1usize }
             try add_node(p, .ErrorNode, statement_start, error_end)
@@ -1768,8 +1805,11 @@ fn parse_file(p: *Parser) -> err {
         p.error_errors_checkpoint = p.tree.errors
         p.error_declarations_checkpoint = p.declarations
         p.error_soft_checkpoint = p.soft_depth
+        if !p.failure_frozen { p.tree.has_failure = false }
         let item_error = parse_one(p)
         if item_error != ok {
+            record_failure(p, p.current, false)
+            p.failure_frozen = true
             p.tree.count = p.error_node_checkpoint
             p.tree.child_count = p.error_child_checkpoint
             p.tree.errors = p.error_errors_checkpoint
@@ -1784,6 +1824,8 @@ fn parse_file(p: *Parser) -> err {
     }
     if p.declarations == 0usize && p.tree.errors == 0usize {
         p.tree.errors = 1usize
+        record_failure(p, p.current, false)
+        p.failure_frozen = true
         try add_top_node(p, .ErrorNode, p.token_index, p.token_index)
     }
     p.tree.nodes[0usize].token_end = p.token_index + 1usize

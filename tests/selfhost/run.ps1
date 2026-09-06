@@ -149,8 +149,8 @@ if ($LASTEXITCODE -ne 1 -or ($missingGraph -join "`n") -notmatch 'error: project
     throw 'missing graph module returned the wrong error'
 }
 $invalidGraph = & $compiler graph-file (Join-Path $graphRoot 'invalid\src\main.e') $repo 'x64' 'windows' '' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($invalidGraph -join "`n") -notmatch 'error: parse\.InvalidSyntax') {
-    throw 'invalid imported source returned the wrong error'
+if ($LASTEXITCODE -ne 1 -or ($invalidGraph -join "`n") -notmatch 'broken\.e:1:12: error\[E-SYNTAX-9999\]: unexpected `\{`') {
+    throw 'invalid imported source did not name the offending module, position and token'
 }
 $invalidGraphTarget = & $compiler graph-file (Join-Path $graphRoot 'transitive\src\leaf.e') $repo 'x86' 'macos' '' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($invalidGraphTarget -join "`n") -notmatch 'error: project\.InvalidTarget') {
@@ -989,8 +989,20 @@ if ($LASTEXITCODE -ne 1 -or ($invalid -join "`n") -notmatch 'lex.InvalidSource')
     throw 'self-hosted compiler invalid-source result failed'
 }
 $invalidParse = & $compiler parse 'fn broken() -> err {' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($invalidParse -join "`n") -notmatch 'parse.InvalidSyntax') {
+if ($LASTEXITCODE -ne 1 -or ($invalidParse -join "`n") -notmatch '<argument>:1:21: error\[E-SYNTAX-9999\]: unexpected end of file') {
     throw 'self-hosted compiler invalid-syntax result failed'
+}
+# Spec section 5: a keyword in a binding position is rejected by name and reason,
+# not as a bare syntax error, because it reads as an ordinary name.
+$reservedBindings = @(
+    @('reserved_binding_let', 'main\.e:2:9: error\[E-NAME-0003\]: `zero` is a keyword and cannot name a local or parameter'),
+    @('reserved_binding_parameter', 'main\.e:1:8: error\[E-NAME-0003\]: `zero` is a keyword and cannot name a local or parameter')
+)
+foreach ($case in $reservedBindings) {
+    $reservedOutput = & $compiler check-file (Join-Path $scopeRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($reservedOutput -join "`n") -notmatch $case[1]) {
+        throw "reserved binding diagnostic for $($case[0]) is wrong: $($reservedOutput -join "`n")"
+    }
 }
 
 $moduleFixture = Join-Path $PSScriptRoot 'fixtures\modules\src\main.e'

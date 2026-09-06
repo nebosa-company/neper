@@ -189,9 +189,10 @@ if invalid_graph=$($test_build/neper-self graph-file "$graph_root/invalid/src/ma
     printf '%s\n' 'invalid imported source unexpectedly succeeded' >&2
     exit 1
 fi
+# A syntax error names the module that holds it and the token it stopped on.
 case "$invalid_graph" in
-    *'error: parse.InvalidSyntax'*) ;;
-    *) printf '%s\n' 'invalid imported source returned the wrong error' >&2; exit 1 ;;
+    *'broken.e:1:12: error[E-SYNTAX-9999]: unexpected `{`'*) ;;
+    *) printf '%s\n' 'invalid imported source did not name the offending module, position and token' >&2; exit 1 ;;
 esac
 if invalid_graph_target=$($test_build/neper-self graph-file "$graph_root/transitive/src/leaf.e" "$repo" x86 macos '' 2>&1); then
     printf '%s\n' 'module graph accepted an invalid target without imports' >&2
@@ -1171,9 +1172,23 @@ if invalid_parse=$($test_build/neper-self parse 'fn broken() -> err {' 2>&1); th
     exit 1
 fi
 case "$invalid_parse" in
-    *parse.InvalidSyntax*) ;;
+    *'<argument>:1:21: error[E-SYNTAX-9999]: unexpected end of file'*) ;;
     *) printf '%s\n' 'invalid syntax returned the wrong error' >&2; exit 1 ;;
 esac
+# Spec section 5: a keyword in a binding position is rejected by name and reason,
+# not as a bare syntax error, because it reads as an ordinary name.
+check_reserved_binding() {
+    if reserved_output=$($test_build/neper-self check-file "$scope_root/$1/src/main.e" "$repo" x64 linux 2>&1); then
+        printf '%s\n' "reserved binding $1 unexpectedly checked" >&2
+        exit 1
+    fi
+    case "$reserved_output" in
+        *"$2"*) ;;
+        *) printf '%s\n' "reserved binding diagnostic for $1 is wrong: $reserved_output" >&2; exit 1 ;;
+    esac
+}
+check_reserved_binding reserved_binding_let 'main.e:2:9: error[E-NAME-0003]: `zero` is a keyword and cannot name a local or parameter'
+check_reserved_binding reserved_binding_parameter 'main.e:1:8: error[E-NAME-0003]: `zero` is a keyword and cannot name a local or parameter'
 
 module_output=$($neper run "$repo/tests/selfhost/fixtures/modules/src/main.e" \
     --output "$test_build/modules")

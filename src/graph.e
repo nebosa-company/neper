@@ -38,6 +38,10 @@ type Graph = struct {
     os: str,
     count: usize,
     import_count: usize,
+    failure_module: usize,
+    failure_token: lex.Token,
+    failure_reserved_name: bool,
+    has_failure: bool,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -146,7 +150,17 @@ fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, g.nodes, g.children)
     let parse_error = parse.parse(&tree, g.modules[module_index].text)
-    if parse_error != ok { ret parse_error }
+    if parse_error != ok {
+        // Every module is parsed here first, so this is where a syntax error is
+        // seen with the module still in hand to name it.
+        if !g.has_failure && tree.has_failure {
+            g.failure_module = module_index
+            g.failure_token = tree.failure_token
+            g.failure_reserved_name = tree.failure_reserved_name
+            g.has_failure = true
+        }
+        ret parse_error
+    }
     let first_import = g.import_count
     var node_index = 1usize
     while node_index < tree.count {

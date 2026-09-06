@@ -366,6 +366,15 @@ fn keyword(source: str, start: usize, end: usize) -> Kind {
     ret .Identifier
 }
 
+// A keyword is exactly an identifier-shaped span that `keyword` maps away from
+// `.Identifier`, so this stays in step with the keyword table by construction
+// rather than by a second list that has to be kept in sync.
+fn is_keyword(source: str, span: Token) -> bool {
+    if span.end <= span.start || span.end > source.len { ret false }
+    let kind = keyword(source, span.start, span.end)
+    ret kind != .Identifier && kind != .PunctUnderscore
+}
+
 fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, column_utf16: usize) -> Token {
     let result = Token{
         kind: kind,

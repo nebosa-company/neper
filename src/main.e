@@ -757,7 +757,7 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
-fn validate_cli_parse(a: *mem.Arena, text: str) -> err {
+fn validate_cli_parse(a: *mem.Arena, path: str, text: str) -> err {
     // The CLI supplies explicit storage; parser lists have no separate caps.
     let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 4096usize)
     if nodes_error != ok { ret nodes_error }
@@ -765,7 +765,12 @@ fn validate_cli_parse(a: *mem.Arena, text: str) -> err {
     if children_error != ok { ret children_error }
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, nodes, children)
-    ret parse.parse(&tree, text)
+    let parse_error = parse.parse(&tree, text)
+    if parse_error != ok && tree.has_failure {
+        try print_parse_failure(path, text, tree.failure_token, tree.failure_reserved_name)
+        os.exit(1i32)
+    }
+    ret parse_error
 }
 
 fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
@@ -1218,6 +1223,41 @@ fn print_token_diagnostic(g: *graph.Graph, module_index: usize, token: lex.Token
     ret write_all(failure, "\n")
 }
 
+// A syntax error names its position and, where the parser knows why, its reason.
+// A keyword in a binding position is the one reason worth spelling out: it reads
+// as an ordinary name and the generic "unexpected" wording explains nothing.
+fn print_parse_failure(path: str, text: str, token: lex.Token, reserved_name: bool) -> err {
+    let failure = os.stderr()
+    try write_all(failure, path)
+    try write_all(failure, ":")
+    try write_usize(failure, token.line)
+    try write_all(failure, ":")
+    try write_usize(failure, token.column)
+    if reserved_name {
+        try write_all(failure, ": error[E-NAME-0003]: `")
+        try write_all(failure, text[token.start..token.end])
+        ret write_all(failure, "` is a keyword and cannot name a local or parameter\n")
+    }
+    try write_all(failure, ": error[E-SYNTAX-9999]: unexpected ")
+    if token.kind == .Eof { ret write_all(failure, "end of file\n") }
+    if token.kind == .Newline { ret write_all(failure, "end of line\n") }
+    try write_all(failure, "`")
+    try write_all(failure, text[token.start..token.end])
+    ret write_all(failure, "`\n")
+}
+
+// Every module is parsed while the graph is loaded, so a syntax error anywhere in
+// the program surfaces here with the module that holds it.
+fn load_graph(a: *mem.Arena, loaded: *graph.Graph, path: str, root: str, arch: str, target_os: str) -> err {
+    let load_error = graph.load(a, loaded, path, root, arch, target_os)
+    if load_error != ok && loaded.has_failure && loaded.failure_module < loaded.count {
+        let module = loaded.modules[loaded.failure_module]
+        try print_parse_failure(module.path, module.text, loaded.failure_token, loaded.failure_reserved_name)
+        os.exit(1i32)
+    }
+    ret load_error
+}
+
 fn named_resolve_failure(resolve_error: err) -> bool {
     ret resolve_error == resolve.ModuleShadow || resolve_error == resolve.DuplicateLocal || resolve_error == resolve.ReservedLocal || resolve_error == resolve.ReservedName || resolve_error == resolve.DuplicateName || resolve_error == resolve.QualifierCollision
 }
@@ -1529,7 +1569,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if args.len == 3usize && same(args[1usize], "parse") {
-        let parse_error = validate_cli_parse(a, args[2usize])
+        let parse_error = validate_cli_parse(a, "<argument>", args[2usize])
         if parse_error != ok { ret parse_error }
         try io.print("parse ok\n")
         ret ok
@@ -1545,7 +1585,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 3usize && same(args[1usize], "parse-file") {
         let (text, load_error) = source.load(a, args[2usize])
         if load_error != ok { ret load_error }
-        let parse_error = validate_cli_parse(a, text)
+        let parse_error = validate_cli_parse(a, args[2usize], text)
         if parse_error != ok { ret parse_error }
         try io.print("parse file ok\n")
         ret ok
@@ -1569,7 +1609,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len >= 7usize && same(args[1usize], "graph-file") {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        try load_graph(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         if loaded.count != args.len - 6usize { ret graph.Capacity }
         var expected = 6usize
         while expected < args.len {
@@ -1582,7 +1622,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 6usize && same(args[1usize], "resolve-file") {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        try load_graph(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
         try resolve.collect(&resolver, &loaded)
@@ -1592,7 +1632,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 6usize && same(args[1usize], "check-file") {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        try load_graph(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
         let resolve_error = resolve.collect(&resolver, &loaded)
@@ -1637,7 +1677,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        try graph.load(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        try load_graph(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
         let resolve_error = resolve.collect(&resolver, &loaded)
