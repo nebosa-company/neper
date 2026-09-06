@@ -879,6 +879,22 @@ fn save_bytes(a: *mem.Arena, path: str, bytes: []u8) -> err {
     ret close_error
 }
 
+fn load_artifact(a: *mem.Arena, path: str) -> ([]usize, err) {
+    let (packed, load_error) = source.load(a, path)
+    if load_error != ok {
+        var empty: []usize = zero
+        ret (empty, load_error)
+    }
+    let (bytes, bytes_error) = mem.alloc[usize](a, packed.len)
+    if bytes_error != ok { ret (bytes, bytes_error) }
+    var at = 0usize
+    while at < packed.len {
+        bytes[at] = usize(packed[at])
+        at += 1usize
+    }
+    ret (bytes, ok)
+}
+
 fn target_triple(a: *mem.Arena, arch: str, operating_system: str) -> (str, err) {
     let length = arch.len + 1usize + operating_system.len
     let (storage, storage_error) = mem.alloc[u8](a, length)
@@ -1113,6 +1129,31 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 2usize && same(args[1usize], "self-test") {
         try self_test()
         try io.print("selfhost lexer ok\n")
+        ret ok
+    }
+    if args.len == 3usize && same(args[1usize], "validate-em") {
+        let (bytes, load_error) = load_artifact(a, args[2usize])
+        if load_error != ok { ret load_error }
+        try em.validate(bytes)
+        try io.print("compiled module valid\n")
+        ret ok
+    }
+    if args.len == 4usize && same(args[1usize], "check-em-edge") {
+        let (dependent, dependent_error) = load_artifact(a, args[2usize])
+        if dependent_error != ok { ret dependent_error }
+        let (target_artifact, target_error) = load_artifact(a, args[3usize])
+        if target_error != ok { ret target_error }
+        let (count, count_error) = em.artifact_dependency_count(dependent)
+        if count_error != ok { ret count_error }
+        if count != 1usize { ret em.InvalidArtifact }
+        let (matches, match_error) = em.dependency_matches(dependent, 0usize, target_artifact)
+        if match_error != ok { ret match_error }
+        if !matches {
+            try io.print("dependency stale\n")
+            os.exit(1i32)
+            ret ok
+        }
+        try io.print("dependency current\n")
         ret ok
     }
     if args.len == 3usize && same(args[1usize], "scan") {
@@ -1381,6 +1422,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
+    try io.print("usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
     ret ok
 }

@@ -342,6 +342,24 @@ all_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost
 [ -f "$test_build/main.x64-linux.em" ]
 [ -f "$test_build/dep.x64-linux.em" ]
 cmp "$module_artifact_path" "$test_build/main.x64-linux.em"
+validated_artifact=$($test_build/neper-self validate-em "$test_build/main.x64-linux.em")
+[ "$validated_artifact" = 'compiled module valid' ]
+current_edge=$($test_build/neper-self check-em-edge "$test_build/main.x64-linux.em" "$test_build/dep.x64-linux.em")
+[ "$current_edge" = 'dependency current' ]
+body_edit_artifacts="$test_build/body-edit"
+signature_edit_artifacts="$test_build/signature-edit"
+mkdir -p "$body_edit_artifacts" "$signature_edit_artifacts"
+body_edit_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/em/body_edit/src/main.e" "$repo" x64 linux "$body_edit_artifacts")
+[ "$body_edit_written" = 'compiled modules written' ]
+signature_edit_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/em/signature_edit/src/main.e" "$repo" x64 linux "$signature_edit_artifacts")
+[ "$signature_edit_written" = 'compiled modules written' ]
+body_edge=$($test_build/neper-self check-em-edge "$test_build/main.x64-linux.em" "$body_edit_artifacts/dep.x64-linux.em")
+[ "$body_edge" = 'dependency current' ]
+if signature_edge=$($test_build/neper-self check-em-edge "$test_build/main.x64-linux.em" "$signature_edit_artifacts/dep.x64-linux.em" 2>&1); then
+    printf '%s\n' 'signature edit left dependency current' >&2
+    exit 1
+fi
+case "$signature_edge" in *'dependency stale'*) ;; *) printf '%s\n' 'signature dependency returned the wrong stale result' >&2; exit 1 ;; esac
 scalar_ops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
 [ "$scalar_ops_lowered" = 'module nir ok' ]
 scalar_ops_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)

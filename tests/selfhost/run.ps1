@@ -263,6 +263,21 @@ $rootModuleArtifactPath = Join-Path $testBuild 'main.x64-windows.em'
 $dependencyModuleArtifactPath = Join-Path $testBuild 'dep.x64-windows.em'
 if (-not (Test-Path -LiteralPath $rootModuleArtifactPath) -or -not (Test-Path -LiteralPath $dependencyModuleArtifactPath)) { throw 'per-module artifact set is incomplete' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rootModuleArtifactPath).Hash -ne $moduleArtifactHash) { throw 'root artifact changed when emitted with its dependency set' }
+$validatedArtifact = & $compiler validate-em $rootModuleArtifactPath
+if ($LASTEXITCODE -ne 0 -or $validatedArtifact -ne 'compiled module valid') { throw 'packed compiled-module validation failed' }
+$currentEdge = & $compiler check-em-edge $rootModuleArtifactPath $dependencyModuleArtifactPath
+if ($LASTEXITCODE -ne 0 -or $currentEdge -ne 'dependency current') { throw 'matching compiled-module dependency was rejected' }
+$bodyEditArtifacts = Join-Path $testBuild 'body-edit'
+$signatureEditArtifacts = Join-Path $testBuild 'signature-edit'
+New-Item -ItemType Directory -Force -Path $bodyEditArtifacts, $signatureEditArtifacts | Out-Null
+$bodyEditWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\em\body_edit\src\main.e') $repo 'x64' 'windows' $bodyEditArtifacts
+if ($LASTEXITCODE -ne 0 -or $bodyEditWritten -ne 'compiled modules written') { throw 'body-edit artifact emission failed' }
+$signatureEditWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\em\signature_edit\src\main.e') $repo 'x64' 'windows' $signatureEditArtifacts
+if ($LASTEXITCODE -ne 0 -or $signatureEditWritten -ne 'compiled modules written') { throw 'signature-edit artifact emission failed' }
+$bodyEdge = & $compiler check-em-edge $rootModuleArtifactPath (Join-Path $bodyEditArtifacts 'dep.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $bodyEdge -ne 'dependency current') { throw 'signature-only dependency was invalidated by a body edit' }
+$signatureEdge = & $compiler check-em-edge $rootModuleArtifactPath (Join-Path $signatureEditArtifacts 'dep.x64-windows.em') 2>&1
+if ($LASTEXITCODE -ne 1 -or ($signatureEdge -join "`n") -notmatch 'dependency stale') { throw 'signature dependency was not invalidated by a signature edit' }
 $scalarOpsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $scalarOpsLowered -ne 'module nir ok') { throw 'casts, unary operators, and call statements did not lower to canonical NIR' }
 $scalarOpsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'

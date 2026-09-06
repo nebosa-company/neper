@@ -1477,6 +1477,16 @@ fn dependency_at(bytes: []const usize, index: usize) -> (Dependency, err) {
     ret (Dependency { kind: kind, module_index: module_index, name_index: name_index, hash: hash }, ok)
 }
 
+fn artifact_dependency_count(bytes: []const usize) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (deps, found_deps, section_error) = find_section_unchecked(bytes, deps_kind())
+    if section_error != ok || !found_deps || deps.length < 4usize { ret (0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, deps.offset)
+    if count_error != ok || count > (deps.length - 4usize) / 20usize { ret (0usize, InvalidArtifact) }
+    ret (count, ok)
+}
+
 fn find_declaration_indexed(bytes: []const usize, query: []const usize, query_name_index: usize) -> (Declaration, bool, err) {
     let empty = Declaration { kind: 0usize, flags: 0usize, name_index: 0usize, signature_hash: 0usize, body_hash: 0usize }
     let validation_error = validate(bytes)
