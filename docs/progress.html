@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>neper Readiness</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&amp;family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;display=swap">
+<style>
+:root {
+  --ink:#101418; --ink-2:#42505f; --ink-3:#78838f;
+  --rule:#e4e8ee; --rule-2:#eef1f5; --paper:#ffffff; --panel:#f7f8fa;
+  --ramp-3:#1a4fa0; --ramp-2:#7297d2; --ramp-1:#c9d8ee; --ramp-0:#dfe4ea;
+  --serif:"Spectral",Georgia,"Times New Roman",serif;
+  --sans:"IBM Plex Sans","Segoe UI",system-ui,-apple-system,Helvetica,Arial,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink:#e7ecf3; --ink-2:#a7b3c1; --ink-3:#7d8894;
+    --rule:#232c37; --rule-2:#1a222c; --paper:#0f1319; --panel:#151b23;
+    --ramp-3:#8fb0e6; --ramp-2:#4a6da8; --ramp-1:#2a3a52; --ramp-0:#262f3a;
+  }
+}
+:root[data-theme="dark"] {
+  --ink:#e7ecf3; --ink-2:#a7b3c1; --ink-3:#7d8894;
+  --rule:#232c37; --rule-2:#1a222c; --paper:#0f1319; --panel:#151b23;
+  --ramp-3:#8fb0e6; --ramp-2:#4a6da8; --ramp-1:#2a3a52; --ramp-0:#262f3a;
+}
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--paper); color:var(--ink);
+  font:400 16px/1.6 var(--sans); -webkit-font-smoothing:antialiased;
+}
+.wrap { max-width:60rem; margin:0 auto; padding:3.5rem 1.5rem 5rem; }
+header { border-bottom:1px solid var(--rule); padding-bottom:1.75rem; margin-bottom:2.5rem; }
+.eyebrow {
+  font:500 .75rem/1 var(--mono); letter-spacing:.14em; text-transform:uppercase;
+  color:var(--ink-3); margin:0 0 .9rem;
+}
+h1 {
+  font:600 2.5rem/1.15 var(--serif); margin:0 0 .6rem; letter-spacing:-.01em;
+  text-wrap:balance; color:var(--ink);
+}
+.stand { font-size:1.0625rem; color:var(--ink-2); max-width:46rem; margin:0; }
+.stand em { font-family:var(--serif); }
+.kpi { display:grid; grid-template-columns:repeat(auto-fit,minmax(13rem,1fr)); gap:1.75rem; margin:0 0 2rem; }
+.tile { display:flex; flex-direction:column; gap:.55rem; }
+.lab { font:500 .8125rem/1 var(--sans); letter-spacing:.02em; color:var(--ink-2); }
+.val { font:600 3rem/1 var(--sans); letter-spacing:-.03em; color:var(--ink); }
+.pc { font-size:1.375rem; font-weight:500; color:var(--ink-3); margin-left:.08em; }
+.track { height:8px; border-radius:4px; background:var(--ramp-1); overflow:hidden; }
+.track i { display:block; height:100%; border-radius:4px; background:var(--ramp-3); }
+.sub { font:400 .8125rem/1.45 var(--mono); color:var(--ink-3); }
+section { margin:0 0 3.25rem; }
+h2 {
+  font:600 1.5rem/1.25 var(--serif); margin:0 0 .75rem; letter-spacing:-.005em;
+  padding-top:1.5rem; border-top:2px solid var(--ink); display:flex;
+  justify-content:space-between; align-items:baseline; gap:1rem; flex-wrap:wrap;
+}
+h2 span { font:500 .875rem/1 var(--mono); color:var(--ink-3); letter-spacing:0; }
+h3 {
+  font:600 .8125rem/1 var(--sans); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--ink-2); margin:2rem 0 .75rem; display:flex;
+  justify-content:space-between; align-items:baseline; gap:1rem;
+}
+h3 em { font:400 .8125rem/1 var(--mono); letter-spacing:0; text-transform:none; color:var(--ink-3); }
+p { max-width:46rem; color:var(--ink-2); }
+.tw { overflow-x:auto; }
+table { border-collapse:collapse; width:100%; font-size:.875rem; min-width:34rem; }
+th {
+  text-align:left; font:500 .6875rem/1 var(--mono); letter-spacing:.1em;
+  text-transform:uppercase; color:var(--ink-3); padding:0 .75rem .5rem 0;
+  border-bottom:1px solid var(--rule);
+}
+td { padding:.45rem .75rem .45rem 0; border-bottom:1px solid var(--rule-2); vertical-align:baseline; }
+tbody tr:last-child td { border-bottom:0; }
+.nm { color:var(--ink); width:46%; }
+.nt { color:var(--ink-3); font:400 .8125rem/1.45 var(--mono); }
+.sc { font-variant-numeric:tabular-nums; font-family:var(--mono); color:var(--ink-2);
+      text-align:right; white-space:nowrap; width:1%; padding-right:1.25rem; }
+th.sc { text-align:right; }
+.mk { width:1.25rem; padding-right:.6rem; }
+.s { display:inline-block; width:9px; height:9px; border-radius:2px; }
+.s3 { background:var(--ramp-3); }
+.s2 { background:var(--ramp-2); }
+.s0 { background:var(--ramp-0); }
+.vh { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+code { font:400 .875em/1 var(--mono); color:var(--ink); }
+.note {
+  background:var(--panel); border-left:2px solid var(--ramp-2);
+  padding:1.15rem 1.35rem; margin:2rem 0 0; font-size:.9375rem;
+}
+.note p { margin:0 0 .65rem; }
+.note p:last-child { margin:0; }
+.note h4 { font:600 .8125rem/1 var(--sans); letter-spacing:.08em; text-transform:uppercase;
+           color:var(--ink-2); margin:0 0 .7rem; }
+.legend { display:flex; gap:1.5rem; flex-wrap:wrap; font:400 .8125rem/1 var(--mono);
+          color:var(--ink-3); margin:0 0 2rem; padding-bottom:.25rem; }
+.legend span { display:inline-flex; align-items:center; gap:.45rem; }
+footer { border-top:1px solid var(--rule); margin-top:3rem; padding-top:1.25rem;
+         font:400 .8125rem/1.6 var(--mono); color:var(--ink-3); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">neper &middot; milestone M2</p>
+  <h1>Readiness</h1>
+  <p class="stand">Three numbers for three deliverables, each scored against the
+  capability list the <em>roadmap</em> and <em>module plan</em> already state. Every row
+  below carries its evidence or its gap, so the totals are checkable rather than
+  asserted.</p>
+</header>
+
+<div class="kpi">
+<div class="tile"><div class="lab">Compiler</div><div class="val">73<span class="pc">%</span></div><div class="track" role="img" aria-label="Compiler: 73 percent complete"><i style="width:73.0%"></i></div><div class="sub">37.25 of 51 capabilities</div></div>
+<div class="tile"><div class="lab">Modules</div><div class="val">7<span class="pc">%</span></div><div class="track" role="img" aria-label="Modules: 7 percent complete"><i style="width:6.6%"></i></div><div class="sub">141 of 2134 declarations</div></div>
+<div class="tile"><div class="lab">Tooling</div><div class="val">25<span class="pc">%</span></div><div class="track" role="img" aria-label="Tooling: 25 percent complete"><i style="width:25.5%"></i></div><div class="sub">5.35 of 21 capabilities</div></div>
+</div>
+
+<p class="legend">
+  <span><i class="s s3"></i> delivered &mdash; score 1</span>
+  <span><i class="s s2"></i> partial &mdash; score 0.25 to 0.5</span>
+  <span><i class="s s0"></i> not started &mdash; score 0</span>
+</p>
+
+<section>
+  <h2>Compiler <span>37.25 / 51 &middot; 73%</span></h2>
+  <p>The furthest along of the three, for a narrow reason: the front end is nearly
+  complete while whole back-end subsystems have not been started. It compiles its own
+  source on both platforms, and stage&nbsp;2 and stage&nbsp;3 come out byte-identical
+  &mdash; the strongest single result on this page.</p>
+<h3>Front end and language <em>26.00 of 34</em></h3><table><thead><tr><th class="mk"><span class="vh">State</span></th><th>Capability</th><th class="sc">Score</th><th>Evidence or gap</th></tr></thead><tbody><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Lexer over the closed token registry</td><td class="sc">1</td><td class="nt">src/lex.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Parser and syntax tree</td><td class="sc">1</td><td class="nt">src/parse.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Module graph and import resolution</td><td class="sc">1</td><td class="nt">src/graph.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Order-independent name resolution</td><td class="sc">1</td><td class="nt">src/resolve.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Integer arithmetic, bitwise, shifts, division</td><td class="sc">1</td><td class="nt">link/bitwise, link/shifts, link/division</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">if / while, break / continue, block scopes</td><td class="sc">1</td><td class="nt">link/control</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">for over ranges, arrays and slices</td><td class="sc">1</td><td class="nt">tests/neper0</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Fixed arrays, zero / undef, .len</td><td class="sc">1</td><td class="nt">link/storage</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Slicing and mutability propagation</td><td class="sc">1</td><td class="nt">link/storage</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Structs: layout, literals, field places</td><td class="sc">1</td><td class="nt">link/aggregate</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Pointers, &amp; / *, *const, auto-deref</td><td class="sc">1</td><td class="nt">link/aggregate</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Aggregate copies and ABI pass / return</td><td class="sc">1</td><td class="nt">link/advanced</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Enums, bare unions, union enum</td><td class="sc">1</td><td class="nt">link/variants</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">switch, exhaustive and non-fallthrough</td><td class="sc">1</td><td class="nt">fixtures/variants</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">defer, both forms</td><td class="sc">1</td><td class="nt">tests/neper0</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">err / try / ok and named errors</td><td class="sc">1</td><td class="nt">link/error_collision</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Multi-return and destructuring</td><td class="sc">1</td><td class="nt">link/scalar</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">const and integer comptime folding</td><td class="sc">1</td><td class="nt">link/generic_folding</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Generic functions [T: type], [N: usize]</td><td class="sc">1</td><td class="nt">link/generic_instances</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Generic aggregate types</td><td class="sc">1</td><td class="nt">link/generic_same_name</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Protocol resolution, spec 9 rules 3 and 5</td><td class="sc">1</td><td class="nt">check/protocol_*</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Iterator protocol &lt;t&gt;_next</td><td class="sc">1</td><td class="nt">tests/neper0</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Supplied cmp (rule 4)</td><td class="sc">1</td><td class="nt">link/sequence_cmp, tagged_union_cmp</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Supplied hash (rule 4)</td><td class="sc">1</td><td class="nt">link/supplied_hash, folded_hash</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Supplied eq (rule 4)</td><td class="sc">1</td><td class="nt">link/supplied_eq</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Supplied format (rule 4)</td><td class="sc">0</td><td class="nt">blocked on e.str</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">Scalar floating point f32 / f64</td><td class="sc">0.5</td><td class="nt">checks, does not lower</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Vec[T,N] / Mask[T,N] and SIMD lowering</td><td class="sc">0</td><td class="nt">absent from check.e</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Atomic[T] and memory orderings</td><td class="sc">0</td><td class="nt">absent from check.e</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">extern with @import / @cc and the C ABI</td><td class="sc">0.25</td><td class="nt">declared and checked; calls rejected</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Comptime str parameters and varargs</td><td class="sc">0</td><td class="nt">blocks str.format, io.printf</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">e.meta reflection</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Spec 11 debug check table and trap protocol</td><td class="sc">0</td><td class="nt">NIR .Trap never emitted</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">General comptime interpreter</td><td class="sc">0.25</td><td class="nt">integer const folding only</td></tr></tbody></table><h3>Back end <em>9.25 of 14</em></h3><table><thead><tr><th class="mk"><span class="vh">State</span></th><th>Capability</th><th class="sc">Score</th><th>Evidence or gap</th></tr></thead><tbody><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">NIR, typed SSA-lite</td><td class="sc">1</td><td class="nt">src/nir.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Linear-scan register allocator</td><td class="sc">1</td><td class="nt">src/regalloc.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">x64 emitter, System V and Win64</td><td class="sc">1</td><td class="nt">src/codegen_x64.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">ELF object writer</td><td class="sc">1</td><td class="nt">src/object_elf.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">COFF object writer</td><td class="sc">1</td><td class="nt">src/object_coff.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Own ELF linker</td><td class="sc">1</td><td class="nt">src/link_elf.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Own PE linker with kernel32 imports</td><td class="sc">1</td><td class="nt">src/link_pe.e</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Host runtime intrinsics, both platforms</td><td class="sc">1</td><td class="nt">runtime_pe_x64.asm, runtime_elf_x64_ext.s</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">`.em` module format with Deps edges</td><td class="sc">1</td><td class="nt">src/em.e, fixtures/em</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Cross-module inlining, 40 NIR cap</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Incremental rebuild on the edge rule</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Work-stealing pool, parallel parse and codegen</td><td class="sc">0</td><td class="nt">single-threaded</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">Determinism harness</td><td class="sc">0.25</td><td class="nt">compiler fixed point only; no -jN or incremental cases</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">DWARF, CodeView and .nepersym debug info</td><td class="sc">0</td><td class="nt">bootstrap only</td></tr></tbody></table><h3>Self-hosting <em>2.00 of 3</em></h3><table><thead><tr><th class="mk"><span class="vh">State</span></th><th>Capability</th><th class="sc">Score</th><th>Evidence or gap</th></tr></thead><tbody><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Self-hosted compiler emits its own source</td><td class="sc">1</td><td class="nt">run.ps1:623, run.sh:760</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Stage 2 == stage 3, byte-identical, both platforms</td><td class="sc">1</td><td class="nt">SHA-256 compare / cmp</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Bootstrap frozen and deleted</td><td class="sc">0</td><td class="nt">bootstrap/neper.c still builds stage 0</td></tr></tbody></table>
+</section>
+
+<section>
+  <h2>Modules <span>141 / 2134 &middot; 7%</span></h2>
+  <p>Scored by <strong>declaration</strong> rather than by module.
+  <code>docs/module-apis.md</code> freezes 2134 declarations across 128
+  modules, and 141 of them exist in committed source or as compiler intrinsics.
+  Counting whole modules gives a similar figure &mdash; 7 at
+  <code>surface:"source"</code> and 1 at <code>"partial"</code> out of 128,
+  or 6%.</p>
+  <p>The two framings agree because the delivered modules are finished: every container
+  and algorithm module below implements its frozen surface in full. What is missing is
+  breadth, not polish. The design layer is a separate story &mdash; all 128 modules
+  have a frozen, mechanically extractable API, which is what makes the denominator
+  meaningful.</p>
+  <div class="tw"><table><thead><tr><th>Module</th><th class="sc">Declarations</th><th class="sc">Share</th><th>Where it comes from</th></tr></thead><tbody><tr><td class="nm"><code>e.algo.bitset</code></td><td class="sc">19 / 19</td><td class="sc">100%</td><td class="nt">lib/e/algo/bitset.e</td></tr><tr><td class="nm"><code>e.algo.hash</code></td><td class="sc">13 / 13</td><td class="sc">100%</td><td class="nt">lib/e/algo/hash.e</td></tr><tr><td class="nm"><code>e.algo.sort</code></td><td class="sc">7 / 7</td><td class="sc">100%</td><td class="nt">lib/e/algo/sort.e</td></tr><tr><td class="nm"><code>e.data.deque</code></td><td class="sc">13 / 13</td><td class="sc">100%</td><td class="nt">lib/e/data/deque.e</td></tr><tr><td class="nm"><code>e.data.heap</code></td><td class="sc">22 / 22</td><td class="sc">100%</td><td class="nt">lib/e/data/heap.e</td></tr><tr><td class="nm"><code>e.data.list</code></td><td class="sc">14 / 14</td><td class="sc">100%</td><td class="nt">lib/e/data/list.e</td></tr><tr><td class="nm"><code>e.data.ring</code></td><td class="sc">12 / 12</td><td class="sc">100%</td><td class="nt">lib/e/data/ring.e</td></tr><tr><td class="nm"><code>e.mem</code></td><td class="sc">9 / 15</td><td class="sc">60%</td><td class="nt">compiler intrinsics</td></tr><tr><td class="nm"><code>e.os</code></td><td class="sc">31 / 121</td><td class="sc">26%</td><td class="nt">compiler intrinsics</td></tr><tr><td class="nm"><code>e.io</code></td><td class="sc">1 / 42</td><td class="sc">2%</td><td class="nt">lib/e/io.e</td></tr></tbody></table></div>
+  <div class="note">
+    <h4>What the two large partials mean</h4>
+    <p><code>e.os</code> at 31 of 121 and <code>e.io</code> at 1 of 42 are not stalled
+    work. They are exactly the subsets the compiler needs in order to build itself. The
+    rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>; the rest
+    of <code>e.io</code> waits on <code>printf</code>, and so on comptime string
+    parameters and varargs.</p>
+    <p><code>e.str</code> scores zero here even though <code>mem.view</code> has just
+    unblocked its <code>Builder</code> half. Its 66 declarations are the largest
+    module-side lever available, because rule&nbsp;4's supplied <code>format</code>
+    &mdash; the one protocol still missing on the compiler side &mdash; consumes
+    them.</p>
+  </div>
+</section>
+
+<section>
+  <h2>Tooling <span>5.35 / 21 &middot; 25%</span></h2>
+  <p>The lowest of the three, and the least surprising. None of the ten specified
+  commands emits the JSONL v1 contract yet, and <code>tests/conformance/</code> does not
+  exist. What does exist is substantial but internal: a 285-fixture self-host suite on
+  both platforms, module-plan validation in CI, and a reproducible-build check. The
+  schema, the diagnostic registry and the command surface are designed and frozen;
+  nothing emits against them.</p>
+  <div class="tw"><table><thead><tr><th class="mk"><span class="vh">State</span></th><th>Capability</th><th class="sc">Score</th><th>Evidence or gap</th></tr></thead><tbody><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">JSONL v1 stream envelope and version header</td><td class="sc">0</td><td class="nt">no JSONL output</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">build</td><td class="sc">0</td><td class="nt">emit-executable only, human output</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">check</td><td class="sc">0.25</td><td class="nt">check-file, human output</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">run</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">test and @test discovery</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">fmt canonical layout</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">tokens, lossless over 94 tokens</td><td class="sc">0.25</td><td class="nt">scan / scan-file, not lossless JSONL</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">parse, lossless over 54 syntax nodes</td><td class="sc">0.25</td><td class="nt">parse / parse-file, not lossless JSONL</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">index, symbols and references</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">dis</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">info</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">v1 schema validation of emitted records</td><td class="sc">0</td><td class="nt">schema written, nothing emits records</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">Stable diagnostic codes from diagnostics.md</td><td class="sc">0.35</td><td class="nt">7 of 30 registered codes; 6 catch-all -9999</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">Build manifest with versions and SHA-256</td><td class="sc">0.25</td><td class="nt">artifact_hash.e covers .em only</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Generated source maps</td><td class="sc">0</td><td class="nt">not started</td></tr><tr><td class="mk"><span class="s s0" aria-hidden="true"></span></td><td class="nm">Conformance corpus accept/reject/format/tokens/parse/tools</td><td class="sc">0</td><td class="nt">tests/conformance absent</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Module-plan validation in CI</td><td class="sc">1</td><td class="nt">scripts/check_module_plan.py, 128 modules</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">Reproducible-build check</td><td class="sc">0.5</td><td class="nt">compiler fixed point in both suites</td></tr><tr><td class="mk"><span class="s s2" aria-hidden="true"></span></td><td class="nm">Generated-code benchmark corpus</td><td class="sc">0.5</td><td class="nt">benchmarks/llm_edit</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Self-host regression suite, both platforms</td><td class="sc">1</td><td class="nt">285 fixtures, run.ps1 + run.sh</td></tr><tr><td class="mk"><span class="s s3" aria-hidden="true"></span></td><td class="nm">Bootstrap and self-host build scripts, both platforms</td><td class="sc">1</td><td class="nt">scripts/build-*</td></tr></tbody></table></div>
+</section>
+
+<div class="note">
+  <h4>Method</h4>
+  <p>Each capability scores 1 when delivered, 0 when not started, and a fraction
+  between when partial, with the reason stated in its own row. Items are weighted
+  equally inside a dimension; no dimension is weighted against another, and the three
+  numbers are never combined into one. Compiler scope is the CPU language of M1 and M2
+  &mdash; GPU (M3) and Metal (M5) are separate milestones, excluded rather than counted
+  as zero.</p>
+  <p>Module readiness counts declarations present in committed source or seeded as
+  compiler intrinsics. Uncommitted work in the tree is deliberately not counted.</p>
+  <p>One judgement is worth naming. Self-hosting is three rows out of 51 here, but it
+  is the binary M2 exit gate. Read the compiler number as capability coverage, not as
+  distance to the milestone.</p>
+</div>
+
+<div class="note">
+  <h4>Keeping this current</h4>
+  <p>This page is generated, never hand-edited. <strong>Every session that lands a
+  capability updates it</strong>: move the affected rows in the tables at the top of
+  <code>scripts/render_progress.py</code>, run <code>python
+  scripts/render_progress.py</code> from the repository root, and commit the regenerated
+  page with the change that earned it. The module numbers need no editing at all &mdash;
+  they are read from <code>docs/module-apis.md</code>, <code>docs/modules.json</code>,
+  the committed <code>lib/e</code> sources and the intrinsics seeded in
+  <code>src/resolve.e</code>.</p>
+  <p>A readiness figure that moves only when someone remembers to move it is worse than
+  no figure. This is the single readiness document for the project; there is no second
+  copy to keep in step.</p>
+</div>
+
+<footer>
+  Generated 2026-09-07 by <code>scripts/render_progress.py</code> from
+  <code>docs/roadmap.md</code>, <code>docs/module-apis.md</code>,
+  <code>docs/modules.json</code> and the compiler sources at <code>25840cd</code>.
+</footer>
+
+</div>
+</body>
+</html>
