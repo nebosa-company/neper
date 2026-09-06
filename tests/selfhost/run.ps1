@@ -789,6 +789,31 @@ $switchCapture = & $compiler resolve-file (Join-Path $scopeRoot 'switch_capture\
 if ($LASTEXITCODE -ne 1 -or ($switchCapture -join "`n") -notmatch 'error: resolve\.DuplicateLocal') { throw 'switch capture shadowing was not rejected' }
 $sharedDuplicate = & $compiler resolve-file (Join-Path $scopeRoot 'shared_duplicate\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($sharedDuplicate -join "`n") -notmatch 'error: resolve\.DuplicateLocal') { throw 'shared local duplicate was not rejected' }
+$declarationDuplicate = & $compiler resolve-file (Join-Path $scopeRoot 'declaration_duplicate\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($declarationDuplicate -join "`n") -notmatch 'error: resolve\.DuplicateName') { throw 'duplicate module-scope declaration was not rejected' }
+$qualifierCollision = & $compiler resolve-file (Join-Path $scopeRoot 'qualifier_collision\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($qualifierCollision -join "`n") -notmatch 'error: resolve\.QualifierCollision') { throw 'declaration over a use qualifier was not rejected' }
+$reservedDeclaration = & $compiler resolve-file (Join-Path $scopeRoot 'reserved_declaration\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($reservedDeclaration -join "`n") -notmatch 'error: resolve\.ReservedName') { throw 'reserved declaration name was not rejected' }
+# Every spec section 5 and section 14 name collision reports an exact token, the
+# offending name and its registered docs/diagnostics.md code.
+$nameDiagnostics = @(
+    @('module_shadow', 'main\.e:4:9: error\[E-NAME-0003\]: `helper` already names a module-scope function; a local or parameter may not reuse it'),
+    @('parameter_shadow', 'main\.e:2:8: error\[E-NAME-0003\]: `value` already names a module-scope function; a local or parameter may not reuse it'),
+    @('qualifier_shadow', 'main\.e:4:9: error\[E-NAME-0003\]: `d` already names a module-scope use qualifier; a local or parameter may not reuse it'),
+    @('duplicate_local', 'main\.e:3:9: error\[E-NAME-0003\]: `value` is already bound in an active scope'),
+    @('duplicate_parameter', 'main\.e:1:20: error\[E-NAME-0003\]: `value` is already bound in an active scope'),
+    @('reserved_local', 'main\.e:2:9: error\[E-NAME-0003\]: `u8` is a reserved name and cannot name a local or parameter'),
+    @('declaration_duplicate', 'main\.e:3:4: error\[E-NAME-0001\]: `Thing` already names a module-scope error; each name may be declared once per namespace'),
+    @('qualifier_collision', 'main\.e:3:4: error\[E-NAME-0002\]: `d` collides with a use qualifier in this module'),
+    @('reserved_declaration', 'main\.e:1:4: error\[E-NAME-0003\]: `u8` is a reserved name and cannot name a declaration')
+)
+foreach ($case in $nameDiagnostics) {
+    $nameOutput = & $compiler check-file (Join-Path $scopeRoot "$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($nameOutput -join "`n") -notmatch $case[1]) {
+        throw "name collision diagnostic for $($case[0]) is wrong: $($nameOutput -join "`n")"
+    }
+}
 $capacityDeclarations = 0..259 | ForEach-Object { "error Capacity$_" }
 $capacityItems = 0..129 | ForEach-Object { '0u8' }
 $capacitySource = ($capacityDeclarations -join "`n") + "`nfn capacity() {`n    let values = [_]u8{ " + ($capacityItems -join ', ') + " }`n}`n"

@@ -59,6 +59,8 @@ type Resolver = struct {
     failure_has_token: bool,
     failure_context_token: lex.Token,
     failure_has_context: bool,
+    failure_name: str,
+    failure_owner: str,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -82,6 +84,8 @@ fn init(r: *Resolver, symbols: []Symbol, tokens: []lex.Token, locals: []Local) -
     r.failure_module = 0usize
     r.failure_has_token = false
     r.failure_has_context = false
+    r.failure_name = ""
+    r.failure_owner = ""
     ret ok
 }
 
@@ -128,13 +132,54 @@ fn find(r: *Resolver, module_index: usize, name: str, space: Namespace) -> (usiz
     ret (0usize, false)
 }
 
+fn kind_noun(kind: Kind) -> str {
+    if kind == .Type { ret "type" }
+    if kind == .Const { ret "const" }
+    if kind == .Var { ret "var" }
+    if kind == .Error { ret "error" }
+    if kind == .Function { ret "function" }
+    if kind == .Extern { ret "extern function" }
+    if kind == .Qualifier { ret "use qualifier" }
+    ret "compiler intrinsic"
+}
+
+// A declaration node starts with its keyword, so its first identifier token is the
+// declared name. A qualifier symbol carries no tokens and reports without one.
+fn symbol_name_token(r: *Resolver, symbol: Symbol) -> (lex.Token, bool) {
+    var empty: lex.Token = zero
+    if symbol.token_end <= symbol.token_start { ret (empty, false) }
+    var at = symbol.token_start
+    while at < symbol.token_end && at < r.token_count {
+        if r.tokens[at].kind == .Identifier { ret (r.tokens[at], true) }
+        at += 1usize
+    }
+    ret (empty, false)
+}
+
+fn record_symbol_failure(r: *Resolver, symbol: Symbol, owner: str) {
+    let (token, has_token) = symbol_name_token(r, symbol)
+    if !has_token { ret }
+    r.failure_module = symbol.module_index
+    r.failure_token = token
+    r.failure_has_token = true
+    r.failure_name = symbol.name
+    r.failure_owner = owner
+}
+
 fn add(r: *Resolver, symbol: Symbol) -> err {
     if reserved(symbol.name) {
-        if symbol.kind != .Qualifier || same(symbol.name, "target") { ret ReservedName }
+        if symbol.kind != .Qualifier || same(symbol.name, "target") {
+            record_symbol_failure(r, symbol, "")
+            ret ReservedName
+        }
     }
     let (prior_index, duplicate) = find(r, symbol.module_index, symbol.name, symbol.space)
     if duplicate {
-        if symbol.kind == .Qualifier || r.symbols[prior_index].kind == .Qualifier { ret QualifierCollision }
+        if symbol.kind == .Qualifier || r.symbols[prior_index].kind == .Qualifier {
+            record_symbol_failure(r, symbol, "")
+            ret QualifierCollision
+        }
+        record_symbol_failure(r, symbol, kind_noun(r.symbols[prior_index].kind))
         ret DuplicateName
     }
     if r.count == r.symbols.len { ret Capacity }
@@ -369,19 +414,43 @@ fn validate_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: synta
     ret UnknownName
 }
 
-fn module_name_taken(r: *Resolver, module_index: usize, name: str) -> bool {
+fn module_name_owner(r: *Resolver, module_index: usize, name: str) -> (str, bool) {
     let (type_index, has_type) = find(r, module_index, name, .Type)
-    if has_type { ret true }
+    if has_type { ret (kind_noun(r.symbols[type_index].kind), true) }
     let (value_index, has_value) = find(r, module_index, name, .Value)
-    ret has_value
+    if has_value { ret (kind_noun(r.symbols[value_index].kind), true) }
+    ret ("", false)
 }
 
-fn add_local(r: *Resolver, module_index: usize, name: str, space: Namespace) -> err {
-    if reserved(name) { ret ReservedLocal }
-    if module_name_taken(r, module_index, name) { ret ModuleShadow }
+fn record_local_failure(r: *Resolver, module_index: usize, token: lex.Token, name: str, owner: str) {
+    r.failure_module = module_index
+    r.failure_token = token
+    r.failure_has_token = true
+    r.failure_name = name
+    r.failure_owner = owner
+}
+
+// Spec section 5: a local or parameter may not reuse a module-scope name of its
+// own module, a use qualifier, a builtin type name, or a name already bound in an
+// active scope. Every rejection here records the offending token so the caller can
+// report where the collision is.
+fn add_local(r: *Resolver, g: *graph.Graph, module_index: usize, token: lex.Token, space: Namespace) -> err {
+    let name = g.modules[module_index].text[token.start..token.end]
+    if reserved(name) {
+        record_local_failure(r, module_index, token, name, "")
+        ret ReservedLocal
+    }
+    let (owner, taken) = module_name_owner(r, module_index, name)
+    if taken {
+        record_local_failure(r, module_index, token, name, owner)
+        ret ModuleShadow
+    }
     var i = 0usize
     while i < r.local_count {
-        if same(r.locals[i].name, name) { ret DuplicateLocal }
+        if same(r.locals[i].name, name) {
+            record_local_failure(r, module_index, token, name, "")
+            ret DuplicateLocal
+        }
         i += 1usize
     }
     if r.local_count == r.locals.len { ret Capacity }
@@ -395,7 +464,7 @@ fn add_first_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: synt
     while at < node.token_end {
         let token = r.tokens[at]
         if token.kind == .Identifier {
-            try add_local(r, module_index, g.modules[module_index].text[token.start..token.end], space)
+            try add_local(r, g, module_index, token, space)
             ret ok
         }
         at += 1usize
@@ -409,7 +478,7 @@ fn add_binding_names(r: *Resolver, g: *graph.Graph, module_index: usize, node: s
     while at < node.token_end {
         let token = r.tokens[at]
         if token.kind == .Identifier {
-            try add_local(r, module_index, g.modules[module_index].text[token.start..token.end], .Value)
+            try add_local(r, g, module_index, token, .Value)
         }
         at += 1usize
     }
@@ -421,7 +490,7 @@ fn add_for_names(r: *Resolver, g: *graph.Graph, module_index: usize, node: synta
     while at < node.token_end && r.tokens[at].kind != .KwIn {
         let token = r.tokens[at]
         if token.kind == .Identifier {
-            try add_local(r, module_index, g.modules[module_index].text[token.start..token.end], .Value)
+            try add_local(r, g, module_index, token, .Value)
         }
         at += 1usize
     }
@@ -437,7 +506,7 @@ fn add_switch_capture(r: *Resolver, g: *graph.Graph, module_index: usize, node: 
             while at < node.token_end {
                 let token = r.tokens[at]
                 if token.kind == .Identifier {
-                    try add_local(r, module_index, g.modules[module_index].text[token.start..token.end], .Value)
+                    try add_local(r, g, module_index, token, .Value)
                     ret ok
                 }
                 at += 1usize
@@ -585,7 +654,7 @@ fn visit_shared_var(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_ind
             saw_var = true
         } else {
             if saw_var && token.kind == .Identifier {
-                ret add_local(r, module_index, g.modules[module_index].text[token.start..token.end], .Value)
+                ret add_local(r, g, module_index, token, .Value)
             }
         }
         at += 1usize

@@ -1188,12 +1188,64 @@ fn print_token_diagnostic(g: *graph.Graph, module_index: usize, token: lex.Token
     ret write_all(failure, "\n")
 }
 
+fn named_resolve_failure(resolve_error: err) -> bool {
+    ret resolve_error == resolve.ModuleShadow || resolve_error == resolve.DuplicateLocal || resolve_error == resolve.ReservedLocal || resolve_error == resolve.ReservedName || resolve_error == resolve.DuplicateName || resolve_error == resolve.QualifierCollision
+}
+
+fn resolve_name_code(resolve_error: err) -> str {
+    if resolve_error == resolve.DuplicateName { ret "E-NAME-0001" }
+    if resolve_error == resolve.QualifierCollision { ret "E-NAME-0002" }
+    ret "E-NAME-0003"
+}
+
+fn write_resolve_name_message(failure: os.File, resolver: *resolve.Resolver, resolve_error: err) -> err {
+    if resolve_error == resolve.ReservedLocal { ret write_all(failure, "is a reserved name and cannot name a local or parameter") }
+    if resolve_error == resolve.ReservedName { ret write_all(failure, "is a reserved name and cannot name a declaration") }
+    if resolve_error == resolve.QualifierCollision { ret write_all(failure, "collides with a use qualifier in this module") }
+    if resolve_error == resolve.DuplicateName {
+        try write_all(failure, "already names a module-scope ")
+        try write_all(failure, resolver.failure_owner)
+        ret write_all(failure, "; each name may be declared once per namespace")
+    }
+    if resolve_error == resolve.ModuleShadow {
+        try write_all(failure, "already names a module-scope ")
+        try write_all(failure, resolver.failure_owner)
+        ret write_all(failure, "; a local or parameter may not reuse it")
+    }
+    ret write_all(failure, "is already bound in an active scope")
+}
+
+fn print_resolve_name_diagnostic(g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
+    let failure = os.stderr()
+    if resolver.failure_module < g.count {
+        try write_all(failure, g.modules[resolver.failure_module].path)
+    } else {
+        try write_all(failure, "<unknown>")
+    }
+    try write_all(failure, ":")
+    try write_usize(failure, resolver.failure_token.line)
+    try write_all(failure, ":")
+    try write_usize(failure, resolver.failure_token.column)
+    try write_all(failure, ": error[")
+    try write_all(failure, resolve_name_code(resolve_error))
+    try write_all(failure, "]: `")
+    try write_all(failure, resolver.failure_name)
+    try write_all(failure, "` ")
+    try write_resolve_name_message(failure, resolver, resolve_error)
+    ret write_all(failure, "\n")
+}
+
 fn print_resolve_diagnostic(g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
     if resolve_error == resolve.UnknownName && resolver.failure_has_token {
         if resolver.failure_has_context {
             try print_token_diagnostic(g, resolver.failure_module, resolver.failure_context_token, "E-TYPE-0002", "initializer type does not match binding")
         }
         ret print_token_diagnostic(g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
+    }
+    // Declaration and scope collisions carry an exact token and the offending
+    // name; docs/diagnostics.md reserves E-NAME-0001 through E-NAME-0003 for them.
+    if resolver.failure_has_token && named_resolve_failure(resolve_error) {
+        ret print_resolve_name_diagnostic(g, resolver, resolve_error)
     }
     var token: lex.Token = zero
     if resolver.failure_has_token { token = resolver.failure_token }

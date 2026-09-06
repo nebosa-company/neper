@@ -1,0 +1,3 @@
+error Thing
+
+fn Thing() {}
