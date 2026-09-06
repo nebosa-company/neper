@@ -141,6 +141,11 @@ type FunctionGeneric = struct {
     lowered: bool,
 }
 
+type ProtocolBuiltin = enum u8 {
+    None,
+    Cmp,
+}
+
 type AggregateKind = enum u8 {
     Struct,
     Union,
@@ -3255,6 +3260,8 @@ type CallInfo = struct {
     alloc_arena: Type,
     mem_alloc: bool,
     protocol_pending: bool,
+    protocol_builtin: ProtocolBuiltin,
+    protocol_type: Type,
 }
 
 type AllocInfo = struct {
@@ -3431,9 +3438,19 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                                 // symbolic, so resolution waits for the instantiation.
                                 info.protocol_pending = true
                             } else {
-                                let (protocol_index, protocol_error) = check_protocol_call(c, g, tree, module_index, node, protocol_type, protocol_name)
+                                let (protocol_index, protocol_builtin, protocol_error) = check_protocol_call(c, g, tree, module_index, node, protocol_type, protocol_name)
                                 if protocol_error != ok { ret (info, protocol_error) }
-                                info.function = c.functions[protocol_index]
+                                if protocol_builtin == .None {
+                                    info.function = c.functions[protocol_index]
+                                } else {
+                                    let (supplied_receiver, supplied_error) = canonical_type(c, protocol_type)
+                                    if supplied_error != ok { ret (info, supplied_error) }
+                                    info.protocol_builtin = protocol_builtin
+                                    info.protocol_type = supplied_receiver
+                                    info.function.module_index = supplied_receiver.module_index
+                                    info.function.parameter_count = 2usize
+                                    info.function.return_count = 1usize
+                                }
                             }
                             has_function = true
                         } else {
@@ -3469,6 +3486,14 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     let function = info.function
                     if child_position > function.parameter_count { ret (info, ArgumentCount) }
                     var parameter_type = invalid_type()
+                    if info.protocol_builtin != .None {
+                        parameter_type = info.protocol_type
+                        let (supplied_argument, supplied_argument_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
+                        if supplied_argument_error != ok { ret (info, supplied_argument_error) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     if info.mem_alloc {
                         if child_position == 1usize {
                             parameter_type = info.alloc_arena
@@ -3542,34 +3567,50 @@ fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool
     ret (0usize, false, ok)
 }
 
-fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: Type, protocol: str) -> (usize, err) {
+// Only the shapes whose ordering is a single machine comparison are supplied so
+// far. An enum needs its backing type threaded to the comparison for an unsigned
+// backing to order correctly, and floats, slices, arrays and unions need the
+// recursion of rule 4; those still report a missing protocol.
+fn supplied_protocol(c: *Checker, canonical: Type, protocol: str) -> ProtocolBuiltin {
+    if !same(protocol, "cmp") { ret .None }
+    if canonical.kind == .Integer || canonical.kind == .Bool || canonical.kind == .Err { ret .Cmp }
+    ret .None
+}
+
+fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: Type, protocol: str) -> (usize, ProtocolBuiltin, err) {
     let (canonical, canonical_error) = canonical_type(c, receiver)
-    if canonical_error != ok { ret (0usize, canonical_error) }
-    if canonical.kind != .Named {
-        record_failure(c, module_index, node, .ProtocolMissing, canonical.name, protocol)
-        ret (0usize, UnknownCallable)
+    if canonical_error != ok { ret (0usize, .None, canonical_error) }
+    var found = false
+    var function_index = 0usize
+    if canonical.kind == .Named {
+        let (declared_index, declared, lookup_error) = protocol_function(c, receiver, protocol)
+        if lookup_error != ok { ret (0usize, .None, lookup_error) }
+        found = declared
+        function_index = declared_index
     }
-    let (function_index, found, lookup_error) = protocol_function(c, receiver, protocol)
-    if lookup_error != ok { ret (0usize, lookup_error) }
     if !found {
+        // Rule 4: a declaration in the type's own module always wins over the
+        // supplied one, so this is only reached when there is none.
+        let builtin = supplied_protocol(c, canonical, protocol)
+        if builtin != .None { ret (0usize, builtin, ok) }
         record_failure(c, module_index, node, .ProtocolMissing, canonical.name, protocol)
-        ret (0usize, UnknownCallable)
+        ret (0usize, .None, UnknownCallable)
     }
     let function = c.functions[function_index]
     if function.generic {
         record_failure(c, module_index, node, .ProtocolGenericType, canonical.name, protocol)
-        ret (0usize, Unsupported)
+        ret (0usize, .None, Unsupported)
     }
     // Rule 3: the first parameter is the receiver type, by value.
     if function.parameter_count == 0usize || function.first_parameter >= c.parameter_count {
         record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
-        ret (0usize, InvalidType)
+        ret (0usize, .None, InvalidType)
     }
     if !type_equal(c, c.parameters[function.first_parameter].ty, canonical) {
         record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
-        ret (0usize, InvalidType)
+        ret (0usize, .None, InvalidType)
     }
-    ret (function_index, ok)
+    ret (function_index, .None, ok)
 }
 
 fn function_return(c: *Checker, function: Function, index: usize) -> (Type, err) {
@@ -3578,6 +3619,10 @@ fn function_return(c: *Checker, function: Function, index: usize) -> (Type, err)
 }
 
 fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
+    if call.protocol_builtin == .Cmp {
+        if index != 0usize { ret (invalid_type(), InvalidType) }
+        ret (make_type(.Integer, "i32", call.protocol_type.module_index), ok)
+    }
     if call.protocol_pending {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (make_type(.TypeParameter, "", 0usize), ok)

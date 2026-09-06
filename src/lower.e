@@ -240,6 +240,7 @@ fn call_return_layout(c: *check.Checker, call: check.CallInfo, result: *ReturnLa
 
 fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) -> (check.Type, err) {
     if index >= call.function.parameter_count { ret (check.invalid_type(), check.ArgumentCount) }
+    if call.protocol_builtin != .None { ret (call.protocol_type, ok) }
     if call.mem_alloc {
         if index == 0usize { ret (call.alloc_arena, ok) }
         ret (check.make_type(.Integer, "usize", call.function.module_index), ok)
@@ -270,7 +271,107 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     ret ("", check.UnknownCallable)
 }
 
+fn store_supplied_cmp_result(builder: *nir.Builder, slot: usize, result_type: check.Type, magnitude: usize, negative: bool, token: lex.Token) -> (usize, err) {
+    let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstInteger, result_type, true, magnitude, token)
+    if constant_error != ok { ret (0usize, constant_error) }
+    var value = constant
+    if negative {
+        let (negate_instruction, negated, negate_error) = nir.emit(builder, .Negate, result_type, true, 0usize, token)
+        if negate_error != ok { ret (0usize, negate_error) }
+        let negate_operand_error = nir.add_operand(builder, negate_instruction, constant)
+        if negate_operand_error != ok { ret (0usize, negate_operand_error) }
+        value = negated
+    }
+    let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, 0usize, token)
+    if store_error != ok { ret (0usize, store_error) }
+    let address_error = nir.add_operand(builder, store_instruction, slot)
+    if address_error != ok { ret (0usize, address_error) }
+    let value_error = nir.add_operand(builder, store_instruction, value)
+    if value_error != ok { ret (0usize, value_error) }
+    let (exit_branch, exit_error) = emit_branch(builder, token)
+    ret (exit_branch, exit_error)
+}
+
+fn emit_supplied_compare(builder: *nir.Builder, opcode: nir.Opcode, boolean: check.Type, left: usize, right: usize, token: lex.Token) -> (usize, err) {
+    let (instruction, value, emit_error) = nir.emit(builder, opcode, boolean, true, 0usize, token)
+    if emit_error != ok { ret (0usize, emit_error) }
+    let left_error = nir.add_operand(builder, instruction, left)
+    if left_error != ok { ret (0usize, left_error) }
+    let right_error = nir.add_operand(builder, instruction, right)
+    if right_error != ok { ret (0usize, right_error) }
+    ret (value, ok)
+}
+
+// Spec section 9 rule 4 supplies `cmp` for the single-scalar shapes. There is
+// nothing to call, so it is emitted inline. The language has no bool-to-integer
+// cast, so the three results come from branches into one slot.
+fn emit_supplied_cmp(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if argument_count != 2usize { ret check.ArgumentCount }
+    let boolean = check.make_type(.Bool, "bool", call.protocol_type.module_index)
+    let result_type = check.make_type(.Integer, "i32", call.protocol_type.module_index)
+    let (slot_instruction, slot, slot_error) = nir.emit(builder, .Stack, result_type, true, 0usize, token)
+    if slot_error != ok { ret slot_error }
+    let (less, less_error) = emit_supplied_compare(builder, .Less, boolean, arguments[0usize], arguments[1usize], token)
+    if less_error != ok { ret less_error }
+    let (less_decision, less_decision_ignored, less_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if less_decision_error != ok { ret less_decision_error }
+    let less_decision_operand_error = nir.add_operand(builder, less_decision, less)
+    if less_decision_operand_error != ok { ret less_decision_operand_error }
+
+    let below_block = builder.block_count
+    let (below_index, below_error) = nir.begin_block(builder)
+    if below_error != ok || below_index != below_block { ret nir.InvalidControlFlow }
+    let (below_exit, below_exit_error) = store_supplied_cmp_result(builder, slot, result_type, 1usize, true, token)
+    if below_exit_error != ok { ret below_exit_error }
+
+    let rest_block = builder.block_count
+    let (rest_index, rest_error) = nir.begin_block(builder)
+    if rest_error != ok || rest_index != rest_block { ret nir.InvalidControlFlow }
+    let (greater, greater_error) = emit_supplied_compare(builder, .Greater, boolean, arguments[0usize], arguments[1usize], token)
+    if greater_error != ok { ret greater_error }
+    let (greater_decision, greater_decision_ignored, greater_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if greater_decision_error != ok { ret greater_decision_error }
+    let greater_decision_operand_error = nir.add_operand(builder, greater_decision, greater)
+    if greater_decision_operand_error != ok { ret greater_decision_operand_error }
+
+    let above_block = builder.block_count
+    let (above_index, above_error) = nir.begin_block(builder)
+    if above_error != ok || above_index != above_block { ret nir.InvalidControlFlow }
+    let (above_exit, above_exit_error) = store_supplied_cmp_result(builder, slot, result_type, 1usize, false, token)
+    if above_exit_error != ok { ret above_exit_error }
+
+    let same_block = builder.block_count
+    let (same_index, same_error) = nir.begin_block(builder)
+    if same_error != ok || same_index != same_block { ret nir.InvalidControlFlow }
+    let (same_exit, same_exit_error) = store_supplied_cmp_result(builder, slot, result_type, 0usize, false, token)
+    if same_exit_error != ok { ret same_exit_error }
+
+    let merge_block = builder.block_count
+    let (merge_index, merge_error) = nir.begin_block(builder)
+    if merge_error != ok || merge_index != merge_block { ret nir.InvalidControlFlow }
+    let less_target_error = nir.set_branch_targets(builder, less_decision, below_block, rest_block)
+    if less_target_error != ok { ret less_target_error }
+    let greater_target_error = nir.set_branch_targets(builder, greater_decision, above_block, same_block)
+    if greater_target_error != ok { ret greater_target_error }
+    let below_target_error = nir.set_branch_targets(builder, below_exit, merge_block, 0usize)
+    if below_target_error != ok { ret below_target_error }
+    let above_target_error = nir.set_branch_targets(builder, above_exit, merge_block, 0usize)
+    if above_target_error != ok { ret above_target_error }
+    let same_target_error = nir.set_branch_targets(builder, same_exit, merge_block, 0usize)
+    if same_target_error != ok { ret same_target_error }
+    let (load_instruction, result, load_error) = nir.emit(builder, .Load, result_type, true, 0usize, token)
+    if load_error != ok { ret load_error }
+    let load_operand_error = nir.add_operand(builder, load_instruction, slot)
+    if load_operand_error != ok { ret load_operand_error }
+    results.call = call
+    results.count = 1usize
+    results.values[0usize] = result
+    results.addresses[0usize] = false
+    ret ok
+}
+
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if call.protocol_builtin == .Cmp { ret emit_supplied_cmp(c, call, arguments, argument_count, builder, token, results) }
     results.call = call
     results.count = call.function.return_count
     var return_layout: ReturnLayout = zero

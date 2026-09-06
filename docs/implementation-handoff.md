@@ -491,6 +491,55 @@ verified to take 24 extra `usize` fields with no failure, and `source_start` and
 function, not its generic parameters, and every instance needs it whether or not
 it came from a template.
 
+### 7.7 Protocol lookup at the instantiation
+
+`T.cmp(a, b)` did not type-check at all. Spec section 9 makes `T.f(...)` a protocol
+call wherever T is a comptime type parameter, resolving to `fn <t>_<f>` in the
+module that declares the type T is bound to, with `<t>` that type's name in
+snake_case.
+
+Delivered:
+
+- `check.protocol_name_matches` generalizes the snake_case stem matcher that was
+  hard-wired to `_next` for iterators; iterator lookup is now a wrapper on it.
+- `check.check_protocol_call` resolves the receiver, finds the declared function
+  and enforces rule 3, that the first parameter is the type by value.
+- A generic template's own body is checked before any instantiation binds T, so the
+  receiver is still symbolic there. Such a call is marked `protocol_pending` and its
+  result follows the context, which defers resolution to the instantiation site
+  where rule 5 puts the error.
+- Rule 4's supplied `cmp` for `Integer`, `Bool` and `Err`. There is nothing to call,
+  so `lower.emit_supplied_cmp` emits it inline. The language has no bool-to-integer
+  cast, so the three results come from branches into one slot, in the same idiom
+  `&&` and `||` already use. Codegen takes comparison signedness from the left
+  operand's own type, so unsigned ordering is correct; the fixture covers
+  `4000000000u32`, which a signed comparison would order wrongly.
+- Rule 4's precedence: a `fn` declared in the type's own module always wins, which
+  falls out of looking the declaration up first.
+
+Not delivered, and each still reports a missing protocol:
+
+- `cmp` for enums. A `u64`-backed enum would need its backing type threaded to the
+  comparison for unsigned ordering, and the receiver type reaching codegen is the
+  named enum, not its backing integer.
+- `cmp` for floats (no scalar float support yet), and for slices, arrays, vectors
+  and tagged unions, which rule 4 defines by recursion.
+- The `hash`, `eq` and `format` fallbacks entirely.
+- A generic protocol function for an instantiated nominal generic type
+  (`Box[i32].hash` needing `fn box_hash[T: type]`). This is detected and reported
+  as unsupported rather than mis-resolved.
+- Lookup edges. Spec section 12 (D36) requires every protocol name examined to be
+  recorded as a `.em` lookup edge so that declaring the `fn` later is not silently
+  ignored. `em.dependency_lookup_kind` already exists and `dependency_matches`
+  already handles it; nothing emits one yet. This matters for incremental
+  correctness, not for a clean build.
+
+`fixtures/link/protocol_cmp` covers both halves: two struct types in one module
+carrying `point_cmp` and `tag_cmp` with opposite orderings, so a wrong dispatch
+fails the run, plus the supplied `cmp` over signed, unsigned and boolean receivers.
+`fixtures/check/protocol_missing`, `protocol_signature` and `protocol_no_fallback`
+pin the three diagnostics exactly in both suites.
+
 ## 8. Working-tree boundaries
 
 No compiler or test change is intentionally uncommitted now. Everything in
@@ -549,7 +598,7 @@ The machine plan currently has ten planned M2 modules:
 
 | Module | Immediate prerequisite or implementation gap |
 | --- | --- |
-| `e.data.heap` | `e.data.list` exists; exact default `T.cmp` protocol resolution is still missing |
+| `e.data.heap` | unblocked for integer, `bool` and `err` elements by section 7.7; a heap over a user struct needs that type to declare its own `cmp`, which works, and one over an enum still needs the enum fallback |
 | `algo.rand` | Exact API includes `f64`; scalar float lowering and ABI support are incomplete |
 | `algo.uuid` | Depends on `algo.hash` and source-complete `e.str`; `e.str` is not source-complete |
 | `e.fs` | Depends on complete `e.path`, `e.str`, memory, and filesystem `e.os` behavior |
@@ -591,7 +640,10 @@ needs general `T.cmp` protocol resolution first.
 
 ### Subsequent compiler prerequisites
 
-1. General protocol lookup at instantiation, including `T.cmp`.
+1. General protocol lookup at instantiation is partially delivered (section 7.7):
+   declared protocol functions resolve, and `cmp` is supplied for integers, `bool`
+   and `err`. Enums, floats, the recursive shapes, `hash`/`eq`/`format`, generic
+   protocol functions and lookup edges remain.
 2. Scalar floating-point parsing/checking/NIR/x64 ABI and operations needed by
    `algo.rand` and the M1 CPU language.
 3. Complete `e.str`, `e.path`, `e.meta`, `e.atomic`, `e.thread`, `e.time`, and

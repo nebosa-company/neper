@@ -276,7 +276,8 @@ if ($LASTEXITCODE -ne 0) { throw 'T.cmp did not resolve to each receiver type ow
 # protocol whose first parameter is not the type by value is rejected outright.
 $protocolDiagnostics = @(
     @('protocol_missing', 'main\.e:4:9: error\[E-NAME-9999\]: no `cmp` protocol for `Point`; declare `fn point_cmp` in the module that declares the type'),
-    @('protocol_signature', 'main\.e:6:9: error\[E-TYPE-0003\]: protocol `point_cmp` must take `Point` by value as its first parameter')
+    @('protocol_signature', 'main\.e:6:9: error\[E-TYPE-0003\]: protocol `point_cmp` must take `Point` by value as its first parameter'),
+    @('protocol_no_fallback', 'main\.e:6:9: error\[E-NAME-9999\]: no `cmp` protocol for `Pair`; declare `fn pair_cmp` in the module that declares the type')
 )
 foreach ($case in $protocolDiagnostics) {
     $protocolOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
