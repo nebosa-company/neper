@@ -20,6 +20,13 @@ type Binding = struct {
     address: bool,
 }
 
+type LoopControl = struct {
+    active: bool,
+    continue_target: usize,
+    breaks: []usize,
+    break_count: usize,
+}
+
 fn find_binding(bindings: []Binding, count: usize, name: str) -> (Binding, bool) {
     var empty: Binding = zero
     var at = count
@@ -206,6 +213,108 @@ fn lower_full_slice(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     ret (stack, result_type, ok)
 }
 
+fn lower_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
+    let node = tree.nodes[node_index]
+    var children: [2]usize = zero
+    var child_count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if child_count == children.len { ret (0usize, zero, check.Unsupported) }
+            children[child_count] = tree.children[at].index
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count != 2usize { ret (0usize, zero, parse.InvalidSyntax) }
+    let (base_type, base_type_error) = check.check_expr(c, g, tree, module_index, children[0usize], check.invalid_type())
+    if base_type_error != ok { ret (0usize, base_type, base_type_error) }
+    let (element_type, element_type_error) = check.index_element_type(c, base_type, module_index)
+    if element_type_error != ok { ret (0usize, element_type, element_type_error) }
+    let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, children[0usize], base_type, builder, bindings, binding_count)
+    if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let (index, index_type, index_error) = lower_expression(c, g, tree, module_index, children[1usize], usize_type, builder, bindings, binding_count)
+    if index_error != ok { ret (0usize, index_type, index_error) }
+    var data = base
+    var length = 0usize
+    if base_type.kind == .Array {
+        let (length_instruction, length_result, length_error) = nir.emit(builder, .ConstInteger, usize_type, true, base_type.array_length, c.tokens[node.token_start])
+        if length_error != ok { ret (0usize, element_type, length_error) }
+        length = length_result
+    } else {
+        if base_type.kind != .Slice && base_type.kind != .String { ret (0usize, element_type, check.Unsupported) }
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, c.tokens[node.token_start])
+        if data_address_error != ok { ret (0usize, element_type, data_address_error) }
+        let data_address_operand_error = nir.add_operand(builder, data_address_instruction, base)
+        if data_address_operand_error != ok { ret (0usize, element_type, data_address_operand_error) }
+        let (data_load, data_result, data_load_error) = nir.emit(builder, .Load, pointer_type, true, 8usize, c.tokens[node.token_start])
+        if data_load_error != ok { ret (0usize, element_type, data_load_error) }
+        let data_load_operand_error = nir.add_operand(builder, data_load, data_address)
+        if data_load_operand_error != ok { ret (0usize, element_type, data_load_operand_error) }
+        data = data_result
+        let (length_address_instruction, length_address, length_address_error) = nir.emit(builder, .FieldAddress, usize_type, true, 8usize, c.tokens[node.token_start])
+        if length_address_error != ok { ret (0usize, element_type, length_address_error) }
+        let length_address_operand_error = nir.add_operand(builder, length_address_instruction, base)
+        if length_address_operand_error != ok { ret (0usize, element_type, length_address_operand_error) }
+        let (length_load, length_result, length_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, c.tokens[node.token_start])
+        if length_load_error != ok { ret (0usize, element_type, length_load_error) }
+        let length_load_operand_error = nir.add_operand(builder, length_load, length_address)
+        if length_load_operand_error != ok { ret (0usize, element_type, length_load_operand_error) }
+        length = length_result
+    }
+    let (element_info, element_info_error) = layout.type_info(c, element_type)
+    if element_info_error != ok { ret (0usize, element_type, element_info_error) }
+    let (address_instruction, address, address_error) = nir.emit(builder, .IndexAddress, element_type, true, element_info.size, c.tokens[node.token_start])
+    if address_error != ok { ret (0usize, element_type, address_error) }
+    let data_operand_error = nir.add_operand(builder, address_instruction, data)
+    if data_operand_error != ok { ret (0usize, element_type, data_operand_error) }
+    let index_operand_error = nir.add_operand(builder, address_instruction, index)
+    if index_operand_error != ok { ret (0usize, element_type, index_operand_error) }
+    let length_operand_error = nir.add_operand(builder, address_instruction, length)
+    if length_operand_error != ok { ret (0usize, element_type, length_operand_error) }
+    if aggregate_value(c, element_type) { ret (address, element_type, ok) }
+    let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+    if result_type_error != ok { ret (0usize, result_type, result_type_error) }
+    let (load_instruction, result, load_error) = nir.emit(builder, .Load, result_type, true, element_info.size, c.tokens[node.token_start])
+    if load_error != ok { ret (0usize, result_type, load_error) }
+    let load_operand_error = nir.add_operand(builder, load_instruction, address)
+    if load_operand_error != ok { ret (0usize, result_type, load_operand_error) }
+    ret (result, result_type, ok)
+}
+
+fn lower_member(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder) -> (usize, check.Type, err) {
+    let node = tree.nodes[node_index]
+    let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+    if result_type_error != ok { ret (0usize, result_type, result_type_error) }
+    let (aggregate_index, found_aggregate) = layout.aggregate_index(c, result_type)
+    if !found_aggregate { ret (0usize, result_type, check.Unsupported) }
+    let aggregate = c.aggregates[aggregate_index]
+    var member_name = ""
+    var token_at = node.token_start
+    while token_at < node.token_end {
+        let token = c.tokens[token_at]
+        if token.kind == .Identifier { member_name = g.modules[module_index].text[token.start..token.end] }
+        token_at += 1usize
+    }
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let field_index = aggregate.first_field + field_at
+        if field_index < c.aggregate_field_count {
+            let member = c.aggregate_fields[field_index]
+            if check.same(member.name, member_name) {
+                if member.enum_negative { ret (0usize, result_type, check.Unsupported) }
+                let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, member.enum_value, c.tokens[node.token_start])
+                ret (result, result_type, emit_error)
+            }
+        }
+        field_at += 1usize
+    }
+    ret (0usize, result_type, check.InvalidType)
+}
+
 fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
     let node = tree.nodes[node_index]
     c.failure_module = module_index
@@ -256,32 +365,8 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         ret (result, result_type, ok)
     }
     if node.kind == .MemberExpr {
-        let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
-        if result_type_error != ok { ret (0usize, result_type, result_type_error) }
-        let (aggregate_index, found_aggregate) = layout.aggregate_index(c, result_type)
-        if !found_aggregate { ret (0usize, result_type, check.Unsupported) }
-        let aggregate = c.aggregates[aggregate_index]
-        var member_name = ""
-        var token_at = node.token_start
-        while token_at < node.token_end {
-            let token = c.tokens[token_at]
-            if token.kind == .Identifier { member_name = g.modules[module_index].text[token.start..token.end] }
-            token_at += 1usize
-        }
-        var field_at = 0usize
-        while field_at < aggregate.field_count {
-            let field_index = aggregate.first_field + field_at
-            if field_index < c.aggregate_field_count {
-                let member = c.aggregate_fields[field_index]
-                if check.same(member.name, member_name) {
-                    if member.enum_negative { ret (0usize, result_type, check.Unsupported) }
-                    let (instruction, result, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, member.enum_value, c.tokens[node.token_start])
-                    ret (result, result_type, emit_error)
-                }
-            }
-            field_at += 1usize
-        }
-        ret (0usize, result_type, check.InvalidType)
+        let (result, result_type, result_error) = lower_member(c, g, tree, module_index, node_index, expected, builder)
+        ret (result, result_type, result_error)
     }
     if node.kind == .FieldExpr {
         let (target_module, qualified_name, qualified) = check.qualified_member(c, g, tree, module_index, node)
@@ -382,6 +467,10 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if node.kind == .BracketPostfix && check.contains_token(c, node.token_start, node.token_end, .PunctRange) {
         let (slice, slice_type, slice_error) = lower_full_slice(c, g, tree, module_index, node_index, expected, builder, bindings, binding_count)
         ret (slice, slice_type, slice_error)
+    }
+    if node.kind == .BracketPostfix {
+        let (result, result_type, result_error) = lower_index(c, g, tree, module_index, node_index, expected, builder, bindings, binding_count)
+        ret (result, result_type, result_error)
     }
     if node.kind == .UnaryExpr {
         let end = node.first_child + node.child_count
@@ -791,7 +880,7 @@ fn emit_branch(builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     ret (instruction, emit_error)
 }
 
-fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
     var condition_index = 0usize
     var found_condition = false
     var branches: [2]usize = zero
@@ -824,7 +913,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let true_block = builder.block_count
     let (true_index, true_error) = nir.begin_block(builder)
     if true_error != ok || true_index != true_block { ret nir.InvalidControlFlow }
-    try lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count)
+    try lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control)
     var true_exit = 0usize
     let true_falls_through = !builder.blocks[builder.current_block].terminated
     if true_falls_through {
@@ -836,7 +925,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let false_block = builder.block_count
     let (false_index, false_error) = nir.begin_block(builder)
     if false_error != ok || false_index != false_block { ret nir.InvalidControlFlow }
-    if branch_count == 2usize { try lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count) }
+    if branch_count == 2usize { try lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control) }
     var false_exit = 0usize
     let false_falls_through = !builder.blocks[builder.current_block].terminated
     if false_falls_through {
@@ -893,7 +982,9 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let body_block = builder.block_count
     let (body_block_index, body_block_error) = nir.begin_block(builder)
     if body_block_error != ok || body_block_index != body_block { ret nir.InvalidControlFlow }
-    try lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count)
+    var break_storage: [256]usize = zero
+    var control = LoopControl { active: true, continue_target: condition_block, breaks: break_storage[..], break_count: 0usize }
+    try lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control)
     if !builder.blocks[builder.current_block].terminated {
         let (back_edge, back_edge_error) = emit_branch(builder, c.tokens[node.token_start])
         if back_edge_error != ok { ret back_edge_error }
@@ -903,10 +994,15 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let (exit_block_index, exit_block_error) = nir.begin_block(builder)
     if exit_block_error != ok || exit_block_index != exit_block { ret nir.InvalidControlFlow }
     try nir.set_branch_targets(builder, decision, body_block, exit_block)
+    var break_at = 0usize
+    while break_at < control.break_count {
+        try nir.set_branch_targets(builder, control.breaks[break_at], exit_block, 0usize)
+        break_at += 1usize
+    }
     ret ok
 }
 
-fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
     c.failure_module = module_index
     c.failure_token = c.tokens[node.token_start]
     c.failure_has_token = true
@@ -915,12 +1011,26 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     if node.kind == .BindingStmt { ret lower_binding(c, g, tree, module_index, node, builder, bindings, binding_count) }
     if node.kind == .AssignmentStmt { ret lower_assignment(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .CallStmt { ret lower_call_statement(c, g, tree, module_index, node, builder, bindings, *binding_count) }
-    if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
+    if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count, control) }
     if node.kind == .WhileStmt { ret lower_while(c, g, tree, module_index, function, node, builder, bindings, binding_count) }
+    if node.kind == .BreakStmt {
+        if !control.active || control.break_count == control.breaks.len { ret check.Unsupported }
+        let (branch, branch_error) = emit_branch(builder, c.tokens[node.token_start])
+        if branch_error != ok { ret branch_error }
+        control.breaks[control.break_count] = branch
+        control.break_count += 1usize
+        ret ok
+    }
+    if node.kind == .ContinueStmt {
+        if !control.active { ret check.Unsupported }
+        let (branch, branch_error) = emit_branch(builder, c.tokens[node.token_start])
+        if branch_error != ok { ret branch_error }
+        ret nir.set_branch_targets(builder, branch, control.continue_target, 0usize)
+    }
     ret check.Unsupported
 }
 
-fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize) -> err {
+fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl) -> err {
     if node.kind != .Block { ret parse.InvalidSyntax }
     let local_checkpoint = c.local_count
     let binding_checkpoint = *binding_count
@@ -928,7 +1038,7 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     var at = node.first_child
     while at < end {
         if builder.blocks[builder.current_block].terminated { break }
-        if tree.children[at].node { try lower_statement(c, g, tree, module_index, function, tree.nodes[tree.children[at].index], builder, bindings, binding_count) }
+        if tree.children[at].node { try lower_statement(c, g, tree, module_index, function, tree.nodes[tree.children[at].index], builder, bindings, binding_count, control) }
         at += 1usize
     }
     c.local_count = local_checkpoint
@@ -974,6 +1084,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         parameter_at += 1usize
     }
     var found_body = false
+    var no_loop: LoopControl = zero
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
@@ -981,7 +1092,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             let child = tree.nodes[tree.children[at].index]
             if child.kind == .Block {
                 found_body = true
-                try lower_block(c, g, tree, module_index, function, child, builder, bindings, &binding_count)
+                try lower_block(c, g, tree, module_index, function, child, builder, bindings, &binding_count, &no_loop)
             }
         }
         at += 1usize

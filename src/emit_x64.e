@@ -194,6 +194,22 @@ fn multiply_register(buffer: *Buffer, destination: usize, source: usize) -> err 
     ret modrm(buffer, destination, source)
 }
 
+fn multiply_immediate(buffer: *Buffer, destination: usize, source: usize, value: usize) -> err {
+    if value > 4294967295usize { ret InvalidByte }
+    try rex(buffer, destination, source)
+    try byte(buffer, 105usize)
+    try modrm(buffer, destination, source)
+    ret little_u32(buffer, value)
+}
+
+fn bounds_check(buffer: *Buffer, index: usize, length: usize) -> err {
+    try compare_register(buffer, index, length)
+    try byte(buffer, 114usize)
+    try byte(buffer, 2usize)
+    try byte(buffer, 15usize)
+    ret byte(buffer, 11usize)
+}
+
 fn negate_register(buffer: *Buffer, value: usize) -> err {
     try check_register(value)
     try rex(buffer, 3usize, value)
@@ -484,8 +500,11 @@ fn self_test() -> err {
     try store_memory(&memory, 10usize, 11usize, 32usize)
     try store_memory(&memory, 10usize, 11usize, 64usize)
     try zero_memory(&memory, 9usize, 24usize)
-    if memory.count != 66usize { ret InvalidRegister }
+    try multiply_immediate(&memory, 10usize, 11usize, 24usize)
+    try bounds_check(&memory, 10usize, 11usize)
+    if memory.count != 80usize { ret InvalidRegister }
     if memory.bytes[0usize] != 76usize || memory.bytes[1usize] != 141usize || memory.bytes[7usize] != 73usize || memory.bytes[14usize] != 77usize || memory.bytes[16usize] != 182usize || memory.bytes[31usize] != 102usize || memory.bytes[40usize] != 26usize { ret InvalidRegister }
     if memory.bytes[41usize] != 77usize || memory.bytes[44usize] != 73usize || memory.bytes[54usize] != 65usize || memory.bytes[65usize] != 244usize { ret InvalidRegister }
+    if memory.bytes[66usize] != 77usize || memory.bytes[67usize] != 105usize || memory.bytes[73usize] != 77usize || memory.bytes[76usize] != 114usize || memory.bytes[79usize] != 11usize { ret InvalidRegister }
     ret ok
 }

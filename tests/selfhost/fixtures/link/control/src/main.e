@@ -14,9 +14,19 @@ fn count() -> i64 {
     ret value
 }
 
+fn loop_control() -> i64 {
+    var value: i64 = 0i64
+    while value < 10i64 {
+        value = value + 1i64
+        if value < 3i64 { continue }
+        if value == 5i64 { break }
+    }
+    ret value - 5i64
+}
+
 fn main() -> i64 {
     if false && true { ret 1i64 }
     if !(true || false) { ret 2i64 }
     if !(true && (false || true)) { ret 3i64 }
-    ret choose(false) - 2i64 + count() - 3i64
+    ret choose(false) - 2i64 + count() - 3i64 + loop_control()
 }
