@@ -2341,7 +2341,7 @@ The names the standard library looks for, by convention rather than by rule:
 |---|---|
 | `fn sensor_hash(v: Sensor) -> u64` | `e.data.map`, hash-based containers |
 | `fn sensor_eq(a: Sensor, b: Sensor) -> bool` | `e.data.map`, containers, `e.test` |
-| `fn sensor_cmp(a: Sensor, b: Sensor) -> i32` | `e.data.sort`, ordered containers |
+| `fn sensor_cmp(a: Sensor, b: Sensor) -> i32` | `algo.sort`, ordered containers |
 | `fn sensor_format(v: Sensor, b: *str.Builder) -> err` | `printf`/`format` on a user type (§4), `e.log` |
 | `fn window_next(it: *Window) -> (T, bool)` | `for` (§6), `e.data.iter` |
 | `fn window_next_err(it: *Window) -> (T, bool, err)` | fallible iterator algorithms; never implicit language `for` |
@@ -4258,9 +4258,9 @@ server would grow from; none is scheduled.
 
 ### Standard library
 
-The surfaces of `lib/e` this document does not write — `e.data.sort`, `e.data.map`,
+The library surfaces this document does not write — `algo.sort`, `e.data.map`,
 the rest of `e.thread` beyond `spawn`, `join`, `detach` and `DEFAULT_STACK` (§8) — are
-specified by their `lib/e` source and indexed by `neper index` (§14). This
+specified by their library source and indexed by `neper index` (§14). This
 document is authoritative only where it writes a signature; where it does not, the
 source is.
 
@@ -4497,7 +4497,7 @@ The rest of the surface, every function pure and allocation-free:
 spelled `<t>_<op>` — `timestamp_cmp`, `instant_add`, `duration_scale` — because that
 is §9's protocol convention (D52) and not merely a way around having no overloading
 (§14): the three clock types are distinct on purpose, and under this spelling
-`timestamp_cmp`, `instant_cmp` and `duration_cmp` are exactly what `e.data.sort` and every
+`timestamp_cmp`, `instant_cmp` and `duration_cmp` are exactly what `algo.sort` and every
 ordered container find when they look up `fn <t>_cmp` in the module that declares the
 type, where a bare `cmp` would resolve to nothing and leave a `Timestamp` unsortable.
 The constructors, accessors and conversions — `days`, `as_millis`, `to_date`,

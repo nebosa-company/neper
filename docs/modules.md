@@ -155,13 +155,13 @@ Containers are one module per data structure rather than the former `e.data` gra
 
 - `e.data.list`, `e.data.deque`, `e.data.stack`, `e.data.queue`, `e.data.linked`,
   `e.data.ring`, `e.data.heap`, `e.data.tree`.
-- `e.data.map`, `e.data.sort`, `e.data.iter`, `e.data.disjoint_set`,
+- `e.data.map`, `e.data.iter`, `e.data.disjoint_set`,
   `e.data.graph`, `e.data.slot_map`.
 
 Pure algorithm domains are:
 
 - `algo.rand`, `algo.uuid`, `algo.hash`, `algo.graph`, `algo.stat`, `algo.bitset`,
-  `algo.complex`, `algo.decimal`, `algo.bignum`, `algo.deflate`.
+  `algo.sort`, `algo.complex`, `algo.decimal`, `algo.bignum`, `algo.deflate`.
 - `algo.linalg.matrix`, `algo.linalg.tensor`.
 - `text.encoding`, `text.utf8`, `text.unicode`, `text.normalize`, `text.collate`,
   `text.regex`.

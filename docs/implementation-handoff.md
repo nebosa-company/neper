@@ -544,7 +544,7 @@ pin the three diagnostics exactly in both suites.
 
 `fn(A, B) -> R` is a type (spec section 5), but the compiler only parsed it:
 `check.e` had no handling and `lower.e` none at all. That blocked the `HeapBy`
-half of `e.data.heap` and the `_by` variants across `e.data.sort`.
+half of `e.data.heap` and the `_by` variants across `algo.sort`.
 
 - `check.Kind.Function` with a `FunctionSignature` side table, because a parameter
   and return list does not fit the flat `Type` record. Structural equality, an
@@ -615,7 +615,7 @@ over integers, a user struct dispatching to its own declared `task_cmp`, and a
 `heapify_in_place_by` and `iter_by`. The fixture asserts the context was actually
 reached and written.
 
-### 7.10 e.data.sort
+### 7.10 algo.sort
 
 All seven declarations of the frozen API, in the order `docs/module-apis.md` lists
 them, so the module is `source`. It is an M1 module, so this is the second M1
@@ -637,7 +637,7 @@ Algorithm choices, none of which the API document fixes:
 - `radix_u32_in_place` and `radix_u64_in_place` are LSD radix, one byte per pass,
   four and eight passes. Each pass is a counting sort, so they are stable too.
 
-`fixtures/link/data_sort` covers duplicates and negatives, empty and single-element
+`fixtures/link/algo_sort` covers duplicates and negatives, empty and single-element
 slices, already-sorted and exactly-reversed inputs, a user struct dispatching to its
 declared `rec_cmp`, a context-mutating comparison in both orderings, and radix over
 values with the high bit set that a signed comparison would order wrongly. Two
@@ -1072,7 +1072,7 @@ The machine plan currently has ten planned M2 modules:
 | Module | Immediate prerequisite or implementation gap |
 | --- | --- |
 | `e.data.heap` | delivered, `surface:"source"` (section 7.9) |
-| `e.data.sort` | delivered, `surface:"source"` (section 7.10). An M1 module, not one of the ten M2 rows |
+| `algo.sort` | delivered, `surface:"source"` (section 7.10). An M1 module, not one of the ten M2 rows |
 | `algo.rand` | Exact API includes `f64`; scalar float lowering and ABI support are incomplete |
 | `algo.uuid` | Depends on `algo.hash` and source-complete `e.str`; `e.str` is not source-complete |
 | `e.fs` | Depends on complete `e.path`, `e.str`, memory, and filesystem `e.os` behavior |

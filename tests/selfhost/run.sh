@@ -673,7 +673,7 @@ list_executable_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$list_executable_path"
 list_output=$("$list_executable_path")
 [ "$list_output" = 'data list ok' ]
-sort_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/e/data/sort.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
+sort_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/algo/sort.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
 expected_sort_surface='in_place
 in_place_by
 stable_in_place
@@ -682,13 +682,13 @@ radix_u32_in_place
 radix_u64_in_place
 is_sorted'
 [ "$sort_surface" = "$expected_sort_surface" ]
-sort_parsed=$($test_build/neper-self parse-file "$repo/lib/e/data/sort.e")
+sort_parsed=$($test_build/neper-self parse-file "$repo/lib/algo/sort.e")
 [ "$sort_parsed" = 'parse file ok' ]
-sort_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_sort/src/main.e" "$repo" x64 linux "$test_build/data-sort-selfhost")
+sort_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_sort/src/main.e" "$repo" x64 linux "$test_build/algo-sort-selfhost")
 [ "$sort_executable_written" = 'executable written' ]
-chmod +x "$test_build/data-sort-selfhost"
-sort_output=$($test_build/data-sort-selfhost)
-[ "$sort_output" = 'data sort ok' ]
+chmod +x "$test_build/algo-sort-selfhost"
+sort_output=$($test_build/algo-sort-selfhost)
+[ "$sort_output" = 'algo sort ok' ]
 heap_surface=$(grep -E '^(type|fn|error|const|var) ' "$repo/lib/e/data/heap.e" | sed -E 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/')
 expected_heap_surface='Heap
 HeapBy

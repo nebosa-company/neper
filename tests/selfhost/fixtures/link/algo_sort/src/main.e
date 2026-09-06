@@ -1,4 +1,4 @@
-use e.data.sort
+use algo.sort
 use e.io
 use e.mem
 
@@ -170,6 +170,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let after = mem.stats(a)
     if after.used != before.used { ret Failed }
 
-    try io.print("data sort ok\n")
+    try io.print("algo sort ok\n")
     ret ok
 }

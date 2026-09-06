@@ -123,6 +123,29 @@ This amends D77/D79's planned tiers, not implementation status. Version/migrate
 delivered CPU contracts in M2.5 without moving M2's preserved baseline. Future
 libraries retain their own implementation gates and independent runtime evidence.
 
+## D85 — `e.data.sort` becomes `algo.sort`
+
+Move the module from `e.data.sort` to `algo.sort`, in `modules.json`, `modules.md`,
+`module-apis.md` and `lib/`. The seven declarations and their order are unchanged and
+stay frozen; `layer`, `surface`, `milestone`, `schedule` and `direct_dependencies` are
+unchanged. This is a namespace correction, not an API or delivery change.
+
+`modules.md` defines `algo.*` as "pure algorithms over caller-owned data", which
+describes the module exactly: all seven functions take a caller-owned slice and sort
+or inspect it in place. `e.data.*` is one module per data structure, and this module
+declares none — across all fourteen `e.data.*` and twelve `algo.*` catalogue entries
+it is the only one declaring zero types, while sitting under a heading that reads
+"Containers are one module per data structure". The catalogue already splits a domain
+this way: `e.data.graph` owns `NodeId`, `Edge`, `Builder`, `Graph`, `Neighbors` and
+`Nodes`, and `algo.graph` owns `bfs`, `dfs` and `topological` over a caller-owned
+`graph.Graph`. Sort is structurally the second of those, with no container to pair it
+with.
+
+This supersedes D50 item 12's naming of `e.data.sort`, whose substance — that the
+module is specified by its library source and indexed by `neper index`, the spec
+authoritative only where it writes a signature — is unchanged and now reads
+`algo.sort`.
+
 ## Consequences accepted
 
 - **We own the optimiser.** v1 targets roughly `-O1` quality: inlining, constant

@@ -523,11 +523,11 @@ compiler, so M1 completes after M2's rewrite compiles itself, not before.
 - Builtin `Atomic[T]` and orderings; `e.thread` over OS threads
 - Protocols and `e.meta` (spec §9, D52, D53): `T.f(...)` resolution at
   instantiation, `for` over a `next`, the comptime-unrolled `for`, and
-  `fields`/`members`/`type_name`/`get`/`set`. **`e.data.map`, `e.data.sort` and every
+  `fields`/`members`/`type_name`/`get`/`set`. **`e.data.map`, `algo.sort` and every
   `fmt.*` module depend on these**
 - M1 library set, using canonical qualified names from `docs/modules.json`:
   `e.mem`, `e.meta`, `e.math`, `e.simd`, `e.atomic`, `e.bytes`, `e.str`, `e.path`,
-  `e.data.list`, `e.data.map`, `e.data.sort`, `e.data.iter`, `e.os`, `e.io`,
+  `e.data.list`, `e.data.map`, `algo.sort`, `e.data.iter`, `e.os`, `e.io`,
   `e.thread`, `e.time`, `e.test`. Implement exactly the M1 declarations frozen in
   `module-apis.md`; a module is not delivered while a declared surface is missing
 

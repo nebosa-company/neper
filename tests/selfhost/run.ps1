@@ -555,21 +555,21 @@ $listExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $listExecutableWritten -ne 'executable written') { throw 'e.data.list did not compile into a PE executable' }
 $listOutput = & $listExecutablePath
 if ($LASTEXITCODE -ne 0 -or $listOutput -ne 'data list ok') { throw 'e.data.list growth, insertion, removal, copy, view, or iteration behavior failed' }
-$sortSurface = Get-Content (Join-Path $repo 'lib\e\data\sort.e') |
+$sortSurface = Get-Content (Join-Path $repo 'lib\algo\sort.e') |
     Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
     ForEach-Object {
-        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'e.data.sort contains an unreadable public declaration' }
+        if ($_ -notmatch '^(?:type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*)') { throw 'algo.sort contains an unreadable public declaration' }
         $Matches[1]
     }
 $expectedSortSurface = @('in_place', 'in_place_by', 'stable_in_place', 'stable_in_place_by', 'radix_u32_in_place', 'radix_u64_in_place', 'is_sorted')
-if (($sortSurface -join "`n") -ne ($expectedSortSurface -join "`n")) { throw 'e.data.sort public declarations differ from module-apis.md' }
-$sortParsed = & $compiler parse-file (Join-Path $repo 'lib\e\data\sort.e')
-if ($LASTEXITCODE -ne 0 -or $sortParsed -ne 'parse file ok') { throw 'e.data.sort failed CLI parsing' }
-$sortExecutablePath = Join-Path $testBuild 'data-sort-selfhost.exe'
-$sortExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_sort\src\main.e') $repo 'x64' 'windows' $sortExecutablePath
-if ($LASTEXITCODE -ne 0 -or $sortExecutableWritten -ne 'executable written') { throw 'e.data.sort did not compile into a PE executable' }
+if (($sortSurface -join "`n") -ne ($expectedSortSurface -join "`n")) { throw 'algo.sort public declarations differ from module-apis.md' }
+$sortParsed = & $compiler parse-file (Join-Path $repo 'lib\algo\sort.e')
+if ($LASTEXITCODE -ne 0 -or $sortParsed -ne 'parse file ok') { throw 'algo.sort failed CLI parsing' }
+$sortExecutablePath = Join-Path $testBuild 'algo-sort-selfhost.exe'
+$sortExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_sort\src\main.e') $repo 'x64' 'windows' $sortExecutablePath
+if ($LASTEXITCODE -ne 0 -or $sortExecutableWritten -ne 'executable written') { throw 'algo.sort did not compile into a PE executable' }
 $sortOutput = & $sortExecutablePath
-if ($LASTEXITCODE -ne 0 -or $sortOutput -ne 'data sort ok') { throw 'e.data.sort ordering, stability, radix, or arena behavior failed' }
+if ($LASTEXITCODE -ne 0 -or $sortOutput -ne 'algo sort ok') { throw 'algo.sort ordering, stability, radix, or arena behavior failed' }
 $heapSurface = Get-Content (Join-Path $repo 'lib\e\data\heap.e') |
     Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
     ForEach-Object {

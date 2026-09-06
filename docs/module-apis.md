@@ -495,18 +495,6 @@ fn set_iter[K: type](s: *const Set[K]) -> SetIter[K]
 fn set_iter_next[K: type](it: *SetIter[K]) -> (K, bool)
 ```
 
-### `e.data.sort`
-
-```neper
-fn in_place[T: type](items: []T)
-fn in_place_by[T: type, Ctx: type](items: []T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32)
-fn stable_in_place[T: type](a: *mem.Arena, items: []T) -> err
-fn stable_in_place_by[T: type, Ctx: type](a: *mem.Arena, items: []T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) -> err
-fn radix_u32_in_place(a: *mem.Arena, items: []u32) -> err
-fn radix_u64_in_place(a: *mem.Arena, items: []u64) -> err
-fn is_sorted[T: type](items: []const T) -> bool
-```
-
 ### `e.data.heap`
 
 ```neper
@@ -879,6 +867,18 @@ fn eq(a: *const BitSet, b: *const BitSet) -> bool
 Bits at indices `len..storage.len*64` are always zero. Operations requiring two
 sets require equal logical lengths; a mismatch is a debug bounds trap and release
 undefined behavior, like incompatible slice bounds in other pure primitives.
+
+### `algo.sort`
+
+```neper
+fn in_place[T: type](items: []T)
+fn in_place_by[T: type, Ctx: type](items: []T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32)
+fn stable_in_place[T: type](a: *mem.Arena, items: []T) -> err
+fn stable_in_place_by[T: type, Ctx: type](a: *mem.Arena, items: []T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) -> err
+fn radix_u32_in_place(a: *mem.Arena, items: []u32) -> err
+fn radix_u64_in_place(a: *mem.Arena, items: []u64) -> err
+fn is_sorted[T: type](items: []const T) -> bool
+```
 
 ### `algo.complex`
 
