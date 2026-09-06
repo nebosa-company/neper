@@ -55,6 +55,9 @@ type DiagnosticKind = enum u8 {
     AggregateMemberUnknown,
     BindingUnknownNamed,
     NonExhaustive,
+    ProtocolMissing,
+    ProtocolSignature,
+    ProtocolGenericType,
 }
 
 type Kind = enum u8 {
@@ -3251,6 +3254,7 @@ type CallInfo = struct {
     alloc_return: Type,
     alloc_arena: Type,
     mem_alloc: bool,
+    protocol_pending: bool,
 }
 
 type AllocInfo = struct {
@@ -3420,16 +3424,30 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         has_function = true
                     } else {
                         if receiver.kind != .FieldExpr { ret (info, Unsupported) }
-                        let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
-                        if !found { ret (info, UnknownCallable) }
-                        if c.functions[found_index].generic {
-                            let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, found_index)
-                            if specialize_error != ok { ret (info, specialize_error) }
-                            info.function = c.functions[specialized_index]
+                        let (protocol_type, protocol_name, is_protocol) = protocol_receiver(c, g, tree, module_index, receiver)
+                        if is_protocol {
+                            if protocol_type.kind == .Invalid {
+                                // The template's own body: the receiver is still
+                                // symbolic, so resolution waits for the instantiation.
+                                info.protocol_pending = true
+                            } else {
+                                let (protocol_index, protocol_error) = check_protocol_call(c, g, tree, module_index, node, protocol_type, protocol_name)
+                                if protocol_error != ok { ret (info, protocol_error) }
+                                info.function = c.functions[protocol_index]
+                            }
+                            has_function = true
                         } else {
-                            info.function = c.functions[found_index]
+                            let (found_index, found) = find_qualified_function(c, g, tree, module_index, receiver)
+                            if !found { ret (info, UnknownCallable) }
+                            if c.functions[found_index].generic {
+                                let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, found_index)
+                                if specialize_error != ok { ret (info, specialize_error) }
+                                info.function = c.functions[specialized_index]
+                            } else {
+                                info.function = c.functions[found_index]
+                            }
+                            has_function = true
                         }
-                        has_function = true
                     }
                 }
             } else {
@@ -3441,6 +3459,13 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     if !is_numeric(argument_type) { ret (info, TypeMismatch) }
                 } else {
                     if !has_function { ret (info, UnknownCallable) }
+                    if info.protocol_pending {
+                        let (pending_type, pending_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                        if pending_error != ok { ret (info, pending_error) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     let function = info.function
                     if child_position > function.parameter_count { ret (info, ArgumentCount) }
                     var parameter_type = invalid_type()
@@ -3466,10 +3491,85 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         ret (info, ok)
     }
     if !has_function { ret (info, UnknownCallable) }
+    if info.protocol_pending { ret (info, ok) }
     let function = info.function
     if child_position == 0usize || child_position - 1usize != function.parameter_count { ret (info, ArgumentCount) }
     if function.generic && !c.generic_declaration { ret (info, Unsupported) }
     ret (info, ok)
+}
+
+// Spec section 9 rule 1: `T.f(...)` is a protocol call only where T is a comptime
+// type parameter. Returns the type bound to T, the protocol name, and whether the
+// receiver is one at all. An invalid bound type means T is still symbolic, which is
+// the case while a generic template's own body is checked.
+fn protocol_receiver(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (Type, str, bool) {
+    let (base_index, has_base) = first_node_child(tree, receiver)
+    if !has_base { ret (invalid_type(), "", false) }
+    let base_node = tree.nodes[base_index]
+    if base_node.kind != .NameExpr { ret (invalid_type(), "", false) }
+    if base_node.token_start >= c.token_count { ret (invalid_type(), "", false) }
+    let base_token = c.tokens[base_node.token_start]
+    if base_token.kind != .Identifier { ret (invalid_type(), "", false) }
+    let text = g.modules[module_index].text
+    let base = text[base_token.start..base_token.end]
+    let (parameter_index, parameter_found) = active_comptime_parameter(c, base)
+    if !parameter_found || c.comptime_parameters[parameter_index].kind != .Type { ret (invalid_type(), "", false) }
+    var member = ""
+    var at = base_node.token_end
+    while at < receiver.token_end && at < c.token_count {
+        let token = c.tokens[at]
+        if token.kind == .Identifier { member = text[token.start..token.end] }
+        at += 1usize
+    }
+    if member.len == 0usize { ret (invalid_type(), "", false) }
+    let (argument, argument_found) = active_argument(c, parameter_index)
+    if !argument_found { ret (invalid_type(), member, true) }
+    ret (argument.ty, member, true)
+}
+
+// Spec section 9: the protocol function is `fn <t>_<protocol>` in the module that
+// declares the receiver type, and its first parameter is the type by value.
+fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool, err) {
+    let (canonical, canonical_error) = canonical_type(c, receiver)
+    if canonical_error != ok { ret (0usize, false, canonical_error) }
+    if canonical.kind != .Named { ret (0usize, false, ok) }
+    var at = 0usize
+    while at < c.signature_function_count {
+        let candidate = c.functions[at]
+        if candidate.module_index == canonical.module_index && protocol_name_matches(canonical.name, candidate.name, protocol) { ret (at, true, ok) }
+        at += 1usize
+    }
+    ret (0usize, false, ok)
+}
+
+fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, receiver: Type, protocol: str) -> (usize, err) {
+    let (canonical, canonical_error) = canonical_type(c, receiver)
+    if canonical_error != ok { ret (0usize, canonical_error) }
+    if canonical.kind != .Named {
+        record_failure(c, module_index, node, .ProtocolMissing, canonical.name, protocol)
+        ret (0usize, UnknownCallable)
+    }
+    let (function_index, found, lookup_error) = protocol_function(c, receiver, protocol)
+    if lookup_error != ok { ret (0usize, lookup_error) }
+    if !found {
+        record_failure(c, module_index, node, .ProtocolMissing, canonical.name, protocol)
+        ret (0usize, UnknownCallable)
+    }
+    let function = c.functions[function_index]
+    if function.generic {
+        record_failure(c, module_index, node, .ProtocolGenericType, canonical.name, protocol)
+        ret (0usize, Unsupported)
+    }
+    // Rule 3: the first parameter is the receiver type, by value.
+    if function.parameter_count == 0usize || function.first_parameter >= c.parameter_count {
+        record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
+        ret (0usize, InvalidType)
+    }
+    if !type_equal(c, c.parameters[function.first_parameter].ty, canonical) {
+        record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
+        ret (0usize, InvalidType)
+    }
+    ret (function_index, ok)
 }
 
 fn function_return(c: *Checker, function: Function, index: usize) -> (Type, err) {
@@ -3478,6 +3578,10 @@ fn function_return(c: *Checker, function: Function, index: usize) -> (Type, err)
 }
 
 fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
+    if call.protocol_pending {
+        if index != 0usize { ret (invalid_type(), InvalidType) }
+        ret (make_type(.TypeParameter, "", 0usize), ok)
+    }
     if index >= call.function.return_count { ret (invalid_type(), InvalidType) }
     if call.mem_alloc {
         if index == 0usize { ret (call.alloc_return, ok) }
@@ -4180,6 +4284,9 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let (result_type, context_error) = apply_context(c, call.cast, expected)
             ret (result_type, context_error)
         }
+        // A protocol call in a template body has no signature until the
+        // instantiation binds its receiver, so its result follows the context.
+        if call.protocol_pending { ret (dependent_expression_type(make_type(.TypeParameter, "", module_index), expected, module_index), ok) }
         let function = call.function
         if function.return_count > 1usize { ret (invalid_type(), ArgumentCount) }
         if function.return_count == 0usize {
@@ -4486,7 +4593,11 @@ fn ascii_lower(byte: u8) -> u8 {
     ret byte
 }
 
-fn iterator_next_name_matches(type_name: str, candidate_name: str) -> bool {
+// Spec section 9: `T.f(...)` resolves to `fn <t>_f` in the module declaring T,
+// where <t> is T's name in snake_case. A boundary precedes an uppercase letter
+// following a lowercase letter or digit, and precedes the last uppercase letter of
+// a run when the next letter is lowercase, so `HTTP2Client` becomes `http2_client`.
+fn protocol_name_matches(type_name: str, candidate_name: str, protocol: str) -> bool {
     var source = 0usize
     var output_at = 0usize
     while source < type_name.len {
@@ -4510,14 +4621,19 @@ fn iterator_next_name_matches(type_name: str, candidate_name: str) -> bool {
         source += 1usize
         output_at += 1usize
     }
-    let suffix = "_next"
+    if output_at >= candidate_name.len || candidate_name[output_at] != 95u8 { ret false }
+    output_at += 1usize
     var suffix_at = 0usize
-    while suffix_at < suffix.len {
-        if output_at >= candidate_name.len || candidate_name[output_at] != suffix[suffix_at] { ret false }
+    while suffix_at < protocol.len {
+        if output_at >= candidate_name.len || candidate_name[output_at] != protocol[suffix_at] { ret false }
         output_at += 1usize
         suffix_at += 1usize
     }
     ret output_at == candidate_name.len
+}
+
+fn iterator_next_name_matches(type_name: str, candidate_name: str) -> bool {
+    ret protocol_name_matches(type_name, candidate_name, "next")
 }
 
 fn protocol_iteration_element(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, statement: syntax.Node, subject_index: usize, iterable: Type, name_count: usize) -> (Type, err) {
@@ -5525,10 +5641,10 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .TryInsideDefer { ret "E-ERROR-9999" }
     if kind == .ArrayLengthType || kind == .InitializerType { ret "E-TYPE-0002" }
-    if kind == .GenericTypeArity || kind == .IteratorSignature { ret "E-TYPE-0003" }
+    if kind == .GenericTypeArity || kind == .IteratorSignature || kind == .ProtocolSignature { ret "E-TYPE-0003" }
     if kind == .EnumValueRange { ret "E-TYPE-0004" }
     if kind == .DuplicateEnumValue { ret "E-NAME-0001" }
-    if kind == .IteratorMissing { ret "E-NAME-9999" }
+    if kind == .IteratorMissing || kind == .ProtocolMissing { ret "E-NAME-9999" }
     if kind == .GenericInference { ret "E-TYPE-0001" }
     ret "E-TYPE-9999"
 }

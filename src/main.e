@@ -1098,7 +1098,7 @@ fn write_lower_byte(file: os.File, byte: u8) -> err {
     ret write_all(file, "z")
 }
 
-fn write_iterator_name(file: os.File, name: str) -> err {
+fn write_snake_name(file: os.File, name: str) -> err {
     var at = 0usize
     while at < name.len {
         let byte = name[at]
@@ -1121,7 +1121,7 @@ fn write_iterator_name(file: os.File, name: str) -> err {
         }
         at += 1usize
     }
-    ret write_all(file, "_next")
+    ret ok
 }
 
 fn write_check_message(file: os.File, checker: *check.Checker) -> err {
@@ -1134,10 +1134,34 @@ fn write_check_message(file: os.File, checker: *check.Checker) -> err {
     }
     if checker.failure_kind == .IteratorMissing {
         try write_all(file, "protocol iteration needs `fn ")
-        try write_iterator_name(file, checker.failure_detail)
+        try write_snake_name(file, checker.failure_detail)
+        try write_all(file, "_next")
         try write_all(file, "(it: *")
         try write_all(file, checker.failure_detail)
         ret write_all(file, ") -> (T, bool)`")
+    }
+    if checker.failure_kind == .ProtocolMissing {
+        try write_all(file, "no `")
+        try write_all(file, checker.failure_detail2)
+        try write_all(file, "` protocol for `")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "`; declare `fn ")
+        try write_snake_name(file, checker.failure_detail)
+        try write_all(file, "_")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "` in the module that declares the type")
+    }
+    if checker.failure_kind == .ProtocolSignature {
+        try write_all(file, "protocol `")
+        try write_all(file, checker.failure_detail2)
+        try write_all(file, "` must take `")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` by value as its first parameter")
+    }
+    if checker.failure_kind == .ProtocolGenericType {
+        try write_all(file, "a generic protocol function for `")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` is not supported yet")
     }
     if checker.failure_kind == .GenericInference {
         try write_all(file, "cannot infer compile-time parameter `")

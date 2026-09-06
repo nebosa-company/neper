@@ -317,6 +317,25 @@ generic_artifact_executable_written=$($test_build/neper-self link-em "$generic_a
 chmod +x "$generic_artifact_executable_path"
 "$generic_artifact_executable_path"
 cmp "$generic_artifact_executable_path" "$generic_executable_path"
+protocol_executable_path="$test_build/protocol-cmp-selfhost"
+protocol_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/protocol_cmp/src/main.e" "$repo" x64 linux "$protocol_executable_path")
+[ "$protocol_written" = 'executable written' ]
+chmod +x "$protocol_executable_path"
+"$protocol_executable_path"
+# Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
+# protocol whose first parameter is not the type by value is rejected outright.
+check_protocol_diagnostic() {
+    if protocol_output=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$1/src/main.e" "$repo" x64 linux 2>&1); then
+        printf '%s\n' "protocol fixture $1 was accepted" >&2
+        exit 1
+    fi
+    case "$protocol_output" in
+        *"$2"*) ;;
+        *) printf '%s\n' "protocol diagnostic for $1 is wrong: $protocol_output" >&2; exit 1 ;;
+    esac
+}
+check_protocol_diagnostic protocol_missing 'main.e:4:9: error[E-NAME-9999]: no `cmp` protocol for `Point`; declare `fn point_cmp` in the module that declares the type'
+check_protocol_diagnostic protocol_signature 'main.e:6:9: error[E-TYPE-0003]: protocol `point_cmp` must take `Point` by value as its first parameter'
 generic_instances_executable_path="$test_build/generic-instances-selfhost"
 generic_instances_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_instances/src/main.e" "$repo" x64 linux "$generic_instances_executable_path")
 [ "$generic_instances_executable_written" = 'executable written' ]

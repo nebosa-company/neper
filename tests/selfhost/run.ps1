@@ -267,6 +267,23 @@ function Get-EmCodeRecords([string]$path) {
     }
     return ,$records
 }
+$protocolExecutablePath = Join-Path $testBuild 'protocol-cmp-selfhost.exe'
+$protocolWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\protocol_cmp\src\main.e') $repo 'x64' 'windows' $protocolExecutablePath
+if ($LASTEXITCODE -ne 0 -or $protocolWritten -ne 'executable written') { throw 'protocol call executable emission failed' }
+& $protocolExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'T.cmp did not resolve to each receiver type own protocol function' }
+# Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
+# protocol whose first parameter is not the type by value is rejected outright.
+$protocolDiagnostics = @(
+    @('protocol_missing', 'main\.e:4:9: error\[E-NAME-9999\]: no `cmp` protocol for `Point`; declare `fn point_cmp` in the module that declares the type'),
+    @('protocol_signature', 'main\.e:6:9: error\[E-TYPE-0003\]: protocol `point_cmp` must take `Point` by value as its first parameter')
+)
+foreach ($case in $protocolDiagnostics) {
+    $protocolOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($protocolOutput -join "`n") -notmatch $case[1]) {
+        throw "protocol diagnostic for $($case[0]) is wrong: $($protocolOutput -join "`n")"
+    }
+}
 $genericInstancesExecutablePath = Join-Path $testBuild 'generic-instances-selfhost.exe'
 $genericInstancesExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesExecutableWritten -ne 'executable written') { throw 'multi-instance generic PE executable emission failed' }
