@@ -7,6 +7,7 @@ use codegen_x64
 use emit_x64
 use graph
 use nir
+use resolve
 
 error Capacity
 error InvalidArtifact
@@ -49,6 +50,10 @@ fn code_kind() -> usize { ret 5usize }
 fn debug_kind() -> usize { ret 6usize }
 
 fn declaration_function_kind() -> usize { ret 1usize }
+fn declaration_aggregate_kind() -> usize { ret 2usize }
+fn declaration_alias_kind() -> usize { ret 3usize }
+fn declaration_constant_kind() -> usize { ret 4usize }
+fn declaration_error_kind() -> usize { ret 5usize }
 fn dependency_signature_kind() -> usize { ret 1usize }
 
 fn mode_id(mode: BuildMode) -> usize {
@@ -261,6 +266,14 @@ fn comptime_kind_id(kind: check.ComptimeKind) -> usize {
     ret 0usize
 }
 
+fn aggregate_kind_id(kind: check.AggregateKind) -> usize {
+    if kind == .Struct { ret 1usize }
+    if kind == .Union { ret 2usize }
+    if kind == .TaggedUnion { ret 3usize }
+    if kind == .Enum { ret 4usize }
+    ret 0usize
+}
+
 fn function_flags(function: check.Function) -> usize {
     var flags = 0usize
     if function.generic { flags += 1usize }
@@ -319,6 +332,152 @@ fn signature_hash(c: *check.Checker, g: *graph.Graph, function_index: usize, scr
     scratch.count = 0usize
     let write_error = write_function_signature_canonical(c, g, function_index, scratch)
     if write_error != ok { ret (0usize, write_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
+fn write_aggregate_signature_canonical(c: *check.Checker, g: *graph.Graph, aggregate_index: usize, output: *binary.Buffer) -> err {
+    if aggregate_index >= c.aggregate_count { ret InvalidArtifact }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.module_index >= g.count { ret InvalidArtifact }
+    let kind = aggregate_kind_id(aggregate.kind)
+    if kind == 0usize { ret InvalidArtifact }
+    try binary.byte(output, declaration_aggregate_kind())
+    if aggregate.generic { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+    try binary.little_u16(output, 0usize)
+    try canonical_text(output, g.modules[aggregate.module_index].name)
+    try canonical_text(output, aggregate.name)
+    try binary.byte(output, kind)
+    try binary.zeroes(output, 3usize)
+    try binary.little_u32(output, aggregate.comptime_count)
+    var at = 0usize
+    while at < aggregate.comptime_count {
+        if aggregate.first_comptime + at >= c.comptime_parameter_count { ret InvalidArtifact }
+        let parameter = c.comptime_parameters[aggregate.first_comptime + at]
+        let parameter_kind = comptime_kind_id(parameter.kind)
+        if parameter_kind == 0usize { ret InvalidArtifact }
+        try binary.byte(output, parameter_kind)
+        try binary.zeroes(output, 3usize)
+        try canonical_text(output, parameter.name)
+        try write_type_canonical(c, g, parameter.ty, output)
+        at += 1usize
+    }
+    if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion {
+        try binary.byte(output, 1usize)
+        try write_type_canonical(c, g, aggregate.backing_type, output)
+    } else {
+        try binary.byte(output, 0usize)
+    }
+    try binary.little_u32(output, aggregate.field_count)
+    at = 0usize
+    while at < aggregate.field_count {
+        if aggregate.first_field + at >= c.aggregate_field_count { ret InvalidArtifact }
+        let field = c.aggregate_fields[aggregate.first_field + at]
+        try canonical_text(output, field.name)
+        try write_type_canonical(c, g, field.ty, output)
+        if field.has_enum_value { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+        if field.enum_negative { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+        try binary.little_u16(output, 0usize)
+        try binary.little_u64(output, field.enum_value)
+        at += 1usize
+    }
+    ret ok
+}
+
+fn aggregate_signature_hash(c: *check.Checker, g: *graph.Graph, aggregate_index: usize, scratch: *binary.Buffer) -> (usize, err) {
+    scratch.count = 0usize
+    let write_error = write_aggregate_signature_canonical(c, g, aggregate_index, scratch)
+    if write_error != ok { ret (0usize, write_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
+fn write_alias_signature_canonical(c: *check.Checker, g: *graph.Graph, alias_index: usize, output: *binary.Buffer) -> err {
+    if alias_index >= c.alias_count { ret InvalidArtifact }
+    let alias = c.aliases[alias_index]
+    if alias.module_index >= g.count { ret InvalidArtifact }
+    try binary.byte(output, declaration_alias_kind())
+    if alias.generic { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+    try binary.little_u16(output, 0usize)
+    try canonical_text(output, g.modules[alias.module_index].name)
+    try canonical_text(output, alias.name)
+    if alias.generic {
+        try binary.byte(output, 0usize)
+    } else {
+        try binary.byte(output, 1usize)
+        try write_type_canonical(c, g, alias.resolved, output)
+    }
+    ret ok
+}
+
+fn alias_signature_hash(c: *check.Checker, g: *graph.Graph, alias_index: usize, scratch: *binary.Buffer) -> (usize, err) {
+    scratch.count = 0usize
+    let write_error = write_alias_signature_canonical(c, g, alias_index, scratch)
+    if write_error != ok { ret (0usize, write_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
+fn write_constant_signature_canonical(c: *check.Checker, g: *graph.Graph, constant_index: usize, output: *binary.Buffer) -> err {
+    if constant_index >= c.constant_count { ret InvalidArtifact }
+    let constant = c.constants[constant_index]
+    if constant.module_index >= g.count { ret InvalidArtifact }
+    try binary.byte(output, declaration_constant_kind())
+    try binary.zeroes(output, 3usize)
+    try canonical_text(output, g.modules[constant.module_index].name)
+    try canonical_text(output, constant.name)
+    ret write_type_canonical(c, g, constant.ty, output)
+}
+
+fn constant_signature_hash(c: *check.Checker, g: *graph.Graph, constant_index: usize, scratch: *binary.Buffer) -> (usize, err) {
+    scratch.count = 0usize
+    let write_error = write_constant_signature_canonical(c, g, constant_index, scratch)
+    if write_error != ok { ret (0usize, write_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
+fn write_error_signature_canonical(g: *graph.Graph, symbol: resolve.Symbol, output: *binary.Buffer) -> err {
+    if symbol.module_index >= g.count || symbol.kind != .Error { ret InvalidArtifact }
+    try binary.byte(output, declaration_error_kind())
+    try binary.zeroes(output, 3usize)
+    try canonical_text(output, g.modules[symbol.module_index].name)
+    ret canonical_text(output, symbol.name)
+}
+
+fn error_signature_hash(g: *graph.Graph, symbol: resolve.Symbol, scratch: *binary.Buffer) -> (usize, err) {
+    scratch.count = 0usize
+    let write_error = write_error_signature_canonical(g, symbol, scratch)
+    if write_error != ok { ret (0usize, write_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
+fn signature_only_body_hash(signature: usize, scratch: *binary.Buffer) -> (usize, err) {
+    scratch.count = 0usize
+    let write_error = binary.little_u64(scratch, signature)
+    if write_error != ok { ret (0usize, write_error) }
+    let marker_error = binary.byte(scratch, 0usize)
+    if marker_error != ok { ret (0usize, marker_error) }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
+fn constant_body_hash(c: *check.Checker, g: *graph.Graph, constant_index: usize, scratch: *binary.Buffer) -> (usize, err) {
+    let (signature, signature_error) = constant_signature_hash(c, g, constant_index, scratch)
+    if signature_error != ok { ret (0usize, signature_error) }
+    let constant = c.constants[constant_index]
+    scratch.count = 0usize
+    let signature_write_error = binary.little_u64(scratch, signature)
+    if signature_write_error != ok { ret (0usize, signature_write_error) }
+    let marker_error = binary.byte(scratch, 1usize)
+    if marker_error != ok { ret (0usize, marker_error) }
+    var negative = 0usize
+    if constant.value.negative { negative = 1usize }
+    let negative_error = binary.byte(scratch, negative)
+    if negative_error != ok { ret (0usize, negative_error) }
+    let value_error = binary.little_u64(scratch, constant.value.magnitude)
+    if value_error != ok { ret (0usize, value_error) }
     let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
     ret (hash, hash_error)
 }
@@ -466,6 +625,61 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
         }
         function_at += 1usize
     }
+    var aggregate_at = 0usize
+    while aggregate_at < c.aggregate_count {
+        let aggregate = c.aggregates[aggregate_at]
+        if aggregate.module_index == module_index && !aggregate.instance {
+            let (aggregate_name, aggregate_name_error) = intern(table, aggregate.name)
+            if aggregate_name_error != ok { ret aggregate_name_error }
+            var at = 0usize
+            while at < aggregate.comptime_count {
+                let parameter = c.comptime_parameters[aggregate.first_comptime + at]
+                let (parameter_name, parameter_name_error) = intern(table, parameter.name)
+                if parameter_name_error != ok { ret parameter_name_error }
+                try collect_type_strings(c, g, table, parameter.ty)
+                at += 1usize
+            }
+            if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion { try collect_type_strings(c, g, table, aggregate.backing_type) }
+            at = 0usize
+            while at < aggregate.field_count {
+                let field = c.aggregate_fields[aggregate.first_field + at]
+                let (field_name, field_name_error) = intern(table, field.name)
+                if field_name_error != ok { ret field_name_error }
+                try collect_type_strings(c, g, table, field.ty)
+                at += 1usize
+            }
+        }
+        aggregate_at += 1usize
+    }
+    var alias_at = 0usize
+    while alias_at < c.alias_count {
+        let alias = c.aliases[alias_at]
+        if alias.module_index == module_index {
+            let (alias_name, alias_name_error) = intern(table, alias.name)
+            if alias_name_error != ok { ret alias_name_error }
+            if !alias.generic { try collect_type_strings(c, g, table, alias.resolved) }
+        }
+        alias_at += 1usize
+    }
+    var constant_at = 0usize
+    while constant_at < c.constant_count {
+        let constant = c.constants[constant_at]
+        if constant.module_index == module_index {
+            let (constant_name, constant_name_error) = intern(table, constant.name)
+            if constant_name_error != ok { ret constant_name_error }
+            try collect_type_strings(c, g, table, constant.ty)
+        }
+        constant_at += 1usize
+    }
+    var symbol_at = 0usize
+    while symbol_at < c.resolver.count {
+        let symbol = c.resolver.symbols[symbol_at]
+        if symbol.module_index == module_index && symbol.kind == .Error {
+            let (error_name, error_name_error) = intern(table, symbol.name)
+            if error_name_error != ok { ret error_name_error }
+        }
+        symbol_at += 1usize
+    }
     function_at = 0usize
     while function_at < builder.function_count {
         let function = builder.functions[function_at]
@@ -501,6 +715,50 @@ fn source_function_count(c: *check.Checker, module_index: usize) -> usize {
         at += 1usize
     }
     ret count
+}
+
+fn module_aggregate_count(c: *check.Checker, module_index: usize) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < c.aggregate_count {
+        if c.aggregates[at].module_index == module_index && !c.aggregates[at].instance { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn module_alias_count(c: *check.Checker, module_index: usize) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < c.alias_count {
+        if c.aliases[at].module_index == module_index { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn module_constant_count(c: *check.Checker, module_index: usize) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < c.constant_count {
+        if c.constants[at].module_index == module_index { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn module_error_count(c: *check.Checker, module_index: usize) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < c.resolver.count {
+        if c.resolver.symbols[at].module_index == module_index && c.resolver.symbols[at].kind == .Error { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn interface_declaration_count(c: *check.Checker, module_index: usize) -> usize {
+    ret source_function_count(c, module_index) + module_aggregate_count(c, module_index) + module_alias_count(c, module_index) + module_constant_count(c, module_index) + module_error_count(c, module_index)
 }
 
 fn module_nir_function_count(builder: *nir.Builder, module_index: usize) -> usize {
@@ -565,13 +823,173 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     ret binary.patch_little_u32(output, length_offset, output.count - payload_start)
 }
 
+fn write_aggregate_interface(c: *check.Checker, g: *graph.Graph, table: *StringTable, aggregate_index: usize, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+    let aggregate = c.aggregates[aggregate_index]
+    let (name_index, name_error) = string_index(table, aggregate.name)
+    if name_error != ok { ret name_error }
+    let (signature, signature_error) = aggregate_signature_hash(c, g, aggregate_index, scratch)
+    if signature_error != ok { ret signature_error }
+    let (body, body_error) = signature_only_body_hash(signature, scratch)
+    if body_error != ok { ret body_error }
+    try binary.byte(output, declaration_aggregate_kind())
+    if aggregate.generic { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+    try binary.little_u16(output, 0usize)
+    let length_offset = output.count
+    try binary.little_u32(output, 0usize)
+    let payload_start = output.count
+    try binary.little_u32(output, name_index)
+    try binary.little_u64(output, signature)
+    try binary.little_u64(output, body)
+    let kind = aggregate_kind_id(aggregate.kind)
+    if kind == 0usize { ret InvalidArtifact }
+    try binary.byte(output, kind)
+    try binary.zeroes(output, 3usize)
+    try binary.little_u32(output, aggregate.comptime_count)
+    var at = 0usize
+    while at < aggregate.comptime_count {
+        let parameter = c.comptime_parameters[aggregate.first_comptime + at]
+        let parameter_kind = comptime_kind_id(parameter.kind)
+        if parameter_kind == 0usize { ret InvalidArtifact }
+        let (parameter_name, parameter_name_error) = string_index(table, parameter.name)
+        if parameter_name_error != ok { ret parameter_name_error }
+        try binary.byte(output, parameter_kind)
+        try binary.zeroes(output, 3usize)
+        try binary.little_u32(output, parameter_name)
+        try write_type_indexed(c, g, table, parameter.ty, output)
+        at += 1usize
+    }
+    if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion {
+        try binary.byte(output, 1usize)
+        try write_type_indexed(c, g, table, aggregate.backing_type, output)
+    } else {
+        try binary.byte(output, 0usize)
+    }
+    try binary.little_u32(output, aggregate.field_count)
+    at = 0usize
+    while at < aggregate.field_count {
+        let field = c.aggregate_fields[aggregate.first_field + at]
+        let (field_name, field_name_error) = string_index(table, field.name)
+        if field_name_error != ok { ret field_name_error }
+        try binary.little_u32(output, field_name)
+        try write_type_indexed(c, g, table, field.ty, output)
+        if field.has_enum_value { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+        if field.enum_negative { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+        try binary.little_u16(output, 0usize)
+        try binary.little_u64(output, field.enum_value)
+        at += 1usize
+    }
+    ret binary.patch_little_u32(output, length_offset, output.count - payload_start)
+}
+
+fn write_alias_interface(c: *check.Checker, g: *graph.Graph, table: *StringTable, alias_index: usize, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+    let alias = c.aliases[alias_index]
+    let (name_index, name_error) = string_index(table, alias.name)
+    if name_error != ok { ret name_error }
+    let (signature, signature_error) = alias_signature_hash(c, g, alias_index, scratch)
+    if signature_error != ok { ret signature_error }
+    let (body, body_error) = signature_only_body_hash(signature, scratch)
+    if body_error != ok { ret body_error }
+    try binary.byte(output, declaration_alias_kind())
+    if alias.generic { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+    try binary.little_u16(output, 0usize)
+    let length_offset = output.count
+    try binary.little_u32(output, 0usize)
+    let payload_start = output.count
+    try binary.little_u32(output, name_index)
+    try binary.little_u64(output, signature)
+    try binary.little_u64(output, body)
+    if alias.generic {
+        try binary.byte(output, 0usize)
+    } else {
+        try binary.byte(output, 1usize)
+        try write_type_indexed(c, g, table, alias.resolved, output)
+    }
+    ret binary.patch_little_u32(output, length_offset, output.count - payload_start)
+}
+
+fn write_constant_interface(c: *check.Checker, g: *graph.Graph, table: *StringTable, constant_index: usize, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+    let constant = c.constants[constant_index]
+    let (name_index, name_error) = string_index(table, constant.name)
+    if name_error != ok { ret name_error }
+    let (signature, signature_error) = constant_signature_hash(c, g, constant_index, scratch)
+    if signature_error != ok { ret signature_error }
+    let (body, body_error) = constant_body_hash(c, g, constant_index, scratch)
+    if body_error != ok { ret body_error }
+    try binary.byte(output, declaration_constant_kind())
+    try binary.zeroes(output, 3usize)
+    let length_offset = output.count
+    try binary.little_u32(output, 0usize)
+    let payload_start = output.count
+    try binary.little_u32(output, name_index)
+    try binary.little_u64(output, signature)
+    try binary.little_u64(output, body)
+    try write_type_indexed(c, g, table, constant.ty, output)
+    if constant.value.negative { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
+    try binary.zeroes(output, 3usize)
+    try binary.little_u64(output, constant.value.magnitude)
+    ret binary.patch_little_u32(output, length_offset, output.count - payload_start)
+}
+
+fn write_error_interface(g: *graph.Graph, table: *StringTable, symbol: resolve.Symbol, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+    let (name_index, name_error) = string_index(table, symbol.name)
+    if name_error != ok { ret name_error }
+    let (signature, signature_error) = error_signature_hash(g, symbol, scratch)
+    if signature_error != ok { ret signature_error }
+    let (body, body_error) = signature_only_body_hash(signature, scratch)
+    if body_error != ok { ret body_error }
+    let (value, value_error) = artifact_hash.qualified_error_value(g.modules[symbol.module_index].name, symbol.name)
+    if value_error != ok || value == 0usize { ret InvalidArtifact }
+    try binary.byte(output, declaration_error_kind())
+    try binary.zeroes(output, 3usize)
+    try binary.little_u32(output, 24usize)
+    try binary.little_u32(output, name_index)
+    try binary.little_u64(output, signature)
+    try binary.little_u64(output, body)
+    ret binary.little_u32(output, value)
+}
+
 fn write_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     let section_start = output.count
     try binary.little_u64(output, 0usize)
-    try binary.little_u32(output, source_function_count(c, module_index))
+    try binary.little_u32(output, interface_declaration_count(c, module_index))
     var at = 0usize
     while at < c.signature_function_count {
         if c.functions[at].module_index == module_index { try write_function_interface(c, g, builder, table, at, scratch, output) }
+        at += 1usize
+    }
+    at = 0usize
+    while at < c.aggregate_count {
+        if c.aggregates[at].module_index == module_index && !c.aggregates[at].instance { try write_aggregate_interface(c, g, table, at, scratch, output) }
+        at += 1usize
+    }
+    at = 0usize
+    while at < c.alias_count {
+        if c.aliases[at].module_index == module_index { try write_alias_interface(c, g, table, at, scratch, output) }
+        at += 1usize
+    }
+    at = 0usize
+    while at < c.constant_count {
+        if c.constants[at].module_index == module_index { try write_constant_interface(c, g, table, at, scratch, output) }
+        at += 1usize
+    }
+    at = 0usize
+    while at < c.resolver.count {
+        let symbol = c.resolver.symbols[at]
+        if symbol.module_index == module_index && symbol.kind == .Error { try write_error_interface(g, table, symbol, scratch, output) }
+        at += 1usize
+    }
+    try binary.little_u32(output, module_error_count(c, module_index))
+    at = 0usize
+    while at < c.resolver.count {
+        let symbol = c.resolver.symbols[at]
+        if symbol.module_index == module_index && symbol.kind == .Error {
+            let (value, value_error) = artifact_hash.qualified_error_value(g.modules[module_index].name, symbol.name)
+            if value_error != ok || value == 0usize { ret InvalidArtifact }
+            let (name_index, name_error) = string_index(table, symbol.name)
+            if name_error != ok { ret name_error }
+            try binary.little_u32(output, value)
+            try binary.little_u32(output, name_index)
+        }
         at += 1usize
     }
     let (interface_hash, interface_hash_error) = artifact_hash.xxhash64(output.bytes[section_start..output.count])

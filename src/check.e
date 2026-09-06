@@ -151,6 +151,7 @@ type Aggregate = struct {
     first_argument: usize,
     generic: bool,
     instance: bool,
+    backing_type: Type,
     token: lex.Token,
 }
 
@@ -1274,7 +1275,7 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
     let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
     let aggregate_index = c.aggregate_count
-    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: c.aggregate_field_count, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, token: c.tokens[node.token_start] }
+    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: c.aggregate_field_count, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[node.token_start] }
     c.aggregates[aggregate_index] = aggregate
     c.aggregate_count += 1usize
     at = node.first_child
@@ -1310,6 +1311,7 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
             backing_at += 1usize
         }
         if backing_type.kind != .Integer { ret InvalidType }
+        aggregate.backing_type = backing_type
     }
     var next_enum_value = 0usize
     var next_enum_negative = false
@@ -1402,7 +1404,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
     if has_memory {
         if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + 2usize > c.aggregate_fields.len { ret Capacity }
         let usize_type = make_type(.Integer, "usize", memory_module)
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, token: zero }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "used", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_fields[c.aggregate_field_count + 1usize] = AggregateField { name: "capacity", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 2usize

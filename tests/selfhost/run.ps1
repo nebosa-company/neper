@@ -250,6 +250,13 @@ if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($mo
 if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 1 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 6) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
+$interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'
+$interfaceArtifactWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\em\interface\src\main.e') $repo 'x64' 'windows' $interfaceArtifactPath
+if ($LASTEXITCODE -ne 0 -or $interfaceArtifactWritten -ne 'compiled module written') { throw 'full interface artifact emission failed' }
+$interfaceArtifactBytes = [IO.File]::ReadAllBytes($interfaceArtifactPath)
+$interfaceOffset = [BitConverter]::ToUInt64($interfaceArtifactBytes, 64)
+if ([BitConverter]::ToUInt32($interfaceArtifactBytes, [int]$interfaceOffset + 8) -ne 6) { throw 'compiled-module interface omitted a declaration kind' }
+if ([BitConverter]::ToUInt64($interfaceArtifactBytes, [int]$interfaceOffset + 24) -eq 0) { throw 'compiled-module function signature hash is zero' }
 $scalarOpsLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $scalarOpsLowered -ne 'module nir ok') { throw 'casts, unary operators, and call statements did not lower to canonical NIR' }
 $scalarOpsGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\scalar_ops\src\main.e') $repo 'x64' 'windows'

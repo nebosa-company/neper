@@ -152,6 +152,45 @@ fn crc32c(bytes: []const usize, zero_at: usize, zero_count: usize) -> (usize, er
     ret (xor(crc, 4294967295usize), ok)
 }
 
+fn fnv1a32_step(hash: usize, value: usize) -> (usize, err) {
+    if value > 255usize { ret (0usize, InvalidByte) }
+    ret (xor(hash, value) *% 16777619usize % 4294967296usize, ok)
+}
+
+fn fnv1a32(bytes: []const usize) -> (usize, err) {
+    var hash = 2166136261usize
+    var at = 0usize
+    while at < bytes.len {
+        let (next, step_error) = fnv1a32_step(hash, bytes[at])
+        if step_error != ok { ret (0usize, step_error) }
+        hash = next
+        at += 1usize
+    }
+    ret (hash, ok)
+}
+
+fn qualified_error_value(module_name: str, error_name: str) -> (usize, err) {
+    var hash = 2166136261usize
+    var at = 0usize
+    while at < module_name.len {
+        let (next, step_error) = fnv1a32_step(hash, usize(module_name[at]))
+        if step_error != ok { ret (0usize, step_error) }
+        hash = next
+        at += 1usize
+    }
+    let (with_separator, separator_error) = fnv1a32_step(hash, 46usize)
+    if separator_error != ok { ret (0usize, separator_error) }
+    hash = with_separator
+    at = 0usize
+    while at < error_name.len {
+        let (next, step_error) = fnv1a32_step(hash, usize(error_name[at]))
+        if step_error != ok { ret (0usize, step_error) }
+        hash = next
+        at += 1usize
+    }
+    ret (hash, ok)
+}
+
 fn self_test() -> err {
     var empty: [1]usize = zero
     let (empty_hash, empty_error) = xxhash64(empty[0usize..0usize])
@@ -162,5 +201,10 @@ fn self_test() -> err {
     let invalid = [1]usize{ 256usize }
     let (invalid_hash, invalid_error) = xxhash64(invalid[..])
     if invalid_error != InvalidByte { ret InvalidByte }
+    let hello = [5]usize{ 104usize, 101usize, 108usize, 108usize, 111usize }
+    let (fnv, fnv_error) = fnv1a32(hello[..])
+    if fnv_error != ok || fnv != 1335831723usize { ret InvalidByte }
+    let (qualified, qualified_error) = qualified_error_value("e.os", "NotFound")
+    if qualified_error != ok || qualified == 0usize { ret InvalidByte }
     ret ok
 }

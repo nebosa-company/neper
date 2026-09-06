@@ -331,6 +331,12 @@ cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '6' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
+interface_artifact_path="$test_build/interface.x64-linux.em"
+interface_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/em/interface/src/main.e" "$repo" x64 linux "$interface_artifact_path")
+[ "$interface_artifact_written" = 'compiled module written' ]
+interface_offset=$(od -An -tu8 -j64 -N8 "$interface_artifact_path" | tr -d ' ')
+[ "$(od -An -tu4 -j$((interface_offset + 8)) -N4 "$interface_artifact_path" | tr -d ' ')" = '6' ]
+[ "$(od -An -tu8 -j$((interface_offset + 24)) -N8 "$interface_artifact_path" | tr -d ' ')" -ne 0 ]
 scalar_ops_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
 [ "$scalar_ops_lowered" = 'module nir ok' ]
 scalar_ops_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/scalar_ops/src/main.e" "$repo" x64 linux)
