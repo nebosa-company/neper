@@ -38,7 +38,10 @@
 
 #define NEPER_VERSION "0.0.96-neper0"
 #define MAX_TOKENS 131072
-#define MAX_DECLS 1024
+/* Program-wide, not per module: one table serves every module in a compile, so this
+   bounds the whole program. Functions are held by pointer (see Program), so a slot
+   costs 8 bytes and this can grow; the struct and error tables are still by value. */
+#define MAX_DECLS 4096
 #define MAX_PARAMS 32
 #define MAX_LOCALS 256
 #define MAX_ARGS 16
@@ -513,7 +516,9 @@ typedef struct Program {
     int constant_count;
     StructDecl structs[MAX_DECLS];
     int struct_count;
-    Function functions[MAX_DECLS];
+    /* Pointers, not values: a Function is tens of kilobytes because it embeds
+       locals[MAX_LOCALS], and this table is program-wide. */
+    Function *functions[MAX_DECLS];
     int function_count;
     Expr *strings[MAX_STRINGS];
     int string_count;
@@ -972,9 +977,26 @@ static void intrinsic_field(StructDecl *decl, Token token, const char *name, Typ
     field->token = token; field->type = type; field->has_payload = has_payload; field->value = value;
 }
 
+/* One zeroed Function on the heap. The table is program-wide, so running out here
+   is a limit on the whole program and not on any one module. */
+static Function *new_function(Compiler *c) {
+    Function *fn;
+    if (c->program.function_count >= MAX_DECLS) {
+        fprintf(stderr, "error: program declares more than %d functions\n", MAX_DECLS);
+        exit(1);
+    }
+    fn = (Function *)calloc(1, sizeof(Function));
+    if (!fn) {
+        fprintf(stderr, "error: out of memory allocating a function\n");
+        exit(1);
+    }
+    c->program.functions[c->program.function_count++] = fn;
+    return fn;
+}
+
 static Function *intrinsic_function(Compiler *c, Token token, const char *name,
                                     const char *symbol) {
-    Function *fn = &c->program.functions[c->program.function_count++];
+    Function *fn = new_function(c);
     int i;
     memset(fn, 0, sizeof(*fn));
     copy_text(fn->name, sizeof(fn->name), name, strlen(name));
@@ -1384,8 +1406,8 @@ static int name_is_declared_error(Compiler *c, const char *name) {
 static Function *parsed_function_named(Compiler *c, const char *name) {
     int i;
     for (i = 0; i < c->program.function_count; ++i)
-        if (strcmp(c->program.functions[i].name, name) == 0)
-            return &c->program.functions[i];
+        if (strcmp(c->program.functions[i]->name, name) == 0)
+            return c->program.functions[i];
     return 0;
 }
 
@@ -2164,7 +2186,7 @@ static void parse_function(Compiler *c, Token token) {
     if (c->program.function_count >= MAX_DECLS) {
         diagnostic_at(c, &token, "E-NAME-9999", "too many functions"); return;
     }
-    fn = &c->program.functions[c->program.function_count++];
+    fn = new_function(c);
     memset(fn, 0, sizeof(*fn)); fn->token = token;
     fn->return_slot_local_index = -1;
     fn->scalar_return_local_index = -1;
@@ -2323,7 +2345,7 @@ static size_t scalar_byte_size(Type type) {
 static Function *find_function(Compiler *c, const char *name) {
     int i;
     for (i = 0; i < c->program.function_count; ++i)
-        if (strcmp(c->program.functions[i].name, name) == 0) return &c->program.functions[i];
+        if (strcmp(c->program.functions[i]->name, name) == 0) return c->program.functions[i];
     return 0;
 }
 
@@ -3252,7 +3274,7 @@ static Function *instantiate_function(Compiler *c, Function *template_fn, Expr *
         diagnostic_at(c, &call->token, "E-TOOL-9999", "function instance limit exceeded");
         return 0;
     }
-    instance = &c->program.functions[c->program.function_count++];
+    instance = new_function(c);
     memset(instance, 0, sizeof(*instance));
     copy_text(instance->name, sizeof(instance->name), instance_name, strlen(instance_name));
     instance->is_intrinsic = template_fn->is_intrinsic;
@@ -5016,7 +5038,7 @@ static void check_program(Compiler *c) {
     /* Canonicalize every callable signature before checking any body. A root
        module may call an imported function that was parsed later. */
     for (i = 0; i < c->program.function_count; ++i) {
-        Function *fn = &c->program.functions[i];
+        Function *fn = c->program.functions[i];
         if (fn->is_template) continue;
         copy_text(c->resolution_module, sizeof(c->resolution_module), fn->module,
                   strlen(fn->module));
@@ -5031,10 +5053,10 @@ static void check_program(Compiler *c) {
         }
     }
     for (i = 0; i < c->program.function_count; ++i) {
-        Function *fn = &c->program.functions[i];
+        Function *fn = c->program.functions[i];
         copy_text(c->resolution_module, sizeof(c->resolution_module), fn->module,
                   strlen(fn->module));
-        for (j = 0; j < i; ++j) if (strcmp(fn->name, c->program.functions[j].name) == 0)
+        for (j = 0; j < i; ++j) if (strcmp(fn->name, c->program.functions[j]->name) == 0)
             diagnostic_at(c, &fn->token, "E-NAME-0001", "duplicate function declaration");
         if (fn->is_template) continue;
         for (j = 0; j < fn->return_count; ++j) {
@@ -5201,8 +5223,8 @@ static void collect_traps_statements(Compiler *c, Function *fn, Stmt *statement)
 static void collect_traps(Compiler *c) {
     int i;
     for (i = 0; i < c->program.function_count; ++i)
-        if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
-            collect_traps_statements(c, &c->program.functions[i], c->program.functions[i].body);
+        if (!c->program.functions[i]->is_template && !c->program.functions[i]->is_intrinsic)
+            collect_traps_statements(c, c->program.functions[i], c->program.functions[i]->body);
 }
 
 typedef struct Emitter {
@@ -6532,7 +6554,7 @@ static void prepare_debug_context(Compiler *c, DebugContext *debug) {
     debug_string(debug, "base"); debug_string(debug, "cap"); debug_string(debug, "off");
     debug_string(debug, "tag");
     for (i = 0; i < c->program.function_count; ++i) {
-        Function *fn = &c->program.functions[i];
+        Function *fn = c->program.functions[i];
         if (fn->is_template || fn->is_intrinsic) continue;
         debug_string(debug, fn->name); debug_string(debug, fn->symbol);
         for (j = 0; j < fn->return_count; ++j) debug_add_type(c, debug, fn->return_types[j]);
@@ -6723,7 +6745,7 @@ static void emit_linux_debug(Compiler *c, FILE *out) {
     emit_dwarf_string_ref(out, debug, ".");
     fputs(".long 0\n.quad np_user_text_start\n.quad np_user_text_end - np_user_text_start\n", out);
     for (i = 0; i < c->program.function_count; ++i) {
-        Function *fn = &c->program.functions[i];
+        Function *fn = c->program.functions[i];
         if (fn->is_template || fn->is_intrinsic) continue;
         fprintf(out, ".uleb128 %d\n", fn->return_count ? 2 : 15);
         emit_dwarf_string_ref(out, debug, fn->name);
@@ -6767,13 +6789,13 @@ static void error_message(Compiler *c, ErrorDecl *error, char *out, size_t capac
 static void emit_nepersym(Compiler *c, FILE *out, int windows) {
     int i, concrete_count = 0, record_index = 0;
     for (i = 0; i < c->program.function_count; ++i)
-        if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic) concrete_count++;
+        if (!c->program.functions[i]->is_template && !c->program.functions[i]->is_intrinsic) concrete_count++;
     if (windows) {
         fputs("\n.nepsym SEGMENT READ\nPUBLIC np_nepersym\nnp_nepersym LABEL BYTE\n"
               "DB 'N','E','P','S'\nDW 1,0\n", out);
         fprintf(out, "DD %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i) {
-            Function *fn = &c->program.functions[i];
+            Function *fn = c->program.functions[i];
             if (fn->is_template || fn->is_intrinsic) continue;
             fprintf(out, "DQ %s, np_end_%s\nDD %d, %d, %d\n",
                     symbol_name(fn), symbol_name(fn), record_index, concrete_count, record_index);
@@ -6781,7 +6803,7 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         }
         fprintf(out, "DD %d\n", concrete_count + 1);
         for (i = 0; i < c->program.function_count; ++i) {
-            Function *fn = &c->program.functions[i];
+            Function *fn = c->program.functions[i];
             if (fn->is_template || fn->is_intrinsic) continue;
             fprintf(out, "DD %u\n", (unsigned)strlen(fn->name));
             emit_bytes(out, (const unsigned char *)fn->name, strlen(fn->name), 1);
@@ -6790,15 +6812,15 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         emit_bytes(out, (const unsigned char *)c->source_path, strlen(c->source_path), 1);
         fprintf(out, "DD %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i)
-            if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
-                fprintf(out, "DD 8, %d, %d\n", c->program.functions[i].token.line, c->program.functions[i].token.column);
+            if (!c->program.functions[i]->is_template && !c->program.functions[i]->is_intrinsic)
+                fprintf(out, "DD 8, %d, %d\n", c->program.functions[i]->token.line, c->program.functions[i]->token.column);
         fputs(".nepsym ENDS\n\n.code\n", out);
     } else {
         fputs("\n.section .nepersym,\"R\",@progbits\n.globl np_nepersym\nnp_nepersym:\n"
               ".ascii \"NEPS\"\n.short 1\n.short 0\n", out);
         fprintf(out, ".long %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i) {
-            Function *fn = &c->program.functions[i];
+            Function *fn = c->program.functions[i];
             if (fn->is_template || fn->is_intrinsic) continue;
             fprintf(out, ".quad %s, np_end_%s\n.long %d, %d, %d\n",
                     symbol_name(fn), symbol_name(fn), record_index, concrete_count, record_index);
@@ -6806,7 +6828,7 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         }
         fprintf(out, ".long %d\n", concrete_count + 1);
         for (i = 0; i < c->program.function_count; ++i) {
-            Function *fn = &c->program.functions[i];
+            Function *fn = c->program.functions[i];
             if (fn->is_template || fn->is_intrinsic) continue;
             fprintf(out, ".long %u\n", (unsigned)strlen(fn->name));
             emit_bytes(out, (const unsigned char *)fn->name, strlen(fn->name), 0);
@@ -6815,8 +6837,8 @@ static void emit_nepersym(Compiler *c, FILE *out, int windows) {
         emit_bytes(out, (const unsigned char *)c->source_path, strlen(c->source_path), 0);
         fprintf(out, ".long %d\n", concrete_count);
         for (i = 0; i < c->program.function_count; ++i)
-            if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
-                fprintf(out, ".long 8, %d, %d\n", c->program.functions[i].token.line, c->program.functions[i].token.column);
+            if (!c->program.functions[i]->is_template && !c->program.functions[i]->is_intrinsic)
+                fprintf(out, ".long 8, %d, %d\n", c->program.functions[i]->token.line, c->program.functions[i]->token.column);
         fputs("\n.text\n", out);
     }
 }
@@ -6907,7 +6929,7 @@ static void prepare_codeview_indices(Compiler *c, DebugContext *debug) {
         entry->codeview_type = next++;
     }
     for (i = 0; i < c->program.function_count; ++i) {
-        Function *fn = &c->program.functions[i];
+        Function *fn = c->program.functions[i];
         if (fn->is_template || fn->is_intrinsic) continue;
         debug->codeview_arg_lists[i] = next++;
         debug->codeview_functions[i] = next++;
@@ -7126,7 +7148,7 @@ static void emit_windows_codeview(Compiler *c, FILE *out) {
     fputs(".debug_t_neper SEGMENT DWORD READ DISCARD ALIAS('.debug$T')\nDD 4\n", out);
     for (i = 0; i < debug->type_count; ++i) emit_codeview_type(c, out, debug, i);
     for (i = 0; i < c->program.function_count; ++i) {
-        Function *fn = &c->program.functions[i];
+        Function *fn = c->program.functions[i];
         if (!fn->is_template && !fn->is_intrinsic) emit_codeview_function_type(out, debug, fn, i);
     }
     fputs(".debug_t_neper ENDS\n\n", out);
@@ -7134,7 +7156,7 @@ static void emit_windows_codeview(Compiler *c, FILE *out) {
     fputs(".debug_s_neper SEGMENT DWORD READ DISCARD ALIAS('.debug$S')\nDD 4\n", out);
     fputs("DD 0F1h, np_cv_symbols_end - np_cv_symbols_body\nnp_cv_symbols_body LABEL BYTE\n", out);
     for (i = 0; i < c->program.function_count; ++i) {
-        Function *fn = &c->program.functions[i];
+        Function *fn = c->program.functions[i];
         size_t name_size;
         if (fn->is_template || fn->is_intrinsic) continue;
         name_size = strlen(fn->name) + 1;
@@ -7171,7 +7193,7 @@ static void emit_windows_codeview(Compiler *c, FILE *out) {
     }
     fputs("np_cv_symbols_end LABEL BYTE\nALIGN 4\n", out);
     for (i = 0; i < c->program.function_count; ++i) {
-        Function *fn = &c->program.functions[i];
+        Function *fn = c->program.functions[i];
         if (fn->is_template || fn->is_intrinsic) continue;
         int line_count = 1 + statement_line_count(fn->body);
         int block_size = 12 + line_count * 8;
@@ -7384,8 +7406,8 @@ static int emit_assembly(Compiler *c, const char *path, int windows) {
     emit_nepersym(c, out, windows);
     fputs(windows ? "np_user_text_start LABEL BYTE\n" : "np_user_text_start:\n", out);
     for (i = 0; i < c->program.function_count; ++i)
-        if (!c->program.functions[i].is_template && !c->program.functions[i].is_intrinsic)
-            emit_function(&e, &c->program.functions[i]);
+        if (!c->program.functions[i]->is_template && !c->program.functions[i]->is_intrinsic)
+            emit_function(&e, c->program.functions[i]);
     fputs(windows ? "np_user_text_end LABEL BYTE\n" : "np_user_text_end:\n", out);
     if (windows) { emit_windows_runtime(c, out); emit_windows_codeview(c, out); fputs("END\n", out); }
     else {
