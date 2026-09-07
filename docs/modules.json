@@ -21,7 +21,7 @@
     {"name":"e.meta","layer":0,"surface":"spec","milestone":"M1","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"e.math","layer":0,"surface":"spec","milestone":"M1","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"e.simd","layer":0,"surface":"spec","milestone":"M1","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
-    {"name":"e.atomic","layer":0,"surface":"spec","milestone":"M1","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
+    {"name":"e.atomic","layer":0,"surface":"source","milestone":"M1","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"e.bytes","layer":1,"surface":"planned","milestone":"M1","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"e.str","layer":1,"surface":"source","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.mem"],"blocked_by":[]},
     {"name":"e.path","layer":1,"surface":"planned","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.mem","e.str"],"blocked_by":[]},

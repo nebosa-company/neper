@@ -58,6 +58,43 @@ type Opcode = enum u8 {
     IndirectCall = 46,
     ConstFloat = 47,
     Bitcast = 48,
+    // Section 8's atomics. `AtomicRmw` and `AtomicCas` give back the value that was
+    // there before, which is what every one of section 8's operations returns; `cas`
+    // derives its `bool` from that with an ordinary comparison, so no opcode here
+    // produces more than one result.
+    AtomicLoad = 49,
+    AtomicStore = 50,
+    AtomicRmw = 51,
+    AtomicCas = 52,
+    AtomicFence = 53,
+}
+
+// `AtomicRmw`'s immediate is `kind * 8 + ordering`, so the two travel in the one
+// immediate an instruction has. Never renumber these either: they are in the format.
+type AtomicRmwKind = enum u8 {
+    Xchg = 0,
+    Add = 1,
+    Sub = 2,
+    And = 3,
+    Or = 4,
+    Xor = 5,
+    Min = 6,
+    Max = 7,
+}
+
+fn atomic_rmw_immediate(kind: AtomicRmwKind, ordering: usize) -> usize {
+    ret atomic_rmw_kind_rank(kind) * 8usize + ordering
+}
+
+fn atomic_rmw_kind_rank(kind: AtomicRmwKind) -> usize {
+    if kind == .Xchg { ret 0usize }
+    if kind == .Add { ret 1usize }
+    if kind == .Sub { ret 2usize }
+    if kind == .And { ret 3usize }
+    if kind == .Or { ret 4usize }
+    if kind == .Min { ret 6usize }
+    if kind == .Max { ret 7usize }
+    ret 5usize
 }
 
 type Instruction = struct {

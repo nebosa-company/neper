@@ -706,3 +706,73 @@ fn self_test() -> err {
     if memory.bytes[66usize] != 77usize || memory.bytes[67usize] != 105usize || memory.bytes[73usize] != 77usize || memory.bytes[76usize] != 114usize || memory.bytes[79usize] != 11usize { ret InvalidRegister }
     ret ok
 }
+
+// Section 8's atomics. `lock` makes the read-modify-write that follows indivisible;
+// `xchg` against memory is locked implicitly and must not carry the prefix.
+//
+// The width prefix is the one `store_memory` uses: `66` for 16, `REX.W` for 64, and a
+// REX byte otherwise -- always emitted at width 8, where it is what makes the low byte
+// of every register addressable.
+fn atomic_prefix(buffer: *Buffer, reg: usize, address: usize, width: usize) -> err {
+    if width != 8usize && width != 16usize && width != 32usize && width != 64usize { ret InvalidByte }
+    if width == 16usize { try byte(buffer, 102usize) }
+    if width == 64usize { ret rex(buffer, reg, address) }
+    ret rex32(buffer, reg, address)
+}
+
+// `lock xadd [address], source`: source gets what was there, the sum is stored.
+fn atomic_exchange_add(buffer: *Buffer, address: usize, source: usize, width: usize) -> err {
+    try byte(buffer, 240usize)
+    try atomic_prefix(buffer, source, address, width)
+    try byte(buffer, 15usize)
+    if width == 8usize { try byte(buffer, 192usize) } else { try byte(buffer, 193usize) }
+    ret memory_modrm(buffer, source, address)
+}
+
+// `xchg [address], source`: source gets what was there. Locked with no prefix.
+fn atomic_exchange(buffer: *Buffer, address: usize, source: usize, width: usize) -> err {
+    try atomic_prefix(buffer, source, address, width)
+    if width == 8usize { try byte(buffer, 134usize) } else { try byte(buffer, 135usize) }
+    ret memory_modrm(buffer, source, address)
+}
+
+// `lock cmpxchg [address], source`: rax is compared with what is there; on a match
+// source is stored, otherwise rax gets what was found. Either way rax ends up holding
+// the previous value, which is what section 8's `cas` returns.
+fn atomic_compare_exchange(buffer: *Buffer, address: usize, source: usize, width: usize) -> err {
+    try byte(buffer, 240usize)
+    try atomic_prefix(buffer, source, address, width)
+    try byte(buffer, 15usize)
+    if width == 8usize { try byte(buffer, 176usize) } else { try byte(buffer, 177usize) }
+    ret memory_modrm(buffer, source, address)
+}
+
+// `mfence`. The only ordering this target has to emit anything for: every other one
+// is free under its store-ordered memory model.
+fn memory_fence(buffer: *Buffer) -> err {
+    try byte(buffer, 15usize)
+    try byte(buffer, 174usize)
+    ret byte(buffer, 240usize)
+}
+
+// `cmovcc destination, source`, for the `min` and `max` that no single instruction
+// does.
+fn conditional_move(buffer: *Buffer, destination: usize, source: usize, condition: usize) -> err {
+    if condition >= 16usize { ret InvalidByte }
+    try rex(buffer, destination, source)
+    try byte(buffer, 15usize)
+    try byte(buffer, 64usize + condition)
+    ret modrm(buffer, destination, source)
+}
+
+// A backward `jne` to `target`, which is a count already taken from this buffer. The
+// hand-rolled loop in `zero_memory` jumps the same way; the compare-and-swap loops
+// that carry `and`, `or`, `xor`, `min` and `max` are the other users.
+fn jump_back_not_equal(buffer: *Buffer, destination: usize) -> err {
+    let after = buffer.count + 2usize
+    if destination > after { ret InvalidByte }
+    let distance = after - destination
+    if distance > 128usize { ret InvalidByte }
+    try byte(buffer, 117usize)
+    ret byte(buffer, 256usize - distance)
+}

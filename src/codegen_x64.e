@@ -193,6 +193,136 @@ fn select_bitcast(builder: *nir.Builder, instruction: nir.Instruction, allocatio
     ret store_result(allocations, instruction.result, destination, output)
 }
 
+// An atomic's `T` is an integer or a pointer, and a pointer is one word.
+// `storage_width` cannot answer this: an atomic instruction's immediate carries its
+// ordering, and that function reads an immediate of 1, 2, 4 or 8 as a byte count.
+fn atomic_width(ty: check.Type) -> usize {
+    if ty.kind == .Pointer || ty.kind == .Function { ret 64usize }
+    ret integer_width(ty)
+}
+
+// `and`, `or`, `xor`, `min` and `max` have no instruction that both applies them to
+// memory and gives back what was there, so each is a compare-and-swap retried until
+// it wins. On entry r10 holds the address and r11 the operand; rax ends up holding
+// the value that was there before, and rcx is the candidate this round.
+fn emit_atomic_loop(output: *emit_x64.Buffer, kind: usize, width: usize, signed: bool) -> err {
+    try emit_x64.load_memory(output, 0usize, 10usize, width, signed)
+    let top = output.count
+    // A failed exchange leaves rax holding only `width` bits of what it found, so the
+    // comparison below needs it widened again before each attempt.
+    try emit_x64.normalize_integer(output, 0usize, 0usize, width, signed)
+    try emit_x64.mov_register(output, 1usize, 0usize)
+    if kind == 3usize { try emit_x64.bit_and_register(output, 1usize, 11usize) }
+    if kind == 4usize { try emit_x64.bit_or_register(output, 1usize, 11usize) }
+    if kind == 5usize { try emit_x64.bit_xor_register(output, 1usize, 11usize) }
+    if kind == 6usize || kind == 7usize {
+        try emit_x64.compare_register(output, 1usize, 11usize)
+        // `min` takes the operand when the candidate is the greater of the two, and
+        // `max` when it is the lesser; which comparison that is depends on the sign.
+        var condition = 15usize
+        if kind == 6usize {
+            if !signed { condition = 7usize }
+        } else {
+            if signed { condition = 12usize } else { condition = 2usize }
+        }
+        try emit_x64.conditional_move(output, 1usize, 11usize, condition)
+    }
+    try emit_x64.atomic_compare_exchange(output, 10usize, 1usize, width)
+    ret emit_x64.jump_back_not_equal(output, top)
+}
+
+// Section 8's five instructions. Every ordering but sequential consistency is free on
+// this target's store-ordered memory model, so only a `SeqCst` store and fence emit
+// anything for it; the rest of the ordering rules were settled while checking.
+fn select_atomic(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, output: *emit_x64.Buffer) -> err {
+    if instruction.opcode == .AtomicFence {
+        if instruction.immediate == 4usize { ret emit_x64.memory_fence(output) }
+        ret ok
+    }
+    let width = atomic_width(instruction.ty)
+    if width == 0usize { ret Unsupported }
+    let signed = signed_integer(instruction.ty)
+    if instruction.opcode == .AtomicLoad {
+        // A load is already an acquire here, and sequential consistency is carried by
+        // the store side, so every ordering section 8 allows is a plain move.
+        if !instruction.has_result || instruction.operand_count != 1usize { ret Unsupported }
+        let (address, address_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+        if address_error != ok { ret InvalidMemoryAddress }
+        let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
+        if destination_error != ok { ret destination_error }
+        try emit_x64.load_memory(output, destination, address, width, signed)
+        ret store_result(allocations, instruction.result, destination, output)
+    }
+    if instruction.opcode == .AtomicStore {
+        if instruction.operand_count != 2usize { ret Unsupported }
+        let (address, address_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+        if address_error != ok { ret InvalidMemoryAddress }
+        if address != 10usize { try emit_x64.mov_register(output, 10usize, address) }
+        let (value, value_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 11usize, output)
+        if value_error != ok { ret value_error }
+        if value != 11usize { try emit_x64.mov_register(output, 11usize, value) }
+        // The exchange is the sequentially consistent store: it is the one ordering
+        // this target pays for, and it is cheaper than a move followed by a fence.
+        if instruction.immediate == 4usize { ret emit_x64.atomic_exchange(output, 10usize, 11usize, width) }
+        ret emit_x64.store_memory(output, 10usize, 11usize, width)
+    }
+    if !instruction.has_result { ret Unsupported }
+    if instruction.opcode == .AtomicCas {
+        if instruction.operand_count != 3usize { ret Unsupported }
+        try save_allocated_registers(output, preserve_base, preserve_count)
+        let (address, address_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+        if address_error != ok { ret InvalidMemoryAddress }
+        if address != 10usize { try emit_x64.mov_register(output, 10usize, address) }
+        let (desired, desired_error) = read_value(allocations, builder.operands[instruction.first_operand + 2usize], 11usize, output)
+        if desired_error != ok { ret desired_error }
+        if desired != 11usize { try emit_x64.mov_register(output, 11usize, desired) }
+        // The address and the desired value are in the two scratch registers now, so
+        // rcx can carry the third operand: every allocated register is on the stack.
+        let (expected, expected_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 1usize, output)
+        if expected_error != ok { ret expected_error }
+        if expected != 0usize { try emit_x64.mov_register(output, 0usize, expected) }
+        try emit_x64.atomic_compare_exchange(output, 10usize, 11usize, width)
+        try emit_x64.mov_register(output, 10usize, 0usize)
+        try restore_allocated_registers(output, preserve_base, preserve_count)
+        let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
+        if destination_error != ok { ret destination_error }
+        try emit_x64.normalize_integer(output, destination, 10usize, width, signed)
+        ret store_result(allocations, instruction.result, destination, output)
+    }
+    if instruction.opcode != .AtomicRmw || instruction.operand_count != 2usize { ret Unsupported }
+    let kind = instruction.immediate / 8usize
+    try save_allocated_registers(output, preserve_base, preserve_count)
+    let (address, address_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+    if address_error != ok { ret InvalidMemoryAddress }
+    if address != 10usize { try emit_x64.mov_register(output, 10usize, address) }
+    let (value, value_error) = read_value(allocations, builder.operands[instruction.first_operand + 1usize], 11usize, output)
+    if value_error != ok { ret value_error }
+    if value != 11usize { try emit_x64.mov_register(output, 11usize, value) }
+    if kind == 0usize {
+        try emit_x64.atomic_exchange(output, 10usize, 11usize, width)
+    } else {
+        if kind == 1usize {
+            try emit_x64.atomic_exchange_add(output, 10usize, 11usize, width)
+        } else {
+            if kind == 2usize {
+                // Subtraction is the exchange-add of the negated operand: there is no
+                // locked subtract that gives back what was there.
+                try emit_x64.negate_register(output, 11usize)
+                try emit_x64.atomic_exchange_add(output, 10usize, 11usize, width)
+            } else {
+                try emit_atomic_loop(output, kind, width, signed)
+                try emit_x64.mov_register(output, 11usize, 0usize)
+            }
+        }
+    }
+    try emit_x64.mov_register(output, 10usize, 11usize)
+    try restore_allocated_registers(output, preserve_base, preserve_count)
+    let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
+    if destination_error != ok { ret destination_error }
+    try emit_x64.normalize_integer(output, destination, 10usize, width, signed)
+    ret store_result(allocations, instruction.result, destination, output)
+}
+
 fn storage_width(instruction: nir.Instruction) -> usize {
     if instruction.immediate == 1usize || instruction.immediate == 2usize || instruction.immediate == 4usize || instruction.immediate == 8usize { ret instruction.immediate * 8usize }
     if instruction.ty.kind == .Bool { ret 8usize }
@@ -673,6 +803,8 @@ fn needs_fixed_registers(builder: *nir.Builder, current: nir.Function) -> bool {
     while at < end {
         let opcode = builder.instructions[at].opcode
         if opcode == .Divide || opcode == .Remainder || opcode == .ShiftLeft || opcode == .ShiftRight || opcode == .IndexAddress || opcode == .Slice || opcode == .Copy || opcode == .Call || opcode == .IndirectCall { ret true }
+        // The read-modify-write forms need rax, and the retried ones rcx as well.
+        if opcode == .AtomicRmw || opcode == .AtomicCas { ret true }
         at += 1usize
     }
     ret false
@@ -1036,6 +1168,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if instruction.immediate != 0usize { try emit_x64.add_immediate(output, destination, instruction.immediate) }
                 try store_result(allocations, instruction.result, destination, output)
             } else {
+            if instruction.opcode == .AtomicLoad || instruction.opcode == .AtomicStore || instruction.opcode == .AtomicRmw || instruction.opcode == .AtomicCas || instruction.opcode == .AtomicFence {
+                try select_atomic(builder, instruction, allocations, preserve_base, preserve_count, output)
+            } else {
             if instruction.opcode == .Zero {
                 try select_zero(builder, instruction, allocations, output)
             } else {
@@ -1298,6 +1433,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             }
             }
             }
+        }
         }
         }
         }

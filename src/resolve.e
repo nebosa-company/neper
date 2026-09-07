@@ -302,6 +302,22 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "Timeout", .Value, .Error)
     try seed(r, g, "e.os", "WouldBlock", .Value, .Error)
     try seed(r, g, "e.os", "Unsupported", .Value, .Error)
+    // Section 8. Every `e.atomic` function is an intrinsic lowered to one instruction,
+    // comptime-generic on `T` inferred from its pointer -- so none is written in
+    // `lib/e/atomic.e`, which declares only the `Ordering` they all take.
+    try seed(r, g, "e.atomic", "init", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "load", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "store", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "xchg", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "cas", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "add", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "sub", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "and", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "or", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "xor", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "min", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "max", .Value, .Intrinsic)
+    try seed(r, g, "e.atomic", "fence", .Value, .Intrinsic)
     ret ok
 }
 

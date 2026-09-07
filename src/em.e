@@ -317,6 +317,11 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     if opcode == .IndirectCall { ret 46usize }
     if opcode == .ConstFloat { ret 47usize }
     if opcode == .Bitcast { ret 48usize }
+    if opcode == .AtomicLoad { ret 49usize }
+    if opcode == .AtomicStore { ret 50usize }
+    if opcode == .AtomicRmw { ret 51usize }
+    if opcode == .AtomicCas { ret 52usize }
+    if opcode == .AtomicFence { ret 53usize }
     ret 0usize
 }
 

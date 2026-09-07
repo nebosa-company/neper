@@ -623,6 +623,34 @@ $genericFieldLeak = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixt
 if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:5: error\[E-TYPE-9999\]: type checking failed: check\.InvalidType') {
     throw "a generic instance's own field leaked into the enclosing struct: $($genericFieldLeak -join "`n")"
 }
+# Section 8's atomics. The ordering rules are settled while checking, so each is pinned
+# to its message; the operations themselves are run, because `and`, `or`, `xor`, `min`
+# and `max` are compare-and-swap loops whose widening and signedness a check cannot see.
+$atomicDiagnostics = @(
+    @('atomic_load_release', 'main\.e:8:34: error\[E-TYPE-9999\]: `atomic\.load` may not take the ordering `\.Release`'),
+    @('atomic_store_acquire', 'main\.e:8:33: error\[E-TYPE-9999\]: `atomic\.store` may not take the ordering `\.Acquire`'),
+    @('atomic_cas_failure', 'main\.e:9:65: error\[E-TYPE-9999\]: `atomic\.cas` may not take the ordering `\.SeqCst`'),
+    @('atomic_element', 'main\.e:5:14: error\[E-TYPE-9999\]: `Atomic\[f64\]` is not a type: an atomic holds an integer or a pointer')
+)
+foreach ($case in $atomicDiagnostics) {
+    Require-Fixture ("check/" + $case[0])
+    $atomicOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($atomicOutput -join "`n") -notmatch $case[1]) {
+        throw "atomic diagnostic for $($case[0]) is wrong: $($atomicOutput -join "`n")"
+    }
+}
+$atomicOpsPath = Join-Path $testBuild 'atomic-ops-selfhost.exe'
+$atomicOpsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\atomic_ops\src\main.e') $repo 'x64' 'windows' $atomicOpsPath
+if ($LASTEXITCODE -ne 0 -or $atomicOpsWritten -ne 'executable written') { throw 'atomic executable emission failed' }
+& $atomicOpsPath
+if ($LASTEXITCODE -ne 0) { throw 'an atomic operation, width or ordering is wrong' }
+# The one check a single thread cannot make: that `lock` is really on the instruction.
+# Without it the four workers lose updates and the total comes out short.
+$atomicThreadsPath = Join-Path $testBuild 'atomic-threads-selfhost.exe'
+$atomicThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\atomic_threads\src\main.e') $repo 'x64' 'windows' $atomicThreadsPath
+if ($LASTEXITCODE -ne 0 -or $atomicThreadsWritten -ne 'executable written') { throw 'contended atomic executable emission failed' }
+& $atomicThreadsPath
+if ($LASTEXITCODE -ne 0) { throw 'contended atomic increments lost updates' }
 # An alias to a generic instantiation cannot resolve in `collect_aliases`' first pass,
 # which runs before any aggregate is registered, so a field naming one holds the alias
 # name until the second pass. `lead` and `tail` bracket the instances, so a size or

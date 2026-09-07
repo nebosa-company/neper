@@ -649,6 +649,26 @@ generic_field_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost
 [ "$generic_field_accepted" = 'module check ok' ]
 check_protocol_diagnostic generic_instance_field_leak 'main.e:8:5: error[E-TYPE-9999]: type checking failed: check.InvalidType'
 check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
+# Section 8's atomics. The ordering rules are settled while checking, so each is pinned
+# to its message; the operations themselves are run, because `and`, `or`, `xor`, `min`
+# and `max` are compare-and-swap loops whose widening and signedness a check cannot see.
+check_protocol_diagnostic atomic_load_release 'main.e:8:34: error[E-TYPE-9999]: `atomic.load` may not take the ordering `.Release`'
+check_protocol_diagnostic atomic_store_acquire 'main.e:8:33: error[E-TYPE-9999]: `atomic.store` may not take the ordering `.Acquire`'
+check_protocol_diagnostic atomic_cas_failure 'main.e:9:65: error[E-TYPE-9999]: `atomic.cas` may not take the ordering `.SeqCst`'
+check_protocol_diagnostic atomic_element 'main.e:5:14: error[E-TYPE-9999]: `Atomic[f64]` is not a type: an atomic holds an integer or a pointer'
+atomic_ops_path="$test_build/atomic-ops-selfhost"
+atomic_ops_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/atomic_ops/src/main.e" "$repo" x64 linux "$atomic_ops_path")
+[ "$atomic_ops_written" = 'executable written' ]
+chmod +x "$atomic_ops_path"
+"$atomic_ops_path"
+# The one check a single thread cannot make: that `lock` is really on the instruction.
+# Without it the four workers lose updates and the total comes out short. The fixture
+# returns early where `os.thread_create` is still `Unsupported`.
+atomic_threads_path="$test_build/atomic-threads-selfhost"
+atomic_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/atomic_threads/src/main.e" "$repo" x64 linux "$atomic_threads_path")
+[ "$atomic_threads_written" = 'executable written' ]
+chmod +x "$atomic_threads_path"
+"$atomic_threads_path"
 # An alias to a generic instantiation cannot resolve in `collect_aliases`' first pass,
 # which runs before any aggregate is registered, so a field naming one holds the alias
 # name until the second pass. `lead` and `tail` bracket the instances, so a size or

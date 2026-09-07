@@ -384,6 +384,9 @@ fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) ->
         if index == 1usize { ret (call.thread_context, ok) }
         ret (check.make_type(.Integer, "usize", call.function.module_index), ok)
     }
+    // Also synthesized: `T` came from the pointer while checking, so the value
+    // arguments are `T` and the trailing ones are the ordering enum.
+    if call.atomic_op != .None { ret (atomic_parameter_type(c, call, index), ok) }
     let parameter_index = call.function.first_parameter + index
     if parameter_index >= c.parameter_count { ret (check.invalid_type(), check.InvalidType) }
     ret (c.parameters[parameter_index].ty, ok)
@@ -1516,7 +1519,113 @@ fn emit_mem_view(c: *check.Checker, call: check.CallInfo, arguments: []usize, ar
     ret ok
 }
 
+// `T` is settled, so the pointer parameter is `*Atomic[T]`, the value parameters are
+// `T` and the trailing ones are the ordering enum.
+fn atomic_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) -> check.Type {
+    let ordering = check.make_type(.Named, "Ordering", call.function.module_index)
+    if call.atomic_op == .Fence { ret ordering }
+    if call.atomic_op == .Init { ret call.atomic_element }
+    if index == 0usize {
+        let (stored, store_error) = check.store_type(c, check.atomic_wrapper_type(c, call.atomic_element, call.function.module_index))
+        if store_error != ok { ret check.invalid_type() }
+        var pointer = check.make_type(.Pointer, "", call.function.module_index)
+        pointer.element = stored
+        pointer.has_element = true
+        ret pointer
+    }
+    var value_positions = 1usize
+    if call.atomic_op == .Cas { value_positions = 2usize }
+    if call.atomic_op == .Load { value_positions = 0usize }
+    if index <= value_positions { ret call.atomic_element }
+    ret ordering
+}
+
+fn atomic_rmw_kind(op: check.AtomicOp) -> nir.AtomicRmwKind {
+    if op == .Add { ret .Add }
+    if op == .Sub { ret .Sub }
+    if op == .And { ret .And }
+    if op == .Or { ret .Or }
+    if op == .Xor { ret .Xor }
+    if op == .Min { ret .Min }
+    if op == .Max { ret .Max }
+    ret .Xchg
+}
+
+// Section 8's operations, each one instruction. An ordering nobody could read at
+// compile time lowers as `SeqCst`: stronger is always safe, and on this target every
+// ordering but that one costs nothing anyway.
+fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    results.call = call
+    results.count = call.function.return_count
+    let element = call.atomic_element
+    let ordering = check.atomic_ordering_rank(call.atomic_success)
+    if call.atomic_op == .Fence {
+        let (instruction, ignored, emit_error) = nir.emit(builder, .AtomicFence, element, false, ordering, token)
+        ret emit_error
+    }
+    // `init(v)` is the one operation that touches no shared location: it builds the
+    // `Atomic[T]` the caller is about to store, so it is an ordinary aggregate value.
+    if call.atomic_op == .Init {
+        if argument_count != 1usize { ret check.ArgumentCount }
+        let wrapper = check.atomic_wrapper_type(c, element, call.function.module_index)
+        let (info, info_error) = layout.type_info(c, wrapper)
+        if info_error != ok { ret info_error }
+        var slots = (info.size + 7usize) / 8usize
+        if slots == 0usize { slots = 1usize }
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, wrapper, true, slots, token)
+        if stack_error != ok { ret stack_error }
+        let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, element, false, info.size, token)
+        if store_error != ok { ret store_error }
+        try nir.add_operand(builder, store_instruction, stack)
+        try nir.add_operand(builder, store_instruction, arguments[0usize])
+        results.values[0usize] = stack
+        results.addresses[0usize] = true
+        ret ok
+    }
+    if argument_count < 2usize { ret check.ArgumentCount }
+    if call.atomic_op == .Load {
+        let (instruction, value, emit_error) = nir.emit(builder, .AtomicLoad, element, true, ordering, token)
+        if emit_error != ok { ret emit_error }
+        try nir.add_operand(builder, instruction, arguments[0usize])
+        results.values[0usize] = value
+        ret ok
+    }
+    if call.atomic_op == .Store {
+        let (instruction, ignored, emit_error) = nir.emit(builder, .AtomicStore, element, false, ordering, token)
+        if emit_error != ok { ret emit_error }
+        try nir.add_operand(builder, instruction, arguments[0usize])
+        try nir.add_operand(builder, instruction, arguments[1usize])
+        ret ok
+    }
+    if call.atomic_op == .Cas {
+        if argument_count < 3usize { ret check.ArgumentCount }
+        let failure = check.atomic_ordering_rank(call.atomic_failure)
+        let (instruction, previous, emit_error) = nir.emit(builder, .AtomicCas, element, true, ordering * 8usize + failure, token)
+        if emit_error != ok { ret emit_error }
+        try nir.add_operand(builder, instruction, arguments[0usize])
+        try nir.add_operand(builder, instruction, arguments[1usize])
+        try nir.add_operand(builder, instruction, arguments[2usize])
+        // A strong compare-and-swap exchanged exactly when what it found was what was
+        // expected, so the `bool` is that comparison and needs no result of its own.
+        let bool_type = check.make_type(.Bool, "bool", call.function.module_index)
+        let (compare_instruction, won, compare_error) = nir.emit(builder, .Equal, bool_type, true, 0usize, token)
+        if compare_error != ok { ret compare_error }
+        try nir.add_operand(builder, compare_instruction, previous)
+        try nir.add_operand(builder, compare_instruction, arguments[1usize])
+        results.values[0usize] = won
+        results.values[1usize] = previous
+        ret ok
+    }
+    let (instruction, previous, emit_error) = nir.emit(builder, .AtomicRmw, element, true, nir.atomic_rmw_immediate(atomic_rmw_kind(call.atomic_op), ordering), token)
+    if emit_error != ok { ret emit_error }
+    try nir.add_operand(builder, instruction, arguments[0usize])
+    try nir.add_operand(builder, instruction, arguments[1usize])
+    results.values[0usize] = previous
+    ret ok
+}
+
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if call.atomic_op != .None { ret emit_atomic(c, call, arguments, argument_count, builder, token, results) }
     if call.meta_query != .None { ret emit_reflection(c, call, builder, token, results) }
     if call.function.intrinsic && check.same(call.function.name, "view") {
         ret emit_mem_view(c, call, arguments, argument_count, builder, token, results)

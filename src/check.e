@@ -77,6 +77,8 @@ type DiagnosticKind = enum u8 {
     ProtocolMissing,
     ProtocolSignature,
     ProtocolGenericType,
+    AtomicElement,
+    AtomicOrdering,
 }
 
 type Kind = enum u8 {
@@ -1331,6 +1333,16 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     }
     if has_qualifier && path_identifiers == 0usize { ret (invalid_type(), InvalidType) }
     if wants_tag && has_arguments { ret (invalid_type(), InvalidType) }
+    // Section 4 reserves `Atomic`, and no module declares it: the bare name is the
+    // section 8 builtin wherever it is written.
+    var atomic_named = false
+    if !has_qualifier && same(name, "Atomic") {
+        let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
+        if has_atomic {
+            target_module = atomic_module
+            atomic_named = true
+        }
+    }
     var result = make_type(.Named, name, target_module)
     if has_arguments {
         let (template_index, found_template) = find_aggregate(c, target_module, name)
@@ -1376,6 +1388,13 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
             at += 1usize
         }
         if argument_count != template.comptime_count { ret (invalid_type(), ArgumentCount) }
+        if atomic_named {
+            let argument = c.generic_arguments[first_argument]
+            if argument.kind != .Type || !atomic_element_legal(argument.ty) {
+                record_failure(c, module_index, node, .AtomicElement, argument.ty.name, "")
+                ret (invalid_type(), InvalidType)
+            }
+        }
         let (instance_index, instance_error) = instantiate_aggregate(c, template_index, first_argument)
         if instance_error != ok { ret (invalid_type(), instance_error) }
         result.element = instance_index
@@ -1798,7 +1817,34 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
         c.aggregate_field_count += 2usize
         c.aggregate_count += 1usize
     }
+    // Section 8: `Atomic[T]` is a builtin, not a library type, so it is seeded rather
+    // than written. One field of type `T` gives it exactly section 4's layout -- `T`'s
+    // size and alignment -- and section 7's zero value, the wrapped value zero, with no
+    // rule of its own. Which `T` it admits is checked at the instantiation.
+    let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
+    if has_atomic {
+        if c.aggregate_count == c.aggregates.len || c.aggregate_field_count == c.aggregate_fields.len { ret Capacity }
+        if c.comptime_parameter_count == c.comptime_parameters.len { ret Capacity }
+        let parameter_index = c.comptime_parameter_count
+        c.comptime_parameters[parameter_index] = ComptimeParameter { name: "T", kind: .Type, ty: invalid_type() }
+        c.comptime_parameter_count += 1usize
+        var element = make_type(.TypeParameter, "T", atomic_module)
+        element.element = parameter_index
+        element.has_element = true
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero }
+        c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "value", ty: element, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
+        c.aggregate_field_count += 1usize
+        c.aggregate_count += 1usize
+    }
     ret ok
+}
+
+// Section 8: `Atomic[T]` is legal for exactly an integer type of section 4 or a
+// pointer, every one of which is native at its width on the CPU.
+fn atomic_element_legal(ty: Type) -> bool {
+    if ty.kind == .Pointer || ty.kind == .Function { ret true }
+    if ty.kind != .Integer { ret false }
+    ret !same(ty.name, "f16") && !same(ty.name, "bf16")
 }
 
 fn collect_aggregate_pass(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, register: bool) -> err {
@@ -3826,6 +3872,47 @@ type CallInfo = struct {
     protocol_type: Type,
     indirect: bool,
     indirect_type: Type,
+    // Section 8. `T` is inferred from the pointer, so the later arguments are checked
+    // against what the first one gave -- as `thread_create` does with its context.
+    atomic_op: AtomicOp,
+    atomic_element: Type,
+    atomic_success: Ordering,
+    atomic_failure: Ordering,
+}
+
+// The thirteen `e.atomic` intrinsics. `None` is "this call is not one of them".
+type AtomicOp = enum u8 {
+    None,
+    Init,
+    Load,
+    Store,
+    Xchg,
+    Cas,
+    Add,
+    Sub,
+    And,
+    Or,
+    Xor,
+    Min,
+    Max,
+    Fence,
+}
+
+// `lib/e/atomic.e`'s `Ordering`, plus `Dynamic` for one that is not a compile-time
+// member. The two lists are one list: the values are that enum's, in its order.
+type Ordering = enum u8 {
+    Relaxed = 0,
+    Acquire = 1,
+    Release = 2,
+    AcqRel = 3,
+    SeqCst = 4,
+    Dynamic = 5,
+}
+
+type AtomicInfo = struct {
+    matched: bool,
+    op: AtomicOp,
+    function: Function,
 }
 
 type MetaQuery = enum u8 {
@@ -4697,6 +4784,251 @@ fn error_push_instance(c: *Checker, owner_module_index: usize, str_module: usize
     ret (index, ok)
 }
 
+// Section 8's thirteen intrinsics, by the name written after `atomic.`.
+fn atomic_op_for_name(name: str) -> AtomicOp {
+    if same(name, "init") { ret .Init }
+    if same(name, "load") { ret .Load }
+    if same(name, "store") { ret .Store }
+    if same(name, "xchg") { ret .Xchg }
+    if same(name, "cas") { ret .Cas }
+    if same(name, "add") { ret .Add }
+    if same(name, "sub") { ret .Sub }
+    if same(name, "and") { ret .And }
+    if same(name, "or") { ret .Or }
+    if same(name, "xor") { ret .Xor }
+    if same(name, "min") { ret .Min }
+    if same(name, "max") { ret .Max }
+    if same(name, "fence") { ret .Fence }
+    ret .None
+}
+
+fn atomic_op_name(op: AtomicOp) -> str {
+    if op == .Init { ret "init" }
+    if op == .Load { ret "load" }
+    if op == .Store { ret "store" }
+    if op == .Xchg { ret "xchg" }
+    if op == .Cas { ret "cas" }
+    if op == .Add { ret "add" }
+    if op == .Sub { ret "sub" }
+    if op == .And { ret "and" }
+    if op == .Or { ret "or" }
+    if op == .Xor { ret "xor" }
+    if op == .Min { ret "min" }
+    if op == .Max { ret "max" }
+    if op == .Fence { ret "fence" }
+    ret ""
+}
+
+// `init(v)` and `fence(o)` take one argument, `cas` takes five, `load` two, and every
+// other operation takes the pointer, a value and an ordering.
+fn atomic_arity(op: AtomicOp) -> usize {
+    if op == .Init || op == .Fence { ret 1usize }
+    if op == .Load { ret 2usize }
+    if op == .Cas { ret 5usize }
+    ret 3usize
+}
+
+// `store` and `fence` give nothing back, `cas` gives the pair, the rest give a `T`.
+fn atomic_return_count(op: AtomicOp) -> usize {
+    if op == .Store || op == .Fence { ret 0usize }
+    if op == .Cas { ret 2usize }
+    ret 1usize
+}
+
+// The arithmetic and bitwise operations take an integer `T` only; `init`, `load`,
+// `store`, `xchg` and `cas` take a pointer `T` as well.
+fn atomic_integer_only(op: AtomicOp) -> bool {
+    ret op == .Add || op == .Sub || op == .And || op == .Or || op == .Xor || op == .Min || op == .Max
+}
+
+fn atomic_ordering_for_name(name: str) -> Ordering {
+    if same(name, "Relaxed") { ret .Relaxed }
+    if same(name, "Acquire") { ret .Acquire }
+    if same(name, "Release") { ret .Release }
+    if same(name, "AcqRel") { ret .AcqRel }
+    if same(name, "SeqCst") { ret .SeqCst }
+    ret .Dynamic
+}
+
+fn atomic_ordering_name(o: Ordering) -> str {
+    if o == .Relaxed { ret "Relaxed" }
+    if o == .Acquire { ret "Acquire" }
+    if o == .Release { ret "Release" }
+    if o == .AcqRel { ret "AcqRel" }
+    if o == .SeqCst { ret "SeqCst" }
+    ret "Dynamic"
+}
+
+// A `load` with a release ordering or a `store` with an acquire one is a compile
+// error, as C11 has it. A CAS failure ordering may not be `.Release` or `.AcqRel`.
+fn atomic_ordering_legal(op: AtomicOp, o: Ordering, failure: bool) -> bool {
+    if o == .Dynamic { ret true }
+    if failure { ret o == .Relaxed || o == .Acquire || o == .SeqCst }
+    if op == .Load { ret o == .Relaxed || o == .Acquire || o == .SeqCst }
+    if op == .Store { ret o == .Relaxed || o == .Release || o == .SeqCst }
+    ret true
+}
+
+// Section 8 orders the five: a CAS failure ordering may not be stronger than its
+// success ordering. `AcqRel` is not a legal failure ordering, so comparing the enum's
+// own order is enough -- `Release` never reaches here either.
+fn atomic_ordering_stronger(left: Ordering, right: Ordering) -> bool {
+    if left == .Dynamic || right == .Dynamic { ret false }
+    ret atomic_ordering_rank(left) > atomic_ordering_rank(right)
+}
+
+// The ordering as a number: its strength for the comparison above, and the immediate
+// lowering carries on the instruction. `Dynamic` ranks strongest because that is the
+// form emitted for an ordering no one could read at compile time.
+fn atomic_ordering_rank(o: Ordering) -> usize {
+    if o == .Relaxed { ret 0usize }
+    if o == .Acquire { ret 1usize }
+    if o == .Release { ret 2usize }
+    if o == .AcqRel { ret 3usize }
+    ret 4usize
+}
+
+// `p` is a `*Atomic[T]`; the instance's one field is the `T` it wraps.
+fn atomic_pointee_element(c: *Checker, ty: Type) -> (Type, bool) {
+    if ty.kind != .Pointer || !ty.has_element || ty.element >= c.type_count { ret (invalid_type(), false) }
+    let pointee = c.types[ty.element]
+    if pointee.kind != .Named || !same(pointee.name, "Atomic") { ret (invalid_type(), false) }
+    let (aggregate_index, found) = aggregate_for_type(c, pointee)
+    if !found { ret (invalid_type(), false) }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.field_count != 1usize || aggregate.first_field >= c.aggregate_field_count { ret (invalid_type(), false) }
+    ret (c.aggregate_fields[aggregate.first_field].ty, true)
+}
+
+// `Atomic[T]` built from a `T` the checker already holds. `init`'s return type is
+// written nowhere, so it cannot be read off a type node like every other one.
+fn atomic_wrapper_type(c: *Checker, element: Type, atomic_module: usize) -> Type {
+    let (template_index, found) = find_aggregate(c, atomic_module, "Atomic")
+    if !found { ret invalid_type() }
+    if c.generic_argument_count == c.generic_arguments.len { ret invalid_type() }
+    let first_argument = c.generic_argument_count
+    var argument: GenericArgument = zero
+    argument.kind = .Type
+    argument.set = true
+    argument.ty = element
+    c.generic_arguments[first_argument] = argument
+    c.generic_argument_count += 1usize
+    let (instance_index, instance_error) = instantiate_aggregate(c, template_index, first_argument)
+    if instance_error != ok {
+        c.generic_argument_count = first_argument
+        ret invalid_type()
+    }
+    // A cached instance kept its own arguments, so this one's slot is dead. Give it
+    // back: `call_return` is asked the same question many times per call.
+    if c.aggregates[instance_index].first_argument != first_argument { c.generic_argument_count = first_argument }
+    var result = make_type(.Named, "Atomic", atomic_module)
+    result.element = instance_index
+    result.has_element = true
+    ret result
+}
+
+// `atomic.<op>(...)`, recognised the way `mem.alloc[T]` is. `T` is not written, so the
+// signature is not fixed and cannot be seeded: it is built here from the arguments.
+fn atomic_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (AtomicInfo, err) {
+    var info: AtomicInfo = zero
+    if receiver.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, receiver)
+    if !found_member || !same(g.modules[target_module].name, "e.atomic") { ret (info, ok) }
+    let op = atomic_op_for_name(member)
+    if op == .None { ret (info, ok) }
+    info.matched = true
+    info.op = op
+    var function: Function = zero
+    function.name = member
+    function.module_index = target_module
+    function.parameter_count = atomic_arity(op)
+    function.return_count = atomic_return_count(op)
+    function.intrinsic = true
+    info.function = function
+    ret (info, ok)
+}
+
+// One argument of an `atomic.*` call. `T` is not written anywhere, so the first
+// argument fixes it and every later one is checked against what it gave -- the shape
+// `thread_create` uses for its context type.
+fn check_atomic_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, child_index: usize, position: usize, info: *CallInfo) -> err {
+    let op = info.atomic_op
+    let atomic_module = info.function.module_index
+    let ordering_type = make_type(.Named, "Ordering", atomic_module)
+    // `fence(o)` has no pointer and no `T`; `init(v)` takes the value the atomic will
+    // hold, which is what fixes `T` for it.
+    if op == .Fence {
+        ret check_atomic_ordering(c, g, tree, module_index, child_index, ordering_type, op, false, info)
+    }
+    if op == .Init {
+        let (value, value_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+        if value_error != ok { ret value_error }
+        if is_untyped(value) { ret MissingContext }
+        if !atomic_element_legal(value) {
+            record_failure_token(c, module_index, c.tokens[tree.nodes[child_index].token_start], .AtomicElement, value.name, "")
+            ret InvalidType
+        }
+        info.atomic_element = value
+        ret ok
+    }
+    if position == 0usize {
+        let (pointer, pointer_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+        if pointer_error != ok { ret pointer_error }
+        let (element, found) = atomic_pointee_element(c, pointer)
+        if !found { ret TypeMismatch }
+        if atomic_integer_only(op) && element.kind != .Integer {
+            record_failure_token(c, module_index, c.tokens[tree.nodes[child_index].token_start], .AtomicElement, element.name, "")
+            ret InvalidType
+        }
+        info.atomic_element = element
+        ret ok
+    }
+    // `cas(p, expected, desired, success, failure)`: two values then two orderings.
+    // Every other operation is `(p, v, o)` and `load` is `(p, o)`.
+    var value_positions = 1usize
+    if op == .Cas { value_positions = 2usize }
+    if op == .Load { value_positions = 0usize }
+    if position <= value_positions {
+        let (value, value_error) = check_expr(c, g, tree, module_index, child_index, info.atomic_element)
+        if value_error != ok { ret value_error }
+        ret ok
+    }
+    let failure = op == .Cas && position == value_positions + 2usize
+    ret check_atomic_ordering(c, g, tree, module_index, child_index, ordering_type, op, failure, info)
+}
+
+// An ordering argument. A member written at the call is known now, so section 8's
+// rules are a compile error rather than a runtime check; one that is not stays
+// `Dynamic` and lowering emits the strongest form, which is always safe.
+//
+// ponytail: a runtime ordering skips section 8's `invalid` check for a bad pair.
+// Add it when an `Ordering` computed at runtime turns up in real code -- it costs a
+// trap site per operation, and every ordering here is a literal today.
+fn check_atomic_ordering(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, child_index: usize, ordering_type: Type, op: AtomicOp, failure: bool, info: *CallInfo) -> err {
+    let (given, given_error) = check_expr(c, g, tree, module_index, child_index, ordering_type)
+    if given_error != ok { ret given_error }
+    var ordering: Ordering = .Dynamic
+    let node = tree.nodes[child_index]
+    if node.kind == .MemberExpr {
+        let (member, has_member) = switch_member_name(c, g.modules[module_index].text, node)
+        if has_member { ordering = atomic_ordering_for_name(member) }
+    }
+    if !atomic_ordering_legal(op, ordering, failure) {
+        record_failure_token(c, module_index, c.tokens[node.token_start], .AtomicOrdering, atomic_op_name(op), atomic_ordering_name(ordering))
+        ret InvalidType
+    }
+    if failure {
+        if atomic_ordering_stronger(ordering, info.atomic_success) {
+            record_failure_token(c, module_index, c.tokens[node.token_start], .AtomicOrdering, atomic_op_name(op), atomic_ordering_name(ordering))
+            ret InvalidType
+        }
+        info.atomic_failure = ordering
+    } else {
+        info.atomic_success = ordering
+    }
+    ret ok
+}
+
 fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
     var info: CallInfo = zero
     // The formatter's arguments become the parameters of the instance its call
@@ -4813,6 +5145,16 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         }
                     } else {
                         if receiver.kind != .FieldExpr { ret (info, Unsupported) }
+                        let (atomics, atomics_error) = atomic_info(c, g, tree, module_index, receiver)
+                        if atomics_error != ok { ret (info, atomics_error) }
+                        if atomics.matched {
+                            info.function = atomics.function
+                            info.atomic_op = atomics.op
+                            info.atomic_element = invalid_type()
+                            info.atomic_success = .Dynamic
+                            info.atomic_failure = .Dynamic
+                            has_function = true
+                        } else {
                         let (protocol_type, protocol_name, is_protocol) = protocol_receiver(c, g, tree, module_index, receiver)
                         if is_protocol {
                             if protocol_type.kind == .Invalid {
@@ -4858,6 +5200,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                                 info.function.return_count = signature.return_count
                             }
                             has_function = true
+                        }
                         }
                     }
                 }
@@ -4958,6 +5301,13 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         let (entry_type, entry_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
                         if entry_error != ok { ret (info, entry_error) }
                         if child_position == 1usize { info.thread_entry = entry_type }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
+                    if info.atomic_op != .None {
+                        let atomic_error = check_atomic_argument(c, g, tree, module_index, child_index, child_position - 1usize, &info)
+                        if atomic_error != ok { ret (info, atomic_error) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -5370,6 +5720,17 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         if index == 0usize { ret (call.alloc_return, ok) }
         if index == 1usize { ret (make_type(.Err, "err", call.function.module_index), ok) }
         ret (invalid_type(), InvalidType)
+    }
+    // Section 8: `init` gives the `Atomic[T]` back, `cas` the pair, and every other
+    // operation with a result gives the `T` it read.
+    if call.atomic_op != .None {
+        if index != 0usize && !(call.atomic_op == .Cas && index == 1usize) { ret (invalid_type(), InvalidType) }
+        if call.atomic_op == .Cas {
+            if index == 0usize { ret (make_type(.Bool, "bool", call.function.module_index), ok) }
+            ret (call.atomic_element, ok)
+        }
+        if call.atomic_op == .Init { ret (atomic_wrapper_type(c, call.atomic_element, call.function.module_index), ok) }
+        ret (call.atomic_element, ok)
     }
     let (result, result_error) = function_return(c, call.function, index)
     ret (result, result_error)

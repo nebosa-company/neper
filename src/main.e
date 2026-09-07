@@ -1183,6 +1183,18 @@ fn write_check_message(file: os.File, checker: *check.Checker, check_error: err)
         try write_all(file, checker.failure_detail)
         ret write_all(file, "` is not supported yet")
     }
+    if checker.failure_kind == .AtomicElement {
+        try write_all(file, "`Atomic[")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "]` is not a type: an atomic holds an integer or a pointer")
+    }
+    if checker.failure_kind == .AtomicOrdering {
+        try write_all(file, "`atomic.")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` may not take the ordering `.")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "`")
+    }
     if checker.failure_kind == .NotAType {
         if checker.failure_detail.len != 0usize {
             try write_all(file, "`")
