@@ -580,7 +580,8 @@ $returnDiagnostics = @(
     @('try_no_propagate', 'main\.e:8:5: error\[E-ERROR-9999\]: try propagates an err, so the enclosing function must return one'),
     @('try_inside_defer', 'main\.e:9:9: error\[E-ERROR-9999\]: try is not legal inside defer'),
     @('aggregate_field_count', 'main\.e:12:17: error\[E-TYPE-9999\]: this literal gives a different number of fields than `Bad` declares'),
-    @('break_outside_loop', 'main\.e:5:5: error\[E-TYPE-9999\]: break requires an enclosing loop or switch')
+    @('break_outside_loop', 'main\.e:5:5: error\[E-TYPE-9999\]: break requires an enclosing loop or switch'),
+    @('thread_create_context', 'main\.e:16:5: error\[E-TYPE-0002\]: initializer type does not match binding')
 )
 foreach ($case in $returnDiagnostics) {
     $returnOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
@@ -588,6 +589,10 @@ foreach ($case in $returnDiagnostics) {
         throw "ret/try diagnostic for $($case[0]) is wrong: $($returnOutput -join "`n")"
     }
 }
+# `os.thread_create[Ctx]` binds a context type at the call and checks the entry point
+# against it. The checker half only -- the runtime has no `neper_os_thread_create` yet.
+$threadAccepted = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\thread_create_accepted\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $threadAccepted -ne 'module check ok') { throw 'a valid thread_create was rejected' }
 $genericInstancesExecutablePath = Join-Path $testBuild 'generic-instances-selfhost.exe'
 $genericInstancesExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesExecutableWritten -ne 'executable written') { throw 'multi-instance generic PE executable emission failed' }

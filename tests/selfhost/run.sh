@@ -612,6 +612,11 @@ check_protocol_diagnostic try_no_propagate 'main.e:8:5: error[E-ERROR-9999]: try
 check_protocol_diagnostic try_inside_defer 'main.e:9:9: error[E-ERROR-9999]: try is not legal inside defer'
 check_protocol_diagnostic aggregate_field_count 'main.e:12:17: error[E-TYPE-9999]: this literal gives a different number of fields than `Bad` declares'
 check_protocol_diagnostic break_outside_loop 'main.e:5:5: error[E-TYPE-9999]: break requires an enclosing loop or switch'
+# `os.thread_create[Ctx]` binds a context type at the call and checks the entry point
+# against it. The checker half only -- the runtime has no `neper_os_thread_create` yet.
+thread_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/thread_create_accepted/src/main.e" "$repo" x64 linux)
+[ "$thread_accepted" = 'module check ok' ]
+check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
 generic_instances_executable_path="$test_build/generic-instances-selfhost"
 generic_instances_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_instances/src/main.e" "$repo" x64 linux "$generic_instances_executable_path")
 [ "$generic_instances_executable_written" = 'executable written' ]

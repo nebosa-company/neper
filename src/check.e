@@ -2431,6 +2431,14 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     try add_seeded_parameter(c, seek_index, "f", file)
     try add_seeded_parameter(c, seek_index, "off", i64_type)
     try add_seeded_parameter(c, seek_index, "whence", seek_whence)
+    // `thread_create` is generic and intercepted at the call; these two are ordinary.
+    let thread = make_type(.Named, "Thread", os_module)
+    let (thread_join_index, thread_join_error) = add_seeded_function(c, os_module, "thread_join", error_type, false)
+    if thread_join_error != ok { ret thread_join_error }
+    try add_seeded_parameter(c, thread_join_index, "t", thread)
+    let (thread_detach_index, thread_detach_error) = add_seeded_function(c, os_module, "thread_detach", error_type, false)
+    if thread_detach_error != ok { ret thread_detach_error }
+    try add_seeded_parameter(c, thread_detach_index, "t", thread)
     let (stdout_index, stdout_error) = add_seeded_function(c, os_module, "stdout", file, false)
     if stdout_error != ok { ret stdout_error }
     let (stderr_index, stderr_error) = add_seeded_function(c, os_module, "stderr", file, false)
@@ -3754,6 +3762,11 @@ type CallInfo = struct {
     alloc_return: Type,
     alloc_arena: Type,
     mem_alloc: bool,
+    // `os.thread_create[Ctx]`. The context type is bound at the call and checked
+    // against the entry point here; once lowered both are pointers and it is gone.
+    thread_create: bool,
+    thread_context: Type,
+    thread_entry: Type,
     // `e.meta`'s scalar reflection: which question was asked and the answer, both
     // settled here. Section 9 keeps reflection entirely at compile time, so what
     // reaches lowering is a constant and never the type itself.
@@ -4339,6 +4352,52 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     ret (info, ok)
 }
 
+// `os.thread_create[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize)`. The two
+// pointers have to agree, and this is the only place the context type still exists to
+// say so with.
+fn thread_create_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (AllocInfo, err) {
+    var info: AllocInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.os") || !same(member, "thread_create") { ret (info, ok) }
+    info.matched = true
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let (context, context_error) = comptime_type(c, g, tree, module_index, type_index)
+    if context_error != ok { ret (info, context_error) }
+    if context.kind == .Void || context.kind == .Invalid || context.kind == .Other { ret (info, InvalidType) }
+    let (context_pointer, pointer_error) = seeded_composite_type(c, .Pointer, context, false, target_module)
+    if pointer_error != ok { ret (info, pointer_error) }
+    info.return_type = make_type(.Named, "Thread", target_module)
+    info.arena_type = context_pointer
+    var function: Function = zero
+    function.name = member
+    function.module_index = target_module
+    function.parameter_count = 3usize
+    function.return_count = 2usize
+    function.intrinsic = true
+    info.function = function
+    ret (info, ok)
+}
+
 fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (AllocInfo, err) {
     var info: AllocInfo = zero
     if receiver.kind != .BracketPostfix { ret (info, ok) }
@@ -4649,6 +4708,15 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     }
                 } else {
                     if receiver.kind == .BracketPostfix {
+                        let (spawner, spawner_error) = thread_create_info(c, g, tree, module_index, receiver)
+                        if spawner_error != ok { ret (info, spawner_error) }
+                        if spawner.matched {
+                            info.function = spawner.function
+                            info.thread_create = true
+                            info.thread_context = spawner.arena_type
+                            info.alloc_return = spawner.return_type
+                            has_function = true
+                        } else {
                         let (reflection, reflection_error) = meta_info(c, g, tree, module_index, receiver)
                         if reflection_error != ok { ret (info, reflection_error) }
                         if reflection.matched {
@@ -4701,6 +4769,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         }
                         }
                         has_function = true
+                        }
                     } else {
                         if receiver.kind != .FieldExpr { ret (info, Unsupported) }
                         let (protocol_type, protocol_name, is_protocol) = protocol_receiver(c, g, tree, module_index, receiver)
@@ -4840,6 +4909,18 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         at += 1usize
                         continue
                     }
+                    if info.thread_create {
+                        // The entry point is checked against the context after the
+                        // loop, once both have been seen.
+                        if child_position == 2usize { parameter_type = info.thread_context }
+                        if child_position == 3usize { parameter_type = make_type(.Integer, "usize", function.module_index) }
+                        let (entry_type, entry_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
+                        if entry_error != ok { ret (info, entry_error) }
+                        if child_position == 1usize { info.thread_entry = entry_type }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     if info.mem_alloc {
                         if child_position == 1usize {
                             parameter_type = info.alloc_arena
@@ -4859,6 +4940,16 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     }
     if info.is_cast {
         if child_position != 2usize { ret (info, ArgumentCount) }
+        ret (info, ok)
+    }
+    if info.thread_create {
+        if child_position != 4usize { ret (info, ArgumentCount) }
+        let (signature, has_signature) = function_signature_of(c, info.thread_entry)
+        if !has_signature { ret (info, TypeMismatch) }
+        if signature.parameter_count != 1usize || signature.return_count != 0usize { ret (info, TypeMismatch) }
+        let (entry_parameter, has_parameter) = function_signature_parameter(c, signature, 0usize)
+        if !has_parameter { ret (info, TypeMismatch) }
+        if !type_equal(c, entry_parameter, info.thread_context) { ret (info, TypeMismatch) }
         ret (info, ok)
     }
     if !has_function { ret (info, UnknownCallable) }
@@ -5225,6 +5316,11 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         ret (call.cast, ok)
     }
 
+    if call.thread_create {
+        if index == 0usize { ret (call.alloc_return, ok) }
+        if index == 1usize { ret (make_type(.Err, "err", call.function.module_index), ok) }
+        ret (invalid_type(), ArgumentCount)
+    }
     if call.meta_query != .None {
         if index == 0usize { ret (call.meta_result, ok) }
         ret (invalid_type(), ArgumentCount)

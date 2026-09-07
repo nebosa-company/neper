@@ -2,6 +2,7 @@
 // and lowers them to bootstrap/runtime.c; general extern-backed e.os lands in M1.
 type File = struct { raw: usize }
 type Proc = struct { raw: usize }
+type Thread = struct { raw: usize }
 type Clock = enum u8 { Wall, Monotonic }
 type SeekWhence = enum u8 { Start, Current, End }
 type EntryKind = enum u8 { File, Dir, Symlink, Other }
