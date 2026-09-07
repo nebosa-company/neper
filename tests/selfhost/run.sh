@@ -4,6 +4,17 @@ set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 neper="$repo/build/linux/neper"
 test_build="$repo/build/linux/tests/selfhost"
+
+# A rejection test asserts only that the compiler failed, and a path that does not
+# exist fails too -- so a fixture whose path is wrong passes for the wrong reason.
+# Twice today a mangled path in the PowerShell runner did exactly that. Every
+# rejection names its fixture here first.
+require_fixture() {
+    if [ ! -f "$repo/tests/selfhost/fixtures/$1/src/main.e" ]; then
+        printf '%s\n' "fixture $1 is missing" >&2
+        exit 1
+    fi
+}
 "$repo/scripts/build-bootstrap.sh" >/dev/null
 mkdir -p "$test_build"
 
@@ -447,6 +458,7 @@ chmod +x "$test_build/algo-rand-selfhost"
 format_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/format_accept/src/main.e" "$repo" x64 linux)
 [ "$format_accepted" = 'module check ok' ]
 for format_case in format_too_few format_too_many format_no_arena format_printf_arena format_hex_float format_binary_str format_precision_integer format_unknown_verb format_unterminated format_precision_wide format_not_literal format_untyped; do
+    require_fixture "check/$format_case"
     if $test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$format_case/src/main.e" "$repo" x64 linux >/dev/null 2>&1; then
         printf '%s\n' "formatter fixture $format_case was accepted" >&2
         exit 1
@@ -469,6 +481,7 @@ chmod +x "$test_build/comptime-str-selfhost"
 "$test_build/comptime-str-selfhost"
 # Only a string literal can bind one, and it binds nothing else.
 for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_type comptime_str_for_usize; do
+    require_fixture "check/$comptime_str_case"
     if $test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$comptime_str_case/src/main.e" "$repo" x64 linux >/dev/null 2>&1; then
         printf '%s\n' "comptime string fixture $comptime_str_case was accepted" >&2
         exit 1
@@ -476,6 +489,7 @@ for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_
 done
 # `type` is a compile-time parameter kind, not something a struct field can hold. The
 # report has to name the field, because a location-less failure is what this was.
+require_fixture "check/field_type_keyword"
 if $test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/field_type_keyword/src/main.e" "$repo" x64 linux >/dev/null 2>&1; then
     printf '%s
 ' 'a field typed `type` was accepted' >&2
@@ -485,6 +499,7 @@ fi
 # not a value, and resolving it as one reported `unknown value name` at every `@cc`.
 cc_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/cc_accepted/src/main.e" "$repo" x64 linux)
 [ "$cc_accepted" = 'module check ok' ]
+require_fixture "check/cc_unknown"
 if $test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/cc_unknown/src/main.e" "$repo" x64 linux >/dev/null 2>&1; then
     printf '%s\n' 'an unknown calling convention was accepted' >&2
     exit 1
@@ -542,6 +557,7 @@ chmod +x "$test_build/str-format-selfhost"
 # A slice is formattable under section 4 but needs the expansion to recurse into an
 # element at a time, which it does not do yet, so the build stops rather than quietly
 # formatting nothing. Rejected at lowering, not at checking, so it needs an emission.
+require_fixture "check/format_compound_argument"
 if $test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/check/format_compound_argument/src/main.e" "$repo" x64 linux "$test_build/format-compound-argument" >/dev/null 2>&1; then
     printf '%s\n' 'a format verb with no push was lowered' >&2
     exit 1
@@ -592,6 +608,7 @@ chmod +x "$test_build/str-pure-selfhost"
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
 check_protocol_diagnostic() {
+    require_fixture "check/$1"
     if protocol_output=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$1/src/main.e" "$repo" x64 linux 2>&1); then
         printf '%s\n' "protocol fixture $1 was accepted" >&2
         exit 1

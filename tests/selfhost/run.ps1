@@ -562,12 +562,21 @@ if ($LASTEXITCODE -ne 0 -or $strPureWritten -ne 'executable written') { throw 's
 if ($LASTEXITCODE -ne 0) { throw 'a string search, trim, split, join or integer parse is wrong' }
 # Spec section 9 rules 3 and 5: a missing protocol names what to declare, and a
 # protocol whose first parameter is not the type by value is rejected outright.
+# A rejection test asserts only that the compiler failed, and a path that does not
+# exist fails too -- so a fixture whose path is wrong passes for the wrong reason.
+# Twice today a mangled path here did exactly that.
+function Require-Fixture($name) {
+    $fixturePath = Join-Path $repo ("tests\selfhost\fixtures\" + ($name -replace '/', '\\') + "\src\main.e")
+    if (-not (Test-Path -LiteralPath $fixturePath)) { throw "fixture $name is missing" }
+}
+
 $protocolDiagnostics = @(
     @('protocol_missing', 'main\.e:4:9: error\[E-NAME-9999\]: no `cmp` protocol for `Point`; declare `fn point_cmp` in the module that declares the type'),
     @('protocol_signature', 'main\.e:6:9: error\[E-TYPE-0003\]: protocol `point_cmp` must take `Point` by value as its first parameter'),
     @('protocol_no_fallback', 'main\.e:6:9: error\[E-NAME-9999\]: no `cmp` protocol for `Pair`; declare `fn pair_cmp` in the module that declares the type')
 )
 foreach ($case in $protocolDiagnostics) {
+    Require-Fixture ("check/" + $case[0])
     $protocolOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1 -or ($protocolOutput -join "`n") -notmatch $case[1]) {
         throw "protocol diagnostic for $($case[0]) is wrong: $($protocolOutput -join "`n")"
@@ -591,6 +600,7 @@ $returnDiagnostics = @(
     @('thread_create_context', 'main\.e:16:5: error\[E-TYPE-0002\]: initializer type does not match binding')
 )
 foreach ($case in $returnDiagnostics) {
+    Require-Fixture ("check/" + $case[0])
     $returnOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1 -or ($returnOutput -join "`n") -notmatch $case[1]) {
         throw "ret/try diagnostic for $($case[0]) is wrong: $($returnOutput -join "`n")"
