@@ -1732,7 +1732,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if allocations_error != ok { ret allocations_error }
         var machine_capacity = 1usize
         if emit_machine_code {
-            machine_capacity = builder.instruction_count * 256usize + 65536usize
+            // One entry per emitted byte, so this allocation is eight times the
+            // code it will hold and it dominates the arena. Selecting the compiler
+            // itself needs between 16 and 32 bytes per NIR instruction, measured by
+            // bisecting the multiplier until emission reports `emit_x64.Capacity`;
+            // 96 keeps three to six times that and takes the allocation from about
+            // 512 MiB to about 192 MiB. Overrunning it is a clean `Capacity` error,
+            // never a wrong instruction.
+            machine_capacity = builder.instruction_count * 96usize + 65536usize
         }
         let (machine_storage, machine_storage_error) = mem.alloc[usize](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }
