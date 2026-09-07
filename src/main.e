@@ -790,7 +790,11 @@ fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
 fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
     let (symbols, symbols_error) = mem.alloc[resolve.Symbol](a, 16384usize)
     if symbols_error != ok { ret symbols_error }
-    let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
+    // The largest module, `check.e`, needs between 65536 and 69632 tokens, measured
+    // by bisecting this until resolution reports `resolve.Capacity`. 131072 keeps
+    // about twice that; `MAX_TOKENS` in the bootstrap is the same number for the same
+    // reason.
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, 131072usize)
     if tokens_error != ok { ret tokens_error }
     let (locals, locals_error) = mem.alloc[resolve.Local](a, 16384usize)
     if locals_error != ok { ret locals_error }
@@ -818,7 +822,7 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if checked_switches_error != ok { ret checked_switches_error }
     let (function_signatures, function_signatures_error) = mem.alloc[check.FunctionSignature](a, 4096usize)
     if function_signatures_error != ok { ret function_signatures_error }
-    let (tokens, tokens_error) = mem.alloc[lex.Token](a, 65536usize)
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, 131072usize)
     if tokens_error != ok { ret tokens_error }
     let (locals, locals_error) = mem.alloc[check.Local](a, 16384usize)
     if locals_error != ok { ret locals_error }

@@ -37,7 +37,7 @@
 #endif
 
 #define NEPER_VERSION "0.0.96-neper0"
-#define MAX_TOKENS 65536
+#define MAX_TOKENS 131072
 #define MAX_DECLS 1024
 #define MAX_PARAMS 32
 #define MAX_LOCALS 256
