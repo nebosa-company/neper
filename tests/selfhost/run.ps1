@@ -394,6 +394,14 @@ $strBuilderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $strBuilderWritten -ne 'executable written') { throw 'str builder executable emission failed' }
 & $strBuilderPath
 if ($LASTEXITCODE -ne 0) { throw 'the string builder or one of its pushes is wrong' }
+# The float pushes: `{}` writes the shortest string that reads back as the same value,
+# `{.N}` exactly N digits after the point. The fixture checks the text against an
+# independent implementation and reads every shortest case back through the parser.
+$pushFloatPath = Join-Path $testBuild 'str-push-float-selfhost.exe'
+$pushFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_push_float\src\main.e') $repo 'x64' 'windows' $pushFloatPath
+if ($LASTEXITCODE -ne 0 -or $pushFloatWritten -ne 'executable written') { throw 'float push executable emission failed' }
+& $pushFloatPath
+if ($LASTEXITCODE -ne 0) { throw 'a float push wrote the wrong digits, notation or precision' }
 # `parse_f64` and `parse_f32` are the inverse of the float pushes and accept nothing
 # else. The fixture pins the grammar, the non-finite tokens, both range ends and the
 # exact ties, against bit patterns produced by rounding an exact rational.

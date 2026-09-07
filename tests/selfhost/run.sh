@@ -434,6 +434,13 @@ str_builder_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$str_builder_written" = 'executable written' ]
 chmod +x "$test_build/str-builder-selfhost"
 "$test_build/str-builder-selfhost"
+# The float pushes: `{}` writes the shortest string that reads back as the same value,
+# `{.N}` exactly N digits after the point. The fixture checks the text against an
+# independent implementation and reads every shortest case back through the parser.
+push_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/str_push_float/src/main.e" "$repo" x64 linux "$test_build/str-push-float-selfhost")
+[ "$push_float_written" = 'executable written' ]
+chmod +x "$test_build/str-push-float-selfhost"
+"$test_build/str-push-float-selfhost"
 # `parse_f64` and `parse_f32` are the inverse of the float pushes and accept nothing
 # else. The fixture pins the grammar, the non-finite tokens, both range ends and the
 # exact ties, against bit patterns produced by rounding an exact rational.

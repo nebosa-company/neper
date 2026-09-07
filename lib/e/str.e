@@ -235,6 +235,1102 @@ fn push_hex_u64(b: *Builder, v: u64) -> err {
     ret push(b, digits[at..16usize])
 }
 
+// `{.N}`: exactly `precision` digits after the point, rounded half to even. The
+// value is expanded to its exact decimal first -- a f64 is a dyadic rational, so it
+// has one -- and the rounding then reads digits rather than arithmetic, which is what
+// makes a tie a tie. The digit array is large enough for that expansion in full
+// (1200 entries against a worst case of about 1091), so nothing is truncated and
+// no sticky bit is needed.
+//
+// `e.str` is frozen at its declared surface and a neper module exports every
+// declaration it has, so this cannot be shared with `push_f32_fixed`; the two are
+// generated from one template rather than written twice.
+// `{}`: the shortest digit string that reads back as this exact value. The value is
+// expanded to its exact decimal, then rounded to `p` significant digits for a
+// `p` the search below narrows, and the test that `p` is enough is `parse_f64` --
+// which is frozen into this same surface, so the formatter and the parser cannot
+// drift apart by construction. The search is a bisection over `p` in `1..17`,
+// because a candidate that reads back correctly at `p` digits still does at `p + 1`.
+//
+// The point is placed per section 4: fixed notation while the leading digit's decimal
+// exponent is in `[-5, 15]`, scientific otherwise.
+//
+// `e.str` is frozen at its declared surface and a neper module exports every
+// declaration it has, so this cannot be shared with `push_f32`; the two are
+// generated from one template rather than written twice.
+fn push_f64(b: *Builder, v: f64) -> err {
+    let bits = mem.bitcast[u64](v)
+    let sign = bits >> 63u64
+    let exponent_field = bits >> 52u64 & 2047u64
+    let mantissa_field = bits & 4503599627370495u64
+    if exponent_field == 2047u64 {
+        if mantissa_field != 0u64 { ret push(b, "nan") }
+        if sign == 1u64 { ret push(b, "-inf") }
+        ret push(b, "inf")
+    }
+    if exponent_field == 0u64 && mantissa_field == 0u64 {
+        if sign == 1u64 { ret push(b, "-0") }
+        ret push(b, "0")
+    }
+    var scale = mantissa_field
+    var power = 0i64
+    if exponent_field == 0u64 {
+        power = -1074i64
+    } else {
+        scale = mantissa_field + 4503599627370496u64
+        power = i64(exponent_field) - 1075i64
+    }
+    // The exact decimal of `scale * 2^power`, as `0.digits * 10^exponent`.
+    var digits: [1200]u8 = zero
+    var used = 0usize
+    var exponent = 0i64
+    var reversed: [24]u8 = zero
+    var length = 0usize
+    var rest = scale
+    while rest > 0u64 {
+        reversed[length] = u8(rest % 10u64)
+        length += 1usize
+        rest = rest / 10u64
+    }
+    exponent = i64(length)
+    var back = 0usize
+    while back < length {
+        digits[back] = reversed[length - 1usize - back]
+        back += 1usize
+    }
+    used = length
+    while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    var steps = power
+    while steps != 0i64 && used != 0usize {
+        if steps > 0i64 {
+            var carry = 0u8
+            var scan = used
+            while scan > 0usize {
+                scan = scan - 1usize
+                let value = digits[scan] * 2u8 + carry
+                digits[scan] = value % 10u8
+                carry = value / 10u8
+            }
+            if carry != 0u8 {
+                used += 1usize
+                var shift = used
+                while shift > 1usize {
+                    shift = shift - 1usize
+                    digits[shift] = digits[shift - 1usize]
+                }
+                digits[0usize] = carry
+                exponent += 1i64
+            }
+            steps = steps - 1i64
+        } else {
+            var remainder = 0u8
+            var scan = 0usize
+            while scan < used {
+                let value = remainder * 10u8 + digits[scan]
+                digits[scan] = value / 2u8
+                remainder = value % 2u8
+                scan += 1usize
+            }
+            if remainder != 0u8 {
+                digits[used] = 5u8
+                used += 1usize
+            }
+            if digits[0usize] == 0u8 {
+                var shift = 0usize
+                while shift + 1usize < used {
+                    digits[shift] = digits[shift + 1usize]
+                    shift += 1usize
+                }
+                used = used - 1usize
+                exponent = exponent - 1i64
+            }
+            steps += 1i64
+        }
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    }
+    // Bisect for the fewest significant digits that read back as this value. The
+    // magnitude is what is compared, because the candidate never carries the sign.
+    let magnitude = bits & 9223372036854775807u64
+    var low = 1usize
+    var high = 17usize
+    while low < high {
+        let middle = (low + high) / 2usize
+        var trial: [24]u8 = zero
+        var trial_used = middle
+        var trial_exponent = exponent
+        var fill = 0usize
+        while fill < middle {
+            var digit = 0u8
+            if fill < used { digit = digits[fill] }
+            trial[fill] = digit
+            fill += 1usize
+        }
+        var lift = false
+        if middle < used {
+            let first = digits[middle]
+            if first > 5u8 { lift = true }
+            if first == 5u8 {
+                var beyond = false
+                var scan = middle + 1usize
+                while scan < used {
+                    if digits[scan] != 0u8 { beyond = true }
+                    scan += 1usize
+                }
+                if beyond {
+                    lift = true
+                } else {
+                    lift = trial[middle - 1usize] % 2u8 == 1u8
+                }
+            }
+        }
+        if lift {
+            var carry = true
+            var at = trial_used
+            while at > 0usize && carry {
+                at = at - 1usize
+                if trial[at] == 9u8 {
+                    trial[at] = 0u8
+                } else {
+                    trial[at] = trial[at] + 1u8
+                    carry = false
+                }
+            }
+            if carry {
+                var shift = trial_used
+                while shift > 0usize {
+                    trial[shift] = trial[shift - 1usize]
+                    shift = shift - 1usize
+                }
+                trial[0usize] = 1u8
+                trial_used += 1usize
+                trial_exponent += 1i64
+            }
+        }
+        while trial_used > 0usize && trial[trial_used - 1usize] == 0u8 { trial_used = trial_used - 1usize }
+        // `0.<digits>e<exponent>` is a spelling `parse_f64` accepts for any candidate.
+        var candidate: [40]u8 = zero
+        candidate[0usize] = 48u8
+        candidate[1usize] = 46u8
+        var written = 2usize
+        var emit = 0usize
+        while emit < trial_used {
+            candidate[written] = 48u8 + trial[emit]
+            written += 1usize
+            emit += 1usize
+        }
+        candidate[written] = 101u8
+        written += 1usize
+        var power_left = trial_exponent
+        if power_left < 0i64 {
+            candidate[written] = 45u8
+            written += 1usize
+            power_left = 0i64 - power_left
+        }
+        var power_digits: [8]u8 = zero
+        var power_length = 0usize
+        while power_left > 0i64 {
+            power_digits[power_length] = u8(power_left % 10i64)
+            power_length += 1usize
+            power_left = power_left / 10i64
+        }
+        if power_length == 0usize {
+            candidate[written] = 48u8
+            written += 1usize
+        }
+        while power_length > 0usize {
+            power_length = power_length - 1usize
+            candidate[written] = 48u8 + power_digits[power_length]
+            written += 1usize
+        }
+        let (reread, reread_error) = parse_f64(candidate[0usize..written])
+        var enough = false
+        if reread_error == ok {
+            if mem.bitcast[u64](reread) == magnitude { enough = true }
+        }
+        if enough {
+            high = middle
+        } else {
+            low = middle + 1usize
+        }
+    }
+    // Round once more at the length the bisection settled on, and keep the result.
+    var shortest: [24]u8 = zero
+    var shortest_used = low
+    var shortest_exponent = exponent
+    var fill = 0usize
+    while fill < low {
+        var digit = 0u8
+        if fill < used { digit = digits[fill] }
+        shortest[fill] = digit
+        fill += 1usize
+    }
+    var lift = false
+    if low < used {
+        let first = digits[low]
+        if first > 5u8 { lift = true }
+        if first == 5u8 {
+            var beyond = false
+            var scan = low + 1usize
+            while scan < used {
+                if digits[scan] != 0u8 { beyond = true }
+                scan += 1usize
+            }
+            if beyond {
+                lift = true
+            } else {
+                lift = shortest[low - 1usize] % 2u8 == 1u8
+            }
+        }
+    }
+    if lift {
+        var carry = true
+        var at = shortest_used
+        while at > 0usize && carry {
+            at = at - 1usize
+            if shortest[at] == 9u8 {
+                shortest[at] = 0u8
+            } else {
+                shortest[at] = shortest[at] + 1u8
+                carry = false
+            }
+        }
+        if carry {
+            var shift = shortest_used
+            while shift > 0usize {
+                shortest[shift] = shortest[shift - 1usize]
+                shift = shift - 1usize
+            }
+            shortest[0usize] = 1u8
+            shortest_used += 1usize
+            shortest_exponent += 1i64
+        }
+    }
+    while shortest_used > 0usize && shortest[shortest_used - 1usize] == 0u8 { shortest_used = shortest_used - 1usize }
+    // Section 4's notation rule is on the leading digit's exponent, which is one less
+    // than the exponent of `0.digits`.
+    let leading = shortest_exponent - 1i64
+    var text: [48]u8 = zero
+    var written = 0usize
+    if sign == 1u64 {
+        text[written] = 45u8
+        written += 1usize
+    }
+    if leading >= -5i64 && leading <= 15i64 {
+        if shortest_exponent <= 0i64 {
+            text[written] = 48u8
+            written += 1usize
+            text[written] = 46u8
+            written += 1usize
+            var pad = 0i64 - shortest_exponent
+            while pad > 0i64 {
+                text[written] = 48u8
+                written += 1usize
+                pad = pad - 1i64
+            }
+            var emit = 0usize
+            while emit < shortest_used {
+                text[written] = 48u8 + shortest[emit]
+                written += 1usize
+                emit += 1usize
+            }
+        } else {
+            var whole = usize(shortest_exponent)
+            var emit = 0usize
+            while emit < whole {
+                var digit = 0u8
+                if emit < shortest_used { digit = shortest[emit] }
+                text[written] = 48u8 + digit
+                written += 1usize
+                emit += 1usize
+            }
+            if shortest_used > whole {
+                text[written] = 46u8
+                written += 1usize
+                while emit < shortest_used {
+                    text[written] = 48u8 + shortest[emit]
+                    written += 1usize
+                    emit += 1usize
+                }
+            }
+        }
+    } else {
+        text[written] = 48u8 + shortest[0usize]
+        written += 1usize
+        if shortest_used > 1usize {
+            text[written] = 46u8
+            written += 1usize
+            var emit = 1usize
+            while emit < shortest_used {
+                text[written] = 48u8 + shortest[emit]
+                written += 1usize
+                emit += 1usize
+            }
+        }
+        text[written] = 101u8
+        written += 1usize
+        var power_left = leading
+        if power_left < 0i64 {
+            text[written] = 45u8
+            written += 1usize
+            power_left = 0i64 - power_left
+        }
+        var power_digits: [8]u8 = zero
+        var power_length = 0usize
+        while power_left > 0i64 {
+            power_digits[power_length] = u8(power_left % 10i64)
+            power_length += 1usize
+            power_left = power_left / 10i64
+        }
+        if power_length == 0usize {
+            text[written] = 48u8
+            written += 1usize
+        }
+        while power_length > 0usize {
+            power_length = power_length - 1usize
+            text[written] = 48u8 + power_digits[power_length]
+            written += 1usize
+        }
+    }
+    ret push(b, text[0usize..written])
+}
+
+// `{}`: the shortest digit string that reads back as this exact value. The value is
+// expanded to its exact decimal, then rounded to `p` significant digits for a
+// `p` the search below narrows, and the test that `p` is enough is `parse_f32` --
+// which is frozen into this same surface, so the formatter and the parser cannot
+// drift apart by construction. The search is a bisection over `p` in `1..9`,
+// because a candidate that reads back correctly at `p` digits still does at `p + 1`.
+//
+// The point is placed per section 4: fixed notation while the leading digit's decimal
+// exponent is in `[-5, 15]`, scientific otherwise.
+//
+// `e.str` is frozen at its declared surface and a neper module exports every
+// declaration it has, so this cannot be shared with `push_f64`; the two are
+// generated from one template rather than written twice.
+fn push_f32(b: *Builder, v: f32) -> err {
+    let bits = mem.bitcast[u32](v)
+    let sign = bits >> 31u32
+    let exponent_field = bits >> 23u32 & 255u32
+    let mantissa_field = bits & 8388607u32
+    if exponent_field == 255u32 {
+        if mantissa_field != 0u32 { ret push(b, "nan") }
+        if sign == 1u32 { ret push(b, "-inf") }
+        ret push(b, "inf")
+    }
+    if exponent_field == 0u32 && mantissa_field == 0u32 {
+        if sign == 1u32 { ret push(b, "-0") }
+        ret push(b, "0")
+    }
+    var scale = mantissa_field
+    var power = 0i64
+    if exponent_field == 0u32 {
+        power = -149i64
+    } else {
+        scale = mantissa_field + 8388608u32
+        power = i64(exponent_field) - 150i64
+    }
+    // The exact decimal of `scale * 2^power`, as `0.digits * 10^exponent`.
+    var digits: [256]u8 = zero
+    var used = 0usize
+    var exponent = 0i64
+    var reversed: [24]u8 = zero
+    var length = 0usize
+    var rest = scale
+    while rest > 0u32 {
+        reversed[length] = u8(rest % 10u32)
+        length += 1usize
+        rest = rest / 10u32
+    }
+    exponent = i64(length)
+    var back = 0usize
+    while back < length {
+        digits[back] = reversed[length - 1usize - back]
+        back += 1usize
+    }
+    used = length
+    while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    var steps = power
+    while steps != 0i64 && used != 0usize {
+        if steps > 0i64 {
+            var carry = 0u8
+            var scan = used
+            while scan > 0usize {
+                scan = scan - 1usize
+                let value = digits[scan] * 2u8 + carry
+                digits[scan] = value % 10u8
+                carry = value / 10u8
+            }
+            if carry != 0u8 {
+                used += 1usize
+                var shift = used
+                while shift > 1usize {
+                    shift = shift - 1usize
+                    digits[shift] = digits[shift - 1usize]
+                }
+                digits[0usize] = carry
+                exponent += 1i64
+            }
+            steps = steps - 1i64
+        } else {
+            var remainder = 0u8
+            var scan = 0usize
+            while scan < used {
+                let value = remainder * 10u8 + digits[scan]
+                digits[scan] = value / 2u8
+                remainder = value % 2u8
+                scan += 1usize
+            }
+            if remainder != 0u8 {
+                digits[used] = 5u8
+                used += 1usize
+            }
+            if digits[0usize] == 0u8 {
+                var shift = 0usize
+                while shift + 1usize < used {
+                    digits[shift] = digits[shift + 1usize]
+                    shift += 1usize
+                }
+                used = used - 1usize
+                exponent = exponent - 1i64
+            }
+            steps += 1i64
+        }
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    }
+    // Bisect for the fewest significant digits that read back as this value. The
+    // magnitude is what is compared, because the candidate never carries the sign.
+    let magnitude = bits & 2147483647u32
+    var low = 1usize
+    var high = 9usize
+    while low < high {
+        let middle = (low + high) / 2usize
+        var trial: [24]u8 = zero
+        var trial_used = middle
+        var trial_exponent = exponent
+        var fill = 0usize
+        while fill < middle {
+            var digit = 0u8
+            if fill < used { digit = digits[fill] }
+            trial[fill] = digit
+            fill += 1usize
+        }
+        var lift = false
+        if middle < used {
+            let first = digits[middle]
+            if first > 5u8 { lift = true }
+            if first == 5u8 {
+                var beyond = false
+                var scan = middle + 1usize
+                while scan < used {
+                    if digits[scan] != 0u8 { beyond = true }
+                    scan += 1usize
+                }
+                if beyond {
+                    lift = true
+                } else {
+                    lift = trial[middle - 1usize] % 2u8 == 1u8
+                }
+            }
+        }
+        if lift {
+            var carry = true
+            var at = trial_used
+            while at > 0usize && carry {
+                at = at - 1usize
+                if trial[at] == 9u8 {
+                    trial[at] = 0u8
+                } else {
+                    trial[at] = trial[at] + 1u8
+                    carry = false
+                }
+            }
+            if carry {
+                var shift = trial_used
+                while shift > 0usize {
+                    trial[shift] = trial[shift - 1usize]
+                    shift = shift - 1usize
+                }
+                trial[0usize] = 1u8
+                trial_used += 1usize
+                trial_exponent += 1i64
+            }
+        }
+        while trial_used > 0usize && trial[trial_used - 1usize] == 0u8 { trial_used = trial_used - 1usize }
+        // `0.<digits>e<exponent>` is a spelling `parse_f32` accepts for any candidate.
+        var candidate: [40]u8 = zero
+        candidate[0usize] = 48u8
+        candidate[1usize] = 46u8
+        var written = 2usize
+        var emit = 0usize
+        while emit < trial_used {
+            candidate[written] = 48u8 + trial[emit]
+            written += 1usize
+            emit += 1usize
+        }
+        candidate[written] = 101u8
+        written += 1usize
+        var power_left = trial_exponent
+        if power_left < 0i64 {
+            candidate[written] = 45u8
+            written += 1usize
+            power_left = 0i64 - power_left
+        }
+        var power_digits: [8]u8 = zero
+        var power_length = 0usize
+        while power_left > 0i64 {
+            power_digits[power_length] = u8(power_left % 10i64)
+            power_length += 1usize
+            power_left = power_left / 10i64
+        }
+        if power_length == 0usize {
+            candidate[written] = 48u8
+            written += 1usize
+        }
+        while power_length > 0usize {
+            power_length = power_length - 1usize
+            candidate[written] = 48u8 + power_digits[power_length]
+            written += 1usize
+        }
+        let (reread, reread_error) = parse_f32(candidate[0usize..written])
+        var enough = false
+        if reread_error == ok {
+            if mem.bitcast[u32](reread) == magnitude { enough = true }
+        }
+        if enough {
+            high = middle
+        } else {
+            low = middle + 1usize
+        }
+    }
+    // Round once more at the length the bisection settled on, and keep the result.
+    var shortest: [24]u8 = zero
+    var shortest_used = low
+    var shortest_exponent = exponent
+    var fill = 0usize
+    while fill < low {
+        var digit = 0u8
+        if fill < used { digit = digits[fill] }
+        shortest[fill] = digit
+        fill += 1usize
+    }
+    var lift = false
+    if low < used {
+        let first = digits[low]
+        if first > 5u8 { lift = true }
+        if first == 5u8 {
+            var beyond = false
+            var scan = low + 1usize
+            while scan < used {
+                if digits[scan] != 0u8 { beyond = true }
+                scan += 1usize
+            }
+            if beyond {
+                lift = true
+            } else {
+                lift = shortest[low - 1usize] % 2u8 == 1u8
+            }
+        }
+    }
+    if lift {
+        var carry = true
+        var at = shortest_used
+        while at > 0usize && carry {
+            at = at - 1usize
+            if shortest[at] == 9u8 {
+                shortest[at] = 0u8
+            } else {
+                shortest[at] = shortest[at] + 1u8
+                carry = false
+            }
+        }
+        if carry {
+            var shift = shortest_used
+            while shift > 0usize {
+                shortest[shift] = shortest[shift - 1usize]
+                shift = shift - 1usize
+            }
+            shortest[0usize] = 1u8
+            shortest_used += 1usize
+            shortest_exponent += 1i64
+        }
+    }
+    while shortest_used > 0usize && shortest[shortest_used - 1usize] == 0u8 { shortest_used = shortest_used - 1usize }
+    // Section 4's notation rule is on the leading digit's exponent, which is one less
+    // than the exponent of `0.digits`.
+    let leading = shortest_exponent - 1i64
+    var text: [48]u8 = zero
+    var written = 0usize
+    if sign == 1u32 {
+        text[written] = 45u8
+        written += 1usize
+    }
+    if leading >= -5i64 && leading <= 15i64 {
+        if shortest_exponent <= 0i64 {
+            text[written] = 48u8
+            written += 1usize
+            text[written] = 46u8
+            written += 1usize
+            var pad = 0i64 - shortest_exponent
+            while pad > 0i64 {
+                text[written] = 48u8
+                written += 1usize
+                pad = pad - 1i64
+            }
+            var emit = 0usize
+            while emit < shortest_used {
+                text[written] = 48u8 + shortest[emit]
+                written += 1usize
+                emit += 1usize
+            }
+        } else {
+            var whole = usize(shortest_exponent)
+            var emit = 0usize
+            while emit < whole {
+                var digit = 0u8
+                if emit < shortest_used { digit = shortest[emit] }
+                text[written] = 48u8 + digit
+                written += 1usize
+                emit += 1usize
+            }
+            if shortest_used > whole {
+                text[written] = 46u8
+                written += 1usize
+                while emit < shortest_used {
+                    text[written] = 48u8 + shortest[emit]
+                    written += 1usize
+                    emit += 1usize
+                }
+            }
+        }
+    } else {
+        text[written] = 48u8 + shortest[0usize]
+        written += 1usize
+        if shortest_used > 1usize {
+            text[written] = 46u8
+            written += 1usize
+            var emit = 1usize
+            while emit < shortest_used {
+                text[written] = 48u8 + shortest[emit]
+                written += 1usize
+                emit += 1usize
+            }
+        }
+        text[written] = 101u8
+        written += 1usize
+        var power_left = leading
+        if power_left < 0i64 {
+            text[written] = 45u8
+            written += 1usize
+            power_left = 0i64 - power_left
+        }
+        var power_digits: [8]u8 = zero
+        var power_length = 0usize
+        while power_left > 0i64 {
+            power_digits[power_length] = u8(power_left % 10i64)
+            power_length += 1usize
+            power_left = power_left / 10i64
+        }
+        if power_length == 0usize {
+            text[written] = 48u8
+            written += 1usize
+        }
+        while power_length > 0usize {
+            power_length = power_length - 1usize
+            text[written] = 48u8 + power_digits[power_length]
+            written += 1usize
+        }
+    }
+    ret push(b, text[0usize..written])
+}
+
+fn push_f64_fixed(b: *Builder, v: f64, precision: u8) -> err {
+    if precision > 99u8 { ret BadNumber }
+    let bits = mem.bitcast[u64](v)
+    let sign = bits >> 63u64
+    let exponent_field = bits >> 52u64 & 2047u64
+    let mantissa_field = bits & 4503599627370495u64
+    // A non-finite value writes its token and no fractional suffix at all.
+    if exponent_field == 2047u64 {
+        if mantissa_field != 0u64 { ret push(b, "nan") }
+        if sign == 1u64 { ret push(b, "-inf") }
+        ret push(b, "inf")
+    }
+    // The value is `scale * 2^power`, exactly.
+    var scale = mantissa_field
+    var power = 0i64
+    if exponent_field == 0u64 {
+        power = -1074i64
+    } else {
+        scale = mantissa_field + 4503599627370496u64
+        power = i64(exponent_field) - 1075i64
+    }
+    var digits: [1200]u8 = zero
+    var used = 0usize
+    var exponent = 0i64
+    if scale != 0u64 {
+        var reversed: [24]u8 = zero
+        var length = 0usize
+        var rest = scale
+        while rest > 0u64 {
+            reversed[length] = u8(rest % 10u64)
+            length += 1usize
+            rest = rest / 10u64
+        }
+        exponent = i64(length)
+        var back = 0usize
+        while back < length {
+            digits[back] = reversed[length - 1usize - back]
+            back += 1usize
+        }
+        used = length
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    }
+    // Apply the binary exponent one bit at a time, which keeps the decimal exact.
+    var steps = power
+    while steps != 0i64 && used != 0usize {
+        if steps > 0i64 {
+            var carry = 0u8
+            var scan = used
+            while scan > 0usize {
+                scan = scan - 1usize
+                let value = digits[scan] * 2u8 + carry
+                digits[scan] = value % 10u8
+                carry = value / 10u8
+            }
+            if carry != 0u8 {
+                used += 1usize
+                var shift = used
+                while shift > 1usize {
+                    shift = shift - 1usize
+                    digits[shift] = digits[shift - 1usize]
+                }
+                digits[0usize] = carry
+                exponent += 1i64
+            }
+            steps = steps - 1i64
+        } else {
+            var remainder = 0u8
+            var scan = 0usize
+            while scan < used {
+                let value = remainder * 10u8 + digits[scan]
+                digits[scan] = value / 2u8
+                remainder = value % 2u8
+                scan += 1usize
+            }
+            if remainder != 0u8 {
+                digits[used] = 5u8
+                used += 1usize
+            }
+            if digits[0usize] == 0u8 {
+                var shift = 0usize
+                while shift + 1usize < used {
+                    digits[shift] = digits[shift + 1usize]
+                    shift += 1usize
+                }
+                used = used - 1usize
+                exponent = exponent - 1i64
+            }
+            steps += 1i64
+        }
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    }
+    // `cut` is how many digits of `digits` survive scaling by `10^precision`, which
+    // makes the answer an integer and the rounding an ordinary digit comparison.
+    let places = usize(precision)
+    var cut = exponent + i64(places)
+    var round_up = false
+    if cut >= 0i64 && usize(cut) < used {
+        let first = digits[usize(cut)]
+        if first > 5u8 { round_up = true }
+        if first == 5u8 {
+            var beyond = false
+            var scan = usize(cut) + 1usize
+            while scan < used {
+                if digits[scan] != 0u8 { beyond = true }
+                scan += 1usize
+            }
+            if beyond {
+                round_up = true
+            } else {
+                // An exact tie goes to the even last kept digit; a digit past the end
+                // of the expansion is a zero, which is even.
+                var last = 0u8
+                if cut > 0i64 && usize(cut) - 1usize < used { last = digits[usize(cut) - 1usize] }
+                round_up = last % 2u8 == 1u8
+            }
+        }
+    }
+    var kept: [512]u8 = zero
+    var digits_kept = 0usize
+    if cut > 0i64 { digits_kept = usize(cut) }
+    var at = 0usize
+    while at < digits_kept {
+        var digit = 0u8
+        if at < used { digit = digits[at] }
+        kept[at] = digit
+        at += 1usize
+    }
+    if round_up {
+        var carry = true
+        var back = digits_kept
+        while back > 0usize && carry {
+            back = back - 1usize
+            if kept[back] == 9u8 {
+                kept[back] = 0u8
+            } else {
+                kept[back] = kept[back] + 1u8
+                carry = false
+            }
+        }
+        if carry {
+            var shift = digits_kept
+            while shift > 0usize {
+                kept[shift] = kept[shift - 1usize]
+                shift = shift - 1usize
+            }
+            kept[0usize] = 1u8
+            digits_kept += 1usize
+        }
+    }
+    // The kept digits are the value times `10^precision`; the point goes that many
+    // places from the right, and a sign is written even for a negative zero.
+    var text: [512]u8 = zero
+    var length = 0usize
+    if sign == 1u64 {
+        text[0usize] = 45u8
+        length = 1usize
+    }
+    if digits_kept > places {
+        var whole = 0usize
+        while whole < digits_kept - places {
+            text[length] = 48u8 + kept[whole]
+            length += 1usize
+            whole += 1usize
+        }
+    } else {
+        text[length] = 48u8
+        length += 1usize
+    }
+    if places > 0usize {
+        text[length] = 46u8
+        length += 1usize
+        var pad = 0usize
+        if digits_kept < places { pad = places - digits_kept }
+        while pad > 0usize {
+            text[length] = 48u8
+            length += 1usize
+            pad = pad - 1usize
+        }
+        var tail = 0usize
+        if digits_kept > places { tail = digits_kept - places }
+        while tail < digits_kept {
+            text[length] = 48u8 + kept[tail]
+            length += 1usize
+            tail += 1usize
+        }
+    }
+    ret push(b, text[0usize..length])
+}
+
+// `{.N}`: exactly `precision` digits after the point, rounded half to even. The
+// value is expanded to its exact decimal first -- a f32 is a dyadic rational, so it
+// has one -- and the rounding then reads digits rather than arithmetic, which is what
+// makes a tie a tie. The digit array is large enough for that expansion in full
+// (256 entries against a worst case of about 173), so nothing is truncated and
+// no sticky bit is needed.
+//
+// `e.str` is frozen at its declared surface and a neper module exports every
+// declaration it has, so this cannot be shared with `push_f64_fixed`; the two are
+// generated from one template rather than written twice.
+fn push_f32_fixed(b: *Builder, v: f32, precision: u8) -> err {
+    if precision > 99u8 { ret BadNumber }
+    let bits = mem.bitcast[u32](v)
+    let sign = bits >> 31u32
+    let exponent_field = bits >> 23u32 & 255u32
+    let mantissa_field = bits & 8388607u32
+    // A non-finite value writes its token and no fractional suffix at all.
+    if exponent_field == 255u32 {
+        if mantissa_field != 0u32 { ret push(b, "nan") }
+        if sign == 1u32 { ret push(b, "-inf") }
+        ret push(b, "inf")
+    }
+    // The value is `scale * 2^power`, exactly.
+    var scale = mantissa_field
+    var power = 0i64
+    if exponent_field == 0u32 {
+        power = -149i64
+    } else {
+        scale = mantissa_field + 8388608u32
+        power = i64(exponent_field) - 150i64
+    }
+    var digits: [256]u8 = zero
+    var used = 0usize
+    var exponent = 0i64
+    if scale != 0u32 {
+        var reversed: [24]u8 = zero
+        var length = 0usize
+        var rest = scale
+        while rest > 0u32 {
+            reversed[length] = u8(rest % 10u32)
+            length += 1usize
+            rest = rest / 10u32
+        }
+        exponent = i64(length)
+        var back = 0usize
+        while back < length {
+            digits[back] = reversed[length - 1usize - back]
+            back += 1usize
+        }
+        used = length
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    }
+    // Apply the binary exponent one bit at a time, which keeps the decimal exact.
+    var steps = power
+    while steps != 0i64 && used != 0usize {
+        if steps > 0i64 {
+            var carry = 0u8
+            var scan = used
+            while scan > 0usize {
+                scan = scan - 1usize
+                let value = digits[scan] * 2u8 + carry
+                digits[scan] = value % 10u8
+                carry = value / 10u8
+            }
+            if carry != 0u8 {
+                used += 1usize
+                var shift = used
+                while shift > 1usize {
+                    shift = shift - 1usize
+                    digits[shift] = digits[shift - 1usize]
+                }
+                digits[0usize] = carry
+                exponent += 1i64
+            }
+            steps = steps - 1i64
+        } else {
+            var remainder = 0u8
+            var scan = 0usize
+            while scan < used {
+                let value = remainder * 10u8 + digits[scan]
+                digits[scan] = value / 2u8
+                remainder = value % 2u8
+                scan += 1usize
+            }
+            if remainder != 0u8 {
+                digits[used] = 5u8
+                used += 1usize
+            }
+            if digits[0usize] == 0u8 {
+                var shift = 0usize
+                while shift + 1usize < used {
+                    digits[shift] = digits[shift + 1usize]
+                    shift += 1usize
+                }
+                used = used - 1usize
+                exponent = exponent - 1i64
+            }
+            steps += 1i64
+        }
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    }
+    // `cut` is how many digits of `digits` survive scaling by `10^precision`, which
+    // makes the answer an integer and the rounding an ordinary digit comparison.
+    let places = usize(precision)
+    var cut = exponent + i64(places)
+    var round_up = false
+    if cut >= 0i64 && usize(cut) < used {
+        let first = digits[usize(cut)]
+        if first > 5u8 { round_up = true }
+        if first == 5u8 {
+            var beyond = false
+            var scan = usize(cut) + 1usize
+            while scan < used {
+                if digits[scan] != 0u8 { beyond = true }
+                scan += 1usize
+            }
+            if beyond {
+                round_up = true
+            } else {
+                // An exact tie goes to the even last kept digit; a digit past the end
+                // of the expansion is a zero, which is even.
+                var last = 0u8
+                if cut > 0i64 && usize(cut) - 1usize < used { last = digits[usize(cut) - 1usize] }
+                round_up = last % 2u8 == 1u8
+            }
+        }
+    }
+    var kept: [256]u8 = zero
+    var digits_kept = 0usize
+    if cut > 0i64 { digits_kept = usize(cut) }
+    var at = 0usize
+    while at < digits_kept {
+        var digit = 0u8
+        if at < used { digit = digits[at] }
+        kept[at] = digit
+        at += 1usize
+    }
+    if round_up {
+        var carry = true
+        var back = digits_kept
+        while back > 0usize && carry {
+            back = back - 1usize
+            if kept[back] == 9u8 {
+                kept[back] = 0u8
+            } else {
+                kept[back] = kept[back] + 1u8
+                carry = false
+            }
+        }
+        if carry {
+            var shift = digits_kept
+            while shift > 0usize {
+                kept[shift] = kept[shift - 1usize]
+                shift = shift - 1usize
+            }
+            kept[0usize] = 1u8
+            digits_kept += 1usize
+        }
+    }
+    // The kept digits are the value times `10^precision`; the point goes that many
+    // places from the right, and a sign is written even for a negative zero.
+    var text: [256]u8 = zero
+    var length = 0usize
+    if sign == 1u32 {
+        text[0usize] = 45u8
+        length = 1usize
+    }
+    if digits_kept > places {
+        var whole = 0usize
+        while whole < digits_kept - places {
+            text[length] = 48u8 + kept[whole]
+            length += 1usize
+            whole += 1usize
+        }
+    } else {
+        text[length] = 48u8
+        length += 1usize
+    }
+    if places > 0usize {
+        text[length] = 46u8
+        length += 1usize
+        var pad = 0usize
+        if digits_kept < places { pad = places - digits_kept }
+        while pad > 0usize {
+            text[length] = 48u8
+            length += 1usize
+            pad = pad - 1usize
+        }
+        var tail = 0usize
+        if digits_kept > places { tail = digits_kept - places }
+        while tail < digits_kept {
+            text[length] = 48u8 + kept[tail]
+            length += 1usize
+            tail += 1usize
+        }
+    }
+    ret push(b, text[0usize..length])
+}
+
 fn push_bin_u32(b: *Builder, v: u32) -> err {
     ret push_bin_u64(b, u64(v))
 }
