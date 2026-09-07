@@ -22,6 +22,7 @@ EXTERN __imp_ReadFile:QWORD
 EXTERN __imp_VirtualAlloc:QWORD
 EXTERN __imp_WideCharToMultiByte:QWORD
 EXTERN __imp_WriteFile:QWORD
+EXTERN __imp_SetFilePointerEx:QWORD
 
 .code
 
@@ -711,6 +712,40 @@ close_done:
     add rsp, 40
     ret
 neper_os_close ENDP
+
+PUBLIC neper_os_seek
+neper_os_seek PROC
+    push rbx
+    sub rsp, 48
+    mov qword ptr [rsp+40], 0
+    movzx r9d, r8b
+    cmp r9d, 2
+    ja seek_failed
+    mov rcx, [rcx]
+    lea r8, [rsp+40]
+    call qword ptr [__imp_SetFilePointerEx]
+    test eax, eax
+    jz seek_last_error
+    mov rax, [rsp+40]
+    xor edx, edx
+    jmp seek_done
+seek_last_error:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov edx, eax
+    xor eax, eax
+    jmp seek_done
+seek_failed:
+    mov ecx, 87
+    call np_error
+    mov edx, eax
+    xor eax, eax
+seek_done:
+    add rsp, 48
+    pop rbx
+    ret
+neper_os_seek ENDP
 
 PUBLIC neper_os_stdout
 neper_os_stdout PROC

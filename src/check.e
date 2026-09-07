@@ -2364,6 +2364,12 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     let (close_index, close_error) = add_seeded_function(c, os_module, "close", error_type, false)
     if close_error != ok { ret close_error }
     try add_seeded_parameter(c, close_index, "f", file)
+    let seek_whence = make_type(.Named, "SeekWhence", os_module)
+    let (seek_index, seek_error) = add_seeded_function(c, os_module, "seek", make_type(.Integer, "u64", os_module), true)
+    if seek_error != ok { ret seek_error }
+    try add_seeded_parameter(c, seek_index, "f", file)
+    try add_seeded_parameter(c, seek_index, "off", i64_type)
+    try add_seeded_parameter(c, seek_index, "whence", seek_whence)
     let (stdout_index, stdout_error) = add_seeded_function(c, os_module, "stdout", file, false)
     if stdout_error != ok { ret stdout_error }
     let (stderr_index, stderr_error) = add_seeded_function(c, os_module, "stderr", file, false)

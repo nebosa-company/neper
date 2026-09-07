@@ -48,27 +48,28 @@ fn append_name(output: *emit_x64.Buffer, name: str, width: usize) -> err {
 }
 
 fn append_thunks(output: *emit_x64.Buffer, idata_address: usize) -> err {
-    try emit_x64.little_u64(output, idata_address + 406usize)
-    try emit_x64.little_u64(output, idata_address + 420usize)
-    try emit_x64.little_u64(output, idata_address + 434usize)
-    try emit_x64.little_u64(output, idata_address + 448usize)
-    try emit_x64.little_u64(output, idata_address + 460usize)
-    try emit_x64.little_u64(output, idata_address + 478usize)
+    try emit_x64.little_u64(output, idata_address + 422usize)
+    try emit_x64.little_u64(output, idata_address + 436usize)
+    try emit_x64.little_u64(output, idata_address + 450usize)
+    try emit_x64.little_u64(output, idata_address + 464usize)
+    try emit_x64.little_u64(output, idata_address + 476usize)
     try emit_x64.little_u64(output, idata_address + 494usize)
-    try emit_x64.little_u64(output, idata_address + 512usize)
+    try emit_x64.little_u64(output, idata_address + 510usize)
     try emit_x64.little_u64(output, idata_address + 528usize)
     try emit_x64.little_u64(output, idata_address + 544usize)
-    try emit_x64.little_u64(output, idata_address + 566usize)
-    try emit_x64.little_u64(output, idata_address + 578usize)
+    try emit_x64.little_u64(output, idata_address + 560usize)
+    try emit_x64.little_u64(output, idata_address + 582usize)
     try emit_x64.little_u64(output, idata_address + 594usize)
-    try emit_x64.little_u64(output, idata_address + 616usize)
-    try emit_x64.little_u64(output, idata_address + 628usize)
-    try emit_x64.little_u64(output, idata_address + 654usize)
-    try emit_x64.little_u64(output, idata_address + 680usize)
-    try emit_x64.little_u64(output, idata_address + 708usize)
-    try emit_x64.little_u64(output, idata_address + 726usize)
-    try emit_x64.little_u64(output, idata_address + 750usize)
-    try emit_x64.little_u64(output, idata_address + 772usize)
+    try emit_x64.little_u64(output, idata_address + 610usize)
+    try emit_x64.little_u64(output, idata_address + 632usize)
+    try emit_x64.little_u64(output, idata_address + 644usize)
+    try emit_x64.little_u64(output, idata_address + 670usize)
+    try emit_x64.little_u64(output, idata_address + 696usize)
+    try emit_x64.little_u64(output, idata_address + 724usize)
+    try emit_x64.little_u64(output, idata_address + 742usize)
+    try emit_x64.little_u64(output, idata_address + 766usize)
+    try emit_x64.little_u64(output, idata_address + 788usize)
+    try emit_x64.little_u64(output, idata_address + 810usize)
     ret emit_x64.little_u64(output, 0usize)
 }
 
@@ -82,8 +83,8 @@ fn append_import_name(output: *emit_x64.Buffer, name: str) -> err {
 
 fn append_imports(output: *emit_x64.Buffer, raw_offset: usize, idata_address: usize) -> err {
     let lookup_address = idata_address + 40usize
-    let iat_address = idata_address + 216usize
-    let dll_address = idata_address + 392usize
+    let iat_address = idata_address + 224usize
+    let dll_address = idata_address + 408usize
     try emit_x64.little_u32(output, lookup_address)
     try emit_x64.little_u32(output, 0usize)
     try emit_x64.little_u32(output, 0usize)
@@ -114,7 +115,8 @@ fn append_imports(output: *emit_x64.Buffer, raw_offset: usize, idata_address: us
     try append_import_name(output, "CreateProcessW")
     try append_import_name(output, "SetHandleInformation")
     try append_import_name(output, "WaitForSingleObject")
-    ret append_import_name(output, "GetExitCodeProcess")
+    try append_import_name(output, "GetExitCodeProcess")
+    ret append_import_name(output, "SetFilePointerEx")
 }
 
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
@@ -129,14 +131,14 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_address = text_address + text_virtual_size
-    let idata_size = 794usize
+    let idata_size = 830usize
     let (idata_raw_size, idata_raw_error) = align_up(idata_size, 512usize)
     if idata_raw_error != ok { ret idata_raw_error }
     let idata_raw_offset = headers_size + text_raw_size
     let (idata_virtual_size, idata_virtual_error) = align_up(idata_size, 4096usize)
     if idata_virtual_error != ok { ret idata_virtual_error }
     let image_size = idata_address + idata_virtual_size
-    let import_address_address = idata_address + 216usize
+    let import_address_address = idata_address + 224usize
 
     try emit_x64.byte(output, 77usize)
     try emit_x64.byte(output, 90usize)
@@ -278,7 +280,7 @@ fn self_test() -> err {
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_raw_offset = headers_size + text_raw_size
     let idata_address = 4096usize + text_virtual_size
-    let import_address_address = idata_address + 216usize
+    let import_address_address = idata_address + 224usize
     let code_at = headers_size + runtime_pe_x64.size()
     if executable.count != idata_raw_offset + 1024usize { ret InvalidExecutable }
     if executable.bytes[0usize] != 77usize || executable.bytes[1usize] != 90usize || executable.bytes[60usize] != 128usize { ret InvalidExecutable }
@@ -296,6 +298,6 @@ fn self_test() -> err {
     // The import directory's first name RVA, which points 40 bytes into idata.
     let first_name_rva = idata_address + 40usize
     if executable.bytes[idata_raw_offset] != first_name_rva % 256usize || executable.bytes[idata_raw_offset + 1usize] != (first_name_rva / 256usize) % 256usize { ret InvalidExecutable }
-    if executable.bytes[idata_raw_offset + 392usize] != 75usize || executable.bytes[idata_raw_offset + 408usize] != 67usize { ret InvalidExecutable }
+    if executable.bytes[idata_raw_offset + 408usize] != 75usize || executable.bytes[idata_raw_offset + 424usize] != 67usize { ret InvalidExecutable }
     ret ok
 }

@@ -452,6 +452,14 @@ for format_case in format_too_few format_too_many format_no_arena format_printf_
         exit 1
     fi
 done
+# `os.seek` is the first `e.os` intrinsic added since the runtime blobs were
+# frozen. The file it works in is passed as an argument.
+seek_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_seek/src/main.e" "$repo" x64 linux "$test_build/os-seek-selfhost")
+[ "$seek_written" = 'executable written' ]
+chmod +x "$test_build/os-seek-selfhost"
+rm -f "$test_build/os-seek-output.txt"
+"$test_build/os-seek-selfhost" "$test_build/os-seek-output.txt"
+[ "$(wc -c < "$test_build/os-seek-output.txt")" = "11" ]
 # A comptime `str` parameter binds a string literal where the call is written, so
 # each distinct literal is its own instance and the body reads it as an ordinary
 # `str`.

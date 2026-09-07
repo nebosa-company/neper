@@ -411,6 +411,17 @@ foreach ($formatCase in @('format_too_few', 'format_too_many', 'format_no_arena'
     & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$formatCase\src\main.e") $repo 'x64' 'windows' 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 1) { throw "formatter fixture $formatCase was accepted" }
 }
+# `os.seek` is the first `e.os` intrinsic added since the runtime blobs were
+# frozen, so this also exercises a twenty-second kernel32 import and the offsets
+# that shift with it. The file it works in is passed as an argument.
+$seekPath = Join-Path $testBuild 'os-seek-selfhost.exe'
+$seekWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_seek\src\main.e') $repo 'x64' 'windows' $seekPath
+if ($LASTEXITCODE -ne 0 -or $seekWritten -ne 'executable written') { throw 'os.seek executable emission failed' }
+$seekFile = Join-Path $testBuild 'os-seek-output.txt'
+Remove-Item -LiteralPath $seekFile -ErrorAction SilentlyContinue
+& $seekPath $seekFile
+if ($LASTEXITCODE -ne 0) { throw 'os.seek did not move the cursor where it said it did' }
+if ((Get-Item -LiteralPath $seekFile).Length -ne 11) { throw 'seeking past the end extended the file' }
 # A comptime `str` parameter binds a string literal where the call is written, so
 # each distinct literal is its own instance and the body reads it as an ordinary
 # `str`.

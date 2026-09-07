@@ -136,6 +136,22 @@ neper_os_clock:
     add rsp, 16
     ret
 
+.global neper_os_seek
+neper_os_seek:
+    cmp edx, 2
+    ja .Lseek_failed
+    mov rdi, qword ptr [rdi]
+    mov eax, 8
+    syscall
+    test rax, rax
+    js .Lseek_failed
+    xor edx, edx
+    ret
+.Lseek_failed:
+    xor eax, eax
+    mov edx, 0x6f777ebf
+    ret
+
 .global neper_os_spawn
 neper_os_spawn:
     push rbx
