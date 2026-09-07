@@ -44,7 +44,7 @@ compiler = {
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
   ("Atomic[T] and memory orderings", 0, "absent from check.e"),
   ("extern with @import / @cc and the C ABI", 0.25, "declared and checked; calls rejected"),
-  ("Comptime str parameters and varargs", 0, "blocks str.format, io.printf"),
+  ("Comptime str parameters and varargs", 0.5, "link/comptime_str; varargs not started"),
   ("e.meta reflection", 0, "not started"),
   ("Spec 11 debug check table and trap protocol", 0, "NIR .Trap never emitted"),
   ("General comptime interpreter", 0.25, "integer const folding only"),
