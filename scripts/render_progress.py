@@ -62,7 +62,7 @@ compiler = {
   ("`.em` module format with Deps edges", 1, "src/em.e, fixtures/em"),
   ("Cross-module inlining, 40 NIR cap", 0, "not started"),
   ("Incremental rebuild on the edge rule", 0, "not started"),
-  ("os.thread_create / join / detach", 0.6, "link/os_thread runs a real thread on Windows and joins it. Linux answers Unsupported: the ELF output is static with no libc, so it needs a clone(2) trampoline and a futex join"),
+  ("os.thread_create / join / detach", 1, "link/os_thread runs and joins a real thread on both platforms: CreateThread on Windows, clone(2) over a self-allocated stack with a futex join on Linux. detach leaks its mapping, wanting a reaper"),
   ("Work-stealing pool, parallel parse and codegen", 0, "single-threaded"),
   ("Determinism harness", 0.25, "compiler fixed point only; no -jN or incremental cases"),
   ("DWARF, CodeView and .nepersym debug info", 0, "bootstrap only"),
