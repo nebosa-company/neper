@@ -47,29 +47,93 @@ fn append_name(output: *emit_x64.Buffer, name: str, width: usize) -> err {
     ret ok
 }
 
+// Every symbol the runtime imports from KERNEL32, in the order the import tables
+// list them. This is the only place the set is written down: the descriptor, the
+// lookup table, the address table and every thunk offset are computed from it, so
+// adding one is adding a line here.
+//
+// It used to be four hand-maintained lists and three magic offsets, and getting one
+// of them wrong produced a binary that loaded and then jumped through the wrong
+// thunk -- a segfault in whatever the program did first, with nothing pointing back
+// at the import table.
+fn import_count() -> usize {
+    ret 22usize
+}
+
+fn import_name(index: usize) -> str {
+    if index == 0usize { ret "CloseHandle" }
+    if index == 1usize { ret "CreateFileW" }
+    if index == 2usize { ret "ExitProcess" }
+    if index == 3usize { ret "FindClose" }
+    if index == 4usize { ret "FindFirstFileW" }
+    if index == 5usize { ret "FindNextFileW" }
+    if index == 6usize { ret "GetCommandLineW" }
+    if index == 7usize { ret "GetLastError" }
+    if index == 8usize { ret "GetStdHandle" }
+    if index == 9usize { ret "MultiByteToWideChar" }
+    if index == 10usize { ret "ReadFile" }
+    if index == 11usize { ret "VirtualAlloc" }
+    if index == 12usize { ret "WideCharToMultiByte" }
+    if index == 13usize { ret "WriteFile" }
+    if index == 14usize { ret "GetSystemTimeAsFileTime" }
+    if index == 15usize { ret "QueryPerformanceCounter" }
+    if index == 16usize { ret "QueryPerformanceFrequency" }
+    if index == 17usize { ret "CreateProcessW" }
+    if index == 18usize { ret "SetHandleInformation" }
+    if index == 19usize { ret "WaitForSingleObject" }
+    if index == 20usize { ret "GetExitCodeProcess" }
+    if index == 21usize { ret "SetFilePointerEx" }
+    ret ""
+}
+
+// Each entry is a 2-byte hint, the name, a terminator, and a pad to an even address.
+fn import_name_size(name: str) -> usize {
+    var size = name.len + 3usize
+    if size % 2usize != 0usize { size += 1usize }
+    ret size
+}
+
+// The descriptor is 20 bytes and a null descriptor follows it, so the lookup table
+// starts at 40. The address table follows the lookup table, the DLL name follows
+// that, and the hint/name entries follow the name. Both thunk arrays hold one entry
+// per import plus a null terminator.
+fn import_lookup_address(idata_address: usize) -> usize {
+    ret idata_address + 40usize
+}
+
+fn import_address_table(idata_address: usize) -> usize {
+    ret import_lookup_address(idata_address) + (import_count() + 1usize) * 8usize
+}
+
+fn import_dll_address(idata_address: usize) -> usize {
+    ret import_address_table(idata_address) + (import_count() + 1usize) * 8usize
+}
+
+// The DLL name is written in a 13-byte field with a terminator after it.
+fn import_names_address(idata_address: usize) -> usize {
+    ret import_dll_address(idata_address) + 14usize
+}
+
+fn import_thunk(idata_address: usize, index: usize) -> usize {
+    var address = import_names_address(idata_address)
+    var at = 0usize
+    while at < index {
+        address += import_name_size(import_name(at))
+        at += 1usize
+    }
+    ret address
+}
+
+fn import_section_size(idata_address: usize) -> usize {
+    ret import_thunk(idata_address, import_count()) - idata_address
+}
+
 fn append_thunks(output: *emit_x64.Buffer, idata_address: usize) -> err {
-    try emit_x64.little_u64(output, idata_address + 422usize)
-    try emit_x64.little_u64(output, idata_address + 436usize)
-    try emit_x64.little_u64(output, idata_address + 450usize)
-    try emit_x64.little_u64(output, idata_address + 464usize)
-    try emit_x64.little_u64(output, idata_address + 476usize)
-    try emit_x64.little_u64(output, idata_address + 494usize)
-    try emit_x64.little_u64(output, idata_address + 510usize)
-    try emit_x64.little_u64(output, idata_address + 528usize)
-    try emit_x64.little_u64(output, idata_address + 544usize)
-    try emit_x64.little_u64(output, idata_address + 560usize)
-    try emit_x64.little_u64(output, idata_address + 582usize)
-    try emit_x64.little_u64(output, idata_address + 594usize)
-    try emit_x64.little_u64(output, idata_address + 610usize)
-    try emit_x64.little_u64(output, idata_address + 632usize)
-    try emit_x64.little_u64(output, idata_address + 644usize)
-    try emit_x64.little_u64(output, idata_address + 670usize)
-    try emit_x64.little_u64(output, idata_address + 696usize)
-    try emit_x64.little_u64(output, idata_address + 724usize)
-    try emit_x64.little_u64(output, idata_address + 742usize)
-    try emit_x64.little_u64(output, idata_address + 766usize)
-    try emit_x64.little_u64(output, idata_address + 788usize)
-    try emit_x64.little_u64(output, idata_address + 810usize)
+    var at = 0usize
+    while at < import_count() {
+        try emit_x64.little_u64(output, import_thunk(idata_address, at))
+        at += 1usize
+    }
     ret emit_x64.little_u64(output, 0usize)
 }
 
@@ -82,9 +146,9 @@ fn append_import_name(output: *emit_x64.Buffer, name: str) -> err {
 }
 
 fn append_imports(output: *emit_x64.Buffer, raw_offset: usize, idata_address: usize) -> err {
-    let lookup_address = idata_address + 40usize
-    let iat_address = idata_address + 224usize
-    let dll_address = idata_address + 408usize
+    let lookup_address = import_lookup_address(idata_address)
+    let iat_address = import_address_table(idata_address)
+    let dll_address = import_dll_address(idata_address)
     try emit_x64.little_u32(output, lookup_address)
     try emit_x64.little_u32(output, 0usize)
     try emit_x64.little_u32(output, 0usize)
@@ -95,28 +159,12 @@ fn append_imports(output: *emit_x64.Buffer, raw_offset: usize, idata_address: us
     try append_thunks(output, idata_address)
     try append_name(output, "KERNEL32.dll", 13usize)
     try emit_x64.byte(output, 0usize)
-    try append_import_name(output, "CloseHandle")
-    try append_import_name(output, "CreateFileW")
-    try append_import_name(output, "ExitProcess")
-    try append_import_name(output, "FindClose")
-    try append_import_name(output, "FindFirstFileW")
-    try append_import_name(output, "FindNextFileW")
-    try append_import_name(output, "GetCommandLineW")
-    try append_import_name(output, "GetLastError")
-    try append_import_name(output, "GetStdHandle")
-    try append_import_name(output, "MultiByteToWideChar")
-    try append_import_name(output, "ReadFile")
-    try append_import_name(output, "VirtualAlloc")
-    try append_import_name(output, "WideCharToMultiByte")
-    try append_import_name(output, "WriteFile")
-    try append_import_name(output, "GetSystemTimeAsFileTime")
-    try append_import_name(output, "QueryPerformanceCounter")
-    try append_import_name(output, "QueryPerformanceFrequency")
-    try append_import_name(output, "CreateProcessW")
-    try append_import_name(output, "SetHandleInformation")
-    try append_import_name(output, "WaitForSingleObject")
-    try append_import_name(output, "GetExitCodeProcess")
-    ret append_import_name(output, "SetFilePointerEx")
+    var at = 0usize
+    while at < import_count() {
+        try append_import_name(output, import_name(at))
+        at += 1usize
+    }
+    ret ok
 }
 
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
@@ -131,14 +179,14 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_address = text_address + text_virtual_size
-    let idata_size = 830usize
+    let idata_size = import_section_size(idata_address)
     let (idata_raw_size, idata_raw_error) = align_up(idata_size, 512usize)
     if idata_raw_error != ok { ret idata_raw_error }
     let idata_raw_offset = headers_size + text_raw_size
     let (idata_virtual_size, idata_virtual_error) = align_up(idata_size, 4096usize)
     if idata_virtual_error != ok { ret idata_virtual_error }
     let image_size = idata_address + idata_virtual_size
-    let import_address_address = idata_address + 224usize
+    let import_address_address = import_address_table(idata_address)
 
     try emit_x64.byte(output, 77usize)
     try emit_x64.byte(output, 90usize)
@@ -280,7 +328,7 @@ fn self_test() -> err {
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_raw_offset = headers_size + text_raw_size
     let idata_address = 4096usize + text_virtual_size
-    let import_address_address = idata_address + 224usize
+    let import_address_address = import_address_table(idata_address)
     let code_at = headers_size + runtime_pe_x64.size()
     if executable.count != idata_raw_offset + 1024usize { ret InvalidExecutable }
     if executable.bytes[0usize] != 77usize || executable.bytes[1usize] != 90usize || executable.bytes[60usize] != 128usize { ret InvalidExecutable }
