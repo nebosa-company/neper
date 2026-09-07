@@ -402,6 +402,19 @@ $randWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $randWritten -ne 'executable written') { throw 'rand executable emission failed' }
 & $randPath
 if ($LASTEXITCODE -ne 0) { throw 'a generator does not match its reference stream' }
+# A comptime `str` parameter binds a string literal where the call is written, so
+# each distinct literal is its own instance and the body reads it as an ordinary
+# `str`.
+$comptimeStrPath = Join-Path $testBuild 'comptime-str-selfhost.exe'
+$comptimeStrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_str\src\main.e') $repo 'x64' 'windows' $comptimeStrPath
+if ($LASTEXITCODE -ne 0 -or $comptimeStrWritten -ne 'executable written') { throw 'comptime str executable emission failed' }
+& $comptimeStrPath
+if ($LASTEXITCODE -ne 0) { throw 'a comptime string was bound or instantiated wrongly' }
+# Only a string literal can bind one, and it binds nothing else.
+foreach ($comptimeStrCase in @('comptime_str_runtime', 'comptime_str_integer', 'comptime_str_type', 'comptime_str_for_usize')) {
+    $comptimeStrOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$comptimeStrCase\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1) { throw "comptime string fixture $comptimeStrCase was accepted" }
+}
 # `e.algo.uuid` reads no clock and no random source, so a UUID is a pure function of
 # its inputs and the fixture can pin the exact text of one.
 $uuidPath = Join-Path $testBuild 'algo-uuid-selfhost.exe'

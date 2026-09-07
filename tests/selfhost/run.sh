@@ -441,6 +441,20 @@ rand_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$rand_written" = 'executable written' ]
 chmod +x "$test_build/algo-rand-selfhost"
 "$test_build/algo-rand-selfhost"
+# A comptime `str` parameter binds a string literal where the call is written, so
+# each distinct literal is its own instance and the body reads it as an ordinary
+# `str`.
+comptime_str_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/comptime_str/src/main.e" "$repo" x64 linux "$test_build/comptime-str-selfhost")
+[ "$comptime_str_written" = 'executable written' ]
+chmod +x "$test_build/comptime-str-selfhost"
+"$test_build/comptime-str-selfhost"
+# Only a string literal can bind one, and it binds nothing else.
+for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_type comptime_str_for_usize; do
+    if $test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$comptime_str_case/src/main.e" "$repo" x64 linux >/dev/null 2>&1; then
+        printf '%s\n' "comptime string fixture $comptime_str_case was accepted" >&2
+        exit 1
+    fi
+done
 # `e.algo.uuid` reads no clock and no random source, so a UUID is a pure function of
 # its inputs and the fixture can pin the exact text of one.
 uuid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_uuid/src/main.e" "$repo" x64 linux "$test_build/algo-uuid-selfhost")

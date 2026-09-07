@@ -101,6 +101,7 @@ type FunctionSignature = struct {
 type ComptimeKind = enum u8 {
     Type,
     Integer,
+    Str,
 }
 
 type ComptimeParameter = struct {
@@ -113,6 +114,9 @@ type GenericArgument = struct {
     kind: ComptimeKind,
     ty: Type,
     value: usize,
+    // The literal exactly as it was written, quotes and escapes included: nothing
+    // here decodes it, so it interns and lowers as any other string literal does.
+    text: str,
     expression: usize,
     symbolic: bool,
     set: bool,
@@ -2148,6 +2152,11 @@ fn collect_comptime_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
     if !has_type { ret Unsupported }
     let (ty, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
     if type_error != ok { ret type_error }
+    if ty.kind == .String {
+        c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Str, ty: ty }
+        c.comptime_parameter_count += 1usize
+        ret ok
+    }
     if ty.kind != .Integer || !same(ty.name, "usize") { ret InvalidType }
     c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Integer, ty: ty }
     c.comptime_parameter_count += 1usize
@@ -3339,6 +3348,29 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
     ret (ty, ok)
 }
 
+// A comptime `str` argument must be a string literal. Nothing else has a value at the
+// point the instance is chosen, and the whole reason the parameter is comptime is that
+// the body -- or, for `format`, the expansion -- reads it while compiling.
+fn bind_text_argument(c: *Checker, function_index: usize, first_argument: usize, parameter_index: usize, spelling: str) -> err {
+    if function_index >= c.signature_function_count { ret InvalidType }
+    let function = c.function_generics[function_index]
+    if parameter_index < function.first_comptime { ret InvalidType }
+    let offset = parameter_index - function.first_comptime
+    if offset >= function.comptime_count { ret InvalidType }
+    let argument_index = first_argument + offset
+    if argument_index >= c.generic_argument_count { ret Capacity }
+    if c.generic_arguments[argument_index].set {
+        if c.generic_arguments[argument_index].kind != .Str { ret TypeMismatch }
+        if !same(c.generic_arguments[argument_index].text, spelling) { ret TypeMismatch }
+        ret ok
+    }
+    c.generic_arguments[argument_index].kind = .Str
+    c.generic_arguments[argument_index].text = spelling
+    c.generic_arguments[argument_index].symbolic = false
+    c.generic_arguments[argument_index].set = true
+    ret ok
+}
+
 fn bind_inferred_argument(c: *Checker, function_index: usize, first_argument: usize, parameter_index: usize, ty: Type, value: usize, kind: ComptimeKind) -> err {
     if function_index >= c.signature_function_count { ret InvalidType }
     let function = c.function_generics[function_index]
@@ -3401,7 +3433,11 @@ fn generic_arguments_equal(c: *Checker, function_index: usize, first: usize, sec
         if left.kind == .Type {
             if !type_equal(c, left.ty, right.ty) { ret false }
         } else {
-            if left.value != right.value { ret false }
+            if left.kind == .Str {
+                if !same(left.text, right.text) { ret false }
+            } else {
+                if left.value != right.value { ret false }
+            }
         }
         at += 1usize
     }
@@ -3532,7 +3568,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     var at = 0usize
     while at < generic.comptime_count {
         let parameter = c.comptime_parameters[generic.first_comptime + at]
-        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, expression: 0usize, symbolic: false, set: false }
+        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, text: "", expression: 0usize, symbolic: false, set: false }
         c.generic_argument_count += 1usize
         at += 1usize
     }
@@ -3553,6 +3589,15 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                         let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, ty, 0usize, .Type)
                         if bind_error != ok { ret (0usize, bind_error) }
                     } else {
+                    if parameter.kind == .Str {
+                        let argument_node = tree.nodes[node_index]
+                        if argument_node.kind != .LiteralExpr { ret (0usize, TypeMismatch) }
+                        let literal = c.tokens[argument_node.token_start]
+                        if literal.kind != .String && literal.kind != .RawString { ret (0usize, TypeMismatch) }
+                        let spelling = g.modules[module_index].text[literal.start..literal.end]
+                        let bind_error = bind_text_argument(c, template_index, first_argument, generic.first_comptime + argument_position, spelling)
+                        if bind_error != ok { ret (0usize, bind_error) }
+                    } else {
                         let (value, value_error) = array_length_value(c, g, tree, module_index, node_index)
                         if value_error == ok {
                             let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, invalid_type(), value, .Integer)
@@ -3566,6 +3611,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                             c.generic_arguments[argument_index].symbolic = true
                             c.generic_arguments[argument_index].set = true
                         }
+                    }
                     }
                 }
                 child_position += 1usize
@@ -4873,6 +4919,10 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         }
         let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
         if parameter_found {
+            if c.comptime_parameters[parameter_index].kind == .Str {
+                let (text_type, text_context_error) = apply_context(c, make_type(.String, "str", module_index), expected)
+                ret (text_type, text_context_error)
+            }
             if c.comptime_parameters[parameter_index].kind != .Integer { ret (invalid_type(), InvalidType) }
             let (argument, argument_found) = active_argument(c, parameter_index)
             if !argument_found {

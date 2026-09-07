@@ -204,6 +204,18 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
     ret (result, ok)
 }
 
+// A comptime `str` parameter is a string literal bound at the call site, so reading
+// one in the body is the same as writing that literal there: it interns and lowers
+// exactly as any other does, escapes and all.
+fn lower_comptime_text(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, spelling: str, token: lex.Token, builder: *nir.Builder) -> (usize, check.Type, err) {
+    let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+    if type_error != ok { ret (0usize, result_type, type_error) }
+    let (text_index, text_index_error) = nir.intern_string(builder, spelling)
+    if text_index_error != ok { ret (0usize, result_type, text_index_error) }
+    let (instruction, result, emit_error) = nir.emit(builder, .ConstString, result_type, true, text_index, token)
+    ret (result, result_type, emit_error)
+}
+
 // A float literal's width comes from the context where there is one and from the
 // literal's own suffix otherwise. An untyped float with neither is the same error a
 // caller gets for any literal whose type nothing fixes.
@@ -2152,6 +2164,10 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             let (parameter_index, has_parameter) = check.active_comptime_parameter(c, name)
             if has_parameter {
                 let (argument, has_argument) = check.active_argument(c, parameter_index)
+                if has_argument && argument.kind == .Str && !argument.symbolic {
+                    let (text_value, text_type, text_error) = lower_comptime_text(c, g, tree, module_index, node_index, expected, argument.text, token, builder)
+                    ret (text_value, text_type, text_error)
+                }
                 if !has_argument || argument.kind != .Integer || argument.symbolic { ret (0usize, zero, check.InvalidConstant) }
                 let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
                 if type_error != ok { ret (0usize, result_type, type_error) }
