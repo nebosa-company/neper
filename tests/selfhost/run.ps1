@@ -435,6 +435,14 @@ foreach ($comptimeStrCase in @('comptime_str_runtime', 'comptime_str_integer', '
     $comptimeStrOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$comptimeStrCase\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1) { throw "comptime string fixture $comptimeStrCase was accepted" }
 }
+# `e.io`'s streams: a reader and a writer are a context and a callback, so every
+# adapter is a value the caller owns. The callbacks the constructors install are
+# ordinary declarations (D94), which is what let the module be written at all.
+$ioStreamsPath = Join-Path $testBuild 'io-streams-selfhost.exe'
+$ioStreamsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\io_streams\src\main.e') $repo 'x64' 'windows' $ioStreamsPath
+if ($LASTEXITCODE -ne 0 -or $ioStreamsWritten -ne 'executable written') { throw 'io streams emission failed' }
+& $ioStreamsPath
+if ($LASTEXITCODE -ne 0) { throw 'an e.io stream adapter behaved wrongly' }
 # `io.printf[FMT]` is `format` over a buffer of its own, drained through a generated
 # sink. Its output is compared byte for byte against a file written from the format
 # strings, so the line that outgrows the 4 KiB buffer pins that the drains and the

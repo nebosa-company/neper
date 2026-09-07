@@ -76,7 +76,7 @@
     {"name":"e.crypto.x509","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.crypto.hash","e.crypto.sign","e.mem","e.time","e.fmt.asn1","e.fmt.pem","e.text.unicode"],"blocked_by":[]},
     {"name":"e.os","layer":3,"surface":"spec","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.mem"],"blocked_by":[]},
     {"name":"e.cancel","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.atomic","e.time"],"blocked_by":["post-m2-library-hardening"]},
-    {"name":"e.io","layer":4,"surface":"partial","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.mem","e.os","e.str"],"blocked_by":[]},
+    {"name":"e.io","layer":4,"surface":"source","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.mem","e.os","e.str"],"blocked_by":[]},
     {"name":"e.text.io","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.text.encoding"],"blocked_by":[]},
     {"name":"e.fs","layer":4,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.mem","e.os","e.path"],"blocked_by":[]},
     {"name":"e.fs.mmap","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.mem","e.os"],"blocked_by":[]},

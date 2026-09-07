@@ -612,6 +612,7 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_mem_reset") { ret ("reset", true) }
     if same(name, "neper_mem_stats") { ret ("stats", true) }
     if same(name, "neper_os_open") { ret ("open", true) }
+    if same(name, "neper_os_seek") { ret ("seek", true) }
     if same(name, "neper_os_read") { ret ("read", true) }
     if same(name, "neper_os_write") { ret ("write", true) }
     if same(name, "neper_os_close") { ret ("close", true) }

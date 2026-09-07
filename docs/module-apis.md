@@ -1694,6 +1694,7 @@ type LimitedReader = struct { source: Reader, remaining: u64 }
 type CountingWriter = struct { sink: Writer, count: u64 }
 type TeeWriter = struct { left: Writer, right: Writer }
 type MemoryWriter = struct { arena: *mem.Arena, start: usize, len: usize }
+type BufferState = struct { source: Reader, sink: Writer, buffer: []u8, off: usize, len: usize }
 error End
 error TooSmall
 error NoProgress
@@ -1726,8 +1727,36 @@ fn printf[FMT: str](args: ...) -> err
 fn writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err), flush_fn: fn(*void) -> err) -> Writer
 fn buffered_source(buffer: *BufferedReader) -> Reader
 fn buffered_sink(buffer: *BufferedWriter) -> Writer
+fn file_read(ctx: *void, dst: []u8) -> (usize, err)
+fn file_write(ctx: *void, src: []const u8) -> (usize, err)
+fn file_seek(ctx: *void, off: i64, whence: os.SeekWhence) -> (u64, err)
+fn slice_read(ctx: *void, dst: []u8) -> (usize, err)
+fn slice_write(ctx: *void, src: []const u8) -> (usize, err)
+fn limited_read(ctx: *void, dst: []u8) -> (usize, err)
+fn counting_write(ctx: *void, src: []const u8) -> (usize, err)
+fn tee_write(ctx: *void, src: []const u8) -> (usize, err)
+fn memory_write(ctx: *void, src: []const u8) -> (usize, err)
+fn buffered_read(ctx: *void, dst: []u8) -> (usize, err)
+fn buffered_write(ctx: *void, src: []const u8) -> (usize, err)
+fn buffered_writer_flush(ctx: *void) -> err
+fn forwarding_flush(ctx: *void) -> err
+fn no_flush(ctx: *void) -> err
 
 ```
+
+`BufferedReader` and `BufferedWriter` hold their state behind a `*void` so that the
+surface does not fix it, but the state has a layout and the layout is a type;
+`BufferState` is it, one type serving both directions. It is named here for the
+reason the callbacks are: it is public either way.
+
+The callbacks are declarations (D94). A constructor has to supply one, and the
+language has no visibility mechanism (section 12) and no closures, so each is a public
+symbol; a surface that omitted them described a module that could not be written. They
+are named after the constructor that installs them and are not otherwise useful: pass
+one to `reader`/`writer` and it will read whatever `ctx` you hand it as the state that
+constructor expects. `no_flush` is the flush of a sink that buffers nothing, and
+succeeds without work; `forwarding_flush` is the flush of an adapter that owns no
+buffer of its own and passes it to the sink it wraps.
 
 `limit` is a hard maximum; crossing it returns `TooSmall` without retaining a partial
 result. A callback returning `(0, ok)` for a non-empty request returns `NoProgress`.

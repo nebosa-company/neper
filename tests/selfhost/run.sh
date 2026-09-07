@@ -474,6 +474,13 @@ for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_
         exit 1
     fi
 done
+# `e.io`'s streams: a reader and a writer are a context and a callback, so every
+# adapter is a value the caller owns. The callbacks the constructors install are
+# ordinary declarations (D94), which is what let the module be written at all.
+io_streams_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/io_streams/src/main.e" "$repo" x64 linux "$test_build/io-streams-selfhost")
+[ "$io_streams_written" = 'executable written' ]
+chmod +x "$test_build/io-streams-selfhost"
+"$test_build/io-streams-selfhost"
 # `io.printf[FMT]` is `format` over a buffer of its own, drained through a generated
 # sink. Its output is compared byte for byte against a file written from the format
 # strings, so the line that outgrows the 4 KiB buffer pins that the drains and the

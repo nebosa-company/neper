@@ -377,3 +377,50 @@ is recoverable from the output by design.
 - **Self-hosting sets the language floor.** neper must be able to express a
   compiler — interned strings, growable arrays, hash maps — with no heap. This is
   a real constraint on minimalism and a useful forcing function.
+
+## D93 — `printf`'s sink is generated, not declared
+
+`str.builder_to` takes a `Sink`, whose `write` is `fn(*void, []const u8) -> err`.
+`io.printf` has to supply one, and `e.io` declares no function of that shape:
+`print` is `fn(s: []const u8) -> err`, a different arity, and section 12 exports every
+module-scope declaration, so a helper would be a public symbol its frozen surface does
+not name.
+
+**The compiler generates the sink**, one per module that calls `printf`, as a single
+call into `print`. This is available to `printf` and to nothing else for a reason
+particular to it: `printf` is an intrinsic (section 14, and the pack exception D19),
+so it has no source of its own in which a helper could be written and named. Where a
+function does have source, the helper it needs is a declaration and belongs in the
+surface — which is D94.
+
+## D94 — `e.io`'s callbacks are declarations
+
+`e.io`'s surface could not be implemented as it was frozen. Ten of its constructors —
+`file_reader`, `file_writer`, `slice_reader`, `slice_writer`, `file_seeker`,
+`limited_reader`, `counting_writer`, `tee_writer`, `buffered_source`, `buffered_sink`
+— each have to supply a callback of their own, and the fence declared no function of
+the callback shape. `reader`, `writer` and `writer_with_flush` take a caller-supplied
+callback; they are not callbacks themselves.
+
+There is no way to write one privately. Section 12 exports every module-scope
+declaration, the language having no visibility mechanism, and section 2's list of
+expression forms has no closure or function literal. So the callback a constructor
+needs is a public symbol whether or not the plan names it, and the only question was
+whether the plan would name it.
+
+**The fence now names them.** This records what the language already makes true
+rather than changing the design: the callbacks were always exported, and a surface
+that omitted them was describing a module that could not exist. The alternative
+readings were both worse. Allowing unlisted helpers would give up the property that
+the plan knows every public symbol, which is the whole point of freezing a surface.
+Making the ten constructors compiler intrinsics would work — it is what `printf`'s
+own sink does, for the reason D93 gives — but it would put `e.io`'s implementation
+inside the compiler, where it cannot be read as library source and cannot be changed
+without a compiler release.
+
+`printf` stays the exception rather than the precedent. Its sink is generated because
+`printf` is itself an intrinsic and has no source in which to name a helper; every
+constructor here has one.
+
+`e.str` does not have this problem and needed no change: `builder_to` takes its `Sink`
+from the caller.
