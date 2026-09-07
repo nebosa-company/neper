@@ -42,7 +42,7 @@ compiler = {
   ("Supplied format (rule 4)", 0.85, "link/str_format, link/io_printf expand scalars, str, bool and err; slices, arrays and a type's own format need the expansion to recurse"),
   ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
-  ("Atomic[T] and memory orderings", 0, "absent from check.e, and the blocker under `e.sync`: every one of its lock types is an `Atomic[u32]`, and `e.channel` is built on `e.sync`. Threads alone do not unblock either"),
+  ("Atomic[T] and memory orderings", 0, "a builtin type constructor like Vec[T,N], the thirteen e.atomic intrinsics generic on T and inferred from p, per-operation ordering rules, and lock-prefixed codegen. Blocks e.sync, whose every lock type is an Atomic[u32], and e.channel behind it"),
   ("extern with @import / @cc and the C ABI", 0.3, "check/cc_accepted: the checker half is done. No path routes a user extern into an import: PE resolves only runtime symbols, and link_elf.e is a 200-line static ET_EXEC with no PT_INTERP, .dynamic or PLT -- Linux needs dynamic linking built first"),
   ("Comptime str parameters and varargs", 0.95, "link/comptime_str, link/str_format, link/io_printf; two of the three pack intrinsics expand, `gpu.launch` does not"),
   ("e.meta reflection", 0.3, "link/meta_scalar answers kind, array_len and type_name at compile time; the field and member queries need a comptime value of struct type"),
