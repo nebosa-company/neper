@@ -88,7 +88,7 @@ tooling = [
  ("Build manifest with versions and SHA-256", 0.25, "artifact_hash.e covers .em only"),
  ("Generated source maps", 0, "not started"),
  ("Conformance corpus accept/reject/format/tokens/parse/tools", 0, "tests/conformance absent"),
- ("Module-plan validation in CI", 1, "scripts/check_module_plan.py, 128 modules"),
+ ("Module-plan validation in CI", 1, "check_module_plan.py 128 modules; check_module_surfaces.py 9 sources"),
  ("Reproducible-build check", 0.5, "compiler fixed point in both suites"),
  ("Generated-code benchmark corpus", 0.5, "benchmarks/llm_edit"),
  ("Self-host regression suite, both platforms", 1, "285 fixtures, run.ps1 + run.sh"),
