@@ -62,7 +62,7 @@ compiler = {
   ("`.em` module format with Deps edges", 1, "src/em.e, fixtures/em"),
   ("Cross-module inlining, 40 NIR cap", 0, "not started"),
   ("Incremental rebuild on the edge rule", 0, "not started"),
-  ("os.thread_create / join / detach", 0, "fenced in e.os and nothing else: `e.thread` is a three-function wrapper over them. Windows already imports two of the three calls; Linux needs a clone(2) trampoline, the ELF output being static with no libc"),
+  ("os.thread_create / join / detach", 0.3, "check/thread_create_accepted: the checker half, including that a generic entry point and its context agree. No runtime: Windows needs CreateThread, Linux a clone(2) trampoline and a futex join"),
   ("Work-stealing pool, parallel parse and codegen", 0, "single-threaded"),
   ("Determinism harness", 0.25, "compiler fixed point only; no -jN or incremental cases"),
   ("DWARF, CodeView and .nepersym debug info", 0, "bootstrap only"),
