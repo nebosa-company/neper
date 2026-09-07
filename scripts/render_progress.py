@@ -39,12 +39,12 @@ compiler = {
   ("Supplied cmp (rule 4)", 1, "link/sequence_cmp, tagged_union_cmp"),
   ("Supplied hash (rule 4)", 1, "link/supplied_hash, folded_hash"),
   ("Supplied eq (rule 4)", 1, "link/supplied_eq"),
-  ("Supplied format (rule 4)", 0.25, "checks arity and types; does not expand"),
+  ("Supplied format (rule 4)", 0.75, "link/str_format expands scalars, str and bool; `err` and a type's own format still unreachable"),
   ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
   ("Atomic[T] and memory orderings", 0, "absent from check.e"),
   ("extern with @import / @cc and the C ABI", 0.25, "declared and checked; calls rejected"),
-  ("Comptime str parameters and varargs", 0.75, "link/comptime_str, check/format_*; expansion not written"),
+  ("Comptime str parameters and varargs", 0.9, "link/comptime_str, link/str_format; the pack expands for `format`, not yet for `printf` or `launch`"),
   ("e.meta reflection", 0, "not started"),
   ("Spec 11 debug check table and trap protocol", 0, "NIR .Trap never emitted"),
   ("General comptime interpreter", 0.25, "integer const folding only"),
@@ -370,13 +370,15 @@ __GROUPS__
     rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>; the rest
     of <code>e.io</code> waits on <code>printf</code>, and so on comptime string
     parameters and varargs.</p>
-    <p><code>e.str</code> at 64 of 66 is everything a library can express. The two
-    left are the two the compiler still owes: <code>push_err</code> needs a runtime
-    error-name table, and <code>format</code> &mdash; rule&nbsp;4's supplied protocol,
-    the one still missing on the compiler side &mdash; needs comptime
-    <code>str</code> parameters and varargs. Those two are also what
-    <code>e.io</code>'s 41 remaining declarations wait on, so the same pair of
-    compiler features moves both modules.</p>
+    <p><code>e.str</code> at 64 of 66 is everything a library can express. Of the two
+    left, <code>format</code> now expands: a call becomes a generated function whose
+    body is a builder, a push per piece of the format string, and <code>done</code>.
+    What it cannot yet reach is a push that does not exist &mdash;
+    <code>push_err</code>, the other of the two, needs a runtime error-name table
+    &mdash; and a named type's own <code>format</code>, which needs the expansion to
+    recurse. <code>e.io</code>'s 41 remaining declarations wait on the same expansion
+    driving <code>printf</code>, plus a decision on the callbacks its constructors
+    need and its frozen surface does not name.</p>
   </div>
 </section>
 
