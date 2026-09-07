@@ -598,6 +598,18 @@ check_protocol_diagnostic() {
 check_protocol_diagnostic protocol_missing 'main.e:4:9: error[E-NAME-9999]: no `cmp` protocol for `Point`; declare `fn point_cmp` in the module that declares the type'
 check_protocol_diagnostic protocol_signature 'main.e:6:9: error[E-TYPE-0003]: protocol `point_cmp` must take `Point` by value as its first parameter'
 check_protocol_diagnostic protocol_no_fallback 'main.e:6:9: error[E-NAME-9999]: no `cmp` protocol for `Pair`; declare `fn pair_cmp` in the module that declares the type'
+# `ret` and `try` each reported one message for four different mistakes, so a returned
+# value of the wrong type said "ret is not legal inside defer" in a file with no defer.
+# Each situation now has its own text, and each is pinned to the message and not merely
+# to the rejection.
+check_protocol_diagnostic return_type 'main.e:5:5: error[E-TYPE-0002]: the returned value does not have the declared return type'
+check_protocol_diagnostic return_count 'main.e:4:5: error[E-TYPE-0003]: ret gives a different number of values than this function returns'
+check_protocol_diagnostic return_values_unexpected 'main.e:4:5: error[E-TYPE-0003]: this function returns nothing, so ret takes no value'
+check_protocol_diagnostic return_inside_defer 'main.e:5:9: error[E-TYPE-9999]: ret is not legal inside defer'
+check_protocol_diagnostic try_cast 'main.e:4:5: error[E-ERROR-9999]: try needs a call that can fail; a conversion cannot'
+check_protocol_diagnostic try_not_fallible 'main.e:8:5: error[E-ERROR-9999]: try needs a call whose last result is an err'
+check_protocol_diagnostic try_no_propagate 'main.e:8:5: error[E-ERROR-9999]: try propagates an err, so the enclosing function must return one'
+check_protocol_diagnostic try_inside_defer 'main.e:9:9: error[E-ERROR-9999]: try is not legal inside defer'
 generic_instances_executable_path="$test_build/generic-instances-selfhost"
 generic_instances_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_instances/src/main.e" "$repo" x64 linux "$generic_instances_executable_path")
 [ "$generic_instances_executable_written" = 'executable written' ]

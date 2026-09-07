@@ -14,6 +14,11 @@ error TypeMismatch
 error InvalidCondition
 error InvalidOperator
 error InvalidReturn
+// `InvalidReturn` used to cover four situations at once, so every one of them was
+// reported as the first: "ret is not legal inside defer", in files with no defer.
+error ReturnValuesUnexpected
+error ReturnCount
+error ReturnType
 error MissingReturn
 error UnknownCallable
 error ArgumentCount
@@ -25,6 +30,10 @@ error ConstantOverflow
 error InvalidConstant
 error InvalidFormat
 error InvalidTry
+// The same, for `try`: the defer case now keeps `InvalidTry` to itself.
+error TryCast
+error TryNotFallible
+error TryNoPropagate
 error InvalidSwitch
 error DuplicateCase
 error NonExhaustiveSwitch
@@ -37,7 +46,13 @@ type DiagnosticKind = enum u8 {
     IndexedElementsImmutable,
     BreakOutsideControl,
     ReturnInsideDefer,
+    ReturnValuesUnexpected,
+    ReturnCount,
+    ReturnType,
     TryInsideDefer,
+    TryCast,
+    TryNotFallible,
+    TryNoPropagate,
     DeferValue,
     ArrayElementCount,
     ArrayLengthType,
@@ -387,6 +402,14 @@ fn default_failure_kind(failure: err, node: syntax.Node) -> DiagnosticKind {
     if node.kind == .BreakStmt && failure == Unsupported { ret .BreakOutsideControl }
     if node.kind == .ReturnStmt && failure == InvalidReturn { ret .ReturnInsideDefer }
     if node.kind == .TryStmt && failure == InvalidTry { ret .TryInsideDefer }
+    // These carry their own situation, so they need no help from the node kind --
+    // which matters because a `try` in a binding reaches here as a BindingStmt.
+    if failure == ReturnValuesUnexpected { ret .ReturnValuesUnexpected }
+    if failure == ReturnCount { ret .ReturnCount }
+    if failure == ReturnType { ret .ReturnType }
+    if failure == TryCast { ret .TryCast }
+    if failure == TryNotFallible { ret .TryNotFallible }
+    if failure == TryNoPropagate { ret .TryNoPropagate }
     if node.kind == .DeferStmt && failure == ArgumentCount { ret .DeferValue }
     if node.kind == .BindingStmt && failure == ArgumentCount { ret .MultipleBindingCount }
     if node.kind == .ForStmt && failure == ImmutableAssignment { ret .IteratorImmutable }
@@ -5967,7 +5990,10 @@ fn binding_item_count(c: *Checker, binding: syntax.Node) -> usize {
 }
 
 fn check_try_results(c: *Checker, call: CallInfo, caller: Function) -> (usize, err) {
-    if call.function.external || !call_is_fallible(c, call) || !is_fallible(c, caller) { ret (0usize, InvalidTry) }
+    // Three different mistakes, and telling them apart is the point: the callee cannot
+    // fail, or the caller has no `err` to propagate through.
+    if call.function.external || !call_is_fallible(c, call) { ret (0usize, TryNotFallible) }
+    if !is_fallible(c, caller) { ret (0usize, TryNoPropagate) }
     ret (call.function.return_count - 1usize, ok)
 }
 
@@ -6075,7 +6101,7 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
         let (call, call_error) = check_call(c, g, tree, module_index, initializer)
         if call_error != ok { ret call_error }
         if call.is_cast {
-            if tried { ret InvalidTry }
+            if tried { ret TryCast }
             if tuple { ret ArgumentCount }
             let (actual, context_error) = apply_context(c, call.cast, declared)
             if context_error != ok { ret context_error }
@@ -6135,10 +6161,10 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
         at += 1usize
     }
     if function.return_count == 0usize {
-        if count != 0usize { ret InvalidReturn }
+        if count != 0usize { ret ReturnValuesUnexpected }
         ret ok
     }
-    if count != function.return_count { ret InvalidReturn }
+    if count != function.return_count { ret ReturnCount }
     var return_index = 0usize
     at = node.first_child
     while at < end {
@@ -6146,7 +6172,7 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             let (expected, return_type_error) = function_return(c, function, return_index)
             if return_type_error != ok { ret return_type_error }
             let (actual, expression_error) = check_expr(c, g, tree, module_index, tree.children[at].index, expected)
-            if expression_error == TypeMismatch { ret InvalidReturn }
+            if expression_error == TypeMismatch { ret ReturnType }
             if expression_error != ok { ret expression_error }
             return_index += 1usize
         }
@@ -6226,7 +6252,7 @@ fn check_try_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     let call_node = tree.nodes[child_index]
     let (call, call_error) = check_call(c, g, tree, module_index, call_node)
     if call_error != ok { ret call_error }
-    if call.is_cast { ret InvalidTry }
+    if call.is_cast { ret TryCast }
     let (remaining, try_error) = check_try_results(c, call, function)
     if try_error != ok { ret try_error }
     if remaining != 0usize { ret ArgumentCount }
@@ -6994,7 +7020,7 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let (call, call_error) = check_call(c, g, tree, module_index, initializer)
     if call_error != ok { ret call_error }
     if call.is_cast {
-        if tried { ret InvalidTry }
+        if tried { ret TryCast }
         ret ArgumentCount
     }
     let callee = call.function
@@ -7284,7 +7310,9 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 }
 
 fn diagnostic_code(kind: DiagnosticKind) -> str {
-    if kind == .TryInsideDefer { ret "E-ERROR-9999" }
+    if kind == .TryInsideDefer || kind == .TryCast || kind == .TryNotFallible || kind == .TryNoPropagate { ret "E-ERROR-9999" }
+    if kind == .ReturnCount || kind == .ReturnValuesUnexpected { ret "E-TYPE-0003" }
+    if kind == .ReturnType { ret "E-TYPE-0002" }
     if kind == .ArrayLengthType || kind == .InitializerType { ret "E-TYPE-0002" }
     if kind == .GenericTypeArity || kind == .IteratorSignature || kind == .ProtocolSignature { ret "E-TYPE-0003" }
     if kind == .EnumValueRange { ret "E-TYPE-0004" }
@@ -7300,7 +7328,13 @@ fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .IndexedElementsImmutable { ret "indexed assignment requires mutable elements" }
     if kind == .BreakOutsideControl { ret "break requires an enclosing loop or switch" }
     if kind == .ReturnInsideDefer { ret "ret is not legal inside defer" }
+    if kind == .ReturnValuesUnexpected { ret "this function returns nothing, so ret takes no value" }
+    if kind == .ReturnCount { ret "ret gives a different number of values than this function returns" }
+    if kind == .ReturnType { ret "the returned value does not have the declared return type" }
     if kind == .TryInsideDefer { ret "try is not legal inside defer" }
+    if kind == .TryCast { ret "try needs a call that can fail; a conversion cannot" }
+    if kind == .TryNotFallible { ret "try needs a call whose last result is an err" }
+    if kind == .TryNoPropagate { ret "try propagates an err, so the enclosing function must return one" }
     if kind == .DeferValue { ret "a deferred call returning a value must use `defer let _ = call()`" }
     if kind == .ArrayElementCount { ret "array literal element count does not match its length" }
     if kind == .ArrayLengthType { ret "array length must have type usize" }

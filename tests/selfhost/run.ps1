@@ -566,6 +566,26 @@ foreach ($case in $protocolDiagnostics) {
         throw "protocol diagnostic for $($case[0]) is wrong: $($protocolOutput -join "`n")"
     }
 }
+# `ret` and `try` each reported one message for four different mistakes, so a returned
+# value of the wrong type said "ret is not legal inside defer" in a file with no defer.
+# Each situation now has its own text, and each is pinned to the message and not merely
+# to the rejection.
+$returnDiagnostics = @(
+    @('return_type', 'main\.e:5:5: error\[E-TYPE-0002\]: the returned value does not have the declared return type'),
+    @('return_count', 'main\.e:4:5: error\[E-TYPE-0003\]: ret gives a different number of values than this function returns'),
+    @('return_values_unexpected', 'main\.e:4:5: error\[E-TYPE-0003\]: this function returns nothing, so ret takes no value'),
+    @('return_inside_defer', 'main\.e:5:9: error\[E-TYPE-9999\]: ret is not legal inside defer'),
+    @('try_cast', 'main\.e:4:5: error\[E-ERROR-9999\]: try needs a call that can fail; a conversion cannot'),
+    @('try_not_fallible', 'main\.e:8:5: error\[E-ERROR-9999\]: try needs a call whose last result is an err'),
+    @('try_no_propagate', 'main\.e:8:5: error\[E-ERROR-9999\]: try propagates an err, so the enclosing function must return one'),
+    @('try_inside_defer', 'main\.e:9:9: error\[E-ERROR-9999\]: try is not legal inside defer')
+)
+foreach ($case in $returnDiagnostics) {
+    $returnOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($returnOutput -join "`n") -notmatch $case[1]) {
+        throw "ret/try diagnostic for $($case[0]) is wrong: $($returnOutput -join "`n")"
+    }
+}
 $genericInstancesExecutablePath = Join-Path $testBuild 'generic-instances-selfhost.exe'
 $genericInstancesExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesExecutableWritten -ne 'executable written') { throw 'multi-instance generic PE executable emission failed' }
