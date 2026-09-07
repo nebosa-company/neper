@@ -3624,6 +3624,7 @@ type CallInfo = struct {
     alloc_arena: Type,
     mem_alloc: bool,
     mem_cast: bool,
+    mem_bitcast: bool,
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
@@ -3639,6 +3640,12 @@ type AllocInfo = struct {
 }
 
 type CastInfo = struct {
+    matched: bool,
+    function: Function,
+    target: Type,
+}
+
+type BitcastInfo = struct {
     matched: bool,
     function: Function,
     target: Type,
@@ -3696,6 +3703,85 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         ret (pointer, ok)
     }
     ret (invalid_type(), InvalidType)
+}
+
+// Spec section 8: `mem.bitcast` is legal only where neither type holds a pointer,
+// slice, function pointer, `type` or `Atomic` at any depth. That is what stops a pun
+// from casting away `const`, inventing provenance, changing an address space or
+// manufacturing a callable address, and it is a property of the type alone -- the
+// sizes are compared during lowering, where the layout is reachable.
+fn punnable_type(c: *Checker, ty: Type, depth: usize) -> bool {
+    if depth > c.aggregate_count + 1usize { ret false }
+    let (canonical, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok { ret false }
+    if canonical.kind == .Bool || canonical.kind == .Err || canonical.kind == .Integer || canonical.kind == .Float { ret true }
+    if canonical.kind == .Array {
+        if !canonical.has_element || canonical.element >= c.type_count { ret false }
+        ret punnable_type(c, c.types[canonical.element], depth + 1usize)
+    }
+    if canonical.kind != .Named && canonical.kind != .Tag { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, canonical)
+    if !found { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    // An enum and a tagged union's tag are their backing integer's bytes. Reading
+    // bytes that name no member is section 11's `invalid` check, not a type error.
+    if aggregate.kind == .Enum || canonical.kind == .Tag { ret punnable_type(c, aggregate.backing_type, depth + 1usize) }
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let field_index = aggregate.first_field + field_at
+        if field_index >= c.aggregate_field_count { ret false }
+        let member = c.aggregate_fields[field_index]
+        // A tagged union's void-payload arms carry no bytes of their own.
+        if member.ty.kind != .Void || aggregate.kind != .TaggedUnion {
+            if !punnable_type(c, member.ty, depth + 1usize) { ret false }
+        }
+        field_at += 1usize
+    }
+    if aggregate.kind == .TaggedUnion { ret punnable_type(c, aggregate.backing_type, depth + 1usize) }
+    ret true
+}
+
+// `mem.bitcast[T](x)` reads `x`'s bytes as a `T`, so a pun never needs a `union`. The
+// call names no declared function and is recognised the way `mem.alloc[T]` and
+// `mem.cast[P]` are.
+fn bitcast_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (BitcastInfo, err) {
+    var info: BitcastInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.mem") || !same(member, "bitcast") { ret (info, ok) }
+    info.matched = true
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let (punned, punned_error) = comptime_type(c, g, tree, module_index, type_index)
+    if punned_error != ok { ret (info, punned_error) }
+    if !punnable_type(c, punned, 0usize) { ret (info, InvalidType) }
+    var function: Function = zero
+    function.name = "bitcast"
+    function.module_index = target_module
+    function.parameter_count = 1usize
+    function.return_count = 1usize
+    function.intrinsic = true
+    info.function = function
+    info.target = punned
+    ret (info, ok)
 }
 
 // Spec section 8: a pointer type -- `*void` included -- is only reached through
@@ -3858,11 +3944,19 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.cast = conversion.target
                             info.mem_cast = true
                         } else {
+                        let (pun, pun_error) = bitcast_info(c, g, tree, module_index, receiver)
+                        if pun_error != ok { ret (info, pun_error) }
+                        if pun.matched {
+                            info.function = pun.function
+                            info.cast = pun.target
+                            info.mem_bitcast = true
+                        } else {
                             let (template_index, template_error) = bracket_function(c, g, tree, module_index, receiver)
                             if template_error != ok { ret (info, template_error) }
                             let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, template_index)
                             if specialize_error != ok { ret (info, specialize_error) }
                             info.function = c.functions[specialized_index]
+                        }
                         }
                         }
                         has_function = true
@@ -3958,6 +4052,17 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         let (source, source_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                         if source_error != ok { ret (info, source_error) }
                         if source.kind != .Pointer { ret (info, TypeMismatch) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
+                    if info.mem_bitcast {
+                        let (punned, punned_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                        if punned_error != ok { ret (info, punned_error) }
+                        // An untyped literal has no bytes yet, so there is nothing to
+                        // read as another type.
+                        if is_untyped(punned) { ret (info, MissingContext) }
+                        if !punnable_type(c, punned, 0usize) { ret (info, TypeMismatch) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -4330,7 +4435,7 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         ret (make_type(.TypeParameter, "", 0usize), ok)
     }
     if index >= call.function.return_count { ret (invalid_type(), InvalidType) }
-    if call.mem_cast {
+    if call.mem_cast || call.mem_bitcast {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (call.cast, ok)
     }

@@ -394,6 +394,14 @@ $strBuilderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $strBuilderWritten -ne 'executable written') { throw 'str builder executable emission failed' }
 & $strBuilderPath
 if ($LASTEXITCODE -ne 0) { throw 'the string builder or one of its pushes is wrong' }
+# `mem.bitcast` reads a value's bytes as another type of the same size, which is what
+# lets a pun avoid a `union`. A scalar lives in a register and an aggregate is an
+# address, so the fixture covers all four shapes as well as the bit patterns.
+$bitcastPath = Join-Path $testBuild 'mem-bitcast-selfhost.exe'
+$bitcastWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_bitcast\src\main.e') $repo 'x64' 'windows' $bitcastPath
+if ($LASTEXITCODE -ne 0 -or $bitcastWritten -ne 'executable written') { throw 'mem.bitcast executable emission failed' }
+& $bitcastPath
+if ($LASTEXITCODE -ne 0) { throw 'mem.bitcast changed a value''s bytes or lost a shape' }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

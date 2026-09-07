@@ -57,6 +57,7 @@ type Opcode = enum u8 {
     FunctionAddress = 45,
     IndirectCall = 46,
     ConstFloat = 47,
+    Bitcast = 48,
 }
 
 type Instruction = struct {

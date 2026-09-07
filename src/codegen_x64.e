@@ -160,6 +160,39 @@ fn float_sign_bit(width: usize) -> usize {
     ret 9223372036854775808usize
 }
 
+// The bits a bitcast hands back are the bits it was given; what changes is how the
+// target's width is held in a general register. A signed target is sign-extended, an
+// unsigned one and a float are zero-extended, and a 64-bit one is already whole.
+fn bitcast_scalar(ty: check.Type) -> bool {
+    ret ty.kind == .Integer || ty.kind == .Float || ty.kind == .Bool || ty.kind == .Err
+}
+
+fn bitcast_width(ty: check.Type) -> usize {
+    if ty.kind == .Integer { ret integer_width(ty) }
+    if ty.kind == .Float { ret float_width(ty) }
+    if ty.kind == .Bool { ret 8usize }
+    if ty.kind == .Err { ret 32usize }
+    ret 0usize
+}
+
+fn select_bitcast(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    if instruction.operand_count != 1usize || !instruction.has_result { ret Unsupported }
+    let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+    if source_error != ok { ret source_error }
+    let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
+    if destination_error != ok { ret destination_error }
+    if bitcast_scalar(instruction.ty) {
+        let width = bitcast_width(instruction.ty)
+        if width == 0usize { ret Unsupported }
+        try emit_x64.normalize_integer(output, destination, source, width, signed_integer(instruction.ty))
+    } else {
+        // An aggregate is already a place. Its bytes do not move; only the type
+        // the rest of selection reads them through changes.
+        if destination != source { try emit_x64.mov_register(output, destination, source) }
+    }
+    ret store_result(allocations, instruction.result, destination, output)
+}
+
 fn storage_width(instruction: nir.Instruction) -> usize {
     if instruction.immediate == 1usize || instruction.immediate == 2usize || instruction.immediate == 4usize || instruction.immediate == 8usize { ret instruction.immediate * 8usize }
     if instruction.ty.kind == .Bool { ret 8usize }
@@ -903,6 +936,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         let instruction = builder.instructions[at]
         context.failure_token = instruction.token
         context.failure_instruction = at
+        if instruction.opcode == .Bitcast {
+            try select_bitcast(builder, instruction, allocations, output)
+        } else {
         if float_operation(builder, current, instruction) {
             try select_float(builder, current, instruction, allocations, output)
         } else {
@@ -1236,6 +1272,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             }
             }
             }
+        }
         }
         }
         }

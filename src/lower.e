@@ -224,6 +224,51 @@ fn float_literal_bits(c: *check.Checker, text: str, node: syntax.Node, expected:
     ret (pattern, ty, ok)
 }
 
+// Section 8 requires the operand's size to equal the target's, and that comparison
+// needs the layout, which the checker cannot reach: `layout` is built on `check`.
+// Everything else about the pun -- that neither type holds a pointer, slice or
+// callable at any depth -- is settled while checking.
+fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (source_info, source_info_error) = layout.type_info(c, source_type)
+    if source_info_error != ok { ret (0usize, source_info_error) }
+    let (target_info, target_info_error) = layout.type_info(c, into)
+    if target_info_error != ok { ret (0usize, target_info_error) }
+    if source_info.size != target_info.size { ret (0usize, check.TypeMismatch) }
+    // A scalar is a value in a register and an aggregate is an address. The bytes are
+    // the same either way, so a pun that crosses between the two has to move them.
+    let source_is_place = aggregate_value(c, source_type)
+    let target_is_place = aggregate_value(c, into)
+    if source_is_place == target_is_place {
+        let (instruction, result, emit_error) = nir.emit(builder, .Bitcast, into, true, 0usize, token)
+        if emit_error != ok { ret (0usize, emit_error) }
+        let operand_error = nir.add_operand(builder, instruction, source)
+        if operand_error != ok { ret (0usize, operand_error) }
+        ret (result, ok)
+    }
+    if target_is_place {
+        // Read as an aggregate, the scalar needs somewhere to be read from: it is
+        // spilled to a slot of its own and the slot is the result.
+        var slots = (target_info.size + 7usize) / 8usize
+        if slots == 0usize { slots = 1usize }
+        let (stack_instruction, slot, stack_error) = nir.emit(builder, .Stack, into, true, slots, token)
+        if stack_error != ok { ret (0usize, stack_error) }
+        let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, source_type, false, source_info.size, token)
+        if store_error != ok { ret (0usize, store_error) }
+        let address_error = nir.add_operand(builder, store_instruction, slot)
+        if address_error != ok { ret (0usize, address_error) }
+        let value_error = nir.add_operand(builder, store_instruction, source)
+        if value_error != ok { ret (0usize, value_error) }
+        ret (slot, ok)
+    }
+    // The mirror: read as a scalar, the aggregate's bytes are loaded from where they
+    // already sit, at the into's width and signedness.
+    let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, into, true, target_info.size, token)
+    if load_error != ok { ret (0usize, load_error) }
+    let address_operand_error = nir.add_operand(builder, load_instruction, source)
+    if address_operand_error != ok { ret (0usize, address_operand_error) }
+    ret (loaded, ok)
+}
+
 fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
     if constant_index >= c.constant_count || c.constants[constant_index].state != 2u8 || ty.kind != .Integer { ret (0usize, check.InvalidConstant) }
     let width = check.integer_width(ty)
@@ -2254,7 +2299,7 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if node.kind == .CallExpr {
         let (call_info, call_info_error) = check.check_call(c, g, tree, module_index, node)
         if call_info_error != ok { ret (0usize, zero, call_info_error) }
-        if call_info.is_cast || call_info.mem_cast {
+        if call_info.is_cast || call_info.mem_cast || call_info.mem_bitcast {
             var argument_index = 0usize
             var child_position = 0usize
             let end = node.first_child + node.child_count
@@ -2274,6 +2319,10 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             // `mem.cast` only retypes: the pointer handed in is the pointer handed
             // back, so the operand passes through with no instruction of its own.
             if call_info.mem_cast { ret (argument, call_info.cast, ok) }
+            if call_info.mem_bitcast {
+                let (punned, punned_error) = lower_bitcast(c, argument, lowered_argument_type, call_info.cast, builder, c.tokens[node.token_start])
+                ret (punned, call_info.cast, punned_error)
+            }
             let (instruction, result, emit_error) = nir.emit(builder, .Cast, call_info.cast, true, 0usize, c.tokens[node.token_start])
             if emit_error != ok { ret (0usize, call_info.cast, emit_error) }
             let add_error = nir.add_operand(builder, instruction, argument)

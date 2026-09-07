@@ -434,6 +434,13 @@ str_builder_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$str_builder_written" = 'executable written' ]
 chmod +x "$test_build/str-builder-selfhost"
 "$test_build/str-builder-selfhost"
+# `mem.bitcast` reads a value's bytes as another type of the same size, which is what
+# lets a pun avoid a `union`. A scalar lives in a register and an aggregate is an
+# address, so the fixture covers all four shapes as well as the bit patterns.
+bitcast_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mem_bitcast/src/main.e" "$repo" x64 linux "$test_build/mem-bitcast-selfhost")
+[ "$bitcast_written" = 'executable written' ]
+chmod +x "$test_build/mem-bitcast-selfhost"
+"$test_build/mem-bitcast-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
