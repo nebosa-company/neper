@@ -370,16 +370,13 @@ __GROUPS__
     rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>; the rest
     of <code>e.io</code> waits on <code>printf</code>, and so on comptime string
     parameters and varargs.</p>
-    <p><code>e.str</code> at 58 of 66 is the builder half, which
-    <code>mem.view</code> unblocked and <code>mem.cast</code> completed by making a
-    <code>Sink</code> context constructible, plus the read-only half and the integer
-    parsers, none of which needed compiler work at all. The compiler side of the
-    remaining 8 is now clear: float lowering and <code>mem.bitcast</code> have both
-    landed, so the four float pushes and two float parsers are library work again,
-    and they are the largest piece of it. <code>push_err</code> still waits on a
-    runtime error-name table, and <code>format</code> &mdash; rule&nbsp;4's supplied
-    protocol, the one still missing on the compiler side &mdash; on comptime
-    <code>str</code> parameters and varargs.</p>
+    <p><code>e.str</code> at 64 of 66 is everything a library can express. The two
+    left are the two the compiler still owes: <code>push_err</code> needs a runtime
+    error-name table, and <code>format</code> &mdash; rule&nbsp;4's supplied protocol,
+    the one still missing on the compiler side &mdash; needs comptime
+    <code>str</code> parameters and varargs. Those two are also what
+    <code>e.io</code>'s 41 remaining declarations wait on, so the same pair of
+    compiler features moves both modules.</p>
   </div>
 </section>
 
