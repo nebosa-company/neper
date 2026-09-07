@@ -1,5 +1,6 @@
 // Type-checking foundation. Unsupported forms fail explicitly.
 
+use e.mem
 use graph
 use lex
 use parse
@@ -308,6 +309,10 @@ type Checker = struct {
     error_values: []usize,
     error_spellings: []str,
     error_count: usize,
+    // Lowering has to build strings that appear in no source text -- a reflected type
+    // name, and the qualified error names above -- and interning takes a spelling, so
+    // there has to be somewhere to build them.
+    arena: *mem.Arena,
     function_count: usize,
     parameter_count: usize,
     return_type_count: usize,
@@ -3710,6 +3715,13 @@ type CallInfo = struct {
     alloc_return: Type,
     alloc_arena: Type,
     mem_alloc: bool,
+    // `e.meta`'s scalar reflection: which question was asked and the answer, both
+    // settled here. Section 9 keeps reflection entirely at compile time, so what
+    // reaches lowering is a constant and never the type itself.
+    meta_query: MetaQuery,
+    meta_value: usize,
+    meta_name: str,
+    meta_result: Type,
     mem_cast: bool,
     mem_bitcast: bool,
     formatter: bool,
@@ -3721,6 +3733,22 @@ type CallInfo = struct {
     protocol_type: Type,
     indirect: bool,
     indirect_type: Type,
+}
+
+type MetaQuery = enum u8 {
+    None,
+    Kind,
+    ArrayLen,
+    TypeName,
+}
+
+type MetaInfo = struct {
+    matched: bool,
+    query: MetaQuery,
+    result: Type,
+    value: usize,
+    name: str,
+    function: Function,
 }
 
 type AllocInfo = struct {
@@ -4183,6 +4211,95 @@ fn cast_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     ret (info, ok)
 }
 
+// Section 9's kinds, in the order `e.meta.TypeKind` declares them. A reflected kind
+// is that enum's value, so the two lists are one list and have to stay so.
+fn meta_kind_value(c: *Checker, ty: Type) -> (usize, err) {
+    if ty.kind == .Integer || ty.kind == .UntypedInteger { ret (0usize, ok) }
+    if ty.kind == .Float || ty.kind == .UntypedFloat { ret (1usize, ok) }
+    if ty.kind == .Bool { ret (2usize, ok) }
+    if ty.kind == .Err { ret (3usize, ok) }
+    if ty.kind == .Pointer { ret (4usize, ok) }
+    if ty.kind == .Slice || ty.kind == .String { ret (5usize, ok) }
+    if ty.kind == .Array { ret (6usize, ok) }
+    if ty.kind == .Named || ty.kind == .Tag {
+        let (aggregate_index, found) = aggregate_for_type(c, ty)
+        if !found { ret (0usize, InvalidType) }
+        let aggregate = c.aggregates[aggregate_index]
+        if aggregate.kind == .Enum { ret (8usize, ok) }
+        if aggregate.kind == .TaggedUnion { ret (9usize, ok) }
+        if aggregate.kind == .Struct { ret (7usize, ok) }
+        // A bare `union` is the one aggregate section 9's list has no kind for.
+        ret (0usize, Unsupported)
+    }
+    ret (0usize, InvalidType)
+}
+
+// `e.meta`'s scalar half: three questions whose answer is a constant the checker
+// already holds. `fields`, `members`, `get` and `set` are not here -- they need a
+// comptime value of struct type, which the language does not carry yet.
+fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (MetaInfo, err) {
+    var info: MetaInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.meta") { ret (info, ok) }
+    var query: MetaQuery = .None
+    if same(member, "kind") { query = .Kind }
+    if same(member, "array_len") { query = .ArrayLen }
+    if same(member, "type_name") { query = .TypeName }
+    if query == .None { ret (info, ok) }
+    info.matched = true
+    info.query = query
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let (subject, subject_error) = comptime_type(c, g, tree, module_index, type_index)
+    if subject_error != ok { ret (info, subject_error) }
+    if subject.kind == .Void || subject.kind == .Invalid { ret (info, InvalidType) }
+    var function: Function = zero
+    function.name = member
+    function.module_index = target_module
+    function.parameter_count = 0usize
+    function.return_count = 1usize
+    function.intrinsic = true
+    info.function = function
+    if query == .Kind {
+        let (value, value_error) = meta_kind_value(c, subject)
+        if value_error != ok { ret (info, value_error) }
+        info.value = value
+        info.result = make_type(.Named, "TypeKind", target_module)
+        ret (info, ok)
+    }
+    if query == .ArrayLen {
+        if subject.kind != .Array { ret (info, InvalidType) }
+        info.value = subject.array_length
+        info.result = make_type(.Integer, "usize", target_module)
+        ret (info, ok)
+    }
+    // A composite has no written name of its own, and building one -- `[]u8`, `*T` --
+    // means spelling a nesting and a length, which this does not do yet.
+    if subject.name.len == 0usize { ret (info, Unsupported) }
+    info.name = subject.name
+    info.result = make_type(.String, "str", target_module)
+    ret (info, ok)
+}
+
 fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (AllocInfo, err) {
     var info: AllocInfo = zero
     if receiver.kind != .BracketPostfix { ret (info, ok) }
@@ -4493,6 +4610,17 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     }
                 } else {
                     if receiver.kind == .BracketPostfix {
+                        let (reflection, reflection_error) = meta_info(c, g, tree, module_index, receiver)
+                        if reflection_error != ok { ret (info, reflection_error) }
+                        if reflection.matched {
+                            info.function = reflection.function
+                            info.meta_query = reflection.query
+                            info.meta_value = reflection.value
+                            info.meta_name = reflection.name
+                            info.meta_result = reflection.result
+                            has_function = true
+                            ret (info, ok)
+                        }
                         let (allocation, allocation_error) = alloc_info(c, g, tree, module_index, receiver)
                         if allocation_error != ok { ret (info, allocation_error) }
                         if allocation.matched {
@@ -5058,6 +5186,10 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         ret (call.cast, ok)
     }
 
+    if call.meta_query != .None {
+        if index == 0usize { ret (call.meta_result, ok) }
+        ret (invalid_type(), ArgumentCount)
+    }
     if call.mem_alloc {
         if index == 0usize { ret (call.alloc_return, ok) }
         if index == 1usize { ret (make_type(.Err, "err", call.function.module_index), ok) }

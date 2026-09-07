@@ -3,6 +3,7 @@
 
 use artifact_hash
 use check
+use e.mem
 use decimal
 use graph
 use layout
@@ -240,6 +241,42 @@ fn float_literal_bits(c: *check.Checker, text: str, node: syntax.Node, expected:
 // needs the layout, which the checker cannot reach: `layout` is built on `check`.
 // Everything else about the pun -- that neither type holds a pointer, slice or
 // callable at any depth -- is settled while checking.
+// Reflection is answered while checking (spec section 9 keeps all of it at compile
+// time), so a call to `e.meta` lowers to the constant and nothing else.
+fn emit_reflection(c: *check.Checker, call: check.CallInfo, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    results.call = call
+    results.count = 1usize
+    if call.meta_query == .TypeName {
+        let (name_index, intern_error) = nir.intern_string(builder, quoted_text(c, call.meta_name))
+        if intern_error != ok { ret intern_error }
+        let (name_instruction, name, name_error) = nir.emit(builder, .ConstString, call.meta_result, true, name_index, token)
+        if name_error != ok { ret name_error }
+        results.values[0usize] = name
+        ret ok
+    }
+    let (value_instruction, value, value_error) = nir.emit(builder, .ConstInteger, call.meta_result, true, call.meta_value, token)
+    if value_error != ok { ret value_error }
+    results.values[0usize] = value
+    ret ok
+}
+
+// Text that is in no source file, wrapped so `nir.intern_string` can take it: the
+// interner works on spellings, and a reflected type name has never been written as a
+// literal anywhere. Type names are `[A-Za-z0-9_.]` throughout, so quotes are the whole
+// encoding.
+fn quoted_text(c: *check.Checker, text: str) -> str {
+    let (storage, storage_error) = mem.alloc[u8](c.arena, text.len + 2usize)
+    if storage_error != ok { ret "" }
+    storage[0usize] = 34u8
+    var at = 0usize
+    while at < text.len {
+        storage[1usize + at] = text[at]
+        at += 1usize
+    }
+    storage[text.len + 1usize] = 34u8
+    ret storage[..]
+}
+
 fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (source_info, source_info_error) = layout.type_info(c, source_type)
     if source_info_error != ok { ret (0usize, source_info_error) }
@@ -1469,6 +1506,7 @@ fn emit_mem_view(c: *check.Checker, call: check.CallInfo, arguments: []usize, ar
 }
 
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    if call.meta_query != .None { ret emit_reflection(c, call, builder, token, results) }
     if call.function.intrinsic && check.same(call.function.name, "view") {
         ret emit_mem_view(c, call, arguments, argument_count, builder, token, results)
     }

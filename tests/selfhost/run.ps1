@@ -435,6 +435,14 @@ foreach ($comptimeStrCase in @('comptime_str_runtime', 'comptime_str_integer', '
     $comptimeStrOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$comptimeStrCase\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1) { throw "comptime string fixture $comptimeStrCase was accepted" }
 }
+# `e.meta`'s scalar reflection. Section 9 keeps all of it at compile time, so each
+# call is a constant by the time lowering sees it and the binary carries no type
+# information at all.
+$metaPath = Join-Path $testBuild 'meta-scalar-selfhost.exe'
+$metaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\meta_scalar\src\main.e') $repo 'x64' 'windows' $metaPath
+if ($LASTEXITCODE -ne 0 -or $metaWritten -ne 'executable written') { throw 'meta reflection emission failed' }
+& $metaPath
+if ($LASTEXITCODE -ne 0) { throw 'a reflected type answer was wrong' }
 # `e.io`'s streams: a reader and a writer are a context and a callback, so every
 # adapter is a value the caller owns. The callbacks the constructors install are
 # ordinary declarations (D94), which is what let the module be written at all.

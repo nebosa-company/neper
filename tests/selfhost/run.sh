@@ -474,6 +474,13 @@ for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_
         exit 1
     fi
 done
+# `e.meta`'s scalar reflection. Section 9 keeps all of it at compile time, so each
+# call is a constant by the time lowering sees it and the binary carries no type
+# information at all.
+meta_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/meta_scalar/src/main.e" "$repo" x64 linux "$test_build/meta-scalar-selfhost")
+[ "$meta_written" = 'executable written' ]
+chmod +x "$test_build/meta-scalar-selfhost"
+"$test_build/meta-scalar-selfhost"
 # `e.io`'s streams: a reader and a writer are a context and a callback, so every
 # adapter is a value the caller owns. The callbacks the constructors install are
 # ordinary declarations (D94), which is what let the module be written at all.

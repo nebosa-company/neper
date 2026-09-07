@@ -1731,6 +1731,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         checker.error_values = error_values
         checker.error_spellings = error_spellings
         checker.error_count = error_count
+        checker.arena = a
         var builder: nir.Builder = zero
         var signatures: nir.Signatures = zero
         try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count, checker.function_count > 256usize)
