@@ -3773,6 +3773,9 @@ fn formatter_push_name(c: *check.Checker, ty: check.Type, verb: check.FormatVerb
         if check.same(canonical.name, "f64") { ret ("push_f64_fixed", ok) }
         ret ("", check.InvalidFormat)
     }
+    // `err` is the one verb whose push is generated rather than exported, so the name
+    // is right but the call has to find this module's instance of it.
+    if canonical.kind == .Err { ret ("push_err", ok) }
     if canonical.kind == .Bool { ret ("push_bool", ok) }
     if canonical.kind == .String { ret ("push", ok) }
     if canonical.kind == .Integer {
@@ -3793,9 +3796,8 @@ fn formatter_push_name(c: *check.Checker, ty: check.Type, verb: check.FormatVerb
         if check.same(canonical.name, "f64") { ret ("push_f64", ok) }
         ret ("", check.InvalidFormat)
     }
-    // `err`, slices, arrays and enums are formattable under section 4 but reach a push
-    // this expansion does not write yet: `push_err` does not exist, and the rest need
-    // the expansion to recurse into an element at a time.
+    // The slices, arrays and enums are formattable under section 4 but need the
+    // expansion to recurse into an element at a time, which it does not do yet.
     ret ("", check.Unsupported)
 }
 
@@ -3878,8 +3880,22 @@ fn lower_formatter_pieces(c: *check.Checker, g: *graph.Graph, module_index: usiz
             arguments[2usize] = precision_value
             argument_count = 3usize
         }
-        let push_error = emit_library_call(c, g, "e.str", push_name, arguments[..], argument_count, builder, token, &results)
-        if push_error != ok { ret push_error }
+        if check.same(push_name, "push_err") {
+            // `push_err` has no exported body: what exists is one generated instance
+            // per module, so the call goes to this module's rather than to `e.str`'s.
+            let (str_module, found_str) = graph.find_module(g, "e.str")
+            if !found_str { ret FunctionNotFound }
+            let (push_err_index, push_err_error) = check.error_push_instance(c, module_index, str_module)
+            if push_err_error != ok { ret push_err_error }
+            var push_err_call: check.CallInfo = zero
+            push_err_call.cast = check.invalid_type()
+            push_err_call.alloc_return = check.invalid_type()
+            push_err_call.alloc_arena = check.invalid_type()
+            push_err_call.function = c.functions[push_err_index]
+            try emit_call_results(c, push_err_call, 0usize, arguments[..], argument_count, builder, token, &results)
+        } else {
+            try emit_library_call(c, g, "e.str", push_name, arguments[..], argument_count, builder, token, &results)
+        }
         if results.count != 1usize { ret check.ArgumentCount }
         let verb_guard_error = emit_formatter_guard(c, module_index, instance, return_slot, results.values[0usize], arena_form, builder, token)
         if verb_guard_error != ok { ret verb_guard_error }

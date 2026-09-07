@@ -472,11 +472,11 @@ $formatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $formatWritten -ne 'executable written') { throw 'format executable emission failed' }
 & $formatPath
 if ($LASTEXITCODE -ne 0) { throw 'a format string expanded to the wrong pushes' }
-# `err` is formattable under section 4 but has no push to expand to, so the build
-# stops rather than quietly formatting nothing. This one is rejected at lowering, not
-# at checking, so it needs an emission rather than a check.
-$formatRejectPath = Join-Path $testBuild 'format-err-argument.exe'
-& $compiler emit-executable (Join-Path $repo 'tests\selfhost\fixtures\check\format_err_argument\src\main.e') $repo 'x64' 'windows' $formatRejectPath 2>&1 | Out-Null
+# A slice is formattable under section 4 but needs the expansion to recurse into an
+# element at a time, which it does not do yet, so the build stops rather than quietly
+# formatting nothing. Rejected at lowering, not at checking, so it needs an emission.
+$formatRejectPath = Join-Path $testBuild 'format-compound-argument.exe'
+& $compiler emit-executable (Join-Path $repo 'tests\selfhost\fixtures\check\format_compound_argument\src\main.e') $repo 'x64' 'windows' $formatRejectPath 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 1) { throw 'a format verb with no push was lowered' }
 # `e.algo.uuid` reads no clock and no random source, so a UUID is a pure function of
 # its inputs and the fixture can pin the exact text of one.

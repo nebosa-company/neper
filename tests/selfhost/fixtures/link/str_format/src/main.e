@@ -73,6 +73,15 @@ fn main(a: *mem.Arena) -> err {
     if retyped_error != ok { ret retyped_error }
     if !str.eq(retyped, "n=7 done") { ret Failed }
 
+    // An `err` verb reaches `push_err`, whose body is generated per module rather
+    // than exported, so this is the one verb whose call does not go to `e.str`.
+    let (failed, failed_error) = str.format["e={}"](a, Failed)
+    if failed_error != ok { ret failed_error }
+    if !str.eq(failed, "e=main.Failed") { ret Failed }
+    let (fine, fine_error) = str.format["e={}"](a, ok)
+    if fine_error != ok { ret fine_error }
+    if !str.eq(fine, "e=ok") { ret Failed }
+
     // The expansion is a call like any other, so the value it returns is a `str` the
     // caller can go on using -- including as an argument to another expansion.
     let (nested, nested_error) = str.format["[{}]"](a, counted)
