@@ -448,6 +448,14 @@ if ($printfRun.ExitCode -ne 0) { throw 'printf returned an error' }
 $printfActual = [System.IO.File]::ReadAllBytes($printfOutput)
 $printfExpected = [System.IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'fixtures\link\io_printf\expected.txt'))
 if (-not [System.Linq.Enumerable]::SequenceEqual($printfActual, $printfExpected)) { throw 'printf wrote the wrong bytes' }
+# `push_err` writes an error's qualified name. It is the one `e.str` declaration a
+# library cannot write: the answer is the merged error table, which is a property of
+# the whole program rather than of any one module.
+$pushErrPath = Join-Path $testBuild 'str-push-err-selfhost.exe'
+$pushErrWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_push_err\src\main.e') $repo 'x64' 'windows' $pushErrPath
+if ($LASTEXITCODE -ne 0 -or $pushErrWritten -ne 'executable written') { throw 'push_err executable emission failed' }
+& $pushErrPath
+if ($LASTEXITCODE -ne 0) { throw 'an error name was written wrongly' }
 # A flushing builder over a stack arena: the shape `printf` expands to, and the only
 # thing that exercises `builder_to`'s drain. Pushing several times the arena's size
 # through it proves the drain happens during the pushes, not once at the end.

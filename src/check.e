@@ -156,6 +156,9 @@ type FunctionGeneric = struct {
     // string, which is why it carries the string rather than a template index.
     formatter: bool,
     formatter_spelling: str,
+    // `push_err` writes a name the library cannot see: the merged error table is
+    // program-wide and exists only once every module is known.
+    formatter_error: bool,
     // `printf` writes through a `str.Sink`, whose `write` is a function value of a
     // shape no `e.io` declaration has. The compiler generates that function too, and
     // this marks the one instance that is it rather than an expansion.
@@ -299,6 +302,12 @@ type Checker = struct {
     constants: []Constant,
     constant_exprs: []ConstantExpr,
     diagnostics: []Diagnostic,
+    // The merged error table (src/error_table.e), by value. Filled once the whole
+    // program is known, because that is the first point at which it is merged; the
+    // expansion of `push_err` is the only thing that reads it so far.
+    error_values: []usize,
+    error_spellings: []str,
+    error_count: usize,
     function_count: usize,
     parameter_count: usize,
     return_type_count: usize,
@@ -2424,11 +2433,28 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     ret ok
 }
 
+// `push_err` is the one `e.str` declaration the library cannot write. Its answer is
+// the merged error table, which is a property of the whole program rather than of any
+// module, so the compiler supplies the function and `lower` generates its body.
+fn seed_str_signatures(c: *Checker, str_module: usize) -> err {
+    let builder_type = make_type(.Named, "Builder", str_module)
+    let (builder_pointer, pointer_error) = seeded_composite_type(c, .Pointer, builder_type, false, str_module)
+    if pointer_error != ok { ret pointer_error }
+    let error_type = make_type(.Err, "err", str_module)
+    let (push_err_index, push_err_error) = add_seeded_function(c, str_module, "push_err", error_type, false)
+    if push_err_error != ok { ret push_err_error }
+    try add_seeded_parameter(c, push_err_index, "b", builder_pointer)
+    try add_seeded_parameter(c, push_err_index, "v", error_type)
+    ret ok
+}
+
 fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     let (mem_module, has_memory) = graph.find_module(g, "e.mem")
     if has_memory { try seed_memory_signatures(c, mem_module) }
     let (os_module, has_os) = graph.find_module(g, "e.os")
     if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory) }
+    let (str_module, has_str) = graph.find_module(g, "e.str")
+    if has_str { try seed_str_signatures(c, str_module) }
     ret ok
 }
 
@@ -4375,6 +4401,46 @@ fn formatter_sink_instance(c: *Checker, owner_module_index: usize, io_module: us
     ret (index, ok)
 }
 
+// One `push_err` body per module that calls it, for the same reason a formatter gets
+// one: the body is generated, so it belongs to the module that asked for it rather
+// than to `e.str`.
+fn error_push_instance(c: *Checker, owner_module_index: usize, str_module: usize) -> (usize, err) {
+    var at = c.signature_function_count
+    while at < c.function_count {
+        if c.function_generics[at].formatter_error && c.functions[at].owner_module_index == owner_module_index { ret (at, ok) }
+        at += 1usize
+    }
+    if c.function_count == c.functions.len { ret (0usize, Capacity) }
+    if c.parameter_count + 2usize > c.parameters.len { ret (0usize, Capacity) }
+    let (seeded_index, found_seeded) = find_function(c, str_module, "push_err")
+    if !found_seeded { ret (0usize, UnknownCallable) }
+    let seeded = c.functions[seeded_index]
+    var instance: Function = zero
+    instance.name = "push_err"
+    instance.module_index = str_module
+    instance.owner_module_index = owner_module_index
+    instance.instance_id = owner_instance_count(c, owner_module_index, "push_err") + 1usize
+    instance.first_parameter = c.parameter_count
+    instance.parameter_count = 2usize
+    instance.first_return = c.return_type_count
+    instance.return_count = 1usize
+    c.parameters[c.parameter_count] = c.parameters[seeded.first_parameter]
+    c.parameters[c.parameter_count + 1usize] = c.parameters[seeded.first_parameter + 1usize]
+    c.parameter_count += 2usize
+    let return_error = store_return_type(c, make_type(.Err, "err", str_module))
+    if return_error != ok { ret (0usize, return_error) }
+    var generic: FunctionGeneric = zero
+    generic.instance = true
+    generic.checked = true
+    generic.formatter = true
+    generic.formatter_error = true
+    let index = c.function_count
+    c.functions[index] = instance
+    c.function_generics[index] = generic
+    c.function_count += 1usize
+    ret (index, ok)
+}
+
 fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
     var info: CallInfo = zero
     // The formatter's arguments become the parameters of the instance its call
@@ -4632,6 +4698,12 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     if info.protocol_pending { ret (info, ok) }
     let function = info.function
     if child_position == 0usize || child_position - 1usize != function.parameter_count { ret (info, ArgumentCount) }
+    if function.intrinsic && same(function.name, "push_err") && function.module_index < g.count && same(g.modules[function.module_index].name, "e.str") {
+        let (instance_index, instance_error) = error_push_instance(c, module_index, function.module_index)
+        if instance_error != ok { ret (info, instance_error) }
+        info.function = c.functions[instance_index]
+        ret (info, ok)
+    }
     if info.formatter {
         let (instance_index, instance_error) = formatter_instance(c, module_index, function.module_index, function.name, info.formatter_spelling, formatter_types[0usize..function.parameter_count], info.formatter_arena)
         if instance_error != ok { ret (info, instance_error) }

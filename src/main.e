@@ -1720,6 +1720,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
             os.exit(1i32)
             ret ok
         }
+        // Every error in the program is known now and not before, so this is where
+        // the merged table is built. `push_err` expands against it.
+        let (error_values, error_values_error) = mem.alloc[usize](a, 4096usize)
+        if error_values_error != ok { ret error_values_error }
+        let (error_spellings, error_spellings_error) = mem.alloc[str](a, 4096usize)
+        if error_spellings_error != ok { ret error_spellings_error }
+        let (error_count, error_build_error) = error_table.build(a, &resolver, &loaded, error_values, error_spellings)
+        if error_build_error != ok { ret error_build_error }
+        checker.error_values = error_values
+        checker.error_spellings = error_spellings
+        checker.error_count = error_count
         var builder: nir.Builder = zero
         var signatures: nir.Signatures = zero
         try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count, checker.function_count > 256usize)

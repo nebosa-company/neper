@@ -483,6 +483,13 @@ printf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 chmod +x "$test_build/io-printf-selfhost"
 "$test_build/io-printf-selfhost" > "$test_build/io-printf-output.txt"
 cmp "$test_build/io-printf-output.txt" "$repo/tests/selfhost/fixtures/link/io_printf/expected.txt"
+# `push_err` writes an error's qualified name. It is the one `e.str` declaration a
+# library cannot write: the answer is the merged error table, which is a property of
+# the whole program rather than of any one module.
+push_err_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/str_push_err/src/main.e" "$repo" x64 linux "$test_build/str-push-err-selfhost")
+[ "$push_err_written" = 'executable written' ]
+chmod +x "$test_build/str-push-err-selfhost"
+"$test_build/str-push-err-selfhost"
 # A flushing builder over a stack arena: the shape `printf` expands to, and the only
 # thing that exercises `builder_to`'s drain. Pushing several times the arena's size
 # through it proves the drain happens during the pushes, not once at the end.

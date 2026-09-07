@@ -3996,6 +3996,89 @@ fn lower_printf_body(c: *check.Checker, g: *graph.Graph, module_index: usize, in
     ret emit_formatter_return(c, module_index, instance, 0usize, 0usize, results.values[0usize], false, builder, token)
 }
 
+// One entry of the merged table: if the value matches, push that name and return.
+// The compare chain is straight-line, so it needs no loop and no table in the binary;
+// a sorted table is what would let a later pass turn it into a search.
+fn emit_error_case(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, handle: usize, value: usize, spelling: str, subject: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    var arguments: [2]usize = zero
+    var results: CallResults = zero
+    let error_type = check.make_type(.Err, "err", module_index)
+    let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstError, error_type, true, value, token)
+    if constant_error != ok { ret constant_error }
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (compare_instruction, matched, compare_error) = nir.emit(builder, .Equal, boolean, true, 0usize, token)
+    if compare_error != ok { ret compare_error }
+    try nir.add_operand(builder, compare_instruction, subject)
+    try nir.add_operand(builder, compare_instruction, constant)
+    let hit_block = builder.block_count
+    let miss_block = builder.block_count + 1usize
+    let (branch_instruction, branch_ignored, branch_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if branch_error != ok { ret branch_error }
+    try nir.add_operand(builder, branch_instruction, matched)
+    try nir.set_branch_targets(builder, branch_instruction, hit_block, miss_block)
+    let (hit_index, hit_error) = nir.begin_block(builder)
+    if hit_error != ok || hit_index != hit_block { ret nir.InvalidControlFlow }
+    let text_type = check.make_type(.String, "str", module_index)
+    let (name_index, name_intern_error) = nir.intern_string(builder, spelling)
+    if name_intern_error != ok { ret name_intern_error }
+    let (name_instruction, name, name_error) = nir.emit(builder, .ConstString, text_type, true, name_index, token)
+    if name_error != ok { ret name_error }
+    arguments[0usize] = handle
+    arguments[1usize] = name
+    try emit_library_call(c, g, "e.str", "push", arguments[..], 2usize, builder, token, &results)
+    if results.count != 1usize { ret check.ArgumentCount }
+    try emit_formatter_return(c, module_index, instance, 0usize, 0usize, results.values[0usize], false, builder, token)
+    let (miss_index, miss_error) = nir.begin_block(builder)
+    if miss_error != ok || miss_index != miss_block { ret nir.InvalidControlFlow }
+    ret ok
+}
+
+// `push_err` writes the qualified name (spec section 7). The names come from the
+// merged error table, which is why this cannot be library source: the table is a
+// property of the whole program, and `e.str` sees one module at a time.
+fn lower_error_push_body(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, parameters: []usize, builder: *nir.Builder, token: lex.Token) -> err {
+    var arguments: [2]usize = zero
+    var results: CallResults = zero
+    let handle = parameters[0usize]
+    let subject = parameters[1usize]
+    try emit_error_case(c, g, module_index, instance, handle, 0usize, "\"ok\"", subject, builder, token)
+    var at = 0usize
+    while at < c.error_count {
+        try emit_error_case(c, g, module_index, instance, handle, c.error_values[at], c.error_spellings[at], subject, builder, token)
+        at += 1usize
+    }
+    // A value the table does not carry is reachable only through `undef` or a union
+    // pun, and prints as its own hexadecimal rather than as a name it does not have.
+    let text_type = check.make_type(.String, "str", module_index)
+    let (open_index, open_intern_error) = nir.intern_string(builder, "\"err(0x\"")
+    if open_intern_error != ok { ret open_intern_error }
+    let (open_instruction, open_text, open_error) = nir.emit(builder, .ConstString, text_type, true, open_index, token)
+    if open_error != ok { ret open_error }
+    arguments[0usize] = handle
+    arguments[1usize] = open_text
+    try emit_library_call(c, g, "e.str", "push", arguments[..], 2usize, builder, token, &results)
+    if results.count != 1usize { ret check.ArgumentCount }
+    try emit_formatter_guard(c, module_index, instance, 0usize, results.values[0usize], false, builder, token)
+    let error_type = check.make_type(.Err, "err", module_index)
+    let unsigned = check.make_type(.Integer, "u32", module_index)
+    let (raw, raw_error) = lower_bitcast(c, subject, error_type, unsigned, builder, token)
+    if raw_error != ok { ret raw_error }
+    arguments[0usize] = handle
+    arguments[1usize] = raw
+    try emit_library_call(c, g, "e.str", "push_hex_u32", arguments[..], 2usize, builder, token, &results)
+    if results.count != 1usize { ret check.ArgumentCount }
+    try emit_formatter_guard(c, module_index, instance, 0usize, results.values[0usize], false, builder, token)
+    let (close_index, close_intern_error) = nir.intern_string(builder, "\")\"")
+    if close_intern_error != ok { ret close_intern_error }
+    let (close_instruction, close_text, close_error) = nir.emit(builder, .ConstString, text_type, true, close_index, token)
+    if close_error != ok { ret close_error }
+    arguments[0usize] = handle
+    arguments[1usize] = close_text
+    try emit_library_call(c, g, "e.str", "push", arguments[..], 2usize, builder, token, &results)
+    if results.count != 1usize { ret check.ArgumentCount }
+    ret emit_formatter_return(c, module_index, instance, 0usize, 0usize, results.values[0usize], false, builder, token)
+}
+
 // A formatter instance is the one function in the program with no source: its
 // signature comes from the call that asked for it and its body from the format
 // string. Everything around the body -- the hidden return slot, the parameters, the
@@ -4048,6 +4131,10 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
         if parameter_error != ok { ret parameter_error }
         parameters[parameter_at] = result
         parameter_at += 1usize
+    }
+    if generic.formatter_error {
+        try lower_error_push_body(c, g, module_index, instance, parameters[..], builder, token)
+        ret nir.end_function(builder)
     }
     if generic.formatter_sink {
         // The sink is one call: `io.print` already loops over `os.write` until every
