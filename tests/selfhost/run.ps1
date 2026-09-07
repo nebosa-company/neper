@@ -610,6 +610,19 @@ foreach ($case in $returnDiagnostics) {
 # against it. The checker half only -- the runtime has no `neper_os_thread_create` yet.
 $threadAccepted = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\thread_create_accepted\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $threadAccepted -ne 'module check ok') { throw 'a valid thread_create was rejected' }
+# An aggregate's fields are one contiguous run, and resolving a field's type can
+# instantiate a generic, which appends the instance's own fields. That split the run
+# being collected, so `Holder` exposed `Box`'s `v` and hid its own `slot` -- the shape
+# every `e.sync` lock is written in. Both halves are pinned: the read that has to work,
+# and the leaked name that has to stop working.
+Require-Fixture 'check/generic_instance_field'
+$genericFieldAccepted = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\generic_instance_field\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $genericFieldAccepted -ne 'module check ok') { throw 'a field whose type is a generic instance was rejected' }
+Require-Fixture 'check/generic_instance_field_leak'
+$genericFieldLeak = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\generic_instance_field_leak\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:5: error\[E-TYPE-9999\]: type checking failed: check\.InvalidType') {
+    throw "a generic instance's own field leaked into the enclosing struct: $($genericFieldLeak -join "`n")"
+}
 $genericInstancesExecutablePath = Join-Path $testBuild 'generic-instances-selfhost.exe'
 $genericInstancesExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesExecutableWritten -ne 'executable written') { throw 'multi-instance generic PE executable emission failed' }

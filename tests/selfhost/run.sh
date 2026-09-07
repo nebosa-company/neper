@@ -639,6 +639,15 @@ check_protocol_diagnostic break_outside_loop 'main.e:5:5: error[E-TYPE-9999]: br
 # against it. The checker half only -- the runtime has no `neper_os_thread_create` yet.
 thread_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/thread_create_accepted/src/main.e" "$repo" x64 linux)
 [ "$thread_accepted" = 'module check ok' ]
+# An aggregate's fields are one contiguous run, and resolving a field's type can
+# instantiate a generic, which appends the instance's own fields. That split the run
+# being collected, so `Holder` exposed `Box`'s `v` and hid its own `slot` -- the shape
+# every `e.sync` lock is written in. Both halves are pinned: the read that has to work,
+# and the leaked name that has to stop working.
+require_fixture check/generic_instance_field
+generic_field_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/generic_instance_field/src/main.e" "$repo" x64 linux)
+[ "$generic_field_accepted" = 'module check ok' ]
+check_protocol_diagnostic generic_instance_field_leak 'main.e:8:5: error[E-TYPE-9999]: type checking failed: check.InvalidType'
 check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
 generic_instances_executable_path="$test_build/generic-instances-selfhost"
 generic_instances_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_instances/src/main.e" "$repo" x64 linux "$generic_instances_executable_path")

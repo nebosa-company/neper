@@ -1748,6 +1748,22 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
                         }
                     }
                 }
+                // An aggregate's fields are one contiguous run starting at
+                // `first_field`, but resolving a field's type can instantiate a
+                // generic aggregate, and an instance appends its own fields --
+                // splitting the run this loop is still filling. Move what has been
+                // collected so far to the end and keep appending there.
+                if c.aggregate_field_count != aggregate.first_field + aggregate.field_count {
+                    if c.aggregate_field_count + aggregate.field_count >= c.aggregate_fields.len { ret Capacity }
+                    var moved = 0usize
+                    while moved < aggregate.field_count {
+                        c.aggregate_fields[c.aggregate_field_count + moved] = c.aggregate_fields[aggregate.first_field + moved]
+                        moved += 1usize
+                    }
+                    aggregate.first_field = c.aggregate_field_count
+                    c.aggregate_field_count += aggregate.field_count
+                }
+                if c.aggregate_field_count == c.aggregate_fields.len { ret Capacity }
                 c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: field_name, ty: field_type, enum_value: enum_value, enum_negative: enum_negative, has_enum_value: has_enum_value, token: c.tokens[field_node.token_start] }
                 c.aggregate_field_count += 1usize
                 aggregate.field_count += 1usize
