@@ -43,7 +43,7 @@ compiler = {
   ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
   ("Atomic[T] and memory orderings", 0, "absent from check.e"),
-  ("extern with @import / @cc and the C ABI", 0.15, "an `extern fn` checks, but `@cc(c)` does not resolve -- `c` is read as a value name -- and emission stops at `link_pe.InvalidExecutable`: both linkers carry a fixed import list, not a general one"),
+  ("extern with @import / @cc and the C ABI", 0.3, "check/cc_accepted: an `extern fn` checks and `@cc` names a convention; emission stops at `link_pe.InvalidExecutable`, both linkers importing from one fixed library"),
   ("Comptime str parameters and varargs", 0.95, "link/comptime_str, link/str_format, link/io_printf; two of the three pack intrinsics expand, `gpu.launch` does not"),
   ("e.meta reflection", 0.3, "link/meta_scalar answers kind, array_len and type_name at compile time; the field and member queries need a comptime value of struct type"),
   ("Merged error table", 0.5, "src/error_table.e builds it and push_err expands against it; not yet in the binary for the failure line, trap protocol or `neper test`"),
