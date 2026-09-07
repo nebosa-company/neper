@@ -154,18 +154,127 @@ neper_os_seek:
 
 .global neper_os_thread_create
 neper_os_thread_create:
-    mov qword ptr [rdi], 0
-    mov dword ptr [rdi + 8], 0x2f8bb651
+    // rdi = (Thread, err) slot, rsi = entry, rdx = ctx, rcx = stack size.
+    //
+    // There is no libc here -- the ELF output is a static executable -- so a thread
+    // is `clone(2)` over a mapping this allocates. The mapping holds three things:
+    // the join word at +0, its own size at +8 so `join` can give it back, and the
+    // child's stack growing down from the top.
+    push rbx
+    push r12
+    push r13
+    push r14
+    mov r12, rdi
+    mov r13, rsi
+    mov r14, rdx
+    mov rbx, rcx
+    cmp rbx, 65536
+    jae .Lthread_size_ok
+    mov rbx, 65536
+.Lthread_size_ok:
+    mov rsi, rbx
+    xor edi, edi
+    mov edx, 3
+    mov r10d, 0x22
+    mov r8, -1
+    xor r9d, r9d
+    mov eax, 9
+    syscall
+    test rax, rax
+    js .Lthread_create_failed
+    mov r9, rax
+    mov qword ptr [r9 + 8], rbx
+    // The child finds its entry point and context on the stack it starts on.
+    lea r11, [r9 + rbx]
+    and r11, -16
+    sub r11, 16
+    mov qword ptr [r11], r13
+    mov qword ptr [r11 + 8], r14
+    // CLONE_VM|FS|FILES|SIGHAND|THREAD|SYSVSEM|PARENT_SETTID|CHILD_CLEARTID, with the
+    // same word for both. CHILD_CLEARTID alone is not enough: it only zeroes the word
+    // when the thread dies and never sets it, so `join` read zero straight away and
+    // unmapped a stack the child was still running on. PARENT_SETTID is what puts the
+    // tid there to begin with.
+    mov edi, 0x350f00
+    mov rsi, r11
+    mov rdx, r9
+    mov r10, r9
+    xor r8d, r8d
+    mov eax, 56
+    syscall
+    test rax, rax
+    js .Lthread_create_unmap
+    jz .Lthread_child
+    mov qword ptr [r12], r9
+    mov dword ptr [r12 + 8], 0
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.Lthread_child:
+    mov rdi, qword ptr [rsp + 8]
+    mov rax, qword ptr [rsp]
+    call rax
+    xor edi, edi
+    mov eax, 60
+    syscall
+.Lthread_create_unmap:
+    mov rdi, r9
+    mov rsi, rbx
+    mov eax, 11
+    syscall
+.Lthread_create_failed:
+    mov qword ptr [r12], 0
+    mov dword ptr [r12 + 8], 0x6f777ebf
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
     ret
 
 .global neper_os_thread_join
 neper_os_thread_join:
-    mov eax, 0x2f8bb651
+    push rbx
+    push r12
+    mov r12, qword ptr [rdi]
+    test r12, r12
+    jz .Lthread_join_failed
+    mov rbx, qword ptr [r12 + 8]
+.Lthread_join_wait:
+    mov eax, dword ptr [r12]
+    test eax, eax
+    jz .Lthread_join_done
+    // FUTEX_WAIT on the tid the kernel will clear. A spurious wake or a value that
+    // has already changed comes back here, which is why this is a loop.
+    mov rdi, r12
+    xor esi, esi
+    mov edx, eax
+    xor r10d, r10d
+    mov eax, 202
+    syscall
+    jmp .Lthread_join_wait
+.Lthread_join_done:
+    mov rdi, r12
+    mov rsi, rbx
+    mov eax, 11
+    syscall
+    xor eax, eax
+    pop r12
+    pop rbx
+    ret
+.Lthread_join_failed:
+    mov eax, 0x6f777ebf
+    pop r12
+    pop rbx
     ret
 
 .global neper_os_thread_detach
 neper_os_thread_detach:
-    mov eax, 0x2f8bb651
+    // Nothing waits for a detached thread, so nothing can know when its stack stops
+    // being in use: the mapping is left alone. A reaper would be the way to give it
+    // back, and there is no thread to run one on yet.
+    xor eax, eax
     ret
 
 .global neper_os_spawn
