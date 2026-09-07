@@ -869,7 +869,13 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 8192usize)
     if strings_error != ok { ret strings_error }
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
-    let (signature_entries, signature_entries_error) = mem.alloc[nir.Signature](a, 1024usize)
+    // One entry per NIR function, indexed by the same function index: a signature
+    // table smaller than the function table makes every function past its end fail to
+    // lower, and `begin_signature` reports that as invalid control flow rather than as
+    // a capacity. It sat at 1024 against a function capacity of 16384, and the compiler
+    // itself had reached 1024 -- adding any ten functions to `check.e` broke the build,
+    // in whichever unrelated function happened to cross the line.
+    let (signature_entries, signature_entries_error) = mem.alloc[nir.Signature](a, function_capacity)
     if signature_entries_error != ok { ret signature_entries_error }
     var type_capacity = signature_type_capacity
     if type_capacity == 0usize { type_capacity = 1usize }
@@ -1794,7 +1800,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if fixups_error != ok { ret fixups_error }
         let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, 32768usize)
         if relocations_error != ok { ret relocations_error }
-        let (function_offsets, function_offsets_error) = mem.alloc[usize](a, 1024usize)
+        // Indexed by NIR function index, like the signature table above: sized to the
+        // function count and not to a constant of its own.
+        let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.function_count + 1usize)
         if function_offsets_error != ok { ret function_offsets_error }
         var relocation_count = 0usize
         var function_at = 0usize
