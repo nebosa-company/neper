@@ -40,7 +40,7 @@ compiler = {
   ("Supplied hash (rule 4)", 1, "link/supplied_hash, folded_hash"),
   ("Supplied eq (rule 4)", 1, "link/supplied_eq"),
   ("Supplied format (rule 4)", 0, "blocked on e.str"),
-  ("Scalar floating point f32 / f64", 0.5, "checks, does not lower"),
+  ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
   ("Atomic[T] and memory orderings", 0, "absent from check.e"),
   ("extern with @import / @cc and the C ABI", 0.25, "declared and checked; calls rejected"),
@@ -374,8 +374,10 @@ __GROUPS__
     <code>mem.view</code> unblocked and <code>mem.cast</code> completed by making a
     <code>Sink</code> context constructible, plus the read-only half and the integer
     parsers, none of which needed compiler work at all. Nothing is left that a
-    library can reach: the four float pushes and two float parsers wait on float
-    lowering, <code>push_err</code> on a runtime error-name table, and
+    library can reach today. Float lowering has landed, so the four float pushes and
+    two float parsers are no longer blocked on it, but writing a shortest
+    round-tripping float needs the value's bits and <code>mem.bitcast</code> is still
+    unimplemented; <code>push_err</code> waits on a runtime error-name table, and
     <code>format</code> &mdash; rule&nbsp;4's supplied protocol, the one still missing
     on the compiler side &mdash; on comptime <code>str</code> parameters and
     varargs.</p>
