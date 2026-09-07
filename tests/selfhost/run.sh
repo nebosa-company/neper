@@ -441,6 +441,17 @@ rand_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$rand_written" = 'executable written' ]
 chmod +x "$test_build/algo-rand-selfhost"
 "$test_build/algo-rand-selfhost"
+# Section 4's formatter is checked against its format string: a call whose arity or
+# argument types do not match is a compile error, not a runtime one. The expansion
+# is not written yet, so these are check fixtures rather than link ones.
+format_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/format_accept/src/main.e" "$repo" x64 linux)
+[ "$format_accepted" = 'module check ok' ]
+for format_case in format_too_few format_too_many format_no_arena format_printf_arena format_hex_float format_binary_str format_precision_integer format_unknown_verb format_unterminated format_precision_wide format_not_literal format_untyped; do
+    if $test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/$format_case/src/main.e" "$repo" x64 linux >/dev/null 2>&1; then
+        printf '%s\n' "formatter fixture $format_case was accepted" >&2
+        exit 1
+    fi
+done
 # A comptime `str` parameter binds a string literal where the call is written, so
 # each distinct literal is its own instance and the body reads it as an ordinary
 # `str`.

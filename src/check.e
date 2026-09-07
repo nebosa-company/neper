@@ -3675,6 +3675,7 @@ type CallInfo = struct {
     formatter: bool,
     formatter_arena: bool,
     formatter_verbs: usize,
+    formatter_spelling: str,
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
@@ -3699,6 +3700,14 @@ type BitcastInfo = struct {
     matched: bool,
     function: Function,
     target: Type,
+}
+
+type FormatterInfo = struct {
+    matched: bool,
+    function: Function,
+    arena: bool,
+    verbs: usize,
+    spelling: str,
 }
 
 fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
@@ -4053,6 +4062,28 @@ fn format_self_test() -> err {
     ret ok
 }
 
+// A format string carries at most this many verbs. It is a limit on one literal, not
+// on a program, and reaching it is `Capacity` rather than a wrong expansion.
+fn format_verb_limit() -> usize {
+    ret 32usize
+}
+
+fn format_verb_count(spelling: str) -> (usize, err) {
+    var kinds: [32]FormatVerb = zero
+    var precisions: [32]u8 = zero
+    let (count, count_error) = format_verbs(spelling, kinds[..], precisions[..])
+    ret (count, count_error)
+}
+
+fn format_verb_at(spelling: str, index: usize) -> (FormatVerb, u8, err) {
+    var kinds: [32]FormatVerb = zero
+    var precisions: [32]u8 = zero
+    let (count, count_error) = format_verbs(spelling, kinds[..], precisions[..])
+    if count_error != ok { ret (.Text, 0u8, count_error) }
+    if index >= count { ret (.Text, 0u8, ArgumentCount) }
+    ret (kinds[index], precisions[index], ok)
+}
+
 // Section 4: formattable is every shape rule 4 supplies a `format` for. This is the
 // half the checker can decide without reaching a module's own `format`, which is why
 // a `Named` type is left to the protocol lookup rather than judged here.
@@ -4164,6 +4195,68 @@ fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     ret (info, ok)
 }
 
+// Section 4: `str.format[FMT](a, args: ...)` and `io.printf[FMT](args: ...)` are
+// expanded rather than called, so the compiler recognises them the way it recognises
+// `mem.alloc[T]`. Arity and argument types are checked against the format string
+// here, which is what makes a mismatched count or an unformattable type a compile
+// error rather than a runtime one.
+fn formatter_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (FormatterInfo, err) {
+    var info: FormatterInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var format_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                format_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member { ret (info, ok) }
+    let module_name = g.modules[target_module].name
+    var arena = false
+    if same(module_name, "e.str") && same(member, "format") {
+        arena = true
+    } else {
+        if !same(module_name, "e.io") || !same(member, "printf") { ret (info, ok) }
+    }
+    info.matched = true
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let format_node = tree.nodes[format_index]
+    if format_node.kind != .LiteralExpr { ret (info, TypeMismatch) }
+    let literal = c.tokens[format_node.token_start]
+    if literal.kind != .String && literal.kind != .RawString { ret (info, TypeMismatch) }
+    let spelling = g.modules[module_index].text[literal.start..literal.end]
+    let (verbs, verbs_error) = format_verb_count(spelling)
+    if verbs_error != ok { ret (info, verbs_error) }
+    var function: Function = zero
+    function.name = member
+    function.module_index = target_module
+    function.parameter_count = verbs
+    function.return_count = 1usize
+    if arena {
+        function.parameter_count = verbs + 1usize
+        function.return_count = 2usize
+    }
+    function.intrinsic = true
+    info.function = function
+    info.arena = arena
+    info.verbs = verbs
+    info.spelling = spelling
+    ret (info, ok)
+}
+
 fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
     var info: CallInfo = zero
     info.cast = invalid_type()
@@ -4235,11 +4328,21 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.cast = pun.target
                             info.mem_bitcast = true
                         } else {
+                        let (formatter, formatter_error) = formatter_info(c, g, tree, module_index, receiver)
+                        if formatter_error != ok { ret (info, formatter_error) }
+                        if formatter.matched {
+                            info.function = formatter.function
+                            info.formatter = true
+                            info.formatter_arena = formatter.arena
+                            info.formatter_verbs = formatter.verbs
+                            info.formatter_spelling = formatter.spelling
+                        } else {
                             let (template_index, template_error) = bracket_function(c, g, tree, module_index, receiver)
                             if template_error != ok { ret (info, template_error) }
                             let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, template_index)
                             if specialize_error != ok { ret (info, specialize_error) }
                             info.function = c.functions[specialized_index]
+                        }
                         }
                         }
                         }
@@ -4336,6 +4439,34 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         let (source, source_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                         if source_error != ok { ret (info, source_error) }
                         if source.kind != .Pointer { ret (info, TypeMismatch) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
+                    if info.formatter {
+                        var verb_position = child_position - 1usize
+                        if info.formatter_arena {
+                            if verb_position == 0usize {
+                                // `format` writes into the caller's arena; `printf`
+                                // has one of its own.
+                                let (supplied, supplied_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                                if supplied_error != ok { ret (info, supplied_error) }
+                                if supplied.kind != .Pointer || !supplied.has_element || supplied.element >= c.type_count { ret (info, TypeMismatch) }
+                                let pointee = c.types[supplied.element]
+                                if pointee.kind != .Named || !same(pointee.name, "Arena") { ret (info, TypeMismatch) }
+                                child_position += 1usize
+                                at += 1usize
+                                continue
+                            }
+                            verb_position = verb_position - 1usize
+                        }
+                        if verb_position >= info.formatter_verbs { ret (info, ArgumentCount) }
+                        let (verb, verb_precision, verb_error) = format_verb_at(info.formatter_spelling, verb_position)
+                        if verb_error != ok { ret (info, verb_error) }
+                        let (supplied, supplied_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                        if supplied_error != ok { ret (info, supplied_error) }
+                        if is_untyped(supplied) { ret (info, MissingContext) }
+                        if !formattable_type(c, supplied, verb) { ret (info, InvalidFormat) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -4722,6 +4853,10 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
     if call.mem_cast || call.mem_bitcast {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (call.cast, ok)
+    }
+    if call.formatter {
+        if call.formatter_arena && index == 0usize { ret (make_type(.String, "str", call.function.module_index), ok) }
+        ret (make_type(.Err, "err", call.function.module_index), ok)
     }
     if call.mem_alloc {
         if index == 0usize { ret (call.alloc_return, ok) }

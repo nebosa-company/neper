@@ -2315,6 +2315,9 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if node.kind == .CallExpr {
         let (call_info, call_info_error) = check.check_call(c, g, tree, module_index, node)
         if call_info_error != ok { ret (0usize, zero, call_info_error) }
+        // The formatter's expansion is not written yet: it checks and does not lower,
+        // the way the floats did before their back end arrived.
+        if call_info.formatter { ret (0usize, zero, check.Unsupported) }
         if call_info.is_cast || call_info.mem_cast || call_info.mem_bitcast {
             var argument_index = 0usize
             var child_position = 0usize

@@ -402,6 +402,15 @@ $randWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $randWritten -ne 'executable written') { throw 'rand executable emission failed' }
 & $randPath
 if ($LASTEXITCODE -ne 0) { throw 'a generator does not match its reference stream' }
+# Section 4's formatter is checked against its format string: a call whose arity or
+# argument types do not match is a compile error, not a runtime one. The expansion
+# is not written yet, so these are check fixtures rather than link ones.
+$formatAccepted = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\format_accept\src\main.e") $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $formatAccepted -ne 'module check ok') { throw 'a well-formed formatter call was rejected' }
+foreach ($formatCase in @('format_too_few', 'format_too_many', 'format_no_arena', 'format_printf_arena', 'format_hex_float', 'format_binary_str', 'format_precision_integer', 'format_unknown_verb', 'format_unterminated', 'format_precision_wide', 'format_not_literal', 'format_untyped')) {
+    & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$formatCase\src\main.e") $repo 'x64' 'windows' 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 1) { throw "formatter fixture $formatCase was accepted" }
+}
 # A comptime `str` parameter binds a string literal where the call is written, so
 # each distinct literal is its own instance and the body reads it as an ordinary
 # `str`.
