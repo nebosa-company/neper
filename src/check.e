@@ -7441,6 +7441,44 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     ret "E-TYPE-9999"
 }
 
+// The name of one of this module's own errors, for the report when nothing recorded
+// a reason. The merged error table (src/error_table.e) cannot answer this: it holds
+// the errors of the program being compiled, and these are the compiler's own.
+//
+// Keep this beside the declarations above. An error missing from it degrades the
+// report to "type checking failed" and nothing worse, which is what the report said
+// for every one of them before.
+fn error_name(value: err) -> str {
+    if value == Capacity { ret "check.Capacity" }
+    if value == Unsupported { ret "check.Unsupported" }
+    if value == MissingContext { ret "check.MissingContext" }
+    if value == TypeMismatch { ret "check.TypeMismatch" }
+    if value == InvalidCondition { ret "check.InvalidCondition" }
+    if value == InvalidOperator { ret "check.InvalidOperator" }
+    if value == InvalidReturn { ret "check.InvalidReturn" }
+    if value == ReturnValuesUnexpected { ret "check.ReturnValuesUnexpected" }
+    if value == ReturnCount { ret "check.ReturnCount" }
+    if value == ReturnType { ret "check.ReturnType" }
+    if value == MissingReturn { ret "check.MissingReturn" }
+    if value == UnknownCallable { ret "check.UnknownCallable" }
+    if value == ArgumentCount { ret "check.ArgumentCount" }
+    if value == InvalidType { ret "check.InvalidType" }
+    if value == ImmutableAssignment { ret "check.ImmutableAssignment" }
+    if value == AliasCycle { ret "check.AliasCycle" }
+    if value == ConstantCycle { ret "check.ConstantCycle" }
+    if value == ConstantOverflow { ret "check.ConstantOverflow" }
+    if value == InvalidConstant { ret "check.InvalidConstant" }
+    if value == InvalidFormat { ret "check.InvalidFormat" }
+    if value == InvalidTry { ret "check.InvalidTry" }
+    if value == TryCast { ret "check.TryCast" }
+    if value == TryNotFallible { ret "check.TryNotFallible" }
+    if value == TryNoPropagate { ret "check.TryNoPropagate" }
+    if value == InvalidSwitch { ret "check.InvalidSwitch" }
+    if value == DuplicateCase { ret "check.DuplicateCase" }
+    if value == NonExhaustiveSwitch { ret "check.NonExhaustiveSwitch" }
+    ret ""
+}
+
 fn diagnostic_message(kind: DiagnosticKind) -> str {
     if kind == .AssignmentImmutable { ret "assignment target is immutable" }
     if kind == .IndexedArrayImmutable { ret "indexed assignment requires a mutable array binding" }

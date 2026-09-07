@@ -1138,7 +1138,7 @@ fn write_snake_name(file: os.File, name: str) -> err {
     ret ok
 }
 
-fn write_check_message(file: os.File, checker: *check.Checker) -> err {
+fn write_check_message(file: os.File, checker: *check.Checker, check_error: err) -> err {
     if checker.failure_kind == .MissingZeroValue {
         try write_all(file, "type `")
         try write_all(file, checker.failure_detail)
@@ -1200,10 +1200,20 @@ fn write_check_message(file: os.File, checker: *check.Checker) -> err {
         try write_all(file, checker.failure_detail)
         ret write_all(file, "`")
     }
+    // `Generic` means nothing along the way recorded a reason, so the error value is
+    // the only evidence of which check rejected the program. Naming it turns "type
+    // checking failed" from a dead end into somewhere to start.
+    if checker.failure_kind == .Generic {
+        let name = check.error_name(check_error)
+        if name.len != 0usize {
+            try write_all(file, "type checking failed: ")
+            ret write_all(file, name)
+        }
+    }
     ret write_all(file, check.diagnostic_message(checker.failure_kind))
 }
 
-fn print_check_diagnostic(g: *graph.Graph, checker: *check.Checker) -> err {
+fn print_check_diagnostic(g: *graph.Graph, checker: *check.Checker, check_error: err) -> err {
     let failure = os.stderr()
     if checker.failure_module < g.count {
         try write_all(failure, g.modules[checker.failure_module].path)
@@ -1221,7 +1231,7 @@ fn print_check_diagnostic(g: *graph.Graph, checker: *check.Checker) -> err {
     try write_all(failure, ": error[")
     try write_all(failure, check.diagnostic_code(checker.failure_kind))
     try write_all(failure, "]: ")
-    try write_check_message(failure, checker)
+    try write_check_message(failure, checker, check_error)
     ret write_all(failure, "\n")
 }
 
@@ -1667,12 +1677,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let check_error = check.run(&checker, &resolver, &loaded)
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
-                try print_check_diagnostic(&loaded, &checker)
+                try print_check_diagnostic(&loaded, &checker, check_error)
             } else {
                 var diagnostic_at = 0usize
                 while diagnostic_at < checker.diagnostic_count {
                     select_check_diagnostic(&checker, checker.diagnostics[diagnostic_at])
-                    try print_check_diagnostic(&loaded, &checker)
+                    try print_check_diagnostic(&loaded, &checker, check_error)
                     diagnostic_at += 1usize
                 }
             }
@@ -1712,12 +1722,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let check_error = check.run(&checker, &resolver, &loaded)
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
-                try print_check_diagnostic(&loaded, &checker)
+                try print_check_diagnostic(&loaded, &checker, check_error)
             } else {
                 var diagnostic_at = 0usize
                 while diagnostic_at < checker.diagnostic_count {
                     select_check_diagnostic(&checker, checker.diagnostics[diagnostic_at])
-                    try print_check_diagnostic(&loaded, &checker)
+                    try print_check_diagnostic(&loaded, &checker, check_error)
                     diagnostic_at += 1usize
                 }
             }
