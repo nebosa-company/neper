@@ -1185,6 +1185,11 @@ fn write_check_message(file: os.File, checker: *check.Checker) -> err {
         }
         ret write_all(file, "this is not a type")
     }
+    if checker.failure_kind == .AggregateFieldCount {
+        try write_all(file, "this literal gives a different number of fields than `")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` declares")
+    }
     if checker.failure_kind == .GenericInference {
         try write_all(file, "cannot infer compile-time parameter `")
         try write_all(file, checker.failure_detail)

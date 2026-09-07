@@ -71,6 +71,7 @@ type DiagnosticKind = enum u8 {
     MultipleBindingCount,
     MultipleAssignmentImmutable,
     AggregateMemberUnknown,
+    AggregateFieldCount,
     BindingUnknownNamed,
     NonExhaustive,
     ProtocolMissing,
@@ -399,7 +400,6 @@ fn default_failure_kind(failure: err, node: syntax.Node) -> DiagnosticKind {
     if failure == TypeMismatch { ret .InitializerType }
     if failure == ConstantCycle { ret .ConstantDependencyCycle }
     if failure == NonExhaustiveSwitch { ret .NonExhaustive }
-    if node.kind == .BreakStmt && failure == Unsupported { ret .BreakOutsideControl }
     if node.kind == .ReturnStmt && failure == InvalidReturn { ret .ReturnInsideDefer }
     if node.kind == .TryStmt && failure == InvalidTry { ret .TryInsideDefer }
     // These carry their own situation, so they need no help from the node kind --
@@ -411,10 +411,12 @@ fn default_failure_kind(failure: err, node: syntax.Node) -> DiagnosticKind {
     if failure == TryNotFallible { ret .TryNotFallible }
     if failure == TryNoPropagate { ret .TryNoPropagate }
     if node.kind == .DeferStmt && failure == ArgumentCount { ret .DeferValue }
-    if node.kind == .BindingStmt && failure == ArgumentCount { ret .MultipleBindingCount }
-    if node.kind == .ForStmt && failure == ImmutableAssignment { ret .IteratorImmutable }
-    if node.kind == .ForStmt && failure == UnknownCallable { ret .IteratorMissing }
-    if node.kind == .ForStmt && failure == InvalidType { ret .IteratorSignature }
+    // Nothing else guesses a diagnostic from the statement it happened in. Each of
+    // these used to: a `for` claimed any type error inside it was an iterator
+    // signature, and a binding claimed any arity error inside it was a binding count
+    // -- which is how a duplicate struct field in a loop body reported "multiple
+    // binding count does not match function results". The situations that really are
+    // those record themselves where they are raised.
     ret .Generic
 }
 
@@ -5454,8 +5456,14 @@ fn check_named_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree
     }
     if aggregate.generic && !c.generic_declaration { ret (invalid_type(), Unsupported) }
     if aggregate.kind == .Enum { ret (invalid_type(), InvalidType) }
-    if aggregate.kind == .Struct && item_count != aggregate.field_count { ret (invalid_type(), ArgumentCount) }
-    if aggregate.kind != .Struct && item_count != 1usize { ret (invalid_type(), ArgumentCount) }
+    if aggregate.kind == .Struct && item_count != aggregate.field_count {
+        record_failure(c, module_index, node, .AggregateFieldCount, aggregate.name, "")
+        ret (invalid_type(), ArgumentCount)
+    }
+    if aggregate.kind != .Struct && item_count != 1usize {
+        record_failure(c, module_index, node, .AggregateFieldCount, aggregate.name, "")
+        ret (invalid_type(), ArgumentCount)
+    }
     let text = g.modules[module_index].text
     let end = node.first_child + node.child_count
     var at = node.first_child
@@ -5997,10 +6005,13 @@ fn check_try_results(c: *Checker, call: CallInfo, caller: Function) -> (usize, e
     ret (call.function.return_count - 1usize, ok)
 }
 
-fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, binding: syntax.Node, call: CallInfo, return_count: usize, declared: Type, mutable: bool) -> err {
+fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, statement: syntax.Node, binding: syntax.Node, call: CallInfo, return_count: usize, declared: Type, mutable: bool) -> err {
     let tuple = c.tokens[binding.token_start].kind == .PunctLParen
     let item_count = binding_item_count(c, binding)
-    if item_count != return_count { ret ArgumentCount }
+    if item_count != return_count {
+        record_failure(c, module_index, statement, .MultipleBindingCount, "", "")
+        ret ArgumentCount
+    }
     if tuple && declared.kind != .Invalid { ret InvalidType }
     var result_index = 0usize
     var at = binding.token_start
@@ -6102,7 +6113,10 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
         if call_error != ok { ret call_error }
         if call.is_cast {
             if tried { ret TryCast }
-            if tuple { ret ArgumentCount }
+            if tuple {
+                record_failure(c, module_index, node, .MultipleBindingCount, "", "")
+                ret ArgumentCount
+            }
             let (actual, context_error) = apply_context(c, call.cast, declared)
             if context_error != ok { ret context_error }
             if actual.kind == .Other { ret Unsupported }
@@ -6118,9 +6132,12 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
             result_count = remaining
         }
         if !tuple && result_count == 0usize { ret TypeMismatch }
-        ret bind_return_types(c, g, module_index, binding, call, result_count, declared, mutable)
+        ret bind_return_types(c, g, module_index, node, binding, call, result_count, declared, mutable)
     }
-    if tuple { ret ArgumentCount }
+    if tuple {
+        record_failure(c, module_index, node, .MultipleBindingCount, "", "")
+        ret ArgumentCount
+    }
     var result = declared
     if has_initializer {
         let (actual, expression_error) = check_expr(c, g, tree, module_index, initializer_index, declared)
@@ -7069,7 +7086,10 @@ fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
     if node.kind == .ForStmt { ret check_for_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .SwitchStmt { ret check_switch_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .BreakStmt {
-        if c.break_depth == 0usize { ret Unsupported }
+        if c.break_depth == 0usize {
+            record_failure(c, module_index, node, .BreakOutsideControl, "", "")
+            ret Unsupported
+        }
         ret ok
     }
     if node.kind == .ContinueStmt {

@@ -578,7 +578,9 @@ $returnDiagnostics = @(
     @('try_cast', 'main\.e:4:5: error\[E-ERROR-9999\]: try needs a call that can fail; a conversion cannot'),
     @('try_not_fallible', 'main\.e:8:5: error\[E-ERROR-9999\]: try needs a call whose last result is an err'),
     @('try_no_propagate', 'main\.e:8:5: error\[E-ERROR-9999\]: try propagates an err, so the enclosing function must return one'),
-    @('try_inside_defer', 'main\.e:9:9: error\[E-ERROR-9999\]: try is not legal inside defer')
+    @('try_inside_defer', 'main\.e:9:9: error\[E-ERROR-9999\]: try is not legal inside defer'),
+    @('aggregate_field_count', 'main\.e:12:17: error\[E-TYPE-9999\]: this literal gives a different number of fields than `Bad` declares'),
+    @('break_outside_loop', 'main\.e:5:5: error\[E-TYPE-9999\]: break requires an enclosing loop or switch')
 )
 foreach ($case in $returnDiagnostics) {
     $returnOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
