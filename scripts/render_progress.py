@@ -33,7 +33,7 @@ compiler = {
   ("Multi-return and destructuring", 1, "link/scalar"),
   ("const and integer comptime folding", 1, "link/generic_folding"),
   ("Generic functions [T: type], [N: usize]", 1, "link/generic_instances"),
-  ("Generic aggregate types", 1, "link/generic_same_name; check/generic_instance_field pins one used as a field type"),
+  ("Generic aggregate types", 1, "link/generic_same_name; check/generic_instance_field and link/generic_instance_alias pin one used as a field type, named directly and through an alias"),
   ("Protocol resolution, spec 9 rules 3 and 5", 1, "check/protocol_*"),
   ("Iterator protocol <t>_next", 1, "tests/neper0"),
   ("Supplied cmp (rule 4)", 1, "link/sequence_cmp, tagged_union_cmp"),
