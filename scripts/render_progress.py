@@ -39,12 +39,12 @@ compiler = {
   ("Supplied cmp (rule 4)", 1, "link/sequence_cmp, tagged_union_cmp"),
   ("Supplied hash (rule 4)", 1, "link/supplied_hash, folded_hash"),
   ("Supplied eq (rule 4)", 1, "link/supplied_eq"),
-  ("Supplied format (rule 4)", 0.75, "link/str_format expands scalars, str and bool; `err` and a type's own format still unreachable"),
+  ("Supplied format (rule 4)", 0.75, "link/str_format, link/io_printf expand scalars, str and bool; `err` and a type's own format still unreachable"),
   ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
   ("Atomic[T] and memory orderings", 0, "absent from check.e"),
   ("extern with @import / @cc and the C ABI", 0.25, "declared and checked; calls rejected"),
-  ("Comptime str parameters and varargs", 0.9, "link/comptime_str, link/str_format; the pack expands for `format`, not yet for `printf` or `launch`"),
+  ("Comptime str parameters and varargs", 0.95, "link/comptime_str, link/str_format, link/io_printf; two of the three pack intrinsics expand, `gpu.launch` does not"),
   ("e.meta reflection", 0, "not started"),
   ("Spec 11 debug check table and trap protocol", 0, "NIR .Trap never emitted"),
   ("General comptime interpreter", 0.25, "integer const folding only"),
@@ -213,6 +213,16 @@ mod_table = ('<table><thead><tr><th>Module</th><th class="sc">Declarations</th>'
 
 mod_pct = 100 * (surf.get(SRC, 0) + 0.5 * surf.get(PART, 0)) / len(plan)
 
+# The prose below the table names three modules by their counts. Typing those in is
+# how the page goes stale one increment after it is written, so they come from the
+# same rows the table does.
+counts = {m: (h, d) for m, h, d in mod_rows}
+
+
+def count_of(module):
+    h, d = counts[module]
+    return '%d of %d' % (h, d)
+
 html = """<!doctype html>
 <html lang="en">
 <head>
@@ -365,20 +375,29 @@ __GROUPS__
   <div class="tw">__MODTABLE__</div>
   <div class="note">
     <h4>What the two large partials mean</h4>
-    <p><code>e.os</code> at 31 of 121 and <code>e.io</code> at 1 of 42 are not stalled
+    <p><code>e.os</code> at __COS__ and <code>e.io</code> at __CIO__ are not stalled
     work. They are exactly the subsets the compiler needs in order to build itself. The
-    rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>; the rest
-    of <code>e.io</code> waits on <code>printf</code>, and so on comptime string
-    parameters and varargs.</p>
-    <p><code>e.str</code> at 64 of 66 is everything a library can express. Of the two
-    left, <code>format</code> now expands: a call becomes a generated function whose
-    body is a builder, a push per piece of the format string, and <code>done</code>.
-    What it cannot yet reach is a push that does not exist &mdash;
-    <code>push_err</code>, the other of the two, needs a runtime error-name table
-    &mdash; and a named type's own <code>format</code>, which needs the expansion to
-    recurse. <code>e.io</code>'s 41 remaining declarations wait on the same expansion
-    driving <code>printf</code>, plus a decision on the callbacks its constructors
-    need and its frozen surface does not name.</p>
+    rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>.
+    <code>e.io</code> no longer waits on <code>printf</code>: that expands, over a
+    4&nbsp;KiB buffer of its own drained through a generated sink.</p>
+    <p><code>e.str</code> at __CSTR__ is everything a library can express.
+    <code>format</code>, which was the other gap, now expands: a call becomes a
+    generated function whose body is a builder, a push per piece of the format
+    string, and <code>done</code>. The one declaration left is <code>push_err</code>,
+    which needs a runtime error-name table &mdash; and it is also the reason a
+    <code>{}</code> on an <code>err</code> stops the build rather than expanding. The
+    expansion's other limit is a named type's own <code>format</code>, which needs it
+    to recurse into an argument.</p>
+    <p>What <code>e.io</code>'s remaining declarations wait on is not a compiler
+    feature but a decision. Ten of its constructors have to supply a callback of
+    their own, and the shape they need &mdash;
+    <code>fn(*void, []u8) -&gt; (usize, err)</code> &mdash; is not one the frozen
+    surface declares. The language has no visibility mechanism (spec&nbsp;&sect;12), so
+    a helper cannot be added quietly: it would be a public symbol the plan does not
+    know about. <code>printf</code>'s own sink hit exactly this and was answered by
+    generating the function in the compiler, which is one of the three ways the rest
+    could go; widening the surface and making the constructors intrinsics are the
+    others.</p>
   </div>
 </section>
 
@@ -451,6 +470,8 @@ for key, val in [
     ('__NMOD__', str(len(blocks))), ('__NPLAN__', str(len(plan))),
     ('__NSRC__', str(surf.get(SRC, 0))), ('__NPART__', str(surf.get(PART, 0))),
     ('__MODPCT__', '%.0f' % mod_pct),
+    ('__COS__', count_of('e.os')), ('__CIO__', count_of('e.io')),
+    ('__CSTR__', count_of('e.str')),
     ('__DATE__', when), ('__REV__', rev),
 ]:
     html = html.replace(key, val)
