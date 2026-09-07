@@ -42,7 +42,7 @@ compiler = {
   ("Supplied format (rule 4)", 0.85, "link/str_format, link/io_printf expand scalars, str, bool and err; slices, arrays and a type's own format need the expansion to recurse"),
   ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
-  ("Atomic[T] and memory orderings", 0, "no parameterised builtin type exists yet -- Vec, Buf and Atomic are all absent from check.e -- so this invents that mechanism, then thirteen e.atomic intrinsics inferred from their pointer, per-operation ordering rules and lock-prefixed codegen. Blocks e.sync and e.channel; shares its first half with Vec"),
+  ("Atomic[T] and memory orderings", 0, "generic aggregates already work as locals; what fails is an instantiation used as a field type, which is the shape e.sync needs. Then the thirteen e.atomic intrinsics inferred from their pointer, per-operation ordering rules and lock-prefixed codegen. Blocks e.sync and e.channel"),
   ("extern with @import / @cc and the C ABI", 0.3, "check/cc_accepted: the checker half is done. No path routes a user extern into an import: PE resolves only runtime symbols, and link_elf.e is a 200-line static ET_EXEC with no PT_INTERP, .dynamic or PLT -- Linux needs dynamic linking built first"),
   ("Comptime str parameters and varargs", 0.95, "link/comptime_str, link/str_format, link/io_printf; two of the three pack intrinsics expand, `gpu.launch` does not"),
   ("e.meta reflection", 0.3, "link/meta_scalar answers kind, array_len and type_name at compile time; the field and member queries need a comptime value of struct type"),
