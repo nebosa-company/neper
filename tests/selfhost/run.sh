@@ -649,6 +649,15 @@ generic_field_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost
 [ "$generic_field_accepted" = 'module check ok' ]
 check_protocol_diagnostic generic_instance_field_leak 'main.e:8:5: error[E-TYPE-9999]: type checking failed: check.InvalidType'
 check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
+# An alias to a generic instantiation cannot resolve in `collect_aliases`' first pass,
+# which runs before any aggregate is registered, so a field naming one holds the alias
+# name until the second pass. `lead` and `tail` bracket the instances, so a size or
+# offset taken from an unexpanded field type is a wrong value and not just a wrong type.
+generic_instance_alias_path="$test_build/generic-instance-alias-selfhost"
+generic_instance_alias_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_instance_alias/src/main.e" "$repo" x64 linux "$generic_instance_alias_path")
+[ "$generic_instance_alias_written" = 'executable written' ]
+chmod +x "$generic_instance_alias_path"
+"$generic_instance_alias_path"
 generic_instances_executable_path="$test_build/generic-instances-selfhost"
 generic_instances_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/generic_instances/src/main.e" "$repo" x64 linux "$generic_instances_executable_path")
 [ "$generic_instances_executable_written" = 'executable written' ]

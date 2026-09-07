@@ -623,6 +623,15 @@ $genericFieldLeak = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixt
 if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:5: error\[E-TYPE-9999\]: type checking failed: check\.InvalidType') {
     throw "a generic instance's own field leaked into the enclosing struct: $($genericFieldLeak -join "`n")"
 }
+# An alias to a generic instantiation cannot resolve in `collect_aliases`' first pass,
+# which runs before any aggregate is registered, so a field naming one holds the alias
+# name until the second pass. `lead` and `tail` bracket the instances, so a size or
+# offset taken from an unexpanded field type is a wrong value and not just a wrong type.
+$genericInstanceAliasPath = Join-Path $testBuild 'generic-instance-alias-selfhost.exe'
+$genericInstanceAliasWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_instance_alias\src\main.e') $repo 'x64' 'windows' $genericInstanceAliasPath
+if ($LASTEXITCODE -ne 0 -or $genericInstanceAliasWritten -ne 'executable written') { throw 'aliased generic instance executable emission failed' }
+& $genericInstanceAliasPath
+if ($LASTEXITCODE -ne 0) { throw 'a field whose type is a generic instance reached through an alias is laid out wrong' }
 $genericInstancesExecutablePath = Join-Path $testBuild 'generic-instances-selfhost.exe'
 $genericInstancesExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\generic_instances\src\main.e') $repo 'x64' 'windows' $genericInstancesExecutablePath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesExecutableWritten -ne 'executable written') { throw 'multi-instance generic PE executable emission failed' }

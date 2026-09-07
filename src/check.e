@@ -1391,7 +1391,16 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     }
     if !c.expand_aliases { ret (result, ok) }
     let (canonical, canonical_error) = canonical_type(c, result)
-    ret (canonical, canonical_error)
+    if canonical_error != ok { ret (canonical, canonical_error) }
+    // `collect_aliases`' first pass runs before any aggregate is registered, so an
+    // alias to a generic instantiation defers to `.Other` there. Expanding to that
+    // would freeze it into whatever names the alias -- an aggregate's field type,
+    // collected before the second pass resolves the alias for real. Keep the name
+    // instead and let it canonicalise at use, by which time the alias is resolved.
+    // An alias that never resolves is not silently lost: the second pass is strict
+    // and fails on the same right-hand side.
+    if canonical.kind == .Other { ret (result, ok) }
+    ret (canonical, ok)
 }
 
 fn declaration_name(c: *Checker, text: str, node: syntax.Node) -> (str, err) {
@@ -1828,6 +1837,22 @@ fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
     try seed_intrinsic_aggregates(c, g)
     try collect_aggregate_pass(c, r, g, true)
     ret collect_aggregate_pass(c, r, g, false)
+}
+
+// A field type is stored fully expanded -- every aggregate lookup and every type
+// comparison relies on that. `collect_aggregates` cannot always manage it: an alias
+// to a generic instantiation does not resolve in `collect_aliases`' first pass, which
+// runs before any aggregate is registered, so a field naming one keeps the alias name.
+// The second pass resolves those, and this walk expands what they were holding open.
+fn expand_aggregate_field_types(c: *Checker) -> err {
+    var at = 0usize
+    while at < c.aggregate_field_count {
+        let (resolved, resolve_error) = canonical_type(c, c.aggregate_fields[at].ty)
+        if resolve_error != ok { ret resolve_error }
+        c.aggregate_fields[at].ty = resolved
+        at += 1usize
+    }
+    ret ok
 }
 
 fn type_has_value_cycle(c: *Checker, ty: Type, cycle_root: usize, depth: usize) -> (bool, err) {
@@ -7439,6 +7464,7 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     try collect_aggregates(c, r, g)
     if c.diagnostic_count != 0usize { ret InvalidType }
     try collect_aliases(c, r, g, false)
+    try expand_aggregate_field_types(c)
     try validate_aggregate_value_cycles(c)
     try collect_signatures(c, r, g)
     ret check_bodies(c, r, g)
