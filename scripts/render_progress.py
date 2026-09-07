@@ -373,14 +373,13 @@ __GROUPS__
     <p><code>e.str</code> at 58 of 66 is the builder half, which
     <code>mem.view</code> unblocked and <code>mem.cast</code> completed by making a
     <code>Sink</code> context constructible, plus the read-only half and the integer
-    parsers, none of which needed compiler work at all. Nothing is left that a
-    library can reach today. Float lowering has landed, so the four float pushes and
-    two float parsers are no longer blocked on it, but writing a shortest
-    round-tripping float needs the value's bits and <code>mem.bitcast</code> is still
-    unimplemented; <code>push_err</code> waits on a runtime error-name table, and
-    <code>format</code> &mdash; rule&nbsp;4's supplied protocol, the one still missing
-    on the compiler side &mdash; on comptime <code>str</code> parameters and
-    varargs.</p>
+    parsers, none of which needed compiler work at all. The compiler side of the
+    remaining 8 is now clear: float lowering and <code>mem.bitcast</code> have both
+    landed, so the four float pushes and two float parsers are library work again,
+    and they are the largest piece of it. <code>push_err</code> still waits on a
+    runtime error-name table, and <code>format</code> &mdash; rule&nbsp;4's supplied
+    protocol, the one still missing on the compiler side &mdash; on comptime
+    <code>str</code> parameters and varargs.</p>
   </div>
 </section>
 
