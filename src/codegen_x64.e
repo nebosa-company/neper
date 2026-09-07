@@ -146,11 +146,26 @@ fn integer_width(ty: check.Type) -> usize {
     ret 64usize
 }
 
+// f16 and bf16 are in the type system but not in this emitter, so they answer zero
+// here and reach the caller as `Unsupported` rather than as the wrong width.
+fn float_width(ty: check.Type) -> usize {
+    if ty.kind != .Float { ret 0usize }
+    if check.same(ty.name, "f32") { ret 32usize }
+    if check.same(ty.name, "f64") { ret 64usize }
+    ret 0usize
+}
+
+fn float_sign_bit(width: usize) -> usize {
+    if width == 32usize { ret 2147483648usize }
+    ret 9223372036854775808usize
+}
+
 fn storage_width(instruction: nir.Instruction) -> usize {
     if instruction.immediate == 1usize || instruction.immediate == 2usize || instruction.immediate == 4usize || instruction.immediate == 8usize { ret instruction.immediate * 8usize }
     if instruction.ty.kind == .Bool { ret 8usize }
     if instruction.ty.kind == .Err { ret 32usize }
     if instruction.ty.kind == .Pointer || instruction.ty.kind == .String || instruction.ty.kind == .Slice { ret 64usize }
+    if instruction.ty.kind == .Float { ret float_width(instruction.ty) }
     ret integer_width(instruction.ty)
 }
 
@@ -192,6 +207,228 @@ fn comparison_condition(opcode: nir.Opcode, unsigned: bool) -> (usize, err) {
     ret (0usize, Unsupported)
 }
 
+// A float operation is told apart by type, not by opcode: the arithmetic and
+// comparison opcodes are shared with the integers, and only the operand or result
+// type says which file the value lives in.
+fn float_operation(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction) -> bool {
+    let opcode = instruction.opcode
+    if opcode == .Add || opcode == .Subtract || opcode == .Multiply || opcode == .Divide || opcode == .Negate {
+        ret instruction.ty.kind == .Float
+    }
+    if opcode == .Cast {
+        if instruction.ty.kind == .Float { ret true }
+        if instruction.operand_count != 1usize { ret false }
+        let (source_type, source_error) = value_type(builder, current, builder.operands[instruction.first_operand])
+        if source_error != ok { ret false }
+        ret source_type.kind == .Float
+    }
+    if comparison(opcode) {
+        if instruction.operand_count != 2usize { ret false }
+        let (operand_type, operand_error) = value_type(builder, current, builder.operands[instruction.first_operand])
+        if operand_error != ok { ret false }
+        ret operand_type.kind == .Float
+    }
+    ret false
+}
+
+// Float values live in general registers as raw bits and move into xmm0 and xmm1 for
+// the operation itself. The cost is two moves per operation and no float value ever
+// staying in a vector register; the upgrade is a second register class in
+// `regalloc`, which the allocator's `register_count` parameter is already shaped for.
+fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    if instruction.operand_count != 2usize || !instruction.has_result { ret Unsupported }
+    let width = float_width(instruction.ty)
+    if width == 0usize { ret Unsupported }
+    let wide = width == 64usize
+    let left_value = builder.operands[instruction.first_operand]
+    let right_value = builder.operands[instruction.first_operand + 1usize]
+    let (left, left_error) = read_value(allocations, left_value, 10usize, output)
+    if left_error != ok { ret left_error }
+    let (right, right_error) = read_value(allocations, right_value, 11usize, output)
+    if right_error != ok { ret right_error }
+    try emit_x64.move_to_float(output, 0usize, left, wide)
+    try emit_x64.move_to_float(output, 1usize, right, wide)
+    var opcode = 88usize
+    if instruction.opcode == .Subtract { opcode = 92usize }
+    if instruction.opcode == .Multiply { opcode = 89usize }
+    if instruction.opcode == .Divide { opcode = 94usize }
+    try emit_x64.float_binary(output, 0usize, 1usize, opcode, wide)
+    let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+    if destination_error != ok { ret destination_error }
+    try emit_x64.move_from_float(output, destination, 0usize, wide)
+    ret store_result(allocations, instruction.result, destination, output)
+}
+
+// Section 6 asks for IEEE ordered comparison: every ordering against a NaN is false,
+// `==` is false and `!=` is true. `ucomis` reports unordered by setting CF, ZF and PF
+// at once, so `above` and `above or equal` already answer false for a NaN and the two
+// ordering forms that would need `below` swap their operands instead. Equality is the
+// only pair that needs the parity flag, because a NaN sets ZF as well.
+fn select_float_comparison(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    if instruction.operand_count != 2usize || !instruction.has_result { ret Unsupported }
+    let left_value = builder.operands[instruction.first_operand]
+    let right_value = builder.operands[instruction.first_operand + 1usize]
+    let (operand_type, operand_type_error) = value_type(builder, current, left_value)
+    if operand_type_error != ok { ret operand_type_error }
+    let width = float_width(operand_type)
+    if width == 0usize { ret Unsupported }
+    let wide = width == 64usize
+    let (left, left_error) = read_value(allocations, left_value, 10usize, output)
+    if left_error != ok { ret left_error }
+    let (right, right_error) = read_value(allocations, right_value, 11usize, output)
+    if right_error != ok { ret right_error }
+    let swapped = instruction.opcode == .Less || instruction.opcode == .LessEqual
+    if swapped {
+        try emit_x64.move_to_float(output, 0usize, right, wide)
+        try emit_x64.move_to_float(output, 1usize, left, wide)
+    } else {
+        try emit_x64.move_to_float(output, 0usize, left, wide)
+        try emit_x64.move_to_float(output, 1usize, right, wide)
+    }
+    try emit_x64.float_compare(output, 0usize, 1usize, wide)
+    let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+    if destination_error != ok { ret destination_error }
+    if instruction.opcode == .Equal || instruction.opcode == .NotEqual {
+        try emit_x64.mov_immediate(output, destination, 0usize)
+        try emit_x64.mov_immediate(output, 11usize, 0usize)
+        if instruction.opcode == .Equal {
+            try emit_x64.set_condition(output, destination, 4usize)
+            try emit_x64.set_condition(output, 11usize, 11usize)
+            try emit_x64.bit_and_register(output, destination, 11usize)
+        } else {
+            try emit_x64.set_condition(output, destination, 5usize)
+            try emit_x64.set_condition(output, 11usize, 10usize)
+            try emit_x64.bit_or_register(output, destination, 11usize)
+        }
+        ret store_result(allocations, instruction.result, destination, output)
+    }
+    var condition = 7usize
+    if instruction.opcode == .GreaterEqual || instruction.opcode == .LessEqual { condition = 3usize }
+    try emit_x64.mov_immediate(output, destination, 0usize)
+    try emit_x64.set_condition(output, destination, condition)
+    ret store_result(allocations, instruction.result, destination, output)
+}
+
+fn select_float_negate(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    if instruction.operand_count != 1usize || !instruction.has_result { ret Unsupported }
+    let width = float_width(instruction.ty)
+    if width == 0usize { ret Unsupported }
+    let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+    if source_error != ok { ret source_error }
+    let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+    if destination_error != ok { ret destination_error }
+    // Negation is the one float operation with an exact integer spelling: flip the
+    // sign bit and leave every other bit, which is right for zero and for a NaN too.
+    try emit_x64.mov_immediate(output, 11usize, float_sign_bit(width))
+    if destination != source { try emit_x64.mov_register(output, destination, source) }
+    try emit_x64.bit_xor_register(output, destination, 11usize)
+    ret store_result(allocations, instruction.result, destination, output)
+}
+
+// Only a 64-bit unsigned integer can hold a value the signed conversion instructions
+// cannot express. Everything narrower already sits zero-extended in a general
+// register and converts as the signed value it equals.
+fn unsigned_wide(ty: check.Type) -> bool {
+    if ty.kind != .Integer || signed_integer(ty) { ret false }
+    ret integer_width(ty) == 64usize
+}
+
+// 2**63 as a float, which is where the signed conversions stop.
+fn two_to_the_sixty_third(wide: bool) -> usize {
+    if wide { ret 4890909195324358656usize }
+    ret 1593835520usize
+}
+
+// `cvtsi2sd` reads its operand as signed, so a `u64` with the top bit set would
+// convert to a negative value. Halving it and folding the lost bit back into the new
+// bottom bit keeps everything the rounding depends on, so doubling afterwards lands
+// on the same result a direct conversion would.
+fn float_from_integer(source: usize, unsigned: bool, wide: bool, output: *emit_x64.Buffer) -> err {
+    if !unsigned { ret emit_x64.float_from_signed(output, 0usize, source, wide) }
+    if source != 11usize { try emit_x64.mov_register(output, 11usize, source) }
+    try emit_x64.test_register(output, 11usize)
+    let (big_at, big_error) = emit_x64.jump_condition(output, 8usize)
+    if big_error != ok { ret big_error }
+    try emit_x64.float_from_signed(output, 0usize, 11usize, wide)
+    let (done_at, done_error) = emit_x64.jump(output)
+    if done_error != ok { ret done_error }
+    try emit_x64.patch_relative32(output, big_at, output.count)
+    try emit_x64.mov_register(output, 10usize, 11usize)
+    try emit_x64.shift_right_one(output, 11usize)
+    try emit_x64.and_immediate8(output, 10usize, 1usize)
+    try emit_x64.bit_or_register(output, 11usize, 10usize)
+    try emit_x64.float_from_signed(output, 0usize, 11usize, wide)
+    try emit_x64.float_binary(output, 0usize, 0usize, 88usize, wide)
+    ret emit_x64.patch_relative32(output, done_at, output.count)
+}
+
+// The mirror: above 2**63 `cvttsd2si` has no answer, so the value comes down by that
+// much before the conversion and the bit goes back on afterwards. A value out of
+// range for the target, and a NaN, get whatever the instruction gives -- section 11's
+// saturating release behaviour needs the check table, which nothing emits yet.
+fn integer_from_float(destination: usize, unsigned: bool, wide: bool, output: *emit_x64.Buffer) -> err {
+    if !unsigned { ret emit_x64.signed_from_float(output, destination, 0usize, wide) }
+    try emit_x64.mov_immediate(output, 11usize, two_to_the_sixty_third(wide))
+    try emit_x64.move_to_float(output, 1usize, 11usize, wide)
+    try emit_x64.float_compare(output, 0usize, 1usize, wide)
+    let (big_at, big_error) = emit_x64.jump_condition(output, 3usize)
+    if big_error != ok { ret big_error }
+    try emit_x64.signed_from_float(output, 10usize, 0usize, wide)
+    let (done_at, done_error) = emit_x64.jump(output)
+    if done_error != ok { ret done_error }
+    try emit_x64.patch_relative32(output, big_at, output.count)
+    try emit_x64.float_binary(output, 0usize, 1usize, 92usize, wide)
+    try emit_x64.signed_from_float(output, 10usize, 0usize, wide)
+    try emit_x64.bit_toggle_high(output, 10usize)
+    try emit_x64.patch_relative32(output, done_at, output.count)
+    if destination != 10usize { try emit_x64.mov_register(output, destination, 10usize) }
+    ret ok
+}
+
+fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    if instruction.operand_count != 1usize || !instruction.has_result { ret Unsupported }
+    let source_value = builder.operands[instruction.first_operand]
+    let (source_type, source_type_error) = value_type(builder, current, source_value)
+    if source_type_error != ok { ret Unsupported }
+    // The source reads into r11 and the result out of r10, which leaves the other one
+    // free for the unsigned conversions to work in.
+    let (source, source_error) = read_value(allocations, source_value, 11usize, output)
+    if source_error != ok { ret source_error }
+    let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+    if destination_error != ok { ret destination_error }
+    let source_width = float_width(source_type)
+    let target_width = float_width(instruction.ty)
+    if source_type.kind == .Float && instruction.ty.kind == .Float {
+        if source_width == 0usize || target_width == 0usize { ret Unsupported }
+        if source_width == target_width {
+            if destination != source { try emit_x64.mov_register(output, destination, source) }
+            ret store_result(allocations, instruction.result, destination, output)
+        }
+        try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
+        try emit_x64.float_convert(output, 0usize, 0usize, target_width == 64usize)
+        try emit_x64.move_from_float(output, destination, 0usize, target_width == 64usize)
+        ret store_result(allocations, instruction.result, destination, output)
+    }
+    if instruction.ty.kind == .Float {
+        if target_width == 0usize || source_type.kind != .Integer { ret Unsupported }
+        try float_from_integer(source, unsigned_wide(source_type), target_width == 64usize, output)
+        try emit_x64.move_from_float(output, destination, 0usize, target_width == 64usize)
+        ret store_result(allocations, instruction.result, destination, output)
+    }
+    if source_width == 0usize || instruction.ty.kind != .Integer { ret Unsupported }
+    try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
+    try integer_from_float(destination, unsigned_wide(instruction.ty), source_width == 64usize, output)
+    try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty))
+    ret store_result(allocations, instruction.result, destination, output)
+}
+
+fn select_float(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    if instruction.opcode == .Cast { ret select_float_cast(builder, current, instruction, allocations, output) }
+    if instruction.opcode == .Negate { ret select_float_negate(builder, instruction, allocations, output) }
+    if comparison(instruction.opcode) { ret select_float_comparison(builder, current, instruction, allocations, output) }
+    ret select_float_binary(builder, current, instruction, allocations, output)
+}
+
 fn parameter_count(builder: *nir.Builder, current: nir.Function) -> (usize, err) {
     var count = 0usize
     let end = current.first_instruction + current.instruction_count
@@ -229,15 +466,132 @@ fn parameter_register_count(abi: Abi) -> usize {
     ret 6usize
 }
 
-fn incoming_stack_displacement(abi: Abi, index: usize) -> usize {
-    if abi == .Windows { ret 48usize + (index - 4usize) * 8usize }
-    ret 16usize + (index - 6usize) * 8usize
+fn incoming_stack_displacement(abi: Abi, stack_index: usize) -> usize {
+    if abi == .Windows { ret 48usize + stack_index * 8usize }
+    ret 16usize + stack_index * 8usize
 }
 
-fn outgoing_stack_displacement(abi: Abi, index: usize) -> usize {
-    if abi == .Windows { ret 32usize + (index - 4usize) * 8usize }
-    let stack_index = index - 6usize
+fn outgoing_stack_displacement(abi: Abi, stack_index: usize) -> usize {
+    if abi == .Windows { ret 32usize + stack_index * 8usize }
     ret stack_index * 8usize
+}
+
+// Win64 matches an argument to the register in its own position, so a float in slot 2
+// is `xmm2` and the integer register for slot 2 goes unused. System V classifies
+// instead: the two files are counted separately, so an integer argument and a float
+// argument each advance only their own counter. Everything past the registers keeps
+// its order in the overflow area, which is why the stack index is counted here too
+// rather than derived from the argument index.
+fn classify_argument(abi: Abi, float: bool, index: usize, integer_used: *usize, float_used: *usize, stack_used: *usize, in_register: *bool, register: *usize, stack_index: *usize) -> err {
+    *in_register = false
+    *register = 0usize
+    *stack_index = 0usize
+    if abi == .Windows {
+        if index < 4usize {
+            *in_register = true
+            if float {
+                *register = index
+                ret ok
+            }
+            let (integer_register, integer_error) = parameter_register(abi, index)
+            *register = integer_register
+            ret integer_error
+        }
+        *stack_index = index - 4usize
+        ret ok
+    }
+    if float {
+        if *float_used < 8usize {
+            *in_register = true
+            *register = *float_used
+            *float_used += 1usize
+            ret ok
+        }
+    } else {
+        if *integer_used < 6usize {
+            *in_register = true
+            let (integer_register, integer_error) = parameter_register(abi, *integer_used)
+            *register = integer_register
+            *integer_used += 1usize
+            ret integer_error
+        }
+    }
+    *stack_index = *stack_used
+    *stack_used += 1usize
+    ret ok
+}
+
+fn parameter_float_width(builder: *nir.Builder, current: nir.Function, index: usize) -> usize {
+    let end = current.first_instruction + current.instruction_count
+    var at = current.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        if instruction.opcode == .Parameter && instruction.immediate == index { ret float_width(instruction.ty) }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+// Every parameter is spilled to its own slot on entry, so the rest of selection never
+// has to know which file it arrived in.
+fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, abi: Abi, stack_slots: usize, parameters: usize, output: *emit_x64.Buffer) -> err {
+    var integer_used = 0usize
+    var float_used = 0usize
+    var stack_used = 0usize
+    var in_register = false
+    var register = 0usize
+    var stack_index = 0usize
+    var at = 0usize
+    while at < parameters {
+        let width = parameter_float_width(builder, current, at)
+        try classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+        if in_register {
+            if width == 0usize {
+                try emit_x64.store_stack(output, stack_slots + at, register)
+            } else {
+                try emit_x64.move_from_float(output, 10usize, register, width == 64usize)
+                try emit_x64.store_stack(output, stack_slots + at, 10usize)
+            }
+        } else {
+            try emit_x64.load_frame_argument(output, 10usize, incoming_stack_displacement(abi, stack_index))
+            try emit_x64.store_stack(output, stack_slots + at, 10usize)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// The arguments are already parked in the outgoing slots as raw bits; this moves each
+// into the place the convention names for it.
+fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, abi: Abi, first_argument: usize, argument_total: usize, outgoing_base: usize, output: *emit_x64.Buffer) -> err {
+    var integer_used = 0usize
+    var float_used = 0usize
+    var stack_used = 0usize
+    var in_register = false
+    var register = 0usize
+    var stack_index = 0usize
+    var at = 0usize
+    while at < argument_total {
+        let value = builder.operands[instruction.first_operand + first_argument + at]
+        let (argument_type, argument_type_error) = value_type(builder, current, value)
+        if argument_type_error != ok { ret argument_type_error }
+        let width = float_width(argument_type)
+        if argument_type.kind == .Float && width == 0usize { ret Unsupported }
+        try classify_argument(abi, width != 0usize, at, &integer_used, &float_used, &stack_used, &in_register, &register, &stack_index)
+        if in_register {
+            if width == 0usize {
+                try emit_x64.load_stack(output, register, outgoing_base + at)
+            } else {
+                try emit_x64.load_stack(output, 10usize, outgoing_base + at)
+                try emit_x64.move_to_float(output, register, 10usize, width == 64usize)
+            }
+        } else {
+            try emit_x64.load_stack(output, 10usize, outgoing_base + at)
+            try emit_x64.store_call_argument(output, outgoing_stack_displacement(abi, stack_index), 10usize)
+        }
+        at += 1usize
+    }
+    ret ok
 }
 
 fn max_call_arguments(builder: *nir.Builder, current: nir.Function) -> usize {
@@ -535,18 +889,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     }
     let frame_slots = preserve_base + preserve_count + call_area_count
     if frame_slots != 0usize { try emit_x64.function_prologue(output, frame_slots) }
-    var parameter_at = 0usize
-    while parameter_at < parameters {
-        if parameter_at < parameter_register_count(abi) {
-            let (incoming, incoming_error) = parameter_register(abi, parameter_at)
-            if incoming_error != ok { ret incoming_error }
-            try emit_x64.store_stack(output, stack_slots + parameter_at, incoming)
-        } else {
-            try emit_x64.load_frame_argument(output, 10usize, incoming_stack_displacement(abi, parameter_at))
-            try emit_x64.store_stack(output, stack_slots + parameter_at, 10usize)
-        }
-        parameter_at += 1usize
-    }
+    try store_incoming_parameters(builder, current, abi, stack_slots, parameters, output)
     let end = current.first_instruction + current.instruction_count
     var fixup_count = 0usize
     var at = current.first_instruction
@@ -560,6 +903,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         let instruction = builder.instructions[at]
         context.failure_token = instruction.token
         context.failure_instruction = at
+        if float_operation(builder, current, instruction) {
+            try select_float(builder, current, instruction, allocations, output)
+        } else {
         if instruction.opcode == .Parameter {
             if instruction.immediate >= parameters { ret Unsupported }
             let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
@@ -663,7 +1009,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 }
                 try store_result(allocations, instruction.result, destination, output)
             } else {
-        if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError {
+        if instruction.opcode == .ConstInteger || instruction.opcode == .ConstBool || instruction.opcode == .ConstError || instruction.opcode == .ConstFloat {
             let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
             if destination_error != ok { ret destination_error }
             try emit_x64.mov_immediate(output, destination, instruction.immediate)
@@ -770,18 +1116,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         try emit_x64.store_stack(output, outgoing_base + argument_at, source)
                         argument_at += 1usize
                     }
-                    argument_at = 0usize
-                    while argument_at < argument_total {
-                        if argument_at < parameter_register_count(abi) {
-                            let (destination, destination_error) = parameter_register(abi, argument_at)
-                            if destination_error != ok { ret destination_error }
-                            try emit_x64.load_stack(output, destination, outgoing_base + argument_at)
-                        } else {
-                            try emit_x64.load_stack(output, 10usize, outgoing_base + argument_at)
-                            try emit_x64.store_call_argument(output, outgoing_stack_displacement(abi, argument_at), 10usize)
-                        }
-                        argument_at += 1usize
-                    }
+                    try load_call_arguments(builder, current, instruction, abi, first_argument, argument_total, outgoing_base, output)
                     if indirect {
                         try emit_x64.load_stack(output, 11usize, outgoing_base + argument_total)
                         try emit_x64.call_register(output, 11usize)
@@ -792,7 +1127,13 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     }
                     let multiple_results = instruction.has_result && (instruction.ty.kind == .Invalid || (instruction.ty.kind == .Other && check.same(instruction.ty.name, "return-values")))
                     if instruction.has_result {
-                        try emit_x64.mov_register(output, 10usize, 0usize)
+                        let result_float = float_width(instruction.ty)
+                        if result_float != 0usize {
+                            try emit_x64.move_from_float(output, 10usize, 0usize, result_float == 64usize)
+                        } else {
+                            if instruction.ty.kind == .Float { ret Unsupported }
+                            try emit_x64.mov_register(output, 10usize, 0usize)
+                        }
                         if multiple_results { try emit_x64.mov_register(output, 11usize, 2usize) }
                     }
                     try restore_allocated_registers(output, preserve_base, preserve_count)
@@ -849,7 +1190,15 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         let value = builder.operands[instruction.first_operand]
                         let (source, source_error) = read_value(allocations, value, 10usize, output)
                         if source_error != ok { ret source_error }
-                        if source != 0usize { try emit_x64.mov_register(output, 0usize, source) }
+                        let (returned_type, returned_error) = value_type(builder, current, value)
+                        if returned_error != ok { ret returned_error }
+                        if returned_type.kind == .Float {
+                            let returned_width = float_width(returned_type)
+                            if returned_width == 0usize { ret Unsupported }
+                            try emit_x64.move_to_float(output, 0usize, source, returned_width == 64usize)
+                        } else {
+                            if source != 0usize { try emit_x64.mov_register(output, 0usize, source) }
+                        }
                     } else {
                         if instruction.operand_count == 2usize {
                             let first_value = builder.operands[instruction.first_operand]
@@ -887,6 +1236,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             }
             }
             }
+        }
         }
         }
         }

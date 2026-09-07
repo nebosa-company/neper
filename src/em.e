@@ -315,6 +315,7 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     if opcode == .Unreachable { ret 44usize }
     if opcode == .FunctionAddress { ret 45usize }
     if opcode == .IndirectCall { ret 46usize }
+    if opcode == .ConstFloat { ret 47usize }
     ret 0usize
 }
 

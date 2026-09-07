@@ -394,6 +394,15 @@ $strBuilderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $strBuilderWritten -ne 'executable written') { throw 'str builder executable emission failed' }
 & $strBuilderPath
 if ($LASTEXITCODE -ne 0) { throw 'the string builder or one of its pushes is wrong' }
+# Scalar f32 and f64 end to end. Float values live in general registers as raw bits
+# and move into xmm only for the operation itself, so the fixture pins the literals,
+# the four operators, IEEE comparison against a NaN, both conversion directions
+# including the unsigned 64-bit edge, and float arguments across the convention.
+$floatPath = Join-Path $testBuild 'float-scalar-selfhost.exe'
+$floatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\float_scalar\src\main.e') $repo 'x64' 'windows' $floatPath
+if ($LASTEXITCODE -ne 0 -or $floatWritten -ne 'executable written') { throw 'float executable emission failed' }
+& $floatPath
+if ($LASTEXITCODE -ne 0) { throw 'a float literal, operator, comparison or conversion is wrong' }
 # The read-only half of `e.str`: comparison, search, trim, split, the integer parsers
 # and the forms that allocate. The fixture pins what an empty needle matches, where a
 # non-overlapping count stops, that `lines` takes CRLF without inventing a final empty

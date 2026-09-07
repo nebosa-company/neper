@@ -281,6 +281,103 @@ fn normalize_integer(buffer: *Buffer, destination: usize, source: usize, width: 
     ret InvalidByte
 }
 
+// SSE2, which is the floating-point baseline every x64 target has. Float values live
+// in general registers as raw bits between operations, so the only xmm registers this
+// emitter names are the two scratch ones an operation borrows; `reg` and `rm` below
+// are whichever file the opcode says, and the caller keeps them straight.
+fn sse(buffer: *Buffer, mandatory: usize, wide: bool, reg: usize, rm: usize, opcode: usize) -> err {
+    try check_register(reg)
+    try check_register(rm)
+    if mandatory != 0usize { try byte(buffer, mandatory) }
+    var extension = 0usize
+    if wide { extension += 8usize }
+    if reg >= 8usize { extension += 4usize }
+    if rm >= 8usize { extension += 1usize }
+    if extension != 0usize { try byte(buffer, 64usize + extension) }
+    try byte(buffer, 15usize)
+    try byte(buffer, opcode)
+    ret modrm(buffer, reg, rm)
+}
+
+// `movq`/`movd` in both directions: the bits move, nothing is converted.
+fn move_to_float(buffer: *Buffer, destination: usize, source: usize, wide: bool) -> err {
+    ret sse(buffer, 102usize, wide, destination, source, 110usize)
+}
+
+fn move_from_float(buffer: *Buffer, destination: usize, source: usize, wide: bool) -> err {
+    ret sse(buffer, 102usize, wide, source, destination, 126usize)
+}
+
+// `addsd` 0x58, `mulsd` 0x59, `subsd` 0x5c, `divsd` 0x5e; the `F2`/`F3` prefix picks
+// double or single, and REX.W has no meaning for these.
+fn float_binary(buffer: *Buffer, destination: usize, source: usize, opcode: usize, wide: bool) -> err {
+    var mandatory = 243usize
+    if wide { mandatory = 242usize }
+    ret sse(buffer, mandatory, false, destination, source, opcode)
+}
+
+// `ucomiss` / `ucomisd`. Unordered sets ZF, PF and CF together, which is what makes
+// `above` and `above or equal` the two conditions that answer false for a NaN.
+fn float_compare(buffer: *Buffer, left: usize, right: usize, wide: bool) -> err {
+    var mandatory = 0usize
+    if wide { mandatory = 102usize }
+    ret sse(buffer, mandatory, false, left, right, 46usize)
+}
+
+// `cvtsi2ss` / `cvtsi2sd` from a 64-bit general register holding a signed value.
+fn float_from_signed(buffer: *Buffer, destination: usize, source: usize, wide: bool) -> err {
+    var mandatory = 243usize
+    if wide { mandatory = 242usize }
+    ret sse(buffer, mandatory, true, destination, source, 42usize)
+}
+
+// `cvttss2si` / `cvttsd2si` into a 64-bit general register, truncating toward zero.
+fn signed_from_float(buffer: *Buffer, destination: usize, source: usize, wide: bool) -> err {
+    var mandatory = 243usize
+    if wide { mandatory = 242usize }
+    ret sse(buffer, mandatory, true, destination, source, 44usize)
+}
+
+// `cvtss2sd` when widening, `cvtsd2ss` when narrowing.
+fn float_convert(buffer: *Buffer, destination: usize, source: usize, to_wide: bool) -> err {
+    var mandatory = 242usize
+    if to_wide { mandatory = 243usize }
+    ret sse(buffer, mandatory, false, destination, source, 90usize)
+}
+
+// `shr r64, 1`, which the unsigned 64-bit conversions need and no integer selection
+// does.
+// `btc r64, 63`, which puts back the 2**63 an unsigned conversion took out.
+fn bit_toggle_high(buffer: *Buffer, destination: usize) -> err {
+    try check_register(destination)
+    try rex(buffer, 7usize, destination)
+    try byte(buffer, 15usize)
+    try byte(buffer, 186usize)
+    try modrm(buffer, 7usize, destination)
+    ret byte(buffer, 63usize)
+}
+
+fn shift_right_one(buffer: *Buffer, destination: usize) -> err {
+    try check_register(destination)
+    try rex(buffer, 5usize, destination)
+    try byte(buffer, 209usize)
+    ret modrm(buffer, 5usize, destination)
+}
+
+// A forward `jcc rel32` whose displacement the caller patches once the landing point
+// is known, the same contract `jump` has.
+fn jump_condition(buffer: *Buffer, condition: usize) -> (usize, err) {
+    if condition >= 16usize { ret (0usize, InvalidByte) }
+    let opcode_error = byte(buffer, 15usize)
+    if opcode_error != ok { ret (0usize, opcode_error) }
+    let condition_error = byte(buffer, 128usize + condition)
+    if condition_error != ok { ret (0usize, condition_error) }
+    let displacement_at = buffer.count
+    let placeholder_error = little_u32(buffer, 0usize)
+    if placeholder_error != ok { ret (0usize, placeholder_error) }
+    ret (displacement_at, ok)
+}
+
 fn frame_size(stack_slots: usize) -> usize {
     let bytes = stack_slots * 8usize
     let rounded = bytes + 15usize

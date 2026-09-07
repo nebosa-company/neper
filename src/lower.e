@@ -3,6 +3,7 @@
 
 use artifact_hash
 use check
+use decimal
 use graph
 use layout
 use lex
@@ -180,12 +181,20 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
                     if string_error != ok { ret (0usize, string_error) }
                     immediate = string_index
                 } else {
+                    if token.kind == .Float {
+                        let (pattern, pattern_type, pattern_error) = float_literal_bits(c, text, node, ty)
+                        if pattern_error != ok { ret (0usize, pattern_error) }
+                        opcode = .ConstFloat
+                        immediate = pattern
+                        ty = pattern_type
+                    } else {
                     if token.kind != .Integer { ret (0usize, check.Unsupported) }
                     let (value, literal_type, value_error) = check.integer_literal_value(c, text, node)
                     if value_error != ok { ret (0usize, value_error) }
                     opcode = .ConstInteger
                     immediate = value
                     if ty.kind == .Invalid { ty = literal_type }
+                    }
                 }
             }
         }
@@ -193,6 +202,26 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
     let (instruction, result, emit_error) = nir.emit(builder, opcode, ty, true, immediate, token)
     if emit_error != ok { ret (0usize, emit_error) }
     ret (result, ok)
+}
+
+// A float literal's width comes from the context where there is one and from the
+// literal's own suffix otherwise. An untyped float with neither is the same error a
+// caller gets for any literal whose type nothing fixes.
+fn float_literal_bits(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type) -> (usize, check.Type, err) {
+    let token = c.tokens[node.token_start]
+    var ty = expected
+    if ty.kind != .Float {
+        let literal_type = check.numeric_literal_type(text, token)
+        if literal_type.kind != .Float { ret (0usize, ty, check.MissingContext) }
+        ty = literal_type
+    }
+    var width = 0usize
+    if check.same(ty.name, "f32") { width = 32usize }
+    if check.same(ty.name, "f64") { width = 64usize }
+    if width == 0usize { ret (0usize, ty, check.Unsupported) }
+    let (pattern, pattern_error) = decimal.literal_bits(text[token.start..token.end], width)
+    if pattern_error != ok { ret (0usize, ty, pattern_error) }
+    ret (pattern, ty, ok)
 }
 
 fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
@@ -205,7 +234,7 @@ fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, toke
 }
 
 fn register_return_type(c: *check.Checker, ty: check.Type) -> bool {
-    if ty.kind == .Bool || ty.kind == .Err || ty.kind == .Integer || ty.kind == .Pointer { ret true }
+    if ty.kind == .Bool || ty.kind == .Err || ty.kind == .Integer || ty.kind == .Pointer || ty.kind == .Float { ret true }
     if ty.kind == .Named || ty.kind == .Tag {
         let (aggregate_index, found) = layout.aggregate_index(c, ty)
         if found && c.aggregates[aggregate_index].kind == .Enum { ret true }

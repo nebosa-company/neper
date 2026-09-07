@@ -4,6 +4,7 @@ use e.os
 use artifact_hash
 use binary
 use check
+use decimal
 use codegen_x64
 use em
 use em_link
@@ -735,6 +736,7 @@ fn self_test() -> err {
     try binary.self_test()
     try em.self_test()
     try error_table.self_test()
+    try decimal.self_test()
     try nir.self_test()
     try nir.signature_self_test()
     try regalloc.self_test()

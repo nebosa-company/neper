@@ -434,6 +434,14 @@ str_builder_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$str_builder_written" = 'executable written' ]
 chmod +x "$test_build/str-builder-selfhost"
 "$test_build/str-builder-selfhost"
+# Scalar f32 and f64 end to end. Float values live in general registers as raw bits
+# and move into xmm only for the operation itself, so the fixture pins the literals,
+# the four operators, IEEE comparison against a NaN, both conversion directions
+# including the unsigned 64-bit edge, and float arguments across the convention.
+float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/float_scalar/src/main.e" "$repo" x64 linux "$test_build/float-scalar-selfhost")
+[ "$float_written" = 'executable written' ]
+chmod +x "$test_build/float-scalar-selfhost"
+"$test_build/float-scalar-selfhost"
 # The read-only half of `e.str`: comparison, search, trim, split, the integer parsers
 # and the forms that allocate. The fixture pins what an empty needle matches, where a
 # non-overlapping count stops, that `lines` takes CRLF without inventing a final empty
