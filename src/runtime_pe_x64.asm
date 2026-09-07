@@ -11,6 +11,8 @@ EXTERN __imp_FindFirstFileW:QWORD
 EXTERN __imp_FindNextFileW:QWORD
 EXTERN __imp_GetCommandLineW:QWORD
 EXTERN __imp_GetLastError:QWORD
+EXTERN __imp_GetModuleHandleW:QWORD
+EXTERN __imp_GetProcAddress:QWORD
 EXTERN __imp_GetExitCodeProcess:QWORD
 EXTERN __imp_GetStdHandle:QWORD
 EXTERN __imp_GetSystemTimeAsFileTime:QWORD
@@ -1640,5 +1642,134 @@ Lhash_final:
     pop rbx
     ret
 neper_hash_bytes ENDP
+
+
+; Section 8's blocking primitives. `WaitOnAddress` and the two wakes are not in
+; kernel32, and this linker emits one import descriptor for one DLL, so they are
+; resolved through `GetModuleHandleW` on KernelBase -- which exports all three and is
+; loaded in every process, so this takes no reference and frees nothing. The lookup
+; happens only on the blocking path, where a handle-table probe costs nothing against
+; the wait it is about to do, and `.text` is read-only so there is nowhere to cache it.
+np_resolve_synch PROC
+    ; rcx = the procedure name. Returns the address in rax, or zero.
+    push rbx
+    sub rsp, 32
+    mov rbx, rcx
+    lea rcx, np_kernelbase_name
+    call qword ptr [__imp_GetModuleHandleW]
+    test rax, rax
+    jz resolve_synch_done
+    mov rcx, rax
+    mov rdx, rbx
+    call qword ptr [__imp_GetProcAddress]
+resolve_synch_done:
+    add rsp, 32
+    pop rbx
+    ret
+np_resolve_synch ENDP
+
+PUBLIC neper_os_wait_u32
+neper_os_wait_u32 PROC
+    ; rcx = p, rdx = expected, r8 = timeout_ns. Returns err in eax.
+    push rbx
+    push rsi
+    push rdi
+    sub rsp, 48
+    mov rbx, rcx
+    mov rdi, r8
+    ; WaitOnAddress compares against a value in memory, so the expected one needs an
+    ; address of its own.
+    mov dword ptr [rsp+40], edx
+    lea rcx, np_wait_on_address_name
+    call np_resolve_synch
+    test rax, rax
+    jz wait_u32_unsupported
+    mov rsi, rax
+    ; A negative timeout is INFINITE and zero polls once; anything between rounds up,
+    ; so a sub-millisecond wait still waits rather than turning into a poll.
+    mov r9d, 0FFFFFFFFh
+    test rdi, rdi
+    js wait_u32_call
+    xor r9d, r9d
+    test rdi, rdi
+    jz wait_u32_call
+    mov rax, rdi
+    add rax, 999999
+    mov rcx, 1000000
+    xor edx, edx
+    div rcx
+    cmp rax, 0FFFFFFFEh
+    jbe wait_u32_millis
+    mov eax, 0FFFFFFFEh
+wait_u32_millis:
+    mov r9d, eax
+wait_u32_call:
+    mov rcx, rbx
+    lea rdx, [rsp+40]
+    mov r8d, 4
+    call rsi
+    test eax, eax
+    jz wait_u32_failed
+    xor eax, eax
+    jmp wait_u32_done
+wait_u32_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    jmp wait_u32_done
+wait_u32_unsupported:
+    mov eax, 02F8BB651h
+wait_u32_done:
+    add rsp, 48
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+neper_os_wait_u32 ENDP
+
+PUBLIC neper_os_wake_one_u32
+neper_os_wake_one_u32 PROC
+    push rbx
+    sub rsp, 32
+    mov rbx, rcx
+    lea rcx, np_wake_single_name
+    call np_resolve_synch
+    test rax, rax
+    jz wake_one_done
+    mov rcx, rbx
+    call rax
+wake_one_done:
+    add rsp, 32
+    pop rbx
+    ret
+neper_os_wake_one_u32 ENDP
+
+PUBLIC neper_os_wake_all_u32
+neper_os_wake_all_u32 PROC
+    push rbx
+    sub rsp, 32
+    mov rbx, rcx
+    lea rcx, np_wake_all_name
+    call np_resolve_synch
+    test rax, rax
+    jz wake_all_done
+    mov rcx, rbx
+    call rax
+wake_all_done:
+    add rsp, 32
+    pop rbx
+    ret
+neper_os_wake_all_u32 ENDP
+
+; Read-only bytes beside the code they belong to. `.text` is not writable, which is
+; exactly why none of the three addresses above is cached.
+np_kernelbase_name:
+    DW 04Bh, 065h, 072h, 06Eh, 065h, 06Ch, 042h, 061h, 073h, 065h, 02Eh, 064h, 06Ch, 06Ch, 0000h
+np_wait_on_address_name:
+    DB "WaitOnAddress", 0
+np_wake_single_name:
+    DB "WakeByAddressSingle", 0
+np_wake_all_name:
+    DB "WakeByAddressAll", 0
 
 END

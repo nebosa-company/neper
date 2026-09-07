@@ -2477,7 +2477,7 @@ fn seed_memory_signatures(c: *Checker, module_index: usize) -> err {
     ret ok
 }
 
-fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool) -> err {
+fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool, atomic_module: usize, has_atomic: bool) -> err {
     let file = make_type(.Named, "File", os_module)
     let process = make_type(.Named, "Proc", os_module)
     let clock = make_type(.Named, "Clock", os_module)
@@ -2547,6 +2547,28 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     if clock_error != ok { ret clock_error }
     try add_seeded_parameter(c, clock_index, "c", clock)
 
+    // Section 8's blocking primitives. Their pointer is an `Atomic[u32]`, so they are
+    // seeded only where `e.atomic` is in the graph -- as the arena calls below are
+    // seeded only with `e.mem`.
+    if has_atomic {
+        let u32_type = make_type(.Integer, "u32", os_module)
+        let atomic_u32 = atomic_wrapper_type(c, u32_type, atomic_module)
+        if atomic_u32.kind == .Invalid { ret InvalidType }
+        let (atomic_pointer, atomic_pointer_error) = seeded_composite_type(c, .Pointer, atomic_u32, false, os_module)
+        if atomic_pointer_error != ok { ret atomic_pointer_error }
+        let (futex_index, futex_error) = add_seeded_function(c, os_module, "wait_u32", error_type, false)
+        if futex_error != ok { ret futex_error }
+        try add_seeded_parameter(c, futex_index, "p", atomic_pointer)
+        try add_seeded_parameter(c, futex_index, "expected", u32_type)
+        try add_seeded_parameter(c, futex_index, "timeout_ns", i64_type)
+        let (wake_one_index, wake_one_error) = add_seeded_function(c, os_module, "wake_one_u32", make_type(.Void, "void", os_module), false)
+        if wake_one_error != ok { ret wake_one_error }
+        try add_seeded_parameter(c, wake_one_index, "p", atomic_pointer)
+        let (wake_all_index, wake_all_error) = add_seeded_function(c, os_module, "wake_all_u32", make_type(.Void, "void", os_module), false)
+        if wake_all_error != ok { ret wake_all_error }
+        try add_seeded_parameter(c, wake_all_index, "p", atomic_pointer)
+    }
+
     if has_memory {
         let arena = make_type(.Named, "Arena", mem_module)
         let (arena_pointer, arena_pointer_error) = seeded_composite_type(c, .Pointer, arena, false, os_module)
@@ -2591,7 +2613,8 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     let (mem_module, has_memory) = graph.find_module(g, "e.mem")
     if has_memory { try seed_memory_signatures(c, mem_module) }
     let (os_module, has_os) = graph.find_module(g, "e.os")
-    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory) }
+    let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
+    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic) }
     let (str_module, has_str) = graph.find_module(g, "e.str")
     if has_str { try seed_str_signatures(c, str_module) }
     ret ok

@@ -617,3 +617,74 @@ neper_hash_bytes:
     pop r12
     pop rbx
     ret
+
+# Section 8's blocking primitives, futex(2) directly: this runtime has no libc.
+# `op` is FUTEX_WAIT_PRIVATE (128) and FUTEX_WAKE_PRIVATE (129) -- the private forms
+# skip the shared-mapping lookup, and every address here is process-local.
+#
+# wait_u32(p, expected, timeout_ns) -> err. A wake, a value that already differs
+# (EAGAIN) and a signal (EINTR) are all `ok`: the fence promises spurious wakes, so
+# every caller rechecks its own state and none can tell them apart.
+.global neper_os_wait_u32
+neper_os_wait_u32:
+    sub rsp, 16
+    xor r10d, r10d
+    test rdx, rdx
+    js .Lwait_go
+    # A timeout builds a timespec in the red-zone-free frame above; zero nanoseconds
+    # is a zero timespec, which futex returns ETIMEDOUT from at once -- one poll.
+    mov rax, rdx
+    mov rcx, 1000000000
+    xor edx, edx
+    div rcx
+    mov qword ptr [rsp], rax
+    mov qword ptr [rsp + 8], rdx
+    mov r10, rsp
+.Lwait_go:
+    mov edx, esi
+    mov esi, 128
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    jns .Lwait_ok
+    cmp rax, -11
+    je .Lwait_ok
+    cmp rax, -4
+    je .Lwait_ok
+    cmp rax, -110
+    je .Lwait_timeout
+    mov eax, 0x6f777ebf
+    add rsp, 16
+    ret
+.Lwait_ok:
+    xor eax, eax
+    add rsp, 16
+    ret
+.Lwait_timeout:
+    mov eax, 0x52812f09
+    add rsp, 16
+    ret
+
+.global neper_os_wake_one_u32
+neper_os_wake_one_u32:
+    mov esi, 129
+    mov edx, 1
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    ret
+
+.global neper_os_wake_all_u32
+neper_os_wake_all_u32:
+    mov esi, 129
+    mov edx, 2147483647
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    ret

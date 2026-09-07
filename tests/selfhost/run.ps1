@@ -623,6 +623,12 @@ $genericFieldLeak = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixt
 if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:5: error\[E-TYPE-9999\]: type checking failed: check\.InvalidType') {
     throw "a generic instance's own field leaked into the enclosing struct: $($genericFieldLeak -join "`n")"
 }
+# Section 8's blocking primitives, under the wake that a bug here turns into a hang.
+$futexPath = Join-Path $testBuild 'os-futex-selfhost.exe'
+$futexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_futex\src\main.e') $repo 'x64' 'windows' $futexPath
+if ($LASTEXITCODE -ne 0 -or $futexWritten -ne 'executable written') { throw 'futex executable emission failed' }
+& $futexPath
+if ($LASTEXITCODE -ne 0) { throw 'os.wait_u32 or a wake is wrong' }
 # Section 8's atomics. The ordering rules are settled while checking, so each is pinned
 # to its message; the operations themselves are run, because `and`, `or`, `xor`, `min`
 # and `max` are compare-and-swap loops whose widening and signedness a check cannot see.

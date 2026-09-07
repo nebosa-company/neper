@@ -649,6 +649,12 @@ generic_field_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost
 [ "$generic_field_accepted" = 'module check ok' ]
 check_protocol_diagnostic generic_instance_field_leak 'main.e:8:5: error[E-TYPE-9999]: type checking failed: check.InvalidType'
 check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
+# Section 8's blocking primitives, under the wake that a bug here turns into a hang.
+futex_path="$test_build/os-futex-selfhost"
+futex_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_futex/src/main.e" "$repo" x64 linux "$futex_path")
+[ "$futex_written" = 'executable written' ]
+chmod +x "$futex_path"
+"$futex_path"
 # Section 8's atomics. The ordering rules are settled while checking, so each is pinned
 # to its message; the operations themselves are run, because `and`, `or`, `xor`, `min`
 # and `max` are compare-and-swap loops whose widening and signedness a check cannot see.

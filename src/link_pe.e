@@ -57,7 +57,7 @@ fn append_name(output: *emit_x64.Buffer, name: str, width: usize) -> err {
 // thunk -- a segfault in whatever the program did first, with nothing pointing back
 // at the import table.
 fn import_count() -> usize {
-    ret 23usize
+    ret 25usize
 }
 
 fn import_name(index: usize) -> str {
@@ -84,6 +84,8 @@ fn import_name(index: usize) -> str {
     if index == 20usize { ret "GetExitCodeProcess" }
     if index == 21usize { ret "SetFilePointerEx" }
     if index == 22usize { ret "CreateThread" }
+    if index == 23usize { ret "GetModuleHandleW" }
+    if index == 24usize { ret "GetProcAddress" }
     ret ""
 }
 

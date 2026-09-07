@@ -55,6 +55,7 @@ function Read-CoffName([int]$Index) {
 }
 
 $symbolNames = @{}
+$textSymbols = @{}
 $publicSymbols = @()
 for ($index = 0; $index -lt $symbolCount;) {
     $offset = $symbolOffset + $index * 18
@@ -67,10 +68,11 @@ for ($index = 0; $index -lt $symbolCount;) {
     if ($sectionNumber -eq $text.Number -and $storageClass -eq 2 -and $name.StartsWith('neper_') -and $name -ne 'neper_entry') {
         $publicSymbols += [pscustomobject]@{ Name = $name; Value = $value }
     }
+    if ($sectionNumber -eq $text.Number) { $textSymbols[$name] = $value }
     $index += 1 + $auxiliaryCount
 }
 
-$imports = @('CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile','GetSystemTimeAsFileTime','QueryPerformanceCounter','QueryPerformanceFrequency','CreateProcessW','SetHandleInformation','WaitForSingleObject','GetExitCodeProcess','SetFilePointerEx','CreateThread')
+$imports = @('CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile','GetSystemTimeAsFileTime','QueryPerformanceCounter','QueryPerformanceFrequency','CreateProcessW','SetHandleInformation','WaitForSingleObject','GetExitCodeProcess','SetFilePointerEx','CreateThread','GetModuleHandleW','GetProcAddress')
 $importIndices = @{}
 for ($index = 0; $index -lt $imports.Count; $index++) { $importIndices['__imp_' + $imports[$index]] = $index }
 $relocations = @()
@@ -85,6 +87,18 @@ for ($index = 0; $index -lt $text.RelocationCount; $index++) {
 
 $image = [byte[]]::new($text.Size)
 [Array]::Copy($bytes, $text.Raw, $image, 0, $text.Size)
+# A reference from the runtime to a label of its own -- read-only data beside the code
+# that reads it. Both ends move together, so the displacement is known here and nothing
+# is left for the linker to patch; only imports and `main` reach the patch table below.
+$relocations = @($relocations | Where-Object {
+    if ($textSymbols.ContainsKey($_.Name)) {
+        $site = [int]$_.Address
+        $addend = [BitConverter]::ToInt32($image, $site)
+        $displacement = [int]$textSymbols[$_.Name] + $addend - ($site + 4)
+        [Array]::Copy([BitConverter]::GetBytes($displacement), 0, $image, $site, 4)
+        $false
+    } else { $true }
+})
 $builder = [Text.StringBuilder]::new()
 [void]$builder.AppendLine('// Generated x86-64 Windows runtime image. Source: runtime_pe_x64.asm.')
 [void]$builder.AppendLine()
