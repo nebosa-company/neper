@@ -22,6 +22,7 @@ error AliasCycle
 error ConstantCycle
 error ConstantOverflow
 error InvalidConstant
+error InvalidFormat
 error InvalidTry
 error InvalidSwitch
 error DuplicateCase
@@ -3671,6 +3672,9 @@ type CallInfo = struct {
     mem_alloc: bool,
     mem_cast: bool,
     mem_bitcast: bool,
+    formatter: bool,
+    formatter_arena: bool,
+    formatter_verbs: usize,
     protocol_pending: bool,
     protocol_builtin: ProtocolBuiltin,
     protocol_type: Type,
@@ -3828,6 +3832,240 @@ fn bitcast_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     info.function = function
     info.target = punned
     ret (info, ok)
+}
+
+// Section 4's verbs. `Text` never reaches a caller: it is the state between verbs.
+type FormatVerb = enum u8 {
+    Text,
+    Default,
+    Hex,
+    Binary,
+    Fixed,
+}
+
+// One decoded byte of a string literal, and where the scan continues. The format
+// string is the decoded text, not the spelling, so `{` reached through an escape is
+// a verb like any other and `{{` is the only way to write a brace that is not one.
+fn literal_byte(spelling: str, at: usize, raw: bool, next: *usize) -> (u8, err) {
+    if at >= spelling.len { ret (0u8, InvalidType) }
+    let byte = spelling[at]
+    if raw || byte != 92u8 {
+        *next = at + 1usize
+        ret (byte, ok)
+    }
+    if at + 1usize >= spelling.len { ret (0u8, InvalidType) }
+    let escaped = spelling[at + 1usize]
+    *next = at + 2usize
+    if escaped == 110u8 { ret (10u8, ok) }
+    if escaped == 116u8 { ret (9u8, ok) }
+    if escaped == 114u8 { ret (13u8, ok) }
+    if escaped == 92u8 { ret (92u8, ok) }
+    if escaped == 34u8 { ret (34u8, ok) }
+    if escaped == 39u8 { ret (39u8, ok) }
+    if escaped == 48u8 { ret (0u8, ok) }
+    if escaped != 120u8 { ret (0u8, InvalidType) }
+    if at + 3usize >= spelling.len { ret (0u8, InvalidType) }
+    var value = 0u8
+    var digit = 0usize
+    while digit < 2usize {
+        let hex = spelling[at + 2usize + digit]
+        var nibble = 16u8
+        if hex >= 48u8 && hex <= 57u8 { nibble = hex - 48u8 }
+        if hex >= 97u8 && hex <= 102u8 { nibble = hex - 87u8 }
+        if hex >= 65u8 && hex <= 70u8 { nibble = hex - 55u8 }
+        if nibble == 16u8 { ret (0u8, InvalidType) }
+        value = value * 16u8 + nibble
+        digit += 1usize
+    }
+    *next = at + 4usize
+    ret (value, ok)
+}
+
+// Strips the quotes and the raw-string hashes, leaving the contents and whether
+// backslashes inside are escapes or bytes.
+fn literal_contents(spelling: str, raw: *bool) -> (str, err) {
+    if spelling.len >= 2usize && spelling[0usize] == 34u8 && spelling[spelling.len - 1usize] == 34u8 {
+        *raw = false
+        ret (spelling[1usize..spelling.len - 1usize], ok)
+    }
+    if spelling.len < 3usize || spelling[0usize] != 114u8 { ret ("", InvalidType) }
+    var at = 1usize
+    var hashes = 0usize
+    while at < spelling.len && spelling[at] == 35u8 {
+        at += 1usize
+        hashes += 1usize
+    }
+    if at >= spelling.len || spelling[at] != 34u8 || spelling.len < at + hashes + 2usize { ret ("", InvalidType) }
+    let closing = spelling.len - hashes - 1usize
+    if spelling[closing] != 34u8 { ret ("", InvalidType) }
+    *raw = true
+    ret (spelling[at + 1usize..closing], ok)
+}
+
+// Reads the verbs out of a format string in order. `{{` and `}}` are the literal
+// braces; a bare `}` is malformed, and so is an unterminated or unknown verb.
+fn format_verbs(spelling: str, kinds: []FormatVerb, precisions: []u8) -> (usize, err) {
+    var raw = false
+    let (body, body_error) = literal_contents(spelling, &raw)
+    if body_error != ok { ret (0usize, body_error) }
+    var count = 0usize
+    var at = 0usize
+    while at < body.len {
+        var next = 0usize
+        let (byte, byte_error) = literal_byte(body, at, raw, &next)
+        if byte_error != ok { ret (0usize, byte_error) }
+        at = next
+        if byte == 125u8 {
+            // A closing brace is only legal doubled.
+            if at >= body.len { ret (0usize, InvalidFormat) }
+            let (following, following_error) = literal_byte(body, at, raw, &next)
+            if following_error != ok { ret (0usize, following_error) }
+            if following != 125u8 { ret (0usize, InvalidFormat) }
+            at = next
+            continue
+        }
+        if byte != 123u8 { continue }
+        if at >= body.len { ret (0usize, InvalidFormat) }
+        let (following, following_error) = literal_byte(body, at, raw, &next)
+        if following_error != ok { ret (0usize, following_error) }
+        if following == 123u8 {
+            at = next
+            continue
+        }
+        if count == kinds.len || count == precisions.len { ret (0usize, Capacity) }
+        var kind: FormatVerb = .Default
+        var precision = 0u8
+        var scan = at
+        var body_byte = following
+        var body_next = next
+        if body_byte == 120u8 || body_byte == 98u8 {
+            if body_byte == 120u8 { kind = .Hex } else { kind = .Binary }
+            scan = body_next
+            if scan >= body.len { ret (0usize, InvalidFormat) }
+            let (closer, closer_error) = literal_byte(body, scan, raw, &body_next)
+            if closer_error != ok { ret (0usize, closer_error) }
+            if closer != 125u8 { ret (0usize, InvalidFormat) }
+            scan = body_next
+        } else {
+            if body_byte == 46u8 {
+                kind = .Fixed
+                scan = body_next
+                var digits = 0usize
+                var value = 0usize
+                while scan < body.len {
+                    let (digit, digit_error) = literal_byte(body, scan, raw, &body_next)
+                    if digit_error != ok { ret (0usize, digit_error) }
+                    if digit < 48u8 || digit > 57u8 { break }
+                    // Section 4 caps a format-literal precision at 99, and a larger
+                    // one is a compile error rather than a runtime `BadNumber`.
+                    if digits == 2usize { ret (0usize, InvalidFormat) }
+                    value = value * 10usize + usize(digit - 48u8)
+                    digits += 1usize
+                    scan = body_next
+                }
+                if digits == 0usize { ret (0usize, InvalidFormat) }
+                precision = u8(value)
+                if scan >= body.len { ret (0usize, InvalidFormat) }
+                let (closer, closer_error) = literal_byte(body, scan, raw, &body_next)
+                if closer_error != ok { ret (0usize, closer_error) }
+                if closer != 125u8 { ret (0usize, InvalidFormat) }
+                scan = body_next
+            } else {
+                if body_byte != 125u8 { ret (0usize, InvalidFormat) }
+                scan = body_next
+            }
+        }
+        kinds[count] = kind
+        precisions[count] = precision
+        count += 1usize
+        at = scan
+    }
+    ret (count, ok)
+}
+
+// The format grammar is small enough to pin exactly, and it is read from a literal's
+// spelling, so the cases below are written the way a caller writes them.
+fn format_self_test() -> err {
+    var kinds: [8]FormatVerb = zero
+    var precisions: [8]u8 = zero
+    // A verb of each shape, and the precision a fixed one carries.
+    let (one, one_error) = format_verbs("\"{}\"", kinds[..], precisions[..])
+    if one_error != ok || one != 1usize || kinds[0usize] != .Default { ret InvalidFormat }
+    let (hex, hex_error) = format_verbs("\"{x}\"", kinds[..], precisions[..])
+    if hex_error != ok || hex != 1usize || kinds[0usize] != .Hex { ret InvalidFormat }
+    let (binary, binary_error) = format_verbs("\"{b}\"", kinds[..], precisions[..])
+    if binary_error != ok || binary != 1usize || kinds[0usize] != .Binary { ret InvalidFormat }
+    let (fixed, fixed_error) = format_verbs("\"{.3}\"", kinds[..], precisions[..])
+    if fixed_error != ok || fixed != 1usize || kinds[0usize] != .Fixed || precisions[0usize] != 3u8 { ret InvalidFormat }
+    let (none_precision, none_precision_error) = format_verbs("\"{.0}\"", kinds[..], precisions[..])
+    if none_precision_error != ok || precisions[0usize] != 0u8 { ret InvalidFormat }
+    let (widest, widest_error) = format_verbs("\"{.99}\"", kinds[..], precisions[..])
+    if widest_error != ok || precisions[0usize] != 99u8 { ret InvalidFormat }
+
+    // Verbs in order, with text around and between them.
+    let (mixed, mixed_error) = format_verbs("\"a{}b{x}c{.2}d\"", kinds[..], precisions[..])
+    if mixed_error != ok || mixed != 3usize { ret InvalidFormat }
+    if kinds[0usize] != .Default || kinds[1usize] != .Hex || kinds[2usize] != .Fixed { ret InvalidFormat }
+    if precisions[2usize] != 2u8 { ret InvalidFormat }
+
+    // A doubled brace is a literal brace and not a verb, in either direction.
+    let (doubled, doubled_error) = format_verbs("\"{{}}\"", kinds[..], precisions[..])
+    if doubled_error != ok || doubled != 0usize { ret InvalidFormat }
+    let (wrapped, wrapped_error) = format_verbs("\"{{{}}}\"", kinds[..], precisions[..])
+    if wrapped_error != ok || wrapped != 1usize { ret InvalidFormat }
+    let (empty, empty_error) = format_verbs("\"\"", kinds[..], precisions[..])
+    if empty_error != ok || empty != 0usize { ret InvalidFormat }
+    let (plain, plain_error) = format_verbs("\"no verbs here\"", kinds[..], precisions[..])
+    if plain_error != ok || plain != 0usize { ret InvalidFormat }
+
+    // The format string is the decoded text, so a brace reached through an escape is
+    // a verb and a raw string's backslash is a byte.
+    let (escaped, escaped_error) = format_verbs("\"\\x7b}\"", kinds[..], precisions[..])
+    if escaped_error != ok || escaped != 1usize || kinds[0usize] != .Default { ret InvalidFormat }
+    let (newline, newline_error) = format_verbs("\"{}\\n\"", kinds[..], precisions[..])
+    if newline_error != ok || newline != 1usize { ret InvalidFormat }
+    let (raw, raw_error) = format_verbs("r\"{}\"", kinds[..], precisions[..])
+    if raw_error != ok || raw != 1usize { ret InvalidFormat }
+
+    // Malformed: an unterminated verb, a bare closing brace, an unknown verb, and a
+    // precision that is missing, too long, or unterminated.
+    let (open_brace, open_brace_error) = format_verbs("\"{\"", kinds[..], precisions[..])
+    if open_brace_error != InvalidFormat { ret InvalidFormat }
+    let (close_brace, close_brace_error) = format_verbs("\"}\"", kinds[..], precisions[..])
+    if close_brace_error != InvalidFormat { ret InvalidFormat }
+    let (unknown, unknown_error) = format_verbs("\"{z}\"", kinds[..], precisions[..])
+    if unknown_error != InvalidFormat { ret InvalidFormat }
+    let (bare_point, bare_point_error) = format_verbs("\"{.}\"", kinds[..], precisions[..])
+    if bare_point_error != InvalidFormat { ret InvalidFormat }
+    let (too_wide, too_wide_error) = format_verbs("\"{.100}\"", kinds[..], precisions[..])
+    if too_wide_error != InvalidFormat { ret InvalidFormat }
+    let (unterminated, unterminated_error) = format_verbs("\"{.1\"", kinds[..], precisions[..])
+    if unterminated_error != InvalidFormat { ret InvalidFormat }
+    let (trailing, trailing_error) = format_verbs("\"a{\"", kinds[..], precisions[..])
+    if trailing_error != InvalidFormat { ret InvalidFormat }
+    // A closing brace followed by anything but another one, and a verb body that
+    // is not a verb: each is reached only when the string does not also run out,
+    // so a shorter spelling of either is caught by the wrong check.
+    let (loose_close, loose_close_error) = format_verbs("\"}a\"", kinds[..], precisions[..])
+    if loose_close_error != InvalidFormat { ret InvalidFormat }
+    let (unknown_body, unknown_body_error) = format_verbs("\"{z}}\"", kinds[..], precisions[..])
+    if unknown_body_error != InvalidFormat { ret InvalidFormat }
+    ret ok
+}
+
+// Section 4: formattable is every shape rule 4 supplies a `format` for. This is the
+// half the checker can decide without reaching a module's own `format`, which is why
+// a `Named` type is left to the protocol lookup rather than judged here.
+fn formattable_type(c: *Checker, ty: Type, kind: FormatVerb) -> bool {
+    let (canonical, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok { ret false }
+    if kind == .Hex || kind == .Binary { ret canonical.kind == .Integer }
+    if kind == .Fixed { ret canonical.kind == .Float }
+    if canonical.kind == .Integer || canonical.kind == .Float { ret true }
+    if canonical.kind == .Bool || canonical.kind == .Err || canonical.kind == .String { ret true }
+    if canonical.kind == .Pointer || canonical.kind == .Slice || canonical.kind == .Array { ret true }
+    if canonical.kind == .Named || canonical.kind == .Tag { ret is_enum_type(c, canonical) }
+    ret false
 }
 
 // Spec section 8: a pointer type -- `*void` included -- is only reached through

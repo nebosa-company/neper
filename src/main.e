@@ -737,6 +737,7 @@ fn self_test() -> err {
     try em.self_test()
     try error_table.self_test()
     try decimal.self_test()
+    try check.format_self_test()
     try nir.self_test()
     try nir.signature_self_test()
     try regalloc.self_test()
