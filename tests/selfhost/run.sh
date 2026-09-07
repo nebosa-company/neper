@@ -434,6 +434,20 @@ str_builder_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$str_builder_written" = 'executable written' ]
 chmod +x "$test_build/str-builder-selfhost"
 "$test_build/str-builder-selfhost"
+# Each generator in `e.algo.rand` is a named published algorithm, so the fixture
+# checks its stream against a separate implementation of the reference rather than
+# against a property. A near miss is the failure worth catching here.
+rand_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rand/src/main.e" "$repo" x64 linux "$test_build/algo-rand-selfhost")
+[ "$rand_written" = 'executable written' ]
+chmod +x "$test_build/algo-rand-selfhost"
+"$test_build/algo-rand-selfhost"
+# Each generator in `e.algo.rand` is a named published algorithm, so the fixture
+# checks its stream against a separate implementation of the reference rather than
+# against a property. A near miss is the failure worth catching here.
+rand_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_rand/src/main.e" "$repo" x64 linux "$test_build/algo-rand-selfhost")
+[ "$rand_written" = 'executable written' ]
+chmod +x "$test_build/algo-rand-selfhost"
+"$test_build/algo-rand-selfhost"
 # The float pushes: `{}` writes the shortest string that reads back as the same value,
 # `{.N}` exactly N digits after the point. The fixture checks the text against an
 # independent implementation and reads every shortest case back through the parser.

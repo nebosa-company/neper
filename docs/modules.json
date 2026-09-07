@@ -37,7 +37,7 @@
     {"name":"e.data.graph","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.data.list","e.mem"],"blocked_by":[]},
     {"name":"e.data.slot_map","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.mem"],"blocked_by":[]},
     {"name":"e.data.iter","layer":2,"surface":"planned","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.data.list","e.mem"],"blocked_by":[]},
-    {"name":"e.algo.rand","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
+    {"name":"e.algo.rand","layer":2,"surface":"source","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"e.algo.uuid","layer":2,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.algo.hash","e.str"],"blocked_by":[]},
     {"name":"e.algo.hash","layer":2,"surface":"source","milestone":"M2","schedule":"scheduled","direct_dependencies":[],"blocked_by":[]},
     {"name":"e.algo.graph","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.data.graph","e.data.heap","e.mem"],"blocked_by":[]},

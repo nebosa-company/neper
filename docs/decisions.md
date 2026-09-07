@@ -339,6 +339,34 @@ The consequence accepted: the empty separator inside a `Split` is now spoken for
 `it.separator` on a `lines` iterator reads as `""` rather than as a terminator. Section
 14 makes the fields readable for diagnostics only, so no caller depends on the value.
 
+## D92 — each `e.algo.rand` name is one published algorithm
+
+`e.algo.rand`'s frozen surface names three generators and fixes their state layout,
+but a name like `pcg64` covers a family. Pin each one to a single published variant:
+
+- `Pcg64` is PCG `setseq_64_rxs_m_xs_64` -- 64 bits of state, 64 bits out, and an odd
+  increment selecting one of 2**63 streams. `stream` holds that increment, which is
+  why the constructor takes the selector and stores `(selector << 1) | 1`.
+- `Xoshiro256` is xoshiro256**, the family's general-purpose member. `+` is documented
+  as float-only and `++` differs only in the scrambler; `**` is the conservative pick
+  where the output feeds anything.
+- `Mt19937` is MT19937 seeded by the reference `init_genrand`, so a seed carries from
+  any other implementation of it.
+- Both `_f64` forms take the top 53 bits over 2**53. Every double in `[0, 1)` that
+  yields is equally spaced and exactly representable, so nothing rounds.
+- `xoshiro256`'s four words are the state, not a seed to expand. An all-zero state is
+  the one the generator cannot leave, and the frozen signature returns no error, so
+  it is replaced with a fixed non-zero state rather than accepted.
+
+The reason to pin rather than leave it open is reproducibility across languages: a
+seed written down in a paper, a test, or another runtime has to produce the same
+stream here. That is also why the fixture compares against a separate implementation
+of each reference rather than against statistical properties -- a near miss passes
+every property test and fails every reproduction.
+
+None of these is cryptographic, and the surface does not pretend otherwise: the state
+is recoverable from the output by design.
+
 ## Consequences accepted
 
 - **We own the optimiser.** v1 targets roughly `-O1` quality: inlining, constant

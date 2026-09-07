@@ -394,6 +394,22 @@ $strBuilderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $strBuilderWritten -ne 'executable written') { throw 'str builder executable emission failed' }
 & $strBuilderPath
 if ($LASTEXITCODE -ne 0) { throw 'the string builder or one of its pushes is wrong' }
+# Each generator in `e.algo.rand` is a named published algorithm, so the fixture
+# checks its stream against a separate implementation of the reference rather than
+# against a property. A near miss is the failure worth catching here.
+$randPath = Join-Path $testBuild 'algo-rand-selfhost.exe'
+$randWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rand\src\main.e') $repo 'x64' 'windows' $randPath
+if ($LASTEXITCODE -ne 0 -or $randWritten -ne 'executable written') { throw 'rand executable emission failed' }
+& $randPath
+if ($LASTEXITCODE -ne 0) { throw 'a generator does not match its reference stream' }
+# Each generator in `e.algo.rand` is a named published algorithm, so the fixture
+# checks its stream against a separate implementation of the reference rather than
+# against a property. A near miss is the failure worth catching here.
+$randPath = Join-Path $testBuild 'algo-rand-selfhost.exe'
+$randWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_rand\src\main.e') $repo 'x64' 'windows' $randPath
+if ($LASTEXITCODE -ne 0 -or $randWritten -ne 'executable written') { throw 'rand executable emission failed' }
+& $randPath
+if ($LASTEXITCODE -ne 0) { throw 'a generator does not match its reference stream' }
 # The float pushes: `{}` writes the shortest string that reads back as the same value,
 # `{.N}` exactly N digits after the point. The fixture checks the text against an
 # independent implementation and reads every shortest case back through the parser.
