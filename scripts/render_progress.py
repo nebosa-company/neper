@@ -39,13 +39,14 @@ compiler = {
   ("Supplied cmp (rule 4)", 1, "link/sequence_cmp, tagged_union_cmp"),
   ("Supplied hash (rule 4)", 1, "link/supplied_hash, folded_hash"),
   ("Supplied eq (rule 4)", 1, "link/supplied_eq"),
-  ("Supplied format (rule 4)", 0.75, "link/str_format, link/io_printf expand scalars, str and bool; `err` and a type's own format still unreachable"),
+  ("Supplied format (rule 4)", 0.85, "link/str_format, link/io_printf expand scalars, str, bool and err; slices, arrays and a type's own format need the expansion to recurse"),
   ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
   ("Atomic[T] and memory orderings", 0, "absent from check.e"),
   ("extern with @import / @cc and the C ABI", 0.25, "declared and checked; calls rejected"),
   ("Comptime str parameters and varargs", 0.95, "link/comptime_str, link/str_format, link/io_printf; two of the three pack intrinsics expand, `gpu.launch` does not"),
   ("e.meta reflection", 0, "not started"),
+  ("Merged error table", 0.5, "src/error_table.e builds it and push_err expands against it; not yet in the binary for the failure line, trap protocol or `neper test`"),
   ("Spec 11 debug check table and trap protocol", 0, "NIR .Trap never emitted"),
   ("General comptime interpreter", 0.25, "integer const folding only"),
  ],
@@ -380,13 +381,13 @@ __GROUPS__
     rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>.
     <code>e.io</code> no longer waits on <code>printf</code>: that expands, over a
     4&nbsp;KiB buffer of its own drained through a generated sink.</p>
-    <p><code>e.str</code> at __CSTR__ is everything a library can express.
-    <code>format</code>, which was the other gap, now expands: a call becomes a
-    generated function whose body is a builder, a push per piece of the format
-    string, and <code>done</code>. The one declaration left is <code>push_err</code>,
-    which needs a runtime error-name table &mdash; and it is also the reason a
-    <code>{}</code> on an <code>err</code> stops the build rather than expanding. The
-    expansion's other limit is a named type's own <code>format</code>, which needs it
+    <p><code>e.str</code> is complete at __CSTR__ and is the first module at
+    <code>surface:&nbsp;"source"</code> to have needed the compiler for any of it.
+    <code>format</code> expands, and so does <code>push_err</code> &mdash; the one
+    declaration a library could not write, because what it prints is the qualified
+    name and the merged error table is a property of the whole program, where a
+    module sees one module at a time. What the expansion still cannot reach is a
+    slice, an array or a named type's own <code>format</code>, each of which needs it
     to recurse into an argument.</p>
     <p>What <code>e.io</code>'s remaining declarations wait on is not a compiler
     feature but a decision. Ten of its constructors have to supply a callback of
