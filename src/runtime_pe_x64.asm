@@ -3,6 +3,7 @@ option casemap:none
 EXTERN main:PROC
 EXTERN __imp_CloseHandle:QWORD
 EXTERN __imp_CreateFileW:QWORD
+EXTERN __imp_CreateThread:QWORD
 EXTERN __imp_CreateProcessW:QWORD
 EXTERN __imp_ExitProcess:QWORD
 EXTERN __imp_FindClose:QWORD
@@ -746,6 +747,84 @@ seek_done:
     pop rbx
     ret
 neper_os_seek ENDP
+
+PUBLIC neper_os_thread_create
+neper_os_thread_create PROC
+    ; (Thread, err) returns through the hidden slot in rcx, as os.open does.
+    ; rdx = entry, r8 = ctx, r9 = stack.
+    push rbx
+    push rsi
+    sub rsp, 56
+    mov rbx, rcx
+    mov rsi, rdx
+    mov qword ptr [rsp+32], 0
+    mov qword ptr [rsp+40], 0
+    xor ecx, ecx
+    mov rdx, r9
+    mov r9, r8
+    mov r8, rsi
+    call qword ptr [__imp_CreateThread]
+    test rax, rax
+    jz thread_create_failed
+    mov [rbx], rax
+    mov dword ptr [rbx+8], 0
+    jmp thread_create_done
+thread_create_failed:
+    mov qword ptr [rbx], 0
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov [rbx+8], eax
+thread_create_done:
+    add rsp, 56
+    pop rsi
+    pop rbx
+    ret
+neper_os_thread_create ENDP
+
+PUBLIC neper_os_thread_join
+neper_os_thread_join PROC
+    push rbx
+    sub rsp, 32
+    mov rbx, [rcx]
+    mov rcx, rbx
+    mov edx, 0FFFFFFFFh
+    call qword ptr [__imp_WaitForSingleObject]
+    cmp eax, 0FFFFFFFFh
+    je thread_join_failed
+    mov rcx, rbx
+    call qword ptr [__imp_CloseHandle]
+    test eax, eax
+    jz thread_join_failed
+    xor eax, eax
+    jmp thread_join_done
+thread_join_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+thread_join_done:
+    add rsp, 32
+    pop rbx
+    ret
+neper_os_thread_join ENDP
+
+PUBLIC neper_os_thread_detach
+neper_os_thread_detach PROC
+    sub rsp, 40
+    mov rcx, [rcx]
+    call qword ptr [__imp_CloseHandle]
+    test eax, eax
+    jz thread_detach_failed
+    xor eax, eax
+    jmp thread_detach_done
+thread_detach_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+thread_detach_done:
+    add rsp, 40
+    ret
+neper_os_thread_detach ENDP
 
 PUBLIC neper_os_stdout
 neper_os_stdout PROC

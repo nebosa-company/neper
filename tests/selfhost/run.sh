@@ -489,6 +489,12 @@ if $test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/cc_unk
     printf '%s\n' 'an unknown calling convention was accepted' >&2
     exit 1
 fi
+# `os.thread_create` / `join` / `detach`. Windows runs a real thread; Linux answers
+# `Unsupported` for now, the ELF output being static with no libc to get one from.
+thread_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_thread/src/main.e" "$repo" x64 linux "$test_build/os-thread-selfhost")
+[ "$thread_written" = 'executable written' ]
+chmod +x "$test_build/os-thread-selfhost"
+"$test_build/os-thread-selfhost"
 # `e.meta`'s scalar reflection. Section 9 keeps all of it at compile time, so each
 # call is a constant by the time lowering sees it and the binary carries no type
 # information at all.

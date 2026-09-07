@@ -376,6 +376,14 @@ fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) ->
         if index == 0usize { ret (call.alloc_arena, ok) }
         ret (check.make_type(.Integer, "usize", call.function.module_index), ok)
     }
+    // Synthesized like `mem.alloc`, so its parameters are not in `c.parameters`: the
+    // entry point's own type was settled while checking, the context is the bound
+    // pointer, and the stack is a size.
+    if call.thread_create {
+        if index == 0usize { ret (call.thread_entry, ok) }
+        if index == 1usize { ret (call.thread_context, ok) }
+        ret (check.make_type(.Integer, "usize", call.function.module_index), ok)
+    }
     let parameter_index = call.function.first_parameter + index
     if parameter_index >= c.parameter_count { ret (check.invalid_type(), check.InvalidType) }
     ret (c.parameters[parameter_index].ty, ok)

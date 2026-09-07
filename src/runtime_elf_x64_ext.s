@@ -152,6 +152,22 @@ neper_os_seek:
     mov edx, 0x6f777ebf
     ret
 
+.global neper_os_thread_create
+neper_os_thread_create:
+    mov qword ptr [rdi], 0
+    mov dword ptr [rdi + 8], 0x2f8bb651
+    ret
+
+.global neper_os_thread_join
+neper_os_thread_join:
+    mov eax, 0x2f8bb651
+    ret
+
+.global neper_os_thread_detach
+neper_os_thread_detach:
+    mov eax, 0x2f8bb651
+    ret
+
 .global neper_os_spawn
 neper_os_spawn:
     push rbx

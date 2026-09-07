@@ -445,6 +445,13 @@ $ccAccepted = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\c
 if ($LASTEXITCODE -ne 0 -or $ccAccepted -ne 'module check ok') { throw 'a named calling convention was rejected' }
 & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\cc_unknown\src\main.e') $repo 'x64' 'windows' 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 1) { throw 'an unknown calling convention was accepted' }
+# `os.thread_create` / `join` / `detach`. Windows runs a real thread; Linux answers
+# `Unsupported` for now, the ELF output being static with no libc to get one from.
+$osThreadPath = Join-Path $testBuild 'os-thread-selfhost.exe'
+$osThreadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_thread\src\main.e') $repo 'x64' 'windows' $osThreadPath
+if ($LASTEXITCODE -ne 0 -or $osThreadWritten -ne 'executable written') { throw 'os thread emission failed' }
+& $osThreadPath
+if ($LASTEXITCODE -ne 0) { throw 'a thread did not run, join, or detach correctly' }
 # `e.meta`'s scalar reflection. Section 9 keeps all of it at compile time, so each
 # call is a constant by the time lowering sees it and the binary carries no type
 # information at all.

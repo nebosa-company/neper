@@ -57,7 +57,7 @@ fn append_name(output: *emit_x64.Buffer, name: str, width: usize) -> err {
 // thunk -- a segfault in whatever the program did first, with nothing pointing back
 // at the import table.
 fn import_count() -> usize {
-    ret 22usize
+    ret 23usize
 }
 
 fn import_name(index: usize) -> str {
@@ -83,6 +83,7 @@ fn import_name(index: usize) -> str {
     if index == 19usize { ret "WaitForSingleObject" }
     if index == 20usize { ret "GetExitCodeProcess" }
     if index == 21usize { ret "SetFilePointerEx" }
+    if index == 22usize { ret "CreateThread" }
     ret ""
 }
 
@@ -344,8 +345,13 @@ fn self_test() -> err {
     if executable.bytes[548usize] != first_import % 256usize || executable.bytes[549usize] != (first_import / 256usize) % 256usize { ret InvalidExecutable }
     if executable.bytes[code_at] != 195usize { ret InvalidExecutable }
     // The import directory's first name RVA, which points 40 bytes into idata.
-    let first_name_rva = idata_address + 40usize
+    let first_name_rva = import_lookup_address(idata_address)
     if executable.bytes[idata_raw_offset] != first_name_rva % 256usize || executable.bytes[idata_raw_offset + 1usize] != (first_name_rva / 256usize) % 256usize { ret InvalidExecutable }
-    if executable.bytes[idata_raw_offset + 408usize] != 75usize || executable.bytes[idata_raw_offset + 424usize] != 67usize { ret InvalidExecutable }
+    // The library name and the first import name, both at offsets derived from the
+    // import list rather than written down: adding a symbol moves them, and a literal
+    // here is the thing that made adding one a hazard.
+    let dll_at = idata_raw_offset + import_dll_address(idata_address) - idata_address
+    let first_name_at = idata_raw_offset + import_thunk(idata_address, 0usize) - idata_address + 2usize
+    if executable.bytes[dll_at] != 75usize || executable.bytes[first_name_at] != 67usize { ret InvalidExecutable }
     ret ok
 }
