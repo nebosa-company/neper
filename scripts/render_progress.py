@@ -45,7 +45,7 @@ compiler = {
   ("Atomic[T] and memory orderings", 0, "absent from check.e"),
   ("extern with @import / @cc and the C ABI", 0.25, "declared and checked; calls rejected"),
   ("Comptime str parameters and varargs", 0.95, "link/comptime_str, link/str_format, link/io_printf; two of the three pack intrinsics expand, `gpu.launch` does not"),
-  ("e.meta reflection", 0, "not started"),
+  ("e.meta reflection", 0.3, "link/meta_scalar answers kind, array_len and type_name at compile time; the field and member queries need a comptime value of struct type"),
   ("Merged error table", 0.5, "src/error_table.e builds it and push_err expands against it; not yet in the binary for the failure line, trap protocol or `neper test`"),
   ("Spec 11 debug check table and trap protocol", 0, "NIR .Trap never emitted"),
   ("General comptime interpreter", 0.25, "integer const folding only"),
