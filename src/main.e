@@ -1787,15 +1787,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         if emit_machine_code {
             if writes_em || writes_all_em {
-                let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 262144usize)
+                // One entry per byte of the artifact, and `e.str` alone compiles to
+                // more than 256 KiB, so the old quarter-megabyte stopped every
+                // `emit-em-all` over a module that uses it.
+                let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 2097152usize)
                 if artifact_storage_error != ok { ret artifact_storage_error }
                 var artifact: binary.Buffer = zero
                 try binary.init(&artifact, artifact_storage)
-                let (scratch_storage, scratch_storage_error) = mem.alloc[usize](a, 65536usize)
+                let (scratch_storage, scratch_storage_error) = mem.alloc[usize](a, 262144usize)
                 if scratch_storage_error != ok { ret scratch_storage_error }
                 var scratch: binary.Buffer = zero
                 try binary.init(&scratch, scratch_storage)
-                let (string_values, string_values_error) = mem.alloc[str](a, 8192usize)
+                let (string_values, string_values_error) = mem.alloc[str](a, 32768usize)
                 if string_values_error != ok { ret string_values_error }
                 let (sections, sections_error) = mem.alloc[em.Section](a, 6usize)
                 if sections_error != ok { ret sections_error }

@@ -1652,7 +1652,9 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
 
 fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, results: *CallResults) -> err {
     var call: check.CallInfo = zero
-    var arguments: [16]usize = zero
+    // A format string may carry 32 verbs, so a call may carry 32 arguments plus the
+    // arena: the checker already allows it and this is what lowering has to match.
+    var arguments: [33]usize = zero
     var argument_count = 0usize
     var callee = 0usize
     let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, &callee, arguments[..], &argument_count)
@@ -3817,11 +3819,81 @@ fn emit_formatter_byte(c: *check.Checker, g: *graph.Graph, module_index: usize, 
 // The expansion itself: open a builder, push a piece at a time, and hand back what
 // `done` built. Verbs and text are interleaved in one scan of the decoded string, so
 // a verb's argument is pushed at exactly the position the format string names it.
-fn lower_formatter_body(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, spelling: str, parameters: []usize, arena_form: bool, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+// The scan: text and verbs interleaved in one pass over the decoded format string, so
+// a verb's argument is pushed at exactly the position the string names it. Both
+// expansions share it; they differ only in the builder they open and what they do
+// with what `done` leaves.
+fn lower_formatter_pieces(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, spelling: str, parameters: []usize, first_verb: usize, handle: usize, arena_form: bool, builder: *nir.Builder, token: lex.Token) -> err {
     var arguments: [4]usize = zero
     var results: CallResults = zero
+    var raw = false
+    let (body, body_error) = check.literal_contents(spelling, &raw)
+    if body_error != ok { ret body_error }
+    var verb_index = 0usize
+    var at = 0usize
+    var next = 0usize
+    while at < body.len {
+        let (byte, byte_error) = check.literal_byte(body, at, raw, &next)
+        if byte_error != ok { ret byte_error }
+        at = next
+        if byte != 123u8 {
+            // A `}` reaching here is the first of the `}}` the checker required.
+            if byte == 125u8 {
+                let (closer, closer_error) = check.literal_byte(body, at, raw, &next)
+                if closer_error != ok { ret closer_error }
+                at = next
+            }
+            let text_error = emit_formatter_byte(c, g, module_index, instance, return_slot, handle, byte, arena_form, builder, token)
+            if text_error != ok { ret text_error }
+            continue
+        }
+        let (following, following_error) = check.literal_byte(body, at, raw, &next)
+        if following_error != ok { ret following_error }
+        if following == 123u8 {
+            at = next
+            let brace_error = emit_formatter_byte(c, g, module_index, instance, return_slot, handle, 123u8, arena_form, builder, token)
+            if brace_error != ok { ret brace_error }
+            continue
+        }
+        while at < body.len {
+            let (scan, scan_error) = check.literal_byte(body, at, raw, &next)
+            if scan_error != ok { ret scan_error }
+            at = next
+            if scan == 125u8 { break }
+        }
+        let (verb, precision, verb_error) = check.format_verb_at(spelling, verb_index)
+        if verb_error != ok { ret verb_error }
+        let parameter_index = first_verb + verb_index
+        if parameter_index >= instance.parameter_count { ret check.ArgumentCount }
+        let argument_type = c.parameters[instance.first_parameter + parameter_index].ty
+        let (push_name, push_name_error) = formatter_push_name(c, argument_type, verb)
+        if push_name_error != ok { ret push_name_error }
+        arguments[0usize] = handle
+        arguments[1usize] = parameters[parameter_index]
+        var argument_count = 2usize
+        if verb == .Fixed {
+            let precision_type = check.make_type(.Integer, "u8", module_index)
+            let (precision_instruction, precision_value, precision_error) = nir.emit(builder, .ConstInteger, precision_type, true, usize(precision), token)
+            if precision_error != ok { ret precision_error }
+            arguments[2usize] = precision_value
+            argument_count = 3usize
+        }
+        let push_error = emit_library_call(c, g, "e.str", push_name, arguments[..], argument_count, builder, token, &results)
+        if push_error != ok { ret push_error }
+        if results.count != 1usize { ret check.ArgumentCount }
+        let verb_guard_error = emit_formatter_guard(c, module_index, instance, return_slot, results.values[0usize], arena_form, builder, token)
+        if verb_guard_error != ok { ret verb_guard_error }
+        verb_index += 1usize
+    }
+    ret ok
+}
+
+// `format` builds into the caller's arena and hands back what `done` leaves, so the
+// result outlives the expansion exactly as an allocation does.
+fn lower_formatter_open(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, spelling: str, parameters: []usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    var arguments: [2]usize = zero
+    var results: CallResults = zero
     let usize_type = check.make_type(.Integer, "usize", module_index)
-    if !arena_form { ret (0usize, check.Unsupported) }
     let (capacity_instruction, capacity, capacity_error) = nir.emit(builder, .ConstInteger, usize_type, true, 64usize, token)
     if capacity_error != ok { ret (0usize, capacity_error) }
     arguments[0usize] = parameters[0usize]
@@ -3830,73 +3902,98 @@ fn lower_formatter_body(c: *check.Checker, g: *graph.Graph, module_index: usize,
     if builder_call_error != ok { ret (0usize, builder_call_error) }
     if results.count != 2usize { ret (0usize, check.ArgumentCount) }
     let handle = results.values[0usize]
-    let open_guard_error = emit_formatter_guard(c, module_index, instance, return_slot, results.values[1usize], arena_form, builder, token)
+    let open_guard_error = emit_formatter_guard(c, module_index, instance, return_slot, results.values[1usize], true, builder, token)
     if open_guard_error != ok { ret (0usize, open_guard_error) }
-
-    var raw = false
-    let (body, body_error) = check.literal_contents(spelling, &raw)
-    if body_error != ok { ret (0usize, body_error) }
-    var verb_index = 0usize
-    var at = 0usize
-    var next = 0usize
-    while at < body.len {
-        let (byte, byte_error) = check.literal_byte(body, at, raw, &next)
-        if byte_error != ok { ret (0usize, byte_error) }
-        at = next
-        if byte != 123u8 {
-            // A `}` reaching here is the first of the `}}` the checker required.
-            if byte == 125u8 {
-                let (closer, closer_error) = check.literal_byte(body, at, raw, &next)
-                if closer_error != ok { ret (0usize, closer_error) }
-                at = next
-            }
-            let text_error = emit_formatter_byte(c, g, module_index, instance, return_slot, handle, byte, arena_form, builder, token)
-            if text_error != ok { ret (0usize, text_error) }
-            continue
-        }
-        let (following, following_error) = check.literal_byte(body, at, raw, &next)
-        if following_error != ok { ret (0usize, following_error) }
-        if following == 123u8 {
-            at = next
-            let brace_error = emit_formatter_byte(c, g, module_index, instance, return_slot, handle, 123u8, arena_form, builder, token)
-            if brace_error != ok { ret (0usize, brace_error) }
-            continue
-        }
-        while at < body.len {
-            let (scan, scan_error) = check.literal_byte(body, at, raw, &next)
-            if scan_error != ok { ret (0usize, scan_error) }
-            at = next
-            if scan == 125u8 { break }
-        }
-        let (verb, precision, verb_error) = check.format_verb_at(spelling, verb_index)
-        if verb_error != ok { ret (0usize, verb_error) }
-        let parameter_index = verb_index + 1usize
-        if parameter_index >= instance.parameter_count { ret (0usize, check.ArgumentCount) }
-        let argument_type = c.parameters[instance.first_parameter + parameter_index].ty
-        let (push_name, push_name_error) = formatter_push_name(c, argument_type, verb)
-        if push_name_error != ok { ret (0usize, push_name_error) }
-        arguments[0usize] = handle
-        arguments[1usize] = parameters[parameter_index]
-        var argument_count = 2usize
-        if verb == .Fixed {
-            let precision_type = check.make_type(.Integer, "u8", module_index)
-            let (precision_instruction, precision_value, precision_error) = nir.emit(builder, .ConstInteger, precision_type, true, usize(precision), token)
-            if precision_error != ok { ret (0usize, precision_error) }
-            arguments[2usize] = precision_value
-            argument_count = 3usize
-        }
-        let push_error = emit_library_call(c, g, "e.str", push_name, arguments[..], argument_count, builder, token, &results)
-        if push_error != ok { ret (0usize, push_error) }
-        if results.count != 1usize { ret (0usize, check.ArgumentCount) }
-        let verb_guard_error = emit_formatter_guard(c, module_index, instance, return_slot, results.values[0usize], arena_form, builder, token)
-        if verb_guard_error != ok { ret (0usize, verb_guard_error) }
-        verb_index += 1usize
-    }
+    let pieces_error = lower_formatter_pieces(c, g, module_index, instance, return_slot, spelling, parameters, 1usize, handle, true, builder, token)
+    if pieces_error != ok { ret (0usize, pieces_error) }
     arguments[0usize] = handle
     let done_error = emit_library_call(c, g, "e.str", "done", arguments[..], 1usize, builder, token, &results)
     if done_error != ok { ret (0usize, done_error) }
     if results.count != 1usize { ret (0usize, check.ArgumentCount) }
     ret (results.values[0usize], ok)
+}
+
+// Two words side by side in a stack slot: the `{ptr, len}` of a slice and the
+// `{ctx, write}` of a `str.Sink` have the same shape, and neither needs a bounds
+// check, so building them by hand is smaller than reaching for the `Slice` opcode.
+fn emit_word_pair(c: *check.Checker, module_index: usize, first: usize, second: usize, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let pair_type = check.make_type(.Other, "word-pair", module_index)
+    let (stack_instruction, pair, stack_error) = nir.emit(builder, .Stack, pair_type, true, 2usize, token)
+    if stack_error != ok { ret (0usize, stack_error) }
+    var offset = 0usize
+    while offset < 16usize {
+        var word = first
+        if offset == 8usize { word = second }
+        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, offset, token)
+        if address_error != ok { ret (0usize, address_error) }
+        let address_operand_error = nir.add_operand(builder, address_instruction, pair)
+        if address_operand_error != ok { ret (0usize, address_operand_error) }
+        let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, pointer_type, false, 8usize, token)
+        if store_error != ok { ret (0usize, store_error) }
+        let destination_error = nir.add_operand(builder, store_instruction, address)
+        if destination_error != ok { ret (0usize, destination_error) }
+        let word_error = nir.add_operand(builder, store_instruction, word)
+        if word_error != ok { ret (0usize, word_error) }
+        offset += 8usize
+    }
+    ret (pair, ok)
+}
+
+// `printf` is `format` over a buffer of its own: a `[4096]u8` local under
+// `mem.arena_from`, its top claimed by `str.builder_to` with a sink that writes
+// through `io.print`. The flushing is the builder's, so a push that exhausts the
+// arena drains it and carries on and output of any length works; `mem.Exhausted`
+// therefore never reaches the expansion, and no caller's arena is involved.
+fn lower_printf_body(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, sink_index: usize, spelling: str, parameters: []usize, builder: *nir.Builder, token: lex.Token) -> err {
+    var arguments: [4]usize = zero
+    var results: CallResults = zero
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let buffer_type = check.make_type(.Other, "printf-buffer", module_index)
+    let (buffer_instruction, buffer, buffer_error) = nir.emit(builder, .Stack, buffer_type, true, 512usize, token)
+    if buffer_error != ok { ret buffer_error }
+    let (size_instruction, size, size_error) = nir.emit(builder, .ConstInteger, usize_type, true, 4096usize, token)
+    if size_error != ok { ret size_error }
+    let (bytes, bytes_error) = emit_word_pair(c, module_index, buffer, size, builder, token)
+    if bytes_error != ok { ret bytes_error }
+    arguments[0usize] = bytes
+    try emit_library_call(c, g, "e.mem", "arena_from", arguments[..], 1usize, builder, token, &results)
+    if results.count != 1usize { ret check.ArgumentCount }
+    let arena = results.values[0usize]
+
+    let sink = c.functions[sink_index]
+    let (function_ref, function_ref_error) = nir.intern_function(builder, sink.owner_module_index, sink.name, sink.instance_id)
+    if function_ref_error != ok { ret function_ref_error }
+    let (write_instruction, write, write_error) = nir.emit(builder, .FunctionAddress, pointer_type, true, function_ref, token)
+    if write_error != ok { ret write_error }
+    // The sink never reads its context: what it writes to is `os.stdout()`, which it
+    // asks for itself. A null keeps the field from carrying a stale address.
+    let (context_instruction, context, context_error) = nir.emit(builder, .ConstInteger, pointer_type, true, 0usize, token)
+    if context_error != ok { ret context_error }
+    let (sink_value, sink_value_error) = emit_word_pair(c, module_index, context, write, builder, token)
+    if sink_value_error != ok { ret sink_value_error }
+
+    // An eighth of the buffer, so the doubling in `push` has somewhere to go before
+    // the arena is exhausted and the first drain happens.
+    let (capacity_instruction, capacity, capacity_error) = nir.emit(builder, .ConstInteger, usize_type, true, 512usize, token)
+    if capacity_error != ok { ret capacity_error }
+    arguments[0usize] = arena
+    arguments[1usize] = capacity
+    arguments[2usize] = sink_value
+    try emit_library_call(c, g, "e.str", "builder_to", arguments[..], 3usize, builder, token, &results)
+    if results.count != 2usize { ret check.ArgumentCount }
+    let handle = results.values[0usize]
+    try emit_formatter_guard(c, module_index, instance, 0usize, results.values[1usize], false, builder, token)
+    try lower_formatter_pieces(c, g, module_index, instance, 0usize, spelling, parameters, 0usize, handle, false, builder, token)
+    arguments[0usize] = handle
+    try emit_library_call(c, g, "e.str", "done", arguments[..], 1usize, builder, token, &results)
+    if results.count != 1usize { ret check.ArgumentCount }
+    // What `done` leaves is the tail the drains did not take, and it goes the same way.
+    arguments[0usize] = results.values[0usize]
+    try emit_library_call(c, g, "e.io", "print", arguments[..], 1usize, builder, token, &results)
+    if results.count != 1usize { ret check.ArgumentCount }
+    ret emit_formatter_return(c, module_index, instance, 0usize, 0usize, results.values[0usize], false, builder, token)
 }
 
 // A formatter instance is the one function in the program with no source: its
@@ -3952,7 +4049,27 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
         parameters[parameter_at] = result
         parameter_at += 1usize
     }
-    let (text, body_error) = lower_formatter_body(c, g, module_index, instance, return_slot, generic.formatter_spelling, parameters[..], arena_form, builder, token)
+    if generic.formatter_sink {
+        // The sink is one call: `io.print` already loops over `os.write` until every
+        // byte is gone. It needs a body of its own only because the arities differ --
+        // a sink takes the context `print` has no parameter for.
+        var sink_results: CallResults = zero
+        var sink_arguments: [1]usize = zero
+        sink_arguments[0usize] = parameters[1usize]
+        try emit_library_call(c, g, "e.io", "print", sink_arguments[..], 1usize, builder, token, &sink_results)
+        if sink_results.count != 1usize { ret check.ArgumentCount }
+        try emit_formatter_return(c, module_index, instance, 0usize, 0usize, sink_results.values[0usize], false, builder, token)
+        ret nir.end_function(builder)
+    }
+    if !arena_form {
+        let (io_module, found_io) = graph.find_module(g, "e.io")
+        if !found_io { ret FunctionNotFound }
+        let (sink_index, sink_error) = check.formatter_sink_instance(c, module_index, io_module)
+        if sink_error != ok { ret sink_error }
+        try lower_printf_body(c, g, module_index, instance, sink_index, generic.formatter_spelling, parameters[..], builder, token)
+        ret nir.end_function(builder)
+    }
+    let (text, body_error) = lower_formatter_open(c, g, module_index, instance, return_slot, generic.formatter_spelling, parameters[..], builder, token)
     if body_error != ok { ret body_error }
     let error_type = check.make_type(.Err, "err", module_index)
     let (ok_instruction, ok_value, ok_error) = nir.emit(builder, .ConstError, error_type, true, 0usize, token)

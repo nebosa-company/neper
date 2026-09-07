@@ -1,5 +1,7 @@
 // Bootstrap-compatible output over the fixed e.os surface.
+use e.mem
 use e.os
+use e.str
 
 fn print(s: []const u8) -> err {
     let output = os.stdout()

@@ -128,7 +128,7 @@ $transitiveGraph = & $compiler graph-file (Join-Path $graphRoot 'transitive\src\
 if ($LASTEXITCODE -ne 0 -or $transitiveGraph -ne 'module graph ok') { throw 'transitive module graph loading failed' }
 $reusedGraph = & $compiler graph-file (Join-Path $graphRoot 'reuse\src\main.e') $repo 'x64' 'windows' 'main' 'common'
 if ($LASTEXITCODE -ne 0 -or $reusedGraph -ne 'module graph ok') { throw 'multiply aliased module was not reused' }
-$toolchainGraph = & $compiler graph-file (Join-Path $nestedRoot 'src\main.e') $repo 'x64' 'windows' 'main' 'e.io' 'e.mem' 'e.os' 'util.math'
+$toolchainGraph = & $compiler graph-file (Join-Path $nestedRoot 'src\main.e') $repo 'x64' 'windows' 'main' 'e.io' 'e.mem' 'e.os' 'e.str' 'util.math'
 if ($LASTEXITCODE -ne 0 -or $toolchainGraph -ne 'module graph ok') { throw 'toolchain fallback module graph loading failed' }
 $variantGraph = & $compiler graph-file (Join-Path $variantRoot 'src\root.e') $repo 'x64' 'windows' 'root' 'system'
 if ($LASTEXITCODE -ne 0 -or $variantGraph -ne 'module graph ok') { throw 'target-variant module graph loading failed' }
@@ -435,6 +435,19 @@ foreach ($comptimeStrCase in @('comptime_str_runtime', 'comptime_str_integer', '
     $comptimeStrOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$comptimeStrCase\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1) { throw "comptime string fixture $comptimeStrCase was accepted" }
 }
+# `io.printf[FMT]` is `format` over a buffer of its own, drained through a generated
+# sink. Its output is compared byte for byte against a file written from the format
+# strings, so the line that outgrows the 4 KiB buffer pins that the drains and the
+# final write agree about where they are.
+$printfPath = Join-Path $testBuild 'io-printf-selfhost.exe'
+$printfWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\io_printf\src\main.e') $repo 'x64' 'windows' $printfPath
+if ($LASTEXITCODE -ne 0 -or $printfWritten -ne 'executable written') { throw 'printf executable emission failed' }
+$printfOutput = Join-Path $testBuild 'io-printf-output.txt'
+$printfRun = Start-Process -FilePath $printfPath -RedirectStandardOutput $printfOutput -NoNewWindow -Wait -PassThru
+if ($printfRun.ExitCode -ne 0) { throw 'printf returned an error' }
+$printfActual = [System.IO.File]::ReadAllBytes($printfOutput)
+$printfExpected = [System.IO.File]::ReadAllBytes((Join-Path $PSScriptRoot 'fixtures\link\io_printf\expected.txt'))
+if (-not [System.Linq.Enumerable]::SequenceEqual($printfActual, $printfExpected)) { throw 'printf wrote the wrong bytes' }
 # A flushing builder over a stack arena: the shape `printf` expands to, and the only
 # thing that exercises `builder_to`'s drain. Pushing several times the arena's size
 # through it proves the drain happens during the pushes, not once at the end.

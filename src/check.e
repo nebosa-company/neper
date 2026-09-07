@@ -156,6 +156,10 @@ type FunctionGeneric = struct {
     // string, which is why it carries the string rather than a template index.
     formatter: bool,
     formatter_spelling: str,
+    // `printf` writes through a `str.Sink`, whose `write` is a function value of a
+    // shape no `e.io` declaration has. The compiler generates that function too, and
+    // this marks the one instance that is it rather than an expansion.
+    formatter_sink: bool,
 }
 
 type ProtocolBuiltin = enum u8 {
@@ -4322,6 +4326,48 @@ fn formatter_instance(c: *Checker, owner_module_index: usize, target_module: usi
     generic.checked = true
     generic.formatter = true
     generic.formatter_spelling = spelling
+    let index = c.function_count
+    c.functions[index] = instance
+    c.function_generics[index] = generic
+    c.function_count += 1usize
+    ret (index, ok)
+}
+
+// The sink `printf` hands to `str.builder_to`. Its shape -- `fn(*void, []const u8) ->
+// err` -- is not one `e.io` declares, and it cannot be added to `e.io` because the
+// language has no visibility mechanism and the surface is frozen (spec section 12).
+// So the compiler generates it, once per module that calls `printf`, the same way it
+// generates the expansions themselves.
+fn formatter_sink_instance(c: *Checker, owner_module_index: usize, io_module: usize) -> (usize, err) {
+    var at = c.signature_function_count
+    while at < c.function_count {
+        if c.function_generics[at].formatter_sink && c.functions[at].owner_module_index == owner_module_index { ret (at, ok) }
+        at += 1usize
+    }
+    if c.function_count == c.functions.len { ret (0usize, Capacity) }
+    if c.parameter_count + 2usize > c.parameters.len { ret (0usize, Capacity) }
+    let u8_type = make_type(.Integer, "u8", io_module)
+    let (bytes, bytes_error) = seeded_composite_type(c, .Slice, u8_type, true, io_module)
+    if bytes_error != ok { ret (0usize, bytes_error) }
+    var instance: Function = zero
+    instance.name = "print_sink"
+    instance.module_index = io_module
+    instance.owner_module_index = owner_module_index
+    instance.instance_id = owner_instance_count(c, owner_module_index, "print_sink") + 1usize
+    instance.first_parameter = c.parameter_count
+    instance.parameter_count = 2usize
+    instance.first_return = c.return_type_count
+    instance.return_count = 1usize
+    c.parameters[c.parameter_count] = Parameter { name: "ctx", ty: make_type(.Pointer, "", io_module) }
+    c.parameters[c.parameter_count + 1usize] = Parameter { name: "bytes", ty: bytes }
+    c.parameter_count += 2usize
+    let return_error = store_return_type(c, make_type(.Err, "err", io_module))
+    if return_error != ok { ret (0usize, return_error) }
+    var generic: FunctionGeneric = zero
+    generic.instance = true
+    generic.checked = true
+    generic.formatter = true
+    generic.formatter_sink = true
     let index = c.function_count
     c.functions[index] = instance
     c.function_generics[index] = generic

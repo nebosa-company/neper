@@ -149,7 +149,7 @@ transitive_graph=$($test_build/neper-self graph-file "$graph_root/transitive/src
 [ "$transitive_graph" = 'module graph ok' ]
 reused_graph=$($test_build/neper-self graph-file "$graph_root/reuse/src/main.e" "$repo" x64 linux main common)
 [ "$reused_graph" = 'module graph ok' ]
-toolchain_graph=$($test_build/neper-self graph-file "$nested_root/src/main.e" "$repo" x64 linux main e.io e.mem e.os util.math)
+toolchain_graph=$($test_build/neper-self graph-file "$nested_root/src/main.e" "$repo" x64 linux main e.io e.mem e.os e.str util.math)
 [ "$toolchain_graph" = 'module graph ok' ]
 variant_graph=$($test_build/neper-self graph-file "$variant_root/src/root.e" "$repo" x64 linux root system)
 [ "$variant_graph" = 'module graph ok' ]
@@ -474,6 +474,15 @@ for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_
         exit 1
     fi
 done
+# `io.printf[FMT]` is `format` over a buffer of its own, drained through a generated
+# sink. Its output is compared byte for byte against a file written from the format
+# strings, so the line that outgrows the 4 KiB buffer pins that the drains and the
+# final write agree about where they are.
+printf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/io_printf/src/main.e" "$repo" x64 linux "$test_build/io-printf-selfhost")
+[ "$printf_written" = 'executable written' ]
+chmod +x "$test_build/io-printf-selfhost"
+"$test_build/io-printf-selfhost" > "$test_build/io-printf-output.txt"
+cmp "$test_build/io-printf-output.txt" "$repo/tests/selfhost/fixtures/link/io_printf/expected.txt"
 # A flushing builder over a stack arena: the shape `printf` expands to, and the only
 # thing that exercises `builder_to`'s drain. Pushing several times the arena's size
 # through it proves the drain happens during the pushes, not once at the end.
