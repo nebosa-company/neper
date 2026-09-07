@@ -435,6 +435,14 @@ foreach ($comptimeStrCase in @('comptime_str_runtime', 'comptime_str_integer', '
     $comptimeStrOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$comptimeStrCase\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1) { throw "comptime string fixture $comptimeStrCase was accepted" }
 }
+# A flushing builder over a stack arena: the shape `printf` expands to, and the only
+# thing that exercises `builder_to`'s drain. Pushing several times the arena's size
+# through it proves the drain happens during the pushes, not once at the end.
+$flushPath = Join-Path $testBuild 'str-flush-selfhost.exe'
+$flushWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_flush\src\main.e') $repo 'x64' 'windows' $flushPath
+if ($LASTEXITCODE -ne 0 -or $flushWritten -ne 'executable written') { throw 'flushing builder emission failed' }
+& $flushPath
+if ($LASTEXITCODE -ne 0) { throw 'a flushing builder dropped or duplicated bytes' }
 # `str.format[FMT]` expands to a generated function: a builder, a push per piece of
 # the format string, and `done`. The fixture compares its output against the same
 # pushes written by hand.

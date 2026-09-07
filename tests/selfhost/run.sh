@@ -474,6 +474,13 @@ for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_
         exit 1
     fi
 done
+# A flushing builder over a stack arena: the shape `printf` expands to, and the only
+# thing that exercises `builder_to`'s drain. Pushing several times the arena's size
+# through it proves the drain happens during the pushes, not once at the end.
+flush_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/str_flush/src/main.e" "$repo" x64 linux "$test_build/str-flush-selfhost")
+[ "$flush_written" = 'executable written' ]
+chmod +x "$test_build/str-flush-selfhost"
+"$test_build/str-flush-selfhost"
 # `str.format[FMT]` expands to a generated function: a builder, a push per piece of
 # the format string, and `done`. The fixture compares its output against the same
 # pushes written by hand.
