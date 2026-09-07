@@ -4072,16 +4072,23 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
             case ST_TRY:
                 if (c->checking_defer)
                     diagnostic_at(c, &s->token, "E-ERROR-9999", "try is not legal inside defer");
-                if (check_expr(c, fn, s->as.expr).kind != TY_ERR || fn->return_type.kind != TY_ERR)
-                    diagnostic_at(c, &s->token, "E-ERROR-9999", "try requires an err expression in an err-returning function");
+                /* Two different mistakes: the callee cannot fail, or the caller has
+                   no err to propagate through. Split to match the self-hosted front
+                   end, which tests/neper0 compares this against byte for byte. */
+                if (check_expr(c, fn, s->as.expr).kind != TY_ERR)
+                    diagnostic_at(c, &s->token, "E-ERROR-9999", "try needs a call whose last result is an err");
+                else if (fn->return_type.kind != TY_ERR)
+                    diagnostic_at(c, &s->token, "E-ERROR-9999", "try propagates an err, so the enclosing function must return one");
                 break;
             case ST_RETURN: {
                 int return_index;
                 if (c->checking_defer)
                     diagnostic_at(c, &s->token, "E-TYPE-9999", "ret is not legal inside defer");
                 if (s->as.ret.value_count != fn->return_count) {
-                    if (!(s->as.ret.value_count == 0 && fn->return_count == 0))
-                        diagnostic_at(c, &s->token, "E-TYPE-9999", "return value count does not match function signature");
+                    if (fn->return_count == 0)
+                        diagnostic_at(c, &s->token, "E-TYPE-0003", "this function returns nothing, so ret takes no value");
+                    else
+                        diagnostic_at(c, &s->token, "E-TYPE-0003", "ret gives a different number of values than this function returns");
                 }
                 for (return_index = 0; return_index < s->as.ret.value_count && return_index < fn->return_count; ++return_index) {
                     Expr *value = s->as.ret.values[return_index];
@@ -4095,7 +4102,7 @@ static void check_statements_in_scope(Compiler *c, Function *fn, Stmt *s,
                         coerce_untyped_integer(value, expected); actual = expected;
                     }
                     if (!type_assignable(actual, expected))
-                        diagnostic_at(c, &value->token, "E-TYPE-9999", "return type mismatch");
+                        diagnostic_at(c, &value->token, "E-TYPE-0002", "the returned value does not have the declared return type");
                 }
                 break;
             }

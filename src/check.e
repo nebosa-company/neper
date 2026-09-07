@@ -6189,7 +6189,10 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
             let (expected, return_type_error) = function_return(c, function, return_index)
             if return_type_error != ok { ret return_type_error }
             let (actual, expression_error) = check_expr(c, g, tree, module_index, tree.children[at].index, expected)
-            if expression_error == TypeMismatch { ret ReturnType }
+            if expression_error == TypeMismatch {
+                record_failure(c, module_index, tree.nodes[tree.children[at].index], .ReturnType, "", "")
+                ret ReturnType
+            }
             if expression_error != ok { ret expression_error }
             return_index += 1usize
         }

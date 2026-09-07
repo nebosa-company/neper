@@ -571,7 +571,7 @@ foreach ($case in $protocolDiagnostics) {
 # Each situation now has its own text, and each is pinned to the message and not merely
 # to the rejection.
 $returnDiagnostics = @(
-    @('return_type', 'main\.e:5:5: error\[E-TYPE-0002\]: the returned value does not have the declared return type'),
+    @('return_type', 'main\.e:5:9: error\[E-TYPE-0002\]: the returned value does not have the declared return type'),
     @('return_count', 'main\.e:4:5: error\[E-TYPE-0003\]: ret gives a different number of values than this function returns'),
     @('return_values_unexpected', 'main\.e:4:5: error\[E-TYPE-0003\]: this function returns nothing, so ret takes no value'),
     @('return_inside_defer', 'main\.e:5:9: error\[E-TYPE-9999\]: ret is not legal inside defer'),

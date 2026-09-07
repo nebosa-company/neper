@@ -602,7 +602,7 @@ check_protocol_diagnostic protocol_no_fallback 'main.e:6:9: error[E-NAME-9999]: 
 # value of the wrong type said "ret is not legal inside defer" in a file with no defer.
 # Each situation now has its own text, and each is pinned to the message and not merely
 # to the rejection.
-check_protocol_diagnostic return_type 'main.e:5:5: error[E-TYPE-0002]: the returned value does not have the declared return type'
+check_protocol_diagnostic return_type 'main.e:5:9: error[E-TYPE-0002]: the returned value does not have the declared return type'
 check_protocol_diagnostic return_count 'main.e:4:5: error[E-TYPE-0003]: ret gives a different number of values than this function returns'
 check_protocol_diagnostic return_values_unexpected 'main.e:4:5: error[E-TYPE-0003]: this function returns nothing, so ret takes no value'
 check_protocol_diagnostic return_inside_defer 'main.e:5:9: error[E-TYPE-9999]: ret is not legal inside defer'
