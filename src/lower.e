@@ -2316,9 +2316,6 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if node.kind == .CallExpr {
         let (call_info, call_info_error) = check.check_call(c, g, tree, module_index, node)
         if call_info_error != ok { ret (0usize, zero, call_info_error) }
-        // The formatter's expansion is not written yet: it checks and does not lower,
-        // the way the floats did before their back end arrived.
-        if call_info.formatter { ret (0usize, zero, check.Unsupported) }
         if call_info.is_cast || call_info.mem_cast || call_info.mem_bitcast {
             var argument_index = 0usize
             var child_position = 0usize
@@ -3657,7 +3654,318 @@ fn pending_instance(c: *check.Checker, owner_module_index: usize) -> (usize, boo
     var at = c.signature_function_count
     while at < c.function_count {
         let generic = c.function_generics[at]
-        if generic.instance && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
+        if generic.instance && !generic.formatter && !generic.lowered && !c.functions[at].generic && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// A call into `e.str` from generated code: the callee is found by name, the arguments
+// are values already lowered, and `emit_call_results` does the rest -- including the
+// hidden slot a `(Builder, err)` return needs.
+fn emit_library_call(c: *check.Checker, g: *graph.Graph, module_name: str, name: str, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    let (target_module, found_module) = graph.find_module(g, module_name)
+    if !found_module { ret FunctionNotFound }
+    let (function_index, found_function) = check.find_function(c, target_module, name)
+    if !found_function { ret FunctionNotFound }
+    var call: check.CallInfo = zero
+    call.cast = check.invalid_type()
+    call.alloc_return = check.invalid_type()
+    call.alloc_arena = check.invalid_type()
+    call.function = c.functions[function_index]
+    ret emit_call_results(c, call, 0usize, arguments, argument_count, builder, token, results)
+}
+
+// The one place a generated formatter returns. `printf` returns `err` in a register;
+// `format` returns `(str, err)`, which is wider than a register pair, so it goes
+// through the same hidden slot `lower_return` writes for a source-level `ret`.
+fn emit_formatter_return(c: *check.Checker, module_index: usize, instance: check.Function, return_slot: usize, text: usize, failure: usize, arena_form: bool, builder: *nir.Builder, token: lex.Token) -> err {
+    let error_type = check.make_type(.Err, "err", module_index)
+    if !arena_form {
+        let (instruction, ignored, emit_error) = nir.emit(builder, .Return, error_type, false, 0usize, token)
+        if emit_error != ok { ret emit_error }
+        ret nir.add_operand(builder, instruction, failure)
+    }
+    var call: check.CallInfo = zero
+    call.function = instance
+    var return_layout: ReturnLayout = zero
+    let layout_error = call_return_layout(c, call, &return_layout)
+    if layout_error != ok || !return_layout.via_slot { ret check.InvalidReturn }
+    var values: [2]usize = zero
+    values[0usize] = text
+    values[1usize] = failure
+    var result_at = 0usize
+    while result_at < 2usize {
+        let result_type = c.return_types[instance.first_return + result_at]
+        let (info, info_error) = layout.type_info(c, result_type)
+        if info_error != ok { ret info_error }
+        let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, result_type, true, return_layout.offsets[result_at], token)
+        if address_error != ok { ret address_error }
+        try nir.add_operand(builder, address_instruction, return_slot)
+        var opcode: nir.Opcode = .Store
+        if aggregate_value(c, result_type) { opcode = .Copy }
+        let (move_instruction, move_ignored, move_error) = nir.emit(builder, opcode, result_type, false, info.size, token)
+        if move_error != ok { ret move_error }
+        try nir.add_operand(builder, move_instruction, address)
+        try nir.add_operand(builder, move_instruction, values[result_at])
+        result_at += 1usize
+    }
+    let (instruction, ignored, emit_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
+    ret emit_error
+}
+
+// The error check every fallible step in an expansion carries. It is the shape `try`
+// lowers to, except that the early exit returns rather than propagates: an expansion
+// has no caller frame of its own to hand the error back through.
+fn emit_formatter_guard(c: *check.Checker, module_index: usize, instance: check.Function, return_slot: usize, failure: usize, arena_form: bool, builder: *nir.Builder, token: lex.Token) -> err {
+    let error_type = check.make_type(.Err, "err", module_index)
+    let (ok_instruction, ok_value, ok_error) = nir.emit(builder, .ConstError, error_type, true, 0usize, token)
+    if ok_error != ok { ret ok_error }
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (compare_instruction, failed, compare_error) = nir.emit(builder, .NotEqual, boolean, true, 0usize, token)
+    if compare_error != ok { ret compare_error }
+    try nir.add_operand(builder, compare_instruction, failure)
+    try nir.add_operand(builder, compare_instruction, ok_value)
+    let failure_block = builder.block_count
+    let continue_block = builder.block_count + 1usize
+    let (branch_instruction, branch_ignored, branch_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if branch_error != ok { ret branch_error }
+    try nir.add_operand(builder, branch_instruction, failed)
+    try nir.set_branch_targets(builder, branch_instruction, failure_block, continue_block)
+    let (failure_index, failure_block_error) = nir.begin_block(builder)
+    if failure_block_error != ok || failure_index != failure_block { ret nir.InvalidControlFlow }
+    var text = 0usize
+    if arena_form {
+        let text_type = check.make_type(.String, "str", module_index)
+        let (empty_index, empty_intern_error) = nir.intern_string(builder, "\"\"")
+        if empty_intern_error != ok { ret empty_intern_error }
+        let (empty_instruction, empty_value, empty_error) = nir.emit(builder, .ConstString, text_type, true, empty_index, token)
+        if empty_error != ok { ret empty_error }
+        text = empty_value
+    }
+    try emit_formatter_return(c, module_index, instance, return_slot, text, failure, arena_form, builder, token)
+    let (continue_index, continue_block_error) = nir.begin_block(builder)
+    if continue_block_error != ok || continue_index != continue_block { ret nir.InvalidControlFlow }
+    ret ok
+}
+
+// Which push a verb expands to. Section 4: `{}` is the push of the argument's own
+// type, `{x}` and `{b}` take the 32- or 64-bit form, and `{.N}` is the fixed float
+// push. Widening to reach one is inside the formatter, not a source-level conversion,
+// so section 6's list of implicit operations stays complete.
+fn formatter_push_name(c: *check.Checker, ty: check.Type, verb: check.FormatVerb) -> (str, err) {
+    let (canonical, canonical_error) = check.canonical_type(c, ty)
+    if canonical_error != ok { ret ("", canonical_error) }
+    if verb == .Hex || verb == .Binary {
+        if canonical.kind != .Integer { ret ("", check.InvalidFormat) }
+        let wide = check.integer_width(canonical) == 64usize
+        if verb == .Hex {
+            if wide { ret ("push_hex_u64", ok) }
+            ret ("push_hex_u32", ok)
+        }
+        if wide { ret ("push_bin_u64", ok) }
+        ret ("push_bin_u32", ok)
+    }
+    if verb == .Fixed {
+        if check.same(canonical.name, "f32") { ret ("push_f32_fixed", ok) }
+        if check.same(canonical.name, "f64") { ret ("push_f64_fixed", ok) }
+        ret ("", check.InvalidFormat)
+    }
+    if canonical.kind == .Bool { ret ("push_bool", ok) }
+    if canonical.kind == .String { ret ("push", ok) }
+    if canonical.kind == .Integer {
+        if check.same(canonical.name, "i8") { ret ("push_i8", ok) }
+        if check.same(canonical.name, "i16") { ret ("push_i16", ok) }
+        if check.same(canonical.name, "i32") { ret ("push_i32", ok) }
+        if check.same(canonical.name, "i64") { ret ("push_i64", ok) }
+        if check.same(canonical.name, "isize") { ret ("push_isize", ok) }
+        if check.same(canonical.name, "u8") { ret ("push_u8", ok) }
+        if check.same(canonical.name, "u16") { ret ("push_u16", ok) }
+        if check.same(canonical.name, "u32") { ret ("push_u32", ok) }
+        if check.same(canonical.name, "u64") { ret ("push_u64", ok) }
+        if check.same(canonical.name, "usize") { ret ("push_usize", ok) }
+        ret ("", check.InvalidFormat)
+    }
+    if canonical.kind == .Float {
+        if check.same(canonical.name, "f32") { ret ("push_f32", ok) }
+        if check.same(canonical.name, "f64") { ret ("push_f64", ok) }
+        ret ("", check.InvalidFormat)
+    }
+    // `err`, slices, arrays and enums are formattable under section 4 but reach a push
+    // this expansion does not write yet: `push_err` does not exist, and the rest need
+    // the expansion to recurse into an element at a time.
+    ret ("", check.Unsupported)
+}
+
+// One literal byte of the format string. Text is pushed a byte at a time rather than
+// as a string constant, because a run between two verbs is a slice of the *decoded*
+// text and interning wants a spelling to re-encode from. A call per byte is the cost;
+// a constant per run is the upgrade, and needs an arena lowering does not have.
+fn emit_formatter_byte(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, handle: usize, byte: u8, arena_form: bool, builder: *nir.Builder, token: lex.Token) -> err {
+    var arguments: [2]usize = zero
+    var results: CallResults = zero
+    let byte_type = check.make_type(.Integer, "u8", module_index)
+    let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstInteger, byte_type, true, usize(byte), token)
+    if constant_error != ok { ret constant_error }
+    arguments[0usize] = handle
+    arguments[1usize] = constant
+    try emit_library_call(c, g, "e.str", "push_byte", arguments[..], 2usize, builder, token, &results)
+    if results.count != 1usize { ret check.ArgumentCount }
+    ret emit_formatter_guard(c, module_index, instance, return_slot, results.values[0usize], arena_form, builder, token)
+}
+
+// The expansion itself: open a builder, push a piece at a time, and hand back what
+// `done` built. Verbs and text are interleaved in one scan of the decoded string, so
+// a verb's argument is pushed at exactly the position the format string names it.
+fn lower_formatter_body(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, spelling: str, parameters: []usize, arena_form: bool, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    var arguments: [4]usize = zero
+    var results: CallResults = zero
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    if !arena_form { ret (0usize, check.Unsupported) }
+    let (capacity_instruction, capacity, capacity_error) = nir.emit(builder, .ConstInteger, usize_type, true, 64usize, token)
+    if capacity_error != ok { ret (0usize, capacity_error) }
+    arguments[0usize] = parameters[0usize]
+    arguments[1usize] = capacity
+    let builder_call_error = emit_library_call(c, g, "e.str", "builder", arguments[..], 2usize, builder, token, &results)
+    if builder_call_error != ok { ret (0usize, builder_call_error) }
+    if results.count != 2usize { ret (0usize, check.ArgumentCount) }
+    let handle = results.values[0usize]
+    let open_guard_error = emit_formatter_guard(c, module_index, instance, return_slot, results.values[1usize], arena_form, builder, token)
+    if open_guard_error != ok { ret (0usize, open_guard_error) }
+
+    var raw = false
+    let (body, body_error) = check.literal_contents(spelling, &raw)
+    if body_error != ok { ret (0usize, body_error) }
+    var verb_index = 0usize
+    var at = 0usize
+    var next = 0usize
+    while at < body.len {
+        let (byte, byte_error) = check.literal_byte(body, at, raw, &next)
+        if byte_error != ok { ret (0usize, byte_error) }
+        at = next
+        if byte != 123u8 {
+            // A `}` reaching here is the first of the `}}` the checker required.
+            if byte == 125u8 {
+                let (closer, closer_error) = check.literal_byte(body, at, raw, &next)
+                if closer_error != ok { ret (0usize, closer_error) }
+                at = next
+            }
+            let text_error = emit_formatter_byte(c, g, module_index, instance, return_slot, handle, byte, arena_form, builder, token)
+            if text_error != ok { ret (0usize, text_error) }
+            continue
+        }
+        let (following, following_error) = check.literal_byte(body, at, raw, &next)
+        if following_error != ok { ret (0usize, following_error) }
+        if following == 123u8 {
+            at = next
+            let brace_error = emit_formatter_byte(c, g, module_index, instance, return_slot, handle, 123u8, arena_form, builder, token)
+            if brace_error != ok { ret (0usize, brace_error) }
+            continue
+        }
+        while at < body.len {
+            let (scan, scan_error) = check.literal_byte(body, at, raw, &next)
+            if scan_error != ok { ret (0usize, scan_error) }
+            at = next
+            if scan == 125u8 { break }
+        }
+        let (verb, precision, verb_error) = check.format_verb_at(spelling, verb_index)
+        if verb_error != ok { ret (0usize, verb_error) }
+        let parameter_index = verb_index + 1usize
+        if parameter_index >= instance.parameter_count { ret (0usize, check.ArgumentCount) }
+        let argument_type = c.parameters[instance.first_parameter + parameter_index].ty
+        let (push_name, push_name_error) = formatter_push_name(c, argument_type, verb)
+        if push_name_error != ok { ret (0usize, push_name_error) }
+        arguments[0usize] = handle
+        arguments[1usize] = parameters[parameter_index]
+        var argument_count = 2usize
+        if verb == .Fixed {
+            let precision_type = check.make_type(.Integer, "u8", module_index)
+            let (precision_instruction, precision_value, precision_error) = nir.emit(builder, .ConstInteger, precision_type, true, usize(precision), token)
+            if precision_error != ok { ret (0usize, precision_error) }
+            arguments[2usize] = precision_value
+            argument_count = 3usize
+        }
+        let push_error = emit_library_call(c, g, "e.str", push_name, arguments[..], argument_count, builder, token, &results)
+        if push_error != ok { ret (0usize, push_error) }
+        if results.count != 1usize { ret (0usize, check.ArgumentCount) }
+        let verb_guard_error = emit_formatter_guard(c, module_index, instance, return_slot, results.values[0usize], arena_form, builder, token)
+        if verb_guard_error != ok { ret (0usize, verb_guard_error) }
+        verb_index += 1usize
+    }
+    arguments[0usize] = handle
+    let done_error = emit_library_call(c, g, "e.str", "done", arguments[..], 1usize, builder, token, &results)
+    if done_error != ok { ret (0usize, done_error) }
+    if results.count != 1usize { ret (0usize, check.ArgumentCount) }
+    ret (results.values[0usize], ok)
+}
+
+// A formatter instance is the one function in the program with no source: its
+// signature comes from the call that asked for it and its body from the format
+// string. Everything around the body -- the hidden return slot, the parameters, the
+// symbol -- is what `lower_function_index` builds for an ordinary function.
+fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: usize, instance_index: usize, builder: *nir.Builder, signatures: *nir.Signatures) -> err {
+    if instance_index >= c.function_count { ret FunctionNotFound }
+    let instance = c.functions[instance_index]
+    let generic = c.function_generics[instance_index]
+    if !generic.formatter { ret check.Unsupported }
+    if instance.parameter_count > 32usize { ret check.ArgumentCount }
+    var token: lex.Token = zero
+    c.failure_module = module_index
+    c.failure_name = instance.name
+    c.failure_has_token = false
+    let arena_form = instance.return_count == 2usize
+    let (nir_function, begin_error) = nir.begin_function(builder, instance.owner_module_index, instance.name, instance.instance_id)
+    if begin_error != ok { ret begin_error }
+    try nir.begin_signature(builder, nir_function, signatures)
+    var signature_at = 0usize
+    while signature_at < instance.parameter_count {
+        try nir.add_parameter_type(builder, nir_function, signatures, c.parameters[instance.first_parameter + signature_at].ty)
+        signature_at += 1usize
+    }
+    signature_at = 0usize
+    while signature_at < instance.return_count {
+        try nir.add_return_type(builder, nir_function, signatures, c.return_types[instance.first_return + signature_at])
+        signature_at += 1usize
+    }
+    let (entry, block_error) = nir.begin_block(builder)
+    if block_error != ok { ret block_error }
+    var call: check.CallInfo = zero
+    call.function = instance
+    var return_layout: ReturnLayout = zero
+    let return_layout_error = call_return_layout(c, call, &return_layout)
+    if return_layout_error != ok { ret return_layout_error }
+    var hidden = 0usize
+    var return_slot = 0usize
+    if return_layout.via_slot {
+        let pointer_type = check.make_type(.Pointer, "", module_index)
+        let (slot_instruction, slot, slot_error) = nir.emit(builder, .Parameter, pointer_type, true, 0usize, token)
+        if slot_error != ok { ret slot_error }
+        return_slot = slot
+        hidden = 1usize
+    }
+    var parameters: [33]usize = zero
+    var parameter_at = 0usize
+    while parameter_at < instance.parameter_count {
+        let parameter = c.parameters[instance.first_parameter + parameter_at]
+        let (instruction, result, parameter_error) = nir.emit(builder, .Parameter, parameter.ty, true, parameter_at + hidden, token)
+        if parameter_error != ok { ret parameter_error }
+        parameters[parameter_at] = result
+        parameter_at += 1usize
+    }
+    let (text, body_error) = lower_formatter_body(c, g, module_index, instance, return_slot, generic.formatter_spelling, parameters[..], arena_form, builder, token)
+    if body_error != ok { ret body_error }
+    let error_type = check.make_type(.Err, "err", module_index)
+    let (ok_instruction, ok_value, ok_error) = nir.emit(builder, .ConstError, error_type, true, 0usize, token)
+    if ok_error != ok { ret ok_error }
+    try emit_formatter_return(c, module_index, instance, return_slot, text, ok_value, arena_form, builder, token)
+    ret nir.end_function(builder)
+}
+
+fn pending_formatter(c: *check.Checker, owner_module_index: usize) -> (usize, bool) {
+    var at = c.signature_function_count
+    while at < c.function_count {
+        let generic = c.function_generics[at]
+        if generic.formatter && !generic.lowered && c.functions[at].owner_module_index == owner_module_index { ret (at, true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -3669,6 +3977,14 @@ fn pending_instance(c: *check.Checker, owner_module_index: usize) -> (usize, boo
 // instances that pass creates in turn are picked up by the next one.
 fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     while true {
+        // A formatter instance has no declaring module to parse, so it is drained
+        // first and on its own; either kind can create the other.
+        let (formatter, found_formatter) = pending_formatter(c, module_index)
+        if found_formatter {
+            c.function_generics[formatter].lowered = true
+            try lower_formatter_instance(c, g, module_index, formatter, builder, signatures)
+            continue
+        }
         let (first, found) = pending_instance(c, module_index)
         if !found { ret ok }
         let template_module = c.functions[c.function_generics[first].template_index].module_index

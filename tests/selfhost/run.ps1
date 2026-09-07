@@ -435,6 +435,20 @@ foreach ($comptimeStrCase in @('comptime_str_runtime', 'comptime_str_integer', '
     $comptimeStrOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$comptimeStrCase\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1) { throw "comptime string fixture $comptimeStrCase was accepted" }
 }
+# `str.format[FMT]` expands to a generated function: a builder, a push per piece of
+# the format string, and `done`. The fixture compares its output against the same
+# pushes written by hand.
+$formatPath = Join-Path $testBuild 'str-format-selfhost.exe'
+$formatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_format\src\main.e') $repo 'x64' 'windows' $formatPath
+if ($LASTEXITCODE -ne 0 -or $formatWritten -ne 'executable written') { throw 'format executable emission failed' }
+& $formatPath
+if ($LASTEXITCODE -ne 0) { throw 'a format string expanded to the wrong pushes' }
+# `err` is formattable under section 4 but has no push to expand to, so the build
+# stops rather than quietly formatting nothing. This one is rejected at lowering, not
+# at checking, so it needs an emission rather than a check.
+$formatRejectPath = Join-Path $testBuild 'format-err-argument.exe'
+& $compiler emit-executable (Join-Path $repo 'tests\selfhost\fixtures\check\format_err_argument\src\main.e') $repo 'x64' 'windows' $formatRejectPath 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 1) { throw 'a format verb with no push was lowered' }
 # `e.algo.uuid` reads no clock and no random source, so a UUID is a pure function of
 # its inputs and the fixture can pin the exact text of one.
 $uuidPath = Join-Path $testBuild 'algo-uuid-selfhost.exe'

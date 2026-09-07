@@ -152,6 +152,10 @@ type FunctionGeneric = struct {
     instance: bool,
     checked: bool,
     lowered: bool,
+    // A formatter instance has no source: its body is generated from the format
+    // string, which is why it carries the string rather than a template index.
+    formatter: bool,
+    formatter_spelling: str,
 }
 
 type ProtocolBuiltin = enum u8 {
@@ -4263,8 +4267,73 @@ fn formatter_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     ret (info, ok)
 }
 
+fn formatter_instance_matches(c: *Checker, candidate: usize, owner_module_index: usize, target_module: usize, member: str, spelling: str, argument_types: []const Type) -> bool {
+    let generic = c.function_generics[candidate]
+    if !generic.formatter || !same(generic.formatter_spelling, spelling) { ret false }
+    let function = c.functions[candidate]
+    if function.owner_module_index != owner_module_index || function.module_index != target_module { ret false }
+    if !same(function.name, member) || function.parameter_count != argument_types.len { ret false }
+    var at = 0usize
+    while at < argument_types.len {
+        if !type_equal(c, c.parameters[function.first_parameter + at].ty, argument_types[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// The expansion becomes a function of its own rather than code inlined at the call.
+// That keeps every existing path -- the multiple-return call, the error propagation,
+// the linker's instance naming -- working unchanged, and cross-module inlining folds
+// it back in where it is small enough to be worth it. One instance per calling
+// module, formatter, format string and argument-type list, so two calls that agree
+// share a body and two that differ do not.
+fn formatter_instance(c: *Checker, owner_module_index: usize, target_module: usize, member: str, spelling: str, argument_types: []const Type, arena: bool) -> (usize, err) {
+    var at = c.signature_function_count
+    while at < c.function_count {
+        if formatter_instance_matches(c, at, owner_module_index, target_module, member, spelling, argument_types) { ret (at, ok) }
+        at += 1usize
+    }
+    if c.function_count == c.functions.len { ret (0usize, Capacity) }
+    if c.parameter_count + argument_types.len > c.parameters.len { ret (0usize, Capacity) }
+    var instance: Function = zero
+    instance.name = member
+    instance.module_index = target_module
+    instance.owner_module_index = owner_module_index
+    instance.instance_id = owner_instance_count(c, owner_module_index, member) + 1usize
+    instance.first_parameter = c.parameter_count
+    instance.parameter_count = argument_types.len
+    instance.first_return = c.return_type_count
+    instance.return_count = 1usize
+    if arena { instance.return_count = 2usize }
+    var fill = 0usize
+    while fill < argument_types.len {
+        c.parameters[c.parameter_count] = Parameter { name: "", ty: argument_types[fill] }
+        c.parameter_count += 1usize
+        fill += 1usize
+    }
+    if arena {
+        let text_error = store_return_type(c, make_type(.String, "str", target_module))
+        if text_error != ok { ret (0usize, text_error) }
+    }
+    let error_error = store_return_type(c, make_type(.Err, "err", target_module))
+    if error_error != ok { ret (0usize, error_error) }
+    var generic: FunctionGeneric = zero
+    generic.instance = true
+    generic.checked = true
+    generic.formatter = true
+    generic.formatter_spelling = spelling
+    let index = c.function_count
+    c.functions[index] = instance
+    c.function_generics[index] = generic
+    c.function_count += 1usize
+    ret (index, ok)
+}
+
 fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
     var info: CallInfo = zero
+    // The formatter's arguments become the parameters of the instance its call
+    // resolves to, so they are kept as they are checked.
+    var formatter_types: [33]Type = zero
     info.cast = invalid_type()
     info.alloc_return = invalid_type()
     info.alloc_arena = invalid_type()
@@ -4460,6 +4529,8 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                                 if supplied.kind != .Pointer || !supplied.has_element || supplied.element >= c.type_count { ret (info, TypeMismatch) }
                                 let pointee = c.types[supplied.element]
                                 if pointee.kind != .Named || !same(pointee.name, "Arena") { ret (info, TypeMismatch) }
+                                if verb_position >= formatter_types.len { ret (info, Capacity) }
+                                formatter_types[verb_position] = supplied
                                 child_position += 1usize
                                 at += 1usize
                                 continue
@@ -4473,6 +4544,8 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         if supplied_error != ok { ret (info, supplied_error) }
                         if is_untyped(supplied) { ret (info, MissingContext) }
                         if !formattable_type(c, supplied, verb) { ret (info, InvalidFormat) }
+                        if child_position - 1usize >= formatter_types.len { ret (info, Capacity) }
+                        formatter_types[child_position - 1usize] = supplied
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -4513,6 +4586,12 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     if info.protocol_pending { ret (info, ok) }
     let function = info.function
     if child_position == 0usize || child_position - 1usize != function.parameter_count { ret (info, ArgumentCount) }
+    if info.formatter {
+        let (instance_index, instance_error) = formatter_instance(c, module_index, function.module_index, function.name, info.formatter_spelling, formatter_types[0usize..function.parameter_count], info.formatter_arena)
+        if instance_error != ok { ret (info, instance_error) }
+        info.function = c.functions[instance_index]
+        ret (info, ok)
+    }
     if function.generic && !c.generic_declaration { ret (info, Unsupported) }
     ret (info, ok)
 }
@@ -4860,10 +4939,7 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (call.cast, ok)
     }
-    if call.formatter {
-        if call.formatter_arena && index == 0usize { ret (make_type(.String, "str", call.function.module_index), ok) }
-        ret (make_type(.Err, "err", call.function.module_index), ok)
-    }
+
     if call.mem_alloc {
         if index == 0usize { ret (call.alloc_return, ok) }
         if index == 1usize { ret (make_type(.Err, "err", call.function.module_index), ok) }

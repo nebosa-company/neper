@@ -474,6 +474,20 @@ for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_
         exit 1
     fi
 done
+# `str.format[FMT]` expands to a generated function: a builder, a push per piece of
+# the format string, and `done`. The fixture compares its output against the same
+# pushes written by hand.
+format_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/str_format/src/main.e" "$repo" x64 linux "$test_build/str-format-selfhost")
+[ "$format_written" = 'executable written' ]
+chmod +x "$test_build/str-format-selfhost"
+"$test_build/str-format-selfhost"
+# `err` is formattable under section 4 but has no push to expand to, so the build
+# stops rather than quietly formatting nothing. This one is rejected at lowering, not
+# at checking, so it needs an emission rather than a check.
+if $test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/check/format_err_argument/src/main.e" "$repo" x64 linux "$test_build/format-err-argument" >/dev/null 2>&1; then
+    printf '%s\n' 'a format verb with no push was lowered' >&2
+    exit 1
+fi
 # `e.algo.uuid` reads no clock and no random source, so a UUID is a pure function of
 # its inputs and the fixture can pin the exact text of one.
 uuid_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_uuid/src/main.e" "$repo" x64 linux "$test_build/algo-uuid-selfhost")
