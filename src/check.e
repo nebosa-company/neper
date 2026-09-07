@@ -52,6 +52,7 @@ type DiagnosticKind = enum u8 {
     InitializerType,
     GenericTypeArity,
     GenericInference,
+    NotAType,
     MultipleBindingCount,
     MultipleAssignmentImmutable,
     AggregateMemberUnknown,
@@ -1207,9 +1208,15 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         result.has_length = has_concrete_length
         ret (result, ok)
     }
-    if node.kind != .NamedType { ret (make_type(.Other, "", module_index), Unsupported) }
+    if node.kind != .NamedType {
+        record_failure(c, module_index, node, .NotAType, "", "")
+        ret (make_type(.Other, "", module_index), Unsupported)
+    }
     let first = c.tokens[node.token_start]
-    if first.kind != .Identifier { ret (make_type(.Other, "", module_index), Unsupported) }
+    if first.kind != .Identifier {
+        record_failure(c, module_index, node, .NotAType, g.modules[module_index].text[first.start..first.end], "")
+        ret (make_type(.Other, "", module_index), Unsupported)
+    }
     let base = g.modules[module_index].text[first.start..first.end]
     let scalar = scalar_type(base, module_index)
     if scalar.kind != .Invalid {
@@ -1655,7 +1662,14 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
                     if type_error != ok { ret type_error }
                     field_type = resolved
                 } else {
-                    if kind != .TaggedUnion && kind != .Enum { ret parse.InvalidSyntax }
+                    // A field whose type is not a type node at all -- `ty: type` is
+                    // the one that turns up, `type` being a compile-time parameter
+                    // and not something a field can hold. Reported here because the
+                    // parse error this used to raise carried no token.
+                    if kind != .TaggedUnion && kind != .Enum {
+                        record_failure(c, module_index, field_node, .NotAType, field_name, "")
+                        ret parse.InvalidSyntax
+                    }
                 }
                 if field_type.kind == .Void && kind != .TaggedUnion && kind != .Enum { ret InvalidType }
                 var prior_at = 0usize

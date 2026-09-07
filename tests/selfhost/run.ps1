@@ -435,6 +435,10 @@ foreach ($comptimeStrCase in @('comptime_str_runtime', 'comptime_str_integer', '
     $comptimeStrOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$comptimeStrCase\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1) { throw "comptime string fixture $comptimeStrCase was accepted" }
 }
+# `type` is a compile-time parameter kind, not something a struct field can hold. The
+# report has to name the field, because a location-less failure is what this was.
+& $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\field_type_keyword\src\main.e') $repo 'x64' 'windows' 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 1) { throw 'a field typed `type` was accepted' }
 # `@cc(CONV)` names a calling convention. Its argument parses as an expression but is
 # not a value, and resolving it as one reported `unknown value name` at every `@cc`.
 $ccAccepted = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\cc_accepted\src\main.e') $repo 'x64' 'windows'

@@ -474,6 +474,13 @@ for comptime_str_case in comptime_str_runtime comptime_str_integer comptime_str_
         exit 1
     fi
 done
+# `type` is a compile-time parameter kind, not something a struct field can hold. The
+# report has to name the field, because a location-less failure is what this was.
+if $test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/field_type_keyword/src/main.e" "$repo" x64 linux >/dev/null 2>&1; then
+    printf '%s
+' 'a field typed `type` was accepted' >&2
+    exit 1
+fi
 # `@cc(CONV)` names a calling convention. Its argument parses as an expression but is
 # not a value, and resolving it as one reported `unknown value name` at every `@cc`.
 cc_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/cc_accepted/src/main.e" "$repo" x64 linux)

@@ -1177,6 +1177,14 @@ fn write_check_message(file: os.File, checker: *check.Checker) -> err {
         try write_all(file, checker.failure_detail)
         ret write_all(file, "` is not supported yet")
     }
+    if checker.failure_kind == .NotAType {
+        if checker.failure_detail.len != 0usize {
+            try write_all(file, "`")
+            try write_all(file, checker.failure_detail)
+            ret write_all(file, "` has no usable type; `type` is one only as a compile-time parameter, not something a field or binding can hold (spec section 9)")
+        }
+        ret write_all(file, "this is not a type")
+    }
     if checker.failure_kind == .GenericInference {
         try write_all(file, "cannot infer compile-time parameter `")
         try write_all(file, checker.failure_detail)
