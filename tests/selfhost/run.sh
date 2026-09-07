@@ -434,6 +434,13 @@ str_builder_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$str_builder_written" = 'executable written' ]
 chmod +x "$test_build/str-builder-selfhost"
 "$test_build/str-builder-selfhost"
+# `parse_f64` and `parse_f32` are the inverse of the float pushes and accept nothing
+# else. The fixture pins the grammar, the non-finite tokens, both range ends and the
+# exact ties, against bit patterns produced by rounding an exact rational.
+parse_float_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/str_parse_float/src/main.e" "$repo" x64 linux "$test_build/str-parse-float-selfhost")
+[ "$parse_float_written" = 'executable written' ]
+chmod +x "$test_build/str-parse-float-selfhost"
+"$test_build/str-parse-float-selfhost"
 # `mem.bitcast` reads a value's bytes as another type of the same size, which is what
 # lets a pun avoid a `union`. A scalar lives in a register and an aggregate is an
 # address, so the fixture covers all four shapes as well as the bit patterns.

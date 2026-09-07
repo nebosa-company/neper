@@ -362,6 +362,520 @@ fn parse_u64_radix(s: str, radix: u8) -> (u64, err) {
     ret (value, ok)
 }
 
+// The exact inverse of what `push_f64` writes, in integer arithmetic: the digits
+// become an arbitrary-precision decimal that is halved and doubled one bit at a time
+// until the binary exponent falls out and the mantissa can be read off the front.
+// Nothing here rounds twice, so the result is the nearest f64 to the input, ties to
+// even. It is also linear in the decimal exponent: a value near either end of the
+// range costs about a thousand passes over the digits, where one near 1 costs about
+// fifty. A Clinger fast path for the common case is the upgrade; correctness does not
+// depend on it.
+//
+// `e.str` is frozen at its declared surface and a neper module exports every
+// declaration it has, so this cannot be shared with `parse_f32`; the two are
+// generated from one template rather than written twice.
+fn parse_f64(s: str) -> (f64, err) {
+    // The non-finite spellings are exact tokens, not numbers, and the NaN handed back
+    // is section 11's canonical quiet one rather than whatever an operation produced.
+    if eq(s, "inf") { ret (mem.bitcast[f64](9218868437227405312u64), ok) }
+    if eq(s, "-inf") { ret (mem.bitcast[f64](18442240474082181120u64), ok) }
+    if eq(s, "nan") { ret (mem.bitcast[f64](9221120237041090560u64), ok) }
+    // 768 digits is past the longest exact tie this width has (768 of them),
+    // so a tie always fits and a decimal that does not fit is never one: what
+    // spills past the end can only be the sticky bit `truncated` carries.
+    var digits: [768]u8 = zero
+    var used = 0usize
+    var truncated = false
+    var negative = false
+    var at = 0usize
+    if s.len > 0usize && s[0usize] == 45u8 {
+        negative = true
+        at = 1usize
+    }
+    // The grammar is the one the pushes write and nothing else: at least one digit,
+    // at most one point with digits on both sides, no separators, no leading `+`, no
+    // surrounding space, and a lowercase `e` exponent with at least one digit.
+    var integer_digits = 0usize
+    var fraction_digits = 0usize
+    var leading_zeros = 0usize
+    var started = false
+    var in_fraction = false
+    while at < s.len {
+        let byte = s[at]
+        if byte == 46u8 && !in_fraction && integer_digits > 0usize {
+            in_fraction = true
+            at += 1usize
+            continue
+        }
+        if byte < 48u8 || byte > 57u8 { break }
+        if in_fraction { fraction_digits += 1usize } else { integer_digits += 1usize }
+        let digit = byte - 48u8
+        if !started && digit == 0u8 {
+            leading_zeros += 1usize
+        } else {
+            started = true
+            if used < digits.len {
+                digits[used] = digit
+                used += 1usize
+            } else {
+                if digit != 0u8 { truncated = true }
+            }
+        }
+        at += 1usize
+    }
+    if integer_digits == 0usize { ret (0.0f64, BadNumber) }
+    if in_fraction && fraction_digits == 0usize { ret (0.0f64, BadNumber) }
+    // `I.F` is `0.(I F) * 10^len(I)`, and every leading zero dropped takes one off it.
+    var exponent = i64(integer_digits) - i64(leading_zeros)
+    if at < s.len && s[at] == 101u8 {
+        at += 1usize
+        var exponent_negative = false
+        if at < s.len && (s[at] == 43u8 || s[at] == 45u8) {
+            exponent_negative = s[at] == 45u8
+            at += 1usize
+        }
+        var magnitude = 0i64
+        var exponent_digits = 0usize
+        while at < s.len {
+            let byte = s[at]
+            if byte < 48u8 || byte > 57u8 { break }
+            exponent_digits += 1usize
+            // Past six digits the value is out of range either way, and the clamp is
+            // what keeps the normalization below finite.
+            if magnitude < 1000000i64 { magnitude = magnitude * 10i64 + i64(byte - 48u8) }
+            at += 1usize
+        }
+        if exponent_digits == 0usize { ret (0.0f64, BadNumber) }
+        if exponent_negative { exponent = exponent - magnitude } else { exponent = exponent + magnitude }
+    }
+    if at != s.len { ret (0.0f64, BadNumber) }
+    while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    // An exact zero keeps its sign; it is the one zero a parse may return.
+    if used == 0usize {
+        var zero_pattern = 0u64
+        if negative { zero_pattern = 9223372036854775808u64 }
+        ret (mem.bitcast[f64](zero_pattern), ok)
+    }
+    // Bounds that only keep the loops finite. Anything outside them is out of range by
+    // a wide margin; anything inside is decided exactly below.
+    if exponent > 400i64 || exponent < -450i64 { ret (0.0f64, BadNumber) }
+    var binary_exponent = 0i64
+    while true {
+        if used == 0usize { break }
+        // `0.digits * 10^exponent` with a leading digit of at least one lies in
+        // `[0.1, 1)`, so both comparisons are on the exponent alone.
+        var halving = false
+        var doubling = false
+        if exponent >= 1i64 {
+            halving = true
+        } else {
+            if exponent < 0i64 {
+                doubling = true
+            } else {
+                if digits[0usize] < 5u8 { doubling = true }
+            }
+        }
+        if !halving && !doubling { break }
+        if halving {
+            var remainder = 0u8
+            var scan = 0usize
+            while scan < used {
+                let value = remainder * 10u8 + digits[scan]
+                digits[scan] = value / 2u8
+                remainder = value % 2u8
+                scan += 1usize
+            }
+            if remainder != 0u8 {
+                if used < digits.len {
+                    digits[used] = 5u8
+                    used += 1usize
+                } else {
+                    truncated = true
+                }
+            }
+            // The division can leave one leading zero, which belongs to the exponent.
+            if digits[0usize] == 0u8 {
+                var back = 0usize
+                while back + 1usize < used {
+                    digits[back] = digits[back + 1usize]
+                    back += 1usize
+                }
+                used = used - 1usize
+                exponent = exponent - 1i64
+            }
+            binary_exponent += 1i64
+        } else {
+            var carry = 0u8
+            var scan = used
+            while scan > 0usize {
+                scan = scan - 1usize
+                let value = digits[scan] * 2u8 + carry
+                digits[scan] = value % 10u8
+                carry = value / 10u8
+            }
+            if carry != 0u8 {
+                if used == digits.len {
+                    if digits[used - 1usize] != 0u8 { truncated = true }
+                } else {
+                    used += 1usize
+                }
+                var back = used
+                while back > 1usize {
+                    back = back - 1usize
+                    digits[back] = digits[back - 1usize]
+                }
+                digits[0usize] = carry
+                exponent += 1i64
+            }
+            binary_exponent = binary_exponent - 1i64
+        }
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    }
+    // The value is `m * 2^binary_exponent` with `m` in `[0.5, 1)`, which fixes a
+    // normal number's exponent field and leaves only the mantissa to read.
+    var biased = binary_exponent - 1i64 + 1023i64
+    var bits = 53i64
+    if biased < 1i64 {
+        // Subnormal: the exponent field is pinned at zero and the mantissa loses one
+        // bit for every step below the smallest normal. `bits` is the value's exponent
+        // in units of that smallest subnormal, so a negative one is less than half of
+        // it and rounds to a zero the input did not write.
+        bits = 53i64 + biased - 1i64
+        biased = 0i64
+        if bits < 0i64 { ret (0.0f64, BadNumber) }
+    }
+    var shifted = 0i64
+    while shifted < bits {
+        var carry = 0u8
+        var scan = used
+        while scan > 0usize {
+            scan = scan - 1usize
+            let value = digits[scan] * 2u8 + carry
+            digits[scan] = value % 10u8
+            carry = value / 10u8
+        }
+        if carry != 0u8 {
+            if used == digits.len {
+                if digits[used - 1usize] != 0u8 { truncated = true }
+            } else {
+                used += 1usize
+            }
+            var back = used
+            while back > 1usize {
+                back = back - 1usize
+                digits[back] = digits[back - 1usize]
+            }
+            digits[0usize] = carry
+            exponent += 1i64
+        }
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+        shifted += 1i64
+    }
+    var mantissa = 0u64
+    var taken = 0i64
+    while taken < exponent {
+        var digit = 0u8
+        if usize(taken) < used { digit = digits[usize(taken)] }
+        mantissa = mantissa * 10u64 + u64(digit)
+        taken += 1i64
+    }
+    // Round to nearest, ties to even, on the digits the integer part left behind.
+    var round_up = false
+    if exponent >= 0i64 && usize(exponent) < used {
+        let first = digits[usize(exponent)]
+        if first > 5u8 { round_up = true }
+        if first == 5u8 {
+            var beyond = truncated
+            var scan = usize(exponent) + 1usize
+            while scan < used {
+                if digits[scan] != 0u8 { beyond = true }
+                scan += 1usize
+            }
+            if beyond {
+                round_up = true
+            } else {
+                round_up = mantissa % 2u64 == 1u64
+            }
+        }
+    }
+    if round_up { mantissa += 1u64 }
+    let implicit = 1u64 << 52u64
+    if biased == 0i64 {
+        // The carry out of a subnormal's mantissa is exactly the smallest normal.
+        if mantissa >= implicit { biased = 1i64 }
+    } else {
+        if mantissa >= implicit * 2u64 {
+            mantissa = mantissa / 2u64
+            biased += 1i64
+        }
+    }
+    if biased > 2046i64 { ret (0.0f64, BadNumber) }
+    var fraction = mantissa
+    if biased >= 1i64 { fraction = mantissa - implicit }
+    if biased == 0i64 && fraction == 0u64 { ret (0.0f64, BadNumber) }
+    var pattern = u64(biased) << 52u64
+    pattern = pattern + fraction
+    if negative { pattern = pattern + 9223372036854775808u64 }
+    ret (mem.bitcast[f64](pattern), ok)
+}
+
+// The exact inverse of what `push_f32` writes, in integer arithmetic: the digits
+// become an arbitrary-precision decimal that is halved and doubled one bit at a time
+// until the binary exponent falls out and the mantissa can be read off the front.
+// Nothing here rounds twice, so the result is the nearest f32 to the input, ties to
+// even. It is also linear in the decimal exponent: a value near either end of the
+// range costs about a thousand passes over the digits, where one near 1 costs about
+// fifty. A Clinger fast path for the common case is the upgrade; correctness does not
+// depend on it.
+//
+// `e.str` is frozen at its declared surface and a neper module exports every
+// declaration it has, so this cannot be shared with `parse_f64`; the two are
+// generated from one template rather than written twice.
+fn parse_f32(s: str) -> (f32, err) {
+    // The non-finite spellings are exact tokens, not numbers, and the NaN handed back
+    // is section 11's canonical quiet one rather than whatever an operation produced.
+    if eq(s, "inf") { ret (mem.bitcast[f32](2139095040u32), ok) }
+    if eq(s, "-inf") { ret (mem.bitcast[f32](4286578688u32), ok) }
+    if eq(s, "nan") { ret (mem.bitcast[f32](2143289344u32), ok) }
+    // 256 digits is past the longest exact tie this width has (113 of them),
+    // so a tie always fits and a decimal that does not fit is never one: what
+    // spills past the end can only be the sticky bit `truncated` carries.
+    var digits: [256]u8 = zero
+    var used = 0usize
+    var truncated = false
+    var negative = false
+    var at = 0usize
+    if s.len > 0usize && s[0usize] == 45u8 {
+        negative = true
+        at = 1usize
+    }
+    // The grammar is the one the pushes write and nothing else: at least one digit,
+    // at most one point with digits on both sides, no separators, no leading `+`, no
+    // surrounding space, and a lowercase `e` exponent with at least one digit.
+    var integer_digits = 0usize
+    var fraction_digits = 0usize
+    var leading_zeros = 0usize
+    var started = false
+    var in_fraction = false
+    while at < s.len {
+        let byte = s[at]
+        if byte == 46u8 && !in_fraction && integer_digits > 0usize {
+            in_fraction = true
+            at += 1usize
+            continue
+        }
+        if byte < 48u8 || byte > 57u8 { break }
+        if in_fraction { fraction_digits += 1usize } else { integer_digits += 1usize }
+        let digit = byte - 48u8
+        if !started && digit == 0u8 {
+            leading_zeros += 1usize
+        } else {
+            started = true
+            if used < digits.len {
+                digits[used] = digit
+                used += 1usize
+            } else {
+                if digit != 0u8 { truncated = true }
+            }
+        }
+        at += 1usize
+    }
+    if integer_digits == 0usize { ret (0.0f32, BadNumber) }
+    if in_fraction && fraction_digits == 0usize { ret (0.0f32, BadNumber) }
+    // `I.F` is `0.(I F) * 10^len(I)`, and every leading zero dropped takes one off it.
+    var exponent = i64(integer_digits) - i64(leading_zeros)
+    if at < s.len && s[at] == 101u8 {
+        at += 1usize
+        var exponent_negative = false
+        if at < s.len && (s[at] == 43u8 || s[at] == 45u8) {
+            exponent_negative = s[at] == 45u8
+            at += 1usize
+        }
+        var magnitude = 0i64
+        var exponent_digits = 0usize
+        while at < s.len {
+            let byte = s[at]
+            if byte < 48u8 || byte > 57u8 { break }
+            exponent_digits += 1usize
+            // Past six digits the value is out of range either way, and the clamp is
+            // what keeps the normalization below finite.
+            if magnitude < 1000000i64 { magnitude = magnitude * 10i64 + i64(byte - 48u8) }
+            at += 1usize
+        }
+        if exponent_digits == 0usize { ret (0.0f32, BadNumber) }
+        if exponent_negative { exponent = exponent - magnitude } else { exponent = exponent + magnitude }
+    }
+    if at != s.len { ret (0.0f32, BadNumber) }
+    while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    // An exact zero keeps its sign; it is the one zero a parse may return.
+    if used == 0usize {
+        var zero_pattern = 0u32
+        if negative { zero_pattern = 2147483648u32 }
+        ret (mem.bitcast[f32](zero_pattern), ok)
+    }
+    // Bounds that only keep the loops finite. Anything outside them is out of range by
+    // a wide margin; anything inside is decided exactly below.
+    if exponent > 60i64 || exponent < -60i64 { ret (0.0f32, BadNumber) }
+    var binary_exponent = 0i64
+    while true {
+        if used == 0usize { break }
+        // `0.digits * 10^exponent` with a leading digit of at least one lies in
+        // `[0.1, 1)`, so both comparisons are on the exponent alone.
+        var halving = false
+        var doubling = false
+        if exponent >= 1i64 {
+            halving = true
+        } else {
+            if exponent < 0i64 {
+                doubling = true
+            } else {
+                if digits[0usize] < 5u8 { doubling = true }
+            }
+        }
+        if !halving && !doubling { break }
+        if halving {
+            var remainder = 0u8
+            var scan = 0usize
+            while scan < used {
+                let value = remainder * 10u8 + digits[scan]
+                digits[scan] = value / 2u8
+                remainder = value % 2u8
+                scan += 1usize
+            }
+            if remainder != 0u8 {
+                if used < digits.len {
+                    digits[used] = 5u8
+                    used += 1usize
+                } else {
+                    truncated = true
+                }
+            }
+            // The division can leave one leading zero, which belongs to the exponent.
+            if digits[0usize] == 0u8 {
+                var back = 0usize
+                while back + 1usize < used {
+                    digits[back] = digits[back + 1usize]
+                    back += 1usize
+                }
+                used = used - 1usize
+                exponent = exponent - 1i64
+            }
+            binary_exponent += 1i64
+        } else {
+            var carry = 0u8
+            var scan = used
+            while scan > 0usize {
+                scan = scan - 1usize
+                let value = digits[scan] * 2u8 + carry
+                digits[scan] = value % 10u8
+                carry = value / 10u8
+            }
+            if carry != 0u8 {
+                if used == digits.len {
+                    if digits[used - 1usize] != 0u8 { truncated = true }
+                } else {
+                    used += 1usize
+                }
+                var back = used
+                while back > 1usize {
+                    back = back - 1usize
+                    digits[back] = digits[back - 1usize]
+                }
+                digits[0usize] = carry
+                exponent += 1i64
+            }
+            binary_exponent = binary_exponent - 1i64
+        }
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+    }
+    // The value is `m * 2^binary_exponent` with `m` in `[0.5, 1)`, which fixes a
+    // normal number's exponent field and leaves only the mantissa to read.
+    var biased = binary_exponent - 1i64 + 127i64
+    var bits = 24i64
+    if biased < 1i64 {
+        // Subnormal: the exponent field is pinned at zero and the mantissa loses one
+        // bit for every step below the smallest normal. `bits` is the value's exponent
+        // in units of that smallest subnormal, so a negative one is less than half of
+        // it and rounds to a zero the input did not write.
+        bits = 24i64 + biased - 1i64
+        biased = 0i64
+        if bits < 0i64 { ret (0.0f32, BadNumber) }
+    }
+    var shifted = 0i64
+    while shifted < bits {
+        var carry = 0u8
+        var scan = used
+        while scan > 0usize {
+            scan = scan - 1usize
+            let value = digits[scan] * 2u8 + carry
+            digits[scan] = value % 10u8
+            carry = value / 10u8
+        }
+        if carry != 0u8 {
+            if used == digits.len {
+                if digits[used - 1usize] != 0u8 { truncated = true }
+            } else {
+                used += 1usize
+            }
+            var back = used
+            while back > 1usize {
+                back = back - 1usize
+                digits[back] = digits[back - 1usize]
+            }
+            digits[0usize] = carry
+            exponent += 1i64
+        }
+        while used > 0usize && digits[used - 1usize] == 0u8 { used = used - 1usize }
+        shifted += 1i64
+    }
+    var mantissa = 0u32
+    var taken = 0i64
+    while taken < exponent {
+        var digit = 0u8
+        if usize(taken) < used { digit = digits[usize(taken)] }
+        mantissa = mantissa * 10u32 + u32(digit)
+        taken += 1i64
+    }
+    // Round to nearest, ties to even, on the digits the integer part left behind.
+    var round_up = false
+    if exponent >= 0i64 && usize(exponent) < used {
+        let first = digits[usize(exponent)]
+        if first > 5u8 { round_up = true }
+        if first == 5u8 {
+            var beyond = truncated
+            var scan = usize(exponent) + 1usize
+            while scan < used {
+                if digits[scan] != 0u8 { beyond = true }
+                scan += 1usize
+            }
+            if beyond {
+                round_up = true
+            } else {
+                round_up = mantissa % 2u32 == 1u32
+            }
+        }
+    }
+    if round_up { mantissa += 1u32 }
+    let implicit = 1u32 << 23u32
+    if biased == 0i64 {
+        // The carry out of a subnormal's mantissa is exactly the smallest normal.
+        if mantissa >= implicit { biased = 1i64 }
+    } else {
+        if mantissa >= implicit * 2u32 {
+            mantissa = mantissa / 2u32
+            biased += 1i64
+        }
+    }
+    if biased > 254i64 { ret (0.0f32, BadNumber) }
+    var fraction = mantissa
+    if biased >= 1i64 { fraction = mantissa - implicit }
+    if biased == 0i64 && fraction == 0u32 { ret (0.0f32, BadNumber) }
+    var pattern = u32(biased) << 23u32
+    pattern = pattern + fraction
+    if negative { pattern = pattern + 2147483648u32 }
+    ret (mem.bitcast[f32](pattern), ok)
+}
+
 fn compare(x: str, y: str) -> i32 {
     var at = 0usize
     while at < x.len && at < y.len {

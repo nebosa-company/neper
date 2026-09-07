@@ -394,6 +394,14 @@ $strBuilderWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $strBuilderWritten -ne 'executable written') { throw 'str builder executable emission failed' }
 & $strBuilderPath
 if ($LASTEXITCODE -ne 0) { throw 'the string builder or one of its pushes is wrong' }
+# `parse_f64` and `parse_f32` are the inverse of the float pushes and accept nothing
+# else. The fixture pins the grammar, the non-finite tokens, both range ends and the
+# exact ties, against bit patterns produced by rounding an exact rational.
+$parseFloatPath = Join-Path $testBuild 'str-parse-float-selfhost.exe'
+$parseFloatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\str_parse_float\src\main.e') $repo 'x64' 'windows' $parseFloatPath
+if ($LASTEXITCODE -ne 0 -or $parseFloatWritten -ne 'executable written') { throw 'float parse executable emission failed' }
+& $parseFloatPath
+if ($LASTEXITCODE -ne 0) { throw 'a float parse rounded, rejected or accepted the wrong way' }
 # `mem.bitcast` reads a value's bytes as another type of the same size, which is what
 # lets a pun avoid a `union`. A scalar lives in a register and an aggregate is an
 # address, so the fixture covers all four shapes as well as the bit patterns.
