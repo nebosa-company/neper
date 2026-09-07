@@ -264,6 +264,27 @@ fn float_operation(builder: *nir.Builder, current: nir.Function, instruction: ni
     ret false
 }
 
+// Section 11: every floating operation that produces a NaN returns one canonical
+// positive quiet NaN for its width, zero payload except the quiet bit, and that
+// canonicalization is part of code generation on every back end -- it is what lets a
+// CPU and a GPU agree bit for bit. `ucomis` against itself is unordered exactly when
+// the value is a NaN, so the test is one compare and a branch that is never taken in
+// ordinary code.
+fn canonical_nan(width: usize) -> usize {
+    if width == 32usize { ret 2143289344usize }
+    ret 9221120237041090560usize
+}
+
+fn canonicalize_nan(width: usize, output: *emit_x64.Buffer) -> err {
+    let wide = width == 64usize
+    try emit_x64.float_compare(output, 0usize, 0usize, wide)
+    let (finite_at, finite_error) = emit_x64.jump_condition(output, 11usize)
+    if finite_error != ok { ret finite_error }
+    try emit_x64.mov_immediate(output, 11usize, canonical_nan(width))
+    try emit_x64.move_to_float(output, 0usize, 11usize, wide)
+    ret emit_x64.patch_relative32(output, finite_at, output.count)
+}
+
 // Float values live in general registers as raw bits and move into xmm0 and xmm1 for
 // the operation itself. The cost is two moves per operation and no float value ever
 // staying in a vector register; the upgrade is a second register class in
@@ -286,6 +307,7 @@ fn select_float_binary(builder: *nir.Builder, current: nir.Function, instruction
     if instruction.opcode == .Multiply { opcode = 89usize }
     if instruction.opcode == .Divide { opcode = 94usize }
     try emit_x64.float_binary(output, 0usize, 1usize, opcode, wide)
+    try canonicalize_nan(width, output)
     let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
     if destination_error != ok { ret destination_error }
     try emit_x64.move_from_float(output, destination, 0usize, wide)
@@ -350,11 +372,14 @@ fn select_float_negate(builder: *nir.Builder, instruction: nir.Instruction, allo
     if source_error != ok { ret source_error }
     let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
     if destination_error != ok { ret destination_error }
-    // Negation is the one float operation with an exact integer spelling: flip the
-    // sign bit and leave every other bit, which is right for zero and for a NaN too.
+    // Negation is a sign-bit flip, which is right for a zero and for every finite
+    // value; a NaN then goes through the same canonicalization as the arithmetic.
     try emit_x64.mov_immediate(output, 11usize, float_sign_bit(width))
     if destination != source { try emit_x64.mov_register(output, destination, source) }
     try emit_x64.bit_xor_register(output, destination, 11usize)
+    try emit_x64.move_to_float(output, 0usize, destination, width == 64usize)
+    try canonicalize_nan(width, output)
+    try emit_x64.move_from_float(output, destination, 0usize, width == 64usize)
     ret store_result(allocations, instruction.result, destination, output)
 }
 
@@ -439,6 +464,7 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
         }
         try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
         try emit_x64.float_convert(output, 0usize, 0usize, target_width == 64usize)
+        try canonicalize_nan(target_width, output)
         try emit_x64.move_from_float(output, destination, 0usize, target_width == 64usize)
         ret store_result(allocations, instruction.result, destination, output)
     }

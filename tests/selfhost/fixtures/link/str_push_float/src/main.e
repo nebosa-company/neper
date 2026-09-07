@@ -35,26 +35,6 @@ fn short32(a: *mem.Arena, v: f32, text: str) -> err {
     ret ok
 }
 
-// A non-finite value writes a token rather than digits, so there is no round trip to
-// check: `nan` reads back as section 11's canonical quiet NaN, which is not
-// bit-for-bit what an arithmetic operation produced. Section 11 says code generation
-// should canonicalize that; this back end does not yet.
-fn token64(a: *mem.Arena, v: f64, text: str) -> err {
-    var (b, builder_error) = str.builder(a, 64usize)
-    if builder_error != ok { ret builder_error }
-    try str.push_f64(&b, v)
-    if !str.eq(str.done(&b), text) { ret Failed }
-    ret ok
-}
-
-fn token32(a: *mem.Arena, v: f32, text: str) -> err {
-    var (b, builder_error) = str.builder(a, 64usize)
-    if builder_error != ok { ret builder_error }
-    try str.push_f32(&b, v)
-    if !str.eq(str.done(&b), text) { ret Failed }
-    ret ok
-}
-
 fn fixed64(a: *mem.Arena, v: f64, precision: u8, text: str) -> err {
     var (b, builder_error) = str.builder(a, 160usize)
     if builder_error != ok { ret builder_error }
@@ -115,13 +95,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     try short32(a, 1e-45f32, "1e-45")
 
     // The non-finite spellings, in both forms and both widths.
-    try token64(a, 1.0f64 / 0.0f64, "inf")
-    try token64(a, -1.0f64 / 0.0f64, "-inf")
-    try token64(a, 0.0f64 / 0.0f64, "nan")
+    try short64(a, 1.0f64 / 0.0f64, "inf")
+    try short64(a, -1.0f64 / 0.0f64, "-inf")
+    try short64(a, 0.0f64 / 0.0f64, "nan")
     try fixed64(a, 1.0f64 / 0.0f64, 3u8, "inf")
     try fixed64(a, -1.0f64 / 0.0f64, 3u8, "-inf")
     try fixed64(a, 0.0f64 / 0.0f64, 3u8, "nan")
-    try token32(a, 1.0f32 / 0.0f32, "inf")
+    try short32(a, 1.0f32 / 0.0f32, "inf")
     try fixed32(a, 0.0f32 / 0.0f32, 2u8, "nan")
 
     // Fixed precision writes exactly N digits, pads on both sides, and keeps the sign

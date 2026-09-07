@@ -110,6 +110,44 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // Across the calling convention, in both files at once.
     if mixed(1i64, 10.0f64, 2i64, 20.0f64, 3i64, 30.0f64, 4i64, 40.0f64, 5i64, 50.0f64) != 165.0f64 { ret Failed }
 
+    // Section 11: every operation that produces a NaN produces the same one -- the
+    // canonical positive quiet NaN of its width, zero payload except the quiet bit --
+    // whatever the hardware would otherwise have left in it. That is what lets a CPU
+    // and a GPU agree bit for bit, so it is checked as a pattern, not as a value.
+    let canonical = 9221120237041090560u64
+    if mem.bitcast[u64](nan) != canonical { ret Failed }
+    if mem.bitcast[u64](infinity - infinity) != canonical { ret Failed }
+    if mem.bitcast[u64](infinity * 0.0f64) != canonical { ret Failed }
+    if mem.bitcast[u64](nan + one) != canonical { ret Failed }
+    if mem.bitcast[u64](nan / two) != canonical { ret Failed }
+    // Negation is a sign-bit flip everywhere else, but not on a NaN.
+    if mem.bitcast[u64](-nan) != canonical { ret Failed }
+    if mem.bitcast[u64](-0.0f64) != 9223372036854775808u64 { ret Failed }
+    if mem.bitcast[u64](0.0f64 - 0.0f64) != 0u64 { ret Failed }
+    if mem.bitcast[u64](infinity) != 9218868437227405312u64 { ret Failed }
+    let narrow_nan = 0.0f32 / 0.0f32
+    if mem.bitcast[u32](narrow_nan) != 2143289344u32 { ret Failed }
+    if mem.bitcast[u32](-narrow_nan) != 2143289344u32 { ret Failed }
+    // A conversion between the widths lands on the target width's canonical pattern
+    // rather than carrying a payload across.
+    if mem.bitcast[u64](f64(narrow_nan)) != canonical { ret Failed }
+    if mem.bitcast[u32](f32(nan)) != 2143289344u32 { ret Failed }
+    // A finite value keeps every bit it had.
+    if mem.bitcast[u64](1.5f64 + 2.25f64) != mem.bitcast[u64](3.75f64) { ret Failed }
+
+    // `mem.bitcast` preserves a NaN's bits, which is how a payload the hardware never
+    // produces can exist at all; the first operation that consumes one canonicalizes
+    // it. That is the only way to tell the conversions' own canonicalization from the
+    // fact that a canonical NaN converts to a canonical NaN by itself.
+    let odd_wide = mem.bitcast[f64](9221120237041090561u64)
+    if mem.bitcast[u64](odd_wide) != 9221120237041090561u64 { ret Failed }
+    if mem.bitcast[u64](odd_wide + one) != canonical { ret Failed }
+    if mem.bitcast[u32](f32(odd_wide)) != 2143289344u32 { ret Failed }
+    let odd_narrow = mem.bitcast[f32](2143289345u32)
+    if mem.bitcast[u32](odd_narrow) != 2143289345u32 { ret Failed }
+    if mem.bitcast[u64](f64(odd_narrow)) != canonical { ret Failed }
+    if mem.bitcast[u32](-odd_narrow) != 2143289344u32 { ret Failed }
+
     // Through memory: a struct field of each width, and a slice walked by a callee.
     var p = Point { x: 2.5f64, y: 0.5f32, tag: 9i64 }
     if p.x != 2.5f64 || p.y != 0.5f32 || p.tag != 9i64 { ret Failed }
