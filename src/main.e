@@ -1266,7 +1266,7 @@ fn load_graph(a: *mem.Arena, loaded: *graph.Graph, path: str, root: str, arch: s
 }
 
 fn named_resolve_failure(resolve_error: err) -> bool {
-    ret resolve_error == resolve.ModuleShadow || resolve_error == resolve.DuplicateLocal || resolve_error == resolve.ReservedLocal || resolve_error == resolve.ReservedName || resolve_error == resolve.DuplicateName || resolve_error == resolve.QualifierCollision
+    ret resolve_error == resolve.UnknownConvention || resolve_error == resolve.ModuleShadow || resolve_error == resolve.DuplicateLocal || resolve_error == resolve.ReservedLocal || resolve_error == resolve.ReservedName || resolve_error == resolve.DuplicateName || resolve_error == resolve.QualifierCollision
 }
 
 fn resolve_name_code(resolve_error: err) -> str {
@@ -1276,6 +1276,7 @@ fn resolve_name_code(resolve_error: err) -> str {
 }
 
 fn write_resolve_name_message(failure: os.File, resolver: *resolve.Resolver, resolve_error: err) -> err {
+    if resolve_error == resolve.UnknownConvention { ret write_all(failure, "is not a calling convention; spec section 5 names c, sysv, win64 and stdcall") }
     if resolve_error == resolve.ReservedLocal { ret write_all(failure, "is a reserved name and cannot name a local or parameter") }
     if resolve_error == resolve.ReservedName { ret write_all(failure, "is a reserved name and cannot name a declaration") }
     if resolve_error == resolve.QualifierCollision { ret write_all(failure, "collides with a use qualifier in this module") }

@@ -14,6 +14,7 @@ error ReservedLocal
 error ModuleShadow
 error DuplicateLocal
 error UnknownName
+error UnknownConvention
 error UnknownType
 
 type Namespace = enum u8 {
@@ -679,8 +680,54 @@ fn visit_defer(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: u
     ret visit_error
 }
 
+// Spec section 5: `c` is the target's native C convention and the default, `sysv`
+// and `win64` name the two x64 conventions explicitly, and `stdcall` is the Win32
+// convention on x86-32 and `c` elsewhere. Anything else is a typo, and saying so here
+// is the whole reason attributes are visited rather than skipped.
+fn calling_convention(name: str) -> bool {
+    ret same(name, "c") || same(name, "sysv") || same(name, "win64") || same(name, "stdcall")
+}
+
+fn attribute_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: syntax.Node) -> str {
+    let text = g.modules[module_index].text
+    var at = node.token_start
+    while at < node.token_end {
+        if r.tokens[at].kind == .Identifier { ret text[r.tokens[at].start..r.tokens[at].end] }
+        at += 1usize
+    }
+    ret ""
+}
+
+fn validate_attribute(r: *Resolver, g: *graph.Graph, module_index: usize, node: syntax.Node) -> err {
+    let name = attribute_name(r, g, module_index, node)
+    if !same(name, "cc") { ret ok }
+    let text = g.modules[module_index].text
+    var at = node.token_start
+    var seen_name = false
+    while at < node.token_end {
+        if r.tokens[at].kind == .Identifier {
+            if seen_name {
+                let convention = text[r.tokens[at].start..r.tokens[at].end]
+                if !calling_convention(convention) {
+                    record_local_failure(r, module_index, r.tokens[at], convention, "")
+                    ret UnknownConvention
+                }
+                ret ok
+            }
+            seen_name = true
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn visit_scope_node(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     let node = tree.nodes[node_index]
+    // An attribute's arguments are parsed as expressions but are not values: `c` in
+    // `@cc(c)` names a calling convention, not something in scope. Resolving them as
+    // values reported `unknown value name` at every `@cc`, so the whole attribute is
+    // validated here and not descended into.
+    if node.kind == .Attribute { ret validate_attribute(r, g, module_index, node) }
     if node.kind == .NameExpr { ret validate_name(r, g, module_index, node) }
     if node.kind == .NamedType {
         try validate_named_type(r, g, module_index, node)

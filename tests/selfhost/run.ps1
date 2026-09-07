@@ -435,6 +435,12 @@ foreach ($comptimeStrCase in @('comptime_str_runtime', 'comptime_str_integer', '
     $comptimeStrOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$comptimeStrCase\src\main.e") $repo 'x64' 'windows' 2>&1
     if ($LASTEXITCODE -ne 1) { throw "comptime string fixture $comptimeStrCase was accepted" }
 }
+# `@cc(CONV)` names a calling convention. Its argument parses as an expression but is
+# not a value, and resolving it as one reported `unknown value name` at every `@cc`.
+$ccAccepted = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\cc_accepted\src\main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $ccAccepted -ne 'module check ok') { throw 'a named calling convention was rejected' }
+& $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\cc_unknown\src\main.e') $repo 'x64' 'windows' 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 1) { throw 'an unknown calling convention was accepted' }
 # `e.meta`'s scalar reflection. Section 9 keeps all of it at compile time, so each
 # call is a constant by the time lowering sees it and the binary carries no type
 # information at all.
