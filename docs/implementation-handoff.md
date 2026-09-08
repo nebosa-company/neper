@@ -1191,8 +1191,13 @@ needs general `T.cmp` protocol resolution first.
 8. Formatter, lossless finite tooling streams, index completeness, manifests,
    generated-source maps, test runner, FFI, debug info, SIMD, and remaining M1
    release gates.
-9. Bootstrap freeze/deletion only after the specified self-host and recovery path
-   is securely archived and reproducible.
+9. Archive the bootstrap recovery path (D95). Tag the revision whose
+   `bootstrap/neper.c` still builds `src/main.e`; record here the tag and, for
+   Windows and Linux, the SHA256 of stage one (`neper-self`), stage two
+   (`neper-own`) and the stable stage at that revision; verify from a clean checkout
+   of the tag on both platforms, with no `neper` binary on the machine, that the
+   recorded hashes reproduce, and write the commands that do it beside them.
+10. Bootstrap freeze/deletion, only once item 9's archive has been reproduced.
 
 ### Documentation/tooling validation still pending
 

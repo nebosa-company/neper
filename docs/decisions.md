@@ -424,3 +424,30 @@ constructor here has one.
 
 `e.str` does not have this problem and needed no change: `builder_to` takes its `Sink`
 from the caller.
+
+## D95 — the bootstrap's archive is a tagged revision and its stage hashes
+
+M2's exit item is "bootstrap compiler frozen, then deleted", and the handoff makes
+deletion conditional on the self-host and recovery path being "securely archived and
+reproducible". Neither document said what that archive is, so the precondition could
+be asserted but never finished. It is now a step of its own, ahead of the deletion.
+
+The archive is a git tag on the last revision whose `bootstrap/neper.c` compiles
+`src/main.e`, the SHA256 of stage one, stage two and the stable stage recorded per
+platform at that revision, and the commands that reproduce those hashes from a clean
+checkout of the tag on a machine carrying no `neper` binary. Deletion then removes
+the bootstrap from the working tree; the tag keeps it buildable.
+
+The alternative is to commit a seed — a stage-one binary, or the compiler's generated
+assembly — and it is worse on every count. A seed is two platform artifacts in the
+tree that either grow with every compiler change or go stale against the source they
+are supposed to build, and a reader has to trust their bytes rather than rebuild them.
+Generated assembly adds back the external assembler that the own linker exists to
+remove. A tag costs nothing to carry, and because the stages are already byte-for-byte
+deterministic — `tests/selfhost/run.ps1` asserts stage two against the stable stage —
+recorded hashes are a check that can fail rather than a note.
+
+The hashes are per platform because stage one is not produced the same way on both:
+on Windows the bootstrap emits MASM and shells out to `ml64` and `link`, on Linux to
+the system toolchain. One number could not cover both, and the recovery path that
+matters is the one for the platform in hand.
