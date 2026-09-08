@@ -42,7 +42,44 @@ fn rooted_path(text: str) -> bool {
     ret false
 }
 
+// A file of `count` bytes, all the same, so a size is enough to tell two of them apart.
+fn write_file_of(a: *mem.Arena, path: str, count: usize, fill: u8) -> err {
+    var flags: os.OpenFlags = zero
+    flags.write = true
+    flags.create = true
+    flags.truncate = true
+    let (file, open_error) = os.open(a, path, flags)
+    if open_error != ok { ret open_error }
+    var payload: [8]u8 = zero
+    var at = 0usize
+    while at < count {
+        payload[at] = fill
+        at += 1usize
+    }
+    let (written, write_error) = os.write(file, payload[0usize..count])
+    if write_error != ok { ret write_error }
+    if written != count { ret os.Failed }
+    ret os.close(file)
+}
+
+// A run that failed part way leaves its scratch behind, and the very first thing this
+// fixture does is make a directory -- which would then fail as `Exists` for a reason that
+// has nothing to do with what is being tested. Every name this file creates is removed
+// here first, and the results are ignored because most of them are not there.
+fn clear(a: *mem.Arena) {
+    let note = os.remove_file(a, "np-os-fs-dir/note.txt")
+    let moved = os.remove_file(a, "np-os-fs-dir/moved.txt")
+    let link = os.remove_file(a, "np-os-fs-dir/link.txt")
+    let fresh = os.remove_file(a, "np-os-fs-dir/fresh.txt")
+    let source = os.remove_file(a, "np-os-fs-dir/source.txt")
+    let destination = os.remove_file(a, "np-os-fs-dir/target.txt")
+    let landed = os.remove_file(a, "np-os-fs-dir/landed.txt")
+    let directory = os.remove_dir(a, "np-os-fs-dir")
+}
+
 fn main(a: *mem.Arena) -> err {
+    clear(a)
+
     // A directory that does not exist is `NotFound`, not a crash and not a zeroed
     // answer that a caller could mistake for an empty file.
     let (absent, absent_error) = os.stat(a, "np-os-fs-absent")
@@ -360,6 +397,54 @@ fn main(a: *mem.Arena) -> err {
     if fresh_entry_error != ok { os.exit(154i32) }
     if fresh_entry.size != 2u64 { os.exit(155i32) }
     if os.remove_file(a, "np-os-fs-dir/fresh.txt") != ok { os.exit(156i32) }
+
+    // `replace`. Two files of different sizes, so which one ended up where is readable
+    // from the size alone.
+    if write_file_of(a, "np-os-fs-dir/source.txt", 3usize, 115u8) != ok { os.exit(157i32) }
+    if write_file_of(a, "np-os-fs-dir/target.txt", 6usize, 116u8) != ok { os.exit(158i32) }
+
+    // Without overwriting, a destination that is there is refused -- and the source is
+    // still where it was, because a refusal is not a partial move.
+    if os.replace(a, "np-os-fs-dir/source.txt", "np-os-fs-dir/target.txt", false, false) != os.Exists { os.exit(159i32) }
+    let (kept, kept_error) = os.stat(a, "np-os-fs-dir/source.txt")
+    if kept_error != ok { os.exit(160i32) }
+    if kept.size != 3u64 { os.exit(161i32) }
+    let (untouched, untouched_error) = os.stat(a, "np-os-fs-dir/target.txt")
+    if untouched_error != ok { os.exit(162i32) }
+    if untouched.size != 6u64 { os.exit(163i32) }
+
+    // With overwriting, the destination becomes the source and the source is gone.
+    if os.replace(a, "np-os-fs-dir/source.txt", "np-os-fs-dir/target.txt", true, false) != ok { os.exit(164i32) }
+    let (replaced, replaced_error) = os.stat(a, "np-os-fs-dir/target.txt")
+    if replaced_error != ok { os.exit(165i32) }
+    if replaced.size != 3u64 { os.exit(166i32) }
+    let (moved_away, moved_away_error) = os.stat(a, "np-os-fs-dir/source.txt")
+    if moved_away_error != os.NotFound { os.exit(167i32) }
+
+    // Onto a free name without overwriting: the path a filesystem that does not know
+    // `RENAME_NOREPLACE` has to reach by another route, so this is the case that says the
+    // fallback works rather than that the flag does.
+    if write_file_of(a, "np-os-fs-dir/source.txt", 5usize, 117u8) != ok { os.exit(168i32) }
+    if os.replace(a, "np-os-fs-dir/source.txt", "np-os-fs-dir/landed.txt", false, false) != ok { os.exit(169i32) }
+    let (landed, landed_error) = os.stat(a, "np-os-fs-dir/landed.txt")
+    if landed_error != ok { os.exit(170i32) }
+    if landed.size != 5u64 { os.exit(171i32) }
+    let (source_gone, source_gone_error) = os.stat(a, "np-os-fs-dir/source.txt")
+    if source_gone_error != os.NotFound { os.exit(172i32) }
+
+    // Durable: the same move, waiting for the disk. What cannot be checked from here is
+    // that it survives a crash; what can is that asking for it is not an error and does
+    // not change where anything ended up.
+    if os.replace(a, "np-os-fs-dir/landed.txt", "np-os-fs-dir/target.txt", true, true) != ok { os.exit(173i32) }
+    let (durable_entry, durable_entry_error) = os.stat(a, "np-os-fs-dir/target.txt")
+    if durable_entry_error != ok { os.exit(174i32) }
+    if durable_entry.size != 5u64 { os.exit(175i32) }
+
+    // A source that is not there is `NotFound` whichever way it is asked for.
+    if os.replace(a, "np-os-fs-absent", "np-os-fs-dir/nowhere.txt", true, false) != os.NotFound { os.exit(176i32) }
+    if os.replace(a, "np-os-fs-absent", "np-os-fs-dir/nowhere.txt", false, false) != os.NotFound { os.exit(177i32) }
+
+    if os.remove_file(a, "np-os-fs-dir/target.txt") != ok { os.exit(178i32) }
 
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }

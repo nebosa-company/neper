@@ -792,3 +792,37 @@ The fixtures pin both halves. Two draws differ and neither is the zeroed buffer 
 that wrote nothing would leave; creating the same name twice is `Exists` and leaves the
 first call's bytes alone, which is what a `CREATE_ALWAYS` in place of `CREATE_NEW` fails
 at.
+
+## D106 — `replace` refuses two ways, and one host needs a second mechanism to do it
+
+`e.os` gains `replace(a, src, dst, overwrite, durable)`: `rename` with the two questions a
+caller actually has. `overwrite` decides whether a destination that is already there is
+replaced or the call fails with `Exists`; `durable` decides whether the result is on the
+disk before it returns, which is what a caller writing a file and swapping it into place is
+after. Crossing a filesystem is `Unsupported` either way — neither host does it atomically,
+and neither is asked to copy behind the caller's back, so `MOVEFILE_COPY_ALLOWED` is never
+passed.
+
+Replacing is what `rename` already does, so the interesting half is refusing to.
+`RENAME_NOREPLACE` is the one call that decides and acts at once, and it is what Linux
+uses — but a filesystem that does not know the flag rejects **the call** rather than the
+destination. Measured: on tmpfs it works both ways, and on the 9p mount this is tested over
+it returns `EEXIST` when the destination exists (the VFS layer answering) and `EINVAL` when
+it does not. So the success path is the one that breaks, and it breaks on the filesystem
+the suite runs on.
+
+The fallback is what every Unix could always do: `linkat` fails if the name is taken, and
+the old name goes afterwards. It is two operations rather than one, so a failure between
+them leaves both names — but the destination still never appears half made, which is the
+guarantee `replace` is for, and the fence already contemplates a partial effect being
+reported. Windows needs none of this: `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING`
+already refuses, and `MOVEFILE_WRITE_THROUGH` is `durable`.
+
+Durability on Linux is two `fsync`s, not one: on the file, so its bytes are on the disk,
+and on the parent directory, so the name is. A name that survives a crash pointing at bytes
+that did not is worse than losing both.
+
+The fallback is pinned the way a fallback should be — by removing it and watching one
+filesystem fail while the other does not. Without it `link/os_fs` still passes on tmpfs and
+fails on 9p at exit 169, the case that renames onto a free name without overwriting. On
+Windows, never setting `MOVEFILE_REPLACE_EXISTING` fails at 164.

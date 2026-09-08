@@ -1557,6 +1557,7 @@ fn mkdir(a: *mem.Arena, path: str) -> err
 fn remove_file(a: *mem.Arena, path: str) -> err
 fn remove_dir(a: *mem.Arena, path: str) -> err
 fn rename(a: *mem.Arena, src: str, dst: str) -> err
+fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err
 fn read_link(a: *mem.Arena, path: str) -> (str, err)
 fn symlink(a: *mem.Arena, target_path: str, link: str) -> err
 fn current_dir(a: *mem.Arena) -> (str, err)
@@ -1637,6 +1638,11 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: ProcGroup) -> err
 
 ```
+
+`replace` is `rename` with the two questions a caller actually has: whether an existing
+destination is replaced or the call fails with `Exists`, and whether the result is on the
+disk before it returns. It is atomic within one filesystem and refuses to cross one, so a
+move between devices is `Unsupported` rather than a copy nothing asked for.
 
 `create_new` creates a file that was not there and fails with `Exists` if it was, opened
 for reading and writing with no sharing. It is the one call that makes a name safe to hand

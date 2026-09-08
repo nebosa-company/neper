@@ -17,6 +17,7 @@ type Permissions = struct { owner_read: bool, owner_write: bool, owner_exec: boo
 type Metadata = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, permissions: Permissions, file_id: u64, link_count: u64 }
 type Walk = struct { state: *void }
 type WalkOptions = struct { recursive: bool, follow_symlinks: bool }
+type ReplaceOptions = struct { overwrite: bool, durable: bool }
 
 error NotFound
 error Exists
@@ -394,6 +395,16 @@ fn remove_file(a: *mem.Arena, path_text: str) -> err {
 // delete something a caller writes rather than something this call does by surprise.
 fn remove_dir(a: *mem.Arena, path_text: str) -> err {
     ret from_os(os.remove_dir(a, path_text))
+}
+
+// `move` with the two questions answered explicitly. `overwrite` decides whether a
+// destination that is already there is replaced or the call fails; `durable` decides
+// whether the result is on the disk before it returns, which is what a caller writing a
+// file and swapping it into place is really after. Crossing a filesystem is `Invalid`
+// either way -- neither host will do it atomically, and neither will copy behind the
+// caller's back.
+fn replace(a: *mem.Arena, src: str, dst: str, options: ReplaceOptions) -> err {
+    ret from_os(os.replace(a, src, dst, options.overwrite, options.durable))
 }
 
 // Within one filesystem. Across two, the host refuses and says so rather than copying

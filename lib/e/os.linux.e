@@ -93,6 +93,16 @@ const OPEN_CREATE_NEW: usize = 524482usize
 const CREATE_MODE: usize = 384usize
 
 const SYS_GETRANDOM: usize = 318usize
+const SYS_FSYNC: usize = 74usize
+const SYS_LINKAT: usize = 265usize
+const SYS_RENAMEAT2: usize = 316usize
+
+// The flag that makes a rename refuse an existing destination instead of replacing it.
+const RENAME_NOREPLACE: usize = 1usize
+
+// O_RDONLY with O_DIRECTORY and O_CLOEXEC, which is how a directory is opened to be
+// flushed rather than read.
+const OPEN_DIRECTORY: usize = 589824usize
 
 // The kernel caps the environment well below this.
 const MAX_ENVIRONMENT: usize = 2097152usize
@@ -563,6 +573,86 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
     let result = syscall(SYS_UTIMENSAT, AT_FDCWD, path_address, mem.address_of(&times), 0usize, 0usize, 0usize)
     mem.reset(a, checkpoint)
     ret from_errno(result)
+}
+
+// The directory part of a path, `.` when it has none. Not `e.path`: `e.os` may depend on
+// `e.mem` and nothing else, and all this has to find is the last separator.
+fn parent_of(path: str) -> str {
+    var cut = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 47u8 { cut = at }
+        at += 1usize
+    }
+    if cut == 0usize {
+        if path.len != 0usize && path[0usize] == 47u8 { ret "/" }
+        ret "."
+    }
+    ret path[0usize..cut]
+}
+
+// `fsync` on the file puts its bytes on the disk; `fsync` on the directory puts the name
+// there. Both are needed, because a name that survives a crash pointing at bytes that did
+// not is worse than losing both.
+fn flush_path(a: *mem.Arena, path: str) -> err {
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok { ret path_error }
+    let file = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_READ_ONLY, 0usize, 0usize, 0usize)
+    if file < 0isize { ret from_errno(file) }
+    let flushed = syscall(SYS_FSYNC, usize(file), 0usize, 0usize, 0usize, 0usize, 0usize)
+    let file_closed = syscall(SYS_CLOSE, usize(file), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if flushed < 0isize { ret from_errno(flushed) }
+    let (parent_address, parent_error) = c_string(a, parent_of(path))
+    if parent_error != ok { ret parent_error }
+    let directory = syscall(SYS_OPENAT, AT_FDCWD, parent_address, OPEN_DIRECTORY, 0usize, 0usize, 0usize)
+    if directory < 0isize { ret from_errno(directory) }
+    let directory_flushed = syscall(SYS_FSYNC, usize(directory), 0usize, 0usize, 0usize, 0usize, 0usize)
+    let directory_closed = syscall(SYS_CLOSE, usize(directory), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if directory_flushed < 0isize { ret from_errno(directory_flushed) }
+    ret ok
+}
+
+// Replacing is what `rename` already does, so the interesting half is refusing to.
+// `RENAME_NOREPLACE` is the one call that decides and acts at once, but a filesystem that
+// does not know the flag rejects the call rather than the destination -- the 9p mount this
+// is tested over is one. The answer there is what every Unix could always do: a hard link
+// fails if the name is taken, and the old name goes afterwards. It is two operations, so a
+// failure between them leaves both names; the destination still never appears half made,
+// which is the guarantee that matters.
+fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err {
+    let checkpoint = mem.mark(a)
+    let (from_address, from_error) = c_string(a, src)
+    if from_error != ok {
+        mem.reset(a, checkpoint)
+        ret from_error
+    }
+    let (to_address, to_error) = c_string(a, dst)
+    if to_error != ok {
+        mem.reset(a, checkpoint)
+        ret to_error
+    }
+    var result = 0isize
+    if overwrite {
+        result = syscall(SYS_RENAMEAT, AT_FDCWD, from_address, AT_FDCWD, to_address, 0usize, 0usize)
+    } else {
+        result = syscall(SYS_RENAMEAT2, AT_FDCWD, from_address, AT_FDCWD, to_address, RENAME_NOREPLACE, 0usize)
+        // EINVAL, ENOSYS, EOPNOTSUPP: the flag was refused, not the rename.
+        if result == -22isize || result == -38isize || result == -95isize {
+            result = syscall(SYS_LINKAT, AT_FDCWD, from_address, AT_FDCWD, to_address, 0usize, 0usize)
+            if result >= 0isize {
+                result = syscall(SYS_UNLINKAT, AT_FDCWD, from_address, 0usize, 0usize, 0usize, 0usize)
+            }
+        }
+    }
+    if result < 0isize {
+        let call_error = from_errno(result)
+        mem.reset(a, checkpoint)
+        ret call_error
+    }
+    var durability = ok
+    if durable { durability = flush_path(a, dst) }
+    mem.reset(a, checkpoint)
+    ret durability
 }
 
 fn rename(a: *mem.Arena, src: str, dst: str) -> err {

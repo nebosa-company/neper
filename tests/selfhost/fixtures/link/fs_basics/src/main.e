@@ -37,6 +37,8 @@ fn clear(a: *mem.Arena) {
     let two = fs.remove_file(a, "np-fs/two.txt")
     let copy = fs.remove_file(a, "np-fs/copy.txt")
     let link = fs.remove_file(a, "np-fs/link.txt")
+    let from_file = fs.remove_file(a, "np-fs/from.txt")
+    let landed_file = fs.remove_file(a, "np-fs/landed.txt")
     let deep = fs.remove_dir(a, "np-fs/deep")
     let outer = fs.remove_dir(a, "np-fs")
 }
@@ -295,6 +297,39 @@ fn main(a: *mem.Arena) -> err {
 
     if fs.remove_file(a, first_temp) != ok { os.exit(214i32) }
     if fs.remove_file(a, second_temp) != ok { os.exit(215i32) }
+
+    // `replace` through the module, with the options named rather than positional.
+    var keep_existing: fs.ReplaceOptions = zero
+    var overwriting: fs.ReplaceOptions = zero
+    overwriting.overwrite = true
+    var durably: fs.ReplaceOptions = zero
+    durably.overwrite = true
+    durably.durable = true
+
+    if fs.write_file(a, "np-fs/from.txt", stamp[..]) != ok { os.exit(220i32) }
+    if fs.replace(a, "np-fs/from.txt", "np-fs/one.txt", keep_existing) != fs.Exists { os.exit(221i32) }
+    // The refusal left both files where they were.
+    let (from_kept, from_kept_error) = fs.stat(a, "np-fs/from.txt")
+    if from_kept_error != ok { os.exit(222i32) }
+    if from_kept.size != 3u64 { os.exit(223i32) }
+
+    // Onto a free name, which is the case the two hosts reach differently.
+    if fs.replace(a, "np-fs/from.txt", "np-fs/landed.txt", keep_existing) != ok { os.exit(224i32) }
+    let (landed, landed_error) = fs.stat(a, "np-fs/landed.txt")
+    if landed_error != ok { os.exit(225i32) }
+    if landed.size != 3u64 { os.exit(226i32) }
+
+    // Over something that is there, and on the disk before it returns.
+    if fs.replace(a, "np-fs/landed.txt", "np-fs/one.txt", durably) != ok { os.exit(227i32) }
+    let (swapped, swapped_error) = fs.stat(a, "np-fs/one.txt")
+    if swapped_error != ok { os.exit(228i32) }
+    if swapped.size != 3u64 { os.exit(229i32) }
+    let (landed_gone, landed_gone_error) = fs.exists(a, "np-fs/landed.txt")
+    if landed_gone_error != ok { os.exit(230i32) }
+    if landed_gone { os.exit(231i32) }
+
+    // Put `one.txt` back to what the rest of this fixture expects of it.
+    if fs.write_file(a, "np-fs/one.txt", payload[..]) != ok { os.exit(232i32) }
 
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.

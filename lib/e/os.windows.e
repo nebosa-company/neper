@@ -201,6 +201,12 @@ const BCRYPT_SYSTEM_PREFERRED: u32 = 2u32
 const GENERIC_READ_WRITE: u32 = 3221225472u32
 const CREATE_NEW: u32 = 1u32
 
+// Without REPLACE_EXISTING the move refuses a destination that is there, and without
+// COPY_ALLOWED -- which is never passed -- it refuses to cross a volume rather than
+// copying. WRITE_THROUGH is what makes it wait for the disk.
+const MOVEFILE_REPLACE_EXISTING: u32 = 1u32
+const MOVEFILE_WRITE_THROUGH: u32 = 8u32
+
 // Making a link is privileged unless the host is in developer mode, which is what the
 // second flag asks for; without it an ordinary process is refused.
 const SYMLINK_DIRECTORY: u32 = 1u32
@@ -852,6 +858,29 @@ fn remove_dir(a: *mem.Arena, path: str) -> err {
 // file and refuses a non-empty directory. Windows refuses an existing destination
 // outright, which is the one place the two differ and is why `e.fs.replace` needs a
 // call of its own rather than this one.
+// One call answers both questions here: the flags say whether an existing destination is
+// replaced and whether the move is on the disk before it returns.
+fn replace(a: *mem.Arena, src: str, dst: str, overwrite: bool, durable: bool) -> err {
+    let checkpoint = mem.mark(a)
+    let (from_name, from_error) = widen(a, src)
+    if from_error != ok {
+        mem.reset(a, checkpoint)
+        ret from_error
+    }
+    let (to_name, to_error) = widen(a, dst)
+    if to_error != ok {
+        mem.reset(a, checkpoint)
+        ret to_error
+    }
+    var flags = 0u32
+    if overwrite { flags = flags | MOVEFILE_REPLACE_EXISTING }
+    if durable { flags = flags | MOVEFILE_WRITE_THROUGH }
+    var call_error = ok
+    if raw_move_file(&from_name[0usize], &to_name[0usize], flags) == 0i32 { call_error = from_last_error() }
+    mem.reset(a, checkpoint)
+    ret call_error
+}
+
 fn rename(a: *mem.Arena, src: str, dst: str) -> err {
     let checkpoint = mem.mark(a)
     let (from_name, from_error) = widen(a, src)
