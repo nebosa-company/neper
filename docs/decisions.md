@@ -1018,3 +1018,43 @@ than a rule that has to detect which kind of callee it is looking at.
 the other. Equality alone would not have caught it -- `0xFFFFFFFF` equals nothing and is
 greater than zero -- so the fixture checks the value and its sign, and reverting the code
 generator's widening fails it.
+
+## D111 — a poller carries a pointer, and one host does not have one to carry
+
+`e.os` gains the readiness poller: `poller_open`, `register`, `modify`, `unregister`, `wait`,
+`wake` and `close`, over `epoll` on Linux. `Poller` changes from `struct { raw: usize }` to
+`struct { state: *void }`, which is the same shape `e.fs.Walk` already uses.
+
+That change is forced rather than chosen. A poller retains a set, and no host offers a single
+handle that *is* a set together with the tokens attached to it — Linux comes closest, and
+even there the poller needs two descriptors, its `epoll` and the one `poller_wake` writes to.
+`poller_open` takes an arena, which is where that state belongs; but D96 leaves no way back
+from a `usize` to a pointer, so a `raw: usize` cannot address it. A pointer field is the only
+thing that reaches arena state, and `Walk` is the precedent.
+
+The kernel's `struct epoll_event` is **packed** on x86-64: the 64-bit datum follows the
+32-bit mask with no padding, so an entry is twelve bytes and not sixteen. It is declared here
+as a mask and two 32-bit halves for exactly that reason — a `u64` field would be eight-byte
+aligned and every entry after the first would be read from the wrong offset. The fixture
+makes two sockets readable at once so that this is a test rather than a comment; declaring
+the padding back in fails it.
+
+`poller_wake` is an `eventfd` registered in the set under a reserved token, which is the
+largest `usize`. A wake is one eight-byte write and one read drains however many arrived, so
+a burst costs one wakeup rather than one each, and the descriptor is never reported to a
+caller because it is not the caller's. The reserved token is the one value a caller may not
+use, which is worth naming rather than leaving to be discovered.
+
+**Windows reports `Unsupported`, and the reason is specific.** `WSAPoll` gives readiness but
+retains nothing — the arena now solves that half — except that `poller_wake` then needs
+something that becomes readable from another thread, and the only such thing there is a bound
+socket whose port must be discovered. **There is no `getsockname` in the `e.os` fence**, so a
+library cannot learn the port it was given and would have to pick one by searching, which is
+not something a library may do to a machine. A completion port retains registrations and even
+carries the token as its completion key, but it reports finished operations rather than ready
+handles, so `readable` and `writable` would have nothing to mean.
+
+Either route is design work rather than translation, so this says `Unsupported` — an answer a
+caller can act on, where a half-poller is not. Adding `getsockname` to the fence is the
+smaller of the two openings and would unblock the `WSAPoll` route; it is also missing for an
+ordinary server that binds to port zero, which is the more common reason to want it.

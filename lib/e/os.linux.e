@@ -75,6 +75,7 @@ const SYS_READLINKAT: usize = 267usize
 const SYS_GETCWD: usize = 79usize
 const SYS_CHDIR: usize = 80usize
 const SYS_READ: usize = 0usize
+const SYS_WRITE: usize = 1usize
 const SYS_CLOSE: usize = 3usize
 const SYS_OPENAT: usize = 257usize
 
@@ -106,6 +107,10 @@ const SYS_BIND: usize = 49usize
 const SYS_LISTEN: usize = 50usize
 const SYS_FCNTL: usize = 72usize
 const SYS_ACCEPT4: usize = 288usize
+const SYS_EPOLL_WAIT: usize = 232usize
+const SYS_EPOLL_CTL: usize = 233usize
+const SYS_EVENTFD2: usize = 290usize
+const SYS_EPOLL_CREATE1: usize = 291usize
 
 // The flag that makes a rename refuse an existing destination instead of replacing it.
 const RENAME_NOREPLACE: usize = 1usize
@@ -143,6 +148,28 @@ const SOCK_CLOEXEC: usize = 524288usize
 const F_GETFL: usize = 3usize
 const F_SETFL: usize = 4usize
 const O_NONBLOCK: usize = 2048usize
+
+const EPOLL_CLOEXEC: usize = 524288usize
+const EFD_CLOEXEC: usize = 524288usize
+
+const EPOLL_CTL_ADD: usize = 1usize
+const EPOLL_CTL_DEL: usize = 2usize
+const EPOLL_CTL_MOD: usize = 3usize
+
+const EPOLLIN: u32 = 1u32
+const EPOLLOUT: u32 = 4u32
+const EPOLLERR: u32 = 8u32
+const EPOLLHUP: u32 = 16u32
+const EPOLLRDHUP: u32 = 8192u32
+
+// The largest `usize`, used as the token of the poller's own wake descriptor. A caller
+// that hands this in as a token of its own will not see those events, which is the one
+// value it may not use.
+const WAKE_TOKEN: usize = 18446744073709551615usize
+
+// ponytail: one wait returns at most this many at a time, because the buffer it reads into
+// is a frame local; a caller asking for more gets them across successive waits.
+const POLL_BATCH: usize = 64usize
 
 // The kernel caps the environment well below this.
 const MAX_ENVIRONMENT: usize = 2097152usize
@@ -627,6 +654,139 @@ type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 // resolve rules without a new call. The size is passed alongside it and the kernel checks
 // both, so the layout is the ABI.
 type OpenHow = struct { flags: u64, mode: u64, resolve: u64 }
+
+type Poller = struct { state: *void }
+type PollInterest = struct { readable: bool, writable: bool }
+type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
+
+// The kernel's `struct epoll_event` is **packed** on this architecture: the 64-bit datum
+// follows the 32-bit mask with no padding between them, so the whole thing is twelve bytes
+// and not sixteen. Writing the datum as two halves is what keeps that true -- a `u64` field
+// here would be eight-byte aligned and every entry after the first would be read from the
+// wrong offset.
+type RawPollEvent = struct { events: u32, token_low: u32, token_high: u32 }
+
+// What a poller retains: the set is the kernel's, and this is the pair of descriptors that
+// reaches it. It lives in the arena the poller was opened with.
+type PollerState = struct { epoll: usize, wake: usize }
+
+fn interest_mask(interest: PollInterest) -> u32 {
+    var mask = 0u32
+    if interest.readable { mask = mask | EPOLLIN }
+    if interest.writable { mask = mask | EPOLLOUT }
+    // A peer that closed is worth hearing about whatever was asked for: a caller waiting to
+    // read would otherwise wait for a write that will never come.
+    ret mask | EPOLLRDHUP
+}
+
+fn control_epoll(state: *PollerState, operation: usize, handle: Handle, token: usize, interest: PollInterest) -> err {
+    var raw: RawPollEvent = zero
+    raw.events = interest_mask(interest)
+    raw.token_low = u32(token % 4294967296usize)
+    raw.token_high = u32(token / 4294967296usize)
+    ret from_errno(syscall(SYS_EPOLL_CTL, state.epoll, operation, handle.raw, mem.address_of(&raw), 0usize, 0usize))
+}
+
+fn poller_open(a: *mem.Arena) -> (Poller, err) {
+    var poller: Poller = zero
+    let epoll = syscall(SYS_EPOLL_CREATE1, EPOLL_CLOEXEC, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if epoll < 0isize { ret (poller, from_errno(epoll)) }
+    let wake = syscall(SYS_EVENTFD2, 0usize, EFD_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if wake < 0isize {
+        let unused = syscall(SYS_CLOSE, usize(epoll), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, from_errno(wake))
+    }
+    let (holder, holder_error) = mem.alloc[PollerState](a, 1usize)
+    if holder_error != ok {
+        let unused_wake = syscall(SYS_CLOSE, usize(wake), 0usize, 0usize, 0usize, 0usize, 0usize)
+        let unused_epoll = syscall(SYS_CLOSE, usize(epoll), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, OutOfMemory)
+    }
+    holder[0usize].epoll = usize(epoll)
+    holder[0usize].wake = usize(wake)
+    var wake_handle: Handle = zero
+    wake_handle.raw = usize(wake)
+    var wake_interest: PollInterest = zero
+    wake_interest.readable = true
+    let register_error = control_epoll(&holder[0usize], EPOLL_CTL_ADD, wake_handle, WAKE_TOKEN, wake_interest)
+    if register_error != ok {
+        let unused_wake = syscall(SYS_CLOSE, usize(wake), 0usize, 0usize, 0usize, 0usize, 0usize)
+        let unused_epoll = syscall(SYS_CLOSE, usize(epoll), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (poller, register_error)
+    }
+    poller.state = mem.cast[*void](&holder[0usize])
+    ret (poller, ok)
+}
+
+fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret control_epoll(mem.cast[*PollerState](p.state), EPOLL_CTL_ADD, handle, token, interest)
+}
+
+fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret control_epoll(mem.cast[*PollerState](p.state), EPOLL_CTL_MOD, handle, token, interest)
+}
+
+fn poller_unregister(p: Poller, handle: Handle) -> err {
+    var nothing: PollInterest = zero
+    ret control_epoll(mem.cast[*PollerState](p.state), EPOLL_CTL_DEL, handle, 0usize, nothing)
+}
+
+// One eight-byte write is what an event descriptor counts, and one read drains it however
+// many wakes arrived, so a burst of them costs one wakeup rather than one each.
+fn poller_wake(p: Poller) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    var one: [8]u8 = zero
+    one[0usize] = 1u8
+    let written = syscall(SYS_WRITE, state.wake, mem.address_of(&one[0usize]), 8usize, 0usize, 0usize, 0usize)
+    if written < 0isize { ret from_errno(written) }
+    ret ok
+}
+
+fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) {
+    let state = mem.cast[*PollerState](p.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    var capacity = events.len
+    if capacity > POLL_BATCH { capacity = POLL_BATCH }
+    // A negative timeout waits forever; anything positive but shorter than the kernel's
+    // millisecond is rounded up, so asking for a little time never means asking for none.
+    var milliseconds = -1isize
+    if timeout_ns == 0i64 { milliseconds = 0isize }
+    if timeout_ns > 0i64 {
+        milliseconds = isize(timeout_ns / 1000000i64)
+        if milliseconds == 0isize { milliseconds = 1isize }
+    }
+    var raw: [64]RawPollEvent = zero
+    let ready = syscall(SYS_EPOLL_WAIT, state.epoll, mem.address_of(&raw[0usize]), capacity, usize(milliseconds), 0usize, 0usize)
+    if ready < 0isize { ret (0usize, from_errno(ready)) }
+    var produced = 0usize
+    var at = 0usize
+    while at < usize(ready) {
+        let token = usize(raw[at].token_low) + usize(raw[at].token_high) * 4294967296usize
+        if token == WAKE_TOKEN {
+            // The poller's own descriptor: drained here so the next wait does not see it
+            // again, and never reported, because it is not the caller's.
+            var drain: [8]u8 = zero
+            let taken = syscall(SYS_READ, state.wake, mem.address_of(&drain[0usize]), 8usize, 0usize, 0usize, 0usize)
+        } else {
+            events[produced].token = token
+            events[produced].readable = raw[at].events & EPOLLIN != 0u32
+            events[produced].writable = raw[at].events & EPOLLOUT != 0u32
+            events[produced].closed = raw[at].events & (EPOLLHUP | EPOLLRDHUP) != 0u32
+            events[produced].failed = raw[at].events & EPOLLERR != 0u32
+            produced += 1usize
+        }
+        at += 1usize
+    }
+    ret (produced, ok)
+}
+
+fn poller_close(p: Poller) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    let wake_result = syscall(SYS_CLOSE, state.wake, 0usize, 0usize, 0usize, 0usize, 0usize)
+    let epoll_result = syscall(SYS_CLOSE, state.epoll, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if epoll_result < 0isize { ret from_errno(epoll_result) }
+    ret from_errno(wake_result)
+}
 
 type Socket = struct { raw: usize }
 type SocketFamily = enum u8 { Ip4, Ip6 }

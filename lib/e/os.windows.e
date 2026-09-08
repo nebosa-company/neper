@@ -82,6 +82,54 @@ type ObjectAttributes = struct {
 
 type IoStatusBlock = struct { status: usize, information: usize }
 
+type Poller = struct { state: *void }
+type PollInterest = struct { readable: bool, writable: bool }
+type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
+
+// A readiness poller is not written for this host yet, and saying so is the honest answer
+// rather than shipping something that looks like one.
+//
+// The two candidates each miss half of what the fence asks for. `WSAPoll` gives readiness
+// but retains nothing, so the set would live here -- which the arena now makes possible --
+// except that `poller_wake` then needs something that becomes readable from another
+// thread, and the only such thing on this host is a bound socket whose port has to be
+// discovered. There is no `getsockname` in the fence, so a library cannot learn the port
+// it was given and would have to pick one by searching, which is not something a library
+// may do to a machine. A completion port retains registrations and even carries the token
+// as its completion key, but it reports finished operations rather than ready handles, so
+// `PollEvent`'s `readable` and `writable` would have no meaning.
+//
+// Either route is design work rather than translation. `Unsupported` is what a caller can
+// act on; a half-poller is not.
+fn poller_open(a: *mem.Arena) -> (Poller, err) {
+    var poller: Poller = zero
+    ret (poller, Unsupported)
+}
+
+fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret Unsupported
+}
+
+fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
+    ret Unsupported
+}
+
+fn poller_unregister(p: Poller, handle: Handle) -> err {
+    ret Unsupported
+}
+
+fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) {
+    ret (0usize, Unsupported)
+}
+
+fn poller_wake(p: Poller) -> err {
+    ret Unsupported
+}
+
+fn poller_close(p: Poller) -> err {
+    ret Unsupported
+}
+
 type Socket = struct { raw: usize }
 type SocketFamily = enum u8 { Ip4, Ip6 }
 type SocketKind = enum u8 { Stream, Datagram }

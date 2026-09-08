@@ -1510,7 +1510,7 @@ type Thread = struct { raw: usize }
 type Lib = struct { raw: usize }
 type Handle = struct { raw: usize }
 type Socket = struct { raw: usize }
-type Poller = struct { raw: usize }
+type Poller = struct { state: *void }
 type Mapping = struct { raw: usize, address: *u8, len: usize }
 type Watch = struct { raw: usize }
 type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
@@ -1685,7 +1685,10 @@ environment (`true`) or is the complete child environment (`false`). Environment
 entries are `NAME=VALUE`. `wait_u32` waits indefinitely when `timeout_ns < 0` and
 polls once when it is zero. In `SocketAddress`, IPv4 uses the first four bytes and
 zeros the remaining twelve. Pollers retain handles, interests and numeric tokens,
-never callbacks; callers unregister a handle before closing it.
+never callbacks; callers unregister a handle before closing it. A poller holds its
+registrations in the arena `poller_open` is given, which is why it carries a pointer where
+every other resource here carries a handle: what it retains is a set, and no host offers a
+single handle that is one.
 
 Every failing `e.os` call records the native code and portable classification in
 thread-local runtime state. `last_error_detail` copies that state into an explicit

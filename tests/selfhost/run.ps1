@@ -589,6 +589,14 @@ $socketWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $socketWritten -ne 'executable written') { throw 'e.os socket emission failed' }
 & $socketPath
 if ($LASTEXITCODE -ne 0) { throw "an e.os socket call answered wrongly: exit $LASTEXITCODE" }
+# `e.os`'s poller. This host has no kernel object that holds a readiness registration set,
+# so `poller_open` reports `Unsupported` and the fixture stops there -- which is asserted
+# here rather than assumed, since exiting early and passing look alike from outside.
+$pollerPath = Join-Path $testBuild 'os-poller-selfhost.exe'
+$pollerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_poller\src\main.e') $repo 'x64' 'windows' $pollerPath
+if ($LASTEXITCODE -ne 0 -or $pollerWritten -ne 'executable written') { throw 'e.os poller emission failed' }
+& $pollerPath
+if ($LASTEXITCODE -ne 0) { throw "the e.os poller answered wrongly: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

@@ -625,6 +625,12 @@ socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$socket_written" = 'executable written' ]
 chmod +x "$test_build/os-socket-selfhost"
 "$test_build/os-socket-selfhost"
+# `e.os`'s poller over epoll, with two loopback sockets made readable at once so the
+# packed event stride is exercised, and a wake timed against the clock.
+poller_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_poller/src/main.e" "$repo" x64 linux "$test_build/os-poller-selfhost")
+[ "$poller_written" = 'executable written' ]
+chmod +x "$test_build/os-poller-selfhost"
+"$test_build/os-poller-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
