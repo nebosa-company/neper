@@ -113,6 +113,12 @@ fn align_up_to(value: usize, alignment: usize) -> usize {
 
 // `.dynstr` holds one terminated name per library and per symbol, after a leading
 // empty string that index 0 has to be.
+// The call results are bound before `.len` is taken, and that is not a style choice:
+// written inline as `nir.import_library_name(builder, library).len`, this function
+// returns a different and wrong size, and the image fails to lay out. The same shape
+// in a small program computes the right answer, so the fault is somewhere in how this
+// one is compiled rather than in the shape itself, and it is not yet located. Leave
+// the bindings.
 fn dynamic_string_size(builder: *nir.Builder) -> usize {
     var size = 1usize
     var library = 0usize
