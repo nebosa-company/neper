@@ -1589,6 +1589,7 @@ fn wake_all_u32(p: *Atomic[u32])
 fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err)
 fn socket_set_nonblocking(s: Socket, enabled: bool) -> err
 fn socket_bind(s: Socket, address: SocketAddress) -> err
+fn socket_local_address(s: Socket) -> (SocketAddress, err)
 fn socket_listen(s: Socket, backlog: u32) -> err
 fn socket_accept(s: Socket) -> (Socket, SocketAddress, err)
 fn socket_connect(s: Socket, address: SocketAddress) -> err
@@ -1684,7 +1685,10 @@ current directory; `inherit_env` controls whether `env` overlays the parent
 environment (`true`) or is the complete child environment (`false`). Environment
 entries are `NAME=VALUE`. `wait_u32` waits indefinitely when `timeout_ns < 0` and
 polls once when it is zero. In `SocketAddress`, IPv4 uses the first four bytes and
-zeros the remaining twelve. Pollers retain handles, interests and numeric tokens,
+zeros the remaining twelve. Binding to port zero asks the host to choose one, and
+`socket_local_address` is the only way the choice comes back -- so a server that does not
+want to guess a free port needs it, and so does anything that has to tell a peer where to
+reach it. Pollers retain handles, interests and numeric tokens,
 never callbacks; callers unregister a handle before closing it. A poller holds its
 registrations in the arena `poller_open` is given, which is why it carries a pointer where
 every other resource here carries a handle: what it retains is a set, and no host offers a

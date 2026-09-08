@@ -1058,3 +1058,30 @@ Either route is design work rather than translation, so this says `Unsupported` 
 caller can act on, where a half-poller is not. Adding `getsockname` to the fence is the
 smaller of the two openings and would unblock the `WSAPoll` route; it is also missing for an
 ordinary server that binds to port zero, which is the more common reason to want it.
+
+## D112 — `socket_local_address` reports the port the host chose
+
+`e.os` gains `socket_local_address(s) -> (SocketAddress, err)`: `getsockname` under the
+`socket_*` name the rest of the family uses, since D11 keeps the neper-side name independent
+of the foreign one.
+
+It closes a hole that was visible from two directions. Binding to port zero asks the host to
+choose a port, and without this call there was no way to learn which — so a server could not
+tell a peer where to reach it, and neither could a test. D111 found the other direction: a
+Windows poller needs a wake socket, the only wake a `WSAPoll` set can have is something that
+becomes readable, and a library that cannot learn the port it was given would have to pick
+one by searching. That is not something a library may do to a machine, so the absence of this
+call is what made `poller_open` report `Unsupported` there. It no longer does so for that
+reason.
+
+The evidence that it was a hole rather than a nicety is what it deleted. `link/os_socket` and
+`link/os_poller` both carried a loop that tried a fixed range of ports until one bound,
+because nothing could report a chosen one — a test that races whatever else the machine is
+running, in a suite that is supposed to be deterministic. Both now bind to port zero and ask,
+and the range constants and the search are gone. The helper asserts a reported port is never
+zero, which is also the check that the report is real: returning a zeroed address instead
+fails both fixtures at exit 11 on both hosts.
+
+Only the local address is added, not `getpeername`. `socket_accept` already hands back the
+peer, which is where a server wants it, and nothing yet needs the peer of an already-connected
+socket. Adding it later is one call in the same shape.

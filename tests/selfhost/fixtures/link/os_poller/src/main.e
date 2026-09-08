@@ -7,9 +7,6 @@
 use e.mem
 use e.os
 
-const FIRST_PORT: u16 = 47901u16
-const LAST_PORT: u16 = 47940u16
-
 const READ_TOKEN: usize = 4242usize
 const WRITE_TOKEN: usize = 9182usize
 
@@ -21,17 +18,19 @@ fn loopback() -> os.SocketAddress {
     ret address
 }
 
-fn bind_somewhere(s: os.Socket, from: u16) -> (u16, err) {
-    var port = from
-    while port <= LAST_PORT {
-        var address = loopback()
-        address.port = port
-        let bind_error = os.socket_bind(s, address)
-        if bind_error == ok { ret (port, ok) }
-        if bind_error != os.Exists { ret (0u16, bind_error) }
-        port += 1u16
-    }
-    ret (0u16, os.Failed)
+// Port zero asks the host to choose, and `socket_local_address` is how the choice comes
+// back. Nothing here guesses a port or hopes one is free, so nothing here can collide with
+// whatever else the machine is running.
+fn bind_ephemeral(s: os.Socket) -> (u16, err) {
+    var address = loopback()
+    address.port = 0u16
+    let bind_error = os.socket_bind(s, address)
+    if bind_error != ok { ret (0u16, bind_error) }
+    let (local, local_error) = os.socket_local_address(s)
+    if local_error != ok { ret (0u16, local_error) }
+    // A chosen port is never zero, so this is also the check that the report is real.
+    if local.port == 0u16 { ret (0u16, os.Failed) }
+    ret (local.port, ok)
 }
 
 fn main(a: *mem.Arena) -> err {
@@ -43,11 +42,11 @@ fn main(a: *mem.Arena) -> err {
     // would be visible rather than merely wrong in the count.
     let (first, first_error) = os.socket_open(.Ip4, .Datagram)
     if first_error != ok { os.exit(11i32) }
-    let (first_port, first_bind_error) = bind_somewhere(first, FIRST_PORT)
+    let (first_port, first_bind_error) = bind_ephemeral(first)
     if first_bind_error != ok { os.exit(12i32) }
     let (second, second_error) = os.socket_open(.Ip4, .Datagram)
     if second_error != ok { os.exit(13i32) }
-    let (second_port, second_bind_error) = bind_somewhere(second, first_port + 1u16)
+    let (second_port, second_bind_error) = bind_ephemeral(second)
     if second_bind_error != ok { os.exit(14i32) }
 
     var readable: os.PollInterest = zero

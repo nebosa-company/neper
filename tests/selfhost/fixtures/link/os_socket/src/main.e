@@ -6,14 +6,12 @@
 // receive follows a send that already returned -- so a single thread is enough and the
 // fixture cannot hang waiting for a peer that is itself.
 //
-// Nothing in the fence reports which port a bind chose, so a port cannot be left to the
-// host: one is picked here and the first that binds wins.
+// Every port is the host's to choose: a bind to port zero and a `socket_local_address` to
+// learn what it gave, so nothing here depends on a particular port being free.
 
 use e.mem
 use e.os
 
-const FIRST_PORT: u16 = 47821u16
-const LAST_PORT: u16 = 47860u16
 
 fn loopback() -> os.SocketAddress {
     var address: os.SocketAddress = zero
@@ -23,26 +21,26 @@ fn loopback() -> os.SocketAddress {
     ret address
 }
 
-// The first port in the range this socket can have. `Exists` is the expected answer for one
-// that is taken, and anything else is a failure worth reporting rather than skipping past.
-fn bind_somewhere(s: os.Socket, from: u16) -> (u16, err) {
-    var port = from
-    while port <= LAST_PORT {
-        var address = loopback()
-        address.port = port
-        let bind_error = os.socket_bind(s, address)
-        if bind_error == ok { ret (port, ok) }
-        if bind_error != os.Exists { ret (0u16, bind_error) }
-        port += 1u16
-    }
-    ret (0u16, os.Failed)
+// Port zero asks the host to choose, and `socket_local_address` is how the choice comes
+// back. Nothing here guesses a port or hopes one is free, so nothing here can collide with
+// whatever else the machine is running.
+fn bind_ephemeral(s: os.Socket) -> (u16, err) {
+    var address = loopback()
+    address.port = 0u16
+    let bind_error = os.socket_bind(s, address)
+    if bind_error != ok { ret (0u16, bind_error) }
+    let (local, local_error) = os.socket_local_address(s)
+    if local_error != ok { ret (0u16, local_error) }
+    // A chosen port is never zero, so this is also the check that the report is real.
+    if local.port == 0u16 { ret (0u16, os.Failed) }
+    ret (local.port, ok)
 }
 
 fn main(a: *mem.Arena) -> err {
     // --- A stream, both directions, and end of stream.
     let (listener, listener_error) = os.socket_open(.Ip4, .Stream)
     if listener_error != ok { os.exit(10i32) }
-    let (port, listen_bind_error) = bind_somewhere(listener, FIRST_PORT)
+    let (port, listen_bind_error) = bind_ephemeral(listener)
     if listen_bind_error != ok { os.exit(11i32) }
     if os.socket_listen(listener, 4u32) != ok { os.exit(12i32) }
 
@@ -108,13 +106,13 @@ fn main(a: *mem.Arena) -> err {
     // --- A datagram, where the sender's address arrives with the data.
     let (receiver, receiver_error) = os.socket_open(.Ip4, .Datagram)
     if receiver_error != ok { os.exit(40i32) }
-    let (receiver_port, receiver_bind_error) = bind_somewhere(receiver, port + 1u16)
+    let (receiver_port, receiver_bind_error) = bind_ephemeral(receiver)
     if receiver_bind_error != ok { os.exit(41i32) }
 
     let (sender, sender_error) = os.socket_open(.Ip4, .Datagram)
     if sender_error != ok { os.exit(42i32) }
     // The sender is bound too, so it has a port for the receiver to see.
-    let (sender_port, sender_bind_error) = bind_somewhere(sender, receiver_port + 1u16)
+    let (sender_port, sender_bind_error) = bind_ephemeral(sender)
     if sender_bind_error != ok { os.exit(43i32) }
 
     var destination = loopback()

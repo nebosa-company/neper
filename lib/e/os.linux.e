@@ -105,6 +105,7 @@ const SYS_RECVFROM: usize = 45usize
 const SYS_SHUTDOWN: usize = 48usize
 const SYS_BIND: usize = 49usize
 const SYS_LISTEN: usize = 50usize
+const SYS_GETSOCKNAME: usize = 51usize
 const SYS_FCNTL: usize = 72usize
 const SYS_ACCEPT4: usize = 288usize
 const SYS_EPOLL_WAIT: usize = 232usize
@@ -892,6 +893,18 @@ fn socket_set_nonblocking(s: Socket, enabled: bool) -> err {
 fn socket_bind(s: Socket, address: SocketAddress) -> err {
     var (raw, length) = encode_address(address)
     ret from_errno(syscall(SYS_BIND, s.raw, mem.address_of(&raw), length, 0usize, 0usize, 0usize))
+}
+
+// The address a socket is actually bound to. With port zero the host chose one and this is
+// the only way to learn it; with a port the caller named it reports that one back, which
+// makes the two cases the same call rather than two.
+fn socket_local_address(s: Socket) -> (SocketAddress, err) {
+    var address: SocketAddress = zero
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let result = syscall(SYS_GETSOCKNAME, s.raw, mem.address_of(&raw), mem.address_of(&length), 0usize, 0usize, 0usize)
+    if result < 0isize { ret (address, from_errno(result)) }
+    ret (decode_address(raw), ok)
 }
 
 fn socket_listen(s: Socket, backlog: u32) -> err {

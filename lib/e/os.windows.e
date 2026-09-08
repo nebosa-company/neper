@@ -290,6 +290,9 @@ extern fn raw_socket_bind(s: usize, address: *RawAddress, length: i32) -> i32
 @import("ws2_32.dll", "listen")
 extern fn raw_socket_listen(s: usize, backlog: i32) -> i32
 
+@import("ws2_32.dll", "getsockname")
+extern fn raw_socket_local(s: usize, address: *RawAddress, length: *i32) -> i32
+
 @import("ws2_32.dll", "accept")
 extern fn raw_socket_accept(s: usize, address: *RawAddress, length: *i32) -> usize
 
@@ -942,6 +945,16 @@ fn socket_bind(s: Socket, address: SocketAddress) -> err {
     var (raw, length) = encode_address(address)
     if raw_socket_bind(s.raw, &raw, i32(length)) != 0i32 { ret from_socket_error() }
     ret ok
+}
+
+// The address a socket is actually bound to. With port zero the host chose one and this is
+// the only way to learn it; with a port the caller named it reports that one back.
+fn socket_local_address(s: Socket) -> (SocketAddress, err) {
+    var address: SocketAddress = zero
+    var raw: RawAddress = zero
+    var length = i32(RAW_IP6_SIZE)
+    if raw_socket_local(s.raw, &raw, &length) != 0i32 { ret (address, from_socket_error()) }
+    ret (decode_address(raw), ok)
 }
 
 fn socket_listen(s: Socket, backlog: u32) -> err {
