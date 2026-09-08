@@ -191,6 +191,46 @@ fn main(a: *mem.Arena) -> err {
     let (no_link, no_link_error) = os.read_link(a, "np-os-fs-absent")
     if no_link_error != os.NotFound { os.exit(102i32) }
 
+    // The working directory: absolute, and the one the relative paths above have been
+    // resolving against. It is process-wide state rather than anything about a path, so
+    // everything here puts it back before moving on.
+    let (base, base_error) = os.current_dir(a)
+    if base_error != ok { os.exit(103i32) }
+    if base.len == 0usize { os.exit(104i32) }
+    var absolute = false
+    if base[0usize] == 47u8 || base[0usize] == 92u8 { absolute = true }
+    if base.len >= 2usize && base[1usize] == 58u8 { absolute = true }
+    if !absolute { os.exit(105i32) }
+
+    // Moving into the directory made above: `current_dir` follows, and it follows by
+    // naming that directory rather than by changing length.
+    if os.set_current_dir(a, "np-os-fs-dir") != ok { os.exit(106i32) }
+    let (inside, inside_error) = os.current_dir(a)
+    if inside_error != ok { os.exit(107i32) }
+    if inside.len < 12usize { os.exit(108i32) }
+    if inside.len <= base.len { os.exit(109i32) }
+    if !same_text(inside[inside.len - 12usize..inside.len], "np-os-fs-dir") { os.exit(110i32) }
+
+    // And the relative paths really did move with it: this is the file made earlier,
+    // named without its directory this time.
+    let (from_inside, from_inside_error) = os.stat(a, "note.txt")
+    if from_inside_error != ok { os.exit(111i32) }
+    if from_inside.size != 5u64 { os.exit(112i32) }
+
+    // Back, by the absolute path the first call gave -- which is the round trip that says
+    // what `current_dir` returns is something `set_current_dir` accepts.
+    if os.set_current_dir(a, base) != ok { os.exit(113i32) }
+    let (restored, restored_error) = os.current_dir(a)
+    if restored_error != ok { os.exit(114i32) }
+    if !same_text(restored, base) { os.exit(115i32) }
+
+    // A directory that is not there is not entered, and the failure leaves us where we
+    // were rather than somewhere unnamed.
+    if os.set_current_dir(a, "np-os-fs-absent") != os.NotFound { os.exit(116i32) }
+    let (unmoved, unmoved_error) = os.current_dir(a)
+    if unmoved_error != ok { os.exit(117i32) }
+    if !same_text(unmoved, base) { os.exit(118i32) }
+
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }
 

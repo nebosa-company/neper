@@ -1558,6 +1558,8 @@ fn remove_dir(a: *mem.Arena, path: str) -> err
 fn rename(a: *mem.Arena, src: str, dst: str) -> err
 fn read_link(a: *mem.Arena, path: str) -> (str, err)
 fn symlink(a: *mem.Arena, target_path: str, link: str) -> err
+fn current_dir(a: *mem.Arena) -> (str, err)
+fn set_current_dir(a: *mem.Arena, path: str) -> err
 fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err
 fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn pipe() -> (File, File, err)
@@ -1632,6 +1634,10 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: ProcGroup) -> err
 
 ```
+
+`current_dir` is absolute and in the host convention. It and `set_current_dir` are the
+one pair here that reads and writes state belonging to the whole process rather than to a
+path, so a caller that moves is the one that has to move back.
 
 `read_link` gives back the target string as it was stored, resolving nothing; a path that
 is not a link is `Unsupported`. `symlink` stores that string, and a host that records at

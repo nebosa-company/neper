@@ -189,6 +189,24 @@ fn main(a: *mem.Arena) -> err {
     let (not_a_link, not_a_link_error) = fs.read_link(a, "np-fs/one.txt")
     if not_a_link_error != fs.Invalid { os.exit(140i32) }
 
+    // The working directory through the module. It is the one pair here that reads and
+    // writes state belonging to the whole process, so the fixture moves and moves back --
+    // every relative path after this depends on that.
+    let (base, base_error) = fs.current_dir(a)
+    if base_error != ok { os.exit(150i32) }
+    if base.len == 0usize { os.exit(151i32) }
+    if fs.set_current_dir(a, "np-fs/deep") != ok { os.exit(152i32) }
+    let (inside, inside_error) = fs.current_dir(a)
+    if inside_error != ok { os.exit(153i32) }
+    if inside.len < 4usize { os.exit(154i32) }
+    if !same(inside[inside.len - 4usize..inside.len], "deep") { os.exit(155i32) }
+    // What `current_dir` returns is what `set_current_dir` takes.
+    if fs.set_current_dir(a, base) != ok { os.exit(156i32) }
+    let (back, back_error) = fs.current_dir(a)
+    if back_error != ok { os.exit(157i32) }
+    if !same(back, base) { os.exit(158i32) }
+    if fs.set_current_dir(a, "np-fs/no-such") != fs.NotFound { os.exit(159i32) }
+
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.
     let (capped, capped_error) = fs.read_file(a, "np-fs/one.txt", 10usize)

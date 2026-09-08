@@ -633,3 +633,33 @@ bytes earlier because it has no flags field, and every other tag is a reparse po
 is not a link at all, so both are `Unsupported`. The print name is preferred over the
 substitute name because the substitute carries the object manager's device prefix, which
 is stripped on the fallback path.
+
+## D101 — the working directory is `e.os` state, and moving back is the caller's job
+
+`e.fs.current_dir` and `set_current_dir` had no primitive under them; `e.os` gains the
+pair under the same names, so `e.fs` is a pass-through and the two fences agree on what
+the words mean. `current_dir` is absolute and in the host convention, which is what makes
+its result something `set_current_dir` accepts — the round trip is the property worth
+having, and the fixtures assert exactly it.
+
+This is the first pair in `e.os` that reads and writes state belonging to the **whole
+process** rather than to a path. Nothing here hides that: there is no scoped form, no
+"run this with that directory", no saving and restoring around a call. A caller that
+moves is the one that has to move back, because any wrapper that promised otherwise would
+be lying in the presence of threads — the directory is one per process and `e.thread`
+exists. Every other call in `e.fs` resolves its relative paths against whatever this is
+set to, so moving it is a decision about the whole program, and it should look like one.
+
+The two hosts differ in how they report a buffer that was too small, and both are handled
+by the shape of the answer rather than by a guess. Linux `getcwd` returns `-ERANGE` and
+nothing else, so the loop only grows; it also counts the terminating NUL, which a `str`
+does not carry, so the result is one byte shorter than what the kernel reports — the
+fixture catches getting that wrong, because a trailing NUL makes the directory's own name
+stop matching. `GetCurrentDirectoryW` answers two questions with one number: what it
+wrote when the buffer fitted, and what it needs — terminator included — when it did not.
+Comparing against the capacity is what tells them apart.
+
+What is still missing for the neighbours this unblocks: `canonical` needs a resolving
+call (`realpath`, or `GetFinalPathNameByHandleW`), `executable_path` needs
+`/proc/self/exe` or `GetModuleFileNameW`, and `temp_dir` and `home_dir` need `os.env`,
+which is in the fence and not yet written.

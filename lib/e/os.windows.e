@@ -132,6 +132,12 @@ extern fn raw_device_control(handle: usize, code: u32, in_buffer: usize, in_size
 @import("kernel32.dll", "WideCharToMultiByte")
 extern fn raw_narrow(code_page: u32, flags: u32, source: *const u16, source_len: i32, destination: *u8, destination_len: i32, default_char: usize, used_default: usize) -> i32
 
+@import("kernel32.dll", "GetCurrentDirectoryW")
+extern fn raw_current_directory(capacity: u32, buffer: *u16) -> u32
+
+@import("kernel32.dll", "SetCurrentDirectoryW")
+extern fn raw_set_current_directory(name: *const u16) -> i32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -165,6 +171,9 @@ const INVALID_FILE_ATTRIBUTES: u32 = 4294967295u32
 
 const FSCTL_GET_REPARSE_POINT: u32 = 589992u32
 const MAXIMUM_REPARSE_DATA: u32 = 16384u32
+
+// A working directory longer than this is not one anybody arrived at.
+const MAX_DIRECTORY_UNITS: usize = 32768usize
 
 // Making a link is privileged unless the host is in developer mode, which is what the
 // second flag asks for; without it an ordinary process is refused.
@@ -525,6 +534,58 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err) {
         ret ("", Failed)
     }
     ret (bytes[0usize..usize(converted)], ok)
+}
+
+// `GetCurrentDirectoryW` answers two different questions with one number: how much it
+// wrote when the buffer was big enough, and how much it needs -- terminator included --
+// when it was not. Comparing against the capacity is what tells the two apart.
+fn current_dir(a: *mem.Arena) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    var capacity = 260usize
+    while capacity <= MAX_DIRECTORY_UNITS {
+        let (units, allocation_error) = mem.alloc[u16](a, capacity + 1usize)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let written = raw_current_directory(u32(capacity + 1usize), &units[0usize])
+        if written == 0u32 {
+            let call_error = from_last_error()
+            mem.reset(a, checkpoint)
+            ret ("", call_error)
+        }
+        if usize(written) <= capacity {
+            let count = usize(written)
+            // A UTF-16 unit never becomes more than three UTF-8 bytes.
+            let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+            if bytes_error != ok {
+                mem.reset(a, checkpoint)
+                ret ("", OutOfMemory)
+            }
+            let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+            if converted <= 0i32 {
+                mem.reset(a, checkpoint)
+                ret ("", Failed)
+            }
+            ret (bytes[0usize..usize(converted)], ok)
+        }
+        capacity = usize(written)
+    }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
+fn set_current_dir(a: *mem.Arena, path: str) -> err {
+    let checkpoint = mem.mark(a)
+    let (name, name_error) = widen(a, path)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret name_error
+    }
+    var call_error = ok
+    if raw_set_current_directory(&name[0usize]) == 0i32 { call_error = from_last_error() }
+    mem.reset(a, checkpoint)
+    ret call_error
 }
 
 fn mkdir(a: *mem.Arena, path: str) -> err {

@@ -72,6 +72,8 @@ const SYS_FCHMODAT: usize = 268usize
 const SYS_UTIMENSAT: usize = 280usize
 const SYS_SYMLINKAT: usize = 266usize
 const SYS_READLINKAT: usize = 267usize
+const SYS_GETCWD: usize = 79usize
+const SYS_CHDIR: usize = 80usize
 
 // A target longer than this is not a link anyone meant to write.
 const MAX_LINK_LENGTH: usize = 65536usize
@@ -279,6 +281,52 @@ fn symlink(a: *mem.Arena, target_path: str, link: str) -> err {
         ret link_error
     }
     let result = syscall(SYS_SYMLINKAT, target_address, AT_FDCWD, link_address, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
+}
+
+// `getcwd` fills the buffer and returns what it filled, the terminator included, or
+// `-ERANGE` when the buffer is too small -- so unlike `readlinkat` there is no ambiguity
+// about a full one and the loop is only about finding a size that fits.
+fn current_dir(a: *mem.Arena) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    var capacity = 256usize
+    while capacity <= MAX_LINK_LENGTH {
+        let (buffer, allocation_error) = mem.alloc[u8](a, capacity)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let written = syscall(SYS_GETCWD, mem.address_of(&buffer[0usize]), capacity, 0usize, 0usize, 0usize, 0usize)
+        // ERANGE, and the only failure a bigger buffer answers.
+        if written == -34isize {
+            capacity = capacity * 2usize
+            continue
+        }
+        if written < 0isize {
+            let call_error = from_errno(written)
+            mem.reset(a, checkpoint)
+            ret ("", call_error)
+        }
+        if written == 0isize {
+            mem.reset(a, checkpoint)
+            ret ("", Failed)
+        }
+        // The count includes the NUL, which a `str` does not carry.
+        ret (buffer[0usize..usize(written) - 1usize], ok)
+    }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
+fn set_current_dir(a: *mem.Arena, path: str) -> err {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret path_error
+    }
+    let result = syscall(SYS_CHDIR, path_address, 0usize, 0usize, 0usize, 0usize, 0usize)
     mem.reset(a, checkpoint)
     ret from_errno(result)
 }

@@ -214,6 +214,20 @@ fn make_dirs(a: *mem.Arena, path_text: str) -> err {
     ret ok
 }
 
+// Where relative paths resolve from, absolute and in the host convention. This is the one
+// pair in this module that reads and writes state belonging to the whole process rather
+// than to a path, so a caller that moves is the one that has to move back -- and every
+// other call here becomes ambiguous while it is moved.
+fn current_dir(a: *mem.Arena) -> (str, err) {
+    let (path_text, read_error) = os.current_dir(a)
+    if read_error != ok { ret ("", from_os(read_error)) }
+    ret (path_text, ok)
+}
+
+fn set_current_dir(a: *mem.Arena, path_text: str) -> err {
+    ret from_os(os.set_current_dir(a, path_text))
+}
+
 // The target as it was stored, resolving nothing: a relative link gives back a relative
 // string, which is what it means. A path that is not a link is `Invalid`.
 fn read_link(a: *mem.Arena, path_text: str) -> (str, err) {
