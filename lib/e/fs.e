@@ -13,6 +13,8 @@ use e.path
 
 type EntryKind = enum u8 { File, Directory, Symlink, Other }
 type Entry = struct { path: str, kind: EntryKind, size: u64 }
+type Permissions = struct { owner_read: bool, owner_write: bool, owner_exec: bool, group_read: bool, group_write: bool, group_exec: bool, other_read: bool, other_write: bool, other_exec: bool }
+type Metadata = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, permissions: Permissions, file_id: u64, link_count: u64 }
 type Walk = struct { state: *void }
 type WalkOptions = struct { recursive: bool, follow_symlinks: bool }
 
@@ -83,6 +85,56 @@ fn stat(a: *mem.Arena, path_text: str) -> (Entry, err) {
     entry.kind = kind_from_os(info.kind)
     entry.size = info.size
     ret (entry, ok)
+}
+
+// `e.os` carries permissions as the POSIX bits, because that is what one of the two
+// hosts actually stores; naming the nine is this module's job, and the host that has one
+// read-only flag instead answers the same for all three classes rather than inventing a
+// distinction nothing enforces.
+fn permissions_from_mode(mode: u32) -> Permissions {
+    var permissions: Permissions = zero
+    permissions.owner_read = mode & 256u32 != 0u32
+    permissions.owner_write = mode & 128u32 != 0u32
+    permissions.owner_exec = mode & 64u32 != 0u32
+    permissions.group_read = mode & 32u32 != 0u32
+    permissions.group_write = mode & 16u32 != 0u32
+    permissions.group_exec = mode & 8u32 != 0u32
+    permissions.other_read = mode & 4u32 != 0u32
+    permissions.other_write = mode & 2u32 != 0u32
+    permissions.other_exec = mode & 1u32 != 0u32
+    ret permissions
+}
+
+// Everything the host records about one path. `follow_symlinks` chooses which path is
+// described when the last component is a link -- the target, or the link itself -- which
+// is the one question `stat` does not let a caller ask.
+//
+// A creation time is `-1` where the host does not keep one: Linux has none in the
+// structure this is read from, so a caller comparing two of them has to allow for that
+// rather than assume a zero.
+fn metadata(a: *mem.Arena, path_text: str, follow_symlinks: bool) -> (Metadata, err) {
+    var described: Metadata = zero
+    var info: os.FileInfo = zero
+    var info_error = ok
+    if follow_symlinks {
+        let (followed, followed_error) = os.stat(a, path_text)
+        info = followed
+        info_error = followed_error
+    } else {
+        let (direct, direct_error) = os.lstat(a, path_text)
+        info = direct
+        info_error = direct_error
+    }
+    if info_error != ok { ret (described, from_os(info_error)) }
+    described.kind = kind_from_os(info.kind)
+    described.size = info.size
+    described.modified_ns = info.modified_ns
+    described.accessed_ns = info.accessed_ns
+    described.created_ns = info.created_ns
+    described.permissions = permissions_from_mode(info.mode)
+    described.file_id = info.file_id
+    described.link_count = info.link_count
+    ret (described, ok)
 }
 
 fn make_dir(a: *mem.Arena, path_text: str) -> err {

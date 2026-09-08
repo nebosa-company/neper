@@ -7,6 +7,11 @@ use e.mem
 use e.fs
 use e.os
 
+// 2020-01-01 and 2100-01-01 in Unix nanoseconds. A timestamp is checked against both:
+// against zero it would pass while still carrying the wrong epoch or the wrong scale.
+const YEAR_2020_NS: i64 = 1577836800000000000i64
+const YEAR_2100_NS: i64 = 4102444800000000000i64
+
 fn same(left: str, right: str) -> bool {
     if left.len != right.len { ret false }
     var at = 0usize
@@ -83,6 +88,37 @@ fn main(a: *mem.Arena) -> err {
     if written_error != ok { os.exit(34i32) }
     if written_entry.kind != .File { os.exit(35i32) }
     if written_entry.size != 11u64 { os.exit(36i32) }
+
+    // `metadata` is everything the host records about one path, and `follow_symlinks`
+    // picks which path that is. With no link in the way the two agree, which is what
+    // says the flag reached the call rather than that it changed anything.
+    let (described, described_error) = fs.metadata(a, "np-fs/one.txt", true)
+    if described_error != ok { os.exit(90i32) }
+    if described.kind != .File { os.exit(91i32) }
+    if described.size != 11u64 { os.exit(92i32) }
+    if described.link_count != 1u64 { os.exit(93i32) }
+    if described.file_id == 0u64 { os.exit(94i32) }
+    if !described.permissions.owner_read { os.exit(95i32) }
+    if !described.permissions.owner_write { os.exit(96i32) }
+    if described.modified_ns < YEAR_2020_NS || described.modified_ns > YEAR_2100_NS { os.exit(97i32) }
+    if described.created_ns != -1i64 {
+        if described.created_ns < YEAR_2020_NS || described.created_ns > YEAR_2100_NS { os.exit(98i32) }
+    }
+    let (direct, direct_error) = fs.metadata(a, "np-fs/one.txt", false)
+    if direct_error != ok { os.exit(99i32) }
+    if direct.file_id != described.file_id { os.exit(100i32) }
+
+    // A directory is a directory and is traversable, and it is not the same object as
+    // the file -- which is what an identity is for.
+    let (folder, folder_error) = fs.metadata(a, "np-fs/deep", true)
+    if folder_error != ok { os.exit(101i32) }
+    if folder.kind != .Directory { os.exit(102i32) }
+    if !folder.permissions.owner_exec { os.exit(103i32) }
+    if folder.file_id == described.file_id { os.exit(104i32) }
+
+    // A path that is not there fails the same way the rest of the module does.
+    let (absent_metadata, absent_metadata_error) = fs.metadata(a, "np-fs/no-such", true)
+    if absent_metadata_error != fs.NotFound { os.exit(105i32) }
 
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.

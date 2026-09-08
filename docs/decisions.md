@@ -524,3 +524,44 @@ where `os.FileInfo` carries a kind and a size, `read_link` and `symlink` need ca
 are one syscall on Linux and reparse-point work on Windows, and `canonical`,
 `current_dir`, `set_current_dir`, `executable_path` and `temp_dir` still have no `e.os`
 primitive at all.
+
+## D98 — `os.FileInfo` carries what `e.fs.Metadata` promises
+
+`os.FileInfo` was `{kind, size}`, and `e.fs.Metadata` promises times, permissions, a file
+identity and a link count. So `e.fs.metadata` could not be written at all: the only two
+fields it could have filled were the two `stat` already returns. `FileInfo` is now
+`{kind, size, modified_ns, accessed_ns, created_ns, mode, file_id, link_count}`, and
+`e.fs.metadata` is the mapping from that to `Metadata` and nothing else.
+
+The fields are the ones both hosts can answer, in the form the host that *has* the notion
+uses. `mode` is POSIX permission bits, because Linux stores exactly that; Windows has one
+read-only flag, so it synthesises the bits and gives owner, group and other the same
+answer rather than a narrower split that nothing on that host enforces. Turning nine bits
+into nine booleans is `e.fs`'s job, not `e.os`'s — the portable presentation belongs where
+the portable module is.
+
+An unavailable timestamp is `-1` and never zero. Zero is a real Unix time, so a caller
+comparing two of them could not tell "not recorded" from 1970. Linux has no creation time
+in the structure `newfstatat` fills, so `created_ns` is `-1` there and a real value on
+Windows; a caller that compares creation times has to allow for that, and the fence says
+so.
+
+Widening it changed how Windows answers. `GetFileAttributesExW` has no link count and no
+file index at all, so `stat` and `lstat` are now `CreateFileW` with `FILE_READ_ATTRIBUTES`
+plus `GetFileInformationByHandle`, which answers every field in one call. That is a better
+primitive for a second reason: `CreateFileW` without `FILE_FLAG_OPEN_REPARSE_POINT`
+follows the link, so `stat` genuinely describes the target and `lstat`, which passes the
+flag, genuinely describes the link — where the previous pair had `stat` on a call whose
+following behaviour is not clearly documented. It also removed `FindFirstFileW` and its
+592-byte `WIN32_FIND_DATAW`, so the file has fewer types than before. `lstat` still asks
+`GetFileInformationByHandleEx` for the reparse tag, because the handle information says
+that a reparse point is there and not what it stands for, and an app-execution alias is
+one without being a link.
+
+The cost is a handle per lookup on Windows, where an attribute query needed none. It is
+opened with `FILE_READ_ATTRIBUTES` and all three share bits, which is the least that can
+be asked for, so a file another process holds open is still described.
+
+`set_permissions` and `set_times` are still not implemented: they need `e.os` primitives
+that write — `chmod`/`utimensat`, `SetFileTime` and the read-only attribute — and this
+decision is about what can be read.

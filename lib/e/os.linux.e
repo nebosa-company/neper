@@ -32,7 +32,11 @@ type DirEntry = struct { name: str, kind: EntryKind }
 type OpenFlags = struct { read: bool, write: bool, create: bool, truncate: bool, append: bool }
 type Handle = struct { raw: usize }
 type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const Handle }
-type FileInfo = struct { kind: EntryKind, size: u64 }
+// `mode` is the POSIX permission bits as the kernel keeps them, and `file_id` is the
+// inode: unique with the device, which is what an `e.fs` caller compares two paths by.
+// `created_ns` is `-1` here -- `struct stat` has no creation time, and reading one needs
+// `statx`, which is a primitive of its own rather than a field of this one.
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
 
 // The kernel's `struct stat` for x86-64, field for field. `newfstatat` writes 144
 // bytes at the address it is given, so this layout is the ABI rather than a choice --
@@ -74,6 +78,12 @@ const AT_REMOVEDIR: usize = 512usize
 
 // 0o777, which the process umask narrows -- the same default a shell `mkdir` gets.
 const DIRECTORY_MODE: usize = 511usize
+
+const NANOSECONDS_PER_SECOND: i64 = 1000000000i64
+
+// The bits `e.fs.Permissions` is made of, plus setuid, setgid and sticky above them.
+// Anything higher in the mode is the format, which `kind` already carries.
+const PERMISSION_MASK: u32 = 4095u32
 
 const FORMAT_MASK: u32 = 61440u32
 const FORMAT_FILE: u32 = 32768u32
@@ -139,6 +149,12 @@ fn stat_with_flags(a: *mem.Arena, path: str, flags: usize) -> (FileInfo, err) {
     if result < 0isize { ret (info, from_errno(result)) }
     info.kind = kind_from_mode(buffer.mode)
     info.size = u64(buffer.size)
+    info.modified_ns = buffer.modified * NANOSECONDS_PER_SECOND + buffer.modified_ns
+    info.accessed_ns = buffer.accessed * NANOSECONDS_PER_SECOND + buffer.accessed_ns
+    info.created_ns = -1i64
+    info.mode = buffer.mode & PERMISSION_MASK
+    info.file_id = buffer.inode
+    info.link_count = buffer.link_count
     ret (info, ok)
 }
 

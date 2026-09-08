@@ -1519,7 +1519,7 @@ type Clock = enum u8 { Wall, Monotonic }
 type SeekWhence = enum u8 { Start, Current, End }
 type EntryKind = enum u8 { File, Dir, Symlink, Other }
 type DirEntry = struct { name: str, kind: EntryKind }
-type FileInfo = struct { kind: EntryKind, size: u64 }
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
 type OpenFlags = struct { read: bool, write: bool, create: bool, truncate: bool, append: bool }
 type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const Handle }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
@@ -1629,6 +1629,13 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: ProcGroup) -> err
 
 ```
+
+`FileInfo.mode` is the POSIX permission bits; a host without them synthesises the
+portable read-only/executable subset and answers the same for owner, group and other
+rather than a narrower split nothing enforces. `FileInfo.file_id` is unique within its
+volume or device, so two paths naming one object compare equal. Timestamps are
+Unix-epoch nanoseconds and an unavailable one is `-1`, never zero — Linux keeps no
+creation time in the structure `stat` reads, so `created_ns` is `-1` there.
 
 All path strings use the host convention. `SpawnOptions.cwd == ""` inherits the
 current directory; `inherit_env` controls whether `env` overlays the parent

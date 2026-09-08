@@ -31,12 +31,16 @@ type DirEntry = struct { name: str, kind: EntryKind }
 type OpenFlags = struct { read: bool, write: bool, create: bool, truncate: bool, append: bool }
 type Handle = struct { raw: usize }
 type Stdio = struct { stdin: File, stdout: File, stderr: File, inherit: []const Handle }
-type FileInfo = struct { kind: EntryKind, size: u64 }
 
-// `WIN32_FILE_ATTRIBUTE_DATA`. Every `FILETIME` is two `DWORD`s in the header, so the
-// whole struct is four-byte aligned and there is no padding anywhere in it -- writing
-// the times as `u64` here would insert some and move `size_high` off its offset.
-type FileAttributeData = struct {
+// `mode` is POSIX permission bits, which this host does not have: what it has is one
+// read-only flag, so the bits are synthesised from it. `file_id` is the file index,
+// unique within its volume. Unlike Linux, this host does record a creation time.
+type FileInfo = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_ns: i64, created_ns: i64, mode: u32, file_id: u64, link_count: u64 }
+
+// `BY_HANDLE_FILE_INFORMATION`: thirteen `DWORD`s. Every `FILETIME` is two of them in
+// the header, so the whole struct is four-byte aligned with no padding anywhere --
+// writing the times as `u64` here would insert some and move every later field.
+type ByHandleFileInformation = struct {
     attributes: u32,
     created_low: u32,
     created_high: u32,
@@ -44,40 +48,33 @@ type FileAttributeData = struct {
     accessed_high: u32,
     written_low: u32,
     written_high: u32,
+    volume_serial: u32,
     size_high: u32,
     size_low: u32,
+    link_count: u32,
+    index_high: u32,
+    index_low: u32,
 }
 
-// `WIN32_FIND_DATAW`, which is how a path is described without following the link at
-// the end of it. Same alignment reasoning as above, and both name arrays are part of
-// the size the call writes.
-type FindData = struct {
-    attributes: u32,
-    created_low: u32,
-    created_high: u32,
-    accessed_low: u32,
-    accessed_high: u32,
-    written_low: u32,
-    written_high: u32,
-    size_high: u32,
-    size_low: u32,
-    reparse_tag: u32,
-    reserved: u32,
-    name: [260]u16,
-    alternate_name: [14]u16,
-}
+// `FILE_ATTRIBUTE_TAG_INFO`, which is the only way to learn *which* kind of reparse
+// point a path is. The handle information above says that one is there and not what it
+// stands for.
+type FileAttributeTagInfo = struct { attributes: u32, reparse_tag: u32 }
 
 @import("kernel32.dll", "MultiByteToWideChar")
 extern fn raw_widen(code_page: u32, flags: u32, source: *const u8, source_len: i32, destination: *u16, destination_len: i32) -> i32
 
-@import("kernel32.dll", "GetFileAttributesExW")
-extern fn raw_attributes(name: *const u16, level: i32, info: *FileAttributeData) -> i32
+@import("kernel32.dll", "CreateFileW")
+extern fn raw_create_file(name: *const u16, access: u32, share: u32, security: usize, disposition: u32, flags: u32, template: usize) -> usize
 
-@import("kernel32.dll", "FindFirstFileW")
-extern fn raw_find_first(name: *const u16, data: *FindData) -> usize
+@import("kernel32.dll", "CloseHandle")
+extern fn raw_close_handle(handle: usize) -> i32
 
-@import("kernel32.dll", "FindClose")
-extern fn raw_find_close(handle: usize) -> i32
+@import("kernel32.dll", "GetFileInformationByHandle")
+extern fn raw_handle_information(handle: usize, info: *ByHandleFileInformation) -> i32
+
+@import("kernel32.dll", "GetFileInformationByHandleEx")
+extern fn raw_handle_information_ex(handle: usize, class: i32, info: *FileAttributeTagInfo, size: u32) -> i32
 
 @import("kernel32.dll", "CreateDirectoryW")
 extern fn raw_create_directory(name: *const u16, security: usize) -> i32
@@ -95,17 +92,42 @@ extern fn raw_move_file(source: *const u16, destination: *const u16, flags: u32)
 extern fn raw_last_error() -> u32
 
 const CP_UTF8: u32 = 65001u32
-const GET_FILE_EX_INFO_STANDARD: i32 = 0i32
 const INVALID_HANDLE: usize = 18446744073709551615usize
 
+// `FILE_READ_ATTRIBUTES` alone: nothing here reads the bytes of a file, and asking for
+// less is what lets a path that is open elsewhere still be described. The three share
+// bits are for the same reason -- a file someone else is writing is not an error here.
+const FILE_READ_ATTRIBUTES: u32 = 128u32
+const FILE_SHARE_ALL: u32 = 7u32
+const OPEN_EXISTING: u32 = 3u32
+
+// A directory cannot be opened at all without `BACKUP_SEMANTICS`, and
+// `OPEN_REPARSE_POINT` is the difference between `lstat` and `stat`: without it
+// `CreateFileW` follows the link, which is exactly what `stat` is asked to do.
+const FILE_FLAG_BACKUP_SEMANTICS: u32 = 33554432u32
+const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 2097152u32
+
+const FILE_ATTRIBUTE_TAG_CLASS: i32 = 9i32
+
+const ATTRIBUTE_READONLY: u32 = 1u32
 const ATTRIBUTE_DIRECTORY: u32 = 16u32
 const ATTRIBUTE_REPARSE_POINT: u32 = 1024u32
 
-// A reparse point is not always a symlink: a mount point and an app-execution stub are
-// reparse points too, and only these two tags stand for something a caller would call
-// a symbolic link.
+// A reparse point is not always a link: an app-execution alias is one too, and a walk
+// that called it a symlink would skip a real executable. Only these two tags stand for
+// something a caller would follow.
 const REPARSE_TAG_SYMLINK: u32 = 2684354572u32
 const REPARSE_TAG_MOUNT_POINT: u32 = 2684354563u32
+
+// 1601-01-01 to 1970-01-01 in 100-nanosecond ticks, which is what a `FILETIME` counts.
+const FILETIME_UNIX_EPOCH: u64 = 116444736000000000u64
+
+// Read, and write unless the read-only flag is set; a directory is also traversable.
+// This is a synthesis, not a translation: Windows has no group or other, so all three
+// classes get the same answer rather than a narrower one that nothing enforces.
+const MODE_READ_ONLY: u32 = 292u32
+const MODE_READ_WRITE: u32 = 438u32
+const MODE_TRAVERSABLE: u32 = 73u32
 
 // The wide, NUL-terminated copy of a path that every `W` call takes. It stays a slice
 // rather than an address because there is no way back from a `usize` to a pointer
@@ -153,8 +175,23 @@ fn from_last_error() -> err {
     ret Failed
 }
 
-fn size_from_parts(high: u32, low: u32) -> u64 {
+fn pair_to_u64(high: u32, low: u32) -> u64 {
     ret u64(high) * 4294967296u64 + u64(low)
+}
+
+// A `FILETIME` of zero means the host did not record one, which the fence spells `-1`.
+// So does a stamp from before the Unix epoch, which this field cannot carry.
+fn time_from_filetime(high: u32, low: u32) -> i64 {
+    let ticks = pair_to_u64(high, low)
+    if ticks < FILETIME_UNIX_EPOCH { ret -1i64 }
+    ret i64((ticks - FILETIME_UNIX_EPOCH) * 100u64)
+}
+
+fn mode_from_attributes(attributes: u32) -> u32 {
+    var mode = MODE_READ_WRITE
+    if attributes & ATTRIBUTE_READONLY != 0u32 { mode = MODE_READ_ONLY }
+    if attributes & ATTRIBUTE_DIRECTORY != 0u32 { mode = mode | MODE_TRAVERSABLE }
+    ret mode
 }
 
 fn kind_from_attributes(attributes: u32) -> EntryKind {
@@ -162,63 +199,77 @@ fn kind_from_attributes(attributes: u32) -> EntryKind {
     ret .File
 }
 
-// `GetFileAttributesExW` describes what a path leads to. It is the following call: for
-// a symbolic link it answers about the target, which is what `stat` is asked for.
+// A directory needs `BACKUP_SEMANTICS` to open at all, and nothing here reads a byte of
+// the file, so one helper covers both calls -- the flag that separates them is the
+// caller's.
+fn open_for_info(a: *mem.Arena, path: str, extra_flags: u32) -> (usize, err) {
+    let (name, name_error) = widen(a, path)
+    if name_error != ok { ret (INVALID_HANDLE, name_error) }
+    let handle = raw_create_file(&name[0usize], FILE_READ_ATTRIBUTES, FILE_SHARE_ALL, 0usize, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | extra_flags, 0usize)
+    if handle == INVALID_HANDLE { ret (INVALID_HANDLE, from_last_error()) }
+    ret (handle, ok)
+}
+
+// One call answers every field, which is what the handle is worth opening for: the
+// attribute-only call has no link count and no file index at all. The attributes come
+// back too, because whether a reparse point is there is not a field of `FileInfo`.
+fn info_from_handle(handle: usize) -> (FileInfo, u32, err) {
+    var info: FileInfo = zero
+    var data: ByHandleFileInformation = zero
+    if raw_handle_information(handle, &data) == 0i32 { ret (info, 0u32, from_last_error()) }
+    info.kind = kind_from_attributes(data.attributes)
+    info.size = pair_to_u64(data.size_high, data.size_low)
+    info.modified_ns = time_from_filetime(data.written_high, data.written_low)
+    info.accessed_ns = time_from_filetime(data.accessed_high, data.accessed_low)
+    info.created_ns = time_from_filetime(data.created_high, data.created_low)
+    info.mode = mode_from_attributes(data.attributes)
+    info.file_id = pair_to_u64(data.index_high, data.index_low)
+    info.link_count = u64(data.link_count)
+    ret (info, data.attributes, ok)
+}
+
+fn reparse_kind(handle: usize) -> EntryKind {
+    var tag: FileAttributeTagInfo = zero
+    if raw_handle_information_ex(handle, FILE_ATTRIBUTE_TAG_CLASS, &tag, 8u32) == 0i32 { ret .Other }
+    if tag.reparse_tag == REPARSE_TAG_SYMLINK { ret .Symlink }
+    if tag.reparse_tag == REPARSE_TAG_MOUNT_POINT { ret .Symlink }
+    ret .Other
+}
+
+// Without `OPEN_REPARSE_POINT`, `CreateFileW` follows the link, so what is described is
+// the target -- which is what `stat` means, and why a dangling link is `NotFound` here.
 fn stat(a: *mem.Arena, path: str) -> (FileInfo, err) {
     var info: FileInfo = zero
     let checkpoint = mem.mark(a)
-    let (name, name_error) = widen(a, path)
-    if name_error != ok {
+    let (handle, open_error) = open_for_info(a, path, 0u32)
+    if open_error != ok {
         mem.reset(a, checkpoint)
-        ret (info, name_error)
+        ret (info, open_error)
     }
-    var data: FileAttributeData = zero
-    let result = raw_attributes(&name[0usize], GET_FILE_EX_INFO_STANDARD, &data)
-    if result == 0i32 {
-        let call_error = from_last_error()
-        mem.reset(a, checkpoint)
-        ret (info, call_error)
-    }
+    let (described, attributes, info_error) = info_from_handle(handle)
+    let closed = raw_close_handle(handle)
     mem.reset(a, checkpoint)
-    info.kind = kind_from_attributes(data.attributes)
-    info.size = size_from_parts(data.size_high, data.size_low)
-    ret (info, ok)
+    ret (described, info_error)
 }
 
-// `FindFirstFileW` describes the entry itself and never follows the link at the end of
-// the path, which is the difference `lstat` exists for. It cannot name a drive root --
-// there is no directory entry for `C:\` to find -- so that one case falls back to the
-// following call, where a root is a directory either way.
+// The entry itself rather than what it leads to, which is the whole difference: a
+// dangling symlink has an `lstat` and no `stat`.
 fn lstat(a: *mem.Arena, path: str) -> (FileInfo, err) {
     var info: FileInfo = zero
     let checkpoint = mem.mark(a)
-    let (name, name_error) = widen(a, path)
-    if name_error != ok {
+    let (handle, open_error) = open_for_info(a, path, FILE_FLAG_OPEN_REPARSE_POINT)
+    if open_error != ok {
         mem.reset(a, checkpoint)
-        ret (info, name_error)
+        ret (info, open_error)
     }
-    var data: FindData = zero
-    let handle = raw_find_first(&name[0usize], &data)
-    if handle == INVALID_HANDLE {
-        mem.reset(a, checkpoint)
-        let (followed, followed_error) = stat(a, path)
-        ret (followed, followed_error)
+    let (described, attributes, info_error) = info_from_handle(handle)
+    var answer = described
+    if info_error == ok && attributes & ATTRIBUTE_REPARSE_POINT != 0u32 {
+        answer.kind = reparse_kind(handle)
     }
-    let ignored = raw_find_close(handle)
+    let closed = raw_close_handle(handle)
     mem.reset(a, checkpoint)
-    if data.attributes & ATTRIBUTE_REPARSE_POINT != 0u32 {
-        if data.reparse_tag == REPARSE_TAG_SYMLINK || data.reparse_tag == REPARSE_TAG_MOUNT_POINT {
-            info.kind = .Symlink
-            info.size = size_from_parts(data.size_high, data.size_low)
-            ret (info, ok)
-        }
-        info.kind = .Other
-        info.size = size_from_parts(data.size_high, data.size_low)
-        ret (info, ok)
-    }
-    info.kind = kind_from_attributes(data.attributes)
-    info.size = size_from_parts(data.size_high, data.size_low)
-    ret (info, ok)
+    ret (answer, info_error)
 }
 
 fn mkdir(a: *mem.Arena, path: str) -> err {
