@@ -33,6 +33,15 @@ fn same_text(left: str, right: str) -> bool {
     ret true
 }
 
+// A leading separator, or a drive letter and a colon: the two ways a path on either host
+// does not depend on where it is read from.
+fn rooted_path(text: str) -> bool {
+    if text.len == 0usize { ret false }
+    if text[0usize] == 47u8 || text[0usize] == 92u8 { ret true }
+    if text.len >= 2usize && text[1usize] == 58u8 { ret true }
+    ret false
+}
+
 fn main(a: *mem.Arena) -> err {
     // A directory that does not exist is `NotFound`, not a crash and not a zeroed
     // answer that a caller could mistake for an empty file.
@@ -174,6 +183,14 @@ fn main(a: *mem.Arena) -> err {
         if stored_error != ok { os.exit(95i32) }
         if !same_text(stored, "note.txt") { os.exit(96i32) }
 
+        // Resolving is what `canonical` is for, and a link is the only thing that makes
+        // the question interesting: naming the link and naming its target are one answer.
+        let (through_link, through_link_error) = os.canonical(a, "np-os-fs-dir/link.txt")
+        if through_link_error != ok { os.exit(139i32) }
+        let (through_name, through_name_error) = os.canonical(a, "np-os-fs-dir/note.txt")
+        if through_name_error != ok { os.exit(140i32) }
+        if !same_text(through_link, through_name) { os.exit(141i32) }
+
         // Removing a link removes the link and leaves what it pointed at.
         if os.remove_file(a, "np-os-fs-dir/link.txt") != ok { os.exit(97i32) }
         let (survivor, survivor_error) = os.stat(a, "np-os-fs-dir/note.txt")
@@ -270,6 +287,35 @@ fn main(a: *mem.Arena) -> err {
     // length check would match the first entry.
     let (empty_name, empty_name_error) = os.env(a, "")
     if empty_name_error != os.NotFound { os.exit(131i32) }
+
+    // The resolved path. The fixture cannot know what it is, so it checks what has to be
+    // true of it: absolute, in a form anyone would call a path, and the same for two
+    // spellings of one place.
+    let (resolved_dir, resolved_dir_error) = os.canonical(a, "np-os-fs-dir")
+    if resolved_dir_error != ok { os.exit(132i32) }
+    if !rooted_path(resolved_dir) { os.exit(133i32) }
+    // Not the extended-length form one host answers in, which is correct and is not what
+    // anybody means by a path.
+    if resolved_dir.len >= 4usize {
+        if resolved_dir[0usize] == 92u8 && resolved_dir[1usize] == 92u8 {
+            if resolved_dir[2usize] == 63u8 && resolved_dir[3usize] == 92u8 { os.exit(134i32) }
+        }
+    }
+
+    // The same directory named the long way round is the same directory.
+    let (resolved_round, resolved_round_error) = os.canonical(a, "np-os-fs-dir/../np-os-fs-dir")
+    if resolved_round_error != ok { os.exit(135i32) }
+    if !same_text(resolved_round, resolved_dir) { os.exit(136i32) }
+
+    // A file inside it resolves to something longer that begins with it.
+    let (resolved_note, resolved_note_error) = os.canonical(a, "np-os-fs-dir/note.txt")
+    if resolved_note_error != ok { os.exit(137i32) }
+    if resolved_note.len <= resolved_dir.len { os.exit(138i32) }
+    if !same_text(resolved_note[0usize..resolved_dir.len], resolved_dir) { os.exit(142i32) }
+
+    // A name that leads nowhere has nothing to resolve.
+    let (no_resolve, no_resolve_error) = os.canonical(a, "np-os-fs-absent")
+    if no_resolve_error != os.NotFound { os.exit(143i32) }
 
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }

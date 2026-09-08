@@ -214,6 +214,17 @@ fn make_dirs(a: *mem.Arena, path_text: str) -> err {
     ret ok
 }
 
+// The one name for a file, with every symbolic link and every `.` and `..` gone. It needs
+// the path to exist, because both hosts answer it by opening the path and asking what was
+// opened -- there is nothing to resolve about a name that leads nowhere. It is also the
+// only way to tell whether two paths are the same file, since `executable_path` and a
+// path a caller built are not guaranteed to be written the same way.
+fn canonical(a: *mem.Arena, path_text: str) -> (str, err) {
+    let (resolved, resolve_error) = os.canonical(a, path_text)
+    if resolve_error != ok { ret ("", from_os(resolve_error)) }
+    ret (resolved, ok)
+}
+
 // A candidate the host named, kept only if it is really there and really a directory.
 // That is what makes a list of candidates worth having: the first name that is set is not
 // necessarily the one that works.

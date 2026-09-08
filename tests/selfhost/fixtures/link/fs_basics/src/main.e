@@ -249,6 +249,17 @@ fn main(a: *mem.Arena) -> err {
     // than from one lookup answering both.
     if same(temporary, home) { os.exit(180i32) }
 
+    // `canonical` through the module: two spellings of one file are one answer, and the
+    // answer is absolute whatever the working directory happens to be.
+    let (resolved, resolved_error) = fs.canonical(a, "np-fs/one.txt")
+    if resolved_error != ok { os.exit(190i32) }
+    if !rooted(resolved) { os.exit(191i32) }
+    let (round_about, round_about_error) = fs.canonical(a, "np-fs/deep/../one.txt")
+    if round_about_error != ok { os.exit(192i32) }
+    if !same(round_about, resolved) { os.exit(193i32) }
+    let (unresolvable, unresolvable_error) = fs.canonical(a, "np-fs/no-such")
+    if unresolvable_error != fs.NotFound { os.exit(194i32) }
+
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.
     let (capped, capped_error) = fs.read_file(a, "np-fs/one.txt", 10usize)

@@ -81,6 +81,10 @@ const SYS_OPENAT: usize = 257usize
 // O_RDONLY with O_CLOEXEC, so a spawn between here and there does not inherit it.
 const OPEN_READ_ONLY: usize = 524288usize
 
+// O_PATH with O_CLOEXEC: it opens the name and nothing else, so no permission to read is
+// needed and a directory opens as readily as a file.
+const OPEN_PATH_ONLY: usize = 2621440usize
+
 // The kernel caps the environment well below this.
 const MAX_ENVIRONMENT: usize = 2097152usize
 
@@ -408,6 +412,73 @@ fn env(a: *mem.Arena, name: str) -> (str, err) {
     }
     mem.reset(a, checkpoint)
     ret ("", Failed)
+}
+
+// A descriptor number as decimal, which is the only formatting this file needs -- and the
+// reason it does not reach for `e.str`, since `e.os` may depend on `e.mem` and nothing
+// else.
+fn descriptor_path(a: *mem.Arena, descriptor: usize) -> (str, err) {
+    let prefix = "/proc/self/fd/"
+    let (bytes, allocation_error) = mem.alloc[u8](a, prefix.len + 20usize)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < prefix.len {
+        bytes[at] = prefix[at]
+        at += 1usize
+    }
+    var digits: [20]u8 = zero
+    var count = 0usize
+    var value = descriptor
+    if value == 0usize {
+        digits[0usize] = 48u8
+        count = 1usize
+    }
+    while value != 0usize {
+        digits[count] = 48u8 + u8(value % 10usize)
+        value = value / 10usize
+        count += 1usize
+    }
+    var placed = 0usize
+    while placed < count {
+        bytes[at + placed] = digits[count - 1usize - placed]
+        placed += 1usize
+    }
+    ret (bytes[0usize..at + count], ok)
+}
+
+// The kernel resolves a path once and for all when it opens it, and then keeps the result
+// where it can be read back. So this is an open and a `read_link` rather than an
+// implementation of `realpath`: every symbolic link, `.` and `..` is already gone by the
+// time the descriptor exists, and the answer is absolute because the kernel's own record
+// of it is.
+fn canonical(a: *mem.Arena, path: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", path_error)
+    }
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_PATH_ONLY, 0usize, 0usize, 0usize)
+    if descriptor < 0isize {
+        let open_error = from_errno(descriptor)
+        mem.reset(a, checkpoint)
+        ret ("", open_error)
+    }
+    let (name, name_error) = descriptor_path(a, usize(descriptor))
+    if name_error != ok {
+        let unused_close = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        mem.reset(a, checkpoint)
+        ret ("", name_error)
+    }
+    // A `/proc` symbolic link reports a fixed size rather than its target's length, so
+    // `read_link` finds the real one by growing -- which it already does.
+    let (resolved, resolved_error) = read_link(a, name)
+    let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if resolved_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", resolved_error)
+    }
+    ret (resolved, ok)
 }
 
 fn executable_path(a: *mem.Arena) -> (str, err) {

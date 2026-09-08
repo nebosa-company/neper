@@ -1561,6 +1561,7 @@ fn symlink(a: *mem.Arena, target_path: str, link: str) -> err
 fn current_dir(a: *mem.Arena) -> (str, err)
 fn set_current_dir(a: *mem.Arena, path: str) -> err
 fn executable_path(a: *mem.Arena) -> (str, err)
+fn canonical(a: *mem.Arena, path: str) -> (str, err)
 fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err
 fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn pipe() -> (File, File, err)
@@ -1635,6 +1636,10 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: ProcGroup) -> err
 
 ```
+
+`canonical` is absolute with every symbolic link, `.` and `..` resolved, and it requires
+the path to exist: both hosts answer it by opening the path and asking what was opened, so
+there is nothing to resolve for a name that leads nowhere.
 
 `executable_path` is absolute and names the running image. It is what the host records,
 which is not the same thing on both: Linux answers with symbolic links already resolved

@@ -146,6 +146,9 @@ extern fn raw_module_file_name(module: usize, buffer: *u16, capacity: u32) -> u3
 @import("kernel32.dll", "GetEnvironmentVariableW")
 extern fn raw_environment_variable(name: *const u16, buffer: *u16, capacity: u32) -> u32
 
+@import("kernel32.dll", "GetFinalPathNameByHandleW")
+extern fn raw_final_path(handle: usize, buffer: *u16, capacity: u32, flags: u32) -> u32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -182,6 +185,9 @@ const MAXIMUM_REPARSE_DATA: u32 = 16384u32
 
 // A working directory longer than this is not one anybody arrived at.
 const MAX_DIRECTORY_UNITS: usize = 32768usize
+
+// VOLUME_NAME_DOS: a drive letter rather than a volume GUID.
+const FINAL_PATH_DOS: u32 = 0u32
 
 // Making a link is privileged unless the host is in developer mode, which is what the
 // second flag asks for; without it an ordinary process is refused.
@@ -632,6 +638,76 @@ fn env(a: *mem.Arena, name: str) -> (str, err) {
         }
         capacity = usize(written)
     }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
+// `GetFinalPathNameByHandleW` answers in extended-length form, which is correct and is
+// not what anyone means by a path. The device prefix is dropped, and a UNC name gets its
+// two leading separators back -- written over the tail of the prefix, since that is
+// exactly where they belong.
+fn without_device_prefix(units: []u16, count: usize) -> (usize, usize) {
+    if count >= 8usize {
+        if units[0usize] == 92u16 && units[1usize] == 92u16 && units[2usize] == 63u16 && units[3usize] == 92u16 {
+            if units[4usize] == 85u16 && units[5usize] == 78u16 && units[6usize] == 67u16 && units[7usize] == 92u16 {
+                units[6usize] = 92u16
+                units[7usize] = 92u16
+                ret (6usize, count - 6usize)
+            }
+        }
+    }
+    if count >= 4usize {
+        if units[0usize] == 92u16 && units[1usize] == 92u16 && units[2usize] == 63u16 && units[3usize] == 92u16 {
+            ret (4usize, count - 4usize)
+        }
+    }
+    ret (0usize, count)
+}
+
+// Opening the path is what resolves it: the handle names one object, and the host is then
+// asked which one. Following the links is the default, which is why this uses the same
+// open `stat` does.
+fn canonical(a: *mem.Arena, path: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (handle, open_error) = open_for_info(a, path, 0u32)
+    if open_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", open_error)
+    }
+    var capacity = 260usize
+    while capacity <= MAX_DIRECTORY_UNITS {
+        let (units, allocation_error) = mem.alloc[u16](a, capacity)
+        if allocation_error != ok {
+            let unused_close = raw_close_handle(handle)
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let written = raw_final_path(handle, &units[0usize], u32(capacity), FINAL_PATH_DOS)
+        if written == 0u32 {
+            let call_error = from_last_error()
+            let unused_close = raw_close_handle(handle)
+            mem.reset(a, checkpoint)
+            ret ("", call_error)
+        }
+        if usize(written) < capacity {
+            let closed = raw_close_handle(handle)
+            let (offset, count) = without_device_prefix(units, usize(written))
+            // A UTF-16 unit never becomes more than three UTF-8 bytes.
+            let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+            if bytes_error != ok {
+                mem.reset(a, checkpoint)
+                ret ("", OutOfMemory)
+            }
+            let converted = raw_narrow(CP_UTF8, 0u32, &units[offset], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+            if converted <= 0i32 {
+                mem.reset(a, checkpoint)
+                ret ("", Failed)
+            }
+            ret (bytes[0usize..usize(converted)], ok)
+        }
+        capacity = usize(written)
+    }
+    let unused_close = raw_close_handle(handle)
     mem.reset(a, checkpoint)
     ret ("", Failed)
 }

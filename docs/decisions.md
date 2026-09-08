@@ -724,3 +724,37 @@ first. Each candidate is kept only if it is really there and really a directory,
 what makes a list of candidates worth having rather than a chain of first-set-wins.
 Neither creates anything or checks that it can be written to: `temp_file` is what would
 have to, and it is not written yet.
+
+## D104 — `canonical` opens the path and asks what was opened
+
+`e.os` gains `canonical`, absolute with every symbolic link, `.` and `..` resolved.
+Neither host implements it by walking the path: both open it and then ask the host which
+object the handle names, which is the same answer the host would have reached anyway and
+is reached by the code that already does it correctly.
+
+On Linux that is `openat` with `O_PATH` — which opens the name and nothing else, so no
+permission to read is needed and a directory opens as readily as a file — followed by
+`read_link` of `/proc/self/fd/<n>`. The alternative was writing `realpath` by hand:
+component by component, following links, bounding the loop against a cycle, and getting
+`..` right across a symbolic link, which is where hand-written versions go wrong. What
+replaced all of that is a decimal formatter for the descriptor number, which is the only
+formatting this file needs and the reason it does not reach for `e.str` — `e.os` may
+depend on `e.mem` and nothing else.
+
+On Windows it is `GetFinalPathNameByHandleW` over the same open `stat` uses, since
+following links is that call's default. It answers in extended-length form, which is
+correct and is not what anyone means by a path, so the device prefix is dropped — and a
+UNC name gets its two leading separators written over the tail of that prefix, which is
+exactly where they belong.
+
+**It requires the path to exist**, and that follows from the method rather than being a
+restriction chosen for it: there is no handle to ask about a name that leads nowhere. A
+caller that wants to canonicalise a path it is about to create has to canonicalise the
+parent.
+
+The fixture cannot know the answer, so it asserts what must hold: absolute, not in the
+extended-length form, one answer for two spellings of one place, and a file inside a
+directory resolving to something longer that begins with it. The link case is the one that
+makes resolution observable at all — naming the link and naming its target give one
+answer — and both halves are pinned by breaking them: dropping the prefix strip fails at
+exit 134, and resolving the input instead of the descriptor fails at 140.
