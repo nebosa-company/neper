@@ -64,6 +64,22 @@ type FileAttributeTagInfo = struct { attributes: u32, reparse_tag: u32 }
 // `FILETIME`: two `DWORD`s, low first, counting 100-nanosecond ticks from 1601.
 type FileTime = struct { low: u32, high: u32 }
 
+// `REPARSE_DATA_BUFFER` as a symbolic link uses it. `flags` exists for that tag alone --
+// a junction's path begins four bytes earlier -- which is why only a symbolic link is
+// read here and every other tag is `Unsupported`. The array covers
+// `MAXIMUM_REPARSE_DATA_BUFFER_SIZE`, which is what the call may write.
+type ReparseBuffer = struct {
+    tag: u32,
+    data_length: u16,
+    reserved: u16,
+    substitute_offset: u16,
+    substitute_length: u16,
+    print_offset: u16,
+    print_length: u16,
+    flags: u32,
+    path: [8188]u16,
+}
+
 @import("kernel32.dll", "MultiByteToWideChar")
 extern fn raw_widen(code_page: u32, flags: u32, source: *const u8, source_len: i32, destination: *u16, destination_len: i32) -> i32
 
@@ -104,6 +120,18 @@ extern fn raw_set_attributes(name: *const u16, attributes: u32) -> i32
 @import("kernel32.dll", "SetFileTime")
 extern fn raw_set_file_time(handle: usize, creation: usize, accessed: usize, written: usize) -> i32
 
+@import("kernel32.dll", "CreateSymbolicLinkW")
+extern fn raw_create_symbolic_link(link: *const u16, points_to: *const u16, flags: u32) -> u8
+
+// Two of the eight arguments are always null here -- there is no input buffer and no
+// overlapped structure -- so they are `usize`, which is what carries an address when the
+// address is allowed to be none (D96).
+@import("kernel32.dll", "DeviceIoControl")
+extern fn raw_device_control(handle: usize, code: u32, in_buffer: usize, in_size: u32, out_buffer: *ReparseBuffer, out_size: u32, returned: *u32, overlapped: usize) -> i32
+
+@import("kernel32.dll", "WideCharToMultiByte")
+extern fn raw_narrow(code_page: u32, flags: u32, source: *const u16, source_len: i32, destination: *u8, destination_len: i32, default_char: usize, used_default: usize) -> i32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -134,6 +162,14 @@ const ATTRIBUTE_REPARSE_POINT: u32 = 1024u32
 // at all is spelled `NORMAL` -- which is what "none of the others" means there.
 const ATTRIBUTE_NORMAL: u32 = 128u32
 const INVALID_FILE_ATTRIBUTES: u32 = 4294967295u32
+
+const FSCTL_GET_REPARSE_POINT: u32 = 589992u32
+const MAXIMUM_REPARSE_DATA: u32 = 16384u32
+
+// Making a link is privileged unless the host is in developer mode, which is what the
+// second flag asks for; without it an ordinary process is refused.
+const SYMLINK_DIRECTORY: u32 = 1u32
+const SYMLINK_ALLOW_UNPRIVILEGED: u32 = 2u32
 
 // A reparse point is not always a link: an app-execution alias is one too, and a walk
 // that called it a symlink would skip a real executable. Only these two tags stand for
@@ -194,6 +230,11 @@ fn from_last_error() -> err {
     if code == 14u32 { ret OutOfMemory }
     // ERROR_NOT_SAME_DEVICE: a move Windows will not do without copying.
     if code == 17u32 { ret Unsupported }
+    // ERROR_NOT_A_REPARSE_POINT: asking a plain file what it links to. The request cannot
+    // be honoured as asked, which is the same answer Linux gives it as EINVAL.
+    if code == 4390u32 { ret Unsupported }
+    // ERROR_PRIVILEGE_NOT_HELD: making a symbolic link without the right to.
+    if code == 1314u32 { ret Denied }
     ret Failed
 }
 
@@ -358,6 +399,132 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
     let closed = raw_close_handle(handle)
     mem.reset(a, checkpoint)
     ret call_error
+}
+
+// A drive letter or a leading separator: the two ways a path on this host does not depend
+// on where it is read from.
+fn target_absolute(text: str) -> bool {
+    if text.len == 0usize { ret false }
+    if text[0usize] == 47u8 || text[0usize] == 92u8 { ret true }
+    if text.len >= 2usize && text[1usize] == 58u8 { ret true }
+    ret false
+}
+
+// A relative target is relative to the link's own directory and not to the current one,
+// so deciding whether it names a directory has to look where the link will look.
+fn target_as_link_sees_it(a: *mem.Arena, target_path: str, link: str) -> str {
+    if target_absolute(target_path) { ret target_path }
+    var cut = 0usize
+    var at = 0usize
+    while at < link.len {
+        if link[at] == 47u8 || link[at] == 92u8 { cut = at + 1usize }
+        at += 1usize
+    }
+    if cut == 0usize { ret target_path }
+    let (bytes, allocation_error) = mem.alloc[u8](a, cut + target_path.len)
+    if allocation_error != ok { ret target_path }
+    var written = 0usize
+    while written < cut {
+        bytes[written] = link[written]
+        written += 1usize
+    }
+    var read_at = 0usize
+    while read_at < target_path.len {
+        bytes[cut + read_at] = target_path[read_at]
+        read_at += 1usize
+    }
+    ret bytes[0usize..cut + target_path.len]
+}
+
+// This host records at creation whether a link names a directory, which POSIX does not,
+// so the target is looked at first; one that is not there yet is taken to be a file.
+fn symlink(a: *mem.Arena, target_path: str, link: str) -> err {
+    let checkpoint = mem.mark(a)
+    let (target_name, target_error) = widen(a, target_path)
+    if target_error != ok {
+        mem.reset(a, checkpoint)
+        ret target_error
+    }
+    let (link_name, link_error) = widen(a, link)
+    if link_error != ok {
+        mem.reset(a, checkpoint)
+        ret link_error
+    }
+    var flags = SYMLINK_ALLOW_UNPRIVILEGED
+    let seen = target_as_link_sees_it(a, target_path, link)
+    let (described, described_error) = stat(a, seen)
+    if described_error == ok && described.kind == .Dir { flags = flags | SYMLINK_DIRECTORY }
+    var call_error = ok
+    if raw_create_symbolic_link(&link_name[0usize], &target_name[0usize], flags) == 0u8 { call_error = from_last_error() }
+    mem.reset(a, checkpoint)
+    ret call_error
+}
+
+// The link is opened as itself and asked what it stands for. The print name is what was
+// written; the substitute name is the same target with the object manager's device prefix
+// in front of it, which is why it is only the fallback and why that prefix is stripped
+// when it is used.
+fn read_link(a: *mem.Arena, path: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (name, name_error) = widen(a, path)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", name_error)
+    }
+    let (holder, holder_error) = mem.alloc[ReparseBuffer](a, 1usize)
+    if holder_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", OutOfMemory)
+    }
+    let handle = raw_create_file(&name[0usize], FILE_READ_ATTRIBUTES, FILE_SHARE_ALL, 0usize, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, 0usize)
+    if handle == INVALID_HANDLE {
+        let open_error = from_last_error()
+        mem.reset(a, checkpoint)
+        ret ("", open_error)
+    }
+    var returned = 0u32
+    let controlled = raw_device_control(handle, FSCTL_GET_REPARSE_POINT, 0usize, 0u32, &holder[0usize], MAXIMUM_REPARSE_DATA, &returned, 0usize)
+    let closed = raw_close_handle(handle)
+    if controlled == 0i32 {
+        let control_error = from_last_error()
+        mem.reset(a, checkpoint)
+        ret ("", control_error)
+    }
+    if holder[0usize].tag != REPARSE_TAG_SYMLINK {
+        mem.reset(a, checkpoint)
+        ret ("", Unsupported)
+    }
+    var offset = usize(holder[0usize].print_offset) / 2usize
+    var units = usize(holder[0usize].print_length) / 2usize
+    if units == 0usize {
+        offset = usize(holder[0usize].substitute_offset) / 2usize
+        units = usize(holder[0usize].substitute_length) / 2usize
+        if units >= 4usize {
+            if holder[0usize].path[offset] == 92u16 && holder[0usize].path[offset + 1usize] == 63u16 {
+                if holder[0usize].path[offset + 2usize] == 63u16 && holder[0usize].path[offset + 3usize] == 92u16 {
+                    offset += 4usize
+                    units = units - 4usize
+                }
+            }
+        }
+    }
+    if units == 0usize {
+        mem.reset(a, checkpoint)
+        ret ("", Failed)
+    }
+    // A UTF-16 unit never becomes more than three UTF-8 bytes -- a surrogate pair is two
+    // units and four bytes -- so three per unit always fits.
+    let (bytes, bytes_error) = mem.alloc[u8](a, units * 3usize)
+    if bytes_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", OutOfMemory)
+    }
+    let converted = raw_narrow(CP_UTF8, 0u32, &holder[0usize].path[offset], i32(units), &bytes[0usize], i32(units * 3usize), 0usize, 0usize)
+    if converted <= 0i32 {
+        mem.reset(a, checkpoint)
+        ret ("", Failed)
+    }
+    ret (bytes[0usize..usize(converted)], ok)
 }
 
 fn mkdir(a: *mem.Arena, path: str) -> err {

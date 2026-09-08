@@ -1557,6 +1557,7 @@ fn remove_file(a: *mem.Arena, path: str) -> err
 fn remove_dir(a: *mem.Arena, path: str) -> err
 fn rename(a: *mem.Arena, src: str, dst: str) -> err
 fn read_link(a: *mem.Arena, path: str) -> (str, err)
+fn symlink(a: *mem.Arena, target_path: str, link: str) -> err
 fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err
 fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn pipe() -> (File, File, err)
@@ -1631,6 +1632,11 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: ProcGroup) -> err
 
 ```
+
+`read_link` gives back the target string as it was stored, resolving nothing; a path that
+is not a link is `Unsupported`. `symlink` stores that string, and a host that records at
+creation whether a link names a directory decides that from the target as the link will
+see it. Creating one is privileged on some hosts and is `Denied` there.
 
 `set_mode` takes the same `mode` `stat` reports, and `set_times` the same nanoseconds:
 a negative one leaves that stamp as it is, which is the `-1` that means "not recorded" on

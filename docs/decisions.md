@@ -598,3 +598,38 @@ Both fixtures check both directions of the write bit, because a call that change
 would pass either direction on its own. They set whole-second stamps, since one of the two
 filesystems this suite runs on drops the nanoseconds — precision it never promised, and
 not what the assertion is about.
+
+## D100 — `read_link` gives back the string, and `symlink` stores one
+
+`e.os` gains `symlink(a, target_path, link)` beside the `read_link` its fence already
+named. `read_link` returns the target **as it was stored** and resolves nothing: a
+relative link gives back a relative string, because that string is what the link means and
+resolving it is `canonical`'s job. A path that is not a link is `Unsupported` — EINVAL on
+Linux, `ERROR_NOT_A_REPARSE_POINT` on Windows, one answer either way.
+
+The two hosts disagree about what a link is, and the disagreement is handled at creation.
+POSIX stores a string and asks nothing else; Windows records at creation whether the link
+names a directory. So the Windows side looks the target up first — and looks it up **as
+the link will see it**, resolving a relative target against the link's own directory
+rather than the current one, which is the difference between a correctly typed link and
+one that happens to work from where it was made. A target that is not there yet is taken
+to be a file, since a link to something not yet created is still a link.
+
+Making a link is privileged on Windows unless the host is in developer mode.
+`CreateSymbolicLinkW` is passed `SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE`, and
+`ERROR_PRIVILEGE_NOT_HELD` becomes `Denied` — a refusal by policy, not a failure of the
+call. The fixtures skip on exactly that one error and on nothing else, so a machine
+without developer mode still runs everything except the link assertions while any other
+error, or a target that reads back wrong, still fails.
+
+Reading the target is where the two hosts cost different amounts. Linux is one
+`readlinkat`, sized from `lstat` — POSIX makes a symbolic link's `st_size` the length of
+its target, which turns "how long is it" into one call instead of a doubling search, and
+the doubling stays for the filesystems that report zero. Windows has no such call:
+`GetFinalPathNameByHandleW` resolves the whole chain and would answer a different
+question, so it is `DeviceIoControl` with `FSCTL_GET_REPARSE_POINT` and the reparse buffer
+read field by field. Only `IO_REPARSE_TAG_SYMLINK` is read; a junction's path begins four
+bytes earlier because it has no flags field, and every other tag is a reparse point that
+is not a link at all, so both are `Unsupported`. The print name is preferred over the
+substitute name because the substitute carries the object manager's device prefix, which
+is stripped on the fallback path.

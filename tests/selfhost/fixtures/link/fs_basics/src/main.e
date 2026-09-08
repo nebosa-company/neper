@@ -36,6 +36,7 @@ fn clear(a: *mem.Arena) {
     let one = fs.remove_file(a, "np-fs/one.txt")
     let two = fs.remove_file(a, "np-fs/two.txt")
     let copy = fs.remove_file(a, "np-fs/copy.txt")
+    let link = fs.remove_file(a, "np-fs/link.txt")
     let deep = fs.remove_dir(a, "np-fs/deep")
     let outer = fs.remove_dir(a, "np-fs")
 }
@@ -161,6 +162,32 @@ fn main(a: *mem.Arena) -> err {
     // Neither succeeds quietly on a path that is not there.
     if fs.set_permissions(a, "np-fs/no-such", writable) != fs.NotFound { os.exit(125i32) }
     if fs.set_times(a, "np-fs/no-such", STAMP_ACCESSED, STAMP_MODIFIED) != fs.NotFound { os.exit(126i32) }
+
+    // A link through the module. Making one is privileged on some hosts, and `Denied` is
+    // the one answer that skips what follows -- any other error, or a target that reads
+    // back wrong, still fails.
+    let symlink_error = fs.symlink(a, "one.txt", "np-fs/link.txt")
+    if symlink_error == ok {
+        let (stored, stored_error) = fs.read_link(a, "np-fs/link.txt")
+        if stored_error != ok { os.exit(130i32) }
+        if !same(stored, "one.txt") { os.exit(131i32) }
+        // `follow_symlinks` is what decides which of the two is described.
+        let (as_link, as_link_error) = fs.metadata(a, "np-fs/link.txt", false)
+        if as_link_error != ok { os.exit(132i32) }
+        if as_link.kind != .Symlink { os.exit(133i32) }
+        let (through, through_error) = fs.metadata(a, "np-fs/link.txt", true)
+        if through_error != ok { os.exit(134i32) }
+        if through.kind != .File { os.exit(135i32) }
+        if through.size != 11u64 { os.exit(136i32) }
+        if through.file_id != described.file_id { os.exit(137i32) }
+        if fs.remove_file(a, "np-fs/link.txt") != ok { os.exit(138i32) }
+    } else {
+        if symlink_error != fs.Denied { os.exit(139i32) }
+    }
+
+    // A path that is not a link has no target to give.
+    let (not_a_link, not_a_link_error) = fs.read_link(a, "np-fs/one.txt")
+    if not_a_link_error != fs.Invalid { os.exit(140i32) }
 
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.

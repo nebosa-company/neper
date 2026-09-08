@@ -214,6 +214,21 @@ fn make_dirs(a: *mem.Arena, path_text: str) -> err {
     ret ok
 }
 
+// The target as it was stored, resolving nothing: a relative link gives back a relative
+// string, which is what it means. A path that is not a link is `Invalid`.
+fn read_link(a: *mem.Arena, path_text: str) -> (str, err) {
+    let (target_text, read_error) = os.read_link(a, path_text)
+    if read_error != ok { ret ("", from_os(read_error)) }
+    ret (target_text, ok)
+}
+
+// `target_path` is stored as given; nothing checks that it leads anywhere, because a link
+// to something that does not exist yet is a link. Making one is privileged on some hosts,
+// where this is `Denied`.
+fn symlink(a: *mem.Arena, target_path: str, link: str) -> err {
+    ret from_os(os.symlink(a, target_path, link))
+}
+
 // A symbolic link is removed as itself on both hosts: the name goes, what it pointed at
 // stays.
 fn remove_file(a: *mem.Arena, path_text: str) -> err {

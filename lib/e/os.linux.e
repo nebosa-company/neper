@@ -70,6 +70,11 @@ const SYS_UNLINKAT: usize = 263usize
 const SYS_RENAMEAT: usize = 264usize
 const SYS_FCHMODAT: usize = 268usize
 const SYS_UTIMENSAT: usize = 280usize
+const SYS_SYMLINKAT: usize = 266usize
+const SYS_READLINKAT: usize = 267usize
+
+// A target longer than this is not a link anyone meant to write.
+const MAX_LINK_LENGTH: usize = 65536usize
 
 // AT_FDCWD is -100: every path here is relative to the process's own directory, which
 // is what the plain `stat`/`mkdir` names mean. It is a `usize` because every argument
@@ -123,8 +128,11 @@ fn from_errno(result: isize) -> err {
     if result == -12isize { ret OutOfMemory }
     if result == -13isize { ret Denied }
     if result == -17isize { ret Exists }
-    // EXDEV: a rename across filesystems, which the kernel will not do at all.
+    // EXDEV: a rename across filesystems, which the kernel will not do at all. EINVAL is
+    // the same shape of answer -- the request cannot be honoured as asked, which is what
+    // reading a link from something that is not one gets.
     if result == -18isize { ret Unsupported }
+    if result == -22isize { ret Unsupported }
     if result == -38isize { ret Unsupported }
     ret Failed
 }
@@ -217,6 +225,62 @@ fn remove_file(a: *mem.Arena, path: str) -> err {
 
 fn remove_dir(a: *mem.Arena, path: str) -> err {
     ret path_syscall(a, SYS_UNLINKAT, path, AT_REMOVEDIR)
+}
+
+// The kernel offers no way to ask how long a link is: `readlinkat` fills what it is given
+// and a full buffer cannot be told from an exact fit. `lstat` reports a symbolic link's
+// size as the length of its target, so that is the first guess; the buffer doubles from
+// there for the filesystems that report zero.
+fn read_link(a: *mem.Arena, path: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", path_error)
+    }
+    let (described, described_error) = lstat(a, path)
+    var capacity = 256usize
+    if described_error == ok && described.size != 0u64 { capacity = usize(described.size) + 1usize }
+    while capacity <= MAX_LINK_LENGTH {
+        let (buffer, allocation_error) = mem.alloc[u8](a, capacity)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let written = syscall(SYS_READLINKAT, AT_FDCWD, path_address, mem.address_of(&buffer[0usize]), capacity, 0usize, 0usize)
+        if written < 0isize {
+            let call_error = from_errno(written)
+            mem.reset(a, checkpoint)
+            ret ("", call_error)
+        }
+        // A result shorter than the buffer is the whole of it. The answer and the scratch
+        // the search for its length needed both stay in the caller's arena, which is what
+        // `mem.mark` around the call is for.
+        if usize(written) < capacity { ret (buffer[0usize..usize(written)], ok) }
+        capacity = capacity * 2usize
+    }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
+// `symlinkat` is the one call here whose directory argument is not first: the target is a
+// string the kernel stores rather than a path it resolves, so nothing is relative to
+// anything until the link is read.
+fn symlink(a: *mem.Arena, target_path: str, link: str) -> err {
+    let checkpoint = mem.mark(a)
+    let (target_address, target_error) = c_string(a, target_path)
+    if target_error != ok {
+        mem.reset(a, checkpoint)
+        ret target_error
+    }
+    let (link_address, link_error) = c_string(a, link)
+    if link_error != ok {
+        mem.reset(a, checkpoint)
+        ret link_error
+    }
+    let result = syscall(SYS_SYMLINKAT, target_address, AT_FDCWD, link_address, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
 }
 
 // `fchmodat` takes no flag this host honours -- it rejects `AT_SYMLINK_NOFOLLOW` rather

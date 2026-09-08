@@ -23,6 +23,16 @@ const STAMP_ACCESSED: i64 = 1700000000000000000i64
 const STAMP_MODIFIED: i64 = 1700000060000000000i64
 const STAMP_SECOND: i64 = 1700000120000000000i64
 
+fn same_text(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn main(a: *mem.Arena) -> err {
     // A directory that does not exist is `NotFound`, not a crash and not a zeroed
     // answer that a caller could mistake for an empty file.
@@ -140,6 +150,46 @@ fn main(a: *mem.Arena) -> err {
     // Neither call succeeds quietly on a path that is not there.
     if os.set_times(a, "np-os-fs-absent", STAMP_ACCESSED, STAMP_MODIFIED) != os.NotFound { os.exit(87i32) }
     if os.set_mode(a, "np-os-fs-absent", 438u32) != os.NotFound { os.exit(88i32) }
+
+    // A symbolic link, where the host lets one be made at all. On Windows that needs
+    // developer mode or an elevated process, and a refusal comes back as `Denied` rather
+    // than as a broken call -- so that one answer, and only that one, skips what follows.
+    // Any other error still fails, and so does a link that reads back wrong.
+    let link_error = os.symlink(a, "note.txt", "np-os-fs-dir/link.txt")
+    if link_error == ok {
+        // `lstat` describes the link and `stat` describes what it leads to, which is the
+        // pair that has no meaning until there is a link to try it on.
+        let (as_link, as_link_error) = os.lstat(a, "np-os-fs-dir/link.txt")
+        if as_link_error != ok { os.exit(89i32) }
+        if as_link.kind != .Symlink { os.exit(90i32) }
+        let (through, through_error) = os.stat(a, "np-os-fs-dir/link.txt")
+        if through_error != ok { os.exit(91i32) }
+        if through.kind != .File { os.exit(92i32) }
+        if through.size != 5u64 { os.exit(93i32) }
+        // The identity is the target's: following the link reaches the same object.
+        if through.file_id != again.file_id { os.exit(94i32) }
+
+        // The target is the string that was stored, not a path that was resolved.
+        let (stored, stored_error) = os.read_link(a, "np-os-fs-dir/link.txt")
+        if stored_error != ok { os.exit(95i32) }
+        if !same_text(stored, "note.txt") { os.exit(96i32) }
+
+        // Removing a link removes the link and leaves what it pointed at.
+        if os.remove_file(a, "np-os-fs-dir/link.txt") != ok { os.exit(97i32) }
+        let (survivor, survivor_error) = os.stat(a, "np-os-fs-dir/note.txt")
+        if survivor_error != ok { os.exit(98i32) }
+        if survivor.size != 5u64 { os.exit(99i32) }
+    } else {
+        if link_error != os.Denied { os.exit(100i32) }
+    }
+
+    // Asking a plain file what it links to is refused, and refused the same way on both
+    // hosts -- EINVAL on one, ERROR_NOT_A_REPARSE_POINT on the other.
+    let (not_a_link, not_a_link_error) = os.read_link(a, "np-os-fs-dir/note.txt")
+    if not_a_link_error != os.Unsupported { os.exit(101i32) }
+    // And so is one that is not there at all, which is a different answer again.
+    let (no_link, no_link_error) = os.read_link(a, "np-os-fs-absent")
+    if no_link_error != os.NotFound { os.exit(102i32) }
 
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }
