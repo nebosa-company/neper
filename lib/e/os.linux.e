@@ -689,6 +689,133 @@ fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy
     ret (file, ok)
 }
 
+// The parent of the final component, opened under the policy so every step but the last is
+// walked with links refused. The last component is then acted on by name relative to that.
+// This is how "do not follow a link on the way there, but do act on the link that is
+// there" gets said: neither host has a single call that means both, and removing a
+// symbolic link has to remove the link rather than what it points at.
+//
+// The returned handle is the caller's to close only when it is not the one passed in,
+// which is what comparing the two raw values says.
+fn open_parent(a: *mem.Arena, dir: Dir, relative_path: str) -> (Dir, str, err) {
+    var parent: Dir = zero
+    parent.raw = dir.raw
+    var cut = 0usize
+    var found = false
+    var at = 0usize
+    while at < relative_path.len {
+        if relative_path[at] == 47u8 {
+            cut = at
+            found = true
+        }
+        at += 1usize
+    }
+    if !found { ret (parent, relative_path, ok) }
+    let head = relative_path[0usize..cut]
+    let tail = relative_path[cut + 1usize..relative_path.len]
+    // A name ending in a separator names no final component to act on.
+    if tail.len == 0usize { ret (parent, "", Denied) }
+    let checkpoint = mem.mark(a)
+    let (head_address, head_error) = c_string(a, head)
+    if head_error != ok {
+        mem.reset(a, checkpoint)
+        ret (parent, "", head_error)
+    }
+    var how: OpenHow = zero
+    how.flags = u64(OPEN_DIRECTORY)
+    how.resolve = RESOLVE_NO_SYMLINKS | RESOLVE_BENEATH
+    let descriptor = syscall(SYS_OPENAT2, dir.raw, head_address, mem.address_of(&how), 24usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize {
+        if descriptor == -18isize { ret (parent, "", Denied) }
+        ret (parent, "", from_errno(descriptor))
+    }
+    parent.raw = usize(descriptor)
+    ret (parent, tail, ok)
+}
+
+fn release_parent(parent: Dir, dir: Dir) {
+    if parent.raw != dir.raw {
+        let closed = dir_close(parent)
+    }
+}
+
+// `unlinkat` never follows the final component, which is what makes removing a symbolic
+// link remove the link.
+fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    let checkpoint = mem.mark(a)
+    let (name_address, name_error) = c_string(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(parent, dir)
+        ret name_error
+    }
+    var modifier = 0usize
+    if directory { modifier = AT_REMOVEDIR }
+    let result = syscall(SYS_UNLINKAT, parent.raw, name_address, modifier, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    release_parent(parent, dir)
+    ret from_errno(result)
+}
+
+// The same two-step as `remove_at`, on both sides: each parent is resolved under the
+// policy and the rename is then between two final names. `RENAME_NOREPLACE` and its
+// `linkat` fallback are the same pair `replace` uses, for the same reason -- a filesystem
+// that does not know the flag rejects the call rather than the destination.
+fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err {
+    if !relative_path_ok(src_path) { ret Denied }
+    if !relative_path_ok(dst_path) { ret Denied }
+    let (src_parent, src_name, src_parent_error) = open_parent(a, src_dir, src_path)
+    if src_parent_error != ok { ret src_parent_error }
+    let (dst_parent, dst_name, dst_parent_error) = open_parent(a, dst_dir, dst_path)
+    if dst_parent_error != ok {
+        release_parent(src_parent, src_dir)
+        ret dst_parent_error
+    }
+    let checkpoint = mem.mark(a)
+    let (from_address, from_error) = c_string(a, src_name)
+    if from_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(src_parent, src_dir)
+        release_parent(dst_parent, dst_dir)
+        ret from_error
+    }
+    let (to_address, to_error) = c_string(a, dst_name)
+    if to_error != ok {
+        mem.reset(a, checkpoint)
+        release_parent(src_parent, src_dir)
+        release_parent(dst_parent, dst_dir)
+        ret to_error
+    }
+    var result = 0isize
+    if overwrite {
+        result = syscall(SYS_RENAMEAT, src_parent.raw, from_address, dst_parent.raw, to_address, 0usize, 0usize)
+    } else {
+        result = syscall(SYS_RENAMEAT2, src_parent.raw, from_address, dst_parent.raw, to_address, RENAME_NOREPLACE, 0usize)
+        if result == -22isize || result == -38isize || result == -95isize {
+            result = syscall(SYS_LINKAT, src_parent.raw, from_address, dst_parent.raw, to_address, 0usize, 0usize)
+            if result >= 0isize {
+                result = syscall(SYS_UNLINKAT, src_parent.raw, from_address, 0usize, 0usize, 0usize, 0usize)
+            }
+        }
+    }
+    var answer = ok
+    if result < 0isize { answer = from_errno(result) }
+    // The directory the name landed in is what has to reach the disk for the name to
+    // survive; the bytes were already the caller's to have flushed.
+    if answer == ok && durable {
+        let flushed = syscall(SYS_FSYNC, dst_parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+        if flushed < 0isize { answer = from_errno(flushed) }
+    }
+    mem.reset(a, checkpoint)
+    release_parent(src_parent, src_dir)
+    release_parent(dst_parent, dst_dir)
+    ret answer
+}
+
 // The directory part of a path, `.` when it has none. Not `e.path`: `e.os` may depend on
 // `e.mem` and nothing else, and all this has to find is the last separator.
 fn parent_of(path: str) -> str {

@@ -39,6 +39,8 @@ fn clear(a: *mem.Arena) {
     let link = fs.remove_file(a, "np-fs/link.txt")
     let from_file = fs.remove_file(a, "np-fs/from.txt")
     let landed_file = fs.remove_file(a, "np-fs/landed.txt")
+    let scratch = fs.remove_file(a, "np-fs/scratch.txt")
+    let moved_deep = fs.remove_file(a, "np-fs/deep/moved.txt")
     let deep = fs.remove_dir(a, "np-fs/deep")
     let outer = fs.remove_dir(a, "np-fs")
 }
@@ -363,6 +365,27 @@ fn main(a: *mem.Arena) -> err {
     let (deep_file, deep_file_error) = fs.open_at(a, &root_holder, "deep/leaf.txt", root_flags, .NoSymlinks)
     if deep_file_error != ok { os.exit(247i32) }
     if os.close(deep_file) != ok { os.exit(248i32) }
+
+
+    // `remove_at` and `replace_at` through the same root, which is what makes a `Root` a
+    // place to work rather than only a place to read from.
+    if fs.write_file(a, "np-fs/scratch.txt", under[..]) != ok { os.exit(251i32) }
+    if fs.replace_at(a, &root_holder, "scratch.txt", &root_holder, "deep/moved.txt", keep_existing) != ok { os.exit(252i32) }
+    let (moved_in_root, moved_in_root_error) = fs.stat(a, "np-fs/deep/moved.txt")
+    if moved_in_root_error != ok { os.exit(253i32) }
+    if moved_in_root.size != 2u64 { os.exit(254i32) }
+    let (scratch_gone, scratch_gone_error) = fs.exists(a, "np-fs/scratch.txt")
+    if scratch_gone_error != ok { os.exit(255i32) }
+    if scratch_gone { os.exit(256i32) }
+
+    // A name that would leave the root is refused by both of them as well.
+    if fs.remove_at(a, &root_holder, "../np-fs", true) != fs.Denied { os.exit(257i32) }
+    if fs.replace_at(a, &root_holder, "deep/moved.txt", &root_holder, "../escaped.txt", keep_existing) != fs.Denied { os.exit(258i32) }
+
+    if fs.remove_at(a, &root_holder, "deep/moved.txt", false) != ok { os.exit(259i32) }
+    let (moved_gone, moved_gone_error) = fs.exists(a, "np-fs/deep/moved.txt")
+    if moved_gone_error != ok { os.exit(260i32) }
+    if moved_gone { os.exit(261i32) }
 
     if fs.root_close(&root_holder) != ok { os.exit(249i32) }
 

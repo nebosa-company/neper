@@ -82,6 +82,20 @@ type ObjectAttributes = struct {
 
 type IoStatusBlock = struct { status: usize, information: usize }
 
+// `FILE_DISPOSITION_INFO`: one byte saying the file goes when the last handle to it closes.
+type FileDispositionInfo = struct { delete_file: u8 }
+
+// `FILE_RENAME_INFO`. The name begins at offset twenty, after a four-byte union, the
+// padding that eight-byte-aligns the handle, and the length -- so the padding is written
+// out here for the same reason it is in the structures above.
+type FileRenameInfo = struct {
+    replace: u32,
+    padding: u32,
+    root_directory: usize,
+    name_length: u32,
+    name: [520]u16,
+}
+
 // `FILETIME`: two `DWORD`s, low first, counting 100-nanosecond ticks from 1601.
 type FileTime = struct { low: u32, high: u32 }
 
@@ -182,6 +196,20 @@ extern fn raw_random(algorithm: usize, buffer: *u8, size: u32, flags: u32) -> i3
 @import("ntdll.dll", "NtCreateFile")
 extern fn raw_nt_create_file(handle: *usize, access: u32, attributes: *ObjectAttributes, status_block: *IoStatusBlock, allocation: usize, file_attributes: u32, share: u32, disposition: u32, options: u32, ea_buffer: usize, ea_length: u32) -> u32
 
+// The native setter rather than `SetFileInformationByHandle`, because the Win32 wrapper
+// rejects the form of `FILE_RENAME_INFORMATION` that names a root directory -- and a
+// rename that has to spell its destination as a full path is the string join this whole
+// family exists to avoid. Measured: the wrapper answers a rename against a root handle
+// with an unmapped error while accepting the same structure's disposition sibling.
+//
+// The information structure differs per class, so it is passed as an address rather than
+// as a typed pointer, which is what `mem.address_of` (D96) is for.
+@import("ntdll.dll", "NtSetInformationFile")
+extern fn raw_nt_set_information(handle: usize, status_block: *IoStatusBlock, info: usize, size: u32, class: i32) -> u32
+
+@import("kernel32.dll", "FlushFileBuffers")
+extern fn raw_flush_file(handle: usize) -> i32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -257,6 +285,23 @@ const FILE_OVERWRITE_IF: u32 = 5u32
 // `open_at` opens files.
 const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 32u32
 const FILE_NON_DIRECTORY_FILE: u32 = 64u32
+
+const FILE_DIRECTORY_FILE: u32 = 1u32
+
+// The final component is opened as itself, so removing a symbolic link removes the link.
+const FILE_OPEN_REPARSE_POINT: u32 = 2097152u32
+
+const DELETE_ACCESS: u32 = 65536u32
+
+// `FlushFileBuffers` refuses a handle that cannot write, so a durable rename has to ask
+// for this as well -- on a directory it is the right to add an entry, which is granted the
+// same way.
+const FILE_WRITE_DATA: u32 = 2u32
+
+// `FILE_INFORMATION_CLASS`, which numbers its members differently from the Win32
+// `FILE_INFO_BY_HANDLE_CLASS` the wrapper takes.
+const FILE_RENAME_CLASS: i32 = 10i32
+const FILE_DISPOSITION_CLASS: i32 = 13i32
 
 // Making a link is privileged unless the host is in developer mode, which is what the
 // second flag asks for; without it an ordinary process is refused.
@@ -461,6 +506,9 @@ fn from_nt_status(status: u32) -> err {
     if status == 3221225525u32 { ret Exists }
     // STATUS_REPARSE_POINT_ENCOUNTERED: a link refused under `NoSymlinks`.
     if status == 3221226763u32 { ret Denied }
+    // STATUS_OBJECT_NAME_EXISTS is a warning rather than a failure, and the collision
+    // above is the error form; both mean the name was taken.
+    if status == 1073741824u32 { ret Exists }
     if status == 3221225731u32 { ret Failed }
     if status == 3221225658u32 { ret Failed }
     ret Failed
@@ -521,11 +569,24 @@ fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy
     var file: File = zero
     if policy == .Beneath { ret (file, Unsupported) }
     if !relative_path_ok(relative_path) { ret (file, Denied) }
+    var access = SYNCHRONIZE
+    if flags.read { access = access | GENERIC_READ }
+    if flags.write { access = access | GENERIC_WRITE }
+    let (handle, open_error) = open_relative(a, dir, relative_path, access, disposition_for(flags), OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE, FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE)
+    if open_error != ok { ret (file, open_error) }
+    file.raw = handle
+    ret (file, ok)
+}
+
+// One relative open against a directory handle. `attributes` and `options` are the
+// caller's, because what varies between these calls is exactly whether a reparse point is
+// refused and whether a directory is wanted.
+fn open_relative(a: *mem.Arena, dir: Dir, relative_path: str, access: u32, disposition: u32, attribute_flags: u32, options: u32) -> (usize, err) {
     let checkpoint = mem.mark(a)
     let (name, count, name_error) = widen_relative(a, relative_path)
     if name_error != ok {
         mem.reset(a, checkpoint)
-        ret (file, name_error)
+        ret (INVALID_HANDLE, name_error)
     }
     var text: UnicodeString = zero
     text.length = u16(count * 2usize)
@@ -535,17 +596,123 @@ fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy
     attributes.length = 48u32
     attributes.root_directory = dir.raw
     attributes.object_name = &text
-    attributes.attributes = OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE
+    attributes.attributes = attribute_flags
     var status_block: IoStatusBlock = zero
     var handle = 0usize
-    var access = SYNCHRONIZE
-    if flags.read { access = access | GENERIC_READ }
-    if flags.write { access = access | GENERIC_WRITE }
-    let status = raw_nt_create_file(&handle, access, &attributes, &status_block, 0usize, ATTRIBUTE_NORMAL, FILE_SHARE_ALL, disposition_for(flags), FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, 0usize, 0u32)
+    let status = raw_nt_create_file(&handle, access, &attributes, &status_block, 0usize, ATTRIBUTE_NORMAL, FILE_SHARE_ALL, disposition, options, 0usize, 0u32)
     mem.reset(a, checkpoint)
-    if status != 0u32 { ret (file, from_nt_status(status)) }
-    file.raw = handle
-    ret (file, ok)
+    if status != 0u32 { ret (INVALID_HANDLE, from_nt_status(status)) }
+    ret (handle, ok)
+}
+
+// The parent of the final component, opened with reparse points refused so every step but
+// the last is walked without following a link. The last component is then acted on
+// relative to that -- which is how "do not follow a link on the way there, but do act on
+// the link that is there" gets said, since one call cannot mean both.
+//
+// The returned handle is the caller's to close only when it is not the one passed in,
+// which is what comparing the two raw values says.
+fn open_parent(a: *mem.Arena, dir: Dir, relative_path: str) -> (Dir, str, err) {
+    var parent: Dir = zero
+    parent.raw = dir.raw
+    var cut = 0usize
+    var found = false
+    var at = 0usize
+    while at < relative_path.len {
+        if relative_path[at] == 47u8 || relative_path[at] == 92u8 {
+            cut = at
+            found = true
+        }
+        at += 1usize
+    }
+    if !found { ret (parent, relative_path, ok) }
+    let head = relative_path[0usize..cut]
+    let tail = relative_path[cut + 1usize..relative_path.len]
+    if tail.len == 0usize { ret (parent, "", Denied) }
+    let (handle, open_error) = open_relative(a, dir, head, DIRECTORY_ACCESS, FILE_OPEN, OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE, FILE_SYNCHRONOUS_IO_NONALERT | FILE_DIRECTORY_FILE)
+    if open_error != ok { ret (parent, "", open_error) }
+    parent.raw = handle
+    ret (parent, tail, ok)
+}
+
+fn release_parent(parent: Dir, dir: Dir) {
+    if parent.raw != dir.raw {
+        let closed = raw_close_handle(parent.raw)
+    }
+}
+
+// The file is opened for deletion and then marked to go, which is this host's way of
+// unlinking a name. `FILE_OPEN_REPARSE_POINT` without `OBJ_DONT_REPARSE` on this last step
+// is what removes a symbolic link rather than its target -- the path to it was already
+// walked with links refused.
+fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err {
+    if !relative_path_ok(relative_path) { ret Denied }
+    let (parent, name, parent_error) = open_parent(a, dir, relative_path)
+    if parent_error != ok { ret parent_error }
+    var options = FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT | FILE_NON_DIRECTORY_FILE
+    if directory { options = FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT | FILE_DIRECTORY_FILE }
+    let (handle, open_error) = open_relative(a, parent, name, DELETE_ACCESS | SYNCHRONIZE, FILE_OPEN, OBJ_CASE_INSENSITIVE, options)
+    if open_error != ok {
+        release_parent(parent, dir)
+        ret open_error
+    }
+    var disposition: FileDispositionInfo = zero
+    disposition.delete_file = 1u8
+    var status_block: IoStatusBlock = zero
+    var answer = from_nt_status(raw_nt_set_information(handle, &status_block, mem.address_of(&disposition), 1u32, FILE_DISPOSITION_CLASS))
+    let closed = raw_close_handle(handle)
+    release_parent(parent, dir)
+    ret answer
+}
+
+// A rename here is a property of the open file rather than a call on two paths: the handle
+// carries where it should go, and the destination directory is a handle too, so nothing in
+// it is a string join.
+fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err {
+    if !relative_path_ok(src_path) { ret Denied }
+    if !relative_path_ok(dst_path) { ret Denied }
+    let (src_parent, src_name, src_parent_error) = open_parent(a, src_dir, src_path)
+    if src_parent_error != ok { ret src_parent_error }
+    let (dst_parent, dst_name, dst_parent_error) = open_parent(a, dst_dir, dst_path)
+    if dst_parent_error != ok {
+        release_parent(src_parent, src_dir)
+        ret dst_parent_error
+    }
+    var rename_access = DELETE_ACCESS | SYNCHRONIZE
+    if durable { rename_access = rename_access | FILE_WRITE_DATA }
+    let (handle, open_error) = open_relative(a, src_parent, src_name, rename_access, FILE_OPEN, OBJ_CASE_INSENSITIVE, FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT)
+    if open_error != ok {
+        release_parent(src_parent, src_dir)
+        release_parent(dst_parent, dst_dir)
+        ret open_error
+    }
+    let checkpoint = mem.mark(a)
+    let (wide_name, count, wide_error) = widen_relative(a, dst_name)
+    var answer = ok
+    if wide_error != ok {
+        answer = wide_error
+    } else {
+        var information: FileRenameInfo = zero
+        if overwrite { information.replace = 1u32 }
+        information.root_directory = dst_parent.raw
+        information.name_length = u32(count * 2usize)
+        var copied = 0usize
+        while copied < count {
+            information.name[copied] = wide_name[copied]
+            copied += 1usize
+        }
+        var status_block: IoStatusBlock = zero
+        answer = from_nt_status(raw_nt_set_information(handle, &status_block, mem.address_of(&information), 20u32 + u32(count * 2usize), FILE_RENAME_CLASS))
+        // The handle followed the file through the rename, so this is the moved file.
+        if answer == ok && durable {
+            if raw_flush_file(handle) == 0i32 { answer = from_last_error() }
+        }
+    }
+    mem.reset(a, checkpoint)
+    let closed = raw_close_handle(handle)
+    release_parent(src_parent, src_dir)
+    release_parent(dst_parent, dst_dir)
+    ret answer
 }
 
 fn to_filetime(value: i64) -> FileTime {

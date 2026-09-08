@@ -873,3 +873,52 @@ One trap worth recording: `openat2` rejects the whole call with `EINVAL` unless 
 is zero when nothing is being created. Setting a default mode once and leaving it made
 every read-only open fail — and fail as `Unsupported`, which reads as "this host cannot do
 it" rather than "you asked wrongly".
+
+## D108 — `remove_at` and `rename_at` resolve the parent, then act on the name
+
+The last three declarations in `e.fs`'s fence. `e.os` gains `remove_at` and `rename_at`,
+and `e.fs` gains `remove_at` and `replace_at` over them, which closes the module.
+
+Both hosts need the same two-step, for the same reason. The fence asks for two things that
+sound compatible and are not: **traverse without following symlinks**, and **removing a
+final symlink removes the link, not its target**. Neither host has one call that says both
+— a flag that refuses links refuses the last component too, and a flag that opens the last
+component as itself says nothing about the way there. So the parent is resolved first,
+under the policy, and the final component is then acted on by name relative to that handle.
+On Linux that is `openat2` with `RESOLVE_NO_SYMLINKS` and then `unlinkat`/`renameat`, which
+never follow a final component anyway; on Windows it is `NtCreateFile` with
+`OBJ_DONT_REPARSE` and then a second relative open carrying `FILE_OPEN_REPARSE_POINT`
+without it.
+
+The returned parent handle is the caller's to close only when it is not the one passed in,
+which comparing the two raw values says. That is a small thing to get wrong quietly, so it
+is one helper rather than a rule each call remembers.
+
+Windows uses `NtSetInformationFile` rather than `SetFileInformationByHandle`. The Win32
+wrapper rejects the form of `FILE_RENAME_INFORMATION` that names a root directory — it
+answers with an unmapped error while accepting the same structure's disposition sibling —
+and a rename that has to spell its destination as a full path is exactly the string join
+this family exists to avoid. Using the native setter for both classes also leaves one error
+vocabulary instead of two, since `NtCreateFile` was already there.
+
+A durable rename on Windows asks for `FILE_WRITE_DATA` as well: `FlushFileBuffers` refuses
+a handle that cannot write, and the handle a rename needs is otherwise opened for `DELETE`
+alone. On Linux durability is an `fsync` of the destination directory, because it is the
+name that has to survive — the bytes were the caller's to have flushed already.
+
+The guarantee is pinned by removing it: with the parent walk following links, both hosts
+remove a file named through a symbolic link that should have been refused, and `link/os_fs`
+fails at exit 224 on each.
+
+That leaves `e.fs` at 44 of its 45 declarations. The one not written is
+`last_error_detail`, and it is not an oversight: the `e.os` fence says every failing call
+"records the native code and portable classification in **thread-local runtime state**",
+while spec section 15 says in as many words that "thread state travels in an explicit
+context pointer, not thread-local storage", and rejects `__thread` and
+`__declspec(thread)` by name. The two cannot both hold. A module-scope `var` is not a way
+out — `e.thread` exists, so that is a race by construction rather than an approximation.
+
+The e.fs fence already marks the call "a legacy M2 bridge pending H07, not the revised
+checked API's error-detail transport", so the contradiction is known there too. Resolving
+it is a decision about which of the two documents gives way, and belongs to whoever makes
+that call rather than to the module that would consume the answer.

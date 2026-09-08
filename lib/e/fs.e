@@ -322,6 +322,22 @@ fn open_at(a: *mem.Arena, r: *const Root, relative_path: str, flags: os.OpenFlag
     ret (file, ok)
 }
 
+// The path to the final component is walked with links refused, and the final component
+// itself is removed as whatever it is -- so removing a symbolic link removes the link, not
+// what it points at. `directory` picks which of the two a name is allowed to be, because a
+// caller that meant one and got the other has a bug this call can catch.
+fn remove_at(a: *mem.Arena, r: *const Root, relative_path: str, directory: bool) -> err {
+    ret from_os(os.remove_at(a, r.dir, relative_path, directory))
+}
+
+// Between two roots, which may be the same one. Both sides resolve under the policy, so
+// neither path is a string joined to a directory's name -- and `options` means here what
+// it means for `replace`: whether an existing destination is replaced, and whether the
+// name is on the disk before this returns.
+fn replace_at(a: *mem.Arena, src_root: *const Root, src_path: str, dst_root: *const Root, dst_path: str, options: ReplaceOptions) -> err {
+    ret from_os(os.rename_at(a, src_root.dir, src_path, dst_root.dir, dst_path, options.overwrite, options.durable))
+}
+
 // The one name for a file, with every symbolic link and every `.` and `..` gone. It needs
 // the path to exist, because both hosts answer it by opening the path and asking what was
 // opened -- there is nothing to resolve about a name that leads nowhere. It is also the

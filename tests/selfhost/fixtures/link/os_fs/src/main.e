@@ -74,6 +74,14 @@ fn clear(a: *mem.Arena) {
     let source = os.remove_file(a, "np-os-fs-dir/source.txt")
     let destination = os.remove_file(a, "np-os-fs-dir/target.txt")
     let landed = os.remove_file(a, "np-os-fs-dir/landed.txt")
+    let inner = os.remove_file(a, "np-os-fs-dir/sub/inner.txt")
+    let via_file = os.remove_file(a, "np-os-fs-dir/viasub")
+    let via_dir = os.remove_dir(a, "np-os-fs-dir/viasub")
+    let sub = os.remove_dir(a, "np-os-fs-dir/sub")
+    let gone = os.remove_file(a, "np-os-fs-dir/gone.txt")
+    let before = os.remove_file(a, "np-os-fs-dir/before.txt")
+    let after = os.remove_file(a, "np-os-fs-dir/after.txt")
+    let landed_at = os.remove_file(a, "np-os-fs-dir/landed_at.txt")
     let directory = os.remove_dir(a, "np-os-fs-dir")
 }
 
@@ -244,6 +252,42 @@ fn main(a: *mem.Arena) -> err {
             if linked_error != os.Denied { os.exit(192i32) }
             if os.dir_close(escape_root) != ok { os.exit(193i32) }
             if os.remove_file(a, "np-os-fs-dir/escape.txt") != ok { os.exit(194i32) }
+        }
+
+        // A link in the middle of a path is refused by the calls that act on a name, which
+        // is the whole reason those calls resolve the parent separately: the walk to the
+        // final component follows nothing, even though the final component itself may be a
+        // link and is removed as one.
+        if os.mkdir(a, "np-os-fs-dir/sub") == ok {
+            if write_file_of(a, "np-os-fs-dir/sub/inner.txt", 3usize, 105u8) != ok { os.exit(220i32) }
+            if os.symlink(a, "sub", "np-os-fs-dir/viasub") == ok {
+                let (via_root, via_root_error) = os.dir_open(a, "np-os-fs-dir")
+                if via_root_error != ok { os.exit(221i32) }
+
+                // Straight through the real directory is fine, so the refusal below is
+                // about the link and not about the depth.
+                if os.remove_at(a, via_root, "sub/inner.txt", false) != ok { os.exit(222i32) }
+                if write_file_of(a, "np-os-fs-dir/sub/inner.txt", 3usize, 105u8) != ok { os.exit(223i32) }
+
+                // The same file named through the link is refused, by both calls.
+                if os.remove_at(a, via_root, "viasub/inner.txt", false) != os.Denied { os.exit(224i32) }
+                if os.rename_at(a, via_root, "viasub/inner.txt", via_root, "escaped.txt", true, false) != os.Denied { os.exit(225i32) }
+                // And the file is still there, which says the refusal happened before
+                // anything was done rather than after.
+                let (still_inner, still_inner_error) = os.stat(a, "np-os-fs-dir/sub/inner.txt")
+                if still_inner_error != ok { os.exit(226i32) }
+                if still_inner.size != 3u64 { os.exit(227i32) }
+
+                if os.dir_close(via_root) != ok { os.exit(228i32) }
+                // A link to a directory is removed as a directory on one host and as a
+                // file on the other, which is a difference in what the name is rather than
+                // in what is being asked for.
+                if os.remove_file(a, "np-os-fs-dir/viasub") != ok {
+                    if os.remove_dir(a, "np-os-fs-dir/viasub") != ok { os.exit(229i32) }
+                }
+            }
+            if os.remove_file(a, "np-os-fs-dir/sub/inner.txt") != ok { os.exit(230i32) }
+            if os.remove_dir(a, "np-os-fs-dir/sub") != ok { os.exit(231i32) }
         }
 
         // Removing a link removes the link and leaves what it pointed at.
@@ -498,6 +542,53 @@ fn main(a: *mem.Arena) -> err {
     // `..` inside a longer name is refused too, not only at the front.
     let (root_buried, buried_error) = os.open_at(a, root_handle, "sub/../../note.txt", root_open_flags, .NoSymlinks)
     if buried_error != os.Denied { os.exit(188i32) }
+
+
+    // Removing and renaming through the handle. The same shape check applies, and the same
+    // policy walks the path -- what is different is that the final component is acted on
+    // rather than opened.
+    if write_file_of(a, "np-os-fs-dir/gone.txt", 4usize, 103u8) != ok { os.exit(196i32) }
+    if os.remove_at(a, root_handle, "gone.txt", false) != ok { os.exit(197i32) }
+    let (removed, removed_error) = os.stat(a, "np-os-fs-dir/gone.txt")
+    if removed_error != os.NotFound { os.exit(198i32) }
+
+    // A file is not a directory and the call says so rather than removing it anyway.
+    if write_file_of(a, "np-os-fs-dir/gone.txt", 4usize, 103u8) != ok { os.exit(199i32) }
+    if os.remove_at(a, root_handle, "gone.txt", true) == ok { os.exit(200i32) }
+    if os.remove_at(a, root_handle, "gone.txt", false) != ok { os.exit(201i32) }
+
+    // The shapes are refused here too, before the host is asked.
+    if os.remove_at(a, root_handle, "../np-os-fs-absent", false) != os.Denied { os.exit(202i32) }
+
+    // Renaming within one root: the new name has it, the old name has nothing.
+    if write_file_of(a, "np-os-fs-dir/before.txt", 7usize, 98u8) != ok { os.exit(203i32) }
+    if os.rename_at(a, root_handle, "before.txt", root_handle, "after.txt", true, false) != ok { os.exit(204i32) }
+    let (after_entry, after_entry_error) = os.stat(a, "np-os-fs-dir/after.txt")
+    if after_entry_error != ok { os.exit(205i32) }
+    if after_entry.size != 7u64 { os.exit(206i32) }
+    let (before_entry, before_entry_error) = os.stat(a, "np-os-fs-dir/before.txt")
+    if before_entry_error != os.NotFound { os.exit(207i32) }
+
+    // Without overwriting, a destination that is there is refused and nothing moves.
+    if write_file_of(a, "np-os-fs-dir/before.txt", 2usize, 99u8) != ok { os.exit(208i32) }
+    if os.rename_at(a, root_handle, "before.txt", root_handle, "after.txt", false, false) != os.Exists { os.exit(209i32) }
+    let (kept_after, kept_after_error) = os.stat(a, "np-os-fs-dir/after.txt")
+    if kept_after_error != ok { os.exit(210i32) }
+    if kept_after.size != 7u64 { os.exit(211i32) }
+
+    // Onto a free name without overwriting, and durably -- the path that has to work where
+    // the flag that says "refuse" is not understood.
+    if os.rename_at(a, root_handle, "before.txt", root_handle, "landed_at.txt", false, true) != ok { os.exit(212i32) }
+    let (landed_at, landed_at_error) = os.stat(a, "np-os-fs-dir/landed_at.txt")
+    if landed_at_error != ok { os.exit(213i32) }
+    if landed_at.size != 2u64 { os.exit(214i32) }
+
+    // A source that is not there, and a shape that is refused.
+    if os.rename_at(a, root_handle, "not-here.txt", root_handle, "x.txt", true, false) != os.NotFound { os.exit(215i32) }
+    if os.rename_at(a, root_handle, "before.txt", root_handle, "/x.txt", true, false) != os.Denied { os.exit(216i32) }
+
+    if os.remove_at(a, root_handle, "after.txt", false) != ok { os.exit(217i32) }
+    if os.remove_at(a, root_handle, "landed_at.txt", false) != ok { os.exit(218i32) }
 
     if os.dir_close(root_handle) != ok { os.exit(195i32) }
 
