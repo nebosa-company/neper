@@ -70,6 +70,7 @@ compiler = {
  "Self-hosting": [
   ("Self-hosted compiler emits its own source", 1, "run.ps1:623, run.sh:760"),
   ("Stage 2 == stage 3, byte-identical, both platforms", 1, "SHA-256 compare / cmp"),
+  ("Bootstrap recovery path archived", 0, "no freeze tag; stage hashes unrecorded (D95)"),
   ("Bootstrap frozen and deleted", 0, "bootstrap/neper.c still builds stage 0"),
  ],
 }
@@ -424,7 +425,7 @@ __GROUPS__
   as zero.</p>
   <p>Module readiness counts declarations present in committed source or seeded as
   compiler intrinsics. Uncommitted work in the tree is deliberately not counted.</p>
-  <p>One judgement is worth naming. Self-hosting is three rows out of __CN__ here, but it
+  <p>One judgement is worth naming. Self-hosting is four rows out of __CN__ here, but it
   is the binary M2 exit gate. Read the compiler number as capability coverage, not as
   distance to the milestone.</p>
 </div>
