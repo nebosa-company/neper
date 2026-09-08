@@ -230,7 +230,15 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 0usize)
     try little_u16(output, 3usize)
     try little_u16(output, 256usize)
-    try emit_x64.little_u64(output, 1048576usize)
+    // Stack reserve, then commit; heap reserve, then commit. Reserve is address space
+    // and is committed on demand, so a large one costs nothing until it is used.
+    //
+    // A megabyte was the default and it was not enough: lowering recurses once per
+    // level of a nested expression, through frames that carry a hundred or more
+    // bindings, and the compiler emitting itself overflowed it (0xC00000FD) rather
+    // than reporting anything. Sixteen leaves well over an order of magnitude of head
+    // room against the deepest expression in this source.
+    try emit_x64.little_u64(output, 16777216usize)
     try emit_x64.little_u64(output, 4096usize)
     try emit_x64.little_u64(output, 1048576usize)
     try emit_x64.little_u64(output, 4096usize)
