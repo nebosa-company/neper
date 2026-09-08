@@ -565,3 +565,36 @@ be asked for, so a file another process holds open is still described.
 `set_permissions` and `set_times` are still not implemented: they need `e.os` primitives
 that write — `chmod`/`utimensat`, `SetFileTime` and the read-only attribute — and this
 decision is about what can be read.
+
+## D99 — `e.os` writes permissions as a mode and times as nanoseconds
+
+`e.fs.set_permissions` and `e.fs.set_times` had no primitive under them: the `e.os` fence
+described how to read a path and not how to change one. It gains two calls, spelled as the
+inverses of what `stat` already reports — `set_mode(a, path, mode)` taking the same `mode`
+as `FileInfo.mode`, and `set_times(a, path, accessed_ns, modified_ns)` taking the same
+nanoseconds. Symmetry is the whole argument: a caller that read a value can write it back
+without a conversion, and `e.fs` is again only the mapping between a mode and nine
+booleans.
+
+A negative nanosecond count leaves that stamp as it is, so one of the two can be set
+alone. That is the same `-1` D98 gave "not recorded" on the way out, and both hosts have a
+way to say it: `UTIME_OMIT` in a `timespec` on Linux, a null `FILETIME` pointer on
+Windows. The Windows side is why `SetFileTime`'s three time parameters are declared
+`usize` rather than `*FileTime` — a null is a meaningful argument there, and with no
+integer-to-pointer conversion (D96) an address is what a `usize` parameter carries and
+zero is the address that means nothing. `mem.address_of` supplies the non-null case.
+
+**What a host cannot represent is not reported as a failure.** Windows has one read-only
+attribute where POSIX has nine bits, so `set_mode` honours the owner-write bit and `stat`
+reads the read and execute bits back as set whatever was asked for; a filesystem that
+enforces no modes at all can succeed while changing nothing. The alternative was
+`os.Unsupported` for any mode the host cannot store exactly, which is every mode on
+Windows — it would make the call useless while telling a caller nothing it could act on.
+The fence already promised the portable read-only/executable subset, and reading back with
+`stat` or `metadata` is the only honest way to learn what took. `set_times` is the same
+about precision: a filesystem that keeps whole seconds keeps the seconds.
+
+Both fixtures check both directions of the write bit, because a call that changed nothing
+would pass either direction on its own. They set whole-second stamps, since one of the two
+filesystems this suite runs on drops the nanoseconds — precision it never promised, and
+not what the assertion is about.

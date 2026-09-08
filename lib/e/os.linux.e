@@ -68,6 +68,8 @@ const SYS_NEWFSTATAT: usize = 262usize
 const SYS_MKDIRAT: usize = 258usize
 const SYS_UNLINKAT: usize = 263usize
 const SYS_RENAMEAT: usize = 264usize
+const SYS_FCHMODAT: usize = 268usize
+const SYS_UTIMENSAT: usize = 280usize
 
 // AT_FDCWD is -100: every path here is relative to the process's own directory, which
 // is what the plain `stat`/`mkdir` names mean. It is a `usize` because every argument
@@ -80,6 +82,10 @@ const AT_REMOVEDIR: usize = 512usize
 const DIRECTORY_MODE: usize = 511usize
 
 const NANOSECONDS_PER_SECOND: i64 = 1000000000i64
+
+// `UTIME_OMIT` in the nanosecond field of a `timespec` means "leave this stamp alone",
+// which is what a negative nanosecond count asks for.
+const UTIME_OMIT: i64 = 1073741822i64
 
 // The bits `e.fs.Permissions` is made of, plus setuid, setgid and sticky above them.
 // Anything higher in the mode is the format, which `kind` already carries.
@@ -170,6 +176,22 @@ fn lstat(a: *mem.Arena, path: str) -> (FileInfo, err) {
     ret (info, stat_error)
 }
 
+// What `utimensat` writes: two `timespec`s, the accessed stamp first. The layout is the
+// ABI, so the kernel reads 32 bytes at the address this is handed by.
+type TimeSpec = struct { seconds: i64, nanoseconds: i64 }
+type TimeSpecPair = struct { accessed: TimeSpec, modified: TimeSpec }
+
+fn to_timespec(value: i64) -> TimeSpec {
+    var spec: TimeSpec = zero
+    if value < 0i64 {
+        spec.nanoseconds = UTIME_OMIT
+        ret spec
+    }
+    spec.seconds = value / NANOSECONDS_PER_SECOND
+    spec.nanoseconds = value % NANOSECONDS_PER_SECOND
+    ret spec
+}
+
 // `mkdirat` and `unlinkat` have the same shape: the directory a path is relative to,
 // the path, and one modifier -- a mode for one, a flag for the other.
 fn path_syscall(a: *mem.Arena, number: usize, path: str, modifier: usize) -> err {
@@ -195,6 +217,29 @@ fn remove_file(a: *mem.Arena, path: str) -> err {
 
 fn remove_dir(a: *mem.Arena, path: str) -> err {
     ret path_syscall(a, SYS_UNLINKAT, path, AT_REMOVEDIR)
+}
+
+// `fchmodat` takes no flag this host honours -- it rejects `AT_SYMLINK_NOFOLLOW` rather
+// than changing a link's own bits -- so the modifier slot carries the mode itself.
+fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err {
+    ret path_syscall(a, SYS_FCHMODAT, path, usize(mode & PERMISSION_MASK))
+}
+
+// Whether the stamps are kept at all is the filesystem's business: this call succeeds on
+// one that stores no times of its own and reading them back is the only way to tell.
+fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret path_error
+    }
+    var times: TimeSpecPair = zero
+    times.accessed = to_timespec(accessed_ns)
+    times.modified = to_timespec(modified_ns)
+    let result = syscall(SYS_UTIMENSAT, AT_FDCWD, path_address, mem.address_of(&times), 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    ret from_errno(result)
 }
 
 fn rename(a: *mem.Arena, src: str, dst: str) -> err {

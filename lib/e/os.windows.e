@@ -61,6 +61,9 @@ type ByHandleFileInformation = struct {
 // stands for.
 type FileAttributeTagInfo = struct { attributes: u32, reparse_tag: u32 }
 
+// `FILETIME`: two `DWORD`s, low first, counting 100-nanosecond ticks from 1601.
+type FileTime = struct { low: u32, high: u32 }
+
 @import("kernel32.dll", "MultiByteToWideChar")
 extern fn raw_widen(code_page: u32, flags: u32, source: *const u8, source_len: i32, destination: *u16, destination_len: i32) -> i32
 
@@ -88,6 +91,19 @@ extern fn raw_remove_directory(name: *const u16) -> i32
 @import("kernel32.dll", "MoveFileExW")
 extern fn raw_move_file(source: *const u16, destination: *const u16, flags: u32) -> i32
 
+@import("kernel32.dll", "GetFileAttributesW")
+extern fn raw_get_attributes(name: *const u16) -> u32
+
+@import("kernel32.dll", "SetFileAttributesW")
+extern fn raw_set_attributes(name: *const u16, attributes: u32) -> i32
+
+// The three times are pointers, and a null one means "leave that stamp alone". They are
+// declared as `usize` for exactly that reason: an address is what the call wants, zero is
+// the address that means nothing, and `mem.address_of` (D96) is how a real one is
+// spelled. A `*FileTime` parameter could not carry the null.
+@import("kernel32.dll", "SetFileTime")
+extern fn raw_set_file_time(handle: usize, creation: usize, accessed: usize, written: usize) -> i32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -98,6 +114,7 @@ const INVALID_HANDLE: usize = 18446744073709551615usize
 // less is what lets a path that is open elsewhere still be described. The three share
 // bits are for the same reason -- a file someone else is writing is not an error here.
 const FILE_READ_ATTRIBUTES: u32 = 128u32
+const FILE_WRITE_ATTRIBUTES: u32 = 256u32
 const FILE_SHARE_ALL: u32 = 7u32
 const OPEN_EXISTING: u32 = 3u32
 
@@ -112,6 +129,11 @@ const FILE_ATTRIBUTE_TAG_CLASS: i32 = 9i32
 const ATTRIBUTE_READONLY: u32 = 1u32
 const ATTRIBUTE_DIRECTORY: u32 = 16u32
 const ATTRIBUTE_REPARSE_POINT: u32 = 1024u32
+
+// `SetFileAttributesW` rejects an empty attribute word, so a file left with no attribute
+// at all is spelled `NORMAL` -- which is what "none of the others" means there.
+const ATTRIBUTE_NORMAL: u32 = 128u32
+const INVALID_FILE_ATTRIBUTES: u32 = 4294967295u32
 
 // A reparse point is not always a link: an app-execution alias is one too, and a walk
 // that called it a symlink would skip a real executable. Only these two tags stand for
@@ -270,6 +292,72 @@ fn lstat(a: *mem.Arena, path: str) -> (FileInfo, err) {
     let closed = raw_close_handle(handle)
     mem.reset(a, checkpoint)
     ret (answer, info_error)
+}
+
+fn to_filetime(value: i64) -> FileTime {
+    var stamp: FileTime = zero
+    let ticks = u64(value) / 100u64 + FILETIME_UNIX_EPOCH
+    stamp.low = u32(ticks % 4294967296u64)
+    stamp.high = u32(ticks / 4294967296u64)
+    ret stamp
+}
+
+// This host has one writable flag where POSIX has nine bits, so what a mode says here is
+// whether the owner may write and nothing else. The read and execute bits cannot be
+// turned off -- there is no attribute for either -- so `stat` reads them back as set
+// whatever was asked for, which is why the fence calls this the portable subset.
+fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err {
+    let checkpoint = mem.mark(a)
+    let (name, name_error) = widen(a, path)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret name_error
+    }
+    let current = raw_get_attributes(&name[0usize])
+    if current == INVALID_FILE_ATTRIBUTES {
+        let query_error = from_last_error()
+        mem.reset(a, checkpoint)
+        ret query_error
+    }
+    var wanted = current | ATTRIBUTE_READONLY
+    if mode & 128u32 != 0u32 {
+        wanted = current
+        if current & ATTRIBUTE_READONLY != 0u32 { wanted = current - ATTRIBUTE_READONLY }
+    }
+    if wanted == 0u32 { wanted = ATTRIBUTE_NORMAL }
+    var call_error = ok
+    if raw_set_attributes(&name[0usize], wanted) == 0i32 { call_error = from_last_error() }
+    mem.reset(a, checkpoint)
+    ret call_error
+}
+
+// The stamps are set through a handle, so this is the one call here that needs
+// `FILE_WRITE_ATTRIBUTES` rather than the read of it -- and a directory still needs
+// `BACKUP_SEMANTICS` to be opened at all.
+fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err {
+    let checkpoint = mem.mark(a)
+    let (name, name_error) = widen(a, path)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret name_error
+    }
+    let handle = raw_create_file(&name[0usize], FILE_WRITE_ATTRIBUTES, FILE_SHARE_ALL, 0usize, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0usize)
+    if handle == INVALID_HANDLE {
+        let open_error = from_last_error()
+        mem.reset(a, checkpoint)
+        ret open_error
+    }
+    var accessed = to_filetime(accessed_ns)
+    var written = to_filetime(modified_ns)
+    var accessed_address = 0usize
+    var written_address = 0usize
+    if accessed_ns >= 0i64 { accessed_address = mem.address_of(&accessed) }
+    if modified_ns >= 0i64 { written_address = mem.address_of(&written) }
+    var call_error = ok
+    if raw_set_file_time(handle, 0usize, accessed_address, written_address) == 0i32 { call_error = from_last_error() }
+    let closed = raw_close_handle(handle)
+    mem.reset(a, checkpoint)
+    ret call_error
 }
 
 fn mkdir(a: *mem.Arena, path: str) -> err {

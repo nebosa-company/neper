@@ -105,6 +105,22 @@ fn permissions_from_mode(mode: u32) -> Permissions {
     ret permissions
 }
 
+// The reverse of `permissions_from_mode`, for the calls that write. A host that keeps no
+// POSIX bits reads only the owner-write one out of this.
+fn mode_from_permissions(permissions: Permissions) -> u32 {
+    var mode = 0u32
+    if permissions.owner_read { mode = mode | 256u32 }
+    if permissions.owner_write { mode = mode | 128u32 }
+    if permissions.owner_exec { mode = mode | 64u32 }
+    if permissions.group_read { mode = mode | 32u32 }
+    if permissions.group_write { mode = mode | 16u32 }
+    if permissions.group_exec { mode = mode | 8u32 }
+    if permissions.other_read { mode = mode | 4u32 }
+    if permissions.other_write { mode = mode | 2u32 }
+    if permissions.other_exec { mode = mode | 1u32 }
+    ret mode
+}
+
 // Everything the host records about one path. `follow_symlinks` chooses which path is
 // described when the last component is a link -- the target, or the link itself -- which
 // is the one question `stat` does not let a caller ask.
@@ -135,6 +151,21 @@ fn metadata(a: *mem.Arena, path_text: str, follow_symlinks: bool) -> (Metadata, 
     described.file_id = info.file_id
     described.link_count = info.link_count
     ret (described, ok)
+}
+
+// What a host cannot represent it does not report as a failure: a Windows filesystem
+// honours the owner-write bit and answers `metadata` with read and execute set whatever
+// was asked for, and a filesystem that enforces no modes at all succeeds while changing
+// nothing. Reading back with `metadata` is the only way to know what took.
+fn set_permissions(a: *mem.Arena, path_text: str, permissions: Permissions) -> err {
+    ret from_os(os.set_mode(a, path_text, mode_from_permissions(permissions)))
+}
+
+// A negative nanosecond count leaves that stamp as it is -- the same `-1` that `metadata`
+// reports for a stamp the host does not keep -- so one of the two can be set alone.
+// Precision is the filesystem's: one that stores whole seconds keeps the seconds.
+fn set_times(a: *mem.Arena, path_text: str, accessed_ns: i64, modified_ns: i64) -> err {
+    ret from_os(os.set_times(a, path_text, accessed_ns, modified_ns))
 }
 
 fn make_dir(a: *mem.Arena, path_text: str) -> err {

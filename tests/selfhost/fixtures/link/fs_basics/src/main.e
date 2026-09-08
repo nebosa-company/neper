@@ -12,6 +12,13 @@ use e.os
 const YEAR_2020_NS: i64 = 1577836800000000000i64
 const YEAR_2100_NS: i64 = 4102444800000000000i64
 
+// Whole seconds, so the round trip is exact wherever it runs: one of the filesystems this
+// suite uses keeps seconds and drops the nanoseconds, which is precision it never
+// promised and not what these assertions are about.
+const STAMP_ACCESSED: i64 = 1700000000000000000i64
+const STAMP_MODIFIED: i64 = 1700000060000000000i64
+const STAMP_SECOND: i64 = 1700000120000000000i64
+
 fn same(left: str, right: str) -> bool {
     if left.len != right.len { ret false }
     var at = 0usize
@@ -119,6 +126,41 @@ fn main(a: *mem.Arena) -> err {
     // A path that is not there fails the same way the rest of the module does.
     let (absent_metadata, absent_metadata_error) = fs.metadata(a, "np-fs/no-such", true)
     if absent_metadata_error != fs.NotFound { os.exit(105i32) }
+
+    // `set_permissions` and `set_times` are the writing half, and `metadata` is how what
+    // they did is read. Both directions of the write bit are checked: a call that changed
+    // nothing would pass either one on its own.
+    var read_only: fs.Permissions = zero
+    read_only.owner_read = true
+    if fs.set_permissions(a, "np-fs/one.txt", read_only) != ok { os.exit(110i32) }
+    let (locked, locked_error) = fs.metadata(a, "np-fs/one.txt", true)
+    if locked_error != ok { os.exit(111i32) }
+    if locked.permissions.owner_write { os.exit(112i32) }
+    if !locked.permissions.owner_read { os.exit(113i32) }
+    var writable: fs.Permissions = zero
+    writable.owner_read = true
+    writable.owner_write = true
+    if fs.set_permissions(a, "np-fs/one.txt", writable) != ok { os.exit(114i32) }
+    let (freed, freed_error) = fs.metadata(a, "np-fs/one.txt", true)
+    if freed_error != ok { os.exit(115i32) }
+    if !freed.permissions.owner_write { os.exit(116i32) }
+
+    if fs.set_times(a, "np-fs/one.txt", STAMP_ACCESSED, STAMP_MODIFIED) != ok { os.exit(117i32) }
+    let (stamped, stamped_error) = fs.metadata(a, "np-fs/one.txt", true)
+    if stamped_error != ok { os.exit(118i32) }
+    if stamped.modified_ns != STAMP_MODIFIED { os.exit(119i32) }
+    if stamped.accessed_ns != STAMP_ACCESSED { os.exit(120i32) }
+
+    // One of the two alone: a negative stamp is left as it was.
+    if fs.set_times(a, "np-fs/one.txt", -1i64, STAMP_SECOND) != ok { os.exit(121i32) }
+    let (restamped, restamped_error) = fs.metadata(a, "np-fs/one.txt", true)
+    if restamped_error != ok { os.exit(122i32) }
+    if restamped.modified_ns != STAMP_SECOND { os.exit(123i32) }
+    if restamped.accessed_ns != STAMP_ACCESSED { os.exit(124i32) }
+
+    // Neither succeeds quietly on a path that is not there.
+    if fs.set_permissions(a, "np-fs/no-such", writable) != fs.NotFound { os.exit(125i32) }
+    if fs.set_times(a, "np-fs/no-such", STAMP_ACCESSED, STAMP_MODIFIED) != fs.NotFound { os.exit(126i32) }
 
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.

@@ -1557,6 +1557,8 @@ fn remove_file(a: *mem.Arena, path: str) -> err
 fn remove_dir(a: *mem.Arena, path: str) -> err
 fn rename(a: *mem.Arena, src: str, dst: str) -> err
 fn read_link(a: *mem.Arena, path: str) -> (str, err)
+fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err
+fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn pipe() -> (File, File, err)
 fn spawn(a: *mem.Arena, argv: []const str, stdio: Stdio) -> (Proc, err)
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err)
@@ -1629,6 +1631,12 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: ProcGroup) -> err
 
 ```
+
+`set_mode` takes the same `mode` `stat` reports, and `set_times` the same nanoseconds:
+a negative one leaves that stamp as it is, which is the `-1` that means "not recorded" on
+the way out. A host that keeps no permission bits honours the write bit and nothing else,
+and a filesystem that enforces no modes at all may honour none of it while still
+succeeding — reading back is the only way to know.
 
 `FileInfo.mode` is the POSIX permission bits; a host without them synthesises the
 portable read-only/executable subset and answers the same for owner, group and other

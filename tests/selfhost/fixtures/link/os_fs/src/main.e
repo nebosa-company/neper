@@ -16,6 +16,13 @@ use e.os
 const YEAR_2020_NS: i64 = 1577836800000000000i64
 const YEAR_2100_NS: i64 = 4102444800000000000i64
 
+// Whole seconds, so the round trip is exact wherever it runs: one of the filesystems this
+// suite uses keeps seconds and drops the nanoseconds, which is precision it never
+// promised and not what these assertions are about.
+const STAMP_ACCESSED: i64 = 1700000000000000000i64
+const STAMP_MODIFIED: i64 = 1700000060000000000i64
+const STAMP_SECOND: i64 = 1700000120000000000i64
+
 fn main(a: *mem.Arena) -> err {
     // A directory that does not exist is `NotFound`, not a crash and not a zeroed
     // answer that a caller could mistake for an empty file.
@@ -100,6 +107,39 @@ fn main(a: *mem.Arena) -> err {
     // A directory is traversable, which is the one permission bit a host with no POSIX
     // mode still has to synthesise.
     if made.mode & 64u32 == 0u32 { os.exit(71i32) }
+
+    // Writing the stamps back, and reading them through the same `stat` that reported
+    // them: on Linux a `timespec` pair the kernel reads at an address, on Windows two
+    // `FILETIME`s through a handle opened for writing attributes.
+    if os.set_times(a, "np-os-fs-dir/note.txt", STAMP_ACCESSED, STAMP_MODIFIED) != ok { os.exit(72i32) }
+    let (stamped, stamped_error) = os.stat(a, "np-os-fs-dir/note.txt")
+    if stamped_error != ok { os.exit(73i32) }
+    if stamped.modified_ns != STAMP_MODIFIED { os.exit(74i32) }
+    if stamped.accessed_ns != STAMP_ACCESSED { os.exit(75i32) }
+
+    // A negative stamp leaves that one as it was, which is how one of the two is set by
+    // itself -- `UTIME_OMIT` on one host, a null pointer on the other.
+    if os.set_times(a, "np-os-fs-dir/note.txt", -1i64, STAMP_SECOND) != ok { os.exit(76i32) }
+    let (restamped, restamped_error) = os.stat(a, "np-os-fs-dir/note.txt")
+    if restamped_error != ok { os.exit(77i32) }
+    if restamped.modified_ns != STAMP_SECOND { os.exit(78i32) }
+    if restamped.accessed_ns != STAMP_ACCESSED { os.exit(79i32) }
+
+    // Taking the write bit away and giving it back. Both directions are checked, because
+    // a call that did nothing at all would pass either one alone.
+    if os.set_mode(a, "np-os-fs-dir/note.txt", 256u32) != ok { os.exit(80i32) }
+    let (locked, locked_error) = os.stat(a, "np-os-fs-dir/note.txt")
+    if locked_error != ok { os.exit(81i32) }
+    if locked.mode & 128u32 != 0u32 { os.exit(82i32) }
+    if locked.mode & 256u32 == 0u32 { os.exit(83i32) }
+    if os.set_mode(a, "np-os-fs-dir/note.txt", 438u32) != ok { os.exit(84i32) }
+    let (freed, freed_error) = os.stat(a, "np-os-fs-dir/note.txt")
+    if freed_error != ok { os.exit(85i32) }
+    if freed.mode & 128u32 == 0u32 { os.exit(86i32) }
+
+    // Neither call succeeds quietly on a path that is not there.
+    if os.set_times(a, "np-os-fs-absent", STAMP_ACCESSED, STAMP_MODIFIED) != os.NotFound { os.exit(87i32) }
+    if os.set_mode(a, "np-os-fs-absent", 438u32) != os.NotFound { os.exit(88i32) }
 
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }
