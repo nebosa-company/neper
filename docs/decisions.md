@@ -451,3 +451,36 @@ The hashes are per platform because stage one is not produced the same way on bo
 on Windows the bootstrap emits MASM and shells out to `ml64` and `link`, on Linux to
 the system toolchain. One number could not cover both, and the recovery path that
 matters is the one for the platform in hand.
+
+## D96 — `mem.address_of` reads an address out, and nothing reads one back
+
+A pointer's address is available as a `usize` through one intrinsic,
+`mem.address_of(p)`. There is no conversion in the other direction: no integer becomes
+a pointer, and §8's bitcast rule is not relaxed to let one through.
+
+The need is concrete. `os.syscall` (D32's route to a Linux `e.os`) takes six `usize`
+arguments because that is what the kernel takes, and every filesystem call among the
+seven `e.fs` is waiting for — `newfstatat`, `mkdirat`, `unlinkat`, `renameat`,
+`readlinkat`, and `read` and `write` themselves — passes a path or a buffer as an
+address. Without a way to name one, `os.syscall` could reach only the calls whose
+arguments are all numbers, which is none of the ones that mattered. The alternative
+considered was widening `mem.bitcast` to admit the pointer-to-`usize` direction. It was
+rejected because the bitcast rule is stated over the types, not the direction: a rule
+that reads "neither type holds a pointer" is checkable by looking at a type, and one
+that reads "unless the pointer is on the left" is not, so every future use of
+`punnable_type` would have to carry the exception.
+
+Making it one-way is what keeps it cheap. The three things §8's rule exists to prevent
+— inventing provenance, casting away `const`, manufacturing a callable address — are
+all things done *with* a pointer, and none of them follows from a program learning where
+one points. A `usize` cannot be dereferenced, and with no integer-to-pointer conversion
+there is no expression that turns the number back into something the language will
+follow. An address that leaves the program can only return through an interface whose
+arguments are numbers — a system call — where the kernel, not the type system, is what
+validates it. So the intrinsic emits no instruction: the address *is* the pointer, and
+the `usize` is the same bits under a name with no way to be followed.
+
+`address_of` takes a pointer and not a slice. A slice is a pointer and a length and has
+no single address, so `&s[0]` is how the element whose address is wanted gets named —
+which also makes the length the caller's business to pass, as every one of those calls
+requires anyway.

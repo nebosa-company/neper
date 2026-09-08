@@ -550,6 +550,15 @@ $bitcastWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $bitcastWritten -ne 'executable written') { throw 'mem.bitcast executable emission failed' }
 & $bitcastPath
 if ($LASTEXITCODE -ne 0) { throw 'mem.bitcast changed a value''s bytes or lost a shape' }
+# `mem.address_of` is the one way a pointer becomes a number. Where the arena lands is
+# not knowable from inside the program, so the fixture checks what an address has to
+# satisfy whatever it is: distances that follow the element size, field offsets,
+# alignment, and the same answer for one place reached two ways.
+$addressPath = Join-Path $testBuild 'mem-address-selfhost.exe'
+$addressWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_address\src\main.e') $repo 'x64' 'windows' $addressPath
+if ($LASTEXITCODE -ne 0 -or $addressWritten -ne 'executable written') { throw 'mem.address_of executable emission failed' }
+& $addressPath
+if ($LASTEXITCODE -ne 0) { throw "mem.address_of gave an address that is not the place's: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
@@ -1175,6 +1184,7 @@ $checkFailures = @(
     @('void_value', 'TypeMismatch'),
     @('cast_untyped', 'MissingContext'),
     @('cast_mismatch', 'TypeMismatch'),
+    @('address_of_slice', 'TypeMismatch'),
     @('bool_ordering', 'InvalidOperator'),
     @('void_parameter', 'InvalidType'),
     @('missing_return_value', 'InvalidReturn'),

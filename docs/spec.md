@@ -1871,6 +1871,7 @@ fn copy[T: type](dst: []T, src: []const T) // dst.len < src.len is a bounds chec
 fn eq[T: type](x: []const T, y: []const T) -> bool // element-wise value equality; padding is ignored
 fn cast[P: type, Q: type](p: Q) -> P // intrinsic (§4); P and Q are pointer types; Q is inferred
 fn bitcast[T: type, U: type](x: U) -> T // intrinsic (§4); U is inferred and its size equals size_of[T]
+fn address_of[T: type](p: *const T) -> usize // intrinsic; T is inferred; the address as a number
 fn size_of[T: type]() -> usize // intrinsic, comptime: §4's layout
 fn align_of[T: type]() -> usize // intrinsic, comptime
 fn stats(a: *const Arena) -> Stats // derived from off and cap; allocates nothing
@@ -1895,6 +1896,16 @@ slice, function pointer, `type`, `Atomic`, or target address-space value at any 
 This prevents it from casting away `const`, inventing provenance, changing an address
 space or manufacturing a callable address. A pointer or slice operand in device code
 is `mem.cast` by another name and is banned with it.
+
+`mem.address_of(p)` is the other direction, and the only one there is: `p`'s address as
+a `usize`, with `T` inferred from the pointer. It is not a `bitcast` — that rule refuses
+every type holding a pointer, so a pun can never invent provenance, cast away `const` or
+manufacture a callable address, and none of the three follows from reading an address
+out, because nothing comes back through it. The result is a number: there is no
+conversion from an integer to a pointer, so an address that leaves a program returns
+only through an interface that takes numbers, which is what a system call is (§5's
+`os.syscall`) and what this intrinsic exists for. A slice is a pointer and a length and
+so has no one address; `&s[0]` names the element whose address is wanted.
 
 Reading bytes as `bool` requires the result to be `0` or `1`; reading them as an enum
 or tagged-union tag requires a declared member. A violation is an `invalid` check: it
@@ -4328,7 +4339,7 @@ line-anchored edit is *reliable* rather than probabilistic.
 
 **Intrinsics.** A closed set of core functions has no neper body and no declaration
 — an intrinsic appears in no `.e` file; the compiler knows each under its qualified
-name: `mem.cast`, `mem.bitcast`, `mem.size_of`
+name: `mem.cast`, `mem.bitcast`, `mem.address_of`, `mem.size_of`
 and `mem.align_of` (§4, §8), `meta.*` (§9), `atomic.*` (§8), `os.syscall` and
 `os.thread_start` (§5),
 `math.fma` (§11), `simd.*` (§4), the `gpu.*` builtins (§10), and the three pack

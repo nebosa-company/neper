@@ -1,9 +1,9 @@
 // `os.syscall` over Linux calls chosen so that every argument position is exercised and
 // every answer is checkable without a filesystem the test does not own.
 //
-// Nothing here passes an address, because the language has no way to produce one as a
-// `usize`: `mmap` takes a null hint and gives its result back as an integer, which is
-// what lets a six-argument call be tested at all.
+// The calls that carry a buffer carry it as `mem.address_of(&b[0])`, which is what makes
+// this intrinsic enough for the filesystem primitives: without an address it could reach
+// only the calls whose arguments are all numbers.
 
 use e.mem
 use e.os
@@ -39,6 +39,49 @@ fn main(a: *mem.Arena) -> err {
     // A zero length is what munmap rejects, so this one proves the second argument is
     // read rather than assumed. Unmapping twice would not: Linux lets that succeed.
     if os.syscall(11usize, usize(mapped), 0usize, 0usize, 0usize, 0usize, 0usize) != -22isize { ret Failed }
+
+    // An address, which is what the filesystem primitives are waiting for. getcwd
+    // fills the buffer and returns its length including the NUL, and a working
+    // directory is always absolute -- so byte zero is a separator whatever it is.
+    let (directory, directory_error) = mem.alloc[u8](a, 256usize)
+    if directory_error != ok { ret directory_error }
+    let directory_address = mem.address_of(&directory[0usize])
+    if os.syscall(79usize, directory_address, 256usize, 0usize, 0usize, 0usize, 0usize) <= 0isize { ret Failed }
+    if directory[0usize] != 47u8 { ret Failed }
+    // A buffer too small for the answer is -ERANGE, so the size is read as well as the
+    // address rather than the kernel writing wherever it likes.
+    if os.syscall(79usize, directory_address, 1usize, 0usize, 0usize, 0usize, 0usize) != -34isize { ret Failed }
+
+    // newfstatat(AT_FDCWD, "/", &status, 0): two addresses in one call, and the shape
+    // of the `e.fs.stat` primitive. AT_FDCWD is -100, which is a `usize` here because
+    // every argument is one.
+    let (status, status_error) = mem.alloc[u8](a, 144usize)
+    if status_error != ok { ret status_error }
+    let (root, root_error) = mem.alloc[u8](a, 2usize)
+    if root_error != ok { ret root_error }
+    root[0usize] = 47u8
+    root[1usize] = 0u8
+    let cwd_fd = 18446744073709551516usize
+    let status_address = mem.address_of(&status[0usize])
+    if os.syscall(262usize, cwd_fd, mem.address_of(&root[0usize]), status_address, 0usize, 0usize, 0usize) != 0isize { ret Failed }
+    // `st_mode` is four bytes at offset 24 of the kernel's `struct stat`, and S_IFDIR is
+    // 0x4000 -- so the directory bit is bit 6 of byte 25. `/` is a directory.
+    if status[25usize] & 64u8 == 0u8 { ret Failed }
+
+    // A path that is not there is -ENOENT, which proves the path address was read and
+    // not ignored in favour of the directory fd.
+    let (absent, absent_error) = mem.alloc[u8](a, 16usize)
+    if absent_error != ok { ret absent_error }
+    absent[0usize] = 47u8
+    absent[1usize] = 110u8
+    absent[2usize] = 111u8
+    absent[3usize] = 45u8
+    absent[4usize] = 115u8
+    absent[5usize] = 117u8
+    absent[6usize] = 99u8
+    absent[7usize] = 104u8
+    absent[8usize] = 0u8
+    if os.syscall(262usize, cwd_fd, mem.address_of(&absent[0usize]), status_address, 0usize, 0usize, 0usize) != -2isize { ret Failed }
 
     // A call number nothing implements is -ENOSYS, not a crash.
     if os.syscall(9999usize, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize) != -38isize { ret Failed }

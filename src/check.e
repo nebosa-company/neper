@@ -4075,6 +4075,7 @@ type CallInfo = struct {
     meta_result: Type,
     mem_cast: bool,
     mem_bitcast: bool,
+    mem_address: bool,
     formatter: bool,
     formatter_arena: bool,
     formatter_verbs: usize,
@@ -4275,6 +4276,29 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         ret (pointer, ok)
     }
     ret (invalid_type(), InvalidType)
+}
+
+// Section 8. A pointer's own bits read as a `usize`. `mem.bitcast` cannot give this:
+// it refuses any type holding a pointer, so that a pun can never invent provenance,
+// cast away `const` or manufacture a callable address. Reading an address out is the
+// direction none of that applies to -- nothing comes back, and the `usize` is a number
+// with no way to be dereferenced -- and it is what an operating system interface needs,
+// because a system call takes a buffer as an integer.
+fn address_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (CastInfo, err) {
+    var info: CastInfo = zero
+    if receiver.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, receiver)
+    if !found_member || !same(g.modules[target_module].name, "e.mem") || !same(member, "address_of") { ret (info, ok) }
+    info.matched = true
+    var function: Function = zero
+    function.name = "address_of"
+    function.module_index = target_module
+    function.parameter_count = 1usize
+    function.return_count = 1usize
+    function.intrinsic = true
+    info.function = function
+    info.target = make_type(.Integer, "usize", target_module)
+    ret (info, ok)
 }
 
 // Spec section 8: `mem.bitcast` is legal only where neither type holds a pointer,
@@ -5493,6 +5517,14 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         }
                     } else {
                         if receiver.kind != .FieldExpr { ret (info, Unsupported) }
+                        let (address, address_error) = address_info(c, g, tree, module_index, receiver)
+                        if address_error != ok { ret (info, address_error) }
+                        if address.matched {
+                            info.function = address.function
+                            info.cast = address.target
+                            info.mem_address = true
+                            has_function = true
+                        } else {
                         let (atomics, atomics_error) = atomic_info(c, g, tree, module_index, receiver)
                         if atomics_error != ok { ret (info, atomics_error) }
                         if atomics.matched {
@@ -5550,6 +5582,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             has_function = true
                         }
                         }
+                        }
                     }
                 }
             } else {
@@ -5594,6 +5627,16 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         let (source, source_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                         if source_error != ok { ret (info, source_error) }
                         if source.kind != .Pointer { ret (info, TypeMismatch) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
+                    if info.mem_address {
+                        let (addressed, addressed_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                        if addressed_error != ok { ret (info, addressed_error) }
+                        // A slice is a pointer and a length, so it has no single
+                        // address: `&s[0]` is how one of its bytes is named.
+                        if addressed.kind != .Pointer { ret (info, TypeMismatch) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -6076,7 +6119,7 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         ret (make_type(.TypeParameter, "", 0usize), ok)
     }
     if index >= call.function.return_count { ret (invalid_type(), InvalidType) }
-    if call.mem_cast || call.mem_bitcast {
+    if call.mem_cast || call.mem_bitcast || call.mem_address {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (call.cast, ok)
     }

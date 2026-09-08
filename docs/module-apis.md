@@ -51,6 +51,7 @@ fn copy[T: type](dst: []T, src: []const T)
 fn eq[T: type](x: []const T, y: []const T) -> bool
 fn cast[P: type, Q: type](p: Q) -> P
 fn bitcast[T: type, U: type](x: U) -> T
+fn address_of[T: type](p: *const T) -> usize
 fn size_of[T: type]() -> usize
 fn align_of[T: type]() -> usize
 fn stats(a: *const Arena) -> Stats

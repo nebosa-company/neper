@@ -2507,7 +2507,7 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if node.kind == .CallExpr {
         let (call_info, call_info_error) = check.check_call(c, g, tree, module_index, node)
         if call_info_error != ok { ret (0usize, zero, call_info_error) }
-        if call_info.is_cast || call_info.mem_cast || call_info.mem_bitcast {
+        if call_info.is_cast || call_info.mem_cast || call_info.mem_bitcast || call_info.mem_address {
             var argument_index = 0usize
             var child_position = 0usize
             let end = node.first_child + node.child_count
@@ -2527,6 +2527,10 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             // `mem.cast` only retypes: the pointer handed in is the pointer handed
             // back, so the operand passes through with no instruction of its own.
             if call_info.mem_cast { ret (argument, call_info.cast, ok) }
+            // The address is the pointer, so `address_of` retypes and emits nothing
+            // either -- the `usize` it gives back is the same bits under a name that
+            // cannot be dereferenced.
+            if call_info.mem_address { ret (argument, call_info.cast, ok) }
             if call_info.mem_bitcast {
                 let (punned, punned_error) = lower_bitcast(c, argument, lowered_argument_type, call_info.cast, builder, c.tokens[node.token_start])
                 ret (punned, call_info.cast, punned_error)

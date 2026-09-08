@@ -266,6 +266,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.mem", "view", .Value, .Intrinsic)
     try seed(r, g, "e.mem", "cast", .Value, .Intrinsic)
     try seed(r, g, "e.mem", "bitcast", .Value, .Intrinsic)
+    try seed(r, g, "e.mem", "address_of", .Value, .Intrinsic)
     try seed(r, g, "e.str", "format", .Value, .Intrinsic)
     try seed(r, g, "e.str", "push_err", .Value, .Intrinsic)
     try seed(r, g, "e.meta", "kind", .Value, .Intrinsic)

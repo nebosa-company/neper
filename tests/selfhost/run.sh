@@ -596,6 +596,14 @@ bitcast_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$bitcast_written" = 'executable written' ]
 chmod +x "$test_build/mem-bitcast-selfhost"
 "$test_build/mem-bitcast-selfhost"
+# `mem.address_of` is the one way a pointer becomes a number. Where the arena lands is
+# not knowable from inside the program, so the fixture checks what an address has to
+# satisfy whatever it is: distances that follow the element size, field offsets,
+# alignment, and the same answer for one place reached two ways.
+address_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mem_address/src/main.e" "$repo" x64 linux "$test_build/mem-address-selfhost")
+[ "$address_written" = 'executable written' ]
+chmod +x "$test_build/mem-address-selfhost"
+"$test_build/mem-address-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
@@ -1299,6 +1307,7 @@ expect_check_error immutable_assignment ImmutableAssignment
 expect_check_error void_value TypeMismatch
 expect_check_error cast_untyped MissingContext
 expect_check_error cast_mismatch TypeMismatch
+expect_check_error address_of_slice TypeMismatch
 expect_check_error bool_ordering InvalidOperator
 expect_check_error void_parameter InvalidType
 expect_check_error missing_return_value InvalidReturn
