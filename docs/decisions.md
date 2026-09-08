@@ -922,3 +922,53 @@ The e.fs fence already marks the call "a legacy M2 bridge pending H07, not the r
 checked API's error-detail transport", so the contradiction is known there too. Resolving
 it is a decision about which of the two documents gives way, and belongs to whoever makes
 that call rather than to the module that would consume the answer.
+
+## D109 — the platform error detail is a named exception to §15, and stays unwritten
+
+D108's closing paragraph overstated this, and this row corrects it. It said the `e.os`
+error-detail contract and spec §15 "cannot both hold" and that someone had to choose which
+document gives way. Two things are wrong with that. The conflict is not between the fence
+and the spec — it is inside the spec, since §5's `os` table and its "Error detail state is
+per OS thread" paragraph mandate exactly the ambient per-thread state §15 rejects by name.
+And it is already reconciled: `docs/modules.md` lists "existing legacy platform-detail
+state" among the explicit exceptions to ambient state, beside compiler-owned test-report
+state, and says of them that they are "explicit exceptions, not invisible guarantees".
+
+So §15 stands unamended and needs no adjudication. It states the rule; this one path is a
+named, bounded exception to it, with a designated replacement — H07, which
+`docs/post-m2-llm-hardening.md` charters to "replace the temporal requirement to call
+`os.last_error_detail` before another failed operation with explicitly returned or
+caller-supplied detail", and to "design rich detail as ordinary typed data, not ambient
+exception state".
+
+**The decision here is that the exception is not exercised.** `os.last_error_detail`,
+`os.error_message` and `e.fs.last_error_detail` stay declared in their fences and stay
+unimplemented. Three reasons, in order of weight:
+
+Correct means all of it. The contract is that *every* failing `e.os` call records its
+native code before returning. A version that records it in some paths and not others is
+worse than none, because a caller cannot tell a stale detail from a fresh one — and the
+temporal rule ("must be called before the next failing operation on that thread") gives it
+no way to check. That is roughly forty call sites across both `e.os` variants, all of which
+H07 then unwinds.
+
+It needs a mechanism the language does not have. Thread-local storage has no spelling in
+neper by choice, so this would be runtime state with no source-level form, added to two
+runtimes, for a surface with no callers yet. A module-scope `var` is not an approximation of
+it but a race, since `e.thread` exists.
+
+And building it is migration debt by construction. The temporal contract is the specific
+thing H07 exists to delete; writing it now would mean writing something whose replacement
+is already chartered, and whose only consumers would be code that then has to change.
+
+What a caller has instead is the `err` value — the portable classification the nine-error
+table already gives, which is what §11's unified error type is for. What is lost is the raw
+platform code, and that costs diagnostic precision rather than correctness. Where it bites
+is `Failed` as a catch-all: the answer there is to widen the mapping in the two variants
+when a particular code turns out to matter, which is a local change with a local test,
+rather than to open an ambient channel for it.
+
+The fence entries stay rather than being deleted. `e.fs` is therefore complete at 44 of its
+45 declarations, and the readiness number keeps counting the surface that is planned:
+removing the three entries would make both modules look finished while a promised call is
+absent, which is the opposite of what that number is for.
