@@ -663,3 +663,31 @@ What is still missing for the neighbours this unblocks: `canonical` needs a reso
 call (`realpath`, or `GetFinalPathNameByHandleW`), `executable_path` needs
 `/proc/self/exe` or `GetModuleFileNameW`, and `temp_dir` and `home_dir` need `os.env`,
 which is in the fence and not yet written.
+
+## D102 — `executable_path` is what the host records, not what it ought to be
+
+`e.os` gains `executable_path(a) -> (str, err)`, absolute, naming the running image. On
+Linux it is `read_link` of `/proc/self/exe` and nothing else — the kernel already keeps
+the image as a symbolic link, so the primitive that landed in D100 is the whole
+implementation. On Windows it is `GetModuleFileNameW` with a null module handle.
+
+**The two answers are not the same kind of path, and this does not pretend otherwise.**
+Linux resolves the symbolic links in it, because that is what the kernel stores; Windows
+gives the path the process was started from, links and all. Normalising the two would
+mean resolving on Windows, which needs the resolving call `canonical` is still waiting
+for, and would make this call quietly do more work than it says. The fence says which
+host does what, and a caller comparing this against a path of its own should compare what
+`canonical` makes of them rather than the strings.
+
+The buffer protocols differ again and again the shape of the answer settles it.
+`GetModuleFileNameW` signals a buffer that was too small by filling it exactly and
+returning the capacity, so a result that fills the buffer is never treated as complete —
+a truncated path is the failure mode this guards, and the fixture catches it by asking the
+host to `stat` what came back. Linux needs no such loop, since `read_link` already sizes
+itself from `lstat`.
+
+The fixture cannot know the answer, so it asserts what has to hold whatever it is:
+absolute, the same on two calls, and naming a file that exists and has bytes — which is
+the running program itself. Both halves were pinned by breaking them: pointing Linux at
+`/proc/self/cwd` fails on the kind, and dropping a byte from the Windows result fails on
+the lookup.

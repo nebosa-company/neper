@@ -207,6 +207,16 @@ fn main(a: *mem.Arena) -> err {
     if !same(back, base) { os.exit(158i32) }
     if fs.set_current_dir(a, "np-fs/no-such") != fs.NotFound { os.exit(159i32) }
 
+    // The program's own path, through the module. It is absolute, so it says the same
+    // thing wherever the working directory has been moved to.
+    let (program, program_error) = fs.executable_path(a)
+    if program_error != ok { os.exit(160i32) }
+    if program.len == 0usize { os.exit(161i32) }
+    let (image, image_error) = fs.stat(a, program)
+    if image_error != ok { os.exit(162i32) }
+    if image.kind != .File { os.exit(163i32) }
+    if image.size == 0u64 { os.exit(164i32) }
+
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.
     let (capped, capped_error) = fs.read_file(a, "np-fs/one.txt", 10usize)

@@ -1560,6 +1560,7 @@ fn read_link(a: *mem.Arena, path: str) -> (str, err)
 fn symlink(a: *mem.Arena, target_path: str, link: str) -> err
 fn current_dir(a: *mem.Arena) -> (str, err)
 fn set_current_dir(a: *mem.Arena, path: str) -> err
+fn executable_path(a: *mem.Arena) -> (str, err)
 fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err
 fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn pipe() -> (File, File, err)
@@ -1634,6 +1635,10 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: ProcGroup) -> err
 
 ```
+
+`executable_path` is absolute and names the running image. It is what the host records,
+which is not the same thing on both: Linux answers with symbolic links already resolved
+and Windows with the path the process was started from.
 
 `current_dir` is absolute and in the host convention. It and `set_current_dir` are the
 one pair here that reads and writes state belonging to the whole process rather than to a

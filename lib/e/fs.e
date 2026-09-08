@@ -214,6 +214,16 @@ fn make_dirs(a: *mem.Arena, path_text: str) -> err {
     ret ok
 }
 
+// The running program's own path, absolute. What the host records is not quite the same
+// thing on both -- one resolves the symbolic links in it and the other does not -- so a
+// caller comparing it against a path of its own should compare what `canonical` makes of
+// them rather than the strings.
+fn executable_path(a: *mem.Arena) -> (str, err) {
+    let (image, image_error) = os.executable_path(a)
+    if image_error != ok { ret ("", from_os(image_error)) }
+    ret (image, ok)
+}
+
 // Where relative paths resolve from, absolute and in the host convention. This is the one
 // pair in this module that reads and writes state belonging to the whole process rather
 // than to a path, so a caller that moves is the one that has to move back -- and every

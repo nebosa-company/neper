@@ -231,6 +231,24 @@ fn main(a: *mem.Arena) -> err {
     if unmoved_error != ok { os.exit(117i32) }
     if !same_text(unmoved, base) { os.exit(118i32) }
 
+    // The path of the running program. It is the one answer here the fixture cannot know
+    // in advance, so what it checks is what has to be true of it whatever it is: absolute,
+    // stable, and naming a file that is there and has bytes -- this one.
+    let (program, program_error) = os.executable_path(a)
+    if program_error != ok { os.exit(119i32) }
+    if program.len == 0usize { os.exit(120i32) }
+    var program_absolute = false
+    if program[0usize] == 47u8 || program[0usize] == 92u8 { program_absolute = true }
+    if program.len >= 2usize && program[1usize] == 58u8 { program_absolute = true }
+    if !program_absolute { os.exit(121i32) }
+    let (image, image_error) = os.stat(a, program)
+    if image_error != ok { os.exit(122i32) }
+    if image.kind != .File { os.exit(123i32) }
+    if image.size == 0u64 { os.exit(124i32) }
+    let (program_again, program_again_error) = os.executable_path(a)
+    if program_again_error != ok { os.exit(125i32) }
+    if !same_text(program_again, program) { os.exit(126i32) }
+
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }
 

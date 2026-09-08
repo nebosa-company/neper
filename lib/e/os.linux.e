@@ -319,6 +319,15 @@ fn current_dir(a: *mem.Arena) -> (str, err) {
     ret ("", Failed)
 }
 
+// The kernel keeps the running image as a symbolic link, so this is `read_link` and
+// nothing else. What comes back has its links already resolved -- that is what the kernel
+// stores, not a choice made here -- and it needs `/proc` mounted, without which it is the
+// `NotFound` that any missing path is.
+fn executable_path(a: *mem.Arena) -> (str, err) {
+    let (image, image_error) = read_link(a, "/proc/self/exe")
+    ret (image, image_error)
+}
+
 fn set_current_dir(a: *mem.Arena, path: str) -> err {
     let checkpoint = mem.mark(a)
     let (path_address, path_error) = c_string(a, path)

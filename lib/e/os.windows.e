@@ -138,6 +138,11 @@ extern fn raw_current_directory(capacity: u32, buffer: *u16) -> u32
 @import("kernel32.dll", "SetCurrentDirectoryW")
 extern fn raw_set_current_directory(name: *const u16) -> i32
 
+// A null module handle asks for the running image rather than for a library, which is
+// why the first argument is a `usize` (D96) and always zero here.
+@import("kernel32.dll", "GetModuleFileNameW")
+extern fn raw_module_file_name(module: usize, buffer: *u16, capacity: u32) -> u32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -570,6 +575,45 @@ fn current_dir(a: *mem.Arena) -> (str, err) {
             ret (bytes[0usize..usize(converted)], ok)
         }
         capacity = usize(written)
+    }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
+// `GetModuleFileNameW` signals a buffer that was too small by filling it exactly and
+// leaving the count equal to the capacity, so a result that fills the buffer is never
+// trusted to be complete. The path is the one the process was started from, links and all.
+fn executable_path(a: *mem.Arena) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    var capacity = 260usize
+    while capacity <= MAX_DIRECTORY_UNITS {
+        let (units, allocation_error) = mem.alloc[u16](a, capacity)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let written = raw_module_file_name(0usize, &units[0usize], u32(capacity))
+        if written == 0u32 {
+            let call_error = from_last_error()
+            mem.reset(a, checkpoint)
+            ret ("", call_error)
+        }
+        if usize(written) < capacity {
+            let count = usize(written)
+            // A UTF-16 unit never becomes more than three UTF-8 bytes.
+            let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+            if bytes_error != ok {
+                mem.reset(a, checkpoint)
+                ret ("", OutOfMemory)
+            }
+            let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+            if converted <= 0i32 {
+                mem.reset(a, checkpoint)
+                ret ("", Failed)
+            }
+            ret (bytes[0usize..usize(converted)], ok)
+        }
+        capacity = capacity * 2usize
     }
     mem.reset(a, checkpoint)
     ret ("", Failed)
