@@ -81,6 +81,7 @@ type DiagnosticKind = enum u8 {
     AtomicOrdering,
     MetaShape,
     MetaFieldOwner,
+    ExternWithoutImport,
 }
 
 type Kind = enum u8 {
@@ -180,6 +181,10 @@ type Function = struct {
     instance_id: usize,
     generic: bool,
     external: bool,
+    // `@import(LIB, SYM)` on an `extern fn`: the library to bind against and the name
+    // to bind to, which is not the neper-side name -- D11 keeps those independent.
+    import_library: str,
+    import_symbol: str,
     intrinsic: bool,
 }
 
@@ -2435,7 +2440,51 @@ fn store_return_type(c: *Checker, ty: Type) -> err {
     ret ok
 }
 
-fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+// The string an attribute argument spells, without its quotes. Attribute arguments
+// are parsed as expressions and never resolved as values, so this is the only place
+// their text is read.
+fn attribute_string(c: *Checker, text: str, at: usize) -> (str, bool) {
+    if at >= c.token_count { ret ("", false) }
+    let token = c.tokens[at]
+    if token.kind != .String { ret ("", false) }
+    let spelling = text[token.start..token.end]
+    if spelling.len < 2usize || spelling[0usize] != 34u8 { ret ("", false) }
+    ret (spelling[1usize..spelling.len - 1usize], true)
+}
+
+// `@import("kernel32", "Sleep")` sitting above the declaration it applies to. The
+// parser makes each attribute a top-level node of its own, created before the
+// declaration, so the run immediately before it is that declaration's.
+fn declaration_import(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, str, bool) {
+    let text = g.modules[module_index].text
+    var at = node_index
+    while at > 1usize {
+        at = at - 1usize
+        let node = tree.nodes[at]
+        if !node.top_level { continue }
+        if node.kind != .Attribute { ret ("", "", false) }
+        var name = ""
+        var arguments: [2]str = zero
+        var argument_count = 0usize
+        var token_at = node.token_start
+        while token_at < node.token_end && token_at < c.token_count {
+            let token = c.tokens[token_at]
+            if token.kind == .Identifier && name.len == 0usize { name = text[token.start..token.end] }
+            if token.kind == .String {
+                let (value, has_value) = attribute_string(c, text, token_at)
+                if has_value && argument_count < 2usize {
+                    arguments[argument_count] = value
+                    argument_count += 1usize
+                }
+            }
+            token_at += 1usize
+        }
+        if same(name, "import") && argument_count == 2usize { ret (arguments[0usize], arguments[1usize], true) }
+    }
+    ret ("", "", false)
+}
+
+fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, node_index: usize) -> err {
     if c.function_count == c.functions.len { ret Capacity }
     let (name, name_error) = function_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
@@ -2450,6 +2499,13 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     item.first_parameter = c.parameter_count
     item.first_return = c.return_type_count
     item.external = node.kind == .ExternDecl
+    if item.external {
+        let (library, symbol, has_import) = declaration_import(c, g, tree, module_index, node_index)
+        if has_import {
+            item.import_library = library
+            item.import_symbol = symbol
+        }
+    }
     var generic: FunctionGeneric = zero
     generic.first_comptime = c.comptime_parameter_count
     let end = node.first_child + node.child_count
@@ -2752,7 +2808,7 @@ fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
         while node_index < tree.count {
             let node = tree.nodes[node_index]
             if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl) {
-                try collect_function(c, r, g, &tree, module_index, node)
+                try collect_function(c, r, g, &tree, module_index, node, node_index)
             }
             node_index += 1usize
         }
@@ -5654,6 +5710,13 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         ret (info, ok)
     }
     if function.generic && !c.generic_declaration { ret (info, Unsupported) }
+    // An `extern fn` reaches the loader through `@import`, and nothing else can bind
+    // it: without one there is no library to look in and no name to look for. Said
+    // here because the linker's report names neither the call nor the declaration.
+    if function.external && function.import_library.len == 0usize {
+        record_failure(c, module_index, node, .ExternWithoutImport, function.name, "")
+        ret (info, InvalidType)
+    }
     ret (info, ok)
 }
 

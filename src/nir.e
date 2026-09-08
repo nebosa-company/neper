@@ -138,6 +138,11 @@ type FunctionRef = struct {
     module_index: usize,
     name: str,
     instance: usize,
+    // An `extern fn` bound by `@import`. A reference carrying a library is called
+    // through the image's import table rather than by a relative displacement, so the
+    // distinction has to survive as far as the linker.
+    library: str,
+    symbol: str,
 }
 
 type StringConstant = struct {
@@ -213,8 +218,18 @@ fn intern_function(builder: *Builder, module_index: usize, name: str, instance: 
     }
     if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
     let index = builder.function_ref_count
-    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance }
+    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, library: "", symbol: "" }
     builder.function_ref_count += 1usize
+    ret (index, ok)
+}
+
+// The same reference, bound to an imported symbol. Interning is by neper-side name, so
+// the library and symbol are attached to whichever entry that name resolves to.
+fn intern_import(builder: *Builder, module_index: usize, name: str, library: str, symbol: str) -> (usize, err) {
+    let (index, intern_error) = intern_function(builder, module_index, name, 0usize)
+    if intern_error != ok { ret (0usize, intern_error) }
+    builder.function_refs[index].library = library
+    builder.function_refs[index].symbol = symbol
     ret (index, ok)
 }
 

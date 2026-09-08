@@ -8,6 +8,10 @@ use runtime_pe_x64
 
 error InvalidExecutable
 
+fn same_text(left: str, right: str) -> bool {
+    ret check.same(left, right)
+}
+
 fn little_u16(output: *emit_x64.Buffer, value: usize) -> err {
     try emit_x64.byte(output, value % 256usize)
     ret emit_x64.byte(output, value / 256usize % 256usize)
@@ -56,11 +60,16 @@ fn append_name(output: *emit_x64.Buffer, name: str, width: usize) -> err {
 // of them wrong produced a binary that loaded and then jumped through the wrong
 // thunk -- a segfault in whatever the program did first, with nothing pointing back
 // at the import table.
-fn import_count() -> usize {
+//
+// The runtime's own imports are library 0 and are fixed. A user `extern fn` bound by
+// `@import` adds to them: its library joins the list in first-appearance order and its
+// symbol joins that library's. Everything below is derived from those two orders, so a
+// program with no `extern` lays out exactly as it did when there was only one library.
+fn runtime_import_count() -> usize {
     ret 25usize
 }
 
-fn import_name(index: usize) -> str {
+fn runtime_import_name(index: usize) -> str {
     if index == 0usize { ret "CloseHandle" }
     if index == 1usize { ret "CreateFileW" }
     if index == 2usize { ret "ExitProcess" }
@@ -89,6 +98,124 @@ fn import_name(index: usize) -> str {
     ret ""
 }
 
+// A reference the loader has to bind, rather than one this image defines.
+fn imported_reference(builder: *nir.Builder, index: usize) -> bool {
+    ret index < builder.function_ref_count && builder.function_refs[index].library.len != 0usize
+}
+
+// The user libraries, in the order their first reference appears. Library 0 is always
+// the runtime's, so a user library's index is one more than its position here.
+fn user_library_count(builder: *nir.Builder) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < builder.function_ref_count {
+        if imported_reference(builder, at) {
+            var seen = false
+            var prior = 0usize
+            while prior < at {
+                if imported_reference(builder, prior) && same_text(builder.function_refs[prior].library, builder.function_refs[at].library) { seen = true }
+                prior += 1usize
+            }
+            if !seen { count += 1usize }
+        }
+        at += 1usize
+    }
+    ret count
+}
+
+fn user_library_name(builder: *nir.Builder, library: usize) -> str {
+    var remaining = library
+    var at = 0usize
+    while at < builder.function_ref_count {
+        if imported_reference(builder, at) {
+            var seen = false
+            var prior = 0usize
+            while prior < at {
+                if imported_reference(builder, prior) && same_text(builder.function_refs[prior].library, builder.function_refs[at].library) { seen = true }
+                prior += 1usize
+            }
+            if !seen {
+                if remaining == 0usize { ret builder.function_refs[at].library }
+                remaining = remaining - 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret ""
+}
+
+fn library_count(builder: *nir.Builder) -> usize {
+    ret 1usize + user_library_count(builder)
+}
+
+fn library_name(builder: *nir.Builder, library: usize) -> str {
+    if library == 0usize { ret "KERNEL32.dll" }
+    ret user_library_name(builder, library - 1usize)
+}
+
+// A library's symbols, in the order their references appear. A symbol named twice is
+// one entry: the loader writes one slot and both calls read it.
+fn library_entry_count(builder: *nir.Builder, library: usize) -> usize {
+    if library == 0usize { ret runtime_import_count() }
+    let wanted = library_name(builder, library)
+    var count = 0usize
+    var at = 0usize
+    while at < builder.function_ref_count {
+        if imported_reference(builder, at) && same_text(builder.function_refs[at].library, wanted) {
+            var seen = false
+            var prior = 0usize
+            while prior < at {
+                if imported_reference(builder, prior) && same_text(builder.function_refs[prior].library, wanted) && same_text(builder.function_refs[prior].symbol, builder.function_refs[at].symbol) { seen = true }
+                prior += 1usize
+            }
+            if !seen { count += 1usize }
+        }
+        at += 1usize
+    }
+    ret count
+}
+
+fn library_entry_name(builder: *nir.Builder, library: usize, entry: usize) -> str {
+    if library == 0usize { ret runtime_import_name(entry) }
+    let wanted = library_name(builder, library)
+    var remaining = entry
+    var at = 0usize
+    while at < builder.function_ref_count {
+        if imported_reference(builder, at) && same_text(builder.function_refs[at].library, wanted) {
+            var seen = false
+            var prior = 0usize
+            while prior < at {
+                if imported_reference(builder, prior) && same_text(builder.function_refs[prior].library, wanted) && same_text(builder.function_refs[prior].symbol, builder.function_refs[at].symbol) { seen = true }
+                prior += 1usize
+            }
+            if !seen {
+                if remaining == 0usize { ret builder.function_refs[at].symbol }
+                remaining = remaining - 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret ""
+}
+
+// Where a reference's slot sits: which library, and which entry within it.
+fn reference_import_slot(builder: *nir.Builder, index: usize) -> (usize, usize, bool) {
+    if !imported_reference(builder, index) { ret (0usize, 0usize, false) }
+    let reference = builder.function_refs[index]
+    var library = 1usize
+    while library < library_count(builder) {
+        if same_text(library_name(builder, library), reference.library) {
+            var entry = 0usize
+            while entry < library_entry_count(builder, library) {
+                if same_text(library_entry_name(builder, library, entry), reference.symbol) { ret (library, entry, true) }
+                entry += 1usize
+            }
+        }
+        library += 1usize
+    }
+    ret (0usize, 0usize, false)
+}
+
 // Each entry is a 2-byte hint, the name, a terminator, and a pad to an even address.
 fn import_name_size(name: str) -> usize {
     var size = name.len + 3usize
@@ -96,45 +223,95 @@ fn import_name_size(name: str) -> usize {
     ret size
 }
 
-// The descriptor is 20 bytes and a null descriptor follows it, so the lookup table
-// starts at 40. The address table follows the lookup table, the DLL name follows
-// that, and the hint/name entries follow the name. Both thunk arrays hold one entry
-// per import plus a null terminator.
-fn import_lookup_address(idata_address: usize) -> usize {
-    ret idata_address + 40usize
+// A library name is written in a field one byte longer than itself, terminated, and
+// padded to an even address the same way. `KERNEL32.dll` in a 13-byte field is that
+// rule applied to twelve characters, which is what it has always been.
+fn library_name_size(name: str) -> usize {
+    var size = name.len + 2usize
+    if size % 2usize != 0usize { size += 1usize }
+    ret size
 }
 
-fn import_address_table(idata_address: usize) -> usize {
-    ret import_lookup_address(idata_address) + (import_count() + 1usize) * 8usize
+// One descriptor per library and a null one after them.
+fn import_descriptors_size(builder: *nir.Builder) -> usize {
+    let descriptors = library_count(builder) + 1usize
+    ret descriptors * 20usize
 }
 
-fn import_dll_address(idata_address: usize) -> usize {
-    ret import_address_table(idata_address) + (import_count() + 1usize) * 8usize
+// Both thunk arrays hold one entry per import plus a null terminator, and every
+// library has a pair.
+fn import_thunks_size(builder: *nir.Builder) -> usize {
+    var size = 0usize
+    var library = 0usize
+    while library < library_count(builder) {
+        size += (library_entry_count(builder, library) + 1usize) * 8usize
+        library += 1usize
+    }
+    ret size
 }
 
-// The DLL name is written in a 13-byte field with a terminator after it.
-fn import_names_address(idata_address: usize) -> usize {
-    ret import_dll_address(idata_address) + 14usize
-}
-
-fn import_thunk(idata_address: usize, index: usize) -> usize {
-    var address = import_names_address(idata_address)
+fn import_lookup_address(builder: *nir.Builder, idata_address: usize, library: usize) -> usize {
+    var address = idata_address + import_descriptors_size(builder)
     var at = 0usize
-    while at < index {
-        address += import_name_size(import_name(at))
+    while at < library {
+        address += (library_entry_count(builder, at) + 1usize) * 8usize
         at += 1usize
     }
     ret address
 }
 
-fn import_section_size(idata_address: usize) -> usize {
-    ret import_thunk(idata_address, import_count()) - idata_address
+fn import_address_table(builder: *nir.Builder, idata_address: usize, library: usize) -> usize {
+    var address = idata_address + import_descriptors_size(builder) + import_thunks_size(builder)
+    var at = 0usize
+    while at < library {
+        address += (library_entry_count(builder, at) + 1usize) * 8usize
+        at += 1usize
+    }
+    ret address
 }
 
-fn append_thunks(output: *emit_x64.Buffer, idata_address: usize) -> err {
+fn import_dll_address(builder: *nir.Builder, idata_address: usize, library: usize) -> usize {
+    var address = idata_address + import_descriptors_size(builder) + import_thunks_size(builder) * 2usize
     var at = 0usize
-    while at < import_count() {
-        try emit_x64.little_u64(output, import_thunk(idata_address, at))
+    while at < library {
+        address += library_name_size(library_name(builder, at))
+        at += 1usize
+    }
+    ret address
+}
+
+fn import_names_address(builder: *nir.Builder, idata_address: usize) -> usize {
+    ret import_dll_address(builder, idata_address, library_count(builder))
+}
+
+fn import_thunk(builder: *nir.Builder, idata_address: usize, library: usize, entry: usize) -> usize {
+    var address = import_names_address(builder, idata_address)
+    var at = 0usize
+    while at < library {
+        var seen = 0usize
+        while seen < library_entry_count(builder, at) {
+            address += import_name_size(library_entry_name(builder, at, seen))
+            seen += 1usize
+        }
+        at += 1usize
+    }
+    var within = 0usize
+    while within < entry {
+        address += import_name_size(library_entry_name(builder, library, within))
+        within += 1usize
+    }
+    ret address
+}
+
+fn import_section_size(builder: *nir.Builder, idata_address: usize) -> usize {
+    let last = library_count(builder) - 1usize
+    ret import_thunk(builder, idata_address, last, library_entry_count(builder, last)) - idata_address
+}
+
+fn append_thunks(builder: *nir.Builder, output: *emit_x64.Buffer, idata_address: usize, library: usize) -> err {
+    var at = 0usize
+    while at < library_entry_count(builder, library) {
+        try emit_x64.little_u64(output, import_thunk(builder, idata_address, library, at))
         at += 1usize
     }
     ret emit_x64.little_u64(output, 0usize)
@@ -148,24 +325,42 @@ fn append_import_name(output: *emit_x64.Buffer, name: str) -> err {
     ret ok
 }
 
-fn append_imports(output: *emit_x64.Buffer, raw_offset: usize, idata_address: usize) -> err {
-    let lookup_address = import_lookup_address(idata_address)
-    let iat_address = import_address_table(idata_address)
-    let dll_address = import_dll_address(idata_address)
-    try emit_x64.little_u32(output, lookup_address)
-    try emit_x64.little_u32(output, 0usize)
-    try emit_x64.little_u32(output, 0usize)
-    try emit_x64.little_u32(output, dll_address)
-    try emit_x64.little_u32(output, iat_address)
-    try pad_to(output, raw_offset + 40usize)
-    try append_thunks(output, idata_address)
-    try append_thunks(output, idata_address)
-    try append_name(output, "KERNEL32.dll", 13usize)
-    try emit_x64.byte(output, 0usize)
-    var at = 0usize
-    while at < import_count() {
-        try append_import_name(output, import_name(at))
-        at += 1usize
+fn append_imports(builder: *nir.Builder, output: *emit_x64.Buffer, raw_offset: usize, idata_address: usize) -> err {
+    var library = 0usize
+    while library < library_count(builder) {
+        try emit_x64.little_u32(output, import_lookup_address(builder, idata_address, library))
+        try emit_x64.little_u32(output, 0usize)
+        try emit_x64.little_u32(output, 0usize)
+        try emit_x64.little_u32(output, import_dll_address(builder, idata_address, library))
+        try emit_x64.little_u32(output, import_address_table(builder, idata_address, library))
+        library += 1usize
+    }
+    try pad_to(output, raw_offset + import_descriptors_size(builder))
+    library = 0usize
+    while library < library_count(builder) {
+        try append_thunks(builder, output, idata_address, library)
+        library += 1usize
+    }
+    library = 0usize
+    while library < library_count(builder) {
+        try append_thunks(builder, output, idata_address, library)
+        library += 1usize
+    }
+    library = 0usize
+    while library < library_count(builder) {
+        let name = library_name(builder, library)
+        try append_name(output, name, library_name_size(name) - 1usize)
+        try emit_x64.byte(output, 0usize)
+        library += 1usize
+    }
+    library = 0usize
+    while library < library_count(builder) {
+        var at = 0usize
+        while at < library_entry_count(builder, library) {
+            try append_import_name(output, library_entry_name(builder, library, at))
+            at += 1usize
+        }
+        library += 1usize
     }
     ret ok
 }
@@ -182,14 +377,14 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_address = text_address + text_virtual_size
-    let idata_size = import_section_size(idata_address)
+    let idata_size = import_section_size(builder, idata_address)
     let (idata_raw_size, idata_raw_error) = align_up(idata_size, 512usize)
     if idata_raw_error != ok { ret idata_raw_error }
     let idata_raw_offset = headers_size + text_raw_size
     let (idata_virtual_size, idata_virtual_error) = align_up(idata_size, 4096usize)
     if idata_virtual_error != ok { ret idata_virtual_error }
     let image_size = idata_address + idata_virtual_size
-    let import_address_address = import_address_table(idata_address)
+    let import_address_address = import_address_table(builder, idata_address, 0usize)
 
     try emit_x64.byte(output, 77usize)
     try emit_x64.byte(output, 90usize)
@@ -290,15 +485,27 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         if !relocations[relocation_at].resolved {
             let reference_index = relocations[relocation_at].function_ref
             if reference_index >= builder.function_ref_count { ret InvalidExecutable }
-            let (runtime_offset, found_runtime) = runtime_pe_x64.symbol_offset(builder.function_refs[reference_index].name)
-            if !found_runtime { ret InvalidExecutable }
-            try emit_x64.patch_relative32(output, machine_file + relocations[relocation_at].displacement_at, runtime_file + runtime_offset)
-            relocations[relocation_at].resolved = true
+            // An imported call reads the slot the loader wrote, so what is patched is
+            // the displacement from the instruction to that slot rather than to code.
+            let (import_library, import_entry, is_import) = reference_import_slot(builder, reference_index)
+            if is_import {
+                let slot = import_address_table(builder, idata_address, import_library) + import_entry * 8usize
+                let site = machine_file + relocations[relocation_at].displacement_at
+                let next_rva = text_address + site - headers_size + 4usize
+                if slot < next_rva { ret InvalidExecutable }
+                try emit_x64.patch_little_u32(output, site, slot - next_rva)
+                relocations[relocation_at].resolved = true
+            } else {
+                let (runtime_offset, found_runtime) = runtime_pe_x64.symbol_offset(builder.function_refs[reference_index].name)
+                if !found_runtime { ret InvalidExecutable }
+                try emit_x64.patch_relative32(output, machine_file + relocations[relocation_at].displacement_at, runtime_file + runtime_offset)
+                relocations[relocation_at].resolved = true
+            }
         }
         relocation_at += 1usize
     }
     try pad_to(output, idata_raw_offset)
-    try append_imports(output, idata_raw_offset, idata_address)
+    try append_imports(builder, output, idata_raw_offset, idata_address)
     if output.count != idata_raw_offset + idata_size { ret InvalidExecutable }
     ret pad_to(output, idata_raw_offset + idata_raw_size)
 }
@@ -339,7 +546,7 @@ fn self_test() -> err {
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_raw_offset = headers_size + text_raw_size
     let idata_address = 4096usize + text_virtual_size
-    let import_address_address = import_address_table(idata_address)
+    let import_address_address = import_address_table(&builder, idata_address, 0usize)
     let code_at = headers_size + runtime_pe_x64.size()
     if executable.count != idata_raw_offset + 1024usize { ret InvalidExecutable }
     if executable.bytes[0usize] != 77usize || executable.bytes[1usize] != 90usize || executable.bytes[60usize] != 128usize { ret InvalidExecutable }
@@ -355,13 +562,13 @@ fn self_test() -> err {
     if executable.bytes[548usize] != first_import % 256usize || executable.bytes[549usize] != (first_import / 256usize) % 256usize { ret InvalidExecutable }
     if executable.bytes[code_at] != 195usize { ret InvalidExecutable }
     // The import directory's first name RVA, which points 40 bytes into idata.
-    let first_name_rva = import_lookup_address(idata_address)
+    let first_name_rva = import_lookup_address(&builder, idata_address, 0usize)
     if executable.bytes[idata_raw_offset] != first_name_rva % 256usize || executable.bytes[idata_raw_offset + 1usize] != (first_name_rva / 256usize) % 256usize { ret InvalidExecutable }
     // The library name and the first import name, both at offsets derived from the
     // import list rather than written down: adding a symbol moves them, and a literal
     // here is the thing that made adding one a hazard.
-    let dll_at = idata_raw_offset + import_dll_address(idata_address) - idata_address
-    let first_name_at = idata_raw_offset + import_thunk(idata_address, 0usize) - idata_address + 2usize
+    let dll_at = idata_raw_offset + import_dll_address(&builder, idata_address, 0usize) - idata_address
+    let first_name_at = idata_raw_offset + import_thunk(&builder, idata_address, 0usize, 0usize) - idata_address + 2usize
     if executable.bytes[dll_at] != 75usize || executable.bytes[first_name_at] != 67usize { ret InvalidExecutable }
     ret ok
 }

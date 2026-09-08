@@ -628,6 +628,18 @@ if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:
 # consumers waiting on empty -- a close that failed to wake would hang here.
 # Section 9's reflection, run rather than only checked: the offsets and sizes are
 # asserted by hand, so a field read at the wrong offset is a wrong value here.
+# `extern fn` bound by `@import`, reached through the image's import table. Two
+# libraries and a repeated symbol, with effects that are observable -- a call that
+# reached the wrong slot is a wrong answer, not a link error. Windows only until
+# the ELF linker emits a dynamic image.
+Require-Fixture 'check/extern_without_import'
+$externUnbound = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\extern_without_import\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($externUnbound -join "`n") -notmatch 'main\.e:7:13: error\[E-TYPE-9999\]: `mystery` is an extern fn with no') { throw "an extern with no @import was not reported: $($externUnbound -join "`n")" }
+$externPath = Join-Path $testBuild 'extern-import-selfhost.exe'
+$externWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\extern_import\src\main.e') $repo 'x64' 'windows' $externPath
+if ($LASTEXITCODE -ne 0 -or $externWritten -ne 'executable written') { throw 'imported extern executable emission failed' }
+& $externPath
+if ($LASTEXITCODE -ne 0) { throw 'an imported extern call reached the wrong symbol' }
 $metaReflectPath = Join-Path $testBuild 'meta-reflect-selfhost.exe'
 $metaReflectWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\meta_reflect\src\main.e') $repo 'x64' 'windows' $metaReflectPath
 if ($LASTEXITCODE -ne 0 -or $metaReflectWritten -ne 'executable written') { throw 'reflection executable emission failed' }

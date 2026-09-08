@@ -581,6 +581,19 @@ fn call(buffer: *Buffer) -> (usize, err) {
     ret (displacement, displacement_error)
 }
 
+// `call qword ptr [rip + disp32]`, FF /2 with a RIP-relative operand: the indirect
+// call an imported function is reached through, where the slot holds the address the
+// loader wrote rather than the code itself.
+fn call_indirect_relative(buffer: *Buffer) -> (usize, err) {
+    let opcode_error = byte(buffer, 255usize)
+    if opcode_error != ok { ret (0usize, opcode_error) }
+    let modrm_error = byte(buffer, 21usize)
+    if modrm_error != ok { ret (0usize, modrm_error) }
+    let displacement = buffer.count
+    let displacement_error = little_u32(buffer, 0usize)
+    ret (displacement, displacement_error)
+}
+
 // FF /2 with a register operand: an indirect call through the callee value.
 fn call_register(buffer: *Buffer, callee: usize) -> err {
     try check_register(callee)

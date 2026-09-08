@@ -1671,9 +1671,17 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
     }
     var function_ref = 0usize
     if !call.indirect {
-        let (interned, function_ref_error) = nir.intern_function(builder, call.function.owner_module_index, symbol, symbol_instance)
-        if function_ref_error != ok { ret function_ref_error }
-        function_ref = interned
+        // An `extern fn` bound by `@import` is called through the image's import
+        // table, so the reference carries the library and the foreign name.
+        if call.function.external && call.function.import_library.len != 0usize {
+            let (imported, import_error) = nir.intern_import(builder, call.function.owner_module_index, symbol, call.function.import_library, call.function.import_symbol)
+            if import_error != ok { ret import_error }
+            function_ref = imported
+        } else {
+            let (interned, function_ref_error) = nir.intern_function(builder, call.function.owner_module_index, symbol, symbol_instance)
+            if function_ref_error != ok { ret function_ref_error }
+            function_ref = interned
+        }
     }
     var slot = 0usize
     if return_layout.via_slot && results.count != 0usize {

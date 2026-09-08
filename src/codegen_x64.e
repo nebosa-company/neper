@@ -1318,9 +1318,18 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         try emit_x64.load_stack(output, 11usize, outgoing_base + argument_total)
                         try emit_x64.call_register(output, 11usize)
                     } else {
-                        let (call_displacement, call_error) = emit_x64.call(output)
-                        if call_error != ok { ret call_error }
-                        try add_relocation(relocations, relocation_count, call_displacement, instruction.immediate)
+                        // An imported callee is reached through the slot the loader
+                        // wrote, not by a displacement to code that is in this image.
+                        // The linker tells the two apart by the reference itself.
+                        if builder.function_refs[instruction.immediate].library.len != 0usize {
+                            let (import_displacement, import_error) = emit_x64.call_indirect_relative(output)
+                            if import_error != ok { ret import_error }
+                            try add_relocation(relocations, relocation_count, import_displacement, instruction.immediate)
+                        } else {
+                            let (call_displacement, call_error) = emit_x64.call(output)
+                            if call_error != ok { ret call_error }
+                            try add_relocation(relocations, relocation_count, call_displacement, instruction.immediate)
+                        }
                     }
                     let multiple_results = instruction.has_result && (instruction.ty.kind == .Invalid || (instruction.ty.kind == .Other && check.same(instruction.ty.name, "return-values")))
                     if instruction.has_result {
