@@ -826,3 +826,50 @@ The fallback is pinned the way a fallback should be — by removing it and watch
 filesystem fail while the other does not. Without it `link/os_fs` still passes on tmpfs and
 fails on 9p at exit 169, the case that renames onto a free name without overwriting. On
 Windows, never setting `MOVEFILE_REPLACE_EXISTING` fails at 164.
+
+## D107 — a directory-relative open is the host's walk, not a check before one
+
+`e.os` gains `Dir`, `ResolvePolicy`, `dir_open`, `dir_close` and `open_at`, and `e.fs`
+gains `Root`, `root`, `root_close` and `open_at` over them. The point of the family is that
+a handle keeps naming the same directory even if the path that opened it is renamed
+underneath, and that the resolve policy is enforced **while the host walks the path** —
+not by a test made here first, which would be a statement about a path something else can
+change before the open happens.
+
+Linux is `openat2` and nothing else. `RESOLVE_BENEATH` refuses any step that would leave
+the directory and `RESOLVE_NO_SYMLINKS` refuses any link at all, both inside the kernel's
+own walk. Measured on both filesystems the suite touches, including the 9p mount, which
+refuses a `Beneath` escape with `EXDEV` and a link under `NoSymlinks` with `ELOOP`. That
+`EXDEV` is read at the call site rather than in `from_errno`: from `openat2` it means the
+policy refused a step, where from `rename` the same number means a device boundary, and
+collapsing the two would have made a refused escape indistinguishable from a filesystem
+that cannot do the move.
+
+Windows has no `openat` in `kernel32`, so every "open this name under that directory" it
+offers is really a string join — which is exactly what the fence refuses to accept as a
+safety claim. The implementation is `NtCreateFile` from `ntdll` with a `RootDirectory`
+handle in its `OBJECT_ATTRIBUTES`, which is a true relative open, plus `OBJ_DONT_REPARSE`
+for `NoSymlinks`: the object manager fails the whole path if any component is a reparse
+point.
+
+**`Beneath` is `Unsupported` on Windows**, and that is the honest answer rather than a
+gap. Nothing in the object manager confines a walk to a subtree, and the fence is explicit
+that a lexical prefix test or a canonicalise-then-open is not a substitute. Saying so
+leaves a caller able to tell that the guarantee is absent; a fallback would not.
+
+The shape check — absolute paths, `..` in any position, embedded NULs — happens before the
+host is asked and answers `Denied`. It is not the security boundary; the resolve policy is.
+It exists because those three are never a name *under* a directory, and because an embedded
+NUL is the classic way a check and the thing checked come apart. On Linux the kernel would
+catch two of the three anyway, which the fixtures show: removing the check there still fails
+only on the empty name, while removing it on Windows fails on the absolute path, where a
+leading separator with a root directory is a syntax error rather than a refusal.
+
+Every guarantee is pinned by removing it. Without `RESOLVE_NO_SYMLINKS` or without
+`OBJ_DONT_REPARSE`, `link/os_fs` opens a symlink it should have refused and fails at exit
+192 on the respective host.
+
+One trap worth recording: `openat2` rejects the whole call with `EINVAL` unless `how.mode`
+is zero when nothing is being created. Setting a default mode once and leaving it made
+every read-only open fail — and fail as `Unsupported`, which reads as "this host cannot do
+it" rather than "you asked wrongly".

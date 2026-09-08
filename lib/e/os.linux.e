@@ -96,6 +96,7 @@ const SYS_GETRANDOM: usize = 318usize
 const SYS_FSYNC: usize = 74usize
 const SYS_LINKAT: usize = 265usize
 const SYS_RENAMEAT2: usize = 316usize
+const SYS_OPENAT2: usize = 437usize
 
 // The flag that makes a rename refuse an existing destination instead of replacing it.
 const RENAME_NOREPLACE: usize = 1usize
@@ -103,6 +104,24 @@ const RENAME_NOREPLACE: usize = 1usize
 // O_RDONLY with O_DIRECTORY and O_CLOEXEC, which is how a directory is opened to be
 // flushed rather than read.
 const OPEN_DIRECTORY: usize = 589824usize
+
+// The resolve flags `openat2` takes, which are the whole reason it is used instead of
+// `openat`: the kernel enforces them while it walks, where a check made here would be a
+// guess about a path that can change underneath it.
+const RESOLVE_NO_SYMLINKS: u64 = 4u64
+const RESOLVE_BENEATH: u64 = 8u64
+
+// The access modes and the four bits `OpenFlags` carries.
+const O_RDONLY: u64 = 0u64
+const O_WRONLY: u64 = 1u64
+const O_RDWR: u64 = 2u64
+const O_CREAT: u64 = 64u64
+const O_TRUNC: u64 = 512u64
+const O_APPEND: u64 = 1024u64
+const O_CLOEXEC: u64 = 524288u64
+
+// 0o644 for anything this creates, which the umask narrows.
+const FILE_MODE: u64 = 420u64
 
 // The kernel caps the environment well below this.
 const MAX_ENVIRONMENT: usize = 2097152usize
@@ -168,6 +187,8 @@ fn from_errno(result: isize) -> err {
     if result == -18isize { ret Unsupported }
     if result == -22isize { ret Unsupported }
     if result == -38isize { ret Unsupported }
+    // ELOOP: under `RESOLVE_NO_SYMLINKS` this is a link that was refused, not a cycle.
+    if result == -40isize { ret Denied }
     ret Failed
 }
 
@@ -573,6 +594,99 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
     let result = syscall(SYS_UTIMENSAT, AT_FDCWD, path_address, mem.address_of(&times), 0usize, 0usize, 0usize)
     mem.reset(a, checkpoint)
     ret from_errno(result)
+}
+
+type Dir = struct { raw: usize }
+type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
+
+// `openat2` reads this rather than taking flags in registers, which is what lets it grow
+// resolve rules without a new call. The size is passed alongside it and the kernel checks
+// both, so the layout is the ABI.
+type OpenHow = struct { flags: u64, mode: u64, resolve: u64 }
+
+// A directory-relative path is a name under that directory and nothing else. An absolute
+// one would ignore the directory it was given, `..` would leave it, and an embedded NUL
+// would make the kernel see a shorter path than the caller wrote -- the classic way a
+// check and the thing checked come apart. Each is refused rather than interpreted.
+fn relative_path_ok(path: str) -> bool {
+    if path.len == 0usize { ret false }
+    if path[0usize] == 47u8 { ret false }
+    var start = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 0u8 { ret false }
+        if path[at] == 47u8 {
+            if at == start + 2usize && path[start] == 46u8 && path[start + 1usize] == 46u8 { ret false }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    if at == start + 2usize && path[start] == 46u8 && path[start + 1usize] == 46u8 { ret false }
+    ret true
+}
+
+fn open_bits(flags: OpenFlags) -> u64 {
+    var bits = O_RDONLY
+    if flags.read && flags.write { bits = O_RDWR }
+    if !flags.read && flags.write { bits = O_WRONLY }
+    if flags.create { bits = bits | O_CREAT }
+    if flags.truncate { bits = bits | O_TRUNC }
+    if flags.append { bits = bits | O_APPEND }
+    ret bits | O_CLOEXEC
+}
+
+fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
+    var dir: Dir = zero
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (dir, path_error)
+    }
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_DIRECTORY, 0usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize { ret (dir, from_errno(descriptor)) }
+    dir.raw = usize(descriptor)
+    ret (dir, ok)
+}
+
+fn dir_close(dir: Dir) -> err {
+    let result = syscall(SYS_CLOSE, dir.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+    ret from_errno(result)
+}
+
+// The policy is the kernel's to enforce, not this file's. `RESOLVE_BENEATH` refuses any
+// step that would leave the directory, and `RESOLVE_NO_SYMLINKS` refuses any link at all,
+// both while the walk is happening -- which is the difference between a guarantee and a
+// check made before a path that something else can change.
+fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) {
+    var file: File = zero
+    if !relative_path_ok(relative_path) { ret (file, Denied) }
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, relative_path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (file, path_error)
+    }
+    var how: OpenHow = zero
+    how.flags = open_bits(flags)
+    // `openat2` insists the mode be zero unless something is being created, and rejects
+    // the whole call with EINVAL otherwise -- so this is not a default that can be set
+    // once and left.
+    if flags.create { how.mode = FILE_MODE }
+    how.resolve = RESOLVE_BENEATH
+    if policy == .NoSymlinks { how.resolve = RESOLVE_NO_SYMLINKS | RESOLVE_BENEATH }
+    let descriptor = syscall(SYS_OPENAT2, dir.raw, path_address, mem.address_of(&how), 24usize, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize {
+        // EXDEV here is the resolve policy refusing a step that would leave the directory,
+        // not a device boundary -- a different thing from what `rename` means by it, which
+        // is why it is read here rather than in `from_errno`.
+        if descriptor == -18isize { ret (file, Denied) }
+        ret (file, from_errno(descriptor))
+    }
+    file.raw = usize(descriptor)
+    ret (file, ok)
 }
 
 // The directory part of a path, `.` when it has none. Not `e.path`: `e.os` may depend on

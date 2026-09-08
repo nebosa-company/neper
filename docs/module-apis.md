@@ -1697,7 +1697,7 @@ APIs may expose a detail snapshot while ordinary callers retain cheap `err`/`try
 
 These new primitives are the reviewed platform boundary for SL05/SL06, not permission
 for e.fs/e.proc to add externs. Directory-relative operations reject absolute paths,
-parent traversal and embedded NULs; NoSymlinks rejects every traversed link/reparse
+parent traversal and embedded NULs with `Denied`, before the host is asked; NoSymlinks rejects every traversed link/reparse
 point. Beneath permits only traversal provably confined under the opened root, or
 returns Unsupported. No lexical-prefix or canonicalize-then-open safety claim.
 remove_at/rename_at traverse without following symlinks; removing a final symlink

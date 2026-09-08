@@ -18,6 +18,7 @@ type Metadata = struct { kind: EntryKind, size: u64, modified_ns: i64, accessed_
 type Walk = struct { state: *void }
 type WalkOptions = struct { recursive: bool, follow_symlinks: bool }
 type ReplaceOptions = struct { overwrite: bool, durable: bool }
+type Root = struct { dir: os.Dir }
 
 error NotFound
 error Exists
@@ -290,6 +291,35 @@ fn temp_file(a: *mem.Arena, dir: str, prefix: str) -> (str, os.File, err) {
         attempt += 1usize
     }
     ret ("", nothing, Io)
+}
+
+// A directory held open, and every path used through it resolved against that handle
+// rather than against a string. The difference is that the handle keeps naming the same
+// directory even if the path that opened it is renamed underneath -- which is the whole
+// reason the `*_at` family exists and a path-based call cannot stand in for it.
+fn root(a: *mem.Arena, path_text: str) -> (Root, err) {
+    var opened: Root = zero
+    let (dir, dir_error) = os.dir_open(a, path_text)
+    if dir_error != ok { ret (opened, from_os(dir_error)) }
+    opened.dir = dir
+    ret (opened, ok)
+}
+
+fn root_close(r: *Root) -> err {
+    ret from_os(os.dir_close(r.dir))
+}
+
+// `policy` is enforced by the host while it walks, not checked here beforehand: a check
+// made first would be about a path something else can change before the open happens.
+// What is checked here is the shape of the name -- absolute, `..` or an embedded NUL are
+// refused outright, because none of them is a name under this root.
+//
+// `Beneath` is not available on every host. Where it is not, this says so rather than
+// falling back to a lexical test that would look like the same guarantee.
+fn open_at(a: *mem.Arena, r: *const Root, relative_path: str, flags: os.OpenFlags, policy: os.ResolvePolicy) -> (os.File, err) {
+    let (file, open_error) = os.open_at(a, r.dir, relative_path, flags, policy)
+    if open_error != ok { ret (file, from_os(open_error)) }
+    ret (file, ok)
 }
 
 // The one name for a file, with every symbolic link and every `.` and `..` gone. It needs

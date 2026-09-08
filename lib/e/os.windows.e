@@ -61,6 +61,27 @@ type ByHandleFileInformation = struct {
 // stands for.
 type FileAttributeTagInfo = struct { attributes: u32, reparse_tag: u32 }
 
+type Dir = struct { raw: usize }
+type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
+
+// `UNICODE_STRING`, `OBJECT_ATTRIBUTES` and `IO_STATUS_BLOCK` as the native call takes
+// them: 16, 48 and 16 bytes on this architecture, with the padding written out because it
+// is what makes the later fields land where the call reads them.
+type UnicodeString = struct { length: u16, maximum_length: u16, padding: u32, buffer: *u16 }
+
+type ObjectAttributes = struct {
+    length: u32,
+    padding: u32,
+    root_directory: usize,
+    object_name: *UnicodeString,
+    attributes: u32,
+    padding_two: u32,
+    security_descriptor: usize,
+    security_quality: usize,
+}
+
+type IoStatusBlock = struct { status: usize, information: usize }
+
 // `FILETIME`: two `DWORD`s, low first, counting 100-nanosecond ticks from 1601.
 type FileTime = struct { low: u32, high: u32 }
 
@@ -154,6 +175,13 @@ extern fn raw_final_path(handle: usize, buffer: *u16, capacity: u32, flags: u32)
 @import("bcrypt.dll", "BCryptGenRandom")
 extern fn raw_random(algorithm: usize, buffer: *u8, size: u32, flags: u32) -> i32
 
+// The one call in this file from `ntdll`, and the only way this host opens a path
+// relative to a directory handle at all: `kernel32` has nothing that takes a directory to
+// resolve against, so every "open this name under that directory" it offers is really a
+// string join, which is what the fence refuses to call safe.
+@import("ntdll.dll", "NtCreateFile")
+extern fn raw_nt_create_file(handle: *usize, access: u32, attributes: *ObjectAttributes, status_block: *IoStatusBlock, allocation: usize, file_attributes: u32, share: u32, disposition: u32, options: u32, ea_buffer: usize, ea_length: u32) -> u32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -206,6 +234,29 @@ const CREATE_NEW: u32 = 1u32
 // copying. WRITE_THROUGH is what makes it wait for the disk.
 const MOVEFILE_REPLACE_EXISTING: u32 = 1u32
 const MOVEFILE_WRITE_THROUGH: u32 = 8u32
+
+// A directory handle to resolve against needs the right to list and to traverse; nothing
+// here reads the directory's bytes.
+const DIRECTORY_ACCESS: u32 = 1048737u32
+
+const SYNCHRONIZE: u32 = 1048576u32
+const GENERIC_READ: u32 = 2147483648u32
+const GENERIC_WRITE: u32 = 1073741824u32
+
+// `OBJ_CASE_INSENSITIVE`, and the flag that makes the object manager fail rather than
+// follow a reparse point anywhere along the path -- which is what `NoSymlinks` is.
+const OBJ_CASE_INSENSITIVE: u32 = 64u32
+const OBJ_DONT_REPARSE: u32 = 4096u32
+
+const FILE_OPEN: u32 = 1u32
+const FILE_OPEN_IF: u32 = 3u32
+const FILE_OVERWRITE: u32 = 4u32
+const FILE_OVERWRITE_IF: u32 = 5u32
+
+// Synchronous, so the handle behaves like one from `CreateFileW`, and never a directory:
+// `open_at` opens files.
+const FILE_SYNCHRONOUS_IO_NONALERT: u32 = 32u32
+const FILE_NON_DIRECTORY_FILE: u32 = 64u32
 
 // Making a link is privileged unless the host is in developer mode, which is what the
 // second flag asks for; without it an ordinary process is refused.
@@ -374,6 +425,127 @@ fn lstat(a: *mem.Arena, path: str) -> (FileInfo, err) {
     let closed = raw_close_handle(handle)
     mem.reset(a, checkpoint)
     ret (answer, info_error)
+}
+
+// A directory-relative path is a name under that directory and nothing else. An absolute
+// one would ignore the directory it was given, `..` would leave it, and an embedded NUL
+// would make the call see a shorter path than the caller wrote -- the classic way a check
+// and the thing checked come apart. Both separators count here, because both are one on
+// this host.
+fn relative_path_ok(path: str) -> bool {
+    if path.len == 0usize { ret false }
+    if path[0usize] == 47u8 || path[0usize] == 92u8 { ret false }
+    if path.len >= 2usize && path[1usize] == 58u8 { ret false }
+    var start = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 0u8 { ret false }
+        if path[at] == 47u8 || path[at] == 92u8 {
+            if at == start + 2usize && path[start] == 46u8 && path[start + 1usize] == 46u8 { ret false }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    if at == start + 2usize && path[start] == 46u8 && path[start + 1usize] == 46u8 { ret false }
+    ret true
+}
+
+// An `NTSTATUS` rather than a `GetLastError` code: the native call reports in its result
+// and sets nothing afterwards, so the two error vocabularies do not meet.
+fn from_nt_status(status: u32) -> err {
+    if status == 0u32 { ret ok }
+    if status == 3221225524u32 { ret NotFound }
+    if status == 3221225530u32 { ret NotFound }
+    if status == 3221225506u32 { ret Denied }
+    if status == 3221225539u32 { ret Denied }
+    if status == 3221225525u32 { ret Exists }
+    // STATUS_REPARSE_POINT_ENCOUNTERED: a link refused under `NoSymlinks`.
+    if status == 3221226763u32 { ret Denied }
+    if status == 3221225731u32 { ret Failed }
+    if status == 3221225658u32 { ret Failed }
+    ret Failed
+}
+
+// The native call takes one separator, and a caller writing a relative path may well have
+// used the other. The conversion happens on the wide copy, after `widen`, so the byte
+// length the caller wrote is never what is scanned.
+fn widen_relative(a: *mem.Arena, path: str) -> ([]u16, usize, err) {
+    var nothing: []u16 = zero
+    let (units, widen_error) = widen(a, path)
+    if widen_error != ok { ret (nothing, 0usize, widen_error) }
+    var count = 0usize
+    while count < units.len {
+        if units[count] == 0u16 { break }
+        if units[count] == 47u16 { units[count] = 92u16 }
+        count += 1usize
+    }
+    ret (units, count, ok)
+}
+
+fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
+    var dir: Dir = zero
+    let checkpoint = mem.mark(a)
+    let (name, name_error) = widen(a, path)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret (dir, name_error)
+    }
+    let handle = raw_create_file(&name[0usize], DIRECTORY_ACCESS, FILE_SHARE_ALL, 0usize, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0usize)
+    if handle == INVALID_HANDLE {
+        let open_error = from_last_error()
+        mem.reset(a, checkpoint)
+        ret (dir, open_error)
+    }
+    mem.reset(a, checkpoint)
+    dir.raw = handle
+    ret (dir, ok)
+}
+
+fn dir_close(dir: Dir) -> err {
+    if raw_close_handle(dir.raw) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
+fn disposition_for(flags: OpenFlags) -> u32 {
+    if flags.create && flags.truncate { ret FILE_OVERWRITE_IF }
+    if flags.create { ret FILE_OPEN_IF }
+    if flags.truncate { ret FILE_OVERWRITE }
+    ret FILE_OPEN
+}
+
+// `Beneath` has no equivalent here. The object manager will refuse a reparse point, which
+// is `NoSymlinks`, but nothing in it confines a walk to a subtree -- and the fence is
+// explicit that a lexical check or a canonicalise-then-open is not a substitute, so this
+// says `Unsupported` rather than claiming a guarantee it cannot keep.
+fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err) {
+    var file: File = zero
+    if policy == .Beneath { ret (file, Unsupported) }
+    if !relative_path_ok(relative_path) { ret (file, Denied) }
+    let checkpoint = mem.mark(a)
+    let (name, count, name_error) = widen_relative(a, relative_path)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret (file, name_error)
+    }
+    var text: UnicodeString = zero
+    text.length = u16(count * 2usize)
+    text.maximum_length = u16(count * 2usize)
+    text.buffer = &name[0usize]
+    var attributes: ObjectAttributes = zero
+    attributes.length = 48u32
+    attributes.root_directory = dir.raw
+    attributes.object_name = &text
+    attributes.attributes = OBJ_CASE_INSENSITIVE | OBJ_DONT_REPARSE
+    var status_block: IoStatusBlock = zero
+    var handle = 0usize
+    var access = SYNCHRONIZE
+    if flags.read { access = access | GENERIC_READ }
+    if flags.write { access = access | GENERIC_WRITE }
+    let status = raw_nt_create_file(&handle, access, &attributes, &status_block, 0usize, ATTRIBUTE_NORMAL, FILE_SHARE_ALL, disposition_for(flags), FILE_SYNCHRONOUS_IO_NONALERT | FILE_NON_DIRECTORY_FILE, 0usize, 0u32)
+    mem.reset(a, checkpoint)
+    if status != 0u32 { ret (file, from_nt_status(status)) }
+    file.raw = handle
+    ret (file, ok)
 }
 
 fn to_filetime(value: i64) -> FileTime {

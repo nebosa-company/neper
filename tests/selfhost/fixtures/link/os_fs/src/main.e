@@ -228,6 +228,24 @@ fn main(a: *mem.Arena) -> err {
         if through_name_error != ok { os.exit(140i32) }
         if !same_text(through_link, through_name) { os.exit(141i32) }
 
+        // A link that leads out of the directory is what `Beneath` is for. The host
+        // enforces it while it walks, or says it cannot -- and either is an answer. What
+        // would not be an answer is opening it.
+        if os.symlink(a, "../np-os-fs-absent", "np-os-fs-dir/escape.txt") == ok {
+            let (escape_root, escape_root_error) = os.dir_open(a, "np-os-fs-dir")
+            if escape_root_error != ok { os.exit(189i32) }
+            var escape_flags: os.OpenFlags = zero
+            escape_flags.read = true
+            let (escaped, escaped_error) = os.open_at(a, escape_root, "escape.txt", escape_flags, .Beneath)
+            if escaped_error == ok { os.exit(190i32) }
+            if escaped_error != os.Denied && escaped_error != os.Unsupported { os.exit(191i32) }
+            // And a link is refused outright under `NoSymlinks`, on every host.
+            let (linked, linked_error) = os.open_at(a, escape_root, "link.txt", escape_flags, .NoSymlinks)
+            if linked_error != os.Denied { os.exit(192i32) }
+            if os.dir_close(escape_root) != ok { os.exit(193i32) }
+            if os.remove_file(a, "np-os-fs-dir/escape.txt") != ok { os.exit(194i32) }
+        }
+
         // Removing a link removes the link and leaves what it pointed at.
         if os.remove_file(a, "np-os-fs-dir/link.txt") != ok { os.exit(97i32) }
         let (survivor, survivor_error) = os.stat(a, "np-os-fs-dir/note.txt")
@@ -445,6 +463,43 @@ fn main(a: *mem.Arena) -> err {
     if os.replace(a, "np-os-fs-absent", "np-os-fs-dir/nowhere.txt", false, false) != os.NotFound { os.exit(177i32) }
 
     if os.remove_file(a, "np-os-fs-dir/target.txt") != ok { os.exit(178i32) }
+
+    // A directory root_handle open, and names resolved against that handle rather than against a
+    // string. This is the only family here whose guarantee is about what a name cannot
+    // reach, so the refusals matter as much as the opens.
+    let (root_handle, held_error) = os.dir_open(a, "np-os-fs-dir")
+    if held_error != ok { os.exit(179i32) }
+    var root_open_flags: os.OpenFlags = zero
+    root_open_flags.read = true
+
+    // A plain name under the directory opens, and reads what was written through it.
+    let (under_root, under_root_error) = os.open_at(a, root_handle, "note.txt", root_open_flags, .NoSymlinks)
+    if under_root_error != ok { os.exit(180i32) }
+    var root_read_bytes: [8]u8 = zero
+    let (root_read, root_read_error) = os.read(under_root, root_read_bytes[..])
+    if root_read_error != ok { os.exit(181i32) }
+    if root_read != 5usize { os.exit(182i32) }
+    if os.close(under_root) != ok { os.exit(183i32) }
+
+    // The three shapes that are refused before the host is asked at all: a name that
+    // ignores the directory, one that leaves it, and one that is not a name.
+    let (root_absolute, absolute_error) = os.open_at(a, root_handle, "/etc/hosts", root_open_flags, .NoSymlinks)
+    if absolute_error != os.Denied { os.exit(184i32) }
+    let (root_upward, upward_error) = os.open_at(a, root_handle, "../np-os-fs-absent", root_open_flags, .NoSymlinks)
+    if upward_error != os.Denied { os.exit(185i32) }
+    let (root_nameless, nameless_error) = os.open_at(a, root_handle, "", root_open_flags, .NoSymlinks)
+    if nameless_error != os.Denied { os.exit(186i32) }
+
+    // A name that is simply not there is `NotFound`, which is how the shape check is told
+    // apart from the host's own answer.
+    let (root_missing, missing_error) = os.open_at(a, root_handle, "not-here.txt", root_open_flags, .NoSymlinks)
+    if missing_error != os.NotFound { os.exit(187i32) }
+
+    // `..` inside a longer name is refused too, not only at the front.
+    let (root_buried, buried_error) = os.open_at(a, root_handle, "sub/../../note.txt", root_open_flags, .NoSymlinks)
+    if buried_error != os.Denied { os.exit(188i32) }
+
+    if os.dir_close(root_handle) != ok { os.exit(195i32) }
 
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }

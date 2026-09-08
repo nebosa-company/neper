@@ -331,6 +331,41 @@ fn main(a: *mem.Arena) -> err {
     // Put `one.txt` back to what the rest of this fixture expects of it.
     if fs.write_file(a, "np-fs/one.txt", payload[..]) != ok { os.exit(232i32) }
 
+    // A `Root` is a directory held open, and every name used through it resolves against
+    // that handle. The refusals are the reason it exists, so they are what is checked.
+    let (opened_root, opened_root_error) = fs.root(a, "np-fs")
+    if opened_root_error != ok { os.exit(240i32) }
+    var root_holder = opened_root
+    var root_flags: os.OpenFlags = zero
+    root_flags.read = true
+
+    let (through_root, through_root_error) = fs.open_at(a, &root_holder, "one.txt", root_flags, .NoSymlinks)
+    if through_root_error != ok { os.exit(241i32) }
+    var root_bytes: [16]u8 = zero
+    let (root_read, root_read_error) = os.read(through_root, root_bytes[..])
+    if root_read_error != ok { os.exit(242i32) }
+    if root_read != 11usize { os.exit(243i32) }
+    if os.close(through_root) != ok { os.exit(244i32) }
+
+    // A name that would leave the root, and one that ignores it entirely.
+    let (upward, upward_error) = fs.open_at(a, &root_holder, "../np-fs", root_flags, .NoSymlinks)
+    if upward_error != fs.Denied { os.exit(245i32) }
+    let (rooted_name, rooted_name_error) = fs.open_at(a, &root_holder, "/etc/hosts", root_flags, .NoSymlinks)
+    if rooted_name_error != fs.Denied { os.exit(246i32) }
+
+    // A name under a subdirectory of the root is fine -- the refusal is about leaving, not
+    // about depth. The file is made here rather than assumed, because what else this
+    // fixture has created by now is not this block's business.
+    var under: [2]u8 = zero
+    under[0usize] = 105u8
+    under[1usize] = 110u8
+    if fs.write_file(a, "np-fs/deep/leaf.txt", under[..]) != ok { os.exit(250i32) }
+    let (deep_file, deep_file_error) = fs.open_at(a, &root_holder, "deep/leaf.txt", root_flags, .NoSymlinks)
+    if deep_file_error != ok { os.exit(247i32) }
+    if os.close(deep_file) != ok { os.exit(248i32) }
+
+    if fs.root_close(&root_holder) != ok { os.exit(249i32) }
+
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.
     let (capped, capped_error) = fs.read_file(a, "np-fs/one.txt", 10usize)
