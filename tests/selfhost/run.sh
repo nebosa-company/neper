@@ -649,6 +649,19 @@ generic_field_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost
 [ "$generic_field_accepted" = 'module check ok' ]
 check_protocol_diagnostic generic_instance_field_leak 'main.e:8:5: error[E-TYPE-9999]: type checking failed: check.InvalidType'
 check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
+# `e.sync`. The uncontended half first, where every fence promise lives and where a
+# wrong wait fails in milliseconds; then the half a single thread cannot check, where
+# a mutex that does not exclude loses increments and the total comes out short.
+sync_path="$test_build/sync-semantics-selfhost"
+sync_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/sync_semantics/src/main.e" "$repo" x64 linux "$sync_path")
+[ "$sync_written" = 'executable written' ]
+chmod +x "$sync_path"
+"$sync_path"
+sync_threads_path="$test_build/sync-threads-selfhost"
+sync_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/sync_threads/src/main.e" "$repo" x64 linux "$sync_threads_path")
+[ "$sync_threads_written" = 'executable written' ]
+chmod +x "$sync_threads_path"
+"$sync_threads_path"
 # Section 8's blocking primitives, under the wake that a bug here turns into a hang.
 futex_path="$test_build/os-futex-selfhost"
 futex_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_futex/src/main.e" "$repo" x64 linux "$futex_path")

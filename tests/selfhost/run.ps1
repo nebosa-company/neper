@@ -623,6 +623,19 @@ $genericFieldLeak = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixt
 if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:5: error\[E-TYPE-9999\]: type checking failed: check\.InvalidType') {
     throw "a generic instance's own field leaked into the enclosing struct: $($genericFieldLeak -join "`n")"
 }
+# .sync. The uncontended half first, where every fence promise lives and where a
+# wrong wait fails in milliseconds; then the half a single thread cannot check, where
+# a mutex that does not exclude loses increments and the total comes out short.
+$syncPath = Join-Path $testBuild 'sync-semantics-selfhost.exe'
+$syncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\sync_semantics\src\main.e') $repo 'x64' 'windows' $syncPath
+if ($LASTEXITCODE -ne 0 -or $syncWritten -ne 'executable written') { throw 'e.sync executable emission failed' }
+& $syncPath
+if ($LASTEXITCODE -ne 0) { throw 'an e.sync primitive is wrong uncontended' }
+$syncThreadsPath = Join-Path $testBuild 'sync-threads-selfhost.exe'
+$syncThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\sync_threads\src\main.e') $repo 'x64' 'windows' $syncThreadsPath
+if ($LASTEXITCODE -ne 0 -or $syncThreadsWritten -ne 'executable written') { throw 'contended e.sync executable emission failed' }
+& $syncThreadsPath
+if ($LASTEXITCODE -ne 0) { throw 'an e.sync lock did not exclude, or a wait did not wake' }
 # Section 8's blocking primitives, under the wake that a bug here turns into a hang.
 $futexPath = Join-Path $testBuild 'os-futex-selfhost.exe'
 $futexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_futex\src\main.e') $repo 'x64' 'windows' $futexPath
