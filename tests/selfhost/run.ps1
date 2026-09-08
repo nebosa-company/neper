@@ -626,6 +626,13 @@ if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:
 # `e.channel`, over `e.sync`. The threaded half runs four producers through a channel
 # that holds four, so every one of them blocks, and the close is what releases the
 # consumers waiting on empty -- a close that failed to wake would hang here.
+# Section 9's reflection, run rather than only checked: the offsets and sizes are
+# asserted by hand, so a field read at the wrong offset is a wrong value here.
+$metaReflectPath = Join-Path $testBuild 'meta-reflect-selfhost.exe'
+$metaReflectWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\meta_reflect\src\main.e') $repo 'x64' 'windows' $metaReflectPath
+if ($LASTEXITCODE -ne 0 -or $metaReflectWritten -ne 'executable written') { throw 'reflection executable emission failed' }
+& $metaReflectPath
+if ($LASTEXITCODE -ne 0) { throw 'a comptime field walk, get, set or member value is wrong' }
 $channelPath = Join-Path $testBuild 'channel-semantics-selfhost.exe'
 $channelWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\channel_semantics\src\main.e') $repo 'x64' 'windows' $channelPath
 if ($LASTEXITCODE -ne 0 -or $channelWritten -ne 'executable written') { throw 'e.channel executable emission failed' }

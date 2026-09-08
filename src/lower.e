@@ -387,6 +387,20 @@ fn call_parameter_type(c: *check.Checker, call: check.CallInfo, index: usize) ->
     // Also synthesized: `T` came from the pointer while checking, so the value
     // arguments are `T` and the trailing ones are the ordering enum.
     if call.atomic_op != .None { ret (atomic_parameter_type(c, call, index), ok) }
+    // Synthesized like the rest: `get` takes the value by pointer, `set` that and the
+    // field's own type.
+    if call.meta_access {
+        if index == 0usize {
+            let (stored, store_error) = check.store_type(c, call.meta_subject)
+            if store_error != ok { ret (check.invalid_type(), store_error) }
+            var pointer = check.make_type(.Pointer, "", call.function.module_index)
+            pointer.element = stored
+            pointer.has_element = true
+            pointer.is_const = !call.meta_writes
+            ret (pointer, ok)
+        }
+        ret (call.meta_field.ty, ok)
+    }
     let parameter_index = call.function.first_parameter + index
     if parameter_index >= c.parameter_count { ret (check.invalid_type(), check.InvalidType) }
     ret (c.parameters[parameter_index].ty, ok)
@@ -1629,6 +1643,7 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
 
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     if call.atomic_op != .None { ret emit_atomic(c, call, arguments, argument_count, builder, token, results) }
+    if call.meta_access { ret emit_meta_access(c, call, arguments, argument_count, builder, token, results) }
     if call.meta_query != .None { ret emit_reflection(c, call, builder, token, results) }
     if call.function.intrinsic && check.same(call.function.name, "view") {
         ret emit_mem_view(c, call, arguments, argument_count, builder, token, results)
@@ -2384,6 +2399,10 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         ret (result, result_type, result_error)
     }
     if node.kind == .FieldExpr {
+        // A member of an unrolled `for`'s binding is a constant, and the loop it came
+        // from is gone by here.
+        let (bound_value, bound_type, bound_handled, bound_error) = lower_binding_member_expr(c, g, tree, module_index, node_index, expected, builder)
+        if bound_handled { ret (bound_value, bound_type, bound_error) }
         let (target_module, qualified_name, qualified) = check.qualified_member(c, g, tree, module_index, node)
         if qualified {
             let (constant_index, has_constant) = check.find_constant(c, target_module, qualified_name)
@@ -2516,114 +2535,8 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         ret (value, result_type, result_error)
     }
     if node.kind == .BinaryExpr {
-        var children: [2]usize = zero
-        var child_count = 0usize
-        let end = node.first_child + node.child_count
-        var at = node.first_child
-        while at < end {
-            if tree.children[at].node {
-                if child_count == children.len { ret (0usize, zero, parse.InvalidSyntax) }
-                children[child_count] = tree.children[at].index
-                child_count += 1usize
-            }
-            at += 1usize
-        }
-        if child_count != 2usize { ret (0usize, zero, parse.InvalidSyntax) }
-        let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
-        if result_type_error != ok { ret (0usize, result_type, result_type_error) }
-        let operator = check.binary_operator(c, tree, node)
-        if operator == .PunctAndAnd || operator == .PunctOrOr {
-            let boolean = check.make_type(.Bool, "bool", module_index)
-            let (left, left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], boolean, builder, bindings, binding_count)
-            if left_error != ok { ret (0usize, left_type, left_error) }
-            let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, boolean, true, 0usize, c.tokens[node.token_start])
-            if stack_error != ok { ret (0usize, boolean, stack_error) }
-            let (decision, ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, c.tokens[node.token_start])
-            if decision_error != ok { ret (0usize, boolean, decision_error) }
-            let decision_operand_error = nir.add_operand(builder, decision, left)
-            if decision_operand_error != ok { ret (0usize, boolean, decision_operand_error) }
-
-            let right_block = builder.block_count
-            let (right_block_index, right_block_error) = nir.begin_block(builder)
-            if right_block_error != ok || right_block_index != right_block { ret (0usize, boolean, nir.InvalidControlFlow) }
-            let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], boolean, builder, bindings, binding_count)
-            if right_error != ok { ret (0usize, right_type, right_error) }
-            let (right_store, right_store_ignored, right_store_error) = nir.emit(builder, .Store, boolean, false, 0usize, c.tokens[node.token_start])
-            if right_store_error != ok { ret (0usize, boolean, right_store_error) }
-            let right_address_error = nir.add_operand(builder, right_store, stack)
-            if right_address_error != ok { ret (0usize, boolean, right_address_error) }
-            let right_value_error = nir.add_operand(builder, right_store, right)
-            if right_value_error != ok { ret (0usize, boolean, right_value_error) }
-            let (right_exit, right_exit_error) = emit_branch(builder, c.tokens[node.token_start])
-            if right_exit_error != ok { ret (0usize, boolean, right_exit_error) }
-
-            let short_block = builder.block_count
-            let (short_block_index, short_block_error) = nir.begin_block(builder)
-            if short_block_error != ok || short_block_index != short_block { ret (0usize, boolean, nir.InvalidControlFlow) }
-            var short_immediate = 0usize
-            if operator == .PunctOrOr { short_immediate = 1usize }
-            let (short_constant_instruction, short_value, short_constant_error) = nir.emit(builder, .ConstBool, boolean, true, short_immediate, c.tokens[node.token_start])
-            if short_constant_error != ok { ret (0usize, boolean, short_constant_error) }
-            let (short_store, short_store_ignored, short_store_error) = nir.emit(builder, .Store, boolean, false, 0usize, c.tokens[node.token_start])
-            if short_store_error != ok { ret (0usize, boolean, short_store_error) }
-            let short_address_error = nir.add_operand(builder, short_store, stack)
-            if short_address_error != ok { ret (0usize, boolean, short_address_error) }
-            let short_value_error = nir.add_operand(builder, short_store, short_value)
-            if short_value_error != ok { ret (0usize, boolean, short_value_error) }
-            let (short_exit, short_exit_error) = emit_branch(builder, c.tokens[node.token_start])
-            if short_exit_error != ok { ret (0usize, boolean, short_exit_error) }
-
-            let merge_block = builder.block_count
-            let (merge_block_index, merge_block_error) = nir.begin_block(builder)
-            if merge_block_error != ok || merge_block_index != merge_block { ret (0usize, boolean, nir.InvalidControlFlow) }
-            if operator == .PunctAndAnd {
-                let target_error = nir.set_branch_targets(builder, decision, right_block, short_block)
-                if target_error != ok { ret (0usize, boolean, target_error) }
-            } else {
-                let target_error = nir.set_branch_targets(builder, decision, short_block, right_block)
-                if target_error != ok { ret (0usize, boolean, target_error) }
-            }
-            let right_target_error = nir.set_branch_targets(builder, right_exit, merge_block, 0usize)
-            if right_target_error != ok { ret (0usize, boolean, right_target_error) }
-            let short_target_error = nir.set_branch_targets(builder, short_exit, merge_block, 0usize)
-            if short_target_error != ok { ret (0usize, boolean, short_target_error) }
-            let (load_instruction, result, load_error) = nir.emit(builder, .Load, boolean, true, 0usize, c.tokens[node.token_start])
-            if load_error != ok { ret (0usize, boolean, load_error) }
-            let load_operand_error = nir.add_operand(builder, load_instruction, stack)
-            if load_operand_error != ok { ret (0usize, boolean, load_operand_error) }
-            ret (result, result_type, ok)
-        }
-        let opcode = binary_opcode(operator)
-        if opcode == .Invalid { ret (0usize, zero, check.InvalidOperator) }
-        var operand_expected = result_type
-        if check.is_comparison(operator) { operand_expected = check.invalid_type() }
-        let (left_type, left_type_error) = check.check_expr(c, g, tree, module_index, children[0usize], operand_expected)
-        if left_type_error != ok { ret (0usize, left_type, left_type_error) }
-        let (left, lowered_left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], left_type, builder, bindings, binding_count)
-        if left_error != ok { ret (0usize, lowered_left_type, left_error) }
-        var right_expected = left_type
-        if operator == .PunctShiftLeft || operator == .PunctShiftRight { right_expected = check.invalid_type() }
-        let (right_type, right_type_error) = check.check_expr(c, g, tree, module_index, children[1usize], right_expected)
-        if right_type_error != ok { ret (0usize, right_type, right_type_error) }
-        let (right, lowered_right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], right_type, builder, bindings, binding_count)
-        if right_error != ok { ret (0usize, lowered_right_type, right_error) }
-        var left_ordered = left
-        var right_ordered = right
-        if ordering_opcode(opcode) {
-            let (left_operand, left_coerce_error) = coerce_ordering_operand(c, left_type, left, builder, c.tokens[node.token_start])
-            if left_coerce_error != ok { ret (0usize, result_type, left_coerce_error) }
-            let (right_operand, right_coerce_error) = coerce_ordering_operand(c, right_type, right, builder, c.tokens[node.token_start])
-            if right_coerce_error != ok { ret (0usize, result_type, right_coerce_error) }
-            left_ordered = left_operand
-            right_ordered = right_operand
-        }
-        let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, c.tokens[node.token_start])
-        if emit_error != ok { ret (0usize, result_type, emit_error) }
-        let left_operand_error = nir.add_operand(builder, instruction, left_ordered)
-        if left_operand_error != ok { ret (0usize, result_type, left_operand_error) }
-        let right_operand_error = nir.add_operand(builder, instruction, right_ordered)
-        if right_operand_error != ok { ret (0usize, result_type, right_operand_error) }
-        ret (result, result_type, ok)
+        let (binary_value, binary_type, binary_error) = lower_binary_expr(c, g, tree, module_index, node_index, expected, builder, bindings, binding_count)
+        ret (binary_value, binary_type, binary_error)
     }
     ret (0usize, zero, check.Unsupported)
 }
@@ -3199,6 +3112,253 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     ret ok
 }
 
+// Section 9: a `for` over a comptime sequence is unrolled, and nothing of the loop
+// survives -- what the emitter sees is the straight-line bodies. The binding is pushed
+// on the checker's comptime stack for each copy, which is how the body's `f.name`,
+// `f.ty` and `meta.get[f, T]` see a different value each time.
+// Split out of `lower_expression`, which is at the bootstrap's per-function local
+// limit: every binding here would otherwise be one of its.
+// Split out of `lower_expression`, which sits at the bootstrap's per-function local
+// limit -- every binding below would otherwise be one of its. The short-circuit
+// operators alone account for a third of them.
+fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
+    let node = tree.nodes[node_index]
+    var children: [2]usize = zero
+    var child_count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if child_count == children.len { ret (0usize, zero, parse.InvalidSyntax) }
+            children[child_count] = tree.children[at].index
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count != 2usize { ret (0usize, zero, parse.InvalidSyntax) }
+    let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+    if result_type_error != ok { ret (0usize, result_type, result_type_error) }
+    let operator = check.binary_operator(c, tree, node)
+    if operator == .PunctAndAnd || operator == .PunctOrOr {
+        let boolean = check.make_type(.Bool, "bool", module_index)
+        let (left, left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], boolean, builder, bindings, binding_count)
+        if left_error != ok { ret (0usize, left_type, left_error) }
+        let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, boolean, true, 0usize, c.tokens[node.token_start])
+        if stack_error != ok { ret (0usize, boolean, stack_error) }
+        let (decision, ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, c.tokens[node.token_start])
+        if decision_error != ok { ret (0usize, boolean, decision_error) }
+        let decision_operand_error = nir.add_operand(builder, decision, left)
+        if decision_operand_error != ok { ret (0usize, boolean, decision_operand_error) }
+
+        let right_block = builder.block_count
+        let (right_block_index, right_block_error) = nir.begin_block(builder)
+        if right_block_error != ok || right_block_index != right_block { ret (0usize, boolean, nir.InvalidControlFlow) }
+        let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], boolean, builder, bindings, binding_count)
+        if right_error != ok { ret (0usize, right_type, right_error) }
+        let (right_store, right_store_ignored, right_store_error) = nir.emit(builder, .Store, boolean, false, 0usize, c.tokens[node.token_start])
+        if right_store_error != ok { ret (0usize, boolean, right_store_error) }
+        let right_address_error = nir.add_operand(builder, right_store, stack)
+        if right_address_error != ok { ret (0usize, boolean, right_address_error) }
+        let right_value_error = nir.add_operand(builder, right_store, right)
+        if right_value_error != ok { ret (0usize, boolean, right_value_error) }
+        let (right_exit, right_exit_error) = emit_branch(builder, c.tokens[node.token_start])
+        if right_exit_error != ok { ret (0usize, boolean, right_exit_error) }
+
+        let short_block = builder.block_count
+        let (short_block_index, short_block_error) = nir.begin_block(builder)
+        if short_block_error != ok || short_block_index != short_block { ret (0usize, boolean, nir.InvalidControlFlow) }
+        var short_immediate = 0usize
+        if operator == .PunctOrOr { short_immediate = 1usize }
+        let (short_constant_instruction, short_value, short_constant_error) = nir.emit(builder, .ConstBool, boolean, true, short_immediate, c.tokens[node.token_start])
+        if short_constant_error != ok { ret (0usize, boolean, short_constant_error) }
+        let (short_store, short_store_ignored, short_store_error) = nir.emit(builder, .Store, boolean, false, 0usize, c.tokens[node.token_start])
+        if short_store_error != ok { ret (0usize, boolean, short_store_error) }
+        let short_address_error = nir.add_operand(builder, short_store, stack)
+        if short_address_error != ok { ret (0usize, boolean, short_address_error) }
+        let short_value_error = nir.add_operand(builder, short_store, short_value)
+        if short_value_error != ok { ret (0usize, boolean, short_value_error) }
+        let (short_exit, short_exit_error) = emit_branch(builder, c.tokens[node.token_start])
+        if short_exit_error != ok { ret (0usize, boolean, short_exit_error) }
+
+        let merge_block = builder.block_count
+        let (merge_block_index, merge_block_error) = nir.begin_block(builder)
+        if merge_block_error != ok || merge_block_index != merge_block { ret (0usize, boolean, nir.InvalidControlFlow) }
+        if operator == .PunctAndAnd {
+            let target_error = nir.set_branch_targets(builder, decision, right_block, short_block)
+            if target_error != ok { ret (0usize, boolean, target_error) }
+        } else {
+            let target_error = nir.set_branch_targets(builder, decision, short_block, right_block)
+            if target_error != ok { ret (0usize, boolean, target_error) }
+        }
+        let right_target_error = nir.set_branch_targets(builder, right_exit, merge_block, 0usize)
+        if right_target_error != ok { ret (0usize, boolean, right_target_error) }
+        let short_target_error = nir.set_branch_targets(builder, short_exit, merge_block, 0usize)
+        if short_target_error != ok { ret (0usize, boolean, short_target_error) }
+        let (load_instruction, result, load_error) = nir.emit(builder, .Load, boolean, true, 0usize, c.tokens[node.token_start])
+        if load_error != ok { ret (0usize, boolean, load_error) }
+        let load_operand_error = nir.add_operand(builder, load_instruction, stack)
+        if load_operand_error != ok { ret (0usize, boolean, load_operand_error) }
+        ret (result, result_type, ok)
+    }
+    let opcode = binary_opcode(operator)
+    if opcode == .Invalid { ret (0usize, zero, check.InvalidOperator) }
+    var operand_expected = result_type
+    if check.is_comparison(operator) { operand_expected = check.invalid_type() }
+    let (left_type, left_type_error) = check.check_expr(c, g, tree, module_index, children[0usize], operand_expected)
+    if left_type_error != ok { ret (0usize, left_type, left_type_error) }
+    let (left, lowered_left_type, left_error) = lower_expression(c, g, tree, module_index, children[0usize], left_type, builder, bindings, binding_count)
+    if left_error != ok { ret (0usize, lowered_left_type, left_error) }
+    var right_expected = left_type
+    if operator == .PunctShiftLeft || operator == .PunctShiftRight { right_expected = check.invalid_type() }
+    let (right_type, right_type_error) = check.check_expr(c, g, tree, module_index, children[1usize], right_expected)
+    if right_type_error != ok { ret (0usize, right_type, right_type_error) }
+    let (right, lowered_right_type, right_error) = lower_expression(c, g, tree, module_index, children[1usize], right_type, builder, bindings, binding_count)
+    if right_error != ok { ret (0usize, lowered_right_type, right_error) }
+    var left_ordered = left
+    var right_ordered = right
+    if ordering_opcode(opcode) {
+        let (left_operand, left_coerce_error) = coerce_ordering_operand(c, left_type, left, builder, c.tokens[node.token_start])
+        if left_coerce_error != ok { ret (0usize, result_type, left_coerce_error) }
+        let (right_operand, right_coerce_error) = coerce_ordering_operand(c, right_type, right, builder, c.tokens[node.token_start])
+        if right_coerce_error != ok { ret (0usize, result_type, right_coerce_error) }
+        left_ordered = left_operand
+        right_ordered = right_operand
+    }
+    let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, c.tokens[node.token_start])
+    if emit_error != ok { ret (0usize, result_type, emit_error) }
+    let left_operand_error = nir.add_operand(builder, instruction, left_ordered)
+    if left_operand_error != ok { ret (0usize, result_type, left_operand_error) }
+    let right_operand_error = nir.add_operand(builder, instruction, right_ordered)
+    if right_operand_error != ok { ret (0usize, result_type, right_operand_error) }
+    ret (result, result_type, ok)
+    ret (0usize, check.invalid_type(), check.Unsupported)
+}
+fn lower_binding_member_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder) -> (usize, check.Type, bool, err) {
+    let node = tree.nodes[node_index]
+    let (bound, bound_member, is_bound) = check.comptime_binding_base(c, g.modules[module_index].text, tree, node)
+    if !is_bound { ret (0usize, check.invalid_type(), false, ok) }
+    let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
+    if type_error != ok { ret (0usize, result_type, true, type_error) }
+    let (value, value_error) = lower_comptime_binding_member(c, bound, bound_member, result_type, builder, c.tokens[node.token_start])
+    ret (value, result_type, true, value_error)
+}
+
+fn lower_unrolled_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, sequence: check.MetaSequence, name: str, body_index: usize, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
+    let aggregate = c.aggregates[sequence.aggregate_index]
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let (argument, present) = check.meta_sequence_binding(c, sequence, field_at)
+        if present {
+            let depth = c.comptime_binding_count
+            if name.len != 0usize {
+                let push_error = check.push_comptime_binding(c, name, argument)
+                if push_error != ok { ret push_error }
+            }
+            let body_bindings = *binding_count
+            // No loop survives, so there is no target for a `break`. The checker does
+            // not raise `loop_depth` for an unrolled `for` either, so one in the body
+            // is already rejected there as having no enclosing loop.
+            var control: LoopControl = zero
+            let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
+            *binding_count = body_bindings
+            c.comptime_binding_count = depth
+            if body_error != ok { ret body_error }
+        }
+        field_at += 1usize
+    }
+    ret ok
+}
+
+// A member of a comptime `Field` or `Member`, as the constant it was all along. The
+// offset and size are target layout, which is why the checker kept the aggregate and
+// the field index rather than the answers.
+fn lower_comptime_binding_member(c: *check.Checker, argument: check.GenericArgument, member: str, result_type: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    if check.same(member, "name") {
+        let (name_index, intern_error) = nir.intern_string(builder, quoted_text(c, argument.text))
+        if intern_error != ok { ret (0usize, intern_error) }
+        let (instruction, value, emit_error) = nir.emit(builder, .ConstString, result_type, true, name_index, token)
+        if emit_error != ok { ret (0usize, emit_error) }
+        ret (value, ok)
+    }
+    var constant = argument.value
+    if argument.kind == .Field {
+        let owner = c.aggregates[argument.owner]
+        if argument.value >= owner.field_count { ret (0usize, check.InvalidType) }
+        let entry = c.aggregate_fields[owner.first_field + argument.value]
+        if check.same(member, "size") {
+            let (info, info_error) = layout.type_info(c, entry.ty)
+            if info_error != ok { ret (0usize, info_error) }
+            constant = info.size
+        } else {
+            let (offset, offset_error) = comptime_field_offset(c, argument)
+            if offset_error != ok { ret (0usize, offset_error) }
+            constant = offset
+        }
+    }
+    let (instruction, value, emit_error) = nir.emit(builder, .ConstInteger, result_type, true, constant, token)
+    if emit_error != ok { ret (0usize, emit_error) }
+    ret (value, ok)
+}
+
+// Where the field sits in the aggregate it came from. Walked here rather than through
+// `layout.field` by name, because a tagged union's payloads share an offset and the
+// name lookup would be doing the same walk anyway.
+fn comptime_field_offset(c: *check.Checker, argument: check.GenericArgument) -> (usize, err) {
+    let owner = c.aggregates[argument.owner]
+    if argument.value >= owner.field_count { ret (0usize, check.InvalidType) }
+    let entry = c.aggregate_fields[owner.first_field + argument.value]
+    var subject = check.make_type(.Named, owner.name, owner.module_index)
+    subject.element = argument.owner
+    subject.has_element = true
+    let (field, field_error) = layout.field(c, subject, entry.name)
+    if field_error != ok { ret (0usize, field_error) }
+    ret (field.offset, ok)
+}
+
+// Section 9: `get` and `set` each compile to one field load or store at the offset
+// `FIELD` names, which is why they may run at runtime while `fields` may not.
+fn emit_meta_access(c: *check.Checker, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    results.call = call
+    results.count = call.function.return_count
+    if argument_count == 0usize { ret check.ArgumentCount }
+    let (offset, offset_error) = comptime_field_offset(c, call.meta_field)
+    if offset_error != ok { ret offset_error }
+    let field_type = call.meta_field.ty
+    let (info, info_error) = layout.type_info(c, field_type)
+    if info_error != ok { ret info_error }
+    let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, field_type, true, offset, token)
+    if address_error != ok { ret address_error }
+    let address_operand_error = nir.add_operand(builder, address_instruction, arguments[0usize])
+    if address_operand_error != ok { ret address_operand_error }
+    if call.meta_writes {
+        if argument_count != 2usize { ret check.ArgumentCount }
+        if aggregate_value(c, field_type) {
+            let (copy_instruction, copy_ignored, copy_error) = nir.emit(builder, .Copy, field_type, false, info.size, token)
+            if copy_error != ok { ret copy_error }
+            try nir.add_operand(builder, copy_instruction, address)
+            try nir.add_operand(builder, copy_instruction, arguments[1usize])
+            ret ok
+        }
+        let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, field_type, false, info.size, token)
+        if store_error != ok { ret store_error }
+        try nir.add_operand(builder, store_instruction, address)
+        try nir.add_operand(builder, store_instruction, arguments[1usize])
+        ret ok
+    }
+    // An aggregate field is read as a place, exactly as `v.x` is.
+    if aggregate_value(c, field_type) {
+        results.values[0usize] = address
+        results.addresses[0usize] = true
+        ret ok
+    }
+    let (load_instruction, value, load_error) = nir.emit(builder, .Load, field_type, true, info.size, token)
+    if load_error != ok { ret load_error }
+    let load_operand_error = nir.add_operand(builder, load_instruction, address)
+    if load_operand_error != ok { ret load_operand_error }
+    results.values[0usize] = value
+    ret ok
+}
+
 fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
     var names: [2]lex.Token = zero
     var name_count = 0usize
@@ -3236,6 +3396,14 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     }
     if !found_body || expression_count == 0usize { ret parse.InvalidSyntax }
     if expression_count == 1usize {
+        let (sequence, sequence_error) = check.meta_sequence(c, g, tree, module_index, expressions[0usize])
+        if sequence_error != ok { ret sequence_error }
+        if sequence.kind != .None {
+            if sequence.deferred { ret check.Unsupported }
+            var binding_name = ""
+            if names[0usize].kind == .Identifier { binding_name = g.modules[module_index].text[names[0usize].start..names[0usize].end] }
+            ret lower_unrolled_for(c, g, tree, module_index, function, sequence, binding_name, body_index, builder, bindings, binding_count, defers)
+        }
         let (iterable_type, iterable_type_error) = check.check_expr(c, g, tree, module_index, expressions[0usize], check.invalid_type())
         if iterable_type_error != ok { ret iterable_type_error }
         if iterable_type.kind != .Array && iterable_type.kind != .Slice && iterable_type.kind != .String {

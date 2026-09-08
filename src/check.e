@@ -79,6 +79,8 @@ type DiagnosticKind = enum u8 {
     ProtocolGenericType,
     AtomicElement,
     AtomicOrdering,
+    MetaShape,
+    MetaFieldOwner,
 }
 
 type Kind = enum u8 {
@@ -123,6 +125,19 @@ type ComptimeKind = enum u8 {
     Type,
     Integer,
     Str,
+    // Section 9's comptime-only types. A `Field` is (name, type, offset) and a
+    // `Member` is (name, value); both fit the slots a `GenericArgument` already has,
+    // and `Field.size` is the type's own size rather than a fourth slot to keep in
+    // step with it.
+    Field,
+    Member,
+}
+
+// One name bound by an unrolled `for`, which the enclosing instantiation's contiguous
+// comptime window has no room for -- it belongs to the loop, not to the signature.
+type ComptimeBinding = struct {
+    name: str,
+    argument: GenericArgument,
 }
 
 type ComptimeParameter = struct {
@@ -139,6 +154,10 @@ type GenericArgument = struct {
     // here decodes it, so it interns and lowers as any other string literal does.
     text: str,
     expression: usize,
+    // The aggregate a comptime `Field` or `Member` came from. Its offset and size are
+    // target layout, which only lowering can compute -- `layout` is built on this
+    // module, not the other way round -- so what is kept here is where to look them up.
+    owner: usize,
     symbolic: bool,
     set: bool,
 }
@@ -351,6 +370,10 @@ type Checker = struct {
     diagnostic_count: usize,
     constants_ready: bool,
     expand_aliases: bool,
+    // Unrolled `for` bindings, innermost last. Eight is the nesting depth of comptime
+    // loops, not of loops: only a comptime subject pushes here.
+    comptime_bindings: [8]ComptimeBinding,
+    comptime_binding_count: usize,
     active_first_comptime: usize,
     active_comptime_count: usize,
     active_first_argument: usize,
@@ -847,6 +870,24 @@ fn active_comptime_parameter(c: *Checker, name: str) -> (usize, bool) {
     ret (0usize, false)
 }
 
+// Innermost first: a nested unrolled loop may reuse an outer loop's binding name.
+fn find_comptime_binding(c: *Checker, name: str) -> (GenericArgument, bool) {
+    var empty: GenericArgument = zero
+    var at = c.comptime_binding_count
+    while at > 0usize {
+        at = at - 1usize
+        if same(c.comptime_bindings[at].name, name) { ret (c.comptime_bindings[at].argument, true) }
+    }
+    ret (empty, false)
+}
+
+fn push_comptime_binding(c: *Checker, name: str, argument: GenericArgument) -> err {
+    if c.comptime_binding_count == c.comptime_bindings.len { ret Capacity }
+    c.comptime_bindings[c.comptime_binding_count] = ComptimeBinding { name: name, argument: argument }
+    c.comptime_binding_count += 1usize
+    ret ok
+}
+
 fn active_argument(c: *Checker, parameter_index: usize) -> (GenericArgument, bool) {
     var empty: GenericArgument = zero
     if !c.active_arguments || parameter_index < c.active_first_comptime { ret (empty, false) }
@@ -1165,6 +1206,30 @@ fn function_type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, t
 // pushed onto `c.generic_arguments`. Both spellings land here: `St[i64]` written as a
 // type, and the same thing written in a comptime argument slot, where the parser gives
 // a bracket expression rather than a type node.
+// `f.ty` written where a type is written -- an annotation, a parameter, a generic
+// argument. The comptime `Field` binding carries the type; every other member of one
+// is a value and belongs in an expression.
+fn comptime_binding_type_path(c: *Checker, text: str, node: syntax.Node) -> (Type, bool) {
+    var base = ""
+    var member = ""
+    var seen = 0usize
+    var at = node.token_start
+    while at < node.token_end && at < c.token_count {
+        let token = c.tokens[at]
+        if token.kind == .PunctLBracket { break }
+        if token.kind == .Identifier {
+            if seen == 0usize { base = text[token.start..token.end] }
+            if seen == 1usize { member = text[token.start..token.end] }
+            seen += 1usize
+        }
+        at += 1usize
+    }
+    if seen != 2usize || !same(member, "ty") { ret (invalid_type(), false) }
+    let (argument, found) = find_comptime_binding(c, base)
+    if !found || argument.kind != .Field { ret (invalid_type(), false) }
+    ret (argument.ty, true)
+}
+
 fn collect_generic_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, template_index: usize, first_child: usize, child_end: usize) -> (usize, err) {
     if template_index >= c.aggregate_count { ret (0usize, InvalidType) }
     if !c.aggregates[template_index].generic { ret (0usize, InvalidType) }
@@ -1296,6 +1361,8 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         let (scalar_module, scalar_qualified) = resolve.qualifier(r, module_index, base)
         if !scalar_qualified || !named_type_is_path(c, node) { ret (scalar, ok) }
     }
+    let (bound_type, is_bound_path) = comptime_binding_type_path(c, g.modules[module_index].text, node)
+    if is_bound_path { ret (bound_type, ok) }
     let (parameter_index, parameter_found) = active_comptime_parameter(c, base)
     if parameter_found {
         if c.comptime_parameters[parameter_index].kind != .Type { ret (invalid_type(), InvalidType) }
@@ -3820,7 +3887,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     var at = 0usize
     while at < generic.comptime_count {
         let parameter = c.comptime_parameters[generic.first_comptime + at]
-        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, text: "", expression: 0usize, symbolic: false, set: false }
+        c.generic_arguments[c.generic_argument_count] = GenericArgument { kind: parameter.kind, ty: invalid_type(), value: 0usize, text: "", expression: 0usize, owner: 0usize, symbolic: false, set: false }
         c.generic_argument_count += 1usize
         at += 1usize
     }
@@ -3950,6 +4017,12 @@ type CallInfo = struct {
     atomic_element: Type,
     atomic_success: Ordering,
     atomic_failure: Ordering,
+    // `meta.get` / `meta.set`: the field is settled here and what reaches lowering is
+    // one load or store at its offset.
+    meta_writes: bool,
+    meta_field: GenericArgument,
+    meta_subject: Type,
+    meta_access: bool,
 }
 
 // The thirteen `e.atomic` intrinsics. `None` is "this call is not one of them".
@@ -4060,6 +4133,13 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         ret (canonical, canonical_error)
     }
     if node.kind == .FieldExpr {
+        // `f.ty` where `f` is bound by an unrolled `for`: a comptime expression of type
+        // `type`, so it stands wherever a type stands.
+        let (bound, bound_member, is_bound) = comptime_binding_base(c, text, tree, node)
+        if is_bound {
+            if bound.kind != .Field || !same(bound_member, "ty") { ret (invalid_type(), InvalidType) }
+            ret (bound.ty, ok)
+        }
         let (target_module, name, found) = qualified_member(c, g, tree, module_index, node)
         if !found { ret (invalid_type(), InvalidType) }
         let (_, has_type) = resolve.find(c.resolver, target_module, name, .Type)
@@ -5141,6 +5221,78 @@ fn check_atomic_ordering(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
     ret ok
 }
 
+type MetaAccessInfo = struct {
+    matched: bool,
+    writes: bool,
+    field: GenericArgument,
+    subject: Type,
+    function: Function,
+}
+
+// Section 9: `get` and `set` are comptime-*parameterised*, not comptime-only. Only
+// `FIELD` must be comptime; each compiles to one field load or store at the offset
+// that `FIELD` names, so both are legal in any body at runtime, exactly as `v.x` is.
+fn meta_access_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (MetaAccessInfo, err) {
+    var info: MetaAccessInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let text = g.modules[module_index].text
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var field_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize { base_index = tree.children[at].index }
+            if child_count == 1usize { field_index = tree.children[at].index }
+            if child_count == 2usize { type_index = tree.children[at].index }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.meta") { ret (info, ok) }
+    if !same(member, "get") && !same(member, "set") { ret (info, ok) }
+    info.matched = true
+    info.writes = same(member, "set")
+    if child_count != 3usize { ret (info, ArgumentCount) }
+    // The first bracket argument names a comptime `Field`, which today can only come
+    // from the binding of an unrolled `for` over `meta.fields[T]()`.
+    let field_node = tree.nodes[field_index]
+    if field_node.kind != .NameExpr { ret (info, InvalidType) }
+    let field_token = c.tokens[field_node.token_start]
+    if field_token.kind != .Identifier { ret (info, InvalidType) }
+    let (argument, found_binding) = find_comptime_binding(c, text[field_token.start..field_token.end])
+    if !found_binding || argument.kind != .Field { ret (info, InvalidType) }
+    let (subject, subject_error) = comptime_type(c, g, tree, module_index, type_index)
+    if subject_error != ok { ret (info, subject_error) }
+    // Section 9 requires that `FIELD` be an element of `meta.fields[T]()`: a `Field` of
+    // any other type read at its offset in this one is exactly what that forbids.
+    let (aggregate_index, found_aggregate) = aggregate_for_type(c, subject)
+    if !found_aggregate || aggregate_index != argument.owner {
+        record_failure(c, module_index, field_node, .MetaFieldOwner, argument.text, subject.name)
+        ret (info, InvalidType)
+    }
+    info.field = argument
+    info.subject = subject
+    var function: Function = zero
+    function.name = member
+    function.module_index = target_module
+    function.parameter_count = 1usize
+    function.return_count = 1usize
+    if info.writes {
+        function.parameter_count = 2usize
+        function.return_count = 0usize
+    }
+    function.intrinsic = true
+    info.function = function
+    ret (info, ok)
+}
+
 fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (CallInfo, err) {
     var info: CallInfo = zero
     // The formatter's arguments become the parameters of the instance its call
@@ -5202,6 +5354,16 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.alloc_return = spawner.return_type
                             has_function = true
                         } else {
+                        let (access, access_error) = meta_access_info(c, g, tree, module_index, receiver)
+                        if access_error != ok { ret (info, access_error) }
+                        if access.matched {
+                            info.function = access.function
+                            info.meta_access = true
+                            info.meta_writes = access.writes
+                            info.meta_field = access.field
+                            info.meta_subject = access.subject
+                            has_function = true
+                        } else {
                         let (reflection, reflection_error) = meta_info(c, g, tree, module_index, receiver)
                         if reflection_error != ok { ret (info, reflection_error) }
                         if reflection.matched {
@@ -5254,6 +5416,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         }
                         }
                         has_function = true
+                        }
                         }
                     } else {
                         if receiver.kind != .FieldExpr { ret (info, Unsupported) }
@@ -5413,6 +5576,25 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         let (entry_type, entry_error) = check_expr(c, g, tree, module_index, child_index, parameter_type)
                         if entry_error != ok { ret (info, entry_error) }
                         if child_position == 1usize { info.thread_entry = entry_type }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
+                    if info.meta_access {
+                        var wanted = invalid_type()
+                        if child_position == 1usize {
+                            let (stored, store_error) = store_type(c, info.meta_subject)
+                            if store_error != ok { ret (info, store_error) }
+                            var pointer = make_type(.Pointer, "", function.module_index)
+                            pointer.element = stored
+                            pointer.has_element = true
+                            pointer.is_const = !info.meta_writes
+                            wanted = pointer
+                        } else {
+                            wanted = info.meta_field.ty
+                        }
+                        let (supplied, supplied_error) = check_expr(c, g, tree, module_index, child_index, wanted)
+                        if supplied_error != ok { ret (info, supplied_error) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -5832,6 +6014,12 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         if index == 0usize { ret (call.alloc_return, ok) }
         if index == 1usize { ret (make_type(.Err, "err", call.function.module_index), ok) }
         ret (invalid_type(), InvalidType)
+    }
+    // `get` gives back the field's own type -- section 9's dependent return -- and
+    // `set` gives nothing.
+    if call.meta_access {
+        if call.meta_writes || index != 0usize { ret (invalid_type(), InvalidType) }
+        ret (call.meta_field.ty, ok)
     }
     // Section 8: `init` gives the `Atomic[T]` back, `cas` the pair, and every other
     // operation with a result gives the `T` it read.
@@ -6338,6 +6526,13 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         ret (expected, ok)
     }
     if node.kind == .FieldExpr {
+        let (bound, bound_member, is_bound) = comptime_binding_base(c, text, tree, node)
+        if is_bound {
+            let (member_type, has_member) = comptime_binding_member(c, bound, bound_member, module_index)
+            if !has_member { ret (invalid_type(), InvalidType) }
+            let (contextual, context_error) = apply_context(c, member_type, expected)
+            ret (contextual, context_error)
+        }
         let (enum_member_type, found_enum_member, enum_target) = static_enum_member(c, g, module_index, node)
         if found_enum_member {
             let (contextual_enum, context_error) = apply_context(c, enum_member_type, expected)
@@ -6999,6 +7194,184 @@ fn protocol_iteration_element(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
     ret (element, ok)
 }
 
+// Section 9: `fields[T]()` and `members[E]()` are comptime-only, and the one place a
+// comptime sequence may stand is the subject of a `for`, which is always unrolled.
+// There is no runtime `[]const Field`, so there is nothing else to recognise.
+type MetaSequenceKind = enum u8 {
+    None,
+    Fields,
+    Members,
+}
+
+type MetaSequence = struct {
+    kind: MetaSequenceKind,
+    subject: Type,
+    aggregate_index: usize,
+    // The subject is still a comptime parameter, so there is nothing to enumerate
+    // yet. The template body is checked symbolically once and each instance is checked
+    // again with the parameter bound, and that is where the unrolling belongs.
+    deferred: bool,
+}
+
+// `meta.fields[T]()` written as a whole call: a bracket receiver under a call node.
+fn meta_sequence(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (MetaSequence, err) {
+    var info: MetaSequence = zero
+    let node = tree.nodes[node_index]
+    if node.kind != .CallExpr { ret (info, ok) }
+    let (receiver_index, has_receiver) = first_node_child(tree, node)
+    if !has_receiver { ret (info, ok) }
+    let receiver = tree.nodes[receiver_index]
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.meta") { ret (info, ok) }
+    var kind: MetaSequenceKind = .None
+    if same(member, "fields") { kind = .Fields }
+    if same(member, "members") { kind = .Members }
+    if kind == .None { ret (info, ok) }
+    info.kind = kind
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let (subject, subject_error) = comptime_type(c, g, tree, module_index, type_index)
+    if subject_error != ok { ret (info, subject_error) }
+    if type_shape_unknown(subject) {
+        info.subject = subject
+        info.deferred = true
+        ret (info, ok)
+    }
+    let (aggregate_index, found_aggregate) = aggregate_for_type(c, subject)
+    if !found_aggregate {
+        record_failure(c, module_index, tree.nodes[type_index], .MetaShape, subject.name, member)
+        ret (info, InvalidType)
+    }
+    let aggregate = c.aggregates[aggregate_index]
+    // `fields` on a bare union is a compile error: its members overlap by design and
+    // there is no fact about which one is live. `members` needs a tag list, which only
+    // an enum or a tagged union has.
+    if kind == .Fields {
+        if aggregate.kind != .Struct && aggregate.kind != .TaggedUnion {
+            record_failure(c, module_index, tree.nodes[type_index], .MetaShape, subject.name, member)
+            ret (info, InvalidType)
+        }
+    } else {
+        if aggregate.kind != .Enum && aggregate.kind != .TaggedUnion {
+            record_failure(c, module_index, tree.nodes[type_index], .MetaShape, subject.name, member)
+            ret (info, InvalidType)
+        }
+    }
+    info.subject = subject
+    info.aggregate_index = aggregate_index
+    ret (info, ok)
+}
+
+// The comptime value the unrolled body sees for one step. For a tagged union `fields`
+// skips the payloadless variants, so the step index and the field index differ; the
+// caller walks fields and asks for each in turn.
+fn meta_sequence_binding(c: *Checker, sequence: MetaSequence, field_index: usize) -> (GenericArgument, bool) {
+    var argument: GenericArgument = zero
+    let aggregate = c.aggregates[sequence.aggregate_index]
+    if field_index >= aggregate.field_count { ret (argument, false) }
+    let entry = c.aggregate_fields[aggregate.first_field + field_index]
+    argument.set = true
+    argument.text = entry.name
+    if sequence.kind == .Members {
+        argument.kind = .Member
+        argument.owner = sequence.aggregate_index
+        argument.value = entry.enum_value
+        if entry.enum_negative {
+            // Section 9 reads the backing value as two's complement, so one `u64` holds
+            // a negative member of a signed enum and a large one of an unsigned enum.
+            argument.value = 0usize -% entry.enum_value
+        }
+        ret (argument, true)
+    }
+    // A payloadless variant of a tagged union has no `Field`.
+    if aggregate.kind == .TaggedUnion && entry.ty.kind == .Void { ret (argument, false) }
+    argument.kind = .Field
+    argument.ty = entry.ty
+    argument.owner = sequence.aggregate_index
+    argument.value = field_index
+    ret (argument, true)
+}
+
+// One checked copy of the body per step. Nothing is added to `c.locals`: the binding
+// is a comptime value, not a local, so the body reaches it through the binding stack.
+fn check_unrolled_for(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function, sequence: MetaSequence, name: str, block_index: usize) -> err {
+    let aggregate = c.aggregates[sequence.aggregate_index]
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let (argument, present) = meta_sequence_binding(c, sequence, field_at)
+        if present {
+            let depth = c.comptime_binding_count
+            if name.len != 0usize { try push_comptime_binding(c, name, argument) }
+            let checkpoint = c.local_count
+            let body_error = check_block(c, r, g, tree, module_index, tree.nodes[block_index], function)
+            c.local_count = checkpoint
+            c.comptime_binding_count = depth
+            if body_error != ok { ret body_error }
+        }
+        field_at += 1usize
+    }
+    ret ok
+}
+
+// A member of a comptime `Field` or `Member`, which is the only way the body of an
+// unrolled `for` reads its binding. `ty` is a type and stands only where a type
+// stands, so it is answered by `comptime_type` rather than here.
+fn comptime_binding_member(c: *Checker, argument: GenericArgument, member: str, module_index: usize) -> (Type, bool) {
+    if argument.kind == .Field {
+        if same(member, "name") { ret (make_type(.String, "str", module_index), true) }
+        if same(member, "offset") { ret (make_type(.Integer, "usize", module_index), true) }
+        if same(member, "size") { ret (make_type(.Integer, "usize", module_index), true) }
+        ret (invalid_type(), false)
+    }
+    if argument.kind == .Member {
+        if same(member, "name") { ret (make_type(.String, "str", module_index), true) }
+        if same(member, "value") { ret (make_type(.Integer, "u64", module_index), true) }
+        ret (invalid_type(), false)
+    }
+    ret (invalid_type(), false)
+}
+
+// The base of `f.name` where `f` is bound by an unrolled `for`.
+fn comptime_binding_base(c: *Checker, text: str, tree: *parse.Tree, node: syntax.Node) -> (GenericArgument, str, bool) {
+    var empty: GenericArgument = zero
+    let (base_index, has_base) = first_node_child(tree, node)
+    if !has_base { ret (empty, "", false) }
+    let base_node = tree.nodes[base_index]
+    if base_node.kind != .NameExpr { ret (empty, "", false) }
+    let base_token = c.tokens[base_node.token_start]
+    if base_token.kind != .Identifier { ret (empty, "", false) }
+    let (argument, found) = find_comptime_binding(c, text[base_token.start..base_token.end])
+    if !found { ret (empty, "", false) }
+    var member = ""
+    var at = base_node.token_end
+    while at < node.token_end && at < c.token_count {
+        let token = c.tokens[at]
+        if token.kind == .Identifier { member = text[token.start..token.end] }
+        at += 1usize
+    }
+    if member.len == 0usize { ret (empty, "", false) }
+    ret (argument, member, true)
+}
+
 fn check_for_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     var names: [2]str = zero
     var name_count = 0usize
@@ -7035,6 +7408,19 @@ fn check_for_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
         at += 1usize
     }
     if !has_block || expression_count == 0usize { ret parse.InvalidSyntax }
+    // Section 9: a `for` whose subject is a comptime value is always unrolled, and the
+    // binding is a distinct comptime value in each copy -- which is what lets the body
+    // use it where only a comptime value may stand. The body is checked once per step
+    // rather than once, because each copy sees a different type in `f.ty`.
+    if expression_count == 1usize {
+        let (sequence, sequence_error) = meta_sequence(c, g, tree, module_index, expressions[0usize])
+        if sequence_error != ok { ret sequence_error }
+        if sequence.kind != .None {
+            if name_count != 1usize { ret ArgumentCount }
+            if sequence.deferred { ret ok }
+            ret check_unrolled_for(c, r, g, tree, module_index, node, function, sequence, names[0usize], block_index)
+        }
+    }
     let checkpoint = c.local_count
     if expression_count == 2usize {
         if name_count != 1usize { ret ArgumentCount }

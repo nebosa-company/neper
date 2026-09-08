@@ -271,6 +271,10 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.meta", "kind", .Value, .Intrinsic)
     try seed(r, g, "e.meta", "array_len", .Value, .Intrinsic)
     try seed(r, g, "e.meta", "type_name", .Value, .Intrinsic)
+    try seed(r, g, "e.meta", "fields", .Value, .Intrinsic)
+    try seed(r, g, "e.meta", "members", .Value, .Intrinsic)
+    try seed(r, g, "e.meta", "get", .Value, .Intrinsic)
+    try seed(r, g, "e.meta", "set", .Value, .Intrinsic)
     try seed(r, g, "e.io", "printf", .Value, .Intrinsic)
     try seed(r, g, "e.mem", "stats", .Value, .Intrinsic)
     try seed(r, g, "e.mem", "Exhausted", .Value, .Error)
@@ -414,6 +418,15 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
                 at += 1usize
             }
             ret UnknownMember
+        }
+        // `f.ty` where `f` is a binding, not a module: section 9's comptime `Field`
+        // carries a type, so a value in scope may stand at the head of a type path.
+        // Which member is legal there is the checker's to say -- it is the only side
+        // that knows whether the binding is a `Field` at all.
+        var value_index = r.local_count
+        while value_index > 0usize {
+            value_index = value_index - 1usize
+            if r.locals[value_index].space == .Value && same(r.locals[value_index].name, base) { ret ok }
         }
     }
     var local_index = r.local_count

@@ -1183,6 +1183,20 @@ fn write_check_message(file: os.File, checker: *check.Checker, check_error: err)
         try write_all(file, checker.failure_detail)
         ret write_all(file, "` is not supported yet")
     }
+    if checker.failure_kind == .MetaFieldOwner {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` is not a field of `")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "`")
+    }
+    if checker.failure_kind == .MetaShape {
+        try write_all(file, "`meta.")
+        try write_all(file, checker.failure_detail2)
+        try write_all(file, "` has nothing to enumerate for `")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "`")
+    }
     if checker.failure_kind == .AtomicElement {
         try write_all(file, "`Atomic[")
         try write_all(file, checker.failure_detail)

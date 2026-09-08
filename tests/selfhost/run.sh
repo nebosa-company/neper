@@ -649,6 +649,13 @@ generic_field_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost
 [ "$generic_field_accepted" = 'module check ok' ]
 check_protocol_diagnostic generic_instance_field_leak 'main.e:8:5: error[E-TYPE-9999]: type checking failed: check.InvalidType'
 check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
+# Section 9's reflection, run rather than only checked: the offsets and sizes are
+# asserted by hand, so a field read at the wrong offset is a wrong value here.
+meta_reflect_path="$test_build/meta-reflect-selfhost"
+meta_reflect_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/meta_reflect/src/main.e" "$repo" x64 linux "$meta_reflect_path")
+[ "$meta_reflect_written" = 'executable written' ]
+chmod +x "$meta_reflect_path"
+"$meta_reflect_path"
 # `e.channel`, over `e.sync`. The threaded half runs four producers through a channel
 # that holds four, so every one of them blocks, and the close is what releases the
 # consumers waiting on empty -- a close that failed to wake would hang here.
