@@ -25,6 +25,14 @@ fn main() -> err {
     // A wider one, from the same library on one platform and a second on the other.
     if plat.absolute_wide(-100000000000i64) != 100000000000i64 { ret Failed }
 
+    // A negative `int` from a foreign call. Equality alone would not catch this: the bug
+    // it guards is a result read as 0xFFFFFFFF, which compares equal to nothing and is
+    // greater than zero, so both the value and its sign are checked.
+    if plat.parse_signed("-5") != -5i32 { ret Failed }
+    if plat.parse_signed("-5") > 0i32 { ret Failed }
+    if plat.parse_signed("-2147483647") != -2147483647i32 { ret Failed }
+    if plat.parse_signed("7") != 7i32 { ret Failed }
+
     // A call with no result, and a clock that has to move across it.
     let before = plat.ticks()
     plat.pause(30u32)

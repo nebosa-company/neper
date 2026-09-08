@@ -17,6 +17,14 @@ extern fn raw_abs(v: i32) -> i32
 @import("libc.so.6", "labs")
 extern fn raw_labs(v: i64) -> i64
 
+@import("libc.so.6", "atoi")
+extern fn raw_parse(text: *const u8) -> i32
+
+// A foreign call that reports failure by a negative number, which is how most of them do
+// it. The convention leaves the bits above an `int` undefined, so a result that is not
+// widened reads as a large positive one and every `< 0` check passes silently.
+fn parse_signed(text: str) -> i32 { ret raw_parse(&text[0usize]) }
+
 fn identity() -> u32 { ret u32(raw_pid()) }
 fn ticks() -> u64 { ret u64(raw_clock()) }
 fn pause(ms: u32) { let ignored = raw_usleep(ms * 1000u32) }

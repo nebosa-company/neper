@@ -1339,6 +1339,18 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         } else {
                             if instruction.ty.kind == .Float { ret Unsupported }
                             try emit_x64.mov_register(output, 10usize, 0usize)
+                            // A callee returning a type narrower than a register leaves
+                            // only that many bits defined -- both System V and Win64 say
+                            // the rest is undefined -- so a narrow result is widened here
+                            // rather than trusted. An `extern fn` returning `i32` was the
+                            // case that showed it: a -1 read as 0xFFFFFFFF is not less
+                            // than zero, so every error check on a foreign call that
+                            // reports failure by a negative number silently passed.
+                            // neper's own calls already leave the value widened, which
+                            // makes this a no-op for them rather than a case to detect.
+                            if instruction.ty.kind == .Integer && integer_width(instruction.ty) != 64usize {
+                                try emit_x64.normalize_integer(output, 10usize, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
+                            }
                         }
                         if multiple_results { try emit_x64.mov_register(output, 11usize, 2usize) }
                     }
