@@ -5086,6 +5086,15 @@ static void check_program(Compiler *c) {
             fn->params[j].local_index = fn->local_count++;
         }
         check_statements(c, fn, fn->body);
+        /* Every site that claims a local checks MAX_LOCALS, but each does so silently:
+           the local is simply not registered and its index keeps whatever it held, so
+           the function goes on to read the wrong slot. That miscompiles quietly, and
+           the symptom shows up wherever the index is used rather than here. Say it. */
+        if (fn->local_count >= MAX_LOCALS) {
+            char message[256];
+            snprintf(message, sizeof(message), "fn %s needs more than %d locals", fn->name, MAX_LOCALS);
+            diagnostic_at(c, &fn->token, "E-TOOL-9999", message);
+        }
         if (strcmp(fn->name, "main") == 0) main_fn = fn;
     }
     if (!main_fn) {
