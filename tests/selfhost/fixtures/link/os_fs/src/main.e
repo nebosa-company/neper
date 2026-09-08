@@ -317,6 +317,50 @@ fn main(a: *mem.Arena) -> err {
     let (no_resolve, no_resolve_error) = os.canonical(a, "np-os-fs-absent")
     if no_resolve_error != os.NotFound { os.exit(143i32) }
 
+    // Randomness, which is what keeps a temporary name from being guessable. Two draws
+    // differ, and neither is the zeroed buffer a call that wrote nothing would leave.
+    var first_draw: [16]u8 = zero
+    var second_draw: [16]u8 = zero
+    if os.random(first_draw[..]) != ok { os.exit(144i32) }
+    if os.random(second_draw[..]) != ok { os.exit(145i32) }
+    var identical = true
+    var draw_at = 0usize
+    while draw_at < 16usize {
+        if first_draw[draw_at] != second_draw[draw_at] { identical = false }
+        draw_at += 1usize
+    }
+    if identical { os.exit(146i32) }
+    var all_zero = true
+    draw_at = 0usize
+    while draw_at < 16usize {
+        if first_draw[draw_at] != 0u8 { all_zero = false }
+        draw_at += 1usize
+    }
+    if all_zero { os.exit(147i32) }
+    // Asking for nothing is not a failure.
+    var no_bytes: []u8 = zero
+    if os.random(no_bytes) != ok { os.exit(148i32) }
+
+    // `create_new` makes a file that was not there and refuses one that was, which is the
+    // pair of answers that makes a name safe to hand out only after it has been taken.
+    let (fresh, fresh_error) = os.create_new(a, "np-os-fs-dir/fresh.txt")
+    if fresh_error != ok { os.exit(149i32) }
+    // The handle it gives back is one the ordinary calls accept.
+    var mark: [2]u8 = zero
+    mark[0usize] = 111u8
+    mark[1usize] = 107u8
+    let (marked, marked_error) = os.write(fresh, mark[..])
+    if marked_error != ok { os.exit(150i32) }
+    if marked != 2usize { os.exit(151i32) }
+    if os.close(fresh) != ok { os.exit(152i32) }
+    let (taken, taken_error) = os.create_new(a, "np-os-fs-dir/fresh.txt")
+    if taken_error != os.Exists { os.exit(153i32) }
+    // And the second call left the first call's bytes alone rather than truncating them.
+    let (fresh_entry, fresh_entry_error) = os.stat(a, "np-os-fs-dir/fresh.txt")
+    if fresh_entry_error != ok { os.exit(154i32) }
+    if fresh_entry.size != 2u64 { os.exit(155i32) }
+    if os.remove_file(a, "np-os-fs-dir/fresh.txt") != ok { os.exit(156i32) }
+
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }
 

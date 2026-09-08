@@ -149,6 +149,11 @@ extern fn raw_environment_variable(name: *const u16, buffer: *u16, capacity: u32
 @import("kernel32.dll", "GetFinalPathNameByHandleW")
 extern fn raw_final_path(handle: usize, buffer: *u16, capacity: u32, flags: u32) -> u32
 
+// The one call here that is not `kernel32`. A null algorithm handle with the
+// system-preferred flag is the form that needs no provider to be opened first.
+@import("bcrypt.dll", "BCryptGenRandom")
+extern fn raw_random(algorithm: usize, buffer: *u8, size: u32, flags: u32) -> i32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -188,6 +193,13 @@ const MAX_DIRECTORY_UNITS: usize = 32768usize
 
 // VOLUME_NAME_DOS: a drive letter rather than a volume GUID.
 const FINAL_PATH_DOS: u32 = 0u32
+
+const BCRYPT_SYSTEM_PREFERRED: u32 = 2u32
+
+// GENERIC_READ | GENERIC_WRITE, and CREATE_NEW, which fails rather than opening a file
+// that is already there.
+const GENERIC_READ_WRITE: u32 = 3221225472u32
+const CREATE_NEW: u32 = 1u32
 
 // Making a link is privileged unless the host is in developer mode, which is what the
 // second flag asks for; without it an ordinary process is refused.
@@ -426,6 +438,36 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
 
 // A drive letter or a leading separator: the two ways a path on this host does not depend
 // on where it is read from.
+// An NTSTATUS, where zero is success and nothing else is. A zero-length request asks the
+// provider for nothing, so it is answered here.
+fn random(buffer: []u8) -> err {
+    if buffer.len == 0usize { ret ok }
+    if raw_random(0usize, &buffer[0usize], u32(buffer.len), BCRYPT_SYSTEM_PREFERRED) != 0i32 { ret Failed }
+    ret ok
+}
+
+// The file must not be there, and finding out is the same operation as creating it. That
+// is the whole point: a name checked and then opened is a name something else can take in
+// between. No share bits either, so nothing else opens it while the caller holds it.
+fn create_new(a: *mem.Arena, path: str) -> (File, err) {
+    var file: File = zero
+    let checkpoint = mem.mark(a)
+    let (name, name_error) = widen(a, path)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret (file, name_error)
+    }
+    let handle = raw_create_file(&name[0usize], GENERIC_READ_WRITE, 0u32, 0usize, CREATE_NEW, ATTRIBUTE_NORMAL, 0usize)
+    if handle == INVALID_HANDLE {
+        let open_error = from_last_error()
+        mem.reset(a, checkpoint)
+        ret (file, open_error)
+    }
+    mem.reset(a, checkpoint)
+    file.raw = handle
+    ret (file, ok)
+}
+
 fn target_absolute(text: str) -> bool {
     if text.len == 0usize { ret false }
     if text[0usize] == 47u8 || text[0usize] == 92u8 { ret true }

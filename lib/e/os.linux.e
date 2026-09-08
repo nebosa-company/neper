@@ -85,6 +85,15 @@ const OPEN_READ_ONLY: usize = 524288usize
 // needed and a directory opens as readily as a file.
 const OPEN_PATH_ONLY: usize = 2621440usize
 
+// O_RDWR with O_CREAT, O_EXCL and O_CLOEXEC: the exclusive bit is what makes creating a
+// name and finding out it was taken one operation rather than two.
+const OPEN_CREATE_NEW: usize = 524482usize
+
+// 0o600. A file nobody has seen yet belongs to whoever made it.
+const CREATE_MODE: usize = 384usize
+
+const SYS_GETRANDOM: usize = 318usize
+
 // The kernel caps the environment well below this.
 const MAX_ENVIRONMENT: usize = 2097152usize
 
@@ -417,6 +426,41 @@ fn env(a: *mem.Arena, name: str) -> (str, err) {
 // A descriptor number as decimal, which is the only formatting this file needs -- and the
 // reason it does not reach for `e.str`, since `e.os` may depend on `e.mem` and nothing
 // else.
+// `getrandom` may return fewer bytes than were asked for, and may be interrupted before
+// it returns any, so the loop is not decoration. A zero-length request is not a failure.
+fn random(buffer: []u8) -> err {
+    var filled = 0usize
+    while filled < buffer.len {
+        let taken = syscall(SYS_GETRANDOM, mem.address_of(&buffer[filled]), buffer.len - filled, 0usize, 0usize, 0usize, 0usize)
+        if taken < 0isize {
+            // EINTR: a signal arrived before anything was written, so ask again.
+            if taken == -4isize { continue }
+            ret from_errno(taken)
+        }
+        if taken == 0isize { ret Failed }
+        filled += usize(taken)
+    }
+    ret ok
+}
+
+// The file must not be there, and finding out is the same operation as creating it. That
+// is the whole point: a name checked and then opened is a name something else can take in
+// between.
+fn create_new(a: *mem.Arena, path: str) -> (File, err) {
+    var file: File = zero
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (file, path_error)
+    }
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_CREATE_NEW, CREATE_MODE, 0usize, 0usize)
+    mem.reset(a, checkpoint)
+    if descriptor < 0isize { ret (file, from_errno(descriptor)) }
+    file.raw = usize(descriptor)
+    ret (file, ok)
+}
+
 fn descriptor_path(a: *mem.Arena, descriptor: usize) -> (str, err) {
     let prefix = "/proc/self/fd/"
     let (bytes, allocation_error) = mem.alloc[u8](a, prefix.len + 20usize)

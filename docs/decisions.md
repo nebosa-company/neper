@@ -758,3 +758,37 @@ directory resolving to something longer that begins with it. The link case is th
 makes resolution observable at all — naming the link and naming its target give one
 answer — and both halves are pinned by breaking them: dropping the prefix strip fails at
 exit 134, and resolving the input instead of the descriptor fails at 140.
+
+## D105 — a temporary name is taken before it is handed out
+
+`e.fs.temp_file` returns a path that already exists, and that is the whole design: a call
+that returned a name for the caller to create would leave a window in which something else
+could take it, and the fence's "never returns a predictable uncreated name" is that window
+named.
+
+Closing it needs a create that fails rather than opening a file that is there, and
+`os.open` could not do it. `OpenFlags` has no exclusive form, and adding one is not the
+small change it looks like: the struct is read at fixed offsets by the runtime assembly
+that backs `os.open` on both hosts, and by the C bootstrap's copy of `lib/e/os.e`, so a
+sixth field would be a change to hand-written assembly on two platforms. `e.os` gains
+`create_new(a, path) -> (File, err)` instead — `O_CREAT|O_EXCL` on Linux, `CREATE_NEW`
+with no share bits on Windows — which is one operation where a check and then an open
+would have been two. The handle it returns is the same kind `os.open` returns, so
+`os.read`, `os.write` and `os.close` take it unchanged.
+
+`os.random` was in the fence and unwritten, and this is what needed it: `getrandom` on
+Linux, `BCryptGenRandom` on Windows with a null algorithm handle and the system-preferred
+flag, which is the form that needs no provider opened first. That makes `bcrypt.dll` the
+second library `lib/e` imports from, which the import machinery already supported and
+nothing had exercised outside a fixture. `getrandom` may return short or be interrupted
+before it writes anything, so the loop is not decoration.
+
+The name is twelve random bytes as twenty-four hex digits after the caller's prefix. The
+retry loop exists because a collision is *possible*, not because it is expected — and it
+retries on `Exists` alone, so a directory that is not there comes back at once rather than
+after sixteen attempts at the same impossible name.
+
+The fixtures pin both halves. Two draws differ and neither is the zeroed buffer a call
+that wrote nothing would leave; creating the same name twice is `Exists` and leaves the
+first call's bytes alone, which is what a `CREATE_ALWAYS` in place of `CREATE_NEW` fails
+at.

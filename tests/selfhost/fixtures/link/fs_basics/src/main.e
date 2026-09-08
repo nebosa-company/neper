@@ -260,6 +260,42 @@ fn main(a: *mem.Arena) -> err {
     let (unresolvable, unresolvable_error) = fs.canonical(a, "np-fs/no-such")
     if unresolvable_error != fs.NotFound { os.exit(194i32) }
 
+    // `temp_file` hands back a name that already exists, which is the difference between
+    // it and building a name and hoping. It comes with the handle that created it, so
+    // nothing has to reopen what it was just given.
+    var stamp: [3]u8 = zero
+    stamp[0usize] = 120u8
+    stamp[1usize] = 121u8
+    stamp[2usize] = 122u8
+    let (first_temp, first_handle, first_temp_error) = fs.temp_file(a, "np-fs", "probe-")
+    if first_temp_error != ok { os.exit(200i32) }
+    if first_temp.len == 0usize { os.exit(201i32) }
+    let (temp_entry, temp_entry_error) = fs.stat(a, first_temp)
+    if temp_entry_error != ok { os.exit(202i32) }
+    if temp_entry.kind != .File { os.exit(203i32) }
+    if temp_entry.size != 0u64 { os.exit(204i32) }
+    let (put, put_error) = os.write(first_handle, stamp[..])
+    if put_error != ok { os.exit(205i32) }
+    if put != 3usize { os.exit(206i32) }
+    if os.close(first_handle) != ok { os.exit(207i32) }
+    let (written_temp, written_temp_error) = fs.stat(a, first_temp)
+    if written_temp_error != ok { os.exit(208i32) }
+    if written_temp.size != 3u64 { os.exit(209i32) }
+
+    // A second call is a different name, or the first one would have been guessable.
+    let (second_temp, second_handle, second_temp_error) = fs.temp_file(a, "np-fs", "probe-")
+    if second_temp_error != ok { os.exit(210i32) }
+    if same(second_temp, first_temp) { os.exit(211i32) }
+    if os.close(second_handle) != ok { os.exit(212i32) }
+
+    // A directory that is not there is not a collision to retry, so it comes straight
+    // back rather than after sixteen attempts.
+    let (no_temp, no_handle, no_temp_error) = fs.temp_file(a, "np-fs/no-such-dir", "probe-")
+    if no_temp_error != fs.NotFound { os.exit(213i32) }
+
+    if fs.remove_file(a, first_temp) != ok { os.exit(214i32) }
+    if fs.remove_file(a, second_temp) != ok { os.exit(215i32) }
+
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.
     let (capped, capped_error) = fs.read_file(a, "np-fs/one.txt", 10usize)

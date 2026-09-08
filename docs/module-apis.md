@@ -1542,6 +1542,7 @@ error WouldBlock
 error Unsupported
 
 fn open(a: *mem.Arena, path: str, flags: OpenFlags) -> (File, err)
+fn create_new(a: *mem.Arena, path: str) -> (File, err)
 fn read(f: File, buf: []u8) -> (usize, err)
 fn write(f: File, buf: []const u8) -> (usize, err)
 fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err)
@@ -1636,6 +1637,11 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err
 fn proc_group_close(group: ProcGroup) -> err
 
 ```
+
+`create_new` creates a file that was not there and fails with `Exists` if it was, opened
+for reading and writing with no sharing. It is the one call that makes a name safe to hand
+out, since the name is taken before it is returned; `OpenFlags` has no exclusive form
+because that has to be one operation, not a check and then an open.
 
 `canonical` is absolute with every symbolic link, `.` and `..` resolved, and it requires
 the path to exist: both hosts answer it by opening the path and asking what was opened, so

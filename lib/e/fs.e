@@ -214,6 +214,83 @@ fn make_dirs(a: *mem.Arena, path_text: str) -> err {
     ret ok
 }
 
+// Twelve random bytes as twenty-four hex digits. Long enough that a collision is not
+// something the retry loop is really for -- the loop is there because a collision is
+// possible at all, not because it is expected.
+const TEMP_NAME_BYTES: usize = 12usize
+const TEMP_ATTEMPTS: usize = 16usize
+
+fn hex_digit(value: u8) -> u8 {
+    if value < 10u8 { ret 48u8 + value }
+    ret 87u8 + value
+}
+
+// The name is created before it is returned, so there is no moment when a caller holds a
+// name that something else could take. `os.create_new` is what closes that window: it
+// fails rather than opening a file that is already there, which is also what the retry
+// loop reads as a collision. An empty `dir` means the host's temporary directory.
+fn temp_file(a: *mem.Arena, dir: str, prefix: str) -> (str, os.File, err) {
+    var nothing: os.File = zero
+    var directory = dir
+    if directory.len == 0usize {
+        let (fallback, fallback_error) = temp_dir(a)
+        if fallback_error != ok { ret ("", nothing, fallback_error) }
+        directory = fallback
+    }
+    let style = host_style()
+    var attempt = 0usize
+    while attempt < TEMP_ATTEMPTS {
+        let checkpoint = mem.mark(a)
+        var drawn: [12]u8 = zero
+        let random_error = os.random(drawn[..])
+        if random_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", nothing, from_os(random_error))
+        }
+        let total = directory.len + 1usize + prefix.len + TEMP_NAME_BYTES * 2usize
+        let (bytes, allocation_error) = mem.alloc[u8](a, total)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", nothing, allocation_error)
+        }
+        var at = 0usize
+        while at < directory.len {
+            bytes[at] = directory[at]
+            at += 1usize
+        }
+        // A directory that already ends in a separator does not get a second one.
+        if at != 0usize && !path.is_separator(bytes[at - 1usize], style) {
+            bytes[at] = path.separator(style)
+            at += 1usize
+        }
+        var offset = 0usize
+        while offset < prefix.len {
+            bytes[at + offset] = prefix[offset]
+            offset += 1usize
+        }
+        at += prefix.len
+        var drawn_at = 0usize
+        while drawn_at < TEMP_NAME_BYTES {
+            bytes[at] = hex_digit(drawn[drawn_at] / 16u8)
+            bytes[at + 1usize] = hex_digit(drawn[drawn_at] % 16u8)
+            at += 2usize
+            drawn_at += 1usize
+        }
+        let candidate = bytes[0usize..at]
+        let (file, create_error) = os.create_new(a, candidate)
+        if create_error == ok { ret (candidate, file, ok) }
+        // Anything but a name that was already taken is the caller's answer, not another
+        // try: a directory that is not there will not become one.
+        if create_error != os.Exists {
+            mem.reset(a, checkpoint)
+            ret ("", nothing, from_os(create_error))
+        }
+        mem.reset(a, checkpoint)
+        attempt += 1usize
+    }
+    ret ("", nothing, Io)
+}
+
 // The one name for a file, with every symbolic link and every `.` and `..` gone. It needs
 // the path to exist, because both hosts answer it by opening the path and asking what was
 // opened -- there is nothing to resolve about a name that leads nowhere. It is also the
