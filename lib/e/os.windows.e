@@ -82,6 +82,23 @@ type ObjectAttributes = struct {
 
 type IoStatusBlock = struct { status: usize, information: usize }
 
+type Socket = struct { raw: usize }
+type SocketFamily = enum u8 { Ip4, Ip6 }
+type SocketKind = enum u8 { Stream, Datagram }
+type SocketShutdown = enum u8 { Read, Write, Both }
+type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, port: u16 }
+
+// `sockaddr_in` and `sockaddr_in6` agree on their first four bytes -- the family then the
+// port -- and diverge after, so one buffer holds either and the length passed alongside
+// says which. It is written by index rather than as typed fields because the port and the
+// address are big-endian on the wire whatever the host is, while the family is in the
+// host's own order: one struct holding both orders would hide the distinction that matters.
+type RawAddress = struct { bytes: [28]u8 }
+
+// `WSADATA`, which is read but never inspected here: the call insists on somewhere to put
+// it.
+type WsaData = struct { bytes: [408]u8 }
+
 // `FILE_DISPOSITION_INFO`: one byte saying the file goes when the last handle to it closes.
 type FileDispositionInfo = struct { delete_file: u8 }
 
@@ -210,6 +227,50 @@ extern fn raw_nt_set_information(handle: usize, status_block: *IoStatusBlock, in
 @import("kernel32.dll", "FlushFileBuffers")
 extern fn raw_flush_file(handle: usize) -> i32
 
+@import("ws2_32.dll", "WSAStartup")
+extern fn raw_wsa_startup(version: u16, data: *WsaData) -> i32
+
+@import("ws2_32.dll", "socket")
+extern fn raw_socket_open(family: i32, kind: i32, protocol: i32) -> usize
+
+@import("ws2_32.dll", "closesocket")
+extern fn raw_socket_close(s: usize) -> i32
+
+@import("ws2_32.dll", "bind")
+extern fn raw_socket_bind(s: usize, address: *RawAddress, length: i32) -> i32
+
+@import("ws2_32.dll", "listen")
+extern fn raw_socket_listen(s: usize, backlog: i32) -> i32
+
+@import("ws2_32.dll", "accept")
+extern fn raw_socket_accept(s: usize, address: *RawAddress, length: *i32) -> usize
+
+@import("ws2_32.dll", "connect")
+extern fn raw_socket_connect(s: usize, address: *RawAddress, length: i32) -> i32
+
+@import("ws2_32.dll", "send")
+extern fn raw_socket_send(s: usize, buffer: *const u8, length: i32, flags: i32) -> i32
+
+@import("ws2_32.dll", "recv")
+extern fn raw_socket_receive(s: usize, buffer: *u8, length: i32, flags: i32) -> i32
+
+@import("ws2_32.dll", "sendto")
+extern fn raw_socket_send_to(s: usize, buffer: *const u8, length: i32, flags: i32, address: *RawAddress, address_length: i32) -> i32
+
+@import("ws2_32.dll", "recvfrom")
+extern fn raw_socket_receive_from(s: usize, buffer: *u8, length: i32, flags: i32, address: *RawAddress, address_length: *i32) -> i32
+
+@import("ws2_32.dll", "shutdown")
+extern fn raw_socket_shutdown(s: usize, how: i32) -> i32
+
+// `long cmd` in the header, so the flag's bit pattern is what matters rather than its sign.
+@import("ws2_32.dll", "ioctlsocket")
+extern fn raw_socket_control(s: usize, command: u32, argument: *u32) -> i32
+
+// Sockets keep their own error channel, separate from `GetLastError`.
+@import("ws2_32.dll", "WSAGetLastError")
+extern fn raw_socket_error() -> i32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -297,6 +358,24 @@ const DELETE_ACCESS: u32 = 65536u32
 // for this as well -- on a directory it is the right to add an entry, which is granted the
 // same way.
 const FILE_WRITE_DATA: u32 = 2u32
+
+const AF_INET: usize = 2usize
+
+// Not the same number as on Linux, which is the one place these two files disagree about
+// the wire rather than about the call.
+const AF_INET6: usize = 23usize
+
+const SOCK_STREAM: i32 = 1i32
+const SOCK_DGRAM: i32 = 2i32
+
+// MAKEWORD(2, 2).
+const WSA_VERSION: u16 = 514u16
+
+// FIONBIO.
+const FIONBIO: u32 = 2147772030u32
+
+const RAW_IP4_SIZE: usize = 16usize
+const RAW_IP6_SIZE: usize = 28usize
 
 // `FILE_INFORMATION_CLASS`, which numbers its members differently from the Win32
 // `FILE_INFO_BY_HANDLE_CLASS` the wrapper takes.
@@ -713,6 +792,179 @@ fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path:
     release_parent(src_parent, src_dir)
     release_parent(dst_parent, dst_dir)
     ret answer
+}
+
+fn family_value(family: SocketFamily) -> usize {
+    if family == .Ip6 { ret AF_INET6 }
+    ret AF_INET
+}
+
+fn encode_address(address: SocketAddress) -> (RawAddress, usize) {
+    var raw: RawAddress = zero
+    let value = family_value(address.family)
+    raw.bytes[0usize] = u8(value % 256usize)
+    raw.bytes[1usize] = u8(value / 256usize)
+    // Network order: the high byte first, whatever this host stores integers as.
+    raw.bytes[2usize] = u8(usize(address.port) / 256usize)
+    raw.bytes[3usize] = u8(usize(address.port) % 256usize)
+    if address.family == .Ip6 {
+        var at = 0usize
+        while at < 16usize {
+            raw.bytes[8usize + at] = address.bytes[at]
+            at += 1usize
+        }
+        raw.bytes[24usize] = u8(address.scope % 256u32)
+        raw.bytes[25usize] = u8(address.scope / 256u32 % 256u32)
+        raw.bytes[26usize] = u8(address.scope / 65536u32 % 256u32)
+        raw.bytes[27usize] = u8(address.scope / 16777216u32)
+        ret (raw, RAW_IP6_SIZE)
+    }
+    var at = 0usize
+    while at < 4usize {
+        raw.bytes[4usize + at] = address.bytes[at]
+        at += 1usize
+    }
+    ret (raw, RAW_IP4_SIZE)
+}
+
+fn decode_address(raw: RawAddress) -> SocketAddress {
+    var address: SocketAddress = zero
+    let value = usize(raw.bytes[0usize]) + usize(raw.bytes[1usize]) * 256usize
+    address.port = u16(usize(raw.bytes[2usize]) * 256usize + usize(raw.bytes[3usize]))
+    if value == AF_INET6 {
+        address.family = .Ip6
+        var at = 0usize
+        while at < 16usize {
+            address.bytes[at] = raw.bytes[8usize + at]
+            at += 1usize
+        }
+        address.scope = u32(raw.bytes[24usize]) + u32(raw.bytes[25usize]) * 256u32 + u32(raw.bytes[26usize]) * 65536u32 + u32(raw.bytes[27usize]) * 16777216u32
+        ret address
+    }
+    address.family = .Ip4
+    var at = 0usize
+    while at < 4usize {
+        address.bytes[at] = raw.bytes[4usize + at]
+        at += 1usize
+    }
+    ret address
+}
+
+fn from_socket_error() -> err {
+    let code = raw_socket_error()
+    if code == 10004i32 { ret Interrupted }
+    if code == 10013i32 { ret Denied }
+    if code == 10035i32 { ret WouldBlock }
+    if code == 10036i32 { ret WouldBlock }
+    if code == 10048i32 { ret Exists }
+    if code == 10049i32 { ret NotFound }
+    if code == 10060i32 { ret Timeout }
+    ret Failed
+}
+
+// Winsock insists on being started before anything else touches it, and there is nowhere to
+// remember that it has been: D109 is why this file keeps no ambient state to hold a flag.
+// The call is reference counted, so asking again is cheap and asking once per socket is
+// correct.
+fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
+    var socket: Socket = zero
+    var data: WsaData = zero
+    if raw_wsa_startup(WSA_VERSION, &data) != 0i32 { ret (socket, Failed) }
+    var type_bits = SOCK_STREAM
+    if kind == .Datagram { type_bits = SOCK_DGRAM }
+    let handle = raw_socket_open(i32(family_value(family)), type_bits, 0i32)
+    if handle == INVALID_HANDLE { ret (socket, from_socket_error()) }
+    socket.raw = handle
+    ret (socket, ok)
+}
+
+fn socket_close(s: Socket) -> err {
+    if raw_socket_close(s.raw) != 0i32 { ret from_socket_error() }
+    ret ok
+}
+
+fn socket_set_nonblocking(s: Socket, enabled: bool) -> err {
+    var wanted = 0u32
+    if enabled { wanted = 1u32 }
+    if raw_socket_control(s.raw, FIONBIO, &wanted) != 0i32 { ret from_socket_error() }
+    ret ok
+}
+
+fn socket_bind(s: Socket, address: SocketAddress) -> err {
+    var (raw, length) = encode_address(address)
+    if raw_socket_bind(s.raw, &raw, i32(length)) != 0i32 { ret from_socket_error() }
+    ret ok
+}
+
+fn socket_listen(s: Socket, backlog: u32) -> err {
+    if raw_socket_listen(s.raw, i32(backlog)) != 0i32 { ret from_socket_error() }
+    ret ok
+}
+
+fn socket_connect(s: Socket, address: SocketAddress) -> err {
+    var (raw, length) = encode_address(address)
+    if raw_socket_connect(s.raw, &raw, i32(length)) != 0i32 { ret from_socket_error() }
+    ret ok
+}
+
+fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
+    var accepted: Socket = zero
+    var peer: SocketAddress = zero
+    var raw: RawAddress = zero
+    var length = i32(RAW_IP6_SIZE)
+    let handle = raw_socket_accept(s.raw, &raw, &length)
+    if handle == INVALID_HANDLE { ret (accepted, peer, from_socket_error()) }
+    accepted.raw = handle
+    ret (accepted, decode_address(raw), ok)
+}
+
+fn socket_send(s: Socket, src: []const u8) -> (usize, err) {
+    if src.len == 0usize { ret (0usize, ok) }
+    let sent = raw_socket_send(s.raw, &src[0usize], i32(src.len), 0i32)
+    if sent < 0i32 { ret (0usize, from_socket_error()) }
+    ret (usize(sent), ok)
+}
+
+fn socket_receive(s: Socket, dst: []u8) -> (usize, err) {
+    if dst.len == 0usize { ret (0usize, ok) }
+    let taken = raw_socket_receive(s.raw, &dst[0usize], i32(dst.len), 0i32)
+    if taken < 0i32 { ret (0usize, from_socket_error()) }
+    ret (usize(taken), ok)
+}
+
+fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) {
+    var (raw, length) = encode_address(dst)
+    if src.len == 0usize { ret (0usize, ok) }
+    let sent = raw_socket_send_to(s.raw, &src[0usize], i32(src.len), 0i32, &raw, i32(length))
+    if sent < 0i32 { ret (0usize, from_socket_error()) }
+    ret (usize(sent), ok)
+}
+
+fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
+    var peer: SocketAddress = zero
+    if dst.len == 0usize { ret (0usize, peer, ok) }
+    var raw: RawAddress = zero
+    var length = i32(RAW_IP6_SIZE)
+    let taken = raw_socket_receive_from(s.raw, &dst[0usize], i32(dst.len), 0i32, &raw, &length)
+    if taken < 0i32 { ret (0usize, peer, from_socket_error()) }
+    ret (usize(taken), decode_address(raw), ok)
+}
+
+fn shutdown_value(how: SocketShutdown) -> i32 {
+    if how == .Write { ret 1i32 }
+    if how == .Both { ret 2i32 }
+    ret 0i32
+}
+
+fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {
+    if raw_socket_shutdown(s.raw, shutdown_value(how)) != 0i32 { ret from_socket_error() }
+    ret ok
+}
+
+fn socket_handle(s: Socket) -> Handle {
+    var handle: Handle = zero
+    handle.raw = s.raw
+    ret handle
 }
 
 fn to_filetime(value: i64) -> FileTime {

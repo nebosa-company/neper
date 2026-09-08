@@ -582,6 +582,13 @@ Push-Location $fsScratch
 $fsBasicsExit = $LASTEXITCODE
 Pop-Location
 if ($fsBasicsExit -ne 0) { throw "e.fs answered wrongly: exit $fsBasicsExit" }
+# `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
+# datagram inside one process, so nothing waits on a peer that has not already acted.
+$socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
+$socketWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_socket\src\main.e') $repo 'x64' 'windows' $socketPath
+if ($LASTEXITCODE -ne 0 -or $socketWritten -ne 'executable written') { throw 'e.os socket emission failed' }
+& $socketPath
+if ($LASTEXITCODE -ne 0) { throw "an e.os socket call answered wrongly: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

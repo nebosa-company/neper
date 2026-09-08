@@ -619,6 +619,12 @@ fs_basics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$fs_basics_written" = 'executable written' ]
 chmod +x "$test_build/fs-basics-selfhost"
 (cd "$fs_scratch" && "$test_build/fs-basics-selfhost")
+# `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
+# datagram inside one process, so nothing waits on a peer that has not already acted.
+socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
+[ "$socket_written" = 'executable written' ]
+chmod +x "$test_build/os-socket-selfhost"
+"$test_build/os-socket-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

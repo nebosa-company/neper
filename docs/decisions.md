@@ -972,3 +972,49 @@ The fence entries stay rather than being deleted. `e.fs` is therefore complete a
 45 declarations, and the readiness number keeps counting the surface that is planned:
 removing the three entries would make both modules look finished while a promised call is
 absent, which is the opposite of what that number is for.
+
+## D110 — sockets are the transport only, and a narrow foreign return has to be widened
+
+`e.os` gains the socket transport: `Socket`, the four descriptive enums, `SocketAddress`,
+and `socket_open`, `socket_close`, `socket_set_nonblocking`, `socket_bind`, `socket_listen`,
+`socket_accept`, `socket_connect`, `socket_send`, `socket_receive`, `socket_send_to`,
+`socket_receive_from`, `socket_shutdown` and `socket_handle`. Linux is raw syscalls, Windows
+is `ws2_32`.
+
+`socket_resolve` is **not** in this increment. On Windows it is `getaddrinfo` and would be an
+afternoon; on Linux, with no libc, a name lookup is a DNS client written in neper — a UDP
+protocol implementation with its own parsing, retries and `/etc/hosts` fallback. That is a
+piece of work in its own right rather than the tail of this one, and shipping it on one host
+only would make the surface asymmetric in a way none of the rest of `e.os` is.
+
+The address is encoded by byte index rather than as a typed struct. `sockaddr_in` and
+`sockaddr_in6` agree on their first four bytes and diverge after, so one buffer holds either
+with the length saying which — but the reason for bytes is that the port and the address are
+big-endian on the wire while the family is in the host's own order. A struct holding both
+orders would hide exactly the distinction that has to be got right, and `AF_INET6` differing
+between the two hosts (10 and 23) is the one place these files disagree about the wire
+rather than about the call.
+
+Winsock has to be started before anything else touches it and there is nowhere to remember
+that it has been — D109 is why this file keeps no ambient state for a flag. `WSAStartup` is
+reference counted, so it is called once per `socket_open`, which is correct and cheap.
+
+**A narrow signed return from a foreign call was being read unwidened, and this is the
+finding worth keeping.** Both System V and Win64 leave the bits above the declared width
+undefined for a value returned in a register, so a C function returning `int` defines only
+`eax`. The code generator moved all of `rax`, which is right for neper's own calls — they
+leave the value widened — and wrong for every `extern`. A `-1` then reads as `0xFFFFFFFF`,
+which is not less than zero, so **every error check on a foreign call that reports failure
+by a negative number passed silently**. It surfaced as a non-blocking `recvfrom` reporting
+success with a byte count of -1, and it had been latent in every `extern fn` returning `i32`
+since imports landed.
+
+The fix is to widen a narrow integer call result with the same `normalize_integer` the
+`Cast` opcode uses. It is applied to every call rather than only to foreign ones: neper's
+own already arrive widened, so it is a no-op for them, and that is cheaper to reason about
+than a rule that has to detect which kind of callee it is looking at.
+
+`link/extern_import` now pins it with `atoi`, which is in `libc` on one host and `msvcrt` on
+the other. Equality alone would not have caught it -- `0xFFFFFFFF` equals nothing and is
+greater than zero -- so the fixture checks the value and its sign, and reverting the code
+generator's widening fails it.

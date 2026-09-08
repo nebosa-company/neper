@@ -97,6 +97,15 @@ const SYS_FSYNC: usize = 74usize
 const SYS_LINKAT: usize = 265usize
 const SYS_RENAMEAT2: usize = 316usize
 const SYS_OPENAT2: usize = 437usize
+const SYS_SOCKET: usize = 41usize
+const SYS_CONNECT: usize = 42usize
+const SYS_SENDTO: usize = 44usize
+const SYS_RECVFROM: usize = 45usize
+const SYS_SHUTDOWN: usize = 48usize
+const SYS_BIND: usize = 49usize
+const SYS_LISTEN: usize = 50usize
+const SYS_FCNTL: usize = 72usize
+const SYS_ACCEPT4: usize = 288usize
 
 // The flag that makes a rename refuse an existing destination instead of replacing it.
 const RENAME_NOREPLACE: usize = 1usize
@@ -122,6 +131,18 @@ const O_CLOEXEC: u64 = 524288u64
 
 // 0o644 for anything this creates, which the umask narrows.
 const FILE_MODE: u64 = 420u64
+
+const AF_INET: usize = 2usize
+const AF_INET6: usize = 10usize
+const SOCK_STREAM: usize = 1usize
+const SOCK_DGRAM: usize = 2usize
+
+// Every socket this opens is close-on-exec, for the same reason every file is.
+const SOCK_CLOEXEC: usize = 524288usize
+
+const F_GETFL: usize = 3usize
+const F_SETFL: usize = 4usize
+const O_NONBLOCK: usize = 2048usize
 
 // The kernel caps the environment well below this.
 const MAX_ENVIRONMENT: usize = 2097152usize
@@ -181,6 +202,9 @@ fn from_errno(result: isize) -> err {
     if result == -12isize { ret OutOfMemory }
     if result == -13isize { ret Denied }
     if result == -17isize { ret Exists }
+    // EADDRINUSE: a name already taken, which is what `Exists` means for a path too.
+    if result == -98isize { ret Exists }
+    if result == -110isize { ret Timeout }
     // EXDEV: a rename across filesystems, which the kernel will not do at all. EINVAL is
     // the same shape of answer -- the request cannot be honoured as asked, which is what
     // reading a link from something that is not one gets.
@@ -603,6 +627,187 @@ type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 // resolve rules without a new call. The size is passed alongside it and the kernel checks
 // both, so the layout is the ABI.
 type OpenHow = struct { flags: u64, mode: u64, resolve: u64 }
+
+type Socket = struct { raw: usize }
+type SocketFamily = enum u8 { Ip4, Ip6 }
+type SocketKind = enum u8 { Stream, Datagram }
+type SocketShutdown = enum u8 { Read, Write, Both }
+type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, port: u16 }
+
+// The kernel's `sockaddr_in` and `sockaddr_in6` agree on their first four bytes -- the
+// family then the port -- and diverge after, so one buffer holds either and the length
+// passed alongside says which. It is written by index rather than as typed fields because
+// the port and the address are big-endian on the wire whatever the host is, while the
+// family is in the host's own order: mixing the two in one struct would hide exactly the
+// distinction that matters.
+type RawAddress = struct { bytes: [28]u8 }
+
+const RAW_IP4_SIZE: usize = 16usize
+const RAW_IP6_SIZE: usize = 28usize
+
+fn family_value(family: SocketFamily) -> usize {
+    if family == .Ip6 { ret AF_INET6 }
+    ret AF_INET
+}
+
+fn encode_address(address: SocketAddress) -> (RawAddress, usize) {
+    var raw: RawAddress = zero
+    let value = family_value(address.family)
+    raw.bytes[0usize] = u8(value % 256usize)
+    raw.bytes[1usize] = u8(value / 256usize)
+    // Network order: the high byte first, whatever this host stores integers as.
+    raw.bytes[2usize] = u8(usize(address.port) / 256usize)
+    raw.bytes[3usize] = u8(usize(address.port) % 256usize)
+    if address.family == .Ip6 {
+        var at = 0usize
+        while at < 16usize {
+            raw.bytes[8usize + at] = address.bytes[at]
+            at += 1usize
+        }
+        raw.bytes[24usize] = u8(address.scope % 256u32)
+        raw.bytes[25usize] = u8(address.scope / 256u32 % 256u32)
+        raw.bytes[26usize] = u8(address.scope / 65536u32 % 256u32)
+        raw.bytes[27usize] = u8(address.scope / 16777216u32)
+        ret (raw, RAW_IP6_SIZE)
+    }
+    // Section 5: an IPv4 address is the first four bytes and the rest are zero.
+    var at = 0usize
+    while at < 4usize {
+        raw.bytes[4usize + at] = address.bytes[at]
+        at += 1usize
+    }
+    ret (raw, RAW_IP4_SIZE)
+}
+
+fn decode_address(raw: RawAddress) -> SocketAddress {
+    var address: SocketAddress = zero
+    let value = usize(raw.bytes[0usize]) + usize(raw.bytes[1usize]) * 256usize
+    address.port = u16(usize(raw.bytes[2usize]) * 256usize + usize(raw.bytes[3usize]))
+    if value == AF_INET6 {
+        address.family = .Ip6
+        var at = 0usize
+        while at < 16usize {
+            address.bytes[at] = raw.bytes[8usize + at]
+            at += 1usize
+        }
+        address.scope = u32(raw.bytes[24usize]) + u32(raw.bytes[25usize]) * 256u32 + u32(raw.bytes[26usize]) * 65536u32 + u32(raw.bytes[27usize]) * 16777216u32
+        ret address
+    }
+    address.family = .Ip4
+    var at = 0usize
+    while at < 4usize {
+        address.bytes[at] = raw.bytes[4usize + at]
+        at += 1usize
+    }
+    ret address
+}
+
+fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
+    var socket: Socket = zero
+    var type_bits = SOCK_STREAM
+    if kind == .Datagram { type_bits = SOCK_DGRAM }
+    let descriptor = syscall(SYS_SOCKET, family_value(family), type_bits | SOCK_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret (socket, from_errno(descriptor)) }
+    socket.raw = usize(descriptor)
+    ret (socket, ok)
+}
+
+fn socket_close(s: Socket) -> err {
+    ret from_errno(syscall(SYS_CLOSE, s.raw, 0usize, 0usize, 0usize, 0usize, 0usize))
+}
+
+// Read the flags before changing them: setting the whole word would drop whatever else the
+// descriptor carries.
+fn socket_set_nonblocking(s: Socket, enabled: bool) -> err {
+    let current = syscall(SYS_FCNTL, s.raw, F_GETFL, 0usize, 0usize, 0usize, 0usize)
+    if current < 0isize { ret from_errno(current) }
+    var wanted = usize(current) | O_NONBLOCK
+    if !enabled {
+        wanted = usize(current)
+        if usize(current) & O_NONBLOCK != 0usize { wanted = usize(current) - O_NONBLOCK }
+    }
+    ret from_errno(syscall(SYS_FCNTL, s.raw, F_SETFL, wanted, 0usize, 0usize, 0usize))
+}
+
+fn socket_bind(s: Socket, address: SocketAddress) -> err {
+    var (raw, length) = encode_address(address)
+    ret from_errno(syscall(SYS_BIND, s.raw, mem.address_of(&raw), length, 0usize, 0usize, 0usize))
+}
+
+fn socket_listen(s: Socket, backlog: u32) -> err {
+    ret from_errno(syscall(SYS_LISTEN, s.raw, usize(backlog), 0usize, 0usize, 0usize, 0usize))
+}
+
+fn socket_connect(s: Socket, address: SocketAddress) -> err {
+    var (raw, length) = encode_address(address)
+    let result = syscall(SYS_CONNECT, s.raw, mem.address_of(&raw), length, 0usize, 0usize, 0usize)
+    // EINPROGRESS on a socket that was made non-blocking is the connect having started,
+    // which is what `WouldBlock` means for every other call here.
+    if result == -115isize { ret WouldBlock }
+    ret from_errno(result)
+}
+
+fn socket_accept(s: Socket) -> (Socket, SocketAddress, err) {
+    var accepted: Socket = zero
+    var peer: SocketAddress = zero
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let descriptor = syscall(SYS_ACCEPT4, s.raw, mem.address_of(&raw), mem.address_of(&length), SOCK_CLOEXEC, 0usize, 0usize)
+    if descriptor < 0isize { ret (accepted, peer, from_errno(descriptor)) }
+    accepted.raw = usize(descriptor)
+    ret (accepted, decode_address(raw), ok)
+}
+
+// A connected socket is `sendto` and `recvfrom` with no address, which is one pair of
+// syscalls for both the connected and the unconnected form.
+fn socket_send(s: Socket, src: []const u8) -> (usize, err) {
+    if src.len == 0usize { ret (0usize, ok) }
+    let sent = syscall(SYS_SENDTO, s.raw, mem.address_of(&src[0usize]), src.len, 0usize, 0usize, 0usize)
+    if sent < 0isize { ret (0usize, from_errno(sent)) }
+    ret (usize(sent), ok)
+}
+
+fn socket_receive(s: Socket, dst: []u8) -> (usize, err) {
+    if dst.len == 0usize { ret (0usize, ok) }
+    let taken = syscall(SYS_RECVFROM, s.raw, mem.address_of(&dst[0usize]), dst.len, 0usize, 0usize, 0usize)
+    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    ret (usize(taken), ok)
+}
+
+fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err) {
+    var (raw, length) = encode_address(dst)
+    var source_address = 0usize
+    if src.len != 0usize { source_address = mem.address_of(&src[0usize]) }
+    let sent = syscall(SYS_SENDTO, s.raw, source_address, src.len, 0usize, mem.address_of(&raw), length)
+    if sent < 0isize { ret (0usize, from_errno(sent)) }
+    ret (usize(sent), ok)
+}
+
+fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
+    var peer: SocketAddress = zero
+    if dst.len == 0usize { ret (0usize, peer, ok) }
+    var raw: RawAddress = zero
+    var length = u32(RAW_IP6_SIZE)
+    let taken = syscall(SYS_RECVFROM, s.raw, mem.address_of(&dst[0usize]), dst.len, 0usize, mem.address_of(&raw), mem.address_of(&length))
+    if taken < 0isize { ret (0usize, peer, from_errno(taken)) }
+    ret (usize(taken), decode_address(raw), ok)
+}
+
+fn shutdown_value(how: SocketShutdown) -> usize {
+    if how == .Write { ret 1usize }
+    if how == .Both { ret 2usize }
+    ret 0usize
+}
+
+fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {
+    ret from_errno(syscall(SYS_SHUTDOWN, s.raw, shutdown_value(how), 0usize, 0usize, 0usize, 0usize))
+}
+
+fn socket_handle(s: Socket) -> Handle {
+    var handle: Handle = zero
+    handle.raw = s.raw
+    ret handle
+}
 
 // A directory-relative path is a name under that directory and nothing else. An absolute
 // one would ignore the directory it was given, `..` would leave it, and an embedded NUL
