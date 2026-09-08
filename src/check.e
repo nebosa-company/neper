@@ -1161,6 +1161,52 @@ fn function_type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, t
     ret (result, ok)
 }
 
+// The comptime arguments of one instantiation, read from a run of child nodes and
+// pushed onto `c.generic_arguments`. Both spellings land here: `St[i64]` written as a
+// type, and the same thing written in a comptime argument slot, where the parser gives
+// a bracket expression rather than a type node.
+fn collect_generic_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, template_index: usize, first_child: usize, child_end: usize) -> (usize, err) {
+    if template_index >= c.aggregate_count { ret (0usize, InvalidType) }
+    if !c.aggregates[template_index].generic { ret (0usize, InvalidType) }
+    let template = c.aggregates[template_index]
+    if c.generic_argument_count + template.comptime_count > c.generic_arguments.len { ret (0usize, Capacity) }
+    let first_argument = c.generic_argument_count
+    var argument_count = 0usize
+    var at = first_child
+    while at < child_end {
+        if tree.children[at].node {
+            if argument_count >= template.comptime_count { ret (0usize, ArgumentCount) }
+            let parameter = c.comptime_parameters[template.first_comptime + argument_count]
+            let argument_node = tree.children[at].index
+            var argument: GenericArgument = zero
+            argument.kind = parameter.kind
+            argument.set = true
+            if parameter.kind == .Type {
+                let (argument_type, argument_error) = comptime_type(c, g, tree, module_index, argument_node)
+                if argument_error != ok { ret (0usize, argument_error) }
+                argument.ty = argument_type
+            } else {
+                let (value, value_error) = array_length_value(c, g, tree, module_index, argument_node)
+                if value_error == ok {
+                    argument.value = value
+                } else {
+                    if c.active_comptime_count == 0usize || c.active_arguments { ret (0usize, value_error) }
+                    let (expression, expression_error) = copy_constant_expr(c, g, tree, module_index, argument_node)
+                    if expression_error != ok { ret (0usize, value_error) }
+                    argument.expression = expression
+                    argument.symbolic = true
+                }
+            }
+            c.generic_arguments[c.generic_argument_count] = argument
+            c.generic_argument_count += 1usize
+            argument_count += 1usize
+        }
+        at += 1usize
+    }
+    if argument_count != template.comptime_count { ret (0usize, ArgumentCount) }
+    ret (first_argument, ok)
+}
+
 fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, err) {
     if node.kind == .FunctionType {
         let (function_type, function_type_error) = function_type_from_node(c, r, g, tree, module_index, node)
@@ -1350,44 +1396,8 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
             if !c.expand_aliases { ret (make_type(.Other, "", module_index), Unsupported) }
             ret (invalid_type(), InvalidType)
         }
-        if !c.aggregates[template_index].generic { ret (invalid_type(), InvalidType) }
-        let template = c.aggregates[template_index]
-        if c.generic_argument_count + template.comptime_count > c.generic_arguments.len { ret (invalid_type(), Capacity) }
-        let first_argument = c.generic_argument_count
-        var argument_count = 0usize
-        let child_end = node.first_child + node.child_count
-        at = node.first_child
-        while at < child_end {
-            if tree.children[at].node {
-                if argument_count >= template.comptime_count { ret (invalid_type(), ArgumentCount) }
-                let parameter = c.comptime_parameters[template.first_comptime + argument_count]
-                let argument_node = tree.children[at].index
-                var argument: GenericArgument = zero
-                argument.kind = parameter.kind
-                argument.set = true
-                if parameter.kind == .Type {
-                    let (argument_type, argument_error) = comptime_type(c, g, tree, module_index, argument_node)
-                    if argument_error != ok { ret (invalid_type(), argument_error) }
-                    argument.ty = argument_type
-                } else {
-                    let (value, value_error) = array_length_value(c, g, tree, module_index, argument_node)
-                    if value_error == ok {
-                        argument.value = value
-                    } else {
-                        if c.active_comptime_count == 0usize || c.active_arguments { ret (invalid_type(), value_error) }
-                        let (expression, expression_error) = copy_constant_expr(c, g, tree, module_index, argument_node)
-                        if expression_error != ok { ret (invalid_type(), value_error) }
-                        argument.expression = expression
-                        argument.symbolic = true
-                    }
-                }
-                c.generic_arguments[c.generic_argument_count] = argument
-                c.generic_argument_count += 1usize
-                argument_count += 1usize
-            }
-            at += 1usize
-        }
-        if argument_count != template.comptime_count { ret (invalid_type(), ArgumentCount) }
+        let (first_argument, collect_error) = collect_generic_arguments(c, g, tree, module_index, template_index, node.first_child, node.first_child + node.child_count)
+        if collect_error != ok { ret (invalid_type(), collect_error) }
         if atomic_named {
             let argument = c.generic_arguments[first_argument]
             if argument.kind != .Type || !atomic_element_legal(argument.ty) {
@@ -1882,7 +1892,46 @@ fn collect_aggregates(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
     c.generic_argument_count = 0usize
     try seed_intrinsic_aggregates(c, g)
     try collect_aggregate_pass(c, r, g, true)
-    ret collect_aggregate_pass(c, r, g, false)
+    try collect_aggregate_pass(c, r, g, false)
+    ret refill_aggregate_instances(c)
+}
+
+// An instance copies its template's fields when it is created, and a field type is
+// what creates one -- so a struct whose field is `other.Thing[i64]` instantiates
+// `Thing` while collecting its own fields, which is before `Thing`'s fields are
+// collected whenever the other module is walked later. The instance is then born with
+// none of them and stays that way, because nothing revisits it.
+//
+// Templates are never instances, so once the pass above has run every template is
+// complete and one sweep settles it. An instance made here is made from a complete
+// template and needs no second look, which is why the loop re-reads the count.
+fn refill_aggregate_instances(c: *Checker) -> err {
+    var at = 0usize
+    while at < c.aggregate_count {
+        let instance = c.aggregates[at]
+        if instance.instance && !instance.generic && instance.template_index < c.aggregate_count {
+            let template = c.aggregates[instance.template_index]
+            if instance.field_count != template.field_count {
+                if c.aggregate_field_count + template.field_count > c.aggregate_fields.len { ret Capacity }
+                // Reserve before substituting: a nested instantiation appends fields of
+                // its own, exactly as `instantiate_aggregate` guards against.
+                let first_field = c.aggregate_field_count
+                c.aggregate_field_count += template.field_count
+                var field_at = 0usize
+                while field_at < template.field_count {
+                    let source = c.aggregate_fields[template.first_field + field_at]
+                    let (specialized, specialize_error) = substitute_aggregate_type(c, instance.template_index, instance.first_argument, source.ty)
+                    if specialize_error != ok { ret specialize_error }
+                    c.aggregate_fields[first_field + field_at] = AggregateField { name: source.name, ty: specialized, enum_value: source.enum_value, enum_negative: source.enum_negative, has_enum_value: source.has_enum_value, token: source.token }
+                    field_at += 1usize
+                }
+                c.aggregates[at].first_field = first_field
+                c.aggregates[at].field_count = template.field_count
+            }
+        }
+        at += 1usize
+    }
+    ret ok
 }
 
 // A field type is stored fully expanded -- every aggregate lookup and every type
@@ -4018,6 +4067,46 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         let named = make_type(.Named, name, target_module)
         let (canonical, canonical_error) = canonical_type(c, named)
         ret (canonical, canonical_error)
+    }
+    // `St[i64]` in a comptime argument slot. The parser gives a bracket expression
+    // here rather than a type node -- the two spellings differ only in where they are
+    // written -- so the base names the template and the rest are its arguments.
+    if node.kind == .BracketPostfix {
+        // The base occupies the first child slot; the arguments are the slots after it.
+        let child_end = node.first_child + node.child_count
+        var base_slot = node.first_child
+        while base_slot < child_end && !tree.children[base_slot].node { base_slot += 1usize }
+        if base_slot >= child_end { ret (invalid_type(), parse.InvalidSyntax) }
+        let base_index = tree.children[base_slot].index
+        let base = tree.nodes[base_index]
+        var target_module = module_index
+        var name = ""
+        if base.kind == .NameExpr {
+            let base_token = c.tokens[base.token_start]
+            if base_token.kind != .Identifier { ret (invalid_type(), InvalidType) }
+            name = text[base_token.start..base_token.end]
+            let (qualified_module, has_qualifier) = resolve.qualifier(c.resolver, module_index, name)
+            if has_qualifier { ret (invalid_type(), InvalidType) }
+            if same(name, "Atomic") {
+                let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
+                if has_atomic { target_module = atomic_module }
+            }
+        } else {
+            let (member_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+            if !found_member { ret (invalid_type(), InvalidType) }
+            target_module = member_module
+            name = member
+        }
+        let (template_index, found_template) = find_aggregate(c, target_module, name)
+        if !found_template { ret (invalid_type(), InvalidType) }
+        let (first_argument, collect_error) = collect_generic_arguments(c, g, tree, module_index, template_index, base_slot + 1usize, child_end)
+        if collect_error != ok { ret (invalid_type(), collect_error) }
+        let (instance_index, instance_error) = instantiate_aggregate(c, template_index, first_argument)
+        if instance_error != ok { ret (invalid_type(), instance_error) }
+        var instance = make_type(.Named, name, target_module)
+        instance.element = instance_index
+        instance.has_element = true
+        ret (instance, ok)
     }
     if node.kind == .UnaryExpr && c.tokens[node.token_start].kind == .PunctStar {
         let (child_index, found) = first_node_child(tree, node)
