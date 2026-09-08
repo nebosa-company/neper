@@ -74,6 +74,15 @@ const SYS_SYMLINKAT: usize = 266usize
 const SYS_READLINKAT: usize = 267usize
 const SYS_GETCWD: usize = 79usize
 const SYS_CHDIR: usize = 80usize
+const SYS_READ: usize = 0usize
+const SYS_CLOSE: usize = 3usize
+const SYS_OPENAT: usize = 257usize
+
+// O_RDONLY with O_CLOEXEC, so a spawn between here and there does not inherit it.
+const OPEN_READ_ONLY: usize = 524288usize
+
+// The kernel caps the environment well below this.
+const MAX_ENVIRONMENT: usize = 2097152usize
 
 // A target longer than this is not a link anyone meant to write.
 const MAX_LINK_LENGTH: usize = 65536usize
@@ -323,6 +332,84 @@ fn current_dir(a: *mem.Arena) -> (str, err) {
 // nothing else. What comes back has its links already resolved -- that is what the kernel
 // stores, not a choice made here -- and it needs `/proc` mounted, without which it is the
 // `NotFound` that any missing path is.
+// One NAME=VALUE record at a time. The name has to match to its whole length and end at
+// the `=`, or a lookup of `PAT` would be answered by `PATH`.
+fn environment_value(block: str, name: str) -> (str, bool) {
+    var at = 0usize
+    while at < block.len {
+        var end = at
+        while end < block.len && block[end] != 0u8 { end = end + 1usize }
+        if end > at + name.len && block[at + name.len] == 61u8 {
+            var matched = true
+            var offset = 0usize
+            while offset < name.len {
+                if block[at + offset] != name[offset] { matched = false }
+                offset += 1usize
+            }
+            if matched { ret (block[at + name.len + 1usize..end], true) }
+        }
+        at = end + 1usize
+    }
+    ret ("", false)
+}
+
+// The environment the process was started with, which is what `/proc/self/environ` holds:
+// NAME=VALUE records separated by NUL bytes. Nothing in this language changes an
+// environment, so a snapshot taken at exec is the whole truth.
+//
+// Every file under `/proc` reports a size of zero, so there is no asking how much to
+// allocate: a buffer that filled exactly may have been cut short, and only a short read
+// proves the whole of it is here.
+fn env(a: *mem.Arena, name: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, "/proc/self/environ")
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", path_error)
+    }
+    var capacity = 8192usize
+    while capacity <= MAX_ENVIRONMENT {
+        let (buffer, allocation_error) = mem.alloc[u8](a, capacity)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_READ_ONLY, 0usize, 0usize, 0usize)
+        if descriptor < 0isize {
+            let open_error = from_errno(descriptor)
+            mem.reset(a, checkpoint)
+            ret ("", open_error)
+        }
+        var filled = 0usize
+        var failure = ok
+        while filled < capacity {
+            let taken = syscall(SYS_READ, usize(descriptor), mem.address_of(&buffer[filled]), capacity - filled, 0usize, 0usize, 0usize)
+            if taken < 0isize {
+                failure = from_errno(taken)
+                break
+            }
+            if taken == 0isize { break }
+            filled += usize(taken)
+        }
+        let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        if failure != ok {
+            mem.reset(a, checkpoint)
+            ret ("", failure)
+        }
+        if filled < capacity {
+            let (value, found) = environment_value(buffer[0usize..filled], name)
+            if !found {
+                mem.reset(a, checkpoint)
+                ret ("", NotFound)
+            }
+            ret (value, ok)
+        }
+        capacity = capacity * 2usize
+    }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
 fn executable_path(a: *mem.Arena) -> (str, err) {
     let (image, image_error) = read_link(a, "/proc/self/exe")
     ret (image, image_error)

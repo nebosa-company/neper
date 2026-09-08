@@ -249,6 +249,28 @@ fn main(a: *mem.Arena) -> err {
     if program_again_error != ok { os.exit(125i32) }
     if !same_text(program_again, program) { os.exit(126i32) }
 
+    // The environment, which is where the two directories `e.fs` names come from. `PATH`
+    // is set for every process on both hosts, so it is the one name that can be asked for
+    // without arranging anything first.
+    let (search_path, search_path_error) = os.env(a, "PATH")
+    if search_path_error != ok { os.exit(127i32) }
+    if search_path.len == 0usize { os.exit(128i32) }
+
+    // A name nothing set is `NotFound` and not an empty answer, which is the whole reason
+    // this returns an error rather than a string.
+    let (unset, unset_error) = os.env(a, "NP_OS_FS_NOT_SET_ANYWHERE")
+    if unset_error != os.NotFound { os.exit(129i32) }
+
+    // A longer name that begins with a real one is not that one: a lookup that compared
+    // only as far as the stored name reaches would answer this with `PATH`'s value.
+    let (overrun, overrun_error) = os.env(a, "PATHH")
+    if overrun_error != os.NotFound { os.exit(130i32) }
+
+    // And the empty name matches nothing, where a record split at the first `=` with no
+    // length check would match the first entry.
+    let (empty_name, empty_name_error) = os.env(a, "")
+    if empty_name_error != os.NotFound { os.exit(131i32) }
+
     // A non-empty directory does not go away, so the file is removed first.
     if os.remove_dir(a, "np-os-fs-dir") == ok { os.exit(40i32) }
 

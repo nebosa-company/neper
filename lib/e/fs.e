@@ -214,6 +214,49 @@ fn make_dirs(a: *mem.Arena, path_text: str) -> err {
     ret ok
 }
 
+// A candidate the host named, kept only if it is really there and really a directory.
+// That is what makes a list of candidates worth having: the first name that is set is not
+// necessarily the one that works.
+fn env_directory(a: *mem.Arena, name: str) -> (str, bool) {
+    let (value, value_error) = os.env(a, name)
+    if value_error != ok || value.len == 0usize { ret ("", false) }
+    let (info, info_error) = os.stat(a, value)
+    if info_error != ok || info.kind != .Dir { ret ("", false) }
+    ret (value, true)
+}
+
+// Which names to ask for is the second thing in this module that depends on the host, and
+// it comes from the same place the first one does. Nothing here creates the directory or
+// checks that it can be written to -- `temp_file` is what would have to.
+fn temp_dir(a: *mem.Arena) -> (str, err) {
+    if host_style() == .Windows {
+        let (tmp, tmp_found) = env_directory(a, "TMP")
+        if tmp_found { ret (tmp, ok) }
+        let (temp, temp_found) = env_directory(a, "TEMP")
+        if temp_found { ret (temp, ok) }
+        ret ("", NotFound)
+    }
+    let (named, named_found) = env_directory(a, "TMPDIR")
+    if named_found { ret (named, ok) }
+    // The one every Unix has whether or not anything named it.
+    let (fallback, fallback_error) = os.stat(a, "/tmp")
+    if fallback_error == ok && fallback.kind == .Dir { ret ("/tmp", ok) }
+    ret ("", NotFound)
+}
+
+// The environment is the only thing asked. A host where the account has no home says so,
+// rather than this guessing at one from a user name.
+fn home_dir(a: *mem.Arena) -> (str, err) {
+    if host_style() == .Windows {
+        let (profile, profile_found) = env_directory(a, "USERPROFILE")
+        if profile_found { ret (profile, ok) }
+        ret ("", NotFound)
+    }
+    let (home, home_found) = env_directory(a, "HOME")
+    if home_found { ret (home, ok) }
+    ret ("", NotFound)
+}
+
 // The running program's own path, absolute. What the host records is not quite the same
 // thing on both -- one resolves the symbolic links in it and the other does not -- so a
 // caller comparing it against a path of its own should compare what `canonical` makes of

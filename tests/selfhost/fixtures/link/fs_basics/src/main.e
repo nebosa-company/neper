@@ -41,6 +41,15 @@ fn clear(a: *mem.Arena) {
     let outer = fs.remove_dir(a, "np-fs")
 }
 
+// A leading separator, or a drive letter and a colon: the two ways a path on either host
+// does not depend on where it is read from.
+fn rooted(text: str) -> bool {
+    if text.len == 0usize { ret false }
+    if text[0usize] == 47u8 || text[0usize] == 92u8 { ret true }
+    if text.len >= 2usize && text[1usize] == 58u8 { ret true }
+    ret false
+}
+
 fn main(a: *mem.Arena) -> err {
     clear(a)
 
@@ -216,6 +225,29 @@ fn main(a: *mem.Arena) -> err {
     if image_error != ok { os.exit(162i32) }
     if image.kind != .File { os.exit(163i32) }
     if image.size == 0u64 { os.exit(164i32) }
+
+    // The two directories the host names rather than the program. Whichever variable each
+    // came from, what has to be true of it is the same: an absolute path that is really
+    // there and is really a directory.
+    let (temporary, temporary_error) = fs.temp_dir(a)
+    if temporary_error != ok { os.exit(170i32) }
+    if temporary.len == 0usize { os.exit(171i32) }
+    if !rooted(temporary) { os.exit(172i32) }
+    let (temporary_entry, temporary_entry_error) = fs.stat(a, temporary)
+    if temporary_entry_error != ok { os.exit(173i32) }
+    if temporary_entry.kind != .Directory { os.exit(174i32) }
+
+    let (home, home_error) = fs.home_dir(a)
+    if home_error != ok { os.exit(175i32) }
+    if home.len == 0usize { os.exit(176i32) }
+    if !rooted(home) { os.exit(177i32) }
+    let (home_entry, home_entry_error) = fs.stat(a, home)
+    if home_entry_error != ok { os.exit(178i32) }
+    if home_entry.kind != .Directory { os.exit(179i32) }
+
+    // They are not the same place, which is what says each came from its own name rather
+    // than from one lookup answering both.
+    if same(temporary, home) { os.exit(180i32) }
 
     // A limit smaller than the file is refused rather than silently truncating, and a
     // limit large enough is not.

@@ -143,6 +143,9 @@ extern fn raw_set_current_directory(name: *const u16) -> i32
 @import("kernel32.dll", "GetModuleFileNameW")
 extern fn raw_module_file_name(module: usize, buffer: *u16, capacity: u32) -> u32
 
+@import("kernel32.dll", "GetEnvironmentVariableW")
+extern fn raw_environment_variable(name: *const u16, buffer: *u16, capacity: u32) -> u32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -583,6 +586,56 @@ fn current_dir(a: *mem.Arena) -> (str, err) {
 // `GetModuleFileNameW` signals a buffer that was too small by filling it exactly and
 // leaving the count equal to the capacity, so a result that fills the buffer is never
 // trusted to be complete. The path is the one the process was started from, links and all.
+// A zero result means two different things here, and the code afterwards is what tells
+// them apart: a name nothing set, or a name set to nothing. The second is not a failure,
+// and reporting it as one would make an empty value indistinguishable from a missing one
+// -- which is the whole reason this returns an `err` rather than an empty `str`.
+fn env(a: *mem.Arena, name: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (wide_name, name_error) = widen(a, name)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", name_error)
+    }
+    var capacity = 256usize
+    while capacity <= MAX_DIRECTORY_UNITS {
+        let (units, allocation_error) = mem.alloc[u16](a, capacity)
+        if allocation_error != ok {
+            mem.reset(a, checkpoint)
+            ret ("", OutOfMemory)
+        }
+        let written = raw_environment_variable(&wide_name[0usize], &units[0usize], u32(capacity))
+        if written == 0u32 {
+            let code = raw_last_error()
+            mem.reset(a, checkpoint)
+            if code == 0u32 { ret ("", ok) }
+            // ERROR_ENVVAR_NOT_FOUND.
+            if code == 203u32 { ret ("", NotFound) }
+            ret ("", Failed)
+        }
+        // A count that reaches the capacity is the size needed, terminator included,
+        // rather than the size written.
+        if usize(written) < capacity {
+            let count = usize(written)
+            // A UTF-16 unit never becomes more than three UTF-8 bytes.
+            let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+            if bytes_error != ok {
+                mem.reset(a, checkpoint)
+                ret ("", OutOfMemory)
+            }
+            let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+            if converted <= 0i32 {
+                mem.reset(a, checkpoint)
+                ret ("", Failed)
+            }
+            ret (bytes[0usize..usize(converted)], ok)
+        }
+        capacity = usize(written)
+    }
+    mem.reset(a, checkpoint)
+    ret ("", Failed)
+}
+
 fn executable_path(a: *mem.Arena) -> (str, err) {
     let checkpoint = mem.mark(a)
     var capacity = 260usize

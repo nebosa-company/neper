@@ -691,3 +691,36 @@ absolute, the same on two calls, and naming a file that exists and has bytes —
 the running program itself. Both halves were pinned by breaking them: pointing Linux at
 `/proc/self/cwd` fails on the kind, and dropping a byte from the Windows result fails on
 the lookup.
+
+## D103 — `os.env` reads the environment; `e.fs` knows which names to ask for
+
+`e.fs.temp_dir` and `home_dir` are the environment and a check, so what they needed was
+`os.env`, which the `e.os` fence already named and nothing had written. No fence change
+this time.
+
+**Linux reads `/proc/self/environ` rather than gaining a runtime primitive.** The
+alternative was exposing `environ` from the stack the way `neper_os_args` already exposes
+`argv`, which is assembly; this is `openat`, `read` and `close` through `os.syscall`, in
+the same neper source as everything else in that file. It is a snapshot taken at exec, and
+that is the whole truth here because nothing in this language changes an environment.
+Every file under `/proc` reports a size of zero, so there is no asking how much to
+allocate: a buffer that filled exactly may have been cut short, and only a short read
+proves the whole of it arrived. Windows is one `GetEnvironmentVariableW`.
+
+A name that is not set and a name set to nothing are different answers, which is why this
+returns an `err` and not an empty `str`. Windows makes that distinction cost something —
+both come back as a zero count, and only the error code afterwards separates
+`ERROR_ENVVAR_NOT_FOUND` from no error at all.
+
+The record scan is where the bug would have been: a name must match to its whole length
+**and** end at the `=`, or `PAT` would be answered by `PATH` and the empty name by the
+first record in the block. The fixture asks for `PATHH` and for `""` for that reason, and
+dropping the `=` check fails it at exit 131.
+
+`temp_dir` and `home_dir` ask different names per host — `TMP` then `TEMP` against
+`TMPDIR` then `/tmp`, `USERPROFILE` against `HOME` — which is the second thing in `e.fs`
+that has to know which host it is on, and it comes from `os.NATIVE_SEPARATOR` like the
+first. Each candidate is kept only if it is really there and really a directory, which is
+what makes a list of candidates worth having rather than a chain of first-set-wins.
+Neither creates anything or checks that it can be written to: `temp_file` is what would
+have to, and it is not written yet.
