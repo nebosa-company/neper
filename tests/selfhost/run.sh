@@ -45,6 +45,13 @@ frame == 0 { next }
 }
 END { report(); if (bad) exit 1; exit 0 }
 ' "$test_build/neper-self.s"
+# A bootstrap code-generation regression: `.len` on a call result is read out of a
+# register, not an address, because a call result has no address. Built and run with
+# the bootstrap, since that is the back end that had it wrong.
+call_len_path="$test_build/call-result-len-bootstrap"
+$neper build "$repo/tests/neper0/call-result-len.e" --output "$call_len_path" >/dev/null
+chmod +x "$call_len_path"
+"$call_len_path"
 lexer=$($test_build/neper-self self-test)
 [ "$lexer" = 'selfhost lexer ok' ]
 scan=$($test_build/neper-self scan 'fn main() -> err { ret ok }')

@@ -45,6 +45,14 @@ foreach ($line in [IO.File]::ReadLines($compilerAsm)) {
 Test-Frame
 if ($frameOverruns.Count -ne 0) { throw "bootstrap frames do not cover their temporaries: $($frameOverruns -join '; ')" }
 $lexer = & $compiler self-test
+# A bootstrap code-generation regression: `.len` on a call result is read out of a
+# register, not an address, because a call result has no address. Built and run with
+# the bootstrap, since that is the back end that had it wrong.
+$callLenPath = Join-Path $testBuild 'call-result-len-bootstrap.exe'
+& $neper build (Join-Path $repo 'tests\neper0\call-result-len.e') --output $callLenPath | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the bootstrap did not build the call-result length fixture' }
+& $callLenPath
+if ($LASTEXITCODE -ne 0) { throw 'the bootstrap reads the length of a call result from the wrong place' }
 if ($LASTEXITCODE -ne 0 -or $lexer -ne 'selfhost lexer ok') { throw 'self-hosted lexer behavior failed' }
 $scan = & $compiler scan 'fn main() -> err { ret ok }'
 if ($LASTEXITCODE -ne 0 -or $scan -ne 'scan ok') { throw 'self-hosted compiler scan command failed' }

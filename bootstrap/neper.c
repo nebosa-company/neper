@@ -5629,8 +5629,17 @@ static void emit_expr(Emitter *e, Expr *x) {
             if (x->is_len && x->place_type.kind == TY_ARRAY)
                 fprintf(e->out, "    mov rax, %llu\n", (unsigned long long)x->place_type.array_length);
             else if (x->is_len) {
-                emit_place_address(e, x->as.field.base);
-                fputs("    mov rax, QWORD PTR [r10+8]\n", e->out);
+                if (expr_is_place(x->as.field.base)) {
+                    emit_place_address(e, x->as.field.base);
+                    fputs("    mov rax, QWORD PTR [r10+8]\n", e->out);
+                } else {
+                    /* A call result is not a place, so there is no address to read a
+                       length out of. A str or slice value arrives as (rax = pointer,
+                       rdx = length), so the length is already in rdx. Asking for the
+                       address of a non-place read whatever r10 happened to hold. */
+                    emit_expr(e, x->as.field.base);
+                    fputs("    mov rax, rdx\n", e->out);
+                }
             } else {
                 emit_place_address(e, x);
                 emit_address_load(e, x->type);
