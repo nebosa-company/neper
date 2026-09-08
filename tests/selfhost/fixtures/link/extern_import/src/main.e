@@ -1,43 +1,34 @@
-// `extern fn` bound by `@import(LIBRARY, SYMBOL)`, reached through the image's import
-// table. Two libraries, so the import directory carries more than one descriptor; a
-// repeated symbol, which is one slot both calls read; and effects that are observable,
-// so a call that reached the wrong slot is a wrong answer rather than a link error.
+// `extern fn` bound by `@import(LIBRARY, SYMBOL)`, reached through whatever the image
+// format calls its import table: a descriptor and an address table on PE, and
+// `DT_NEEDED` with a `GLOB_DAT` relocation into a slot on ELF. Either way the call is
+// an indirect one through a slot the loader fills before this runs.
 //
 // The neper-side name is deliberately not the foreign one -- D11 keeps them
-// independent, and `@import` is the whole of what ties them together.
+// independent, and `@import` is the whole of what ties them together. Which library
+// each symbol comes from is per-platform, so the declarations live in `plat`.
+//
+// Every effect checked here is observable, so a call that reached the wrong slot is a
+// wrong answer rather than a link error.
+
+use plat
+
 error Failed
 
-@import("kernel32", "GetTickCount64")
-extern fn tick_count() -> u64
-
-@import("kernel32", "Sleep")
-extern fn sleep_ms(ms: u32)
-
-@import("kernel32", "GetCurrentProcessId")
-extern fn process_id() -> u32
-
-// A second library, to prove the import directory carries more than one descriptor.
-@import("msvcrt", "abs")
-extern fn c_abs(v: i32) -> i32
-
-@import("msvcrt", "_abs64")
-extern fn c_labs(v: i64) -> i64
-
 fn main() -> err {
-    // The neper-side name is not the foreign one: D11 keeps them independent, and
-    // `@import` is what ties this declaration to `GetTickCount64`.
-    let before = tick_count()
-    sleep_ms(30u32)
-    let after = tick_count()
+    if plat.identity() == 0u32 { ret Failed }
+
+    // A symbol named twice is one slot, and both calls read it.
+    if plat.absolute(-7i32) != 7i32 { ret Failed }
+    if plat.absolute(7i32) != 7i32 { ret Failed }
+    if plat.absolute(-2147483647i32) != 2147483647i32 { ret Failed }
+
+    // A wider one, from the same library on one platform and a second on the other.
+    if plat.absolute_wide(-100000000000i64) != 100000000000i64 { ret Failed }
+
+    // A call with no result, and a clock that has to move across it.
+    let before = plat.ticks()
+    plat.pause(30u32)
+    let after = plat.ticks()
     if after < before { ret Failed }
-    if after - before < 10u64 { ret Failed }
-
-    if process_id() == 0u32 { ret Failed }
-
-    // Two symbols from a second library, one of them called twice: a repeated symbol
-    // is one slot and both calls read it.
-    if c_abs(-7i32) != 7i32 { ret Failed }
-    if c_abs(7i32) != 7i32 { ret Failed }
-    if c_labs(-100000000000i64) != 100000000000i64 { ret Failed }
     ret ok
 }

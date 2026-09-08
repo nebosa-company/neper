@@ -92,9 +92,404 @@ fn find_main(builder: *nir.Builder) -> (usize, err) {
     ret (0usize, InvalidExecutable)
 }
 
+// A program with no `extern` is a freestanding static image and stays exactly that:
+// one read-execute segment, no interpreter, no dynamic array. Only an `@import` makes
+// this image need a loader, and then it needs all of the below.
+//
+// There are no PLT stubs. Every imported call goes straight through a slot the loader
+// fills before the entry point runs -- `R_X86_64_GLOB_DAT` is resolved eagerly -- which
+// is the same `call qword ptr [rip + disp32]` the PE side emits and leaves nothing to
+// bind lazily. Lazy binding would buy a shorter start-up and cost a PLT, a second GOT
+// convention and `DT_PLTGOT`; none of that is worth having here.
+fn interpreter_path() -> str {
+    ret "/lib64/ld-linux-x86-64.so.2"
+}
+
+fn align_up_to(value: usize, alignment: usize) -> usize {
+    let remainder = value % alignment
+    if remainder == 0usize { ret value }
+    ret value + alignment - remainder
+}
+
+// `.dynstr` holds one terminated name per library and per symbol, after a leading
+// empty string that index 0 has to be.
+fn dynamic_string_size(builder: *nir.Builder) -> usize {
+    var size = 1usize
+    var library = 0usize
+    while library < nir.import_library_count(builder) {
+        let library_text = nir.import_library_name(builder, library)
+        size += library_text.len + 1usize
+        var entry = 0usize
+        while entry < nir.import_symbol_count(builder, library) {
+            let symbol_text = nir.import_symbol_name(builder, library, entry)
+            size += symbol_text.len + 1usize
+            entry += 1usize
+        }
+        library += 1usize
+    }
+    ret size
+}
+
+fn library_string_offset(builder: *nir.Builder, library: usize) -> usize {
+    var offset = 1usize
+    var at = 0usize
+    while at < library {
+        let library_text = nir.import_library_name(builder, at)
+        offset += library_text.len + 1usize
+        var entry = 0usize
+        while entry < nir.import_symbol_count(builder, at) {
+            let symbol_text = nir.import_symbol_name(builder, at, entry)
+            offset += symbol_text.len + 1usize
+            entry += 1usize
+        }
+        at += 1usize
+    }
+    ret offset
+}
+
+fn symbol_string_offset(builder: *nir.Builder, library: usize, entry: usize) -> usize {
+    let library_text = nir.import_library_name(builder, library)
+    var offset = library_string_offset(builder, library) + library_text.len + 1usize
+    var at = 0usize
+    while at < entry {
+        let symbol_text = nir.import_symbol_name(builder, library, at)
+        offset += symbol_text.len + 1usize
+        at += 1usize
+    }
+    ret offset
+}
+
+fn append_dynamic_strings(builder: *nir.Builder, output: *emit_x64.Buffer) -> err {
+    try emit_x64.byte(output, 0usize)
+    var library = 0usize
+    while library < nir.import_library_count(builder) {
+        try append_text(output, nir.import_library_name(builder, library))
+        try emit_x64.byte(output, 0usize)
+        var entry = 0usize
+        while entry < nir.import_symbol_count(builder, library) {
+            try append_text(output, nir.import_symbol_name(builder, library, entry))
+            try emit_x64.byte(output, 0usize)
+            entry += 1usize
+        }
+        library += 1usize
+    }
+    ret ok
+}
+
+fn append_text(output: *emit_x64.Buffer, text: str) -> err {
+    var at = 0usize
+    while at < text.len {
+        try emit_x64.byte(output, usize(text[at]))
+        at += 1usize
+    }
+    ret ok
+}
+
+// One `Elf64_Sym` per imported symbol, after the null entry index 0 has to be. Every
+// one is an undefined global function, which is what makes the loader look for it in
+// the libraries `DT_NEEDED` names.
+fn append_dynamic_symbols(builder: *nir.Builder, output: *emit_x64.Buffer) -> err {
+    var at = 0usize
+    while at < 24usize {
+        try emit_x64.byte(output, 0usize)
+        at += 1usize
+    }
+    var library = 0usize
+    while library < nir.import_library_count(builder) {
+        var entry = 0usize
+        while entry < nir.import_symbol_count(builder, library) {
+            try emit_x64.little_u32(output, symbol_string_offset(builder, library, entry))
+            // STB_GLOBAL | STT_FUNC, no visibility bits, SHN_UNDEF.
+            try emit_x64.byte(output, 18usize)
+            try emit_x64.byte(output, 0usize)
+            try little_u16(output, 0usize)
+            try emit_x64.little_u64(output, 0usize)
+            try emit_x64.little_u64(output, 0usize)
+            entry += 1usize
+        }
+        library += 1usize
+    }
+    ret ok
+}
+
+// `DT_HASH` is not used to find anything here -- this image defines no symbol anyone
+// looks up -- but glibc expects a hash table to exist, so it gets the smallest valid
+// one: a single bucket holding every symbol in a chain.
+fn append_dynamic_hash(builder: *nir.Builder, output: *emit_x64.Buffer) -> err {
+    let symbols = nir.import_symbol_total(builder) + 1usize
+    try emit_x64.little_u32(output, 1usize)
+    try emit_x64.little_u32(output, symbols)
+    var first = 0usize
+    if symbols > 1usize { first = 1usize }
+    try emit_x64.little_u32(output, first)
+    try emit_x64.little_u32(output, 0usize)
+    var at = 1usize
+    while at < symbols {
+        var next = at + 1usize
+        if next == symbols { next = 0usize }
+        try emit_x64.little_u32(output, next)
+        at += 1usize
+    }
+    ret ok
+}
+
+fn dynamic_hash_size(builder: *nir.Builder) -> usize {
+    let symbols = nir.import_symbol_total(builder) + 1usize
+    let words = 3usize + symbols
+    ret words * 4usize
+}
+
+// One `R_X86_64_GLOB_DAT` per symbol, each naming the slot that symbol's calls read.
+// Patched rather than appended: the area was reserved with the rest of what the loader
+// reads, which is ahead of the code, while the slots it names are behind it.
+fn patch_dynamic_relocations(builder: *nir.Builder, output: *emit_x64.Buffer, rela_offset: usize, got_address: usize) -> err {
+    var library = 0usize
+    while library < nir.import_library_count(builder) {
+        var entry = 0usize
+        while entry < nir.import_symbol_count(builder, library) {
+            let flat = nir.import_flat_index(builder, library, entry)
+            let at = rela_offset + flat * 24usize
+            try patch_little_u64(output, at, got_address + flat * 8usize)
+            // r_info: the symbol index in the high word, R_X86_64_GLOB_DAT (6) in the low.
+            try emit_x64.patch_little_u32(output, at + 8usize, 6usize)
+            try emit_x64.patch_little_u32(output, at + 12usize, flat + 1usize)
+            entry += 1usize
+        }
+        library += 1usize
+    }
+    ret ok
+}
+
+fn append_dynamic_entry(output: *emit_x64.Buffer, tag: usize, value: usize) -> err {
+    try emit_x64.little_u64(output, tag)
+    ret emit_x64.little_u64(output, value)
+}
+
+fn dynamic_entry_count(builder: *nir.Builder) -> usize {
+    ret nir.import_library_count(builder) + 10usize
+}
+
+fn append_dynamic(builder: *nir.Builder, output: *emit_x64.Buffer, dynstr_address: usize, dynsym_address: usize, hash_address: usize, rela_address: usize) -> err {
+    var library = 0usize
+    while library < nir.import_library_count(builder) {
+        try append_dynamic_entry(output, 1usize, library_string_offset(builder, library))
+        library += 1usize
+    }
+    try append_dynamic_entry(output, 5usize, dynstr_address)
+    try append_dynamic_entry(output, 10usize, dynamic_string_size(builder))
+    try append_dynamic_entry(output, 6usize, dynsym_address)
+    try append_dynamic_entry(output, 11usize, 24usize)
+    try append_dynamic_entry(output, 4usize, hash_address)
+    try append_dynamic_entry(output, 7usize, rela_address)
+    try append_dynamic_entry(output, 8usize, nir.import_symbol_total(builder) * 24usize)
+    try append_dynamic_entry(output, 9usize, 24usize)
+    // DF_BIND_NOW, and the flag that says so again for loaders that read only one.
+    try append_dynamic_entry(output, 30usize, 8usize)
+    ret append_dynamic_entry(output, 0usize, 0usize)
+}
+
+// The dynamic image. Everything the loader reads sits in the first segment ahead of
+// the code, and the one writable segment holds the dynamic array and the slots the
+// loader fills. The layout is derived in one pass so that every address below is the
+// arithmetic that produced it and none of it is written down twice.
+fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
+    let (main_index, main_error) = find_main(builder)
+    if main_error != ok { ret main_error }
+    let base = 4194304usize
+    let code_offset = 4096usize
+    let startup_size = 235usize
+    let symbols = nir.import_symbol_total(builder)
+
+    let phdr_offset = 64usize
+    let phdr_count = 5usize
+    let interp_offset = phdr_offset + phdr_count * 56usize
+    let interpreter = interpreter_path()
+    let interp_size = interpreter.len + 1usize
+    let dynstr_offset = interp_offset + interp_size
+    let dynstr_size = dynamic_string_size(builder)
+    let dynsym_offset = align_up_to(dynstr_offset + dynstr_size, 8usize)
+    let dynsym_size = (symbols + 1usize) * 24usize
+    let hash_offset = align_up_to(dynsym_offset + dynsym_size, 8usize)
+    let hash_size = dynamic_hash_size(builder)
+    let rela_offset = align_up_to(hash_offset + hash_size, 8usize)
+    let rela_size = symbols * 24usize
+    if rela_offset + rela_size > code_offset { ret InvalidExecutable }
+
+    try emit_x64.byte(output, 127usize)
+    try emit_x64.byte(output, 69usize)
+    try emit_x64.byte(output, 76usize)
+    try emit_x64.byte(output, 70usize)
+    try emit_x64.byte(output, 2usize)
+    try emit_x64.byte(output, 1usize)
+    try emit_x64.byte(output, 1usize)
+    try emit_x64.byte(output, 0usize)
+    try emit_x64.byte(output, 0usize)
+    try pad_to(output, 16usize)
+    try little_u16(output, 2usize)
+    try little_u16(output, 62usize)
+    try emit_x64.little_u32(output, 1usize)
+    try emit_x64.little_u64(output, base + code_offset)
+    try emit_x64.little_u64(output, phdr_offset)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u32(output, 0usize)
+    try little_u16(output, 64usize)
+    try little_u16(output, 56usize)
+    try little_u16(output, phdr_count)
+    try little_u16(output, 0usize)
+    try little_u16(output, 0usize)
+    try little_u16(output, 0usize)
+
+    // The sizes of the two loaded segments are not known until the code and the
+    // writable data have been written, so the headers are emitted with placeholders
+    // and patched at the end -- as the static path already does for its one segment.
+    try emit_x64.little_u32(output, 6usize)
+    try emit_x64.little_u32(output, 4usize)
+    try emit_x64.little_u64(output, phdr_offset)
+    try emit_x64.little_u64(output, base + phdr_offset)
+    try emit_x64.little_u64(output, base + phdr_offset)
+    try emit_x64.little_u64(output, phdr_count * 56usize)
+    try emit_x64.little_u64(output, phdr_count * 56usize)
+    try emit_x64.little_u64(output, 8usize)
+
+    try emit_x64.little_u32(output, 3usize)
+    try emit_x64.little_u32(output, 4usize)
+    try emit_x64.little_u64(output, interp_offset)
+    try emit_x64.little_u64(output, base + interp_offset)
+    try emit_x64.little_u64(output, base + interp_offset)
+    try emit_x64.little_u64(output, interp_size)
+    try emit_x64.little_u64(output, interp_size)
+    try emit_x64.little_u64(output, 1usize)
+
+    try emit_x64.little_u32(output, 1usize)
+    try emit_x64.little_u32(output, 5usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, base)
+    try emit_x64.little_u64(output, base)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 4096usize)
+
+    try emit_x64.little_u32(output, 1usize)
+    try emit_x64.little_u32(output, 6usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 4096usize)
+
+    try emit_x64.little_u32(output, 2usize)
+    try emit_x64.little_u32(output, 6usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 0usize)
+    try emit_x64.little_u64(output, 8usize)
+
+    try pad_to(output, interp_offset)
+    try append_text(output, interpreter_path())
+    try emit_x64.byte(output, 0usize)
+    try pad_to(output, dynstr_offset)
+    try append_dynamic_strings(builder, output)
+    try pad_to(output, dynsym_offset)
+    try append_dynamic_symbols(builder, output)
+    try pad_to(output, hash_offset)
+    try append_dynamic_hash(builder, output)
+    // The relocations name slots that do not exist yet, so the area is reserved here
+    // and filled once the writable segment has been laid out.
+    try pad_to(output, rela_offset)
+    var reserved = 0usize
+    while reserved < rela_size {
+        try emit_x64.byte(output, 0usize)
+        reserved += 1usize
+    }
+
+    try pad_to(output, code_offset)
+    try append_startup(output)
+    let machine_start = output.count
+    var at = 0usize
+    while at < machine.count {
+        try emit_x64.byte(output, machine.bytes[at])
+        at += 1usize
+    }
+    let runtime_start = output.count
+    try append_runtime(output)
+    try runtime_elf_x64_ext.append(output)
+    let text_end = output.count
+
+    // The writable segment starts on the next page, at the same offset within it as
+    // its address: a segment whose file offset and address disagree modulo the page
+    // size cannot be mapped.
+    let data_offset = align_up_to(text_end, 4096usize)
+    try pad_to(output, data_offset)
+    let dynamic_address = base + data_offset
+    let dynamic_size = dynamic_entry_count(builder) * 16usize
+    let got_offset = data_offset + dynamic_size
+    let got_address = base + got_offset
+    try append_dynamic(builder, output, base + dynstr_offset, base + dynsym_offset, base + hash_offset, base + rela_offset)
+    var slot = 0usize
+    while slot < symbols {
+        try emit_x64.little_u64(output, 0usize)
+        slot += 1usize
+    }
+    let data_end = output.count
+
+    try patch_dynamic_relocations(builder, output, rela_offset, got_address)
+
+    let main_offset = machine_start + function_offsets[main_index]
+    try emit_x64.patch_relative32(output, code_offset + 200usize, main_offset)
+    var relocation_at = 0usize
+    while relocation_at < relocation_count {
+        if !relocations[relocation_at].resolved {
+            let reference_index = relocations[relocation_at].function_ref
+            if reference_index >= builder.function_ref_count { ret InvalidExecutable }
+            let (library, entry, is_import) = nir.import_slot_of(builder, reference_index)
+            if is_import {
+                let flat = nir.import_flat_index(builder, library, entry)
+                let site = machine_start + relocations[relocation_at].displacement_at
+                let next_address = base + site + 4usize
+                let slot_address = got_address + flat * 8usize
+                if slot_address < next_address { ret InvalidExecutable }
+                try emit_x64.patch_little_u32(output, site, slot_address - next_address)
+            } else {
+                let (runtime_offset, found_runtime) = runtime_symbol_offset(builder.function_refs[reference_index].name)
+                if !found_runtime { ret InvalidExecutable }
+                try emit_x64.patch_relative32(output, site_of(machine_start, relocations[relocation_at].displacement_at), runtime_start + runtime_offset)
+            }
+            relocations[relocation_at].resolved = true
+        }
+        relocation_at += 1usize
+    }
+
+    // The two loaded segments and the dynamic array, now that their sizes are known.
+    try patch_little_u64(output, 96usize + 56usize * 2usize, text_end)
+    try patch_little_u64(output, 104usize + 56usize * 2usize, text_end)
+    try patch_little_u64(output, 72usize + 56usize * 3usize, data_offset)
+    try patch_little_u64(output, 80usize + 56usize * 3usize, base + data_offset)
+    try patch_little_u64(output, 88usize + 56usize * 3usize, base + data_offset)
+    try patch_little_u64(output, 96usize + 56usize * 3usize, data_end - data_offset)
+    try patch_little_u64(output, 104usize + 56usize * 3usize, data_end - data_offset)
+    try patch_little_u64(output, 72usize + 56usize * 4usize, data_offset)
+    try patch_little_u64(output, 80usize + 56usize * 4usize, dynamic_address)
+    try patch_little_u64(output, 88usize + 56usize * 4usize, dynamic_address)
+    try patch_little_u64(output, 96usize + 56usize * 4usize, dynamic_size)
+    try patch_little_u64(output, 104usize + 56usize * 4usize, dynamic_size)
+    ret ok
+}
+
+fn site_of(machine_start: usize, displacement_at: usize) -> usize {
+    ret machine_start + displacement_at
+}
+
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len { ret InvalidExecutable }
     if relocation_count > relocations.len { ret InvalidExecutable }
+    // Only an `@import` makes this image need a loader. Without one it stays the
+    // freestanding static executable it has always been, byte for byte.
+    if nir.import_library_count(builder) != 0usize {
+        ret write_dynamic(builder, machine, function_offsets, relocations, relocation_count, output)
+    }
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
     let code_offset = 4096usize

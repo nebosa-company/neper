@@ -649,6 +649,18 @@ generic_field_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost
 [ "$generic_field_accepted" = 'module check ok' ]
 check_protocol_diagnostic generic_instance_field_leak 'main.e:8:5: error[E-TYPE-9999]: type checking failed: check.InvalidType'
 check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
+# `extern fn` bound by `@import`, reached through the image's import table: a
+# descriptor and an address table on PE, `DT_NEEDED` and a `GLOB_DAT` slot on ELF.
+extern_unbound=$($test_build/neper-self check-file "$repo/tests/selfhost/fixtures/check/extern_without_import/src/main.e" "$repo" x64 linux 2>&1 || true)
+case "$extern_unbound" in
+    *'is an extern fn with no `@import(LIBRARY, SYMBOL)`'*) ;;
+    *) printf '%s\n' "an extern with no @import was not reported: $extern_unbound" >&2; exit 1 ;;
+esac
+extern_path="$test_build/extern-import-selfhost"
+extern_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/extern_import/src/main.e" "$repo" x64 linux "$extern_path")
+[ "$extern_written" = 'executable written' ]
+chmod +x "$extern_path"
+"$extern_path"
 # Section 9's reflection, run rather than only checked: the offsets and sizes are
 # asserted by hand, so a field read at the wrong offset is a wrong value here.
 meta_reflect_path="$test_build/meta-reflect-selfhost"

@@ -233,6 +233,123 @@ fn intern_import(builder: *Builder, module_index: usize, name: str, library: str
     ret (index, ok)
 }
 
+// The imports a program needs the loader to bind, enumerated from the references
+// themselves. Both linkers ask the same questions of the same two orders -- a library
+// joins in the order its first reference appears, and a symbol in the order its first
+// reference within that library does -- so the answers live here rather than in either
+// of them. A symbol named twice is one entry: one slot, read by both calls.
+fn imported_reference(builder: *Builder, index: usize) -> bool {
+    ret index < builder.function_ref_count && builder.function_refs[index].library.len != 0usize
+}
+
+fn first_reference_for_library(builder: *Builder, index: usize) -> bool {
+    if !imported_reference(builder, index) { ret false }
+    var prior = 0usize
+    while prior < index {
+        if imported_reference(builder, prior) && check.same(builder.function_refs[prior].library, builder.function_refs[index].library) { ret false }
+        prior += 1usize
+    }
+    ret true
+}
+
+fn first_reference_for_symbol(builder: *Builder, index: usize) -> bool {
+    if !imported_reference(builder, index) { ret false }
+    var prior = 0usize
+    while prior < index {
+        if imported_reference(builder, prior) && check.same(builder.function_refs[prior].library, builder.function_refs[index].library) && check.same(builder.function_refs[prior].symbol, builder.function_refs[index].symbol) { ret false }
+        prior += 1usize
+    }
+    ret true
+}
+
+fn import_library_count(builder: *Builder) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < builder.function_ref_count {
+        if first_reference_for_library(builder, at) { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn import_library_name(builder: *Builder, library: usize) -> str {
+    var remaining = library
+    var at = 0usize
+    while at < builder.function_ref_count {
+        if first_reference_for_library(builder, at) {
+            if remaining == 0usize { ret builder.function_refs[at].library }
+            remaining = remaining - 1usize
+        }
+        at += 1usize
+    }
+    ret ""
+}
+
+fn import_symbol_count(builder: *Builder, library: usize) -> usize {
+    let wanted = import_library_name(builder, library)
+    var count = 0usize
+    var at = 0usize
+    while at < builder.function_ref_count {
+        if first_reference_for_symbol(builder, at) && check.same(builder.function_refs[at].library, wanted) { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+fn import_symbol_name(builder: *Builder, library: usize, entry: usize) -> str {
+    let wanted = import_library_name(builder, library)
+    var remaining = entry
+    var at = 0usize
+    while at < builder.function_ref_count {
+        if first_reference_for_symbol(builder, at) && check.same(builder.function_refs[at].library, wanted) {
+            if remaining == 0usize { ret builder.function_refs[at].symbol }
+            remaining = remaining - 1usize
+        }
+        at += 1usize
+    }
+    ret ""
+}
+
+// Which library and which of its symbols a reference names.
+fn import_slot_of(builder: *Builder, index: usize) -> (usize, usize, bool) {
+    if !imported_reference(builder, index) { ret (0usize, 0usize, false) }
+    let reference = builder.function_refs[index]
+    var library = 0usize
+    while library < import_library_count(builder) {
+        if check.same(import_library_name(builder, library), reference.library) {
+            var entry = 0usize
+            while entry < import_symbol_count(builder, library) {
+                if check.same(import_symbol_name(builder, library, entry), reference.symbol) { ret (library, entry, true) }
+                entry += 1usize
+            }
+        }
+        library += 1usize
+    }
+    ret (0usize, 0usize, false)
+}
+
+// Every imported symbol laid end to end, which is the order a single table -- an ELF
+// `.dynsym` and the slots beside it -- puts them in.
+fn import_symbol_total(builder: *Builder) -> usize {
+    var total = 0usize
+    var library = 0usize
+    while library < import_library_count(builder) {
+        total += import_symbol_count(builder, library)
+        library += 1usize
+    }
+    ret total
+}
+
+fn import_flat_index(builder: *Builder, library: usize, entry: usize) -> usize {
+    var index = entry
+    var at = 0usize
+    while at < library {
+        index += import_symbol_count(builder, at)
+        at += 1usize
+    }
+    ret index
+}
+
 fn intern_string(builder: *Builder, spelling: str) -> (usize, err) {
     var at = 0usize
     while at < builder.string_count {

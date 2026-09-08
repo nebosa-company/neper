@@ -8,10 +8,6 @@ use runtime_pe_x64
 
 error InvalidExecutable
 
-fn same_text(left: str, right: str) -> bool {
-    ret check.same(left, right)
-}
-
 fn little_u16(output: *emit_x64.Buffer, value: usize) -> err {
     try emit_x64.byte(output, value % 256usize)
     ret emit_x64.byte(output, value / 256usize % 256usize)
@@ -98,122 +94,31 @@ fn runtime_import_name(index: usize) -> str {
     ret ""
 }
 
-// A reference the loader has to bind, rather than one this image defines.
-fn imported_reference(builder: *nir.Builder, index: usize) -> bool {
-    ret index < builder.function_ref_count && builder.function_refs[index].library.len != 0usize
-}
-
-// The user libraries, in the order their first reference appears. Library 0 is always
-// the runtime's, so a user library's index is one more than its position here.
-fn user_library_count(builder: *nir.Builder) -> usize {
-    var count = 0usize
-    var at = 0usize
-    while at < builder.function_ref_count {
-        if imported_reference(builder, at) {
-            var seen = false
-            var prior = 0usize
-            while prior < at {
-                if imported_reference(builder, prior) && same_text(builder.function_refs[prior].library, builder.function_refs[at].library) { seen = true }
-                prior += 1usize
-            }
-            if !seen { count += 1usize }
-        }
-        at += 1usize
-    }
-    ret count
-}
-
-fn user_library_name(builder: *nir.Builder, library: usize) -> str {
-    var remaining = library
-    var at = 0usize
-    while at < builder.function_ref_count {
-        if imported_reference(builder, at) {
-            var seen = false
-            var prior = 0usize
-            while prior < at {
-                if imported_reference(builder, prior) && same_text(builder.function_refs[prior].library, builder.function_refs[at].library) { seen = true }
-                prior += 1usize
-            }
-            if !seen {
-                if remaining == 0usize { ret builder.function_refs[at].library }
-                remaining = remaining - 1usize
-            }
-        }
-        at += 1usize
-    }
-    ret ""
-}
-
+// Library 0 is the runtime's own and is fixed; a user library follows it, in the
+// order `nir` enumerates them.
 fn library_count(builder: *nir.Builder) -> usize {
-    ret 1usize + user_library_count(builder)
+    ret 1usize + nir.import_library_count(builder)
 }
 
 fn library_name(builder: *nir.Builder, library: usize) -> str {
     if library == 0usize { ret "KERNEL32.dll" }
-    ret user_library_name(builder, library - 1usize)
+    ret nir.import_library_name(builder, library - 1usize)
 }
 
-// A library's symbols, in the order their references appear. A symbol named twice is
-// one entry: the loader writes one slot and both calls read it.
 fn library_entry_count(builder: *nir.Builder, library: usize) -> usize {
     if library == 0usize { ret runtime_import_count() }
-    let wanted = library_name(builder, library)
-    var count = 0usize
-    var at = 0usize
-    while at < builder.function_ref_count {
-        if imported_reference(builder, at) && same_text(builder.function_refs[at].library, wanted) {
-            var seen = false
-            var prior = 0usize
-            while prior < at {
-                if imported_reference(builder, prior) && same_text(builder.function_refs[prior].library, wanted) && same_text(builder.function_refs[prior].symbol, builder.function_refs[at].symbol) { seen = true }
-                prior += 1usize
-            }
-            if !seen { count += 1usize }
-        }
-        at += 1usize
-    }
-    ret count
+    ret nir.import_symbol_count(builder, library - 1usize)
 }
 
 fn library_entry_name(builder: *nir.Builder, library: usize, entry: usize) -> str {
     if library == 0usize { ret runtime_import_name(entry) }
-    let wanted = library_name(builder, library)
-    var remaining = entry
-    var at = 0usize
-    while at < builder.function_ref_count {
-        if imported_reference(builder, at) && same_text(builder.function_refs[at].library, wanted) {
-            var seen = false
-            var prior = 0usize
-            while prior < at {
-                if imported_reference(builder, prior) && same_text(builder.function_refs[prior].library, wanted) && same_text(builder.function_refs[prior].symbol, builder.function_refs[at].symbol) { seen = true }
-                prior += 1usize
-            }
-            if !seen {
-                if remaining == 0usize { ret builder.function_refs[at].symbol }
-                remaining = remaining - 1usize
-            }
-        }
-        at += 1usize
-    }
-    ret ""
+    ret nir.import_symbol_name(builder, library - 1usize, entry)
 }
 
-// Where a reference's slot sits: which library, and which entry within it.
 fn reference_import_slot(builder: *nir.Builder, index: usize) -> (usize, usize, bool) {
-    if !imported_reference(builder, index) { ret (0usize, 0usize, false) }
-    let reference = builder.function_refs[index]
-    var library = 1usize
-    while library < library_count(builder) {
-        if same_text(library_name(builder, library), reference.library) {
-            var entry = 0usize
-            while entry < library_entry_count(builder, library) {
-                if same_text(library_entry_name(builder, library, entry), reference.symbol) { ret (library, entry, true) }
-                entry += 1usize
-            }
-        }
-        library += 1usize
-    }
-    ret (0usize, 0usize, false)
+    let (library, entry, found) = nir.import_slot_of(builder, index)
+    if !found { ret (0usize, 0usize, false) }
+    ret (library + 1usize, entry, true)
 }
 
 // Each entry is a 2-byte hint, the name, a terminator, and a pad to an even address.
