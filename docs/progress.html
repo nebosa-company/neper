@@ -117,7 +117,7 @@ footer { border-top:1px solid var(--rule); margin-top:3rem; padding-top:1.25rem;
 
 <div class="kpi">
 <div class="tile"><div class="lab">Compiler</div><div class="val">80<span class="pc">%</span></div><div class="track" role="img" aria-label="Compiler: 80 percent complete"><i style="width:80.0%"></i></div><div class="sub">42.40 of 53 capabilities</div></div>
-<div class="tile"><div class="lab">Modules</div><div class="val">18<span class="pc">%</span></div><div class="track" role="img" aria-label="Modules: 18 percent complete"><i style="width:18.4%"></i></div><div class="sub">396 of 2149 declarations</div></div>
+<div class="tile"><div class="lab">Modules</div><div class="val">19<span class="pc">%</span></div><div class="track" role="img" aria-label="Modules: 19 percent complete"><i style="width:18.9%"></i></div><div class="sub">406 of 2149 declarations</div></div>
 <div class="tile"><div class="lab">Tooling</div><div class="val">25<span class="pc">%</span></div><div class="track" role="img" aria-label="Tooling: 25 percent complete"><i style="width:25.5%"></i></div><div class="sub">5.35 of 21 capabilities</div></div>
 </div>
 
@@ -137,19 +137,19 @@ footer { border-top:1px solid var(--rule); margin-top:3rem; padding-top:1.25rem;
 </section>
 
 <section>
-  <h2>Modules <span>396 / 2149 &middot; 18%</span></h2>
+  <h2>Modules <span>406 / 2149 &middot; 19%</span></h2>
   <p>Scored by <strong>declaration</strong> rather than by module.
   <code>docs/module-apis.md</code> freezes 2149 declarations across 128
-  modules, and 396 of them exist in committed source or as compiler intrinsics.
+  modules, and 406 of them exist in committed source or as compiler intrinsics.
   Counting whole modules gives a similar figure &mdash; 12 at
-  <code>surface:"source"</code> and 2 at <code>"partial"</code> out of 128,
-  or 10%.</p>
+  <code>surface:"source"</code> and 3 at <code>"partial"</code> out of 128,
+  or 11%.</p>
   <p>The two framings agree because the delivered modules are finished: every container
   and algorithm module below implements its frozen surface in full. What is missing is
   breadth, not polish. The design layer is a separate story &mdash; all 128 modules
   have a frozen, mechanically extractable API, which is what makes the denominator
   meaningful.</p>
-  <div class="tw"><table><thead><tr><th>Module</th><th class="sc">Declarations</th><th class="sc">Share</th><th>Where it comes from</th></tr></thead><tbody><tr><td class="nm"><code>e.algo.bitset</code></td><td class="sc">19 / 19</td><td class="sc">100%</td><td class="nt">lib/e/algo/bitset.e</td></tr><tr><td class="nm"><code>e.algo.hash</code></td><td class="sc">13 / 13</td><td class="sc">100%</td><td class="nt">lib/e/algo/hash.e</td></tr><tr><td class="nm"><code>e.algo.rand</code></td><td class="sc">13 / 13</td><td class="sc">100%</td><td class="nt">lib/e/algo/rand.e</td></tr><tr><td class="nm"><code>e.algo.sort</code></td><td class="sc">7 / 7</td><td class="sc">100%</td><td class="nt">lib/e/algo/sort.e</td></tr><tr><td class="nm"><code>e.algo.uuid</code></td><td class="sc">12 / 12</td><td class="sc">100%</td><td class="nt">lib/e/algo/uuid.e</td></tr><tr><td class="nm"><code>e.atomic</code></td><td class="sc">14 / 14</td><td class="sc">100%</td><td class="nt">lib/e/atomic.e</td></tr><tr><td class="nm"><code>e.data.deque</code></td><td class="sc">13 / 13</td><td class="sc">100%</td><td class="nt">lib/e/data/deque.e</td></tr><tr><td class="nm"><code>e.data.heap</code></td><td class="sc">22 / 22</td><td class="sc">100%</td><td class="nt">lib/e/data/heap.e</td></tr><tr><td class="nm"><code>e.data.list</code></td><td class="sc">14 / 14</td><td class="sc">100%</td><td class="nt">lib/e/data/list.e</td></tr><tr><td class="nm"><code>e.data.ring</code></td><td class="sc">12 / 12</td><td class="sc">100%</td><td class="nt">lib/e/data/ring.e</td></tr><tr><td class="nm"><code>e.io</code></td><td class="sc">57 / 57</td><td class="sc">100%</td><td class="nt">lib/e/io.e</td></tr><tr><td class="nm"><code>e.str</code></td><td class="sc">66 / 66</td><td class="sc">100%</td><td class="nt">lib/e/str.e</td></tr><tr><td class="nm"><code>e.sync</code></td><td class="sc">42 / 42</td><td class="sc">100%</td><td class="nt">lib/e/sync.e</td></tr><tr><td class="nm"><code>e.time</code></td><td class="sc">37 / 44</td><td class="sc">84%</td><td class="nt">lib/e/time.e</td></tr><tr><td class="nm"><code>e.mem</code></td><td class="sc">11 / 15</td><td class="sc">73%</td><td class="nt">compiler intrinsics</td></tr><tr><td class="nm"><code>e.meta</code></td><td class="sc">4 / 12</td><td class="sc">33%</td><td class="nt">lib/e/meta.e</td></tr><tr><td class="nm"><code>e.os</code></td><td class="sc">40 / 121</td><td class="sc">33%</td><td class="nt">compiler intrinsics</td></tr></tbody></table></div>
+  <div class="tw"><table><thead><tr><th>Module</th><th class="sc">Declarations</th><th class="sc">Share</th><th>Where it comes from</th></tr></thead><tbody><tr><td class="nm"><code>e.algo.bitset</code></td><td class="sc">19 / 19</td><td class="sc">100%</td><td class="nt">lib/e/algo/bitset.e</td></tr><tr><td class="nm"><code>e.algo.hash</code></td><td class="sc">13 / 13</td><td class="sc">100%</td><td class="nt">lib/e/algo/hash.e</td></tr><tr><td class="nm"><code>e.algo.rand</code></td><td class="sc">13 / 13</td><td class="sc">100%</td><td class="nt">lib/e/algo/rand.e</td></tr><tr><td class="nm"><code>e.algo.sort</code></td><td class="sc">7 / 7</td><td class="sc">100%</td><td class="nt">lib/e/algo/sort.e</td></tr><tr><td class="nm"><code>e.algo.uuid</code></td><td class="sc">12 / 12</td><td class="sc">100%</td><td class="nt">lib/e/algo/uuid.e</td></tr><tr><td class="nm"><code>e.atomic</code></td><td class="sc">14 / 14</td><td class="sc">100%</td><td class="nt">lib/e/atomic.e</td></tr><tr><td class="nm"><code>e.channel</code></td><td class="sc">10 / 10</td><td class="sc">100%</td><td class="nt">lib/e/channel.e</td></tr><tr><td class="nm"><code>e.data.deque</code></td><td class="sc">13 / 13</td><td class="sc">100%</td><td class="nt">lib/e/data/deque.e</td></tr><tr><td class="nm"><code>e.data.heap</code></td><td class="sc">22 / 22</td><td class="sc">100%</td><td class="nt">lib/e/data/heap.e</td></tr><tr><td class="nm"><code>e.data.list</code></td><td class="sc">14 / 14</td><td class="sc">100%</td><td class="nt">lib/e/data/list.e</td></tr><tr><td class="nm"><code>e.data.ring</code></td><td class="sc">12 / 12</td><td class="sc">100%</td><td class="nt">lib/e/data/ring.e</td></tr><tr><td class="nm"><code>e.io</code></td><td class="sc">57 / 57</td><td class="sc">100%</td><td class="nt">lib/e/io.e</td></tr><tr><td class="nm"><code>e.str</code></td><td class="sc">66 / 66</td><td class="sc">100%</td><td class="nt">lib/e/str.e</td></tr><tr><td class="nm"><code>e.sync</code></td><td class="sc">42 / 42</td><td class="sc">100%</td><td class="nt">lib/e/sync.e</td></tr><tr><td class="nm"><code>e.time</code></td><td class="sc">37 / 44</td><td class="sc">84%</td><td class="nt">lib/e/time.e</td></tr><tr><td class="nm"><code>e.mem</code></td><td class="sc">11 / 15</td><td class="sc">73%</td><td class="nt">compiler intrinsics</td></tr><tr><td class="nm"><code>e.meta</code></td><td class="sc">4 / 12</td><td class="sc">33%</td><td class="nt">lib/e/meta.e</td></tr><tr><td class="nm"><code>e.os</code></td><td class="sc">40 / 121</td><td class="sc">33%</td><td class="nt">compiler intrinsics</td></tr></tbody></table></div>
   <div class="note">
     <h4>What the two large partials mean</h4>
     <p><code>e.os</code> at 40 of 121 and <code>e.io</code> at 57 of 57 are not stalled
@@ -222,7 +222,7 @@ footer { border-top:1px solid var(--rule); margin-top:3rem; padding-top:1.25rem;
 <footer>
   Generated by <code>scripts/render_progress.py</code> from <code>docs/roadmap.md</code>,
   <code>docs/module-apis.md</code>, <code>docs/modules.json</code> and the compiler
-  sources, as they stood at <code>525e595</code> (2026-09-08).
+  sources, as they stood at <code>264b247</code> (2026-09-08).
 </footer>
 
 </div>
