@@ -484,3 +484,43 @@ the `usize` is the same bits under a name with no way to be followed.
 no single address, so `&s[0]` is how the element whose address is wanted gets named —
 which also makes the length the caller's business to pass, as every one of those calls
 requires anyway.
+
+## D97 — `e.os` is written per target, and `e.fs` is written once over it
+
+D32 said `e.os` is the sole OS surface of `lib/e`, "written per target over raw syscalls
+(Linux …), `kernel32` (Windows)". That is now what it is: `lib/e/os.linux.e` over the
+`os.syscall` intrinsic, `lib/e/os.windows.e` over `extern fn` with `@import("kernel32.dll",
+…)`, and `lib/e/os.e` for anything else — which is also the file the C bootstrap reads,
+since it resolves `lib/e/<module>.e` and knows nothing about variants. `e.fs` is then one
+portable file with no platform code in it at all.
+
+The alternative was the route every existing `e.os` function takes: a seeded intrinsic
+lowered to a symbol in `runtime_elf_x64_ext.s` and `runtime_pe_x64.asm`. Six primitives
+over two platforms is ten to twelve hand-written stubs, each doing its own arena string
+build and error translation, in the one part of the tree with no type checker over it —
+and it would have made `os.syscall` (D32) and `mem.address_of` (D96) buy nothing, since
+their whole purpose was to put the Linux half in neper. What replaced that is 180 lines of
+checked source per platform.
+
+The cost is that one module is one file, so the type block at the top of the three `os`
+files is a copy rather than something shared. The language has no way to say otherwise and
+D32 accepted that when it said "per target". The errors are not copied: `NotFound` and the
+rest are seeded by the compiler into `e.os`, so declaring them in a variant would be a
+second `NotFound`.
+
+`os.NATIVE_SEPARATOR` is in the variants because `e.fs` needs to know which path
+convention it is running under and nothing else can tell it. `e.path` is pure by
+construction — it applies whatever `Style` it is handed and asks the host nothing — and no
+comptime query names the target, so a portable `lib/e` module has no other source for it.
+It is a helper beyond `e.os`'s fence, in the same category as the `c_string` and `widen`
+that the variants also expose: §12 has no visibility, so a module's fence cannot have
+private parts, which is the same reason `e.io` and `e.sync` are at `surface:"partial"`.
+A comptime target query would remove the need for it and is the cleaner fix when the
+general comptime interpreter is there.
+
+`e.fs` stays at `surface:"partial"` for that reason and because half its fence is waiting
+on primitives that do not exist: `metadata` needs times, permissions and a link count
+where `os.FileInfo` carries a kind and a size, `read_link` and `symlink` need calls that
+are one syscall on Linux and reparse-point work on Windows, and `canonical`,
+`current_dir`, `set_current_dir`, `executable_path` and `temp_dir` still have no `e.os`
+primitive at all.

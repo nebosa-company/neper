@@ -559,6 +559,29 @@ $addressWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $addressWritten -ne 'executable written') { throw 'mem.address_of executable emission failed' }
 & $addressPath
 if ($LASTEXITCODE -ne 0) { throw "mem.address_of gave an address that is not the place's: exit $LASTEXITCODE" }
+# `e.os`'s filesystem primitives and `e.fs` over them, on a real filesystem. The
+# primitives are the per-target half -- `os.syscall` on Linux, `kernel32` through
+# `@import` on Windows -- so the same two fixtures run on both hosts and what they
+# assert is that the two spellings answer alike. Both use relative paths, so they run
+# with the build directory as the working directory and write nothing outside it.
+$fsScratch = Join-Path $testBuild 'fs-scratch'
+New-Item -ItemType Directory -Force -Path $fsScratch | Out-Null
+$osFsPath = Join-Path $testBuild 'os-fs-selfhost.exe'
+$osFsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/os_fs/src/main.e') $repo 'x64' 'windows' $osFsPath
+if ($LASTEXITCODE -ne 0 -or $osFsWritten -ne 'executable written') { throw 'e.os filesystem primitive emission failed' }
+Push-Location $fsScratch
+& $osFsPath
+$osFsExit = $LASTEXITCODE
+Pop-Location
+if ($osFsExit -ne 0) { throw "an e.os filesystem primitive answered wrongly: exit $osFsExit" }
+$fsBasicsPath = Join-Path $testBuild 'fs-basics-selfhost.exe'
+$fsBasicsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/fs_basics/src/main.e') $repo 'x64' 'windows' $fsBasicsPath
+if ($LASTEXITCODE -ne 0 -or $fsBasicsWritten -ne 'executable written') { throw 'e.fs executable emission failed' }
+Push-Location $fsScratch
+& $fsBasicsPath
+$fsBasicsExit = $LASTEXITCODE
+Pop-Location
+if ($fsBasicsExit -ne 0) { throw "e.fs answered wrongly: exit $fsBasicsExit" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

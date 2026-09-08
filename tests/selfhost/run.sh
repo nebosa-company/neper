@@ -604,6 +604,21 @@ address_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$address_written" = 'executable written' ]
 chmod +x "$test_build/mem-address-selfhost"
 "$test_build/mem-address-selfhost"
+# `e.os`'s filesystem primitives and `e.fs` over them, on a real filesystem. The
+# primitives are the per-target half -- `os.syscall` on Linux, `kernel32` through
+# `@import` on Windows -- so the same two fixtures run on both hosts and what they
+# assert is that the two spellings answer alike. Both use relative paths, so they run
+# with the build directory as the working directory and write nothing outside it.
+fs_scratch="$test_build/fs-scratch"
+mkdir -p "$fs_scratch"
+os_fs_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_fs/src/main.e" "$repo" x64 linux "$test_build/os-fs-selfhost")
+[ "$os_fs_written" = 'executable written' ]
+chmod +x "$test_build/os-fs-selfhost"
+(cd "$fs_scratch" && "$test_build/os-fs-selfhost")
+fs_basics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fs_basics/src/main.e" "$repo" x64 linux "$test_build/fs-basics-selfhost")
+[ "$fs_basics_written" = 'executable written' ]
+chmod +x "$test_build/fs-basics-selfhost"
+(cd "$fs_scratch" && "$test_build/fs-basics-selfhost")
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

@@ -1,0 +1,348 @@
+// The filesystem, as one portable file. Nothing here is per target: every host
+// difference is behind `e.os`, which D32 makes the sole OS surface of `lib/e` and which
+// is the module written per target. What that leaves for this file is the part that is
+// the same everywhere -- deciding which primitive a call is, turning a platform's
+// classification into this module's errors, and the loops that a copy or a walk is.
+//
+// `e.path` supplies the string work and asks the host nothing, so this file hands it
+// the style the target actually uses; `os.NATIVE_SEPARATOR` is where that comes from.
+
+use e.mem
+use e.os
+use e.path
+
+type EntryKind = enum u8 { File, Directory, Symlink, Other }
+type Entry = struct { path: str, kind: EntryKind, size: u64 }
+type Walk = struct { state: *void }
+type WalkOptions = struct { recursive: bool, follow_symlinks: bool }
+
+error NotFound
+error Exists
+error Denied
+error Invalid
+error Io
+
+// A traversal is one listing per level, and a level is a directory that has been read
+// and how far through it the caller is.
+// ponytail: a fixed depth, because the levels are one arena allocation made when the
+// walk opens; a growing stack is what to write if a real tree ever exceeds it.
+const WALK_DEPTH: usize = 64usize
+
+type WalkLevel = struct { path: str, entries: []os.DirEntry, at: usize }
+
+type WalkState = struct {
+    arena: *mem.Arena,
+    options: WalkOptions,
+    levels: []WalkLevel,
+    depth: usize,
+}
+
+// `e.os` classifies a platform code into its own closed set; this turns that into this
+// module's, which is the only place the two vocabularies meet.
+fn from_os(source: err) -> err {
+    if source == ok { ret ok }
+    if source == os.NotFound { ret NotFound }
+    if source == os.Exists { ret Exists }
+    if source == os.Denied { ret Denied }
+    if source == os.OutOfMemory { ret mem.Exhausted }
+    // What the host will not do at all is not the same as what it refused to do, and
+    // neither is an I/O failure: both are `Invalid` here, which is the fence's word for
+    // a request that cannot be honoured as asked.
+    if source == os.Unsupported { ret Invalid }
+    ret Io
+}
+
+fn host_style() -> path.Style {
+    if os.NATIVE_SEPARATOR == 92u8 { ret .Windows }
+    ret .Posix
+}
+
+fn kind_from_os(source: os.EntryKind) -> EntryKind {
+    if source == .File { ret .File }
+    if source == .Dir { ret .Directory }
+    if source == .Symlink { ret .Symlink }
+    ret .Other
+}
+
+// `NotFound` is an answer here rather than a failure -- that is what the question was --
+// while a path that cannot be looked at at all still fails.
+fn exists(a: *mem.Arena, path_text: str) -> (bool, err) {
+    let (info, stat_error) = os.stat(a, path_text)
+    if stat_error == os.NotFound { ret (false, ok) }
+    if stat_error != ok { ret (false, from_os(stat_error)) }
+    ret (true, ok)
+}
+
+// The path in the `Entry` is the one the caller gave: this call looks something up, it
+// does not resolve or normalise it.
+fn stat(a: *mem.Arena, path_text: str) -> (Entry, err) {
+    var entry: Entry = zero
+    let (info, stat_error) = os.stat(a, path_text)
+    if stat_error != ok { ret (entry, from_os(stat_error)) }
+    entry.path = path_text
+    entry.kind = kind_from_os(info.kind)
+    entry.size = info.size
+    ret (entry, ok)
+}
+
+fn make_dir(a: *mem.Arena, path_text: str) -> err {
+    ret from_os(os.mkdir(a, path_text))
+}
+
+// Every missing component, parent first. A component that is already a directory is not
+// a failure -- that is the difference from `make_dir` -- but one that is already a file
+// is, because the directory the caller asked for cannot exist.
+fn make_dirs(a: *mem.Arena, path_text: str) -> err {
+    let style = host_style()
+    let checkpoint = mem.mark(a)
+    let (normalized, normalize_error) = path.normalize(a, path_text, style)
+    if normalize_error != ok {
+        mem.reset(a, checkpoint)
+        ret from_os(normalize_error)
+    }
+    var at = path.root_length(normalized, style)
+    while at <= normalized.len {
+        // Stop at each separator in turn, and finally at the whole path.
+        if at == normalized.len || path.is_separator(normalized[at], style) {
+            if at != 0usize {
+                let prefix = normalized[0usize..at]
+                let step_error = os.mkdir(a, prefix)
+                if step_error != ok && step_error != os.Exists {
+                    mem.reset(a, checkpoint)
+                    ret from_os(step_error)
+                }
+                // An existing name has to be a directory, or the path cannot be made.
+                if step_error == os.Exists {
+                    let (info, stat_error) = os.stat(a, prefix)
+                    if stat_error != ok {
+                        mem.reset(a, checkpoint)
+                        ret from_os(stat_error)
+                    }
+                    if info.kind != .Dir {
+                        mem.reset(a, checkpoint)
+                        ret Exists
+                    }
+                }
+            }
+        }
+        at += 1usize
+    }
+    mem.reset(a, checkpoint)
+    ret ok
+}
+
+// A symbolic link is removed as itself on both hosts: the name goes, what it pointed at
+// stays.
+fn remove_file(a: *mem.Arena, path_text: str) -> err {
+    ret from_os(os.remove_file(a, path_text))
+}
+
+// An empty directory only. A non-empty one fails, which is what makes a recursive
+// delete something a caller writes rather than something this call does by surprise.
+fn remove_dir(a: *mem.Arena, path_text: str) -> err {
+    ret from_os(os.remove_dir(a, path_text))
+}
+
+// Within one filesystem. Across two, the host refuses and says so rather than copying
+// behind the caller's back.
+fn move(a: *mem.Arena, src: str, dst: str) -> err {
+    ret from_os(os.rename(a, src, dst))
+}
+
+// `limit` caps what will be allocated. A file larger than it is `Invalid` rather than a
+// short read, because a caller that gets fewer bytes than the file holds has no way to
+// tell that from the whole of a shorter file. `limit == 0` means no cap.
+fn read_file(a: *mem.Arena, path_text: str, limit: usize) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    let (info, stat_error) = os.stat(a, path_text)
+    if stat_error != ok { ret (nothing, from_os(stat_error)) }
+    if info.kind == .Dir { ret (nothing, Invalid) }
+    let size = usize(info.size)
+    if limit != 0usize && size > limit { ret (nothing, Invalid) }
+    var flags: os.OpenFlags = zero
+    flags.read = true
+    let (file, open_error) = os.open(a, path_text, flags)
+    if open_error != ok { ret (nothing, from_os(open_error)) }
+    let (bytes, allocation_error) = mem.alloc[u8](a, size)
+    if allocation_error != ok {
+        let ignored = os.close(file)
+        ret (nothing, allocation_error)
+    }
+    var filled = 0usize
+    while filled < size {
+        let (read_count, read_error) = os.read(file, bytes[filled..size])
+        if read_error != ok {
+            let ignored = os.close(file)
+            ret (nothing, from_os(read_error))
+        }
+        // A file that shrank between the size and the read: what was read is what
+        // there is, and the answer is that much of it.
+        if read_count == 0usize { break }
+        filled += read_count
+    }
+    let close_error = os.close(file)
+    if close_error != ok { ret (nothing, from_os(close_error)) }
+    ret (bytes[0usize..filled], ok)
+}
+
+// The file is created if it is not there and truncated if it is, so what it holds
+// afterwards is exactly `data`.
+fn write_file(a: *mem.Arena, path_text: str, data: []const u8) -> err {
+    var flags: os.OpenFlags = zero
+    flags.write = true
+    flags.create = true
+    flags.truncate = true
+    let (file, open_error) = os.open(a, path_text, flags)
+    if open_error != ok { ret from_os(open_error) }
+    var sent = 0usize
+    while sent < data.len {
+        let (written, write_error) = os.write(file, data[sent..data.len])
+        if write_error != ok {
+            let ignored = os.close(file)
+            ret from_os(write_error)
+        }
+        // A write that moves nothing would spin here rather than fail, so it is the
+        // failure.
+        if written == 0usize {
+            let ignored = os.close(file)
+            ret Io
+        }
+        sent += written
+    }
+    ret from_os(os.close(file))
+}
+
+// Through the caller's buffer, so a copy costs what the caller chose to spend and no
+// arena at all. An empty buffer would make no progress, so it is rejected rather than
+// looping.
+fn copy_file(a: *mem.Arena, src: str, dst: str, scratch: []u8) -> err {
+    if scratch.len == 0usize { ret Invalid }
+    var read_flags: os.OpenFlags = zero
+    read_flags.read = true
+    let (source, source_error) = os.open(a, src, read_flags)
+    if source_error != ok { ret from_os(source_error) }
+    var write_flags: os.OpenFlags = zero
+    write_flags.write = true
+    write_flags.create = true
+    write_flags.truncate = true
+    let (destination, destination_error) = os.open(a, dst, write_flags)
+    if destination_error != ok {
+        let ignored = os.close(source)
+        ret from_os(destination_error)
+    }
+    while true {
+        let (read_count, read_error) = os.read(source, scratch)
+        if read_error != ok {
+            let ignored_source = os.close(source)
+            let ignored_destination = os.close(destination)
+            ret from_os(read_error)
+        }
+        if read_count == 0usize { break }
+        var sent = 0usize
+        while sent < read_count {
+            let (written, write_error) = os.write(destination, scratch[sent..read_count])
+            if write_error != ok {
+                let ignored_source = os.close(source)
+                let ignored_destination = os.close(destination)
+                ret from_os(write_error)
+            }
+            if written == 0usize {
+                let ignored_source = os.close(source)
+                let ignored_destination = os.close(destination)
+                ret Io
+            }
+            sent += written
+        }
+    }
+    let source_close = os.close(source)
+    let destination_close = os.close(destination)
+    if source_close != ok { ret from_os(source_close) }
+    ret from_os(destination_close)
+}
+
+fn push_level(state: *WalkState, directory: str) -> err {
+    if state.depth == state.levels.len { ret Invalid }
+    let (entries, read_error) = os.readdir(state.arena, directory)
+    if read_error != ok { ret from_os(read_error) }
+    state.levels[state.depth].path = directory
+    state.levels[state.depth].entries = entries
+    state.levels[state.depth].at = 0usize
+    state.depth += 1usize
+    ret ok
+}
+
+// The root's own entry is not produced: a walk yields what is under the root, which is
+// what makes the root's name the caller's and every yielded name this call's.
+fn walk(a: *mem.Arena, root_path: str, options: WalkOptions) -> (Walk, err) {
+    var it: Walk = zero
+    let (holder, holder_error) = mem.alloc[WalkState](a, 1usize)
+    if holder_error != ok { ret (it, holder_error) }
+    let (levels, levels_error) = mem.alloc[WalkLevel](a, WALK_DEPTH)
+    if levels_error != ok { ret (it, levels_error) }
+    holder[0usize].arena = a
+    holder[0usize].options = options
+    holder[0usize].levels = levels
+    holder[0usize].depth = 0usize
+    let push_error = push_level(&holder[0usize], root_path)
+    if push_error != ok { ret (it, push_error) }
+    it.state = mem.cast[*void](&holder[0usize])
+    ret (it, ok)
+}
+
+// One entry per call, `false` when there are none left. A directory is yielded before
+// what is inside it, so a caller that stops early has still been told the directory
+// exists.
+fn walk_next_err(it: *Walk) -> (Entry, bool, err) {
+    var entry: Entry = zero
+    let state = mem.cast[*WalkState](it.state)
+    while state.depth != 0usize {
+        let level = state.depth - 1usize
+        if state.levels[level].at == state.levels[level].entries.len {
+            state.depth = state.depth - 1usize
+            continue
+        }
+        let name = state.levels[level].entries[state.levels[level].at].name
+        state.levels[level].at += 1usize
+        var parts: [2]str = zero
+        parts[0usize] = state.levels[level].path
+        parts[1usize] = name
+        let (full, join_error) = path.join(state.arena, parts[..], host_style())
+        if join_error != ok { ret (entry, false, from_os(join_error)) }
+        // The listing gives a kind but no size, and whether the link or its target is
+        // described is the caller's choice, so each entry is looked up.
+        var info: os.FileInfo = zero
+        var info_error = ok
+        if state.options.follow_symlinks {
+            let (followed, followed_error) = os.stat(state.arena, full)
+            info = followed
+            info_error = followed_error
+        } else {
+            let (direct, direct_error) = os.lstat(state.arena, full)
+            info = direct
+            info_error = direct_error
+        }
+        // An entry that went away between the listing and the lookup is skipped: it
+        // was there when the directory was read and is not an error of this walk.
+        if info_error == os.NotFound { continue }
+        if info_error != ok { ret (entry, false, from_os(info_error)) }
+        entry.path = full
+        entry.kind = kind_from_os(info.kind)
+        entry.size = info.size
+        if state.options.recursive && info.kind == .Dir {
+            let descend_error = push_level(state, full)
+            if descend_error != ok { ret (entry, false, descend_error) }
+        }
+        ret (entry, true, ok)
+    }
+    ret (entry, false, ok)
+}
+
+// Everything a walk holds is in the caller's arena and every directory was read in one
+// call, so there is no handle to give back. It exists because a host that streamed a
+// directory would have one, and a caller that abandons a walk should not have to know
+// which host it is on.
+fn walk_close(it: *Walk) -> err {
+    let state = mem.cast[*WalkState](it.state)
+    state.depth = 0usize
+    ret ok
+}
