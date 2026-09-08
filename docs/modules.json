@@ -84,7 +84,7 @@
     {"name":"e.proc","layer":4,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.cancel","e.mem","e.os","e.time"],"blocked_by":[]},
     {"name":"e.thread","layer":4,"surface":"spec","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.os"],"blocked_by":[]},
     {"name":"e.sync","layer":4,"surface":"partial","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.atomic","e.mem","e.os","e.time"],"blocked_by":[]},
-    {"name":"e.channel","layer":4,"surface":"planned","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.mem","e.sync"],"blocked_by":[]},
+    {"name":"e.channel","layer":4,"surface":"partial","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.mem","e.sync"],"blocked_by":[]},
     {"name":"e.concurrent.queue","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.atomic","e.mem","e.os","e.sync","e.time"],"blocked_by":[]},
     {"name":"e.concurrent.map","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.atomic","e.mem","e.os","e.sync"],"blocked_by":[]},
     {"name":"e.task","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.atomic","e.cancel","e.mem","e.sync","e.thread","e.time"],"blocked_by":[]},

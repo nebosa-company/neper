@@ -649,6 +649,19 @@ generic_field_accepted=$($test_build/neper-self check-file "$repo/tests/selfhost
 [ "$generic_field_accepted" = 'module check ok' ]
 check_protocol_diagnostic generic_instance_field_leak 'main.e:8:5: error[E-TYPE-9999]: type checking failed: check.InvalidType'
 check_protocol_diagnostic thread_create_context 'main.e:16:5: error[E-TYPE-0002]: initializer type does not match binding'
+# `e.channel`, over `e.sync`. The threaded half runs four producers through a channel
+# that holds four, so every one of them blocks, and the close is what releases the
+# consumers waiting on empty -- a close that failed to wake would hang here.
+channel_path="$test_build/channel-semantics-selfhost"
+channel_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/channel_semantics/src/main.e" "$repo" x64 linux "$channel_path")
+[ "$channel_written" = 'executable written' ]
+chmod +x "$channel_path"
+"$channel_path"
+channel_threads_path="$test_build/channel-threads-selfhost"
+channel_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/channel_threads/src/main.e" "$repo" x64 linux "$channel_threads_path")
+[ "$channel_threads_written" = 'executable written' ]
+chmod +x "$channel_threads_path"
+"$channel_threads_path"
 # `e.sync`. The uncontended half first, where every fence promise lives and where a
 # wrong wait fails in milliseconds; then the half a single thread cannot check, where
 # a mutex that does not exclude loses increments and the total comes out short.

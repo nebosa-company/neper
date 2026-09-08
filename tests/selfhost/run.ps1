@@ -623,7 +623,20 @@ $genericFieldLeak = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixt
 if ($LASTEXITCODE -ne 1 -or ($genericFieldLeak -join "`n") -notmatch 'main\.e:8:5: error\[E-TYPE-9999\]: type checking failed: check\.InvalidType') {
     throw "a generic instance's own field leaked into the enclosing struct: $($genericFieldLeak -join "`n")"
 }
-# .sync. The uncontended half first, where every fence promise lives and where a
+# `e.channel`, over `e.sync`. The threaded half runs four producers through a channel
+# that holds four, so every one of them blocks, and the close is what releases the
+# consumers waiting on empty -- a close that failed to wake would hang here.
+$channelPath = Join-Path $testBuild 'channel-semantics-selfhost.exe'
+$channelWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\channel_semantics\src\main.e') $repo 'x64' 'windows' $channelPath
+if ($LASTEXITCODE -ne 0 -or $channelWritten -ne 'executable written') { throw 'e.channel executable emission failed' }
+& $channelPath
+if ($LASTEXITCODE -ne 0) { throw 'an e.channel operation is wrong uncontended' }
+$channelThreadsPath = Join-Path $testBuild 'channel-threads-selfhost.exe'
+$channelThreadsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\channel_threads\src\main.e') $repo 'x64' 'windows' $channelThreadsPath
+if ($LASTEXITCODE -ne 0 -or $channelThreadsWritten -ne 'executable written') { throw 'contended e.channel executable emission failed' }
+& $channelThreadsPath
+if ($LASTEXITCODE -ne 0) { throw 'an e.channel handoff lost, duplicated or failed to wake' }
+# `e.sync`. The uncontended half first, where every fence promise lives and where a
 # wrong wait fails in milliseconds; then the half a single thread cannot check, where
 # a mutex that does not exclude loses increments and the total comes out short.
 $syncPath = Join-Path $testBuild 'sync-semantics-selfhost.exe'
