@@ -86,48 +86,205 @@ type Poller = struct { state: *void }
 type PollInterest = struct { readable: bool, writable: bool }
 type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
 
-// A readiness poller is not written for this host yet, and saying so is the honest answer
-// rather than shipping something that looks like one.
-//
-// The two candidates each miss half of what the fence asks for. `WSAPoll` gives readiness
-// but retains nothing, so the set would live here -- which the arena now makes possible --
-// except that `poller_wake` then needs something that becomes readable from another
-// thread, and the only such thing on this host is a bound socket whose port has to be
-// discovered. There is no `getsockname` in the fence, so a library cannot learn the port
-// it was given and would have to pick one by searching, which is not something a library
-// may do to a machine. A completion port retains registrations and even carries the token
-// as its completion key, but it reports finished operations rather than ready handles, so
-// `PollEvent`'s `readable` and `writable` would have no meaning.
-//
-// Either route is design work rather than translation. `Unsupported` is what a caller can
-// act on; a half-poller is not.
-fn poller_open(a: *mem.Arena) -> (Poller, err) {
-    var poller: Poller = zero
-    ret (poller, Unsupported)
+// `WSAPOLLFD`, and the opposite problem from `epoll_event` on the other host. That one is
+// packed, so its padding has to be kept out by hand; this one is ordinary, and the socket's
+// eight-byte alignment rounds the whole structure back up to sixteen without anything being
+// said -- which is the stride the call indexes by. Measured: writing a tail field changes
+// nothing, so it is not written.
+type WsaPollFd = struct { handle: usize, events: u16, revents: u16 }
+
+type PollRegistration = struct { handle: usize, token: usize, readable: bool, writable: bool, active: bool }
+
+// `WSAPoll` retains nothing between calls, so what the fence calls a poller is this: the
+// set, kept in the arena `poller_open` was given, plus the socket a wake arrives on. A
+// completion port would retain the set and even carry the token as its completion key, but
+// it reports finished operations rather than ready handles, so `readable` and `writable`
+// would have nothing to mean -- which is why the set is held here rather than by the host.
+type PollerState = struct {
+    wake: Socket,
+    wake_address: SocketAddress,
+    registrations: []PollRegistration,
 }
 
+// Only sockets. `WSAPoll` reports `POLLNVAL` for anything else, which arrives as a failed
+// event rather than as a lie -- a file handle registered here is answered, not ignored.
+fn poller_open(a: *mem.Arena) -> (Poller, err) {
+    var poller: Poller = zero
+    let (wake, wake_error) = socket_open(.Ip4, .Datagram)
+    if wake_error != ok { ret (poller, wake_error) }
+    var wanted: SocketAddress = zero
+    wanted.family = .Ip4
+    wanted.bytes[0usize] = 127u8
+    wanted.bytes[3usize] = 1u8
+    // Port zero, and then ask: the wake has to know where to send, and D112 is what makes
+    // that answerable without a library choosing a port for the machine.
+    let bind_error = socket_bind(wake, wanted)
+    if bind_error != ok {
+        let unused = socket_close(wake)
+        ret (poller, bind_error)
+    }
+    let (local, local_error) = socket_local_address(wake)
+    if local_error != ok {
+        let unused = socket_close(wake)
+        ret (poller, local_error)
+    }
+    // Non-blocking, so draining the wake stops when it is empty rather than waiting for a
+    // datagram that is not coming.
+    let block_error = socket_set_nonblocking(wake, true)
+    if block_error != ok {
+        let unused = socket_close(wake)
+        ret (poller, block_error)
+    }
+    let (holder, holder_error) = mem.alloc[PollerState](a, 1usize)
+    if holder_error != ok {
+        let unused = socket_close(wake)
+        ret (poller, OutOfMemory)
+    }
+    let (table, table_error) = mem.alloc[PollRegistration](a, POLL_CAPACITY)
+    if table_error != ok {
+        let unused = socket_close(wake)
+        ret (poller, OutOfMemory)
+    }
+    var at = 0usize
+    while at < POLL_CAPACITY {
+        table[at].active = false
+        at += 1usize
+    }
+    holder[0usize].wake = wake
+    holder[0usize].wake_address = local
+    holder[0usize].registrations = table
+    poller.state = mem.cast[*void](&holder[0usize])
+    ret (poller, ok)
+}
+
+fn find_registration(state: *PollerState, handle: Handle) -> (usize, bool) {
+    var at = 0usize
+    while at < state.registrations.len {
+        if state.registrations[at].active && state.registrations[at].handle == handle.raw { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// A second registration of one handle is `Exists` and a full table is `OutOfMemory`, which
+// are the answers the other host's kernel gives to the same two mistakes.
 fn poller_register(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
-    ret Unsupported
+    let state = mem.cast[*PollerState](p.state)
+    let (existing, found) = find_registration(state, handle)
+    if found { ret Exists }
+    var at = 0usize
+    while at < state.registrations.len {
+        if !state.registrations[at].active {
+            state.registrations[at].handle = handle.raw
+            state.registrations[at].token = token
+            state.registrations[at].readable = interest.readable
+            state.registrations[at].writable = interest.writable
+            state.registrations[at].active = true
+            ret ok
+        }
+        at += 1usize
+    }
+    ret OutOfMemory
 }
 
 fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest) -> err {
-    ret Unsupported
+    let state = mem.cast[*PollerState](p.state)
+    let (slot, found) = find_registration(state, handle)
+    if !found { ret NotFound }
+    state.registrations[slot].token = token
+    state.registrations[slot].readable = interest.readable
+    state.registrations[slot].writable = interest.writable
+    ret ok
 }
 
 fn poller_unregister(p: Poller, handle: Handle) -> err {
-    ret Unsupported
+    let state = mem.cast[*PollerState](p.state)
+    let (slot, found) = find_registration(state, handle)
+    if !found { ret NotFound }
+    state.registrations[slot].active = false
+    ret ok
+}
+
+// One datagram to the wake socket's own address. It is the same socket sending and
+// receiving, which is what makes this need no second descriptor and no pair.
+fn poller_wake(p: Poller) -> err {
+    let state = mem.cast[*PollerState](p.state)
+    var one: [1]u8 = zero
+    one[0usize] = 1u8
+    let (sent, send_error) = socket_send_to(state.wake, state.wake_address, one[..])
+    if send_error != ok { ret send_error }
+    ret ok
 }
 
 fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) {
-    ret (0usize, Unsupported)
-}
+    let state = mem.cast[*PollerState](p.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    // The whole set goes in on every call, the wake last so its index is known.
+    var entries: [65]WsaPollFd = zero
+    var slots: [65]usize = zero
+    var count = 0usize
+    var at = 0usize
+    while at < state.registrations.len {
+        if state.registrations[at].active && count < POLL_CAPACITY {
+            var mask = 0u16
+            if state.registrations[at].readable { mask = mask | POLLRDNORM }
+            if state.registrations[at].writable { mask = mask | POLLWRNORM }
+            entries[count].handle = state.registrations[at].handle
+            entries[count].events = mask
+            slots[count] = at
+            count += 1usize
+        }
+        at += 1usize
+    }
+    let wake_index = count
+    entries[wake_index].handle = state.wake.raw
+    entries[wake_index].events = POLLRDNORM
+    count += 1usize
 
-fn poller_wake(p: Poller) -> err {
-    ret Unsupported
+    var milliseconds = -1i32
+    if timeout_ns == 0i64 { milliseconds = 0i32 }
+    if timeout_ns > 0i64 {
+        milliseconds = i32(timeout_ns / 1000000i64)
+        // Anything positive but shorter than a millisecond is rounded up, so asking for a
+        // little time never means asking for none.
+        if milliseconds == 0i32 { milliseconds = 1i32 }
+    }
+    let ready = raw_socket_poll(&entries[0usize], u32(count), milliseconds)
+    if ready < 0i32 { ret (0usize, from_socket_error()) }
+    if ready == 0i32 { ret (0usize, ok) }
+
+    var produced = 0usize
+    at = 0usize
+    while at < count {
+        if entries[at].revents != 0u16 {
+            if at == wake_index {
+                // The poller's own datagrams, drained so the next wait does not see them
+                // again and never reported, because they are not the caller's.
+                var drain: [16]u8 = zero
+                var draining = true
+                while draining {
+                    let (taken, source, drain_error) = socket_receive_from(state.wake, drain[..])
+                    if drain_error != ok { draining = false }
+                }
+            } else {
+                if produced < events.len {
+                    events[produced].token = state.registrations[slots[at]].token
+                    events[produced].readable = entries[at].revents & POLLRDNORM != 0u16
+                    events[produced].writable = entries[at].revents & POLLWRNORM != 0u16
+                    events[produced].closed = entries[at].revents & POLLHUP != 0u16
+                    events[produced].failed = entries[at].revents & (POLLERR | POLLNVAL) != 0u16
+                    produced += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret (produced, ok)
 }
 
 fn poller_close(p: Poller) -> err {
-    ret Unsupported
+    let state = mem.cast[*PollerState](p.state)
+    ret socket_close(state.wake)
 }
 
 type Socket = struct { raw: usize }
@@ -293,6 +450,11 @@ extern fn raw_socket_listen(s: usize, backlog: i32) -> i32
 @import("ws2_32.dll", "getsockname")
 extern fn raw_socket_local(s: usize, address: *RawAddress, length: *i32) -> i32
 
+// The whole readiness set is passed in on every call: `WSAPoll` retains nothing, which is
+// why the registrations are kept here instead.
+@import("ws2_32.dll", "WSAPoll")
+extern fn raw_socket_poll(entries: *WsaPollFd, count: u32, timeout: i32) -> i32
+
 @import("ws2_32.dll", "accept")
 extern fn raw_socket_accept(s: usize, address: *RawAddress, length: *i32) -> usize
 
@@ -424,6 +586,18 @@ const WSA_VERSION: u16 = 514u16
 
 // FIONBIO.
 const FIONBIO: u32 = 2147772030u32
+
+// `WSAPOLLFD`'s request and result bits. Read and write are asked for by name; the other
+// three arrive whether or not anything asked.
+const POLLRDNORM: u16 = 256u16
+const POLLWRNORM: u16 = 16u16
+const POLLERR: u16 = 1u16
+const POLLHUP: u16 = 2u16
+const POLLNVAL: u16 = 4u16
+
+// ponytail: a fixed set, because the table is one arena allocation made when the poller
+// opens; a growing one is what to write if something registers more than this.
+const POLL_CAPACITY: usize = 64usize
 
 const RAW_IP4_SIZE: usize = 16usize
 const RAW_IP6_SIZE: usize = 28usize

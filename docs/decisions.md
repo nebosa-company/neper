@@ -1085,3 +1085,38 @@ fails both fixtures at exit 11 on both hosts.
 Only the local address is added, not `getpeername`. `socket_accept` already hands back the
 peer, which is where a server wants it, and nothing yet needs the peer of an already-connected
 socket. Adding it later is one call in the same shape.
+
+## D113 — the Windows poller keeps the set that `WSAPoll` will not
+
+D111 reported the poller `Unsupported` on Windows and named two blockers. D112 removed one of
+them, and this row is the other half: the poller is now written for both hosts.
+
+`WSAPoll` gives readiness and retains nothing, so the set is kept in the arena that
+`poller_open` was already given — which is what `Poller { state: *void }` exists for — and
+passed in whole on every wait. `poller_wake` is one datagram from the wake socket to its own
+address, which is why it needs no second descriptor and no pair; binding it to port zero and
+asking `socket_local_address` is what D112 made possible. The alternative, a completion port,
+retains the set and even carries the token as its completion key, but reports finished
+operations rather than ready handles, so `readable` and `writable` would have had nothing to
+mean.
+
+`register` answers a duplicate handle with `Exists` and a full table with `OutOfMemory`,
+which are the answers the other host's kernel gives to the same two mistakes — the point
+being that the two implementations agree on the errors and not only on the successes.
+
+**Only sockets can be polled here**, and the fence now says so. `WSAPoll` reports `POLLNVAL`
+for anything else, which arrives as a failed event rather than as a lie: a handle this host
+cannot poll is answered, not ignored.
+
+Two structure layouts, opposite problems, and I got one of them wrong first. Linux's
+`epoll_event` is **packed**: twelve bytes, so its padding has to be kept out by hand, and
+declaring it back fails the fixture at exit 24. Windows's `WSAPOLLFD` is ordinary: the
+socket's eight-byte alignment rounds the structure up to sixteen with nothing said, which is
+the stride the call indexes by. I had written an explicit tail field there with a comment
+claiming the array would otherwise land short. Removing it changed nothing — measured — so
+the field is gone and the comment says what is actually true. A redundant field justified by
+a wrong reason is worse than neither.
+
+The wake is load-bearing on both hosts and pinned the same way: made a no-op, the fixture
+waits out its four seconds and fails at exit 55, because a dead wake still returns zero
+events and only the clock tells the two apart.

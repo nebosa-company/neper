@@ -589,9 +589,10 @@ $socketWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $socketWritten -ne 'executable written') { throw 'e.os socket emission failed' }
 & $socketPath
 if ($LASTEXITCODE -ne 0) { throw "an e.os socket call answered wrongly: exit $LASTEXITCODE" }
-# `e.os`'s poller. This host has no kernel object that holds a readiness registration set,
-# so `poller_open` reports `Unsupported` and the fixture stops there -- which is asserted
-# here rather than assumed, since exiting early and passing look alike from outside.
+# `e.os`'s poller. `WSAPoll` retains nothing between calls, so the registration set lives in
+# the arena and goes in whole on every wait; the wake is a datagram the wake socket sends to
+# its own address. Two sockets are made readable at once so the array stride is exercised,
+# and the wake is timed against the clock.
 $pollerPath = Join-Path $testBuild 'os-poller-selfhost.exe'
 $pollerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_poller\src\main.e') $repo 'x64' 'windows' $pollerPath
 if ($LASTEXITCODE -ne 0 -or $pollerWritten -ne 'executable written') { throw 'e.os poller emission failed' }

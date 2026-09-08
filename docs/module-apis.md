@@ -1692,7 +1692,9 @@ reach it. Pollers retain handles, interests and numeric tokens,
 never callbacks; callers unregister a handle before closing it. A poller holds its
 registrations in the arena `poller_open` is given, which is why it carries a pointer where
 every other resource here carries a handle: what it retains is a set, and no host offers a
-single handle that is one.
+single handle that is one. Only handles the host can report readiness for may be registered
+— sockets everywhere, and pipes where the host has them; a handle it cannot poll comes back
+as a failed event rather than being ignored.
 
 Every failing `e.os` call records the native code and portable classification in
 thread-local runtime state. `last_error_detail` copies that state into an explicit
