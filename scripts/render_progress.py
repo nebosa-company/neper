@@ -59,7 +59,7 @@ compiler = {
   ("Own ELF linker", 1, "src/link_elf.e"),
   ("Own PE linker with kernel32 imports", 1, "src/link_pe.e"),
   ("Host runtime intrinsics, both platforms", 1, "runtime_pe_x64.asm, runtime_elf_x64_ext.s"),
-  ("os.syscall and mem.address_of: the raw kernel path", 1, "link/os_syscall carries a path and a stat buffer through getcwd and newfstatat, so the seven e.fs primitives are ordinary source on Linux; link/mem_address pins the address itself and D96 keeps it one-way. Linux only by design -- the name does not resolve on Windows"),
+  ("os.syscall and mem.address_of: the raw kernel path", 1, "link/os_syscall carries a path and a stat buffer through getcwd and newfstatat; link/mem_address pins the address itself and D96 keeps it one-way. It is what lib/e/os.linux.e is written over -- six filesystem primitives in neper rather than asm. Linux only by design; the name does not resolve on Windows"),
   ("`.em` module format with Deps edges", 1, "src/em.e, fixtures/em"),
   ("Cross-module inlining, 40 NIR cap", 0, "not started"),
   ("Incremental rebuild on the edge rule", 0, "not started"),
@@ -126,14 +126,22 @@ def decl_names(body):
 
 tracked = set(subprocess.run(['git', 'ls-files', 'lib/e'],
                              capture_output=True, text=True).stdout.split())
+# `lib/e/os.linux.e` is `e.os`, not a module called `e.os.linux`: a per-target variant
+# is one of the files a module may be written in (spec 2), so the trailing arch or os
+# is not part of the name and the variants union into one surface.
+VARIANTS = {'linux', 'windows', 'macos', 'none', 'x64', 'x86', 'aarch64', 'spv', 'ptx'}
 impl = {}
 for p in tracked:
     if not p.endswith('.e'):
         continue
-    mod = 'e.' + p[len('lib/e/'):-2].replace('/', '.')
-    impl[mod] = {m.group(2) for m in
-                 (re.match(r'(fn|type|error|const)\s+([A-Za-z_][A-Za-z0-9_]*)', l)
-                  for l in open(p, encoding='utf-8')) if m}
+    parts = p[len('lib/e/'):-2].replace('/', '.').split('.')
+    if len(parts) > 1 and parts[-1] in VARIANTS:
+        parts.pop()
+    mod = 'e.' + '.'.join(parts)
+    impl.setdefault(mod, set()).update(
+        m.group(2) for m in
+        (re.match(r'(fn|type|error|const)\s+([A-Za-z_][A-Za-z0-9_]*)', l)
+         for l in open(p, encoding='utf-8')) if m)
 
 seeded = {}
 for mod, nm in re.findall(r'seed\(r,\s*g,\s*"([^"]+)",\s*"([^"]+)"',
@@ -380,8 +388,12 @@ __GROUPS__
   <div class="note">
     <h4>What the two large partials mean</h4>
     <p><code>e.os</code> at __COS__ and <code>e.io</code> at __CIO__ are not stalled
-    work. They are exactly the subsets the compiler needs in order to build itself. The
-    rest of <code>e.os</code> waits on <code>extern</code> with <code>@cc</code>.
+    work. <code>e.os</code> is the subset the compiler needs to build itself, plus the
+    six filesystem primitives <code>e.fs</code> needs, which are the first of it written
+    as neper source rather than supplied as intrinsics: per target, over
+    <code>os.syscall</code> on Linux and <code>kernel32</code> through
+    <code>@import</code> on Windows, which is what D32 said all along (D97).
+    <code>e.io</code> is the subset the compiler needs.
     <code>e.io</code> no longer waits on <code>printf</code>: that expands, over a
     4&nbsp;KiB buffer of its own drained through a generated sink.</p>
     <p><code>e.str</code> is complete at __CSTR__ and is the first module at
