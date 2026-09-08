@@ -43,7 +43,7 @@ compiler = {
   ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),
   ("Atomic[T] and memory orderings", 1, "link/atomic_ops runs all thirteen across every width and both signs; link/atomic_threads proves the lock prefix under contention; check/atomic_* pin the ordering rules. e.sync and e.channel are unblocked"),
-  ("extern with @import / @cc and the C ABI", 0.3, "check/cc_accepted: the checker half is done. No path routes a user extern into an import: PE resolves only runtime symbols, and link_elf.e is a 200-line static ET_EXEC with no PT_INTERP, .dynamic or PLT -- Linux needs dynamic linking built first"),
+  ("extern with @import / @cc and the C ABI", 0.8, "link/extern_import binds and calls foreign symbols on both platforms: a PE import directory with one descriptor per library, and a dynamic ELF with PT_INTERP, DT_NEEDED and GLOB_DAT slots. What is left is the ABI mapping itself -- section 5's closed table of which types cross, and variadics"),
   ("Comptime str parameters and varargs", 0.95, "link/comptime_str, link/str_format, link/io_printf; two of the three pack intrinsics expand, `gpu.launch` does not"),
   ("e.meta reflection", 0.8, "link/meta_scalar answers kind, array_len and type_name; link/meta_reflect walks fields and members through comptime Field and Member values, an unrolled for and get/set at the named offset. element_type and backing_type are left: they return a type, and the type grammar admits no call"),
   ("Merged error table", 0.5, "src/error_table.e builds it and push_err expands against it; not yet in the binary for the failure line, trap protocol or `neper test`"),
