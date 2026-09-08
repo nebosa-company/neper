@@ -2649,7 +2649,7 @@ fn seed_memory_signatures(c: *Checker, module_index: usize) -> err {
     ret ok
 }
 
-fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool, atomic_module: usize, has_atomic: bool) -> err {
+fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memory: bool, atomic_module: usize, has_atomic: bool, linux_target: bool) -> err {
     let file = make_type(.Named, "File", os_module)
     let process = make_type(.Named, "Proc", os_module)
     let clock = make_type(.Named, "Clock", os_module)
@@ -2719,6 +2719,23 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     if clock_error != ok { ret clock_error }
     try add_seeded_parameter(c, clock_index, "c", clock)
 
+    // Section 5: the raw system call, six arguments always. Its result is the kernel's
+    // own -- a negative errno on failure -- so it is an `isize` and not an `err`, and
+    // turning one into the other is what the `e.os` wrappers over it are for. Seeded on
+    // Linux alone, which is where the intrinsic exists.
+    if linux_target {
+        let isize_type = make_type(.Integer, "isize", os_module)
+        let (syscall_index, syscall_error) = add_seeded_function(c, os_module, "syscall", isize_type, false)
+        if syscall_error != ok { ret syscall_error }
+        try add_seeded_parameter(c, syscall_index, "n", usize_type)
+        try add_seeded_parameter(c, syscall_index, "a0", usize_type)
+        try add_seeded_parameter(c, syscall_index, "a1", usize_type)
+        try add_seeded_parameter(c, syscall_index, "a2", usize_type)
+        try add_seeded_parameter(c, syscall_index, "a3", usize_type)
+        try add_seeded_parameter(c, syscall_index, "a4", usize_type)
+        try add_seeded_parameter(c, syscall_index, "a5", usize_type)
+    }
+
     // Section 8's blocking primitives. Their pointer is an `Atomic[u32]`, so they are
     // seeded only where `e.atomic` is in the graph -- as the arena calls below are
     // seeded only with `e.mem`.
@@ -2786,7 +2803,7 @@ fn seed_intrinsic_signatures(c: *Checker, g: *graph.Graph) -> err {
     if has_memory { try seed_memory_signatures(c, mem_module) }
     let (os_module, has_os) = graph.find_module(g, "e.os")
     let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
-    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic) }
+    if has_os { try seed_os_signatures(c, os_module, mem_module, has_memory, atomic_module, has_atomic, same(g.os, "linux")) }
     let (str_module, has_str) = graph.find_module(g, "e.str")
     if has_str { try seed_str_signatures(c, str_module) }
     ret ok

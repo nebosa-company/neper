@@ -428,6 +428,7 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "reserve") { ret ("neper_os_reserve", ok) }
     if check.same(name, "commit") { ret ("neper_os_commit", ok) }
     if check.same(name, "clock") { ret ("neper_os_clock", ok) }
+    if check.same(name, "syscall") { ret ("neper_os_syscall", ok) }
     if check.same(name, "wait_u32") { ret ("neper_os_wait_u32", ok) }
     if check.same(name, "wake_one_u32") { ret ("neper_os_wake_one_u32", ok) }
     if check.same(name, "wake_all_u32") { ret ("neper_os_wake_all_u32", ok) }

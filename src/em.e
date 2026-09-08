@@ -631,6 +631,7 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_reserve") { ret ("reserve", true) }
     if same(name, "neper_os_commit") { ret ("commit", true) }
     if same(name, "neper_os_clock") { ret ("clock", true) }
+    if same(name, "neper_os_syscall") { ret ("syscall", true) }
     if same(name, "neper_os_wait_u32") { ret ("wait_u32", true) }
     if same(name, "neper_os_wake_one_u32") { ret ("wake_one_u32", true) }
     if same(name, "neper_os_wake_all_u32") { ret ("wake_all_u32", true) }

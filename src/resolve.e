@@ -297,6 +297,9 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "reserve", .Value, .Intrinsic)
     try seed(r, g, "e.os", "commit", .Value, .Intrinsic)
     try seed(r, g, "e.os", "clock", .Value, .Intrinsic)
+    // Section 5: `os.syscall` exists on Linux alone, so on any other target the name is
+    // an unknown name like any other rather than something that fails when called.
+    if same(g.os, "linux") { try seed(r, g, "e.os", "syscall", .Value, .Intrinsic) }
     try seed(r, g, "e.os", "wait_u32", .Value, .Intrinsic)
     try seed(r, g, "e.os", "wake_one_u32", .Value, .Intrinsic)
     try seed(r, g, "e.os", "wake_all_u32", .Value, .Intrinsic)

@@ -688,3 +688,27 @@ neper_os_wake_all_u32:
     mov eax, 202
     syscall
     ret
+
+# The raw system call, and the reason a Linux executable can import nothing. Six
+# arguments always, so nothing here inspects the number to decide how many to move.
+#
+# Two conventions meet: the caller's is SysV (rdi, rsi, rdx, rcx, r8, r9, then the
+# stack) and the kernel's is (rax, rdi, rsi, rdx, r10, r8, r9). Every move below reads
+# its source before anything writes it -- a3 is lifted out of r8 before r8 is reloaded,
+# and a4 is parked in r11 because r9 is overwritten first. `syscall` clobbers rcx and
+# r11, neither of which is live past it.
+#
+# The result is the kernel's own: a negative errno on failure, which is why the return
+# type is `isize` and not an `err`. Turning one into the other is `e.os`'s job.
+.global neper_os_syscall
+neper_os_syscall:
+    mov rax, rdi
+    mov r10, r8
+    mov rdi, rsi
+    mov rsi, rdx
+    mov rdx, rcx
+    mov r11, r9
+    mov r9, qword ptr [rsp + 8]
+    mov r8, r11
+    syscall
+    ret

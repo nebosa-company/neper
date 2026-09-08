@@ -650,6 +650,11 @@ if ($LASTEXITCODE -ne 0 -or $externWritten -ne 'executable written') { throw 'im
 if ($LASTEXITCODE -ne 0) { throw 'an imported extern call reached the wrong symbol' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
+# `os.syscall` exists on Linux alone, so on this target the name must not resolve at
+# all -- an unknown name, not something that fails when called. `run.sh` is where the
+# intrinsic itself is exercised.
+$syscallAbsent = & $compiler check-file (Join-Path $PSScriptRoot 'fixtures\link\os_syscall\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($syscallAbsent -join "`n") -notmatch 'error\[E-NAME-9999\]') { throw "os.syscall resolved on a non-Linux target: $($syscallAbsent -join "`n")" }
 $pathPurePath = Join-Path $testBuild 'path-pure-selfhost.exe'
 $pathPureWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\path_pure\src\main.e') $repo 'x64' 'windows' $pathPurePath
 if ($LASTEXITCODE -ne 0 -or $pathPureWritten -ne 'executable written') { throw 'e.path executable emission failed' }

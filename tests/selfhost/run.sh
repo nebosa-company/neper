@@ -668,6 +668,14 @@ extern_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$extern_written" = 'executable written' ]
 chmod +x "$extern_path"
 "$extern_path"
+# `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
+# Every argument position is exercised, including a six-argument `mmap` whose fifth and
+# sixth a register shuffle that stops early would drop.
+os_syscall_path="$test_build/os-syscall-selfhost"
+os_syscall_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_syscall/src/main.e" "$repo" x64 linux "$os_syscall_path")
+[ "$os_syscall_written" = 'executable written' ]
+chmod +x "$os_syscall_path"
+"$os_syscall_path"
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 path_pure_path="$test_build/path-pure-selfhost"
