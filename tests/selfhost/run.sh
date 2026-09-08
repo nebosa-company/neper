@@ -668,6 +668,13 @@ extern_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$extern_written" = 'executable written' ]
 chmod +x "$extern_path"
 "$extern_path"
+# `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
+# strings rather than only that nothing failed.
+path_pure_path="$test_build/path-pure-selfhost"
+path_pure_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/path_pure/src/main.e" "$repo" x64 linux "$path_pure_path")
+[ "$path_pure_written" = 'executable written' ]
+chmod +x "$path_pure_path"
+"$path_pure_path"
 # Section 9's reflection, run rather than only checked: the offsets and sizes are
 # asserted by hand, so a field read at the wrong offset is a wrong value here.
 meta_reflect_path="$test_build/meta-reflect-selfhost"

@@ -648,6 +648,13 @@ $externWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $externWritten -ne 'executable written') { throw 'imported extern executable emission failed' }
 & $externPath
 if ($LASTEXITCODE -ne 0) { throw 'an imported extern call reached the wrong symbol' }
+# `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
+# strings rather than only that nothing failed.
+$pathPurePath = Join-Path $testBuild 'path-pure-selfhost.exe'
+$pathPureWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\path_pure\src\main.e') $repo 'x64' 'windows' $pathPurePath
+if ($LASTEXITCODE -ne 0 -or $pathPureWritten -ne 'executable written') { throw 'e.path executable emission failed' }
+& $pathPurePath
+if ($LASTEXITCODE -ne 0) { throw "an e.path answer is wrong (section code $LASTEXITCODE)" }
 $metaReflectPath = Join-Path $testBuild 'meta-reflect-selfhost.exe'
 $metaReflectWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\meta_reflect\src\main.e') $repo 'x64' 'windows' $metaReflectPath
 if ($LASTEXITCODE -ne 0 -or $metaReflectWritten -ne 'executable written') { throw 'reflection executable emission failed' }
