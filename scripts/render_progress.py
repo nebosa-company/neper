@@ -59,6 +59,7 @@ compiler = {
   ("Own ELF linker", 1, "src/link_elf.e"),
   ("Own PE linker with kernel32 imports", 1, "src/link_pe.e"),
   ("Host runtime intrinsics, both platforms", 1, "runtime_pe_x64.asm, runtime_elf_x64_ext.s"),
+  ("os.syscall and mem.address_of: the raw kernel path", 1, "link/os_syscall carries a path and a stat buffer through getcwd and newfstatat, so the seven e.fs primitives are ordinary source on Linux; link/mem_address pins the address itself and D96 keeps it one-way. Linux only by design -- the name does not resolve on Windows"),
   ("`.em` module format with Deps edges", 1, "src/em.e, fixtures/em"),
   ("Cross-module inlining, 40 NIR cap", 0, "not started"),
   ("Incremental rebuild on the edge rule", 0, "not started"),
