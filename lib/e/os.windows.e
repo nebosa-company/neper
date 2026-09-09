@@ -97,6 +97,23 @@ type NotifyHeader = struct { next: u32, action: u32, name_length: u32 }
 // completion signals.
 type Overlapped = struct { status: usize, transferred: usize, offset: u32, offset_high: u32, event: usize }
 
+type ErrorKind = enum u8 {
+    NotFound,
+    Denied,
+    Exists,
+    Interrupted,
+    OutOfMemory,
+    Timeout,
+    WouldBlock,
+    Unsupported,
+    Invalid,
+    Other,
+}
+
+// The two strings are the caller's, borrowed rather than copied: they name the operation and
+// its subject, and nothing here needs them to outlive the call that supplied them.
+type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
+
 type Lib = struct { raw: usize }
 
 type ProcGroup = struct { raw: usize }
@@ -859,6 +876,9 @@ extern fn raw_free_environment_strings(block: *u8) -> i32
 
 @import("kernel32.dll", "GetStdHandle")
 extern fn raw_std_handle(which: u32) -> usize
+
+@import("kernel32.dll", "FormatMessageW")
+extern fn raw_format_message(flags: u32, source: usize, code: u32, language: u32, buffer: *u16, size: u32, arguments: usize) -> u32
 
 @import("kernel32.dll", "LoadLibraryW")
 extern fn raw_load_library(name: *const u16) -> usize
@@ -1931,6 +1951,40 @@ fn release(p: *u8, n: usize) -> err {
 // remember that it has been: D109 is why this file keeps no ambient state to hold a flag.
 // The call is reference counted, so asking again is cheap and asking once per socket is
 // correct.
+// `FORMAT_MESSAGE_FROM_SYSTEM` with inserts ignored: a system message may name arguments this
+// has none of, and asking for them without supplying any is how that call is made to fail.
+const FORMAT_MESSAGE_FROM_SYSTEM: u32 = 4096u32
+const FORMAT_MESSAGE_IGNORE_INSERTS: u32 = 512u32
+
+// ponytail: one buffer, no growing. A system message longer than this is truncated rather than
+// retried, which for a diagnostic is the right trade.
+const MESSAGE_UNITS: usize = 1024usize
+
+// The message for a code, copied into the caller's arena. `detail` carries the code, so this asks
+// for no ambient state and is exact whatever the last failing call was -- which is why it is
+// written while `last_error_detail` is not.
+fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) {
+    let (units, units_error) = mem.alloc[u16](a, MESSAGE_UNITS)
+    if units_error != ok { ret ("", OutOfMemory) }
+    let written = raw_format_message(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, 0usize, u32(detail.native_code), 0u32, &units[0usize], u32(MESSAGE_UNITS), 0usize)
+    if written == 0u32 { ret ("", NotFound) }
+    // The system ends its messages with a period and a newline, which belongs to the display and
+    // not to the message: a caller that wants one can add it.
+    var count = usize(written)
+    while count > 0usize {
+        let last = units[count - 1usize]
+        if last != 13u16 && last != 10u16 { break }
+        count = count - 1usize
+    }
+    if count == 0usize { ret ("", NotFound) }
+    // A UTF-16 unit never becomes more than three UTF-8 bytes.
+    let (bytes, bytes_error) = mem.alloc[u8](a, count * 3usize)
+    if bytes_error != ok { ret ("", OutOfMemory) }
+    let converted = raw_narrow(CP_UTF8, 0u32, &units[0usize], i32(count), &bytes[0usize], i32(count * 3usize), 0usize, 0usize)
+    if converted <= 0i32 { ret ("", Failed) }
+    ret (bytes[0usize..usize(converted)], ok)
+}
+
 // A NUL-terminated byte copy, which `GetProcAddress` wants where every other call here wants
 // units. `widen` is the other direction and cannot serve.
 fn narrow_c_string(a: *mem.Arena, text: str) -> ([]u8, err) {

@@ -1144,6 +1144,23 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
     ret address
 }
 
+type ErrorKind = enum u8 {
+    NotFound,
+    Denied,
+    Exists,
+    Interrupted,
+    OutOfMemory,
+    Timeout,
+    WouldBlock,
+    Unsupported,
+    Invalid,
+    Other,
+}
+
+// The two strings are the caller's, borrowed rather than copied: they name the operation and
+// its subject, and nothing here needs them to outlive the call that supplied them.
+type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
+
 type Lib = struct { raw: usize }
 
 type ProcGroup = struct { raw: usize }
@@ -1419,6 +1436,42 @@ fn kill(p: Proc) -> err {
 // takes the whole reservation and rejects a size.
 fn release(p: *u8, n: usize) -> err {
     ret from_errno(syscall(SYS_MUNMAP, mem.address_of(p), n, 0usize, 0usize, 0usize, 0usize))
+}
+
+// The system's own wording for a code, which is the one thing a table here could not keep in step
+// with: it is per host and per locale, and libc already has it. Reached the same way the loader is,
+// and costing the same nothing until it is called.
+@import("libc.so.6", "strerror")
+extern fn raw_strerror(code: i32) -> *u8
+
+// ponytail: how far a message is read before it is taken as unterminated. No `strerror` text comes
+// close, and the alternative is trusting a foreign string with no bound at all.
+const MESSAGE_MAX: usize = 1024usize
+
+// The message for a code, copied into the caller's arena. `detail` carries the code, so this asks
+// for no ambient state and is exact whatever the last failing call was -- which is why it is
+// written while `last_error_detail` is not.
+fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err) {
+    let text = raw_strerror(detail.native_code)
+    if mem.address_of(text) == 0usize { ret ("", Failed) }
+    // `mem.view` names the region without reading it, and the scan below stops at the terminator,
+    // so nothing past the string libc owns is touched.
+    var region: mem.Arena = zero
+    region.base = text
+    region.cap = MESSAGE_MAX
+    region.off = 0usize
+    let bytes = mem.view(&region, 0usize, MESSAGE_MAX)
+    var length = 0usize
+    while length < MESSAGE_MAX && bytes[length] != 0u8 { length += 1usize }
+    if length == 0usize { ret ("", NotFound) }
+    let (copy, copy_error) = mem.alloc[u8](a, length)
+    if copy_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < length {
+        copy[at] = bytes[at]
+        at += 1usize
+    }
+    ret (copy[0usize..length], ok)
 }
 
 // The one place this file names a library rather than a syscall number. There is no system call

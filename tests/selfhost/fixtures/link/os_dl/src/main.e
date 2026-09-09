@@ -1,4 +1,5 @@
-// `e.os`'s loader: `dlopen`, `dlsym` and `dlclose`.
+// `e.os`'s loader -- `dlopen`, `dlsym`, `dlclose` -- and `error_message`, which is here because it
+// is the other call that reaches the host for something a table could not keep in step with.
 //
 // The library each host opens is the one it already depends on and is therefore certain to be
 // there -- `kernel32.dll` on Windows, `libc.so.6` on Linux -- so nothing here needs anything
@@ -62,5 +63,40 @@ fn main(a: *mem.Arena) -> err {
     // --- An empty name is not a library name.
     let (empty, empty_error) = os.dlopen(a, "")
     if empty_error != os.NotFound { os.exit(22i32) }
+
+    // --- `error_message` renders a native code. The code is the caller's, carried in the detail,
+    // so this needs no ambient state and says nothing about what failed last.
+    var detail: os.ErrorDetail = zero
+    detail.kind = .NotFound
+    detail.operation = "open"
+    detail.subject = "np-nothing"
+    // The code for a missing file on each host: ERROR_FILE_NOT_FOUND, and ENOENT.
+    detail.native_code = 2i32
+    let (message, message_error) = os.error_message(a, detail)
+    if message_error != ok { os.exit(40i32) }
+    if message.len == 0usize { os.exit(41i32) }
+    // Whatever the wording and locale, it is one line: the trailing period and newline the system
+    // appends belong to a display, not to the message.
+    var at = 0usize
+    while at < message.len {
+        if message[at] == 10u8 { os.exit(42i32) }
+        if message[at] == 13u8 { os.exit(43i32) }
+        at += 1usize
+    }
+    // A different code gives a different message, which is what says the code is read at all.
+    var other: os.ErrorDetail = zero
+    other.native_code = 13i32
+    let (second_message, second_message_error) = os.error_message(a, other)
+    if second_message_error != ok { os.exit(44i32) }
+    if second_message.len == 0usize { os.exit(45i32) }
+    if second_message.len == message.len {
+        var same_text = true
+        var scan = 0usize
+        while scan < message.len {
+            if message[scan] != second_message[scan] { same_text = false }
+            scan += 1usize
+        }
+        if same_text { os.exit(46i32) }
+    }
     ret ok
 }

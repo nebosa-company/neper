@@ -1757,3 +1757,48 @@ That is the third time this session that a wrong answer arrived as a plausible o
 unwidened narrow `extern` return and `munmap` succeeding on an unmapped range. The pattern is worth
 the name: check the second call, not the first, whenever a result travels through memory the caller
 allocated.
+
+## D129 — `error_message` needs no ambient state, so it is written; `last_error_detail` still does
+
+D109 decided that the platform error-detail exception "is not exercised" and left three
+declarations unwritten. This row exercises the part of it that never needed the exception, and
+sharpens why the rest still does.
+
+`error_message(a, detail)` takes the code in its argument. It reads no thread state, has no temporal
+contract, and is exact whatever failed last — the caller says which code to render. Every reason
+D109 gave applies to the *ambient* half and none of them to this one, so the same decision that
+withheld it withholds nothing here. `ErrorKind` and `ErrorDetail` follow, since a caller cannot
+spell the argument without them.
+
+Both hosts answer from the system rather than from a table, because a table is the one thing that
+could not keep in step: the wording is per host, per version and per locale. Windows is
+`FormatMessageW` with inserts ignored — a system message may name arguments a caller has none of, and
+asking for them without supplying any is how that call fails. Linux is `strerror`, reached the way
+the loader is (D128) and costing the same nothing until called. Both strip the trailing period and
+newline the system appends: that belongs to a display, not to a message.
+
+`last_error_detail` stays unwritten, and the reason is more specific than D109's "thread-local
+storage has no spelling". The two hosts are not in the same position at all:
+
+Windows already keeps this state, per thread, maintained by the operating system. `GetLastError` *is*
+the store, so that half needs nothing built and no exception to §15 — the ambient state is the
+host's, not neper's.
+
+Linux has no such state. A raw syscall returns `-errno` in its result and sets nothing; `from_errno`
+sees the code and drops it, which is the whole of what would have to change. Capturing it needs
+somewhere per-thread to put it, and every route to that — thread-local storage, or a table keyed by
+`gettid` — needs **module-scope mutable static storage**. Spec section 5 permits one ("`var` at
+module scope is mutable static storage"), and the compiler does not implement it: there is no such
+declaration anywhere in `src` or `lib/e`, and neither the checker nor lowering has a case for it.
+That is a language feature standing between here and the contract, which is a more useful thing to
+know than that TLS is unspelled.
+
+So the choice is not between writing it and withholding it, but between writing it on one host and
+withholding it on both. This session has twice refused the first — `recursive` watches and
+`Stdio.inherit` are `Unsupported` and documented rather than honoured on Windows alone — for the
+reason that applies here too: a call that answers on one host and cannot on the other is worse than
+one that is honestly absent, because only the absent one is visible to a caller.
+
+`e.os` is therefore 130 of its 131 declarations, and the one missing is missing for a reason with a
+named unblocker: module-scope `var` in the compiler, after which the Linux capture is a change to
+`from_errno` alone.
