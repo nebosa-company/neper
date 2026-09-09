@@ -1637,3 +1637,48 @@ somewhere else and show up as a wrong value rather than a type error.
 Left where it is: a generic *aggregate* taking a comptime `Field` — `type Holder[FIELD: Field]` with
 a field of type `FIELD.ty` — which section 9 permits and `substitute_aggregate_type` does not do.
 Nothing needs it, and it fails as an error rather than silently.
+
+## D126 — the type grammar gets brackets and a trailing call, and the resolver does the classifying
+
+D124 recorded that `var x: meta.element_type[T]() = zero` was a syntax error and that fixing it meant
+accepting the node and letting name resolution sort it out. This is that change, and looking at it
+turned up a second gap in the same function that had nothing to do with `e.meta`.
+
+`parse_named_type_node` parsed its bracket arguments with the expression parser, so a composite type
+could not stand there: `list.List[[]u8]` in a type position failed with "unexpected `]`", while the
+same thing in an expression worked. The expression grammar decides type-or-value per argument with
+`bracket_argument_is_type`, and the type grammar had no reason not to. One call swapped, and both
+spellings agree. That was a bug rather than a missing feature, and it is fixed where every caller
+goes through rather than where it was noticed.
+
+The trailing `()` is the feature. The parser accepts it after a bracket and keeps the tokens without
+deciding anything, because section 14's first invariant says it may not consult the symbol table --
+`Name[...]` is a comptime argument list after a function or a type and an index after a value, and
+only the symbol table knows which. So the node stays a `NamedType` carrying the parens, and two later
+stages read them: name resolution looks the member up as a value rather than a type when they are
+present, and the checker routes such a node to the same answer a call in an expression reaches. The
+two spellings share `derived_from_subject` so they cannot drift.
+
+Requiring the bracket before the parens is deliberate. `Name()` where a type is written is not a
+shape section 9 gives any meaning to, and accepting it would have this function swallowing tokens
+that belong to whatever follows.
+
+What this buys is the spelling the spec names first: `var element: meta.element_type[[4]u32]() = zero`,
+including nested and including a signed enum's backing carrying a negative value. Before it, the
+answer was reachable only by handing it to a generic of the caller's own -- which works and is what
+`link/meta_types` used, but is not what section 9 says a comptime expression of type `type` does.
+
+Both halves are pinned by the fixture rather than by argument: before the change its annotation lines
+failed with "unexpected `(`" and its `list.List[[]u8]` line with "unexpected `]`", and both are in it
+now.
+
+What actually broke was neither, and it is worth recording because the mistake is easy to repeat.
+Deciding whether a named type carries a trailing call by looking for a `(` anywhere in its tokens
+finds the parentheses of an ordinary argument: `Sized[(N << 1u8) | 1usize]` is an instantiation and
+has one, so every such type was routed to the comptime-call path and failed.
+`check/constant_operators_valid` caught it. Both the checker and the resolver now test the last two
+tokens and nothing else, which is exactly what the parser accepts, and that shape is in
+`link/meta_types` beside the feature that caused it. The risk I had expected instead -- that
+existing instantiations would now hand the checker a type node where they used to hand a name
+expression -- was not one: `bracket_argument_is_type` answers false for a bare name, so nothing
+about those changed.

@@ -416,13 +416,24 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
         if same(base, "target") { ret ok }
         let (target_module, has_qualifier) = qualifier(r, module_index, base)
         if has_qualifier {
+            // A trailing `()` means the member is a comptime function whose result is a type,
+            // not a type itself, so it is looked for where a function lives. This is the
+            // classification section 14's first invariant leaves here: the parser kept the
+            // tokens without consulting the symbol table, and only this side can say which of
+            // the two a path was.
+            // The last two tokens, and nowhere else: a `(` inside the brackets belongs to an
+            // ordinary argument, and `Foo[(N << 1u8) | 1usize]` is an instantiation.
+            var names_a_value = false
+            if node.token_end >= node.token_start + 2usize {
+                if r.tokens[node.token_end - 2usize].kind == .PunctLParen && r.tokens[node.token_end - 1usize].kind == .PunctRParen { names_a_value = true }
+            }
             at = node.token_start + 1usize
             while at < node.token_end {
                 let token = r.tokens[at]
                 if token.kind == .PunctLBracket { break }
                 if token.kind == .Identifier {
                     let member = g.modules[module_index].text[token.start..token.end]
-                    if !exported(r, target_module, member, true) { ret UnknownMember }
+                    if !exported(r, target_module, member, !names_a_value) { ret UnknownMember }
                     ret ok
                 }
                 at += 1usize

@@ -1383,6 +1383,18 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         record_failure(c, module_index, node, .NotAType, g.modules[module_index].text[first.start..first.end], "")
         ret (make_type(.Other, "", module_index), Unsupported)
     }
+    // A trailing `()` is the only shape a comptime call has here, and it is exactly the last two
+    // tokens because that is all the parser accepts. Looking anywhere else in the range would
+    // find the parentheses of an ordinary argument -- `Inner[(N << 1u8) | 1usize]` has a `(` in
+    // it and is an instantiation, not a call.
+    var has_call = false
+    if node.token_end >= node.token_start + 2usize {
+        if c.tokens[node.token_end - 2usize].kind == .PunctLParen && c.tokens[node.token_end - 1usize].kind == .PunctRParen { has_call = true }
+    }
+    if has_call {
+        let (derived, derived_error) = named_type_derived(c, g, tree, module_index, node)
+        ret (derived, derived_error)
+    }
     let base = g.modules[module_index].text[first.start..first.end]
     let scalar = scalar_type(base, module_index)
     if scalar.kind != .Invalid {
@@ -4299,6 +4311,14 @@ fn derived_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     // element of an array of enums has a backing type of its own.
     let (subject, subject_error) = comptime_type(c, g, tree, module_index, type_index)
     if subject_error != ok { ret (invalid_type(), subject_error) }
+    let (answer, answer_error) = derived_from_subject(c, wants_element, subject)
+    ret (answer, answer_error)
+}
+
+// The part of a type these two answer with, once the subject has been read. Shared, because
+// the same question has two spellings: a call in an expression, and a call where a type is
+// written.
+fn derived_from_subject(c: *Checker, wants_element: bool, subject: Type) -> (Type, err) {
     if wants_element {
         if subject.kind != .Array && subject.kind != .Slice { ret (invalid_type(), InvalidType) }
         if !subject.has_element || subject.element >= c.type_count { ret (invalid_type(), InvalidType) }
@@ -4312,6 +4332,45 @@ fn derived_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if aggregate.kind != .Enum && aggregate.kind != .TaggedUnion { ret (invalid_type(), InvalidType) }
     if aggregate.backing_type.kind != .Integer { ret (invalid_type(), InvalidType) }
     ret (aggregate.backing_type, ok)
+}
+
+// `meta.element_type[T]()` written where a type is written. The parser kept the tokens and
+// left the classifying here, so this reads the path from them: two identifiers, then the
+// bracket whose one argument is the subject.
+fn named_type_derived(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, err) {
+    let text = g.modules[module_index].text
+    var qualifier = ""
+    var member = ""
+    var identifiers = 0usize
+    var at = node.token_start
+    while at < node.token_end {
+        let token = c.tokens[at]
+        if token.kind == .PunctLBracket { break }
+        if token.kind == .Identifier {
+            if identifiers == 0usize { qualifier = text[token.start..token.end] }
+            if identifiers == 1usize { member = text[token.start..token.end] }
+            identifiers += 1usize
+        }
+        at += 1usize
+    }
+    if identifiers != 2usize { ret (invalid_type(), InvalidType) }
+    let (target_module, has_qualifier) = resolve.qualifier(c.resolver, module_index, qualifier)
+    if !has_qualifier || !same(g.modules[target_module].name, "e.meta") { ret (invalid_type(), InvalidType) }
+    var wants_element = false
+    var matched = false
+    if same(member, "element_type") {
+        wants_element = true
+        matched = true
+    }
+    if same(member, "backing_type") { matched = true }
+    if !matched { ret (invalid_type(), InvalidType) }
+    // The bracket's argument is this node's only child.
+    let (subject_index, has_subject) = first_node_child(tree, node)
+    if !has_subject { ret (invalid_type(), InvalidType) }
+    let (subject, subject_error) = comptime_type(c, g, tree, module_index, subject_index)
+    if subject_error != ok { ret (invalid_type(), subject_error) }
+    let (answer, answer_error) = derived_from_subject(c, wants_element, subject)
+    ret (answer, answer_error)
 }
 
 fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {

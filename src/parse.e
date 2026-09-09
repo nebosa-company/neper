@@ -710,12 +710,17 @@ fn parse_named_type_node(p: *Parser) -> err {
         try require(p, .Identifier)
         try skip_soft(p)
     }
+    var had_bracket = false
     if p.current.kind == .PunctLBracket {
+        had_bracket = true
         try advance(p)
         enter_soft(p)
         try skip_separators(p)
         while p.current.kind != .PunctRBracket {
-            try parse_expression_node(p)
+            // A comptime argument here may be a type as readily as a value -- `List[[]u8]` is
+            // as ordinary as `Buf[f32, 16]` -- and which it is was already decided for the
+            // brackets an expression carries. The same decision belongs here.
+            try parse_bracket_argument_node(p)
             try skip_separators(p)
             if p.current.kind == .PunctComma {
                 try advance(p)
@@ -725,6 +730,16 @@ fn parse_named_type_node(p: *Parser) -> err {
             }
         }
         try leave_soft(p)
+        try advance(p)
+    }
+    // A trailing `()` makes this a call rather than an instantiation: section 9 says a comptime
+    // expression whose type is `type` stands wherever a type is written, and `meta.element_type[T]()`
+    // is one. Nothing is classified here -- the parser may not consult the symbol table (section 14,
+    // invariant 1) -- so the tokens are kept and name resolution decides what they were.
+    if had_bracket && p.current.kind == .PunctLParen {
+        try advance(p)
+        try skip_soft(p)
+        if p.current.kind != .PunctRParen { ret InvalidSyntax }
         try advance(p)
     }
     try add_parent_since(p, .NamedType, token_start, p.token_index, node_start)
