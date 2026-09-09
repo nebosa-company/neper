@@ -1505,6 +1505,14 @@ fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {
     ret from_errno(syscall(SYS_SHUTDOWN, s.raw, shutdown_value(how), 0usize, 0usize, 0usize, 0usize))
 }
 
+// A poller takes a `Handle`, and a `File` and a `Socket` are different types with the same
+// thing inside them. These two are the whole of the conversion.
+fn file_handle(f: File) -> Handle {
+    var handle: Handle = zero
+    handle.raw = f.raw
+    ret handle
+}
+
 fn socket_handle(s: Socket) -> Handle {
     var handle: Handle = zero
     handle.raw = s.raw

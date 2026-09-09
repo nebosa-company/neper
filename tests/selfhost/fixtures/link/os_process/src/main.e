@@ -1,4 +1,4 @@
-// `e.os`'s pipe, page size, reservation release, and `kill`.
+// `e.os`'s pipe, page size, reservation release, `file_handle` and `kill`.
 //
 // `kill` needs a child, and the only program this fixture can be sure exists is itself: it
 // spawns its own image with an argument, and the child blocks until it is killed. The block
@@ -85,6 +85,12 @@ fn main(a: *mem.Arena) -> err {
         if received[at] != message[at] { os.exit(35i32) }
         at += 1usize
     }
+    // A `File` and a `Socket` reach a poller as a `Handle`, which is the only reason the
+    // conversion exists. Two ends of one pipe are two handles, which is what says this answers
+    // with the file's own rather than with something constant.
+    if os.file_handle(reading).raw == 0usize { os.exit(45i32) }
+    if os.file_handle(writing).raw == 0usize { os.exit(46i32) }
+    if os.file_handle(reading).raw == os.file_handle(writing).raw { os.exit(47i32) }
     // Closing the writing end is what turns a further read into end of stream rather than a
     // wait -- the property a pipe is used for.
     if os.close(writing) != ok { os.exit(36i32) }
