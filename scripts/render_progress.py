@@ -388,11 +388,15 @@ __GROUPS__
   <div class="note">
     <h4>What the two large partials mean</h4>
     <p><code>e.os</code> at __COS__ and <code>e.io</code> at __CIO__ are not stalled
-    work. <code>e.os</code> is the subset the compiler needs to build itself, plus the
-    six filesystem primitives <code>e.fs</code> needs, which are the first of it written
-    as neper source rather than supplied as intrinsics: per target, over
+    work. <code>e.os</code> is the subset the compiler needs to build itself, plus
+    everything written since as neper source rather than supplied as intrinsics: the
+    filesystem calls <code>e.fs</code> needs, sockets, a poller, file mappings, directory
+    watches, file locks and process groups. Those are per target, over
     <code>os.syscall</code> on Linux and <code>kernel32</code> through
-    <code>@import</code> on Windows, which is what D32 said all along (D97).
+    <code>@import</code> on Windows, which is what D32 said all along (D97). What is left
+    is a DNS client, the three <code>dl*</code> calls &mdash; which want an intrinsic with a
+    dependent return type, and a Linux answer that does not contradict D32 &mdash; and the
+    error-detail pair D109 leaves deliberately unwritten.
     <code>e.io</code> is the subset the compiler needs.
     <code>e.io</code> no longer waits on <code>printf</code>: that expands, over a
     4&nbsp;KiB buffer of its own drained through a generated sink.</p>
