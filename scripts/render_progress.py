@@ -215,7 +215,15 @@ for g, items in compiler.items():
 
 mod_body = ''
 for m, h, d in mod_rows:
-    where = 'compiler intrinsics' if m in ('e.mem', 'e.os') else 'lib/' + m.replace('.', '/') + '.e'
+    # Both of these are intrinsics plus source now, and saying only "intrinsics" understates
+    # how much of them is written down: e.os is mostly its two per-target files, and e.mem gained
+    # `copy` and `eq`.
+    if m == 'e.mem':
+        where = 'compiler intrinsics, lib/e/mem.e'
+    elif m == 'e.os':
+        where = 'compiler intrinsics, lib/e/os.linux.e, lib/e/os.windows.e'
+    else:
+        where = 'lib/' + m.replace('.', '/') + '.e'
     mod_body += ('<tr><td class="nm"><code>' + esc(m) + '</code></td><td class="sc">'
                  + ('%d / %d' % (h, d)) + '</td><td class="sc">'
                  + ('%.0f%%' % (100 * h / d)) + '</td><td class="nt">' + where + '</td></tr>')
