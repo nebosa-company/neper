@@ -341,7 +341,11 @@ fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, toke
 }
 
 fn register_return_type(c: *check.Checker, ty: check.Type) -> bool {
-    if ty.kind == .Bool || ty.kind == .Err || ty.kind == .Integer || ty.kind == .Pointer || ty.kind == .Float { ret true }
+    // A function type is an address and comes back in a register, exactly as a pointer does.
+    // Leaving it out put `os.dlsym`'s result in a return slot while the lookup it calls returns
+    // in registers, and a caller and callee that disagree about that read each other's rubbish --
+    // which looked like success the first time, because a fresh slot reads as `ok`.
+    if ty.kind == .Bool || ty.kind == .Err || ty.kind == .Integer || ty.kind == .Pointer || ty.kind == .Float || ty.kind == .Function { ret true }
     if ty.kind == .Named || ty.kind == .Tag {
         let (aggregate_index, found) = layout.aggregate_index(c, ty)
         if found && c.aggregates[aggregate_index].kind == .Enum { ret true }
