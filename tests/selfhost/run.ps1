@@ -696,6 +696,14 @@ $metaTypeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $metaTypeWritten -ne 'executable written') { throw 'e.meta type emission failed' }
 & $metaTypePath
 if ($LASTEXITCODE -ne 0) { throw "an e.meta type answer is wrong: exit $LASTEXITCODE" }
+# Section 9's `Field` and `Member` as declared names: a comptime value crossing a call, so the
+# callee is instantiated per field and its own return type depends on which one it was given.
+# Without the guard that stops inference rebinding such a parameter, this fails at 88.
+$fieldParamPath = Join-Path $testBuild 'meta-field-param-selfhost.exe'
+$fieldParamWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\meta_field_param\src\main.e') $repo 'x64' 'windows' $fieldParamPath
+if ($LASTEXITCODE -ne 0 -or $fieldParamWritten -ne 'executable written') { throw 'e.meta field parameter emission failed' }
+& $fieldParamPath
+if ($LASTEXITCODE -ne 0) { throw "an e.meta comptime value crossing a call is wrong: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

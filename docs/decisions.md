@@ -1579,3 +1579,61 @@ lowering's offset path. That is a feature, not the tail of this one.
 it nests the two questions, asks `kind` of each answer, and hands each to a generic that returns a
 value of that type. A signed backing carries a negative value through that generic, which a size
 comparison alone would not have shown.
+
+## D125 — a comptime value crosses a call, and one funnel carries it
+
+`Field` and `Member` complete `e.meta`. D124 said declaring the names without the rest would be
+worth less than an honest gap, and this is the rest: a user declaration takes `[FIELD: meta.Field]`,
+reads its members, and hands it on, which is what spec section 9 means by "available to user
+declarations under the same rule as the `e.meta` intrinsics".
+
+The leverage is that everything reading a comptime value already goes through one function.
+`find_comptime_binding` resolved a name against the stack an unrolled `for` pushes to; it now falls
+back to a `Field` or `Member` parameter of the enclosing instantiation, and with that one change
+`FIELD.ty` as a type, `FIELD.name` and `.offset` as expressions, `meta.get` and `meta.set`, and
+lowering's constant for the offset all work on a parameter without knowing there is a second way to
+bind one. Only those two kinds fall through: a `T` must not be found there, or `T.anything` would
+read as a member of a comptime value rather than as the type it is.
+
+There is no `Type` for either of them anywhere in the checker, and that is how comptime-only is
+enforced rather than something checked separately. A parameter annotated `meta.Field` is recognised
+by the name it resolves to and turned into a `ComptimeKind`; nothing else can name it, so there is
+nothing for a struct field, a local or a pointee to be declared as — exactly what section 9 says.
+The seeded names exist so that `meta.Field` written anywhere else is a type error rather than an
+unknown name.
+
+Four more sites followed, and each was found by a probe that failed rather than by reading:
+
+A `Field` argument at a call is always a name, because a `Field` has no spelling of its own — it
+comes from `meta.fields`. So `specialize_call` resolves the argument as a comptime value and copies
+it wholesale; `bind_inferred_argument` could not be reused, since it carries a type and a value and
+would lose the owning aggregate.
+
+A generic body is checked once at its declaration, before anything is bound to its parameters, and
+section 9 puts every check that depends on a comptime parameter at the instantiation. So an unbound
+`Field` parameter answers with a placeholder: what a member of it *is* can be said there, what it
+holds cannot. This is safe for a reason worth stating — a declaration's body is never lowered, only
+every instantiation of it is, so a placeholder cannot become wrong code. `meta.get`'s ownership
+check is deferred the same way: at declaration time neither the field nor the type it belongs to
+exists yet, and every instantiation still passes through that check with the argument set.
+
+`FIELD.ty` in a parameter or return type is that placeholder, so `substitute_type` maps it to the
+type the bound field has. A `Member` is not accepted there: its members are a name and a value, so
+there is nothing for one to stand for.
+
+The subtlest was inference. A `FIELD.ty` parameter is a `TypeParameter` whose index belongs to a
+comptime `Field`, and argument inference happily bound it as a type — rebinding `FIELD` to whatever
+the argument happened to be and losing the field it named. Nothing is inferable there: the field was
+named at the call and its type follows from it. Removing that one guard fails `link/meta_field_param`
+at 88, which is how it is pinned.
+
+The fixture is about the handover rather than the reflection, since `link/meta_reflect` already
+walks a struct inside one function. Here the value crosses a call, so the callee is instantiated per
+field with a return type that depends on which one it got; one case relays its own parameter to a
+third function, which is what says a parameter and a loop's binding are the same kind of thing; and
+a write through a call is read back in place, so an offset that were not the field's own would land
+somewhere else and show up as a wrong value rather than a type error.
+
+Left where it is: a generic *aggregate* taking a comptime `Field` — `type Holder[FIELD: Field]` with
+a field of type `FIELD.ty` — which section 9 permits and `substitute_aggregate_type` does not do.
+Nothing needs it, and it fails as an error rather than silently.

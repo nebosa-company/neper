@@ -276,6 +276,8 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.meta", "type_name", .Value, .Intrinsic)
     try seed(r, g, "e.meta", "element_type", .Value, .Intrinsic)
     try seed(r, g, "e.meta", "backing_type", .Value, .Intrinsic)
+    try seed(r, g, "e.meta", "Field", .Type, .Type)
+    try seed(r, g, "e.meta", "Member", .Type, .Type)
     try seed(r, g, "e.meta", "fields", .Value, .Intrinsic)
     try seed(r, g, "e.meta", "members", .Value, .Intrinsic)
     try seed(r, g, "e.meta", "get", .Value, .Intrinsic)

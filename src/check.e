@@ -876,12 +876,35 @@ fn active_comptime_parameter(c: *Checker, name: str) -> (usize, bool) {
 }
 
 // Innermost first: a nested unrolled loop may reuse an outer loop's binding name.
+//
+// A `Field` or `Member` parameter of the enclosing instantiation answers here too, and that
+// is deliberate: it makes every reader of a comptime value -- `FIELD.ty` as a type, `.name`
+// and `.offset` as expressions, `meta.get` and `meta.set`, and lowering's constant for the
+// offset -- work on a declared parameter without knowing there is a second way to bind one.
+// Only those two kinds fall through: a `T` must not be found here, or `T.anything` would read
+// as a member of a comptime value rather than as the type it is.
 fn find_comptime_binding(c: *Checker, name: str) -> (GenericArgument, bool) {
     var empty: GenericArgument = zero
     var at = c.comptime_binding_count
     while at > 0usize {
         at = at - 1usize
         if same(c.comptime_bindings[at].name, name) { ret (c.comptime_bindings[at].argument, true) }
+    }
+    let (parameter_index, parameter_found) = active_comptime_parameter(c, name)
+    if parameter_found {
+        let parameter = c.comptime_parameters[parameter_index]
+        if parameter.kind == .Field || parameter.kind == .Member {
+            let (argument, argument_found) = active_argument(c, parameter_index)
+            if argument_found { ret (argument, true) }
+            // No argument means the declaration is being checked rather than an instantiation.
+            // What a member of this parameter *is* can be answered there; what it holds cannot,
+            // and nothing needs it to be -- a declaration's body is never lowered, only every
+            // instantiation of it is.
+            var pending: GenericArgument = zero
+            pending.kind = parameter.kind
+            pending.ty = parameter.ty
+            ret (pending, true)
+        }
     }
     ret (empty, false)
 }
@@ -2427,6 +2450,27 @@ fn collect_comptime_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
         c.comptime_parameter_count += 1usize
         ret ok
     }
+    // Section 9's two comptime-only types, recognised here by the name they resolve to and
+    // turned into a parameter kind. Nothing else in the checker ever holds a `Type` for
+    // either of them, which is what comptime-only means rather than something enforced
+    // separately: there is no type for a struct field, a local or a pointee to be declared as.
+    let (meta_module, has_meta_module) = graph.find_module(g, "e.meta")
+    if has_meta_module && ty.kind == .Named && ty.module_index == meta_module {
+        if same(ty.name, "Field") || same(ty.name, "Member") {
+            // The type stored is a placeholder standing for whatever this parameter will be
+            // bound to, which is what the body sees while the declaration itself is checked --
+            // section 9 defers everything that depends on a comptime parameter to the
+            // instantiation, so `FIELD.ty` has to be *a* type there without being a known one.
+            var pending = make_type(.TypeParameter, name, module_index)
+            pending.element = c.comptime_parameter_count
+            pending.has_element = true
+            var pending_kind: ComptimeKind = .Field
+            if same(ty.name, "Member") { pending_kind = .Member }
+            c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: pending_kind, ty: pending }
+            c.comptime_parameter_count += 1usize
+            ret ok
+        }
+    }
     if ty.kind != .Integer || !same(ty.name, "usize") { ret InvalidType }
     c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Integer, ty: ty }
     c.comptime_parameter_count += 1usize
@@ -3658,7 +3702,12 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
     if ty.kind == .TypeParameter {
         if !ty.has_element { ret (invalid_type(), InvalidType) }
         let (argument, found) = instance_argument(c, function_index, first_argument, ty.element)
-        if !found || argument.kind != .Type { ret (invalid_type(), MissingContext) }
+        if !found { ret (invalid_type(), MissingContext) }
+        // A `Field` parameter in a type position is `FIELD.ty`, and the type the bound field
+        // has is what the declaration's placeholder stood for. A `Member` has no type among its
+        // members, so there is nothing for one to stand for and it is not accepted here.
+        if argument.kind == .Field { ret (argument.ty, ok) }
+        if argument.kind != .Type { ret (invalid_type(), MissingContext) }
         ret (argument.ty, ok)
     }
     if ty.kind == .Named && ty.has_element {
@@ -3791,6 +3840,11 @@ fn infer_comptime_type(c: *Checker, function_index: usize, first_argument: usize
     if formal.kind == .TypeParameter {
         if is_untyped(actual) || actual.kind == .Invalid || actual.kind == .Other { ret ok }
         if !formal.has_element { ret InvalidType }
+        // A `FIELD.ty` parameter is a `TypeParameter` standing for a comptime `Field`, not for a
+        // type parameter of its own, and there is nothing to infer: the field was named at the
+        // call and its type follows from it. Inferring here would rebind `FIELD` to whatever the
+        // argument happened to be, losing the field it names.
+        if formal.element < c.comptime_parameter_count && c.comptime_parameters[formal.element].kind != .Type { ret ok }
         ret bind_inferred_argument(c, function_index, first_argument, formal.element, actual, 0usize, .Type)
     }
     if formal.kind != actual.kind { ret ok }
@@ -3975,6 +4029,20 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                     if argument_position >= generic.comptime_count { ret (0usize, ArgumentCount) }
                     let parameter = c.comptime_parameters[generic.first_comptime + argument_position]
                     let node_index = tree.children[at].index
+                    if parameter.kind == .Field || parameter.kind == .Member {
+                        // A comptime `Field` has no way to be written down: it comes from
+                        // `meta.fields`, so the argument is always a name that already holds
+                        // one -- a loop's binding, or this caller's own parameter.
+                        let argument_node = tree.nodes[node_index]
+                        if argument_node.kind != .NameExpr { ret (0usize, TypeMismatch) }
+                        let argument_token = c.tokens[argument_node.token_start]
+                        if argument_token.kind != .Identifier { ret (0usize, TypeMismatch) }
+                        let (bound, found_bound) = find_comptime_binding(c, g.modules[module_index].text[argument_token.start..argument_token.end])
+                        if !found_bound || bound.kind != parameter.kind { ret (0usize, TypeMismatch) }
+                        let argument_index = first_argument + argument_position
+                        c.generic_arguments[argument_index] = bound
+                        c.generic_arguments[argument_index].set = true
+                    } else {
                     if parameter.kind == .Type {
                         let (ty, type_error) = comptime_type(c, g, tree, module_index, node_index)
                         if type_error != ok { ret (0usize, type_error) }
@@ -4003,6 +4071,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                             c.generic_arguments[argument_index].symbolic = true
                             c.generic_arguments[argument_index].set = true
                         }
+                    }
                     }
                     }
                 }
@@ -5462,10 +5531,17 @@ fn meta_access_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if subject_error != ok { ret (info, subject_error) }
     // Section 9 requires that `FIELD` be an element of `meta.fields[T]()`: a `Field` of
     // any other type read at its offset in this one is exactly what that forbids.
-    let (aggregate_index, found_aggregate) = aggregate_for_type(c, subject)
-    if !found_aggregate || aggregate_index != argument.owner {
-        record_failure(c, module_index, field_node, .MetaFieldOwner, argument.text, subject.name)
-        ret (info, InvalidType)
+    //
+    // An unset argument is a parameter of a declaration being checked before anything is bound
+    // to it, where neither side of that comparison exists yet. Section 9 puts a check that
+    // depends on a comptime parameter at the instantiation, and this one runs there -- every
+    // instantiation goes through here with the argument set.
+    if argument.set {
+        let (aggregate_index, found_aggregate) = aggregate_for_type(c, subject)
+        if !found_aggregate || aggregate_index != argument.owner {
+            record_failure(c, module_index, field_node, .MetaFieldOwner, argument.text, subject.name)
+            ret (info, InvalidType)
+        }
     }
     info.field = argument
     info.subject = subject

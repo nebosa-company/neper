@@ -713,6 +713,13 @@ meta_type_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$meta_type_written" = 'executable written' ]
 chmod +x "$test_build/meta-types-selfhost"
 "$test_build/meta-types-selfhost"
+# Section 9's `Field` and `Member` as declared names: a comptime value crossing a call, so the
+# callee is instantiated per field and its own return type depends on which one it was given.
+# Without the guard that stops inference rebinding such a parameter, this fails at 88.
+field_param_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/meta_field_param/src/main.e" "$repo" x64 linux "$test_build/meta-field-param-selfhost")
+[ "$field_param_written" = 'executable written' ]
+chmod +x "$test_build/meta-field-param-selfhost"
+"$test_build/meta-field-param-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
