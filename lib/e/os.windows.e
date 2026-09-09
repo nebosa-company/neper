@@ -97,6 +97,37 @@ type NotifyHeader = struct { next: u32, action: u32, name_length: u32 }
 // completion signals.
 type Overlapped = struct { status: usize, transferred: usize, offset: u32, offset_high: u32, event: usize }
 
+type ProcGroup = struct { raw: usize }
+type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
+
+// `STARTUPINFOW`: the padding is written out because the three standard handles are at the end
+// of it and the call reads them where the header says they are, not where they would fall if a
+// field were missing.
+type StartupInfo = struct {
+    size: u32,
+    padding: u32,
+    reserved: usize,
+    desktop: usize,
+    title: usize,
+    x: u32,
+    y: u32,
+    x_size: u32,
+    y_size: u32,
+    x_chars: u32,
+    y_chars: u32,
+    fill: u32,
+    flags: u32,
+    show: u16,
+    reserved_count: u16,
+    padding_two: u32,
+    reserved_block: usize,
+    standard_input: usize,
+    standard_output: usize,
+    standard_error: usize,
+}
+
+type ProcessInformation = struct { process: usize, thread: usize, process_id: u32, thread_id: u32 }
+
 // `SYSTEM_INFO`. Only the page size is read, but the whole thing has to be here for the call
 // to have somewhere to put it -- and for `page_size` to be at the offset it is.
 type SystemInfo = struct {
@@ -779,6 +810,30 @@ extern fn raw_unlock_file(file: usize, reserved: u32, length_low: u32, length_hi
 @import("kernel32.dll", "Sleep")
 extern fn raw_sleep(milliseconds: u32)
 
+@import("kernel32.dll", "CreateProcessW")
+extern fn raw_create_process(image: usize, command: *u16, process_attributes: usize, thread_attributes: usize, inherit: i32, flags: u32, environment: usize, directory: usize, startup: *StartupInfo, information: *ProcessInformation) -> i32
+
+@import("kernel32.dll", "CreateJobObjectW")
+extern fn raw_create_job(security: usize, name: usize) -> usize
+
+@import("kernel32.dll", "AssignProcessToJobObject")
+extern fn raw_assign_job(job: usize, process: usize) -> i32
+
+@import("kernel32.dll", "TerminateJobObject")
+extern fn raw_terminate_job(job: usize, code: u32) -> i32
+
+@import("kernel32.dll", "ResumeThread")
+extern fn raw_resume_thread(thread: usize) -> u32
+
+@import("kernel32.dll", "GetEnvironmentStringsW")
+extern fn raw_environment_strings() -> *u8
+
+@import("kernel32.dll", "FreeEnvironmentStringsW")
+extern fn raw_free_environment_strings(block: *u8) -> i32
+
+@import("kernel32.dll", "GetStdHandle")
+extern fn raw_std_handle(which: u32) -> usize
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -933,6 +988,26 @@ const ERROR_LOCK_VIOLATION: u32 = 33u32
 // ponytail: a timeout is polled, because neither host offers one -- ten milliseconds between
 // tries. A host call that took a deadline would replace the loop entirely.
 const LOCK_POLL_MS: u32 = 10u32
+
+// Suspended, so the child is in the job before it can start anything of its own; assigning
+// afterwards is a race against the children it has already had.
+const CREATE_SUSPENDED: u32 = 4u32
+const CREATE_UNICODE_ENVIRONMENT: u32 = 1024u32
+const STARTF_USESTDHANDLES: u32 = 256u32
+
+// `STD_INPUT_HANDLE` and its two neighbours, which are negative numbers passed as unsigned.
+const STD_INPUT: u32 = 4294967286u32
+const STD_OUTPUT: u32 = 4294967285u32
+const STD_ERROR: u32 = 4294967284u32
+
+// ponytail: an argument or environment list longer than this is refused rather than growing the
+// buffers; a caller with more than a thousand of either is doing something this is not for.
+const SPAWN_LIST_MAX: usize = 1024usize
+
+// ponytail: how far into the inherited environment block this reads before giving up on finding
+// its end. The host does not say how long the block is, and there is no counted call that would;
+// this is well past what `CreateProcessW` itself accepts.
+const MAX_ENVIRONMENT_UNITS: usize = 65536usize
 
 const RAW_IP4_SIZE: usize = 16usize
 const RAW_IP6_SIZE: usize = 28usize
@@ -1428,6 +1503,304 @@ fn from_socket_error() -> err {
 // correct.
 // Asked rather than assumed. This host is not tied to one architecture by anything else in
 // this file, so the page size is read from it.
+// This host takes one command line rather than a vector, so the vector has to be joined -- and
+// joined the way `CommandLineToArgvW` will take it apart again, or a path with a space in it
+// arrives as two arguments. An argument is quoted when it holds a space, a tab or a quote, and
+// inside the quotes a run of backslashes is doubled only where it meets one.
+fn needs_quotes(argument: str) -> bool {
+    if argument.len == 0usize { ret true }
+    var at = 0usize
+    while at < argument.len {
+        if argument[at] == 32u8 || argument[at] == 9u8 || argument[at] == 34u8 { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn command_line(a: *mem.Arena, argv: []const str) -> (str, err) {
+    if argv.len == 0usize || argv.len >= SPAWN_LIST_MAX { ret ("", Failed) }
+    var total = 0usize
+    var counted = 0usize
+    while counted < argv.len {
+        total += argv[counted].len
+        counted += 1usize
+    }
+    // Every byte can at worst double, and every argument can add two quotes and a separator.
+    let (bytes, allocation_error) = mem.alloc[u8](a, total * 2usize + argv.len * 3usize + 1usize)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var written = 0usize
+    var index = 0usize
+    while index < argv.len {
+        if index != 0usize {
+            bytes[written] = 32u8
+            written += 1usize
+        }
+        let argument = argv[index]
+        if !needs_quotes(argument) {
+            var plain = 0usize
+            while plain < argument.len {
+                bytes[written] = argument[plain]
+                written += 1usize
+                plain += 1usize
+            }
+        } else {
+            bytes[written] = 34u8
+            written += 1usize
+            var at = 0usize
+            while at < argument.len {
+                // Count the backslashes first, then decide: doubled where they meet a quote or
+                // the closing one, left alone anywhere else.
+                var slashes = 0usize
+                while at < argument.len && argument[at] == 92u8 {
+                    slashes += 1usize
+                    at += 1usize
+                }
+                var repeat = slashes
+                if at == argument.len || argument[at] == 34u8 { repeat = slashes * 2usize }
+                var emitted = 0usize
+                while emitted < repeat {
+                    bytes[written] = 92u8
+                    written += 1usize
+                    emitted += 1usize
+                }
+                if at < argument.len {
+                    if argument[at] == 34u8 {
+                        bytes[written] = 92u8
+                        written += 1usize
+                    }
+                    bytes[written] = argument[at]
+                    written += 1usize
+                    at += 1usize
+                }
+            }
+            bytes[written] = 34u8
+            written += 1usize
+        }
+        index += 1usize
+    }
+    ret (bytes[0usize..written], ok)
+}
+
+// The name a `NAME=VALUE` record sets. A record with no `=` in it is its own name, which is not
+// a shape the host produces but is one a caller can pass.
+fn entry_name(entry: str) -> str {
+    var at = 0usize
+    while at < entry.len {
+        if entry[at] == 61u8 { ret entry[0usize..at] }
+        at += 1usize
+    }
+    ret entry
+}
+
+// Environment names are not case-sensitive on this host -- the block says `Path` and a lookup
+// for `PATH` finds it -- so an addition replaces a record that differs only in case. Getting
+// this wrong leaves both records in the block and the host answers with whichever it reaches
+// first, which is not the caller's entry.
+fn folded(byte: u8) -> u8 {
+    if byte >= 65u8 && byte <= 90u8 { ret byte + 32u8 }
+    ret byte
+}
+
+// The units of one inherited record before its `=`, compared against an addition's name. The
+// records are UTF-16 and the additions are not, so this compares a unit at a time: a name with
+// anything but ASCII in it never matches, which keeps it rather than dropping it.
+fn wide_name_is(bytes: []const u8, start: usize, end: usize, name: str) -> bool {
+    if end - start < name.len * 2usize + 2usize { ret false }
+    if bytes[start + name.len * 2usize] != 61u8 { ret false }
+    if bytes[start + name.len * 2usize + 1usize] != 0u8 { ret false }
+    var at = 0usize
+    while at < name.len {
+        if folded(bytes[start + at * 2usize]) != folded(name[at]) { ret false }
+        if bytes[start + at * 2usize + 1usize] != 0u8 { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn wide_record_overridden(bytes: []const u8, start: usize, end: usize, entries: []const str) -> bool {
+    var at = 0usize
+    while at < entries.len {
+        if wide_name_is(bytes, start, end, entry_name(entries[at])) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The block this host wants: `NAME=VALUE` records one after another with a terminator each and
+// one more at the end. Inheriting means the parent's records go in first, minus the ones the
+// caller also sets -- nothing appends to an environment, so an overlay has to be built.
+fn environment_block(a: *mem.Arena, entries: []const str, inherit: bool) -> ([]u16, err) {
+    var nothing: []u16 = zero
+    if entries.len >= SPAWN_LIST_MAX { ret (nothing, Failed) }
+    var capacity = 2usize
+    var counted = 0usize
+    while counted < entries.len {
+        // A UTF-16 encoding never needs more units than the UTF-8 one needs bytes.
+        capacity += entries[counted].len + 1usize
+        counted += 1usize
+    }
+    if inherit { capacity += MAX_ENVIRONMENT_UNITS }
+    let (units, allocation_error) = mem.alloc[u16](a, capacity)
+    if allocation_error != ok { ret (nothing, OutOfMemory) }
+    var written = 0usize
+    if inherit {
+        let inherited = raw_environment_strings()
+        if mem.address_of(inherited) == 0usize { ret (nothing, from_last_error()) }
+        // `mem.view` names the region without reading it, and the walk below stops at the
+        // double terminator -- so nothing past the block the host allocated is ever touched.
+        var region: mem.Arena = zero
+        region.base = inherited
+        region.cap = MAX_ENVIRONMENT_UNITS * 2usize
+        region.off = 0usize
+        let bytes = mem.view(&region, 0usize, MAX_ENVIRONMENT_UNITS * 2usize)
+        var at = 0usize
+        while at + 1usize < bytes.len {
+            if bytes[at] == 0u8 && bytes[at + 1usize] == 0u8 { break }
+            var end = at
+            while end + 1usize < bytes.len {
+                if bytes[end] == 0u8 && bytes[end + 1usize] == 0u8 { break }
+                end += 2usize
+            }
+            if !wide_record_overridden(bytes, at, end, entries) && written + (end - at) / 2usize + 1usize <= capacity {
+                var offset = at
+                while offset < end {
+                    units[written] = u16(bytes[offset]) + u16(bytes[offset + 1usize]) * 256u16
+                    written += 1usize
+                    offset += 2usize
+                }
+                units[written] = 0u16
+                written += 1usize
+            }
+            at = end + 2usize
+        }
+        let freed = raw_free_environment_strings(inherited)
+    }
+    var index = 0usize
+    while index < entries.len {
+        // `widen` already answers what the encoding is; its result is terminated, and the
+        // terminator is where the copy stops.
+        let (entry, entry_error) = widen(a, entries[index])
+        if entry_error != ok { ret (nothing, entry_error) }
+        var at = 0usize
+        while at < entry.len && entry[at] != 0u16 {
+            units[written] = entry[at]
+            written += 1usize
+            at += 1usize
+        }
+        units[written] = 0u16
+        written += 1usize
+        index += 1usize
+    }
+    // An empty block is still two terminators: a child with no environment at all is not the
+    // same request as a child with the parent's.
+    units[written] = 0u16
+    written += 1usize
+    ret (units[0usize..written], ok)
+}
+
+type StartResult = struct { group: ProcGroup, child: Proc }
+
+// One place for both spawns: `grouped` decides whether a job is made and whether the child is
+// held suspended long enough to be put in it.
+fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartResult, err) {
+    var result: StartResult = zero
+    let (line, line_error) = command_line(a, options.argv)
+    if line_error != ok { ret (result, line_error) }
+    let (wide_line, wide_line_error) = widen(a, line)
+    if wide_line_error != ok { ret (result, wide_line_error) }
+
+    var flags = 0u32
+    var environment = 0usize
+    // Inheriting with nothing added is the parent's own block, which is what a null pointer
+    // already asks for -- so that case is not copied at all.
+    if !options.inherit_env || options.env.len != 0usize {
+        let (block, block_error) = environment_block(a, options.env, options.inherit_env)
+        if block_error != ok { ret (result, block_error) }
+        environment = mem.address_of(&block[0usize])
+        flags = flags | CREATE_UNICODE_ENVIRONMENT
+    }
+    var directory = 0usize
+    if options.cwd.len != 0usize {
+        let (wide_directory, directory_error) = widen(a, options.cwd)
+        if directory_error != ok { ret (result, directory_error) }
+        directory = mem.address_of(&wide_directory[0usize])
+    }
+
+    var job = 0usize
+    if grouped {
+        job = raw_create_job(0usize, 0usize)
+        if job == 0usize { ret (result, from_last_error()) }
+        flags = flags | CREATE_SUSPENDED
+    }
+
+    var startup: StartupInfo = zero
+    startup.size = 104u32
+    startup.flags = STARTF_USESTDHANDLES
+    // A stream the caller left unset is this process's own, because the alternative -- a child
+    // holding nothing where its output should be -- is not what leaving a field alone means.
+    startup.standard_input = options.stdio.stdin.raw
+    if startup.standard_input == 0usize { startup.standard_input = raw_std_handle(STD_INPUT) }
+    startup.standard_output = options.stdio.stdout.raw
+    if startup.standard_output == 0usize { startup.standard_output = raw_std_handle(STD_OUTPUT) }
+    startup.standard_error = options.stdio.stderr.raw
+    if startup.standard_error == 0usize { startup.standard_error = raw_std_handle(STD_ERROR) }
+    var information: ProcessInformation = zero
+    // Handles are inherited, which is what makes the three above reach the child at all.
+    if raw_create_process(0usize, &wide_line[0usize], 0usize, 0usize, 1i32, flags, environment, directory, &startup, &information) == 0i32 {
+        let start_error = from_last_error()
+        if job != 0usize { let unused_job = raw_close_handle(job) }
+        ret (result, start_error)
+    }
+    if grouped {
+        if raw_assign_job(job, information.process) == 0i32 {
+            // The child is still suspended and now belongs to nothing, so it is ended rather
+            // than resumed: a caller that asked for containment does not get a loose process.
+            let assign_error = from_last_error()
+            let unused_kill = raw_terminate_process(information.process, KILL_EXIT_CODE)
+            let unused_thread = raw_close_handle(information.thread)
+            let unused_process = raw_close_handle(information.process)
+            let unused_job = raw_close_handle(job)
+            ret (result, assign_error)
+        }
+        let resumed = raw_resume_thread(information.thread)
+    }
+    let closed_thread = raw_close_handle(information.thread)
+    result.group.raw = job
+    result.child.raw = information.process
+    ret (result, ok)
+}
+
+fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
+    var child: Proc = zero
+    let (result, start_error) = start_process(a, options, false)
+    if start_error != ok { ret (child, start_error) }
+    ret (result.child, ok)
+}
+
+// Containment is what the host gives and no more: a job holds a process and everything it
+// starts, which is why the fence calls this containment rather than a sandbox.
+fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) {
+    var group: ProcGroup = zero
+    var child: Proc = zero
+    let (result, start_error) = start_process(a, options, true)
+    if start_error != ok { ret (group, child, start_error) }
+    ret (result.group, result.child, ok)
+}
+
+// Everything in the job at once. `force` has nothing to choose between here: this host has no
+// signal to ask politely with, so both are the same end.
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
+    if raw_terminate_job(group.raw, KILL_EXIT_CODE) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
+// The job handle goes; what is in it does not, because nothing asked for that. A job that should
+// end with its owner needs a limit set on it, which is not in the fence.
+fn proc_group_close(group: ProcGroup) -> err {
+    if raw_close_handle(group.raw) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
 type FileLock = struct { raw: usize }
 
 // The whole file, however long it is: offset zero and a length of every byte there could be.

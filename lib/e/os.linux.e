@@ -110,6 +110,11 @@ const SYS_MMAP: usize = 9usize
 const SYS_NANOSLEEP: usize = 35usize
 const SYS_KILL: usize = 62usize
 const SYS_FLOCK: usize = 73usize
+const SYS_DUP2: usize = 33usize
+const SYS_FORK: usize = 57usize
+const SYS_EXECVE: usize = 59usize
+const SYS_SETPGID: usize = 109usize
+const SYS_EXIT_GROUP: usize = 231usize
 const SYS_PIPE2: usize = 293usize
 const SYS_MUNMAP: usize = 11usize
 const SYS_MSYNC: usize = 26usize
@@ -175,6 +180,15 @@ const PIPE_CLOEXEC: usize = 524288usize
 
 // The signal that cannot be caught or ignored, which is what `kill` means here.
 const SIGKILL: usize = 9usize
+const SIGTERM: usize = 15usize
+
+// What a child exits with when the program it was told to become could not be reached. The
+// shell's number for the same thing, so it is not a new convention to learn.
+const EXEC_FAILED: usize = 127usize
+
+// ponytail: an argument or environment list longer than this is refused rather than growing
+// the arrays; a caller with more than a thousand of either is doing something this is not for.
+const SPAWN_LIST_MAX: usize = 1024usize
 
 const LOCK_SH: usize = 1usize
 const LOCK_EX: usize = 2usize
@@ -515,26 +529,15 @@ fn environment_value(block: str, name: str) -> (str, bool) {
 // Every file under `/proc` reports a size of zero, so there is no asking how much to
 // allocate: a buffer that filled exactly may have been cut short, and only a short read
 // proves the whole of it is here.
-fn env(a: *mem.Arena, name: str) -> (str, err) {
-    let checkpoint = mem.mark(a)
+fn environment_bytes(a: *mem.Arena) -> (str, err) {
     let (path_address, path_error) = c_string(a, "/proc/self/environ")
-    if path_error != ok {
-        mem.reset(a, checkpoint)
-        ret ("", path_error)
-    }
+    if path_error != ok { ret ("", path_error) }
     var capacity = 8192usize
     while capacity <= MAX_ENVIRONMENT {
         let (buffer, allocation_error) = mem.alloc[u8](a, capacity)
-        if allocation_error != ok {
-            mem.reset(a, checkpoint)
-            ret ("", OutOfMemory)
-        }
+        if allocation_error != ok { ret ("", OutOfMemory) }
         let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_READ_ONLY, 0usize, 0usize, 0usize)
-        if descriptor < 0isize {
-            let open_error = from_errno(descriptor)
-            mem.reset(a, checkpoint)
-            ret ("", open_error)
-        }
+        if descriptor < 0isize { ret ("", from_errno(descriptor)) }
         var filled = 0usize
         var failure = ok
         while filled < capacity {
@@ -547,22 +550,26 @@ fn env(a: *mem.Arena, name: str) -> (str, err) {
             filled += usize(taken)
         }
         let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
-        if failure != ok {
-            mem.reset(a, checkpoint)
-            ret ("", failure)
-        }
-        if filled < capacity {
-            let (value, found) = environment_value(buffer[0usize..filled], name)
-            if !found {
-                mem.reset(a, checkpoint)
-                ret ("", NotFound)
-            }
-            ret (value, ok)
-        }
+        if failure != ok { ret ("", failure) }
+        if filled < capacity { ret (buffer[0usize..filled], ok) }
         capacity = capacity * 2usize
     }
-    mem.reset(a, checkpoint)
     ret ("", Failed)
+}
+
+fn env(a: *mem.Arena, name: str) -> (str, err) {
+    let checkpoint = mem.mark(a)
+    let (block, block_error) = environment_bytes(a)
+    if block_error != ok {
+        mem.reset(a, checkpoint)
+        ret ("", block_error)
+    }
+    let (value, found) = environment_value(block, name)
+    if !found {
+        mem.reset(a, checkpoint)
+        ret ("", NotFound)
+    }
+    ret (value, ok)
 }
 
 // A descriptor number as decimal, which is the only formatting this file needs -- and the
@@ -1108,6 +1115,202 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
         at += 1usize
     }
     ret address
+}
+
+type ProcGroup = struct { raw: usize }
+type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
+
+// `execve` wants an array of addresses ending in a zero, which is what this builds: each string
+// copied with a terminator, and then a vector of where each landed. Both live in the arena,
+// because the child may not allocate -- everything it needs has to exist before the fork.
+fn c_string_vector(a: *mem.Arena, items: []const str) -> (usize, err) {
+    if items.len >= SPAWN_LIST_MAX { ret (0usize, Failed) }
+    let (vector, vector_error) = mem.alloc[usize](a, items.len + 1usize)
+    if vector_error != ok { ret (0usize, OutOfMemory) }
+    var at = 0usize
+    while at < items.len {
+        let (address, address_error) = c_string(a, items[at])
+        if address_error != ok { ret (0usize, address_error) }
+        vector[at] = address
+        at += 1usize
+    }
+    vector[items.len] = 0usize
+    ret (mem.address_of(&vector[0usize]), ok)
+}
+
+// Everything the child will need, prepared while it is still safe to allocate. After the fork
+// the child does nothing but a handful of syscalls: a language runtime in a forked child is only
+// safe if it never touches anything, and the way to keep that true is to leave it nothing to do.
+type SpawnPlan = struct {
+    argv: usize,
+    envp: usize,
+    program: usize,
+    directory: usize,
+    grouped: bool,
+}
+
+fn spawn_plan(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (SpawnPlan, err) {
+    var plan: SpawnPlan = zero
+    plan.grouped = grouped
+    if options.argv.len == 0usize { ret (plan, Failed) }
+    let (program, program_error) = c_string(a, options.argv[0usize])
+    if program_error != ok { ret (plan, program_error) }
+    plan.program = program
+    let (argv, argv_error) = c_string_vector(a, options.argv)
+    if argv_error != ok { ret (plan, argv_error) }
+    plan.argv = argv
+    // `inherit_env` overlays: the parent's environment with these entries over it. Without it
+    // they are the whole of the child's environment, which is what an empty vector says.
+    if options.inherit_env {
+        let (inherited, inherited_error) = environment_vector(a, options.env)
+        if inherited_error != ok { ret (plan, inherited_error) }
+        plan.envp = inherited
+    } else {
+        let (envp, envp_error) = c_string_vector(a, options.env)
+        if envp_error != ok { ret (plan, envp_error) }
+        plan.envp = envp
+    }
+    if options.cwd.len != 0usize {
+        let (directory, directory_error) = c_string(a, options.cwd)
+        if directory_error != ok { ret (plan, directory_error) }
+        plan.directory = directory
+    }
+    ret (plan, ok)
+}
+
+// The name a `NAME=VALUE` record sets. A record with no `=` in it is its own name, which is
+// not a shape the host produces but is one a caller can pass.
+fn entry_name(entry: str) -> str {
+    var at = 0usize
+    while at < entry.len {
+        if entry[at] == 61u8 { ret entry[0usize..at] }
+        at += 1usize
+    }
+    ret entry
+}
+
+fn same_bytes(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn overridden(entry: str, additions: []const str) -> bool {
+    let name = entry_name(entry)
+    var at = 0usize
+    while at < additions.len {
+        if same_bytes(name, entry_name(additions[at])) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The parent's environment with the caller's entries laid over it: a record the caller also
+// sets is dropped in favour of theirs, and the rest are kept. That is what `inherit_env` means,
+// and it has to be built here because nothing appends to an environment.
+fn environment_vector(a: *mem.Arena, additions: []const str) -> (usize, err) {
+    if additions.len >= SPAWN_LIST_MAX { ret (0usize, Failed) }
+    let (block, block_error) = environment_bytes(a)
+    if block_error != ok { ret (0usize, block_error) }
+    let (vector, vector_error) = mem.alloc[usize](a, SPAWN_LIST_MAX)
+    if vector_error != ok { ret (0usize, OutOfMemory) }
+    var count = 0usize
+    var at = 0usize
+    while at < block.len && count + additions.len + 1usize < SPAWN_LIST_MAX {
+        var end = at
+        while end < block.len && block[end] != 0u8 { end = end + 1usize }
+        // The records are NUL-terminated where they lie, so a kept one is pointed at rather
+        // than copied.
+        if end > at && !overridden(block[at..end], additions) {
+            vector[count] = mem.address_of(&block[at])
+            count += 1usize
+        }
+        at = end + 1usize
+    }
+    var added = 0usize
+    while added < additions.len {
+        let (address, address_error) = c_string(a, additions[added])
+        if address_error != ok { ret (0usize, address_error) }
+        vector[count] = address
+        count += 1usize
+        added += 1usize
+    }
+    vector[count] = 0usize
+    ret (mem.address_of(&vector[0usize]), ok)
+}
+
+// Between the fork and the exec, and nothing else. Each step is one syscall and none of them
+// allocates, which is the only way this is safe in a forked child.
+fn become_child(plan: SpawnPlan, stdio: Stdio) {
+    if plan.grouped {
+        // Its own group, set by the child so that it is true before it can spawn anything --
+        // the parent doing it afterwards is a race against the child's own children.
+        let grouped = syscall(SYS_SETPGID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    }
+    if plan.directory != 0usize {
+        let moved = syscall(SYS_CHDIR, plan.directory, 0usize, 0usize, 0usize, 0usize, 0usize)
+        if moved < 0isize { let failed = syscall(SYS_EXIT_GROUP, EXEC_FAILED, 0usize, 0usize, 0usize, 0usize, 0usize) }
+    }
+    if stdio.stdin.raw != 0usize { let bound = syscall(SYS_DUP2, stdio.stdin.raw, 0usize, 0usize, 0usize, 0usize, 0usize) }
+    if stdio.stdout.raw != 1usize { let bound = syscall(SYS_DUP2, stdio.stdout.raw, 1usize, 0usize, 0usize, 0usize, 0usize) }
+    if stdio.stderr.raw != 2usize { let bound = syscall(SYS_DUP2, stdio.stderr.raw, 2usize, 0usize, 0usize, 0usize, 0usize) }
+    let replaced = syscall(SYS_EXECVE, plan.program, plan.argv, plan.envp, 0usize, 0usize, 0usize)
+    // `execve` only returns when it failed, and there is nothing to report it to.
+    let gone = syscall(SYS_EXIT_GROUP, EXEC_FAILED, 0usize, 0usize, 0usize, 0usize, 0usize)
+}
+
+fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err) {
+    var child: Proc = zero
+    let (plan, plan_error) = spawn_plan(a, options, false)
+    if plan_error != ok { ret (child, plan_error) }
+    let forked = syscall(SYS_FORK, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if forked < 0isize { ret (child, from_errno(forked)) }
+    if forked == 0isize {
+        become_child(plan, options.stdio)
+        ret (child, Failed)
+    }
+    child.raw = usize(forked)
+    ret (child, ok)
+}
+
+// The group is the child's own, and its identifier is the child's own process. Containment is
+// what the host gives and no more: a descendant that starts a new group of its own leaves it,
+// which is why the fence calls this containment rather than a sandbox.
+fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err) {
+    var group: ProcGroup = zero
+    var child: Proc = zero
+    let (plan, plan_error) = spawn_plan(a, options, true)
+    if plan_error != ok { ret (group, child, plan_error) }
+    let forked = syscall(SYS_FORK, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if forked < 0isize { ret (group, child, from_errno(forked)) }
+    if forked == 0isize {
+        become_child(plan, options.stdio)
+        ret (group, child, Failed)
+    }
+    // The parent sets it as well: whichever wins, the group exists before either returns, and
+    // the loser's attempt is harmless.
+    let grouped = syscall(SYS_SETPGID, usize(forked), usize(forked), 0usize, 0usize, 0usize, 0usize)
+    group.raw = usize(forked)
+    child.raw = usize(forked)
+    ret (group, child, ok)
+}
+
+// A negative process identifier is the whole group, which is what `killpg` is.
+fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
+    var signal = SIGTERM
+    if force { signal = SIGKILL }
+    let negated = 0usize - group.raw
+    ret from_errno(syscall(SYS_KILL, negated, signal, 0usize, 0usize, 0usize, 0usize))
+}
+
+// A group identifier is not a handle here, so there is nothing to give back. The call exists
+// because on the other host there is.
+fn proc_group_close(group: ProcGroup) -> err {
+    ret ok
 }
 
 type FileLock = struct { raw: usize }

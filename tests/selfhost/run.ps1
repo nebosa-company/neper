@@ -643,6 +643,19 @@ Push-Location $lockScratch
 $lockExit = $LASTEXITCODE
 Pop-Location
 if ($lockExit -ne 0) { throw "an e.os file lock answered wrongly: exit $lockExit" }
+# `e.os`'s `spawn_with_options` and its process groups. Every check needs a second program and
+# the only one the fixture can be sure exists is itself, so it spawns its own image with a
+# marker argument and each mode answers by its exit code.
+$groupScratch = Join-Path $testBuild 'group-scratch'
+New-Item -ItemType Directory -Force -Path $groupScratch | Out-Null
+$groupPath = Join-Path $testBuild 'os-group-selfhost.exe'
+$groupWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_group\src\main.e') $repo 'x64' 'windows' $groupPath
+if ($LASTEXITCODE -ne 0 -or $groupWritten -ne 'executable written') { throw 'e.os process group emission failed' }
+Push-Location $groupScratch
+& $groupPath
+$groupExit = $LASTEXITCODE
+Pop-Location
+if ($groupExit -ne 0) { throw "an e.os spawn or process group answered wrongly: exit $groupExit" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

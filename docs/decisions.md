@@ -1269,3 +1269,59 @@ enough to make a lock block. Exclusion is pinned by removing it — with the exc
 set, the second claim succeeds and the fixture fails at exit 21 on both hosts — and the polled
 wait is timed against the clock, so a timeout that returned at once fails rather than passing
 for the right reason by accident.
+
+## D118 — a process group is created with the child, not around it
+
+`proc_group_spawn` needed its own spawn rather than a wrapper around `os.spawn`. A group that is
+assigned after a spawn returns is a race with the child itself: between the two calls the child
+can already have started children of its own, and those are outside the containment the caller
+asked for. Both hosts have a way to close that window and neither of them is a second call on a
+running process, so the group and the child are created together — which also delivers the
+fence's `spawn_with_options`, since a spawn that takes options was the missing half of both.
+
+Linux sets the group twice. The child calls `setpgid(0, 0)` between the fork and the exec, and
+the parent calls `setpgid(child, child)` as soon as the fork returns. Whichever runs first wins
+and the other is harmless, and the point of doing both is that the group exists before either
+call returns: the child cannot reach `execve` without being in it, and the parent cannot return a
+`ProcGroup` that is not yet real. A `pgid` is not a handle, so `proc_group_close` is a no-op and
+`proc_group_terminate` is `kill` with a negated group — which is all `killpg` ever was.
+
+Windows creates a Job object first and starts the child `CREATE_SUSPENDED`, assigns it, and only
+then resumes the thread. The suspension is the same window closed from the other side: the child
+has not executed an instruction when it joins the job. An assignment that fails terminates the
+child rather than resuming it, because a caller that asked for containment should not be handed a
+loose process. `TerminateJobObject` ends everything in the job at once, and `force` has nothing to
+choose between there — this host has no signal to ask politely with.
+
+Everything the Linux child needs is prepared before the fork, because it may not allocate. The
+argument and environment vectors, the program path and the target directory are all built in the
+parent's arena, and after the fork the child does nothing but `setpgid`, `chdir`, three `dup2`s
+and `execve` — each one syscall, none of them touching the allocator or the runtime. `execve`
+only returns when it failed and there is nobody to tell, so the child exits 127, which is the
+shell's number for the same thing.
+
+`inherit_env` means overlay, and the fence says so: the parent's environment with the caller's
+entries laid over it, an entry replacing an inherited record of the same name rather than joining
+it. Neither host appends to an environment, so the overlay is built by hand — Linux from
+`/proc/self/environ`, which `env` now shares a reader with, and Windows from
+`GetEnvironmentStringsW`, walked as UTF-16 with the names folded to lower case, because
+environment names are not case-sensitive there and a block holding both `Path` and `PATH` answers
+with whichever the host reaches first rather than the caller's. Inheriting with nothing added
+stays a null pointer on Windows and the parent's own block on Linux: that is what the request
+already means, and copying it would only be a way to get it wrong.
+
+Two ceilings are deliberate. `Stdio.inherit` is not honoured as an exact set — Linux passes every
+descriptor without close-on-exec and Windows every inheritable handle, so the named list is a
+minimum, and the fence now says as much. And the pipe ends `os.pipe` returns are not inheritable
+on Windows, so a child cannot yet be given one as a stream; that is `pipe`'s decision to revisit
+when `e.proc` needs it, not this one's.
+
+The fixture spawns its own image with a marker argument, since that is the only program it can be
+sure exists, and each mode answers by its exit code: the overlay case checks both the addition
+and that the parent's `PATH` survived, the replacement case checks that `PATH` is the caller's,
+the bare case checks that nothing else came through, and the `cwd` case asks the child where it
+is. Both halves are pinned by removing them. With the override filter disabled the child reads
+the inherited `PATH` and the run fails at 83 on both hosts; with both `setpgid` calls removed on
+Linux the terminate finds no group and fails at 32. What is not checked is containment of a
+grandchild, which cannot be observed from outside without an identity the parent has no way to
+learn.

@@ -1683,8 +1683,12 @@ creation time in the structure `stat` reads, so `created_ns` is `-1` there.
 All path strings use the host convention. `SpawnOptions.cwd == ""` inherits the
 current directory; `inherit_env` controls whether `env` overlays the parent
 environment (`true`) or is the complete child environment (`false`). Environment
-entries are `NAME=VALUE`. `wait_u32` waits indefinitely when `timeout_ns < 0` and
-polls once when it is zero. In `SocketAddress`, IPv4 uses the first four bytes and
+entries are `NAME=VALUE`, and an entry whose name an inherited record also sets replaces
+it rather than joining it. A `Stdio` stream left zero is the parent's own, so a caller that
+only wants the child's output redirected sets that one field. `Stdio.inherit` names handles
+the child must receive; neither host confines it to that set -- Linux passes every
+descriptor without close-on-exec and Windows every inheritable handle. `wait_u32` waits
+indefinitely when `timeout_ns < 0` and polls once when it is zero. In `SocketAddress`, IPv4 uses the first four bytes and
 zeros the remaining twelve. Binding to port zero asks the host to choose one, and
 `socket_local_address` is the only way the choice comes back -- so a server that does not
 want to guess a free port needs it, and so does anything that has to tell a peer where to

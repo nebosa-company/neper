@@ -669,6 +669,15 @@ lock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$lock_written" = 'executable written' ]
 chmod +x "$test_build/os-lock-selfhost"
 (cd "$lock_scratch" && "$test_build/os-lock-selfhost")
+# `e.os`'s `spawn_with_options` and its process groups. Every check needs a second program and
+# the only one the fixture can be sure exists is itself, so it spawns its own image with a
+# marker argument and each mode answers by its exit code.
+group_scratch="$test_build/group-scratch"
+mkdir -p "$group_scratch"
+group_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_group/src/main.e" "$repo" x64 linux "$test_build/os-group-selfhost")
+[ "$group_written" = 'executable written' ]
+chmod +x "$test_build/os-group-selfhost"
+(cd "$group_scratch" && "$test_build/os-group-selfhost")
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
