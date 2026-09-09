@@ -1120,3 +1120,37 @@ a wrong reason is worse than neither.
 The wake is load-bearing on both hosts and pinned the same way: made a no-op, the fixture
 waits out its four seconds and fails at exit 55, because a dead wake still returns zero
 events and only the clock tells the two apart.
+
+## D114 — a file mapping arrives as a pointer, and only one host can say so directly
+
+`e.os` gains `map_file`, `mapping_bytes`, `mapping_bytes_mut`, `mapping_flush` and
+`mapping_close`. `Mapping` already carried `address: *u8` and `len`, which is what made the
+interesting problem visible: **a mapping has to arrive as a pointer, and D96 leaves no way
+from an address to one.**
+
+Windows says it directly. `MapViewOfFile` is declared as returning `*u8`, and a foreign
+declaration is where a pointer comes into existence — the same boundary `os.reserve` uses.
+
+Linux cannot: `mmap` is a syscall and `os.syscall` answers with an `isize`. Rather than add a
+runtime stub in assembly — which is what every other pointer-returning primitive here is —
+the pointer comes from `os.reserve`, which already returns a real one over a `PROT_NONE`
+region, and `MAP_FIXED` then replaces that reservation with the file at the same address. The
+pointer already held *is* the mapping afterwards. No assembly, and the reservation being ours
+is what makes discarding it safe.
+
+That is not a cosmetic choice, and the fixture shows it: dropping `MAP_FIXED` makes the
+mapping land somewhere else while the pointer still addresses the `PROT_NONE` reservation, so
+the process takes SIGSEGV and exits 139 rather than answering wrongly. `MAP_PRIVATE` in place
+of `MAP_SHARED` fails at exit 34, where the write never reaches the file.
+
+`mem.view` is how a pointer and a length become a slice, and it is the only such operation —
+its own comment in the compiler says as much. So `mapping_bytes` builds a `mem.Arena` over the
+mapping and views it: not to allocate out of, but because naming a region is what an `Arena`
+is. That is the mechanism the language offers and there is no second one.
+
+`Mapping.raw` carries whether the mapping may be written. Linux needs no handle to keep a
+mapping alive, and Windows closes its mapping object as soon as the view exists — the view
+holds its own reference — so the field is free for the one thing that must be remembered:
+`mapping_bytes_mut` refuses a read-only mapping rather than handing back a slice whose first
+write would fault. A refusal is an error a caller can act on; a fault is not. Removing the
+check fails the fixture at exit 15.

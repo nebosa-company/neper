@@ -598,6 +598,18 @@ $pollerWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $pollerWritten -ne 'executable written') { throw 'e.os poller emission failed' }
 & $pollerPath
 if ($LASTEXITCODE -ne 0) { throw "the e.os poller answered wrongly: exit $LASTEXITCODE" }
+# `e.os`'s file mapping: a file read through memory, written through memory, and the change
+# then seen by an ordinary read -- which is what says a mapping is the file and not a copy.
+$mappingScratch = Join-Path $testBuild 'map-scratch'
+New-Item -ItemType Directory -Force -Path $mappingScratch | Out-Null
+$mappingPath = Join-Path $testBuild 'os-mapping-selfhost.exe'
+$mappingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_mapping\src\main.e') $repo 'x64' 'windows' $mappingPath
+if ($LASTEXITCODE -ne 0 -or $mappingWritten -ne 'executable written') { throw 'e.os mapping emission failed' }
+Push-Location $mappingScratch
+& $mappingPath
+$mappingExit = $LASTEXITCODE
+Pop-Location
+if ($mappingExit -ne 0) { throw "an e.os mapping call answered wrongly: exit $mappingExit" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

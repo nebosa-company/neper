@@ -106,6 +106,9 @@ const SYS_SHUTDOWN: usize = 48usize
 const SYS_BIND: usize = 49usize
 const SYS_LISTEN: usize = 50usize
 const SYS_GETSOCKNAME: usize = 51usize
+const SYS_MMAP: usize = 9usize
+const SYS_MUNMAP: usize = 11usize
+const SYS_MSYNC: usize = 26usize
 const SYS_FCNTL: usize = 72usize
 const SYS_ACCEPT4: usize = 288usize
 const SYS_EPOLL_WAIT: usize = 232usize
@@ -149,6 +152,15 @@ const SOCK_CLOEXEC: usize = 524288usize
 const F_GETFL: usize = 3usize
 const F_SETFL: usize = 4usize
 const O_NONBLOCK: usize = 2048usize
+
+const PROT_READ: usize = 1usize
+const PROT_WRITE: usize = 2usize
+const MAP_SHARED: usize = 1usize
+
+// The flag that puts a mapping exactly where it is told, replacing whatever was there.
+const MAP_FIXED: usize = 16usize
+
+const MS_SYNC: usize = 4usize
 
 const EPOLL_CLOEXEC: usize = 524288usize
 const EFD_CLOEXEC: usize = 524288usize
@@ -655,6 +667,72 @@ type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 // resolve rules without a new call. The size is passed alongside it and the kernel checks
 // both, so the layout is the ABI.
 type OpenHow = struct { flags: u64, mode: u64, resolve: u64 }
+
+type Mapping = struct { raw: usize, address: *u8, len: usize }
+
+// `raw` carries whether the mapping may be written and nothing else. This host needs no
+// handle to keep a mapping alive, and the other closes its mapping object as soon as the
+// view exists, so the field is free -- and something has to remember, because
+// `mapping_bytes_mut` must refuse rather than let a write fault.
+const MAPPING_READ_ONLY: usize = 0usize
+const MAPPING_WRITABLE: usize = 1usize
+
+// A file mapping has to arrive as a `*u8`, and `mmap` answers with an address. D96 leaves no
+// way from one to the other, so the pointer comes from `os.reserve` -- which returns a real
+// one over a `PROT_NONE` region -- and `MAP_FIXED` then replaces that reservation with the
+// file at the same address. The pointer already held is the mapping afterwards, so nothing
+// has to invent one and this host needs no assembly of its own.
+//
+// The offset is the caller's to page-align; the kernel refuses anything else.
+fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err) {
+    var mapping: Mapping = zero
+    if len == 0usize { ret (mapping, Failed) }
+    let (address, reserve_error) = reserve(len)
+    if reserve_error != ok { ret (mapping, reserve_error) }
+    var protection = PROT_READ
+    if writable { protection = PROT_READ | PROT_WRITE }
+    let placed = syscall(SYS_MMAP, mem.address_of(address), len, protection, MAP_SHARED | MAP_FIXED, f.raw, usize(offset))
+    if placed < 0isize {
+        let unused = syscall(SYS_MUNMAP, mem.address_of(address), len, 0usize, 0usize, 0usize, 0usize)
+        ret (mapping, from_errno(placed))
+    }
+    mapping.raw = MAPPING_READ_ONLY
+    if writable { mapping.raw = MAPPING_WRITABLE }
+    mapping.address = address
+    mapping.len = len
+    ret (mapping, ok)
+}
+
+// `mem.view` is the one operation that turns a base pointer and a length into a slice, which
+// is the whole reason an `Arena` is built here: not to allocate out of, but because naming a
+// region is what an `Arena` is and `view` is the only thing that will describe one.
+fn mapping_region(m: Mapping) -> []u8 {
+    var region: mem.Arena = zero
+    region.base = m.address
+    region.cap = m.len
+    region.off = 0usize
+    ret mem.view(&region, 0usize, m.len)
+}
+
+fn mapping_bytes(m: Mapping) -> []const u8 {
+    ret mapping_region(m)
+}
+
+// A mapping opened for reading refuses rather than handing back a slice whose first write
+// would fault: the refusal is an error a caller can act on and the fault is not.
+fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    if m.raw != MAPPING_WRITABLE { ret (nothing, Unsupported) }
+    ret (mapping_region(m), ok)
+}
+
+fn mapping_flush(m: Mapping) -> err {
+    ret from_errno(syscall(SYS_MSYNC, mem.address_of(m.address), m.len, MS_SYNC, 0usize, 0usize, 0usize))
+}
+
+fn mapping_close(m: Mapping) -> err {
+    ret from_errno(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
+}
 
 type Poller = struct { state: *void }
 type PollInterest = struct { readable: bool, writable: bool }

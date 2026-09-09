@@ -82,6 +82,74 @@ type ObjectAttributes = struct {
 
 type IoStatusBlock = struct { status: usize, information: usize }
 
+type Mapping = struct { raw: usize, address: *u8, len: usize }
+
+// `raw` carries whether the mapping may be written and nothing else. The mapping object is
+// closed as soon as the view exists -- the view holds its own reference, so the handle is not
+// worth keeping -- which leaves the field for the one thing that has to be remembered:
+// `mapping_bytes_mut` must refuse rather than let a write fault.
+const MAPPING_READ_ONLY: usize = 0usize
+const MAPPING_WRITABLE: usize = 1usize
+
+// The offset is the caller's to align, and this host wants it on a 64 KiB boundary rather
+// than a page -- the allocation granularity, not the page size.
+fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err) {
+    var mapping: Mapping = zero
+    if len == 0usize { ret (mapping, Failed) }
+    var protection = PAGE_READONLY
+    var access = FILE_MAP_READ
+    if writable {
+        protection = PAGE_READWRITE
+        access = FILE_MAP_READ | FILE_MAP_WRITE
+    }
+    // A zero size maps the whole file, which is what a length past the end would mean here
+    // anyway: the size asked for is the view's, not the object's.
+    let object = raw_create_mapping(f.raw, 0usize, protection, 0u32, 0u32, 0usize)
+    if object == 0usize { ret (mapping, from_last_error()) }
+    let address = raw_map_view(object, access, u32(offset / 4294967296u64), u32(offset % 4294967296u64), len)
+    // The object goes now: the view keeps it alive, and nothing later needs the handle.
+    let closed = raw_close_handle(object)
+    if mem.address_of(address) == 0usize { ret (mapping, from_last_error()) }
+    mapping.raw = MAPPING_READ_ONLY
+    if writable { mapping.raw = MAPPING_WRITABLE }
+    mapping.address = address
+    mapping.len = len
+    ret (mapping, ok)
+}
+
+// `mem.view` is the one operation that turns a base pointer and a length into a slice, which
+// is the whole reason an `Arena` is built here: not to allocate out of, but because naming a
+// region is what an `Arena` is and `view` is the only thing that will describe one.
+fn mapping_region(m: Mapping) -> []u8 {
+    var region: mem.Arena = zero
+    region.base = m.address
+    region.cap = m.len
+    region.off = 0usize
+    ret mem.view(&region, 0usize, m.len)
+}
+
+fn mapping_bytes(m: Mapping) -> []const u8 {
+    ret mapping_region(m)
+}
+
+// A mapping opened for reading refuses rather than handing back a slice whose first write
+// would fault: the refusal is an error a caller can act on and the fault is not.
+fn mapping_bytes_mut(m: Mapping) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    if m.raw != MAPPING_WRITABLE { ret (nothing, Unsupported) }
+    ret (mapping_region(m), ok)
+}
+
+fn mapping_flush(m: Mapping) -> err {
+    if raw_flush_view(m.address, m.len) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
+fn mapping_close(m: Mapping) -> err {
+    if raw_unmap_view(m.address) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
 type Poller = struct { state: *void }
 type PollInterest = struct { readable: bool, writable: bool }
 type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
@@ -484,6 +552,21 @@ extern fn raw_socket_control(s: usize, command: u32, argument: *u32) -> i32
 @import("ws2_32.dll", "WSAGetLastError")
 extern fn raw_socket_error() -> i32
 
+@import("kernel32.dll", "CreateFileMappingW")
+extern fn raw_create_mapping(file: usize, security: usize, protect: u32, size_high: u32, size_low: u32, name: usize) -> usize
+
+// The one call in this file that hands back a pointer. That is what makes a file mapping
+// expressible here at all: an address cannot become a pointer in source (D96), and a foreign
+// declaration is where one comes into existence.
+@import("kernel32.dll", "MapViewOfFile")
+extern fn raw_map_view(mapping: usize, access: u32, offset_high: u32, offset_low: u32, length: usize) -> *u8
+
+@import("kernel32.dll", "UnmapViewOfFile")
+extern fn raw_unmap_view(address: *u8) -> i32
+
+@import("kernel32.dll", "FlushViewOfFile")
+extern fn raw_flush_view(address: *u8, length: usize) -> i32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -598,6 +681,11 @@ const POLLNVAL: u16 = 4u16
 // ponytail: a fixed set, because the table is one arena allocation made when the poller
 // opens; a growing one is what to write if something registers more than this.
 const POLL_CAPACITY: usize = 64usize
+
+const PAGE_READONLY: u32 = 2u32
+const PAGE_READWRITE: u32 = 4u32
+const FILE_MAP_WRITE: u32 = 2u32
+const FILE_MAP_READ: u32 = 4u32
 
 const RAW_IP4_SIZE: usize = 16usize
 const RAW_IP6_SIZE: usize = 28usize

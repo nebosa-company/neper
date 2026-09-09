@@ -631,6 +631,16 @@ poller_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$poller_written" = 'executable written' ]
 chmod +x "$test_build/os-poller-selfhost"
 "$test_build/os-poller-selfhost"
+# `e.os`'s file mapping: a file read through memory, written through memory, and the change
+# then seen by an ordinary read -- which is what says a mapping is the file and not a copy.
+# Dropping MAP_FIXED here is a segmentation fault rather than a wrong answer, since the
+# pointer would still address the reservation the mapping was meant to replace.
+mapping_scratch="$test_build/map-scratch"
+mkdir -p "$mapping_scratch"
+mapping_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_mapping/src/main.e" "$repo" x64 linux "$test_build/os-mapping-selfhost")
+[ "$mapping_written" = 'executable written' ]
+chmod +x "$test_build/os-mapping-selfhost"
+(cd "$mapping_scratch" && "$test_build/os-mapping-selfhost")
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
