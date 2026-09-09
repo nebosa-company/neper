@@ -664,6 +664,14 @@ $resolveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $resolveWritten -ne 'executable written') { throw 'e.os resolver emission failed' }
 & $resolvePath
 if ($LASTEXITCODE -ne 0) { throw "an e.os socket_resolve answered wrongly: exit $LASTEXITCODE" }
+# `e.time`'s civil calendar and ISO 8601. The nanosecond counts the fixture checks against were
+# computed independently of this code, so a wrong shift or leap rule fails rather than agreeing
+# with itself -- truncating instead of flooring fails at 22, and dropping the century rule at 34.
+$calendarPath = Join-Path $testBuild 'time-calendar-selfhost.exe'
+$calendarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_calendar\src\main.e') $repo 'x64' 'windows' $calendarPath
+if ($LASTEXITCODE -ne 0 -or $calendarWritten -ne 'executable written') { throw 'e.time calendar emission failed' }
+& $calendarPath
+if ($LASTEXITCODE -ne 0) { throw "an e.time calendar answer is wrong: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

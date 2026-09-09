@@ -1391,3 +1391,48 @@ everywhere and a suite that needs them fails for the wrong reason. The DNS path 
 the suite at all: it is verified by a scratch program against a real name, whose answer matched the
 host resolver's, and the committed fixture only requires that a name reserved never to exist fails
 — which offline is a timeout and online is a name that is not there, both correct.
+
+## D121 — the calendar is a shift, not a table, and its range is what an i64 reaches
+
+`e.time`'s five calendar conversions and its two ISO-8601 halves are the last of that fence, and
+they are pure arithmetic: no host is asked anything, so both targets run the same code and there is
+nothing to keep symmetric.
+
+The conversions are Hinnant's civil-date algorithms, which shift the year so that it begins in
+March. That moves the leap day to the end of the year, which makes the month lengths one linear
+expression instead of a table and makes the inverse the same shape as the forward direction. The
+alternative — a table of month lengths and a special case for February — is more code and has more
+places to be wrong.
+
+Every division that splits a timestamp into days floors rather than truncates, and that is the one
+thing here most likely to be got wrong quietly. A timestamp before 1970 is negative, and truncating
+toward zero puts the second before midnight in the following day: `1969-12-31T23:59:59Z` becomes
+the first of January. The fixture pins it — with the floor replaced by the plain operator the run
+fails at 22, and with the century rule dropped from the leap test it fails at 34.
+
+The representable range is a consequence, not a policy. An i64 of nanoseconds reaches 106751 days
+either side of the epoch, so the calendar spans 1677 to 2262 and `from_civil` refuses anything
+outside it rather than wrapping. The bound is set one day inside that, at 106750, because a whole
+day of nanoseconds added to the last day passes what an i64 holds — one refused day at each extreme
+is better than an addition that overflows.
+
+Three things are refused rather than repaired. The thirty-first of February is `Invalid`, not the
+first of March: the fence's clamping rule is about adding months and years, where the day has to
+land somewhere, not about being handed a date that is not one. A leap second is `Invalid`, because
+a count of nanoseconds since the epoch has no gap to put one in and folding it into the following
+second would answer a question nobody asked. And a civil time with no zone is `Invalid` on parse —
+a `Timestamp` is an instant, and a local time without an offset does not name one.
+
+`format_iso8601` is fixed width, always UTC and always nine fractional digits, so
+`1970-01-01T00:00:00.000000000Z` is thirty bytes for every representable timestamp and a caller can
+size a buffer without asking. Every year in range is four digits, which is what makes that true. A
+buffer too small gets an empty string rather than a truncated timestamp that would read like a real
+one. `parse_iso8601` takes that shape and the shorter spellings of the same instant — the fraction
+absent or one to nine digits, the zone `Z` or `+HH:MM` — and marks as a ceiling what it does not
+take: ordinal dates, week dates, a comma for the decimal point, and the basic format with no
+separators are all ISO 8601 and none of them are here.
+
+`e.time` stays at `surface: "partial"` even though the whole fence is now written, because the
+calendar needs helpers of its own and spec 12 has no visibility — a module held to its fence exactly
+could not have them. That is the same reason `e.io` and `e.sync` sit there, and the file's own
+header used to say the five conversions were missing; it now says why the surface reads as it does.

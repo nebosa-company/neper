@@ -685,6 +685,13 @@ resolve_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$resolve_written" = 'executable written' ]
 chmod +x "$test_build/os-resolve-selfhost"
 "$test_build/os-resolve-selfhost"
+# `e.time`'s civil calendar and ISO 8601. The nanosecond counts the fixture checks against were
+# computed independently of this code, so a wrong shift or leap rule fails rather than agreeing
+# with itself -- truncating instead of flooring fails at 22, and dropping the century rule at 34.
+calendar_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_calendar/src/main.e" "$repo" x64 linux "$test_build/time-calendar-selfhost")
+[ "$calendar_written" = 'executable written' ]
+chmod +x "$test_build/time-calendar-selfhost"
+"$test_build/time-calendar-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
