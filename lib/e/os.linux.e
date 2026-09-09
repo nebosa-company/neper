@@ -107,7 +107,9 @@ const SYS_BIND: usize = 49usize
 const SYS_LISTEN: usize = 50usize
 const SYS_GETSOCKNAME: usize = 51usize
 const SYS_MMAP: usize = 9usize
+const SYS_NANOSLEEP: usize = 35usize
 const SYS_KILL: usize = 62usize
+const SYS_FLOCK: usize = 73usize
 const SYS_PIPE2: usize = 293usize
 const SYS_MUNMAP: usize = 11usize
 const SYS_MSYNC: usize = 26usize
@@ -173,6 +175,16 @@ const PIPE_CLOEXEC: usize = 524288usize
 
 // The signal that cannot be caught or ignored, which is what `kill` means here.
 const SIGKILL: usize = 9usize
+
+const LOCK_SH: usize = 1usize
+const LOCK_EX: usize = 2usize
+const LOCK_NB: usize = 4usize
+const LOCK_UN: usize = 8usize
+
+// ponytail: a timeout is polled, because neither host offers one -- ten milliseconds between
+// tries, which is a compromise between waking up for nothing and waiting past the deadline.
+// A host call that took a deadline would replace the loop entirely.
+const LOCK_POLL_NS: i64 = 10000000i64
 
 // The page size for this architecture. Every syscall number in this file already pins it to
 // x86-64, where the base page is four kilobytes whatever else the kernel maps in larger ones,
@@ -1096,6 +1108,55 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
         at += 1usize
     }
     ret address
+}
+
+type FileLock = struct { raw: usize }
+
+// `flock` is per open file description, so two `open` calls on one path contend and two
+// handles from one call do not -- which is what makes a lock worth having between processes
+// and nearly meaningless within one.
+//
+// These locks are advisory: nothing stops a reader that never asked. The fence says as much,
+// and this host is the reason it is worded that way.
+fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
+    var lock: FileLock = zero
+    var operation = LOCK_SH
+    if exclusive { operation = LOCK_EX }
+    // A negative timeout waits, which the host does natively.
+    if timeout_ns < 0i64 {
+        let waited = syscall(SYS_FLOCK, file.raw, operation, 0usize, 0usize, 0usize, 0usize)
+        if waited < 0isize { ret (lock, from_errno(waited)) }
+        lock.raw = file.raw
+        ret (lock, ok)
+    }
+    var remaining = timeout_ns
+    while true {
+        let result = syscall(SYS_FLOCK, file.raw, operation | LOCK_NB, 0usize, 0usize, 0usize, 0usize)
+        if result >= 0isize {
+            lock.raw = file.raw
+            ret (lock, ok)
+        }
+        // Anything but "someone else holds it" is the caller's answer rather than another try.
+        if result != -11isize { ret (lock, from_errno(result)) }
+        if remaining <= 0i64 {
+            // Zero asked for one attempt, which is `WouldBlock`; a deadline that ran out is a
+            // `Timeout`. Two different questions deserve two different answers.
+            if timeout_ns == 0i64 { ret (lock, WouldBlock) }
+            ret (lock, Timeout)
+        }
+        var slice = LOCK_POLL_NS
+        if remaining < slice { slice = remaining }
+        var pause: TimeSpec = zero
+        pause.seconds = slice / NANOSECONDS_PER_SECOND
+        pause.nanoseconds = slice % NANOSECONDS_PER_SECOND
+        let slept = syscall(SYS_NANOSLEEP, mem.address_of(&pause), 0usize, 0usize, 0usize, 0usize, 0usize)
+        remaining = remaining - slice
+    }
+    ret (lock, Failed)
+}
+
+fn file_unlock(lock: FileLock) -> err {
+    ret from_errno(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
 }
 
 fn page_size() -> usize {

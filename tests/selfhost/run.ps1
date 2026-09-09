@@ -630,6 +630,19 @@ $processWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $processWritten -ne 'executable written') { throw 'e.os process primitive emission failed' }
 & $processPath
 if ($LASTEXITCODE -ne 0) { throw "an e.os process primitive answered wrongly: exit $LASTEXITCODE" }
+# `e.os`'s file locks. Two separate opens of one path are two separate claims, so one process
+# is enough to make a lock actually block -- and the timed case is checked against the clock,
+# since neither host has a timeout and the wait is polled.
+$lockScratch = Join-Path $testBuild 'lock-scratch'
+New-Item -ItemType Directory -Force -Path $lockScratch | Out-Null
+$lockPath = Join-Path $testBuild 'os-lock-selfhost.exe'
+$lockWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_lock\src\main.e') $repo 'x64' 'windows' $lockPath
+if ($LASTEXITCODE -ne 0 -or $lockWritten -ne 'executable written') { throw 'e.os file lock emission failed' }
+Push-Location $lockScratch
+& $lockPath
+$lockExit = $LASTEXITCODE
+Pop-Location
+if ($lockExit -ne 0) { throw "an e.os file lock answered wrongly: exit $lockExit" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

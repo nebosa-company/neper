@@ -1240,3 +1240,32 @@ true on both.
 `os.stdin` is in the fence and is **not** seeded, so it cannot be named from source at all —
 found while giving the child its streams. `stdout` and `stderr` are there; `stdin` was simply
 never added.
+
+## D117 — a lock timeout is polled, because neither host has one
+
+`e.os` gains `file_lock` and `file_unlock`. `FileLock` needs nothing but the handle, since both
+hosts unlock through the same one they locked — so the fence's single `raw` is enough, unlike
+`Poller` and `Watch`.
+
+`timeout_ns` follows `wait_u32`'s convention: negative waits, zero attempts once. Neither host
+offers a lock call that takes a deadline, so a **positive** timeout is a loop of non-blocking
+attempts ten milliseconds apart. That is a real compromise and it is marked as one in both
+files; a host call that took a deadline would replace the loop entirely.
+
+The three outcomes are three different answers rather than one. Acquiring is `ok`; a zero
+timeout that found the lock held is `WouldBlock`, because one attempt was all that was asked
+for; a positive timeout that ran out is `Timeout`. Collapsing the last two would lose the
+distinction between "not right now" and "not within the time I gave you", which is the only
+thing a caller can act on differently.
+
+The two hosts differ in strength and the fence already allows it. Linux `flock` is advisory —
+nothing stops a reader that never asked — while Windows locks are mandatory and the system
+refuses the read itself. The fence's "cooperative unless the platform explicitly guarantees
+more" is worded for exactly this, and Linux is why.
+
+The fixture makes the contention real instead of describing it: a lock belongs to the open file
+description, not to the process, so two separate opens of one path contend and one process is
+enough to make a lock block. Exclusion is pinned by removing it — with the exclusive flag never
+set, the second claim succeeds and the fixture fails at exit 21 on both hosts — and the polled
+wait is timed against the clock, so a timeout that returned at once fails rather than passing
+for the right reason by accident.

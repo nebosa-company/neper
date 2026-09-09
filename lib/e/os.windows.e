@@ -770,6 +770,15 @@ extern fn raw_virtual_free(address: *u8, size: usize, kind: u32) -> i32
 @import("kernel32.dll", "GetSystemInfo")
 extern fn raw_system_info(info: *SystemInfo)
 
+@import("kernel32.dll", "LockFileEx")
+extern fn raw_lock_file(file: usize, flags: u32, reserved: u32, length_low: u32, length_high: u32, overlapped: *Overlapped) -> i32
+
+@import("kernel32.dll", "UnlockFileEx")
+extern fn raw_unlock_file(file: usize, reserved: u32, length_low: u32, length_high: u32, overlapped: *Overlapped) -> i32
+
+@import("kernel32.dll", "Sleep")
+extern fn raw_sleep(milliseconds: u32)
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -914,6 +923,16 @@ const MEM_RELEASE: u32 = 32768u32
 // becomes 128 plus its number, so the two do not agree on the value and a caller can only
 // rely on it being a failure.
 const KILL_EXIT_CODE: u32 = 9u32
+
+const LOCKFILE_FAIL_IMMEDIATELY: u32 = 1u32
+const LOCKFILE_EXCLUSIVE_LOCK: u32 = 2u32
+
+// ERROR_LOCK_VIOLATION: someone else holds it, which is the one failure worth trying again.
+const ERROR_LOCK_VIOLATION: u32 = 33u32
+
+// ponytail: a timeout is polled, because neither host offers one -- ten milliseconds between
+// tries. A host call that took a deadline would replace the loop entirely.
+const LOCK_POLL_MS: u32 = 10u32
 
 const RAW_IP4_SIZE: usize = 16usize
 const RAW_IP6_SIZE: usize = 28usize
@@ -1409,6 +1428,57 @@ fn from_socket_error() -> err {
 // correct.
 // Asked rather than assumed. This host is not tied to one architecture by anything else in
 // this file, so the page size is read from it.
+type FileLock = struct { raw: usize }
+
+// The whole file, however long it is: offset zero and a length of every byte there could be.
+// Locking a range is not in the fence, so there is nothing for a caller to get wrong here.
+fn lock_whole(file: usize, flags: u32) -> i32 {
+    var region: Overlapped = zero
+    ret raw_lock_file(file, flags, 0u32, 4294967295u32, 4294967295u32, &region)
+}
+
+// Unlike the other host these locks are mandatory: a reader that never asked is refused by the
+// system rather than merely being impolite. The fence allows a host to guarantee more than
+// cooperation, and this is the one that does.
+fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
+    var lock: FileLock = zero
+    var flags = 0u32
+    if exclusive { flags = LOCKFILE_EXCLUSIVE_LOCK }
+    // A negative timeout waits, which the host does natively.
+    if timeout_ns < 0i64 {
+        if lock_whole(file.raw, flags) == 0i32 { ret (lock, from_last_error()) }
+        lock.raw = file.raw
+        ret (lock, ok)
+    }
+    var remaining = timeout_ns
+    while true {
+        if lock_whole(file.raw, flags | LOCKFILE_FAIL_IMMEDIATELY) != 0i32 {
+            lock.raw = file.raw
+            ret (lock, ok)
+        }
+        let code = raw_last_error()
+        // Anything but "someone else holds it" is the caller's answer rather than another try.
+        if code != ERROR_LOCK_VIOLATION { ret (lock, from_last_error()) }
+        if remaining <= 0i64 {
+            // Zero asked for one attempt, which is `WouldBlock`; a deadline that ran out is a
+            // `Timeout`. Two different questions deserve two different answers.
+            if timeout_ns == 0i64 { ret (lock, WouldBlock) }
+            ret (lock, Timeout)
+        }
+        var slice = i64(LOCK_POLL_MS) * 1000000i64
+        if remaining < slice { slice = remaining }
+        raw_sleep(u32(slice / 1000000i64))
+        remaining = remaining - slice
+    }
+    ret (lock, Failed)
+}
+
+fn file_unlock(lock: FileLock) -> err {
+    var region: Overlapped = zero
+    if raw_unlock_file(lock.raw, 0u32, 4294967295u32, 4294967295u32, &region) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
 fn page_size() -> usize {
     var info: SystemInfo = zero
     raw_system_info(&info)

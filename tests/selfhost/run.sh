@@ -660,6 +660,15 @@ process_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$process_written" = 'executable written' ]
 chmod +x "$test_build/os-process-selfhost"
 "$test_build/os-process-selfhost"
+# `e.os`'s file locks. Two separate opens of one path are two separate claims, so one process
+# is enough to make a lock actually block -- and the timed case is checked against the clock,
+# since neither host has a timeout and the wait is polled.
+lock_scratch="$test_build/lock-scratch"
+mkdir -p "$lock_scratch"
+lock_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_lock/src/main.e" "$repo" x64 linux "$test_build/os-lock-selfhost")
+[ "$lock_written" = 'executable written' ]
+chmod +x "$test_build/os-lock-selfhost"
+(cd "$lock_scratch" && "$test_build/os-lock-selfhost")
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
