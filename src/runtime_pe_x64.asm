@@ -656,10 +656,19 @@ read_size_ready:
     jmp read_done
 read_failed:
     call qword ptr [__imp_GetLastError]
+    ; ERROR_BROKEN_PIPE: the writer is gone, which is the end of the stream and not a
+    ; failure. Without this a pipe read reports an error where the other platform reports
+    ; zero bytes, so a caller reading to the end cannot be written once.
+    cmp eax, 109
+    je read_at_end
     mov ecx, eax
     call np_error
     mov edx, eax
     xor eax, eax
+    jmp read_done
+read_at_end:
+    xor eax, eax
+    xor edx, edx
 read_done:
     add rsp, 48
     pop rbx
