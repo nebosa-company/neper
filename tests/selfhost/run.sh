@@ -706,6 +706,13 @@ mem_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$mem_written" = 'executable written' ]
 chmod +x "$test_build/mem-slices-selfhost"
 "$test_build/mem-slices-selfhost"
+# `e.meta`'s two type-valued questions. What is checked is that the answer is a type in every
+# respect -- a comptime argument to anything taking one, including the other question and a generic
+# of the caller's own -- since a function that merely returned something would pass a weaker test.
+meta_type_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/meta_types/src/main.e" "$repo" x64 linux "$test_build/meta-types-selfhost")
+[ "$meta_type_written" = 'executable written' ]
+chmod +x "$test_build/meta-types-selfhost"
+"$test_build/meta-types-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

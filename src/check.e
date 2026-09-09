@@ -4185,6 +4185,66 @@ type FormatterInfo = struct {
     spelling: str,
 }
 
+// The two `e.meta` questions that answer with a type rather than a number or a name.
+// Both take one type and give back one of its parts, so both are a single step: no
+// walking, and no aggregate is built.
+//
+// `element_type` is for an array or a slice. Section 9 also names a vector, which this
+// compiler has no kind for yet; `str` is deliberately not one of them -- section 9 lists
+// array, slice and vector, and a string is its own kind here.
+fn derived_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, err) {
+    let (receiver_index, has_receiver) = first_node_child(tree, node)
+    if !has_receiver { ret (invalid_type(), InvalidType) }
+    let receiver = tree.nodes[receiver_index]
+    if receiver.kind != .BracketPostfix { ret (invalid_type(), InvalidType) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count != 2usize { ret (invalid_type(), InvalidType) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (invalid_type(), InvalidType) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.meta") { ret (invalid_type(), InvalidType) }
+    var wants_element = false
+    var matched = false
+    if same(member, "element_type") {
+        wants_element = true
+        matched = true
+    }
+    if same(member, "backing_type") { matched = true }
+    if !matched { ret (invalid_type(), InvalidType) }
+    // The subject is itself a type expression, so one of these may name the other: the
+    // element of an array of enums has a backing type of its own.
+    let (subject, subject_error) = comptime_type(c, g, tree, module_index, type_index)
+    if subject_error != ok { ret (invalid_type(), subject_error) }
+    if wants_element {
+        if subject.kind != .Array && subject.kind != .Slice { ret (invalid_type(), InvalidType) }
+        if !subject.has_element || subject.element >= c.type_count { ret (invalid_type(), InvalidType) }
+        ret (c.types[subject.element], ok)
+    }
+    let (aggregate_index, found_aggregate) = aggregate_for_type(c, subject)
+    if !found_aggregate { ret (invalid_type(), InvalidType) }
+    let aggregate = c.aggregates[aggregate_index]
+    // An enum's backing type, and a union enum's is its tag's -- which is the same field,
+    // because a union enum is an enum with payloads hung off it.
+    if aggregate.kind != .Enum && aggregate.kind != .TaggedUnion { ret (invalid_type(), InvalidType) }
+    if aggregate.backing_type.kind != .Integer { ret (invalid_type(), InvalidType) }
+    ret (aggregate.backing_type, ok)
+}
+
 fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
     let node = tree.nodes[node_index]
     let text = g.modules[module_index].text
@@ -4229,6 +4289,15 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         let named = make_type(.Named, name, target_module)
         let (canonical, canonical_error) = canonical_type(c, named)
         ret (canonical, canonical_error)
+    }
+    // `meta.element_type[T]()` and `meta.backing_type[E]()`: comptime expressions whose
+    // type is `type`, which section 9 says stand wherever a type is written. They are
+    // answered here rather than in `check_call` because there is nothing for a call like
+    // this to produce -- a type is not a value, so the only place it can be asked for is
+    // where a type is expected.
+    if node.kind == .CallExpr {
+        let (derived, derived_error) = derived_type(c, g, tree, module_index, node)
+        ret (derived, derived_error)
     }
     // `St[i64]` in a comptime argument slot. The parser gives a bracket expression
     // here rather than a type node -- the two spellings differ only in where they are

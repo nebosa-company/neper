@@ -688,6 +688,14 @@ $memWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\lin
 if ($LASTEXITCODE -ne 0 -or $memWritten -ne 'executable written') { throw 'e.mem slice emission failed' }
 & $memPath
 if ($LASTEXITCODE -ne 0) { throw "an e.mem answer is wrong: exit $LASTEXITCODE" }
+# `e.meta`'s two type-valued questions. What is checked is that the answer is a type in every
+# respect -- a comptime argument to anything taking one, including the other question and a generic
+# of the caller's own -- since a function that merely returned something would pass a weaker test.
+$metaTypePath = Join-Path $testBuild 'meta-types-selfhost.exe'
+$metaTypeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\meta_types\src\main.e') $repo 'x64' 'windows' $metaTypePath
+if ($LASTEXITCODE -ne 0 -or $metaTypeWritten -ne 'executable written') { throw 'e.meta type emission failed' }
+& $metaTypePath
+if ($LASTEXITCODE -ne 0) { throw "an e.meta type answer is wrong: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

@@ -1534,3 +1534,48 @@ guess right: `{u32, u32}` is 8 bytes aligned 4, and `{u8, u64}` is 16 aligned 8 
 padding and then a tail round-up. It also checks what must hold for any type whatever the rules are:
 a non-zero power-of-two alignment, a size no smaller than it, and a size that is a whole number of
 it.
+
+## D124 — a type-valued answer belongs in `comptime_type`, which is not the type grammar
+
+`meta.element_type` and `meta.backing_type` return a type rather than a number or a name, and the
+question that decides where they live is where such an answer can be written. Spec section 9 says a
+comptime expression of type `type` stands wherever a type is written, so the implementation is a
+`CallExpr` case in `comptime_type` — the one function that evaluates a type expression — and nothing
+in `check_call` at all. There is no value for a call like this to produce, so the only place it can
+be asked for is a place expecting a type.
+
+That makes both of them one step each with no aggregate built: `element_type` reads the element a
+slice or array type already carries, and `backing_type` reads the `backing_type` an `Aggregate`
+already holds, which is populated for a union enum as well as an enum because a union enum is an
+enum with payloads hung off it. Vectors are named by section 9 and skipped, since this compiler has
+no kind for one; `str` is skipped because section 9's list is array, slice and vector and a string is
+its own kind here.
+
+An earlier note on the readiness page said these two were blocked because "the type grammar admits
+no call". That was half right and worth correcting rather than repeating. The type grammar is not
+what evaluates a comptime argument: `mem.size_of[meta.element_type[[]u8]()]()` reaches
+`comptime_type` directly and works, as does nesting one question in the other, and as does
+instantiating a generic of the caller's own with the answer — which is how a caller reaches a value
+of the element type without having a name for it. What the type grammar does block is the direct
+spelling, `var x: meta.element_type[T]() = zero`, which is a syntax error: that grammar accepts a
+dotted name (`FIELD.ty`, which is why `meta.get`'s return type works) and not a call. Fixing it
+means accepting the lossless `Name[...]()` node in a type position and letting name resolution
+classify it, which section 14's first invariant requires anyway — the parser may not consult the
+symbol table. That is a parser change and it is not in this increment.
+
+`Field` and `Member` are deliberately still not declared, and the reason is worth stating so it is
+not mistaken for an oversight. Declaring the names is trivial and would move the readiness count by
+two, but a name that resolves to a type nobody can use is worth less than an honest gap.
+`ComptimeKind.Field` and `.Member` already exist, and a `Field` value is created in exactly one
+place: the binding of an unrolled `for` over `meta.fields[T]()`. For a user declaration to take
+`[FIELD: Field]` as section 9 promises, six sites need work — the seeds; the comptime-parameter
+declaration, which today maps an annotation to `.Type`, `.Str` or `.Integer` and rejects everything
+else; the generic-argument loop, which handles only those same kinds and would have to accept a
+comptime binding as an argument; `comptime_type`'s `FieldExpr` case, which resolves `FIELD.ty` for a
+binding but not for a parameter; the member reader behind `FIELD.name`, `.offset` and `.size`; and
+lowering's offset path. That is a feature, not the tail of this one.
+
+`link/meta_types` is written to fail if the answer were merely a number that happened to be right:
+it nests the two questions, asks `kind` of each answer, and hands each to a generic that returns a
+value of that type. A signed backing carries a negative value through that generic, which a size
+comparison alone would not have shown.
