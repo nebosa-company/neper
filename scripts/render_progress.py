@@ -406,8 +406,10 @@ __GROUPS__
     The loader is the one place <code>os.linux.e</code> names a library instead of a syscall,
     which costs nothing until it is called: an <code>@import</code> that is never reached adds
     neither <code>PT_INTERP</code> nor <code>DT_NEEDED</code>, so a binary that opens no library
-    stays freestanding (D128). What is left is the error-detail pair D109 leaves deliberately
-    unwritten.
+    stays freestanding (D128). What is left is <code>last_error_detail</code> alone:
+    <code>error_message</code> needed none of the ambient state D109 withheld, so it is written,
+    and the missing one waits on a module-scope <code>var</code> in the compiler &mdash; Windows
+    already keeps that state per thread, and Linux has nowhere to put it (D129).
     <code>e.io</code> is the subset the compiler needs.
     <code>e.io</code> no longer waits on <code>printf</code>: that expands, over a
     4&nbsp;KiB buffer of its own drained through a generated sink.</p>
