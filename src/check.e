@@ -4134,11 +4134,16 @@ type AtomicInfo = struct {
     function: Function,
 }
 
+// The compile-time questions that answer with a constant and emit nothing. Three of
+// them are `e.meta`'s reflection; the last two are `e.mem`'s layout, which is the same
+// shape -- a type in, a number out -- and so takes the same path.
 type MetaQuery = enum u8 {
     None,
     Kind,
     ArrayLen,
     TypeName,
+    SizeOf,
+    AlignOf,
 }
 
 type MetaInfo = struct {
@@ -4147,6 +4152,9 @@ type MetaInfo = struct {
     result: Type,
     value: usize,
     name: str,
+    // Only the layout questions use this: their answer is not a constant this side of
+    // lowering, so what travels is the type itself.
+    subject: Type,
     function: Function,
 }
 
@@ -4729,11 +4737,22 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     let base = tree.nodes[base_index]
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
-    if !found_member || !same(g.modules[target_module].name, "e.meta") { ret (info, ok) }
+    if !found_member { ret (info, ok) }
     var query: MetaQuery = .None
-    if same(member, "kind") { query = .Kind }
-    if same(member, "array_len") { query = .ArrayLen }
-    if same(member, "type_name") { query = .TypeName }
+    if same(g.modules[target_module].name, "e.meta") {
+        if same(member, "kind") { query = .Kind }
+        if same(member, "array_len") { query = .ArrayLen }
+        if same(member, "type_name") { query = .TypeName }
+    }
+    // `e.mem`'s two layout questions come here rather than to a path of their own: a
+    // type goes in, a number comes out, and nothing survives to run time. What is
+    // different is that the number is not known here -- `layout` is built on `check`,
+    // so the size of a type is something only lowering can ask for, which is already
+    // why `bitcast` compares its widths there.
+    if same(g.modules[target_module].name, "e.mem") {
+        if same(member, "size_of") { query = .SizeOf }
+        if same(member, "align_of") { query = .AlignOf }
+    }
     if query == .None { ret (info, ok) }
     info.matched = true
     info.query = query
@@ -4758,6 +4777,11 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     if query == .ArrayLen {
         if subject.kind != .Array { ret (info, InvalidType) }
         info.value = subject.array_length
+        info.result = make_type(.Integer, "usize", target_module)
+        ret (info, ok)
+    }
+    if query == .SizeOf || query == .AlignOf {
+        info.subject = subject
         info.result = make_type(.Integer, "usize", target_module)
         ret (info, ok)
     }
@@ -5469,6 +5493,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.meta_value = reflection.value
                             info.meta_name = reflection.name
                             info.meta_result = reflection.result
+                            info.meta_subject = reflection.subject
                             has_function = true
                             ret (info, ok)
                         }

@@ -699,6 +699,13 @@ glob_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$glob_written" = 'executable written' ]
 chmod +x "$test_build/path-glob-selfhost"
 "$test_build/path-glob-selfhost"
+# `e.mem`'s last four. `copy` and `eq` are ordinary generic code -- the first of `e.mem` that is
+# not an intrinsic -- while `size_of` and `align_of` cannot be written at all and answer with a
+# constant, which the fixture pins by standing one in an array length.
+mem_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/mem_slices/src/main.e" "$repo" x64 linux "$test_build/mem-slices-selfhost")
+[ "$mem_written" = 'executable written' ]
+chmod +x "$test_build/mem-slices-selfhost"
+"$test_build/mem-slices-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

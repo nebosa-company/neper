@@ -680,6 +680,14 @@ $globWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $globWritten -ne 'executable written') { throw 'e.path glob emission failed' }
 & $globPath
 if ($LASTEXITCODE -ne 0) { throw "an e.path glob answer is wrong: exit $LASTEXITCODE" }
+# `e.mem`'s last four. `copy` and `eq` are ordinary generic code -- the first of `e.mem` that is
+# not an intrinsic -- while `size_of` and `align_of` cannot be written at all and answer with a
+# constant, which the fixture pins by standing one in an array length.
+$memPath = Join-Path $testBuild 'mem-slices-selfhost.exe'
+$memWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\mem_slices\src\main.e') $repo 'x64' 'windows' $memPath
+if ($LASTEXITCODE -ne 0 -or $memWritten -ne 'executable written') { throw 'e.mem slice emission failed' }
+& $memPath
+if ($LASTEXITCODE -ne 0) { throw "an e.mem answer is wrong: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

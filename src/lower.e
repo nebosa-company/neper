@@ -254,6 +254,19 @@ fn emit_reflection(c: *check.Checker, call: check.CallInfo, builder: *nir.Builde
         results.values[0usize] = name
         ret ok
     }
+    // `e.mem`'s layout pair. The checker carried the type rather than the answer,
+    // because the answer is here: `layout` is built on `check` and cannot be asked
+    // from inside it.
+    if call.meta_query == .SizeOf || call.meta_query == .AlignOf {
+        let (subject, subject_error) = layout.type_info(c, call.meta_subject)
+        if subject_error != ok { ret subject_error }
+        var answer = subject.size
+        if call.meta_query == .AlignOf { answer = subject.alignment }
+        let (layout_instruction, layout_value, layout_error) = nir.emit(builder, .ConstInteger, call.meta_result, true, answer, token)
+        if layout_error != ok { ret layout_error }
+        results.values[0usize] = layout_value
+        ret ok
+    }
     let (value_instruction, value, value_error) = nir.emit(builder, .ConstInteger, call.meta_result, true, call.meta_value, token)
     if value_error != ok { ret value_error }
     results.values[0usize] = value

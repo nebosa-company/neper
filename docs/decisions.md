@@ -1492,3 +1492,45 @@ the fence is specific and where implementations differ. Making `**` consume a co
 matching zero fails the run at 40. The step limit is pinned in the fixture itself rather than by
 removal: the same pattern is `TooLarge` with a budget of eight steps and answers correctly with
 none, so the limit is what stopped it and not the pattern.
+
+## D123 — `e.mem`'s last four split in half, and the layering decides where each one lives
+
+`copy`, `eq`, `size_of` and `align_of` complete `e.mem`, and they are two different kinds of thing.
+`copy` and `eq` are ordinary generic code — the first of that module written in source rather than
+supplied by the compiler — while `size_of` and `align_of` cannot be written at all, because only the
+compiler knows a layout.
+
+`copy` takes the shorter of its two slices. The fence gives it no return value, so there is no way
+to report a length mismatch; the alternative to copying what fits is trapping on a question the
+caller has no way to ask about. `eq` requires an element type that `==` accepts, which is every
+scalar, pointer and enum and no struct — `eq[SomeStruct]` is `InvalidOperator` reported inside
+`lib/e/mem.e`. That is the right constraint rather than a gap: comparing structs as bytes would
+compare their padding and call two equal values different. The wart is where the diagnostic points,
+which is the library and not the call.
+
+The other two needed less compiler work than expected, because `e.meta`'s scalar reflection already
+established the shape: a type goes in, a constant comes out, and nothing survives to run time. So
+they join `MetaQuery` instead of getting a path of their own, and `emit_reflection` already knew how
+to lower a constant. No new `CallInfo` field either — `meta_subject` exists and is guarded by a
+different flag, which matters while the bootstrap's declaration table sits at its limit.
+
+What forced the one real design choice is the layering. `layout` is built on `check`, so the checker
+cannot ask what a type's size is; it carries the *type* and lowering emits the number. `bitcast`
+already compares its widths there for exactly this reason, so this is the established direction and
+not a workaround.
+
+That layering has a consequence worth writing down because it is invisible until tried:
+**`mem.size_of[T]()` cannot stand in an array length.** `[mem.size_of[u32]()]u8` is
+`Unsupported`, because an array length is evaluated while checking and the size is only reachable
+while lowering. The value is a genuine compile-time constant in the code that comes out — no call is
+emitted — but it is not one the checker can use. Making it usable there means moving layout under
+check, which is a much larger change than this increment, and supporting it for scalars only would
+be worse than not supporting it: a rule that holds for `u32` and not for a struct is harder to learn
+than a rule that never holds. I asserted the opposite in the fixture, both suites failed on it, and
+the assertion is now the comment that records why.
+
+`link/mem_slices` pins the layouts that would expose a wrong rule rather than the ones anyone would
+guess right: `{u32, u32}` is 8 bytes aligned 4, and `{u8, u64}` is 16 aligned 8 — seven bytes of
+padding and then a tail round-up. It also checks what must hold for any type whatever the rules are:
+a non-zero power-of-two alignment, a size no smaller than it, and a size that is a whole number of
+it.
