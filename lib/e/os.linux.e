@@ -1144,6 +1144,8 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
     ret address
 }
 
+type Lib = struct { raw: usize }
+
 type ProcGroup = struct { raw: usize }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
 
@@ -1417,6 +1419,72 @@ fn kill(p: Proc) -> err {
 // takes the whole reservation and rejects a size.
 fn release(p: *u8, n: usize) -> err {
     ret from_errno(syscall(SYS_MUNMAP, mem.address_of(p), n, 0usize, 0usize, 0usize, 0usize))
+}
+
+// The one place this file names a library rather than a syscall number. There is no system call
+// that loads a shared object: that is the dynamic linker's work, and `dlopen` is how it is asked.
+// D32 keeps `e.os` on Linux over raw syscalls so that a neper binary needs no loader, and this
+// does not spend that -- an `@import` that is never called adds neither `PT_INTERP` nor
+// `DT_NEEDED`, so only a program that actually opens a library pays for one, which it must.
+@import("libc.so.6", "dlopen")
+extern fn raw_dlopen(name: *const u8, flags: i32) -> usize
+
+@import("libc.so.6", "dlsym")
+extern fn raw_dlsym(handle: usize, symbol: *const u8) -> usize
+
+@import("libc.so.6", "dlclose")
+extern fn raw_dlclose(handle: usize) -> i32
+
+// `RTLD_NOW`: every symbol resolved when the object is opened rather than at first use, so a
+// missing one is this call's failure and not a crash somewhere later.
+const RTLD_NOW: i32 = 2i32
+
+// A NUL-terminated copy as a slice rather than as an address: `c_string` answers with an address
+// for the syscalls, and a foreign declaration wants a pointer, which only a slice can spell.
+fn c_string_bytes(a: *mem.Arena, text: str) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    let (buffer, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
+    if allocation_error != ok { ret (nothing, OutOfMemory) }
+    var at = 0usize
+    while at < text.len {
+        buffer[at] = text[at]
+        at += 1usize
+    }
+    buffer[text.len] = 0u8
+    ret (buffer, ok)
+}
+
+// The name is passed as it was given, which is what the fence means by "as in `@import`": that
+// takes `libc.so.6` and `kernel32` alike and adds nothing to either, so neither does this.
+fn dlopen(a: *mem.Arena, name: str) -> (Lib, err) {
+    var library: Lib = zero
+    if name.len == 0usize { ret (library, NotFound) }
+    let (bytes, bytes_error) = c_string_bytes(a, name)
+    if bytes_error != ok { ret (library, bytes_error) }
+    let handle = raw_dlopen(&bytes[0usize], RTLD_NOW)
+    // `dlerror` says why, and there is nowhere to keep it (D109): a name that will not load is
+    // reported as one that was not found.
+    if handle == 0usize { ret (library, NotFound) }
+    library.raw = handle
+    ret (library, ok)
+}
+
+// The address of a symbol, which is all a library can answer with. Turning it into something
+// callable is `dlsym`'s, and only the compiler can do that.
+fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) {
+    if sym.len == 0usize { ret (0usize, NotFound) }
+    let (bytes, bytes_error) = c_string_bytes(a, sym)
+    if bytes_error != ok { ret (0usize, bytes_error) }
+    let address = raw_dlsym(l.raw, &bytes[0usize])
+    // A symbol may legitimately resolve to zero on this host, and `dlerror` is the only way to
+    // tell that from a failure -- there is nowhere to keep it (D109), so zero is not found.
+    if address == 0usize { ret (0usize, NotFound) }
+    ret (address, ok)
+}
+
+fn dlclose(l: Lib) -> err {
+    if raw_dlclose(l.raw) != 0i32 { ret Failed }
+    ret ok
 }
 
 fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {

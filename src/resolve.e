@@ -298,6 +298,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "stderr", .Value, .Intrinsic)
     try seed(r, g, "e.os", "readdir", .Value, .Intrinsic)
     try seed(r, g, "e.os", "spawn", .Value, .Intrinsic)
+    try seed(r, g, "e.os", "dlsym", .Value, .Intrinsic)
     try seed(r, g, "e.os", "wait", .Value, .Intrinsic)
     try seed(r, g, "e.os", "exit", .Value, .Intrinsic)
     try seed(r, g, "e.os", "args", .Value, .Intrinsic)

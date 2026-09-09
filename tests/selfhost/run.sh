@@ -720,6 +720,13 @@ field_param_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$field_param_written" = 'executable written' ]
 chmod +x "$test_build/meta-field-param-selfhost"
 "$test_build/meta-field-param-selfhost"
+# `e.os`'s loader. Each host opens the library it already depends on, so nothing needs installing.
+# `dlsym` answers with a value of the caller's own `extern fn` type, which is why the fixture calls
+# what it gets: a result passed the wrong way would be rubbish rather than a wrong number.
+dl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_dl/src/main.e" "$repo" x64 linux "$test_build/os-dl-selfhost")
+[ "$dl_written" = 'executable written' ]
+chmod +x "$test_build/os-dl-selfhost"
+"$test_build/os-dl-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

@@ -704,6 +704,14 @@ $fieldParamWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $fieldParamWritten -ne 'executable written') { throw 'e.meta field parameter emission failed' }
 & $fieldParamPath
 if ($LASTEXITCODE -ne 0) { throw "an e.meta comptime value crossing a call is wrong: exit $LASTEXITCODE" }
+# `e.os`'s loader. Each host opens the library it already depends on, so nothing needs installing.
+# `dlsym` answers with a value of the caller's own `extern fn` type, which is why the fixture calls
+# what it gets: a result passed the wrong way would be rubbish rather than a wrong number.
+$dlPath = Join-Path $testBuild 'os-dl-selfhost.exe'
+$dlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_dl\src\main.e') $repo 'x64' 'windows' $dlPath
+if ($LASTEXITCODE -ne 0 -or $dlWritten -ne 'executable written') { throw 'e.os loader emission failed' }
+& $dlPath
+if ($LASTEXITCODE -ne 0) { throw "an e.os loader call answered wrongly: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

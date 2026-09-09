@@ -4174,6 +4174,9 @@ type CallInfo = struct {
     mem_cast: bool,
     mem_bitcast: bool,
     mem_address: bool,
+    // `os.dlsym[F]`. The call that is made is the variant's own address lookup; what this flag
+    // changes is only the type of its first result, which is `cast` as it is for the three above.
+    dl_symbol: bool,
     formatter: bool,
     formatter_arena: bool,
     formatter_verbs: usize,
@@ -4862,6 +4865,51 @@ fn formattable_type(c: *Checker, ty: Type, kind: FormatVerb) -> bool {
 // `mem.cast[*Foo](p)`. The call names no declared function, so it is recognised
 // here the way `mem.alloc[T]` is, and both its argument and its comptime type have
 // to be pointers. The value itself is unchanged: lowering hands the operand back.
+// Section 8's `os.dlsym[F]`, whose answer is a value of the caller's own `extern fn` type. That
+// is the one thing a library cannot do for itself: section 8 bans manufacturing a callable
+// address and D96 bans integer-to-pointer, so the retype belongs to the compiler. Everything
+// else about the call is ordinary -- the variant's `dl_lookup` finds the address with the same
+// arguments, and only the first result's type is this intrinsic's doing.
+fn dl_symbol_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (CastInfo, err) {
+    var info: CastInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (info, ok) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.os") || !same(member, "dlsym") { ret (info, ok) }
+    info.matched = true
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let (wanted, wanted_error) = comptime_type(c, g, tree, module_index, type_index)
+    if wanted_error != ok { ret (info, wanted_error) }
+    // The fence requires an `extern fn` type, and a function type is the only thing an address
+    // may become: anything else would be manufacturing a value out of one.
+    if wanted.kind != .Function { ret (info, InvalidType) }
+    // The variant supplies the lookup. A target whose `e.os` has none cannot answer this at all,
+    // which is `Unsupported` rather than a missing name.
+    let (lookup_index, has_lookup) = find_function(c, target_module, "dl_lookup")
+    if !has_lookup { ret (info, Unsupported) }
+    info.function = c.functions[lookup_index]
+    info.target = wanted
+    ret (info, ok)
+}
+
 fn cast_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (CastInfo, err) {
     var info: CastInfo = zero
     if receiver.kind != .BracketPostfix { ret (info, ok) }
@@ -5726,6 +5774,13 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.alloc_arena = allocation.arena_type
                             info.mem_alloc = true
                         } else {
+                        let (symbol, symbol_error) = dl_symbol_info(c, g, tree, module_index, receiver)
+                        if symbol_error != ok { ret (info, symbol_error) }
+                        if symbol.matched {
+                            info.function = symbol.function
+                            info.cast = symbol.target
+                            info.dl_symbol = true
+                        } else {
                         let (conversion, conversion_error) = cast_info(c, g, tree, module_index, receiver)
                         if conversion_error != ok { ret (info, conversion_error) }
                         if conversion.matched {
@@ -5754,6 +5809,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, template_index)
                             if specialize_error != ok { ret (info, specialize_error) }
                             info.function = c.functions[specialized_index]
+                        }
                         }
                         }
                         }
@@ -6341,6 +6397,9 @@ fn function_return(c: *Checker, function: Function, index: usize) -> (Type, err)
 }
 
 fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
+    // The address the lookup answers with, under the type the caller asked for. The second
+    // result is the lookup's own `err` and is read from its signature like any other.
+    if call.dl_symbol && index == 0usize { ret (call.cast, ok) }
     if call.indirect {
         let (signature, has_signature) = function_signature_of(c, call.indirect_type)
         if !has_signature { ret (invalid_type(), InvalidType) }

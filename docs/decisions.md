@@ -1711,3 +1711,49 @@ fixture at 109 with `MissingContext`.
 
 That closes the last gap `e.meta` had. What remains in the reflection row is not a gap in section 9's
 surface: `Field` and `Member` cannot be inferred, only written, and nothing asks for them to be.
+
+## D128 — the loader group, and why Linux was never blocked
+
+`dlopen`, `dlsym` and `dlclose` complete `e.os`. Every earlier note in this repository, and my own
+reasoning about it, said the Linux half was blocked: there is no syscall that loads a shared object,
+so `e.os` would have to name libc, which contradicts D32's raw-syscall rule and gives up the
+freestanding ELF that D13 stages first. Two measurements retire that argument.
+
+`@import("libc.so.6", ...)` already works on Linux and always has — `link/extern_import` binds six
+libc symbols through `DT_NEEDED` and a `GLOB_DAT` slot, and passes in the suite. There was never any
+missing linker work. And an `@import` that is **never called** adds neither `PT_INTERP` nor
+`DT_NEEDED`: an executable declaring one and not using it comes out freestanding, which was checked
+with `readelf` rather than assumed. So the three externs in `os.linux.e` cost nothing for every
+program that does not open a library, and a program that does open one needs a loader by definition.
+D32's purpose is that a neper binary need not depend on libc, and that is intact; what it cannot
+mean is that a call with no syscall behind it must go unimplemented.
+
+`dlopen` and `dlclose` are ordinary source in both variants — `LoadLibraryW`/`FreeLibrary` on
+Windows, which spec section 8's own table already assigns to kernel32, and `dlopen`/`dlclose` from
+libc on Linux. The name is passed through unchanged, which is what "as in `@import`" says: that
+takes `kernel32` and `libc.so.6` alike and adds nothing to either.
+
+`dlsym[F]` is the one that needed the compiler, and less of it than expected. Section 8 bans
+manufacturing a callable address and D96 bans integer-to-pointer, so a library cannot turn the
+address a lookup returns into something callable — but nothing about *finding* the address needs the
+compiler. So each variant supplies an ordinary `dl_lookup(a, l, sym) -> (usize, err)`, and the
+checker points `dlsym[F]` at it and overrides the type of the first result. The call, its arguments
+and its lowering are all ordinary; the retype is the whole of the intrinsic. `F` must be a function
+type, which is section 8's "must be an `extern fn` type", and is the only thing an address may
+become.
+
+Doing that found a real code-generation bug that had nothing to do with the loader.
+`register_return_type` in `lower.e` decides whether a result comes back in a register or through a
+memory slot, and it listed `.Pointer` but not `.Function`. With the first result retyped to a
+function, the **caller** computed a return slot while `dl_lookup`, compiled from its own
+`(usize, err)` signature, returned in registers. Two sides disagreeing about that read each other's
+rubbish — and it looked like success, because the first call's slot was freshly zeroed and an `err`
+of zero is `ok`. Only a second call in the same function, reading a dirty slot, showed it, and the
+error it produced matched none of the nine `e.os` errors. A function type is an address and belongs
+in a register exactly as a pointer does; one line fixes it, and it fixes it for any function that
+returns a function pointer, not only this one.
+
+That is the third time this session that a wrong answer arrived as a plausible one — after the
+unwidened narrow `extern` return and `munmap` succeeding on an unmapped range. The pattern is worth
+the name: check the second call, not the first, whenever a result travels through memory the caller
+allocated.

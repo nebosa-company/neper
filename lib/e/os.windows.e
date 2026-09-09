@@ -97,6 +97,8 @@ type NotifyHeader = struct { next: u32, action: u32, name_length: u32 }
 // completion signals.
 type Overlapped = struct { status: usize, transferred: usize, offset: u32, offset_high: u32, event: usize }
 
+type Lib = struct { raw: usize }
+
 type ProcGroup = struct { raw: usize }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
 
@@ -857,6 +859,17 @@ extern fn raw_free_environment_strings(block: *u8) -> i32
 
 @import("kernel32.dll", "GetStdHandle")
 extern fn raw_std_handle(which: u32) -> usize
+
+@import("kernel32.dll", "LoadLibraryW")
+extern fn raw_load_library(name: *const u16) -> usize
+
+// The only call here whose string is bytes rather than units: a symbol name is ASCII and there
+// is no wide form of this one to prefer.
+@import("kernel32.dll", "GetProcAddress")
+extern fn raw_proc_address(library: usize, symbol: *const u8) -> usize
+
+@import("kernel32.dll", "FreeLibrary")
+extern fn raw_free_library(library: usize) -> i32
 
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
@@ -1918,6 +1931,50 @@ fn release(p: *u8, n: usize) -> err {
 // remember that it has been: D109 is why this file keeps no ambient state to hold a flag.
 // The call is reference counted, so asking again is cheap and asking once per socket is
 // correct.
+// A NUL-terminated byte copy, which `GetProcAddress` wants where every other call here wants
+// units. `widen` is the other direction and cannot serve.
+fn narrow_c_string(a: *mem.Arena, text: str) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    let (buffer, allocation_error) = mem.alloc[u8](a, text.len + 1usize)
+    if allocation_error != ok { ret (nothing, OutOfMemory) }
+    var at = 0usize
+    while at < text.len {
+        buffer[at] = text[at]
+        at += 1usize
+    }
+    buffer[text.len] = 0u8
+    ret (buffer, ok)
+}
+
+// The name is passed as it was given, which is what the fence means by "as in `@import`": that
+// takes `kernel32` and `libc.so.6` alike and adds nothing to either, so neither does this.
+fn dlopen(a: *mem.Arena, name: str) -> (Lib, err) {
+    var library: Lib = zero
+    if name.len == 0usize { ret (library, NotFound) }
+    let (wide_name, wide_name_error) = widen(a, name)
+    if wide_name_error != ok { ret (library, wide_name_error) }
+    let handle = raw_load_library(&wide_name[0usize])
+    if handle == 0usize { ret (library, from_last_error()) }
+    library.raw = handle
+    ret (library, ok)
+}
+
+// The address of a symbol, which is all a library can answer with. Turning it into something
+// callable is `dlsym`'s, and only the compiler can do that.
+fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) {
+    if sym.len == 0usize { ret (0usize, NotFound) }
+    let (bytes, bytes_error) = narrow_c_string(a, sym)
+    if bytes_error != ok { ret (0usize, bytes_error) }
+    let address = raw_proc_address(l.raw, &bytes[0usize])
+    if address == 0usize { ret (0usize, from_last_error()) }
+    ret (address, ok)
+}
+
+fn dlclose(l: Lib) -> err {
+    if raw_free_library(l.raw) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
 fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
     var socket: Socket = zero
     var data: WsaData = zero
