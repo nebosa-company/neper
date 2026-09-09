@@ -672,6 +672,14 @@ $calendarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $calendarWritten -ne 'executable written') { throw 'e.time calendar emission failed' }
 & $calendarPath
 if ($LASTEXITCODE -ne 0) { throw "an e.time calendar answer is wrong: exit $LASTEXITCODE" }
+# `e.path`'s globs, which are pure matching and touch no filesystem. The boundary between `*`
+# and a whole `**` component is what the fixture spends most of itself on -- making `**` consume a
+# component instead of matching zero fails at 40.
+$globPath = Join-Path $testBuild 'path-glob-selfhost.exe'
+$globWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\path_glob\src\main.e') $repo 'x64' 'windows' $globPath
+if ($LASTEXITCODE -ne 0 -or $globWritten -ne 'executable written') { throw 'e.path glob emission failed' }
+& $globPath
+if ($LASTEXITCODE -ne 0) { throw "an e.path glob answer is wrong: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

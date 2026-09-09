@@ -1436,3 +1436,59 @@ separators are all ISO 8601 and none of them are here.
 calendar needs helpers of its own and spec 12 has no visibility — a module held to its fence exactly
 could not have them. That is the same reason `e.io` and `e.sync` sit there, and the file's own
 header used to say the five conversions were missing; it now says why the surface reads as it does.
+
+## D122 — a glob is two nested matchers, and the outer one is the reason `**` exists
+
+`e.path`'s `glob` and `glob_match` complete that fence. They are pure matching: a pattern that
+matches says two strings correspond, never that anything exists, which is what the fence means by
+"matching proves no filesystem containment".
+
+The structure follows from one line of the fence: `*` and `?` match within a component and a whole
+`**` component matches zero or more components. So there are two matchers, one nested in the other
+— the outer one walks components and the inner one walks bytes — and `*` cannot cross a separator
+because the inner matcher is never given one. Any implementation that matches the whole path as a
+single string has to special-case separators everywhere instead.
+
+Both matchers backtrack the same way, with two cursors rather than recursion: on a mismatch the last
+star gives up one more unit and the scan resumes just after it. That needs no stack, which matters
+because `glob_match` takes no arena and must allocate nothing. It is also what the step limit is
+for — this shape is quadratic on patterns like `*a*a*a*a*b` against a long run of `a`, and the fence
+says work-limit exhaustion is `TooLarge` and never a quiet `false`.
+
+A zero limit means no limit, for both `max_steps` and `max_pattern_bytes`. The alternative reading —
+that a zeroed `GlobOptions` permits no work at all — would make the default value refuse every
+pattern, and a caller who wants a budget can say so.
+
+Three consequences of the fence that are worth writing down because they surprise:
+
+A `/` cannot appear inside a bracket class. The pattern is cut into components before any class is
+read, so `a[/]b` is the two components `a[` and `]b`, and the first has an unterminated class — the
+pattern is refused at compile time rather than never matching. That is stronger than the fence
+requires and it is the only self-consistent reading of "pattern separators are `/`".
+
+`**` only means "zero or more components" as an entire component. Inside one, as in `a**b`, it is
+just a run of stars and stays inside that component, because that is what "a whole `**` component"
+says.
+
+Empty components and `.` are skipped in both the pattern and the path, so `a//b`, `a/b/` and `./a/b`
+all match `a/b`. This is not normalization creeping in — `.` and `./x` name the same relative path,
+and a matcher that disagreed would be answering a different question than the caller asked. `..` is
+the opposite case and is `Invalid` on both sides, since asking about a parent is asking about
+containment.
+
+Case folding is asked for and never assumed, including inside a class: a range holds a byte if it
+holds it as written or, when folding, if the other case of it falls inside. Folding the bounds
+instead would quietly turn `[A-z]` into something else while leaving `[0-9]` alone, which is a worse
+kind of wrong than not folding at all.
+
+The pattern is copied into the arena rather than referenced, so a `Glob` does not depend on the
+caller keeping their string alive. `glob_next` is a second component walker beside the existing
+`next_component`, which the older functions use: this one reports whether it found anything instead
+of answering with an empty string, and it skips what a glob skips. Changing the old one would have
+changed `normalize` and `relative` for no reason.
+
+`link/path_glob` spends most of itself on the boundary between the wildcards, since that is where
+the fence is specific and where implementations differ. Making `**` consume a component instead of
+matching zero fails the run at 40. The step limit is pinned in the fixture itself rather than by
+removal: the same pattern is `TooLarge` with a budget of eight steps and answers correctly with
+none, so the limit is what stopped it and not the pattern.

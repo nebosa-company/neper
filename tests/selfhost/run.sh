@@ -692,6 +692,13 @@ calendar_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$calendar_written" = 'executable written' ]
 chmod +x "$test_build/time-calendar-selfhost"
 "$test_build/time-calendar-selfhost"
+# `e.path`'s globs, which are pure matching and touch no filesystem. The boundary between `*`
+# and a whole `**` component is what the fixture spends most of itself on -- making `**` consume a
+# component instead of matching zero fails at 40.
+glob_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/path_glob/src/main.e" "$repo" x64 linux "$test_build/path-glob-selfhost")
+[ "$glob_written" = 'executable written' ]
+chmod +x "$test_build/path-glob-selfhost"
+"$test_build/path-glob-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
