@@ -1325,3 +1325,22 @@ the inherited `PATH` and the run fails at 83 on both hosts; with both `setpgid` 
 Linux the terminate finds no group and fails at 32. What is not checked is containment of a
 grandchild, which cannot be observed from outside without an identity the parent has no way to
 learn.
+
+## D119 — `stdin` is source, and the three standard streams no longer come from one place
+
+`stdout` and `stderr` are seeded intrinsics backed by runtime assembly, written before `e.os`
+was source at all. `stdin` was in the fence and had never been supplied, and the cheapest way to
+supply it now is a function in each variant: descriptor zero on Linux, `GetStdHandle` on Windows.
+The alternative was two more assembly stubs and a third seed, for three lines of behaviour.
+
+So the three streams are asymmetric in provenance and identical in effect. That is worth naming
+because it looks like an oversight from either side: a reader of `src/resolve.e` sees two of the
+three seeded, and a reader of a variant sees one of the three written. Neither is wrong, and the
+seeded pair is not worth moving — a seeded name cannot also be declared in a variant, so moving
+them means editing the runtime, the seeds, `lower.e`'s name mapping and both link paths to change
+nothing observable.
+
+`link/os_process` compares the three against each other rather than against a constant, since
+what the fence promises is three distinct streams and what a wrong constant does is answer with
+the neighbouring one. Both fixtures that spawn a child now name `os.stdin()` where they used to
+carry a comment saying they could not.

@@ -1,4 +1,5 @@
-// `e.os`'s pipe, page size, reservation release, `file_handle` and `kill`.
+// `e.os`'s pipe, page size, reservation release, the standard streams, `file_handle`
+// and `kill`.
 //
 // `kill` needs a child, and the only program this fixture can be sure exists is itself: it
 // spawns its own image with an argument, and the child blocks until it is killed. The block
@@ -64,6 +65,12 @@ fn main(a: *mem.Arena) -> err {
     if os.release(reserved, size * 4usize) != ok { os.exit(22i32) }
     if os.commit(reserved, size) == ok { os.exit(23i32) }
 
+    // --- The three standard streams, which are three different things. Comparing them is what
+    // catches a wrong constant: `stdin` asked for with `stdout`'s number answers with `stdout`,
+    // and every read from it would then be a read of the wrong stream.
+    if os.file_handle(os.stdin()).raw == os.file_handle(os.stdout()).raw { os.exit(25i32) }
+    if os.file_handle(os.stdin()).raw == os.file_handle(os.stderr()).raw { os.exit(26i32) }
+
     // --- A pipe, written at one end and read at the other.
     let (reading, writing, pipe_error) = os.pipe()
     if pipe_error != ok { os.exit(30i32) }
@@ -105,9 +112,8 @@ fn main(a: *mem.Arena) -> err {
     var argv: [2]str = zero
     argv[0usize] = image
     argv[1usize] = "np-child"
-    // `os.stdin` is in the fence and is not seeded, so it cannot be named here. The child
-    // never reads, so its input is left as it comes.
     var streams: os.Stdio = zero
+    streams.stdin = os.stdin()
     streams.stdout = os.stdout()
     streams.stderr = os.stderr()
     let (child, spawn_error) = os.spawn(a, argv[..], streams)

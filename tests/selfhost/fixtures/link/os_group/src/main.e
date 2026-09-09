@@ -55,10 +55,10 @@ fn child_argv(a: *mem.Arena, image: str, marker: str) -> ([]str, err) {
     ret (argv, ok)
 }
 
-// The three streams a child is given. `os.stdin` is in the fence and is not seeded, so it
-// cannot be named here; a stream left unset is the parent's own on both hosts.
+// The three streams a child is given, which here are this process's own.
 fn child_streams() -> os.Stdio {
     var streams: os.Stdio = zero
+    streams.stdin = os.stdin()
     streams.stdout = os.stdout()
     streams.stderr = os.stderr()
     ret streams

@@ -1994,6 +1994,15 @@ fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {
     ret ok
 }
 
+// The handle the host started this process with. `stdout` and `stderr` are intrinsics from
+// before `e.os` was written as source; this one never was, so it is written here rather than
+// added to the runtime on two platforms.
+fn stdin() -> File {
+    var file: File = zero
+    file.raw = raw_std_handle(STD_INPUT)
+    ret file
+}
+
 // A poller takes a `Handle`, and a `File` and a `Socket` are different types with the same
 // thing inside them. These two are the whole of the conversion.
 fn file_handle(f: File) -> Handle {
