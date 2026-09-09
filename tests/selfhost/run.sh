@@ -654,6 +654,12 @@ watch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$watch_written" = 'executable written' ]
 chmod +x "$test_build/os-watch-selfhost"
 (cd "$watch_scratch" && "$test_build/os-watch-selfhost")
+# `e.os`'s pipe, page size, reservation release and `kill`. The child `kill` needs is this
+# fixture's own image spawned again, which is the only program it can be sure exists.
+process_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_process/src/main.e" "$repo" x64 linux "$test_build/os-process-selfhost")
+[ "$process_written" = 'executable written' ]
+chmod +x "$test_build/os-process-selfhost"
+"$test_build/os-process-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

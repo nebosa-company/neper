@@ -107,6 +107,8 @@ const SYS_BIND: usize = 49usize
 const SYS_LISTEN: usize = 50usize
 const SYS_GETSOCKNAME: usize = 51usize
 const SYS_MMAP: usize = 9usize
+const SYS_KILL: usize = 62usize
+const SYS_PIPE2: usize = 293usize
 const SYS_MUNMAP: usize = 11usize
 const SYS_MSYNC: usize = 26usize
 const SYS_INOTIFY_ADD_WATCH: usize = 254usize
@@ -163,6 +165,20 @@ const MAP_SHARED: usize = 1usize
 const MAP_FIXED: usize = 16usize
 
 const MS_SYNC: usize = 4usize
+
+// The same bit as `O_CLOEXEC`, which is a `u64` here because `openat2` reads its flags from a
+// structure while every other call takes them in a register. Each API names it for itself,
+// which is what the several spellings of 524288 in this file are.
+const PIPE_CLOEXEC: usize = 524288usize
+
+// The signal that cannot be caught or ignored, which is what `kill` means here.
+const SIGKILL: usize = 9usize
+
+// The page size for this architecture. Every syscall number in this file already pins it to
+// x86-64, where the base page is four kilobytes whatever else the kernel maps in larger ones,
+// so there is nothing to ask -- and no way to ask without reading the startup stack, which a
+// library does not have.
+const PAGE_SIZE: usize = 4096usize
 
 const IN_CLOEXEC: usize = 524288usize
 
@@ -1080,6 +1096,36 @@ fn decode_address(raw: RawAddress) -> SocketAddress {
         at += 1usize
     }
     ret address
+}
+
+fn page_size() -> usize {
+    ret PAGE_SIZE
+}
+
+// Both ends at once, close-on-exec for the same reason every other descriptor here is: a
+// pipe that leaked into an unrelated child would keep its write end open and the reader would
+// never see the end of it.
+fn pipe() -> (File, File, err) {
+    var reading: File = zero
+    var writing: File = zero
+    var pair: [2]i32 = zero
+    let result = syscall(SYS_PIPE2, mem.address_of(&pair[0usize]), PIPE_CLOEXEC, 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (reading, writing, from_errno(result)) }
+    reading.raw = usize(pair[0usize])
+    writing.raw = usize(pair[1usize])
+    ret (reading, writing, ok)
+}
+
+// `SIGKILL`, so this is not a request. What `wait` then reports is 128 plus the signal, which
+// is the fence's rule and not this call's choice.
+fn kill(p: Proc) -> err {
+    ret from_errno(syscall(SYS_KILL, p.raw, SIGKILL, 0usize, 0usize, 0usize, 0usize))
+}
+
+// The other half of `reserve`. The length matters here, unlike on the host where a release
+// takes the whole reservation and rejects a size.
+fn release(p: *u8, n: usize) -> err {
+    ret from_errno(syscall(SYS_MUNMAP, mem.address_of(p), n, 0usize, 0usize, 0usize, 0usize))
 }
 
 fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {

@@ -97,6 +97,21 @@ type NotifyHeader = struct { next: u32, action: u32, name_length: u32 }
 // completion signals.
 type Overlapped = struct { status: usize, transferred: usize, offset: u32, offset_high: u32, event: usize }
 
+// `SYSTEM_INFO`. Only the page size is read, but the whole thing has to be here for the call
+// to have somewhere to put it -- and for `page_size` to be at the offset it is.
+type SystemInfo = struct {
+    oem_id: u32,
+    page_size: u32,
+    minimum_address: usize,
+    maximum_address: usize,
+    active_mask: usize,
+    processor_count: u32,
+    processor_type: u32,
+    allocation_granularity: u32,
+    processor_level: u16,
+    processor_revision: u16,
+}
+
 // What a watch remembers. The buffer and the `OVERLAPPED` both have to outlive the call that
 // starts a read, because the host writes into them while nothing is waiting -- so they live in
 // the arena with the rest of the state rather than in a frame.
@@ -743,6 +758,18 @@ extern fn raw_overlapped_result(handle: usize, overlapped: *Overlapped, returned
 @import("kernel32.dll", "CancelIo")
 extern fn raw_cancel_io(handle: usize) -> i32
 
+@import("kernel32.dll", "CreatePipe")
+extern fn raw_create_pipe(reading: *usize, writing: *usize, security: usize, size: u32) -> i32
+
+@import("kernel32.dll", "TerminateProcess")
+extern fn raw_terminate_process(process: usize, code: u32) -> i32
+
+@import("kernel32.dll", "VirtualFree")
+extern fn raw_virtual_free(address: *u8, size: usize, kind: u32) -> i32
+
+@import("kernel32.dll", "GetSystemInfo")
+extern fn raw_system_info(info: *SystemInfo)
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -878,6 +905,15 @@ const WATCH_BUFFER: usize = 8192usize
 
 // Asynchronous use has to be asked for when the handle is opened.
 const FILE_FLAG_OVERLAPPED: u32 = 1073741824u32
+
+// `MEM_RELEASE`, which gives back a whole reservation and insists the size be zero -- the
+// reservation's own length is what it uses.
+const MEM_RELEASE: u32 = 32768u32
+
+// What `kill` reports as the exit code. The other host has no say in this: there a signal
+// becomes 128 plus its number, so the two do not agree on the value and a caller can only
+// rely on it being a failure.
+const KILL_EXIT_CODE: u32 = 9u32
 
 const RAW_IP4_SIZE: usize = 16usize
 const RAW_IP6_SIZE: usize = 28usize
@@ -1371,6 +1407,45 @@ fn from_socket_error() -> err {
 // remember that it has been: D109 is why this file keeps no ambient state to hold a flag.
 // The call is reference counted, so asking again is cheap and asking once per socket is
 // correct.
+// Asked rather than assumed. This host is not tied to one architecture by anything else in
+// this file, so the page size is read from it.
+fn page_size() -> usize {
+    var info: SystemInfo = zero
+    raw_system_info(&info)
+    if info.page_size == 0u32 { ret 4096usize }
+    ret usize(info.page_size)
+}
+
+// Both ends at once. The handles are not inheritable: a pipe that leaked into an unrelated
+// child would keep its write end open and the reader would never see the end of it.
+fn pipe() -> (File, File, err) {
+    var reading: File = zero
+    var writing: File = zero
+    var read_handle = 0usize
+    var write_handle = 0usize
+    if raw_create_pipe(&read_handle, &write_handle, 0usize, 0u32) == 0i32 {
+        ret (reading, writing, from_last_error())
+    }
+    reading.raw = read_handle
+    writing.raw = write_handle
+    ret (reading, writing, ok)
+}
+
+// Not a request: this host has no signal to send, so the process is ended and told what its
+// exit code is.
+fn kill(p: Proc) -> err {
+    if raw_terminate_process(p.raw, KILL_EXIT_CODE) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
+// The other half of `reserve`. `MEM_RELEASE` takes the whole reservation and refuses a size,
+// so the length the caller gave is not passed on -- which is the one place this and the other
+// host disagree about what a release is.
+fn release(p: *u8, n: usize) -> err {
+    if raw_virtual_free(p, 0usize, MEM_RELEASE) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
 fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
     var socket: Socket = zero
     var data: WsaData = zero

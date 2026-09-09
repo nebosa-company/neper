@@ -1204,3 +1204,39 @@ read never returns. Measured on the mount this repository lives on, which is why
 runner puts the fixture on a local filesystem and why the fence now says a caller pointed at
 arbitrary paths should not assume a watch will fire. It cost a hung suite run to find, which is
 the most expensive way this session found anything.
+
+## D116 — a broken pipe is the end of a stream, not a failure
+
+`e.os` gains `pipe`, `kill`, `release` and `page_size`: four small primitives, both hosts.
+`pipe` and `kill` are the two D15 named for the `neper test` runner, which is why they are worth
+having before the larger families.
+
+**The finding is in `os.read`, not in the new calls.** On Linux a read of a pipe whose write end
+has closed returns zero bytes. On Windows `ReadFile` fails with `ERROR_BROKEN_PIPE`, and the
+runtime turned that into an error — so a caller reading a pipe to its end could not be written
+once. That is now mapped to zero bytes and no error in `neper_os_read`, which is what every
+other runtime does and what the zero-byte convention already meant everywhere else. It was found
+by the fixture failing at exit 37, and fixed in the assembly rather than in the fixture, because
+a pipe whose end cannot be detected portably is a half-delivered pipe.
+
+`page_size` is asked for on Windows through `SYSTEM_INFO` and answered as a constant on Linux.
+That is not laziness on the Linux side: every syscall number in that file already pins it to
+x86-64, where the base page is four kilobytes, and there is no way to ask without reading the
+startup stack, which a library does not have. The Windows side reads offset four of the
+structure, and reading the wrong field fails the fixture at exit 11 — the power-of-two check is
+what makes a plausible-looking wrong answer visible.
+
+`release` is the one place the two hosts disagree about what a call means. Linux `munmap` takes a
+length; Windows `MEM_RELEASE` takes the whole reservation and insists the size be zero. The
+length a caller passes is therefore used on one host and dropped on the other, which is worth
+knowing before relying on a partial release.
+
+And a mistake worth recording twice, since recording it once did not stop me: **Linux `munmap` of
+an already-unmapped range succeeds.** The fixture first checked that releasing twice fails, which
+passes on Windows and not on Linux — the same trap that had already been found and written down
+during `os.syscall`. What it checks now is that the range can no longer be committed, which is
+true on both.
+
+`os.stdin` is in the fence and is **not** seeded, so it cannot be named from source at all —
+found while giving the child its streams. `stdout` and `stderr` are there; `stdin` was simply
+never added.

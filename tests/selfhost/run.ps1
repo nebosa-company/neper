@@ -623,6 +623,13 @@ Push-Location $watchScratch
 $watchExit = $LASTEXITCODE
 Pop-Location
 if ($watchExit -ne 0) { throw "an e.os watch call answered wrongly: exit $watchExit" }
+# `e.os`'s pipe, page size, reservation release and `kill`. The child `kill` needs is this
+# fixture's own image spawned again, which is the only program it can be sure exists.
+$processPath = Join-Path $testBuild 'os-process-selfhost.exe'
+$processWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_process\src\main.e') $repo 'x64' 'windows' $processPath
+if ($LASTEXITCODE -ne 0 -or $processWritten -ne 'executable written') { throw 'e.os process primitive emission failed' }
+& $processPath
+if ($LASTEXITCODE -ne 0) { throw "an e.os process primitive answered wrongly: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
