@@ -109,6 +109,8 @@ const SYS_GETSOCKNAME: usize = 51usize
 const SYS_MMAP: usize = 9usize
 const SYS_MUNMAP: usize = 11usize
 const SYS_MSYNC: usize = 26usize
+const SYS_INOTIFY_ADD_WATCH: usize = 254usize
+const SYS_INOTIFY_INIT1: usize = 294usize
 const SYS_FCNTL: usize = 72usize
 const SYS_ACCEPT4: usize = 288usize
 const SYS_EPOLL_WAIT: usize = 232usize
@@ -161,6 +163,23 @@ const MAP_SHARED: usize = 1usize
 const MAP_FIXED: usize = 16usize
 
 const MS_SYNC: usize = 4usize
+
+const IN_CLOEXEC: usize = 524288usize
+
+// What a change to a directory's contents looks like: something appeared, went, was written
+// to, or was moved in or out. The two move halves are reported separately, which is why a
+// rename arrives as a removal and an addition rather than as one event.
+const IN_MODIFY: u32 = 2u32
+const IN_MOVED_FROM: u32 = 64u32
+const IN_MOVED_TO: u32 = 128u32
+const IN_CREATE: u32 = 256u32
+const IN_DELETE: u32 = 512u32
+const IN_Q_OVERFLOW: u32 = 16384u32
+const WATCH_MASK: usize = 962usize
+
+// ponytail: one read takes at most this much at a time, so a burst larger than it arrives
+// across successive reads rather than being lost.
+const WATCH_BUFFER: usize = 8192usize
 
 const EPOLL_CLOEXEC: usize = 524288usize
 const EFD_CLOEXEC: usize = 524288usize
@@ -667,6 +686,128 @@ type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 // resolve rules without a new call. The size is passed alongside it and the kernel checks
 // both, so the layout is the ABI.
 type OpenHow = struct { flags: u64, mode: u64, resolve: u64 }
+
+type Watch = struct { state: *void }
+type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
+type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
+
+// `struct inotify_event`: sixteen bytes and then the name, whose length the header carries
+// and which the kernel pads so the next one starts aligned. The four fields are all
+// four-byte, so this needs no padding of its own.
+type InotifyHeader = struct { descriptor: i32, mask: u32, cookie: u32, name_length: u32 }
+
+// What a watch remembers: the descriptor to read from, and the directory it is watching --
+// because the kernel reports a name relative to that and `WatchEvent` wants a path.
+type WatchState = struct { descriptor: usize, base: str }
+
+fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
+    var watch: Watch = zero
+    // A recursive watch here is a watch per directory plus a table mapping each descriptor
+    // back to its path, and adding one whenever a directory appears. Until that is written
+    // this refuses, rather than watching only the top and looking like it did more.
+    if recursive { ret (watch, Unsupported) }
+    let checkpoint = mem.mark(a)
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok {
+        mem.reset(a, checkpoint)
+        ret (watch, path_error)
+    }
+    let descriptor = syscall(SYS_INOTIFY_INIT1, IN_CLOEXEC, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if descriptor < 0isize {
+        mem.reset(a, checkpoint)
+        ret (watch, from_errno(descriptor))
+    }
+    let added = syscall(SYS_INOTIFY_ADD_WATCH, usize(descriptor), path_address, WATCH_MASK, 0usize, 0usize, 0usize)
+    if added < 0isize {
+        let call_error = from_errno(added)
+        let unused = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        mem.reset(a, checkpoint)
+        ret (watch, call_error)
+    }
+    let (holder, holder_error) = mem.alloc[WatchState](a, 1usize)
+    if holder_error != ok {
+        let unused = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+        ret (watch, OutOfMemory)
+    }
+    holder[0usize].descriptor = usize(descriptor)
+    holder[0usize].base = path
+    watch.state = mem.cast[*void](&holder[0usize])
+    ret (watch, ok)
+}
+
+fn action_from_mask(mask: u32) -> WatchAction {
+    if mask & IN_Q_OVERFLOW != 0u32 { ret .Overflow }
+    if mask & IN_CREATE != 0u32 { ret .Added }
+    if mask & IN_MOVED_TO != 0u32 { ret .Added }
+    if mask & IN_DELETE != 0u32 { ret .Removed }
+    if mask & IN_MOVED_FROM != 0u32 { ret .Removed }
+    ret .Modified
+}
+
+// The name and the watched directory joined, in the caller's arena. The separator is written
+// here rather than through `e.path`, which `e.os` may not depend on.
+fn watch_path(a: *mem.Arena, base: str, name: str) -> (str, err) {
+    let (bytes, allocation_error) = mem.alloc[u8](a, base.len + 1usize + name.len)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < base.len {
+        bytes[at] = base[at]
+        at += 1usize
+    }
+    if at != 0usize && bytes[at - 1usize] != 47u8 {
+        bytes[at] = 47u8
+        at += 1usize
+    }
+    var offset = 0usize
+    while offset < name.len {
+        bytes[at + offset] = name[offset]
+        offset += 1usize
+    }
+    ret (bytes[0usize..at + name.len], ok)
+}
+
+// One read returns as many whole events as fit, and the kernel never splits one, so the walk
+// is over a buffer that always ends on a boundary.
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
+    let state = mem.cast[*WatchState](w.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    let (buffer, allocation_error) = mem.alloc[u8](a, WATCH_BUFFER)
+    if allocation_error != ok { ret (0usize, OutOfMemory) }
+    let taken = syscall(SYS_READ, state.descriptor, mem.address_of(&buffer[0usize]), WATCH_BUFFER, 0usize, 0usize, 0usize)
+    if taken < 0isize { ret (0usize, from_errno(taken)) }
+    var produced = 0usize
+    var at = 0usize
+    while at + 16usize <= usize(taken) {
+        let header = mem.cast[*InotifyHeader](&buffer[at])
+        let name_length = usize(header.name_length)
+        let mask = header.mask
+        at += 16usize
+        // The name is NUL-padded inside the length the header gave, so its own end is the
+        // first NUL rather than that length.
+        var name_end = 0usize
+        while name_end < name_length && buffer[at + name_end] != 0u8 { name_end += 1usize }
+        if produced < events.len {
+            var entry: WatchEvent = zero
+            entry.action = action_from_mask(mask)
+            if name_end != 0usize {
+                let (joined, join_error) = watch_path(a, state.base, buffer[at..at + name_end])
+                if join_error != ok { ret (produced, join_error) }
+                entry.path = joined
+            } else {
+                entry.path = state.base
+            }
+            events[produced] = entry
+            produced += 1usize
+        }
+        at += name_length
+    }
+    ret (produced, ok)
+}
+
+fn watch_close(w: Watch) -> err {
+    let state = mem.cast[*WatchState](w.state)
+    ret from_errno(syscall(SYS_CLOSE, state.descriptor, 0usize, 0usize, 0usize, 0usize, 0usize))
+}
 
 type Mapping = struct { raw: usize, address: *u8, len: usize }
 

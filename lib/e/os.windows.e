@@ -82,6 +82,166 @@ type ObjectAttributes = struct {
 
 type IoStatusBlock = struct { status: usize, information: usize }
 
+type Watch = struct { state: *void }
+type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
+type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
+
+// `FILE_NOTIFY_INFORMATION`: three four-byte fields and then the name in UTF-16, whose length
+// is in bytes. `next` is the offset to the following entry, or zero at the last one -- so the
+// walk follows it rather than assuming a stride.
+type NotifyHeader = struct { next: u32, action: u32, name_length: u32 }
+
+// What a watch remembers: the directory handle to read from, and the path it stands for --
+// because the host reports a name relative to that and `WatchEvent` wants a path.
+// `OVERLAPPED`. The event is left at zero, which is what makes the file handle the thing
+// completion signals.
+type Overlapped = struct { status: usize, transferred: usize, offset: u32, offset_high: u32, event: usize }
+
+// What a watch remembers. The buffer and the `OVERLAPPED` both have to outlive the call that
+// starts a read, because the host writes into them while nothing is waiting -- so they live in
+// the arena with the rest of the state rather than in a frame.
+type WatchState = struct {
+    directory: usize,
+    base: str,
+    recursive: bool,
+    buffer: []u8,
+    overlapped: Overlapped,
+}
+
+fn arm_watch(state: *WatchState) -> err {
+    state.overlapped.status = 0usize
+    state.overlapped.transferred = 0usize
+    state.overlapped.offset = 0u32
+    state.overlapped.offset_high = 0u32
+    state.overlapped.event = 0usize
+    var recursive_flag = 0i32
+    if state.recursive { recursive_flag = 1i32 }
+    var ignored = 0u32
+    if raw_read_changes(state.directory, &state.buffer[0usize], u32(WATCH_BUFFER), recursive_flag, WATCH_FILTER, &ignored, &state.overlapped, 0usize) == 0i32 {
+        ret from_last_error()
+    }
+    ret ok
+}
+
+fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err) {
+    var watch: Watch = zero
+    // This host would take `recursive` as a parameter and the other needs a watch per
+    // directory, so honouring it here alone would make a program that works here fail there.
+    // Both refuse until both can.
+    if recursive { ret (watch, Unsupported) }
+    let checkpoint = mem.mark(a)
+    let (name, name_error) = widen(a, path)
+    if name_error != ok {
+        mem.reset(a, checkpoint)
+        ret (watch, name_error)
+    }
+    let directory = raw_create_file(&name[0usize], DIRECTORY_ACCESS, FILE_SHARE_ALL, 0usize, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED, 0usize)
+    if directory == INVALID_HANDLE {
+        let open_error = from_last_error()
+        mem.reset(a, checkpoint)
+        ret (watch, open_error)
+    }
+    let (holder, holder_error) = mem.alloc[WatchState](a, 1usize)
+    if holder_error != ok {
+        let unused = raw_close_handle(directory)
+        ret (watch, OutOfMemory)
+    }
+    let (buffer, buffer_error) = mem.alloc[u8](a, WATCH_BUFFER)
+    if buffer_error != ok {
+        let unused = raw_close_handle(directory)
+        ret (watch, OutOfMemory)
+    }
+    holder[0usize].directory = directory
+    holder[0usize].base = path
+    holder[0usize].recursive = recursive
+    holder[0usize].buffer = buffer
+    // Armed here, so a change made before the first read is still reported.
+    let arm_error = arm_watch(&holder[0usize])
+    if arm_error != ok {
+        let unused = raw_close_handle(directory)
+        ret (watch, arm_error)
+    }
+    watch.state = mem.cast[*void](&holder[0usize])
+    ret (watch, ok)
+}
+
+fn action_from_code(action: u32) -> WatchAction {
+    if action == FILE_ACTION_ADDED { ret .Added }
+    if action == FILE_ACTION_REMOVED { ret .Removed }
+    // The two halves of a rename arrive as separate entries, so each is reported as what it
+    // is rather than guessed at: the old name going and the new one appearing.
+    if action == FILE_ACTION_RENAMED_OLD { ret .Removed }
+    if action == FILE_ACTION_RENAMED_NEW { ret .Added }
+    ret .Modified
+}
+
+// The name and the watched directory joined, in the caller's arena. The separator is written
+// here rather than through `e.path`, which `e.os` may not depend on.
+fn watch_path(a: *mem.Arena, base: str, name: *const u16, units: usize) -> (str, err) {
+    // A UTF-16 unit never becomes more than three UTF-8 bytes.
+    let (bytes, allocation_error) = mem.alloc[u8](a, base.len + 1usize + units * 3usize)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    var at = 0usize
+    while at < base.len {
+        bytes[at] = base[at]
+        at += 1usize
+    }
+    if at != 0usize && bytes[at - 1usize] != 92u8 && bytes[at - 1usize] != 47u8 {
+        bytes[at] = 92u8
+        at += 1usize
+    }
+    if units == 0usize { ret (bytes[0usize..at], ok) }
+    let converted = raw_narrow(CP_UTF8, 0u32, name, i32(units), &bytes[at], i32(units * 3usize), 0usize, 0usize)
+    if converted <= 0i32 { ret ("", Failed) }
+    ret (bytes[0usize..at + usize(converted)], ok)
+}
+
+// Waits for the read that is already outstanding, then arms the next one before returning --
+// so the gap in which a change could be missed is never open.
+fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
+    let state = mem.cast[*WatchState](w.state)
+    if events.len == 0usize { ret (0usize, ok) }
+    var returned = 0u32
+    if raw_overlapped_result(state.directory, &state.overlapped, &returned, 1i32) == 0i32 {
+        ret (0usize, from_last_error())
+    }
+    let buffer = state.buffer
+    var produced = 0usize
+    var at = 0usize
+    while at + 12usize <= usize(returned) {
+        let header = mem.cast[*NotifyHeader](&buffer[at])
+        let next = usize(header.next)
+        let action = header.action
+        let units = usize(header.name_length) / 2usize
+        if produced < events.len {
+            var entry: WatchEvent = zero
+            entry.action = action_from_code(action)
+            let names = mem.cast[*const u16](&buffer[at + 12usize])
+            let (joined, join_error) = watch_path(a, state.base, names, units)
+            if join_error != ok { ret (produced, join_error) }
+            entry.path = joined
+            events[produced] = entry
+            produced += 1usize
+        }
+        // A zero `next` is the last entry, and following it is what keeps the walk on the
+        // entries the call actually wrote rather than on a stride they do not have.
+        if next == 0usize { break }
+        at += next
+    }
+    let rearm_error = arm_watch(state)
+    if rearm_error != ok { ret (produced, rearm_error) }
+    ret (produced, ok)
+}
+
+// The outstanding read is cancelled before the handle goes, so the host is not left writing
+// into a buffer nothing is waiting for.
+fn watch_close(w: Watch) -> err {
+    let state = mem.cast[*WatchState](w.state)
+    let cancelled = raw_cancel_io(state.directory)
+    if raw_close_handle(state.directory) == 0i32 { ret from_last_error() }
+    ret ok
+}
+
 type Mapping = struct { raw: usize, address: *u8, len: usize }
 
 // `raw` carries whether the mapping may be written and nothing else. The mapping object is
@@ -567,6 +727,22 @@ extern fn raw_unmap_view(address: *u8) -> i32
 @import("kernel32.dll", "FlushViewOfFile")
 extern fn raw_flush_view(address: *u8, length: usize) -> i32
 
+// The overlapped form, and it has to be: the synchronous one starts recording when it is
+// called, so a change between opening a watch and first reading it would be lost -- where the
+// other host queues from the moment the watch exists. Arming the read at open is what makes
+// the two contracts the same.
+@import("kernel32.dll", "ReadDirectoryChangesW")
+extern fn raw_read_changes(directory: usize, buffer: *u8, length: u32, recursive: i32, filter: u32, returned: *u32, overlapped: *Overlapped, routine: usize) -> i32
+
+// With no event in the `OVERLAPPED`, the file handle itself is what completion signals, and
+// waiting for it is this call -- so no event object and no separate wait are needed while one
+// read is outstanding at a time, which is all this ever has.
+@import("kernel32.dll", "GetOverlappedResult")
+extern fn raw_overlapped_result(handle: usize, overlapped: *Overlapped, returned: *u32, block: i32) -> i32
+
+@import("kernel32.dll", "CancelIo")
+extern fn raw_cancel_io(handle: usize) -> i32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -686,6 +862,22 @@ const PAGE_READONLY: u32 = 2u32
 const PAGE_READWRITE: u32 = 4u32
 const FILE_MAP_WRITE: u32 = 2u32
 const FILE_MAP_READ: u32 = 4u32
+
+// Names appearing or going, sizes changing, and contents written: what a change to a
+// directory's contents means.
+const WATCH_FILTER: u32 = 27u32
+
+const FILE_ACTION_ADDED: u32 = 1u32
+const FILE_ACTION_REMOVED: u32 = 2u32
+const FILE_ACTION_RENAMED_OLD: u32 = 4u32
+const FILE_ACTION_RENAMED_NEW: u32 = 5u32
+
+// ponytail: one read takes at most this much, so a burst larger than it arrives across
+// successive reads rather than being lost.
+const WATCH_BUFFER: usize = 8192usize
+
+// Asynchronous use has to be asked for when the handle is opened.
+const FILE_FLAG_OVERLAPPED: u32 = 1073741824u32
 
 const RAW_IP4_SIZE: usize = 16usize
 const RAW_IP6_SIZE: usize = 28usize

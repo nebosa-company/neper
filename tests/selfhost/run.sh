@@ -641,6 +641,19 @@ mapping_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$mapping_written" = 'executable written' ]
 chmod +x "$test_build/os-mapping-selfhost"
 (cd "$mapping_scratch" && "$test_build/os-mapping-selfhost")
+# `e.os`'s directory watch over inotify. The change is made before the read, so the event has
+# to have been queued from the watch's opening rather than from the read.
+#
+# Not run under $test_build: on this machine the repository is a 9p mount, where
+# `inotify_add_watch` succeeds and returns a descriptor and then no event ever arrives -- so a
+# blocking read there waits forever. Measured, and it is why this uses a local filesystem.
+watch_scratch="${TMPDIR:-/tmp}/neper-watch-scratch"
+rm -rf "$watch_scratch"
+mkdir -p "$watch_scratch"
+watch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_watch/src/main.e" "$repo" x64 linux "$test_build/os-watch-selfhost")
+[ "$watch_written" = 'executable written' ]
+chmod +x "$test_build/os-watch-selfhost"
+(cd "$watch_scratch" && "$test_build/os-watch-selfhost")
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

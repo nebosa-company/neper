@@ -1154,3 +1154,53 @@ holds its own reference — so the field is free for the one thing that must be 
 `mapping_bytes_mut` refuses a read-only mapping rather than handing back a slice whose first
 write would fault. A refusal is an error a caller can act on; a fault is not. Removing the
 check fails the fixture at exit 15.
+
+## D115 — a watch begins when it opens, on both hosts
+
+`e.os` gains `watch_open`, `watch_read` and `watch_close`. `Watch` changes from
+`struct { raw: usize }` to `struct { state: *void }`, for the reason `Poller` did in D111:
+each host reports a change by a **name relative to what is being watched**, so the watch has
+to remember the path in order to give `WatchEvent` one, and `watch_read` is not passed it.
+
+**The contract this row is really about is when watching starts.** Linux queues from the
+moment `inotify_add_watch` returns. Windows records only from the moment
+`ReadDirectoryChangesW` is called — so the synchronous form loses any change made between
+opening a watch and first reading it, which is exactly what a caller writes: open, act, read.
+Matching Linux means arming the read at open, which means the overlapped form. With no event
+in the `OVERLAPPED` the file handle itself is what completion signals, so
+`GetOverlappedResult` is the only extra call needed; no event object and no separate wait,
+because there is never more than one read outstanding. `watch_read` waits for the outstanding
+read and arms the next one **before** returning, so the gap is never open.
+
+That is the whole reason the Windows half is not three lines, and it is pinned: with the
+arming removed, the file created before the first read is not reported and the fixture fails
+at exit 22.
+
+`recursive` asks for `Unsupported` on **both**, and this is a deliberate refusal rather than
+a missing half. Windows would take it as a parameter; Linux needs a watch per directory, a
+table mapping each descriptor back to its path, and a new watch whenever a directory appears.
+Honouring it on the host where it is free would make a program that works there fail on the
+other — the asymmetry trap, discovered late rather than at the first call. Both refuse until
+the Linux side is written.
+
+A rename arrives as a removal and an addition rather than as `Renamed`. Both hosts report the
+two halves separately — `IN_MOVED_FROM`/`IN_MOVED_TO` with a cookie, and
+`RENAMED_OLD_NAME`/`RENAMED_NEW_NAME` — and pairing them means matching across a batch
+boundary and holding the unmatched half somewhere. Reporting what each half actually is costs
+a caller nothing it cannot reconstruct, where guessing would.
+
+The fixture uses **one watch per action**. A single change is not one event everywhere:
+creating a file is an addition on both and a modification as well on at least one, so a watch
+that had seen two actions leaves a read holding whichever came first. A fresh watch has an
+empty queue, which is what makes one read exact — and it is why the first version of this
+fixture failed at exit 32 on Windows for a reason that had nothing to do with the watch. The
+path is checked for being longer than the bare name as well as ending with it, since a name
+with nothing prepended ends the same way; dropping the base fails Linux at exit 21.
+
+A watch also needs a filesystem that reports changes, and finding out costs more than it
+should: on a 9p mount `inotify_add_watch` **succeeds and returns a descriptor**, and then no
+event ever arrives. So the failure is not an error a caller can see — the watch opens, and the
+read never returns. Measured on the mount this repository lives on, which is why the Linux
+runner puts the fixture on a local filesystem and why the fence now says a caller pointed at
+arbitrary paths should not assume a watch will fire. It cost a hung suite run to find, which is
+the most expensive way this session found anything.

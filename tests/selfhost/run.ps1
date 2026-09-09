@@ -610,6 +610,19 @@ Push-Location $mappingScratch
 $mappingExit = $LASTEXITCODE
 Pop-Location
 if ($mappingExit -ne 0) { throw "an e.os mapping call answered wrongly: exit $mappingExit" }
+# `e.os`'s directory watch. The change is made before the read, which is the case that says
+# watching begins when the watch opens: this host records only from the first read unless the
+# read is armed at open, so an unarmed version misses the file it was watching for.
+$watchScratch = Join-Path $testBuild 'watch-scratch'
+New-Item -ItemType Directory -Force -Path $watchScratch | Out-Null
+$watchPath = Join-Path $testBuild 'os-watch-selfhost.exe'
+$watchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_watch\src\main.e') $repo 'x64' 'windows' $watchPath
+if ($LASTEXITCODE -ne 0 -or $watchWritten -ne 'executable written') { throw 'e.os watch emission failed' }
+Push-Location $watchScratch
+& $watchPath
+$watchExit = $LASTEXITCODE
+Pop-Location
+if ($watchExit -ne 0) { throw "an e.os watch call answered wrongly: exit $watchExit" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

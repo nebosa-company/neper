@@ -1512,7 +1512,7 @@ type Handle = struct { raw: usize }
 type Socket = struct { raw: usize }
 type Poller = struct { state: *void }
 type Mapping = struct { raw: usize, address: *u8, len: usize }
-type Watch = struct { raw: usize }
+type Watch = struct { state: *void }
 type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
 type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
 type Clock = enum u8 { Wall, Monotonic }
@@ -1701,7 +1701,17 @@ thread-local runtime state. `last_error_detail` copies that state into an explic
 value and must be called before another `e.os` operation on that thread. Higher-level
 APIs may expose a detail snapshot while ordinary callers retain cheap `err`/`try`.
 `operation` and `subject` are borrowed caller strings, never inferred global state;
-`error_message` is the only locale-dependent rendering operation in `e.os`.
+`error_message` is the only locale-dependent rendering operation in `e.os`. A `Watch` carries a
+pointer for the same reason a `Poller` does: the host reports a change by a name relative to
+what is being watched, so the watch has to remember the path to give `WatchEvent` one, and
+that lives in the arena `watch_open` is given. A watch needs a filesystem that
+reports changes, and one that does not is **not** an error a caller can see: opening the watch
+succeeds and the read simply never returns. A network or translation layer — a 9p or DrvFS
+mount among them — is the case, so a caller that may be pointed at arbitrary paths should not
+assume a watch will ever fire. `recursive` is not yet honoured on either
+host and asks for `Unsupported`: one of them takes it as a parameter and the other needs a
+watch per directory and a table mapping each back to its path, so honouring it on one alone
+would make a program that works there fail on the other.
 
 
 These new primitives are the reviewed platform boundary for SL05/SL06, not permission
