@@ -395,9 +395,8 @@ __GROUPS__
     <code>os.syscall</code> on Linux and <code>kernel32</code> through
     <code>@import</code> on Windows, which is what D32 said all along (D97). What is left
     is a DNS client, the three <code>dl*</code> calls &mdash; which want an intrinsic with a
-    dependent return type, and a Linux answer that does not contradict D32 &mdash; the
-    error-detail pair D109 leaves deliberately unwritten, and <code>stdin</code>, which is in
-    the fence and has never been seeded.
+    dependent return type, and a Linux answer that does not contradict D32 &mdash; and the
+    error-detail pair D109 leaves deliberately unwritten.
     <code>e.io</code> is the subset the compiler needs.
     <code>e.io</code> no longer waits on <code>printf</code>: that expands, over a
     4&nbsp;KiB buffer of its own drained through a generated sink.</p>
