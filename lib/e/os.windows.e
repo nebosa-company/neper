@@ -1497,12 +1497,6 @@ fn from_socket_error() -> err {
     ret Failed
 }
 
-// Winsock insists on being started before anything else touches it, and there is nowhere to
-// remember that it has been: D109 is why this file keeps no ambient state to hold a flag.
-// The call is reference counted, so asking again is cheap and asking once per socket is
-// correct.
-// Asked rather than assumed. This host is not tied to one architecture by anything else in
-// this file, so the page size is read from it.
 // This host takes one command line rather than a vector, so the vector has to be joined -- and
 // joined the way `CommandLineToArgvW` will take it apart again, or a path with a space in it
 // arrives as two arguments. An argument is quoted when it holds a space, a tab or a quote, and
@@ -1852,6 +1846,8 @@ fn file_unlock(lock: FileLock) -> err {
     ret ok
 }
 
+// Asked rather than assumed. This host is not tied to one architecture by anything else in
+// this file, so the page size is read from it.
 fn page_size() -> usize {
     var info: SystemInfo = zero
     raw_system_info(&info)
@@ -1889,6 +1885,10 @@ fn release(p: *u8, n: usize) -> err {
     ret ok
 }
 
+// Winsock insists on being started before anything else touches it, and there is nowhere to
+// remember that it has been: D109 is why this file keeps no ambient state to hold a flag.
+// The call is reference counted, so asking again is cheap and asking once per socket is
+// correct.
 fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
     var socket: Socket = zero
     var data: WsaData = zero
