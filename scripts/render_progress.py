@@ -391,10 +391,11 @@ __GROUPS__
     work. <code>e.os</code> is the subset the compiler needs to build itself, plus
     everything written since as neper source rather than supplied as intrinsics: the
     filesystem calls <code>e.fs</code> needs, sockets, a poller, file mappings, directory
-    watches, file locks and process groups. Those are per target, over
+    watches, file locks, process groups and name resolution. Those are per target, over
     <code>os.syscall</code> on Linux and <code>kernel32</code> through
-    <code>@import</code> on Windows, which is what D32 said all along (D97). What is left
-    is a DNS client, the three <code>dl*</code> calls &mdash; which want an intrinsic with a
+    <code>@import</code> on Windows, which is what D32 said all along (D97) &mdash; and on Linux
+    the resolver is a DNS client written in neper, because that host has nothing to ask (D120).
+    What is left is the three <code>dl*</code> calls &mdash; which want an intrinsic with a
     dependent return type, and a Linux answer that does not contradict D32 &mdash; and the
     error-detail pair D109 leaves deliberately unwritten.
     <code>e.io</code> is the subset the compiler needs.
