@@ -656,6 +656,14 @@ Push-Location $groupScratch
 $groupExit = $LASTEXITCODE
 Pop-Location
 if ($groupExit -ne 0) { throw "an e.os spawn or process group answered wrongly: exit $groupExit" }
+# `e.os`'s `socket_resolve`. Nothing here needs a network: a literal is parsed and the loopback
+# name comes from the hosts file on one host and its own resolver on the other. The one case that
+# does leave the machine only has to fail, which it does either way.
+$resolvePath = Join-Path $testBuild 'os-resolve-selfhost.exe'
+$resolveWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\os_resolve\src\main.e') $repo 'x64' 'windows' $resolvePath
+if ($LASTEXITCODE -ne 0 -or $resolveWritten -ne 'executable written') { throw 'e.os resolver emission failed' }
+& $resolvePath
+if ($LASTEXITCODE -ne 0) { throw "an e.os socket_resolve answered wrongly: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

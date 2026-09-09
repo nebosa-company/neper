@@ -1692,7 +1692,15 @@ indefinitely when `timeout_ns < 0` and polls once when it is zero. In `SocketAdd
 zeros the remaining twelve. Binding to port zero asks the host to choose one, and
 `socket_local_address` is the only way the choice comes back -- so a server that does not
 want to guess a free port needs it, and so does anything that has to tell a peer where to
-reach it. Pollers retain handles, interests and numeric tokens,
+reach it. `socket_resolve` answers with the caller's port rather than looking a service name
+up, and a name that exists with no address of the family asked for is `NotFound` -- there is
+nothing there to connect to either way. What it consults differs by host and cannot be made to
+agree: Windows hands the name to its own resolver, which is a literal, the hosts file, the cache,
+DNS and whatever else that host is configured to consult; Linux has no resolver to hand it to, so
+it is a literal, `/etc/hosts`, then plain UDP DNS to the servers in `/etc/resolv.conf`. Two
+consequences are worth naming rather than discovering: an unqualified name that a search-suffix
+list would complete resolves on Windows and not on Linux, and an IPv6 literal with a zone suffix
+(`fe80::1%3`) is accepted on Windows and not on Linux. Pollers retain handles, interests and numeric tokens,
 never callbacks; callers unregister a handle before closing it. A poller holds its
 registrations in the arena `poller_open` is given, which is why it carries a pointer where
 every other resource here carries a handle: what it retains is a set, and no host offers a

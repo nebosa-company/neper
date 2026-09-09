@@ -1344,3 +1344,50 @@ nothing observable.
 what the fence promises is three distinct streams and what a wrong constant does is answer with
 the neighbouring one. Both fixtures that spawn a child now name `os.stdin()` where they used to
 carry a comment saying they could not.
+
+## D120 — one host has a resolver, the other gets a DNS client
+
+`socket_resolve` is the one call in the fence where the two hosts are not the same amount of work.
+Windows hands the name to `GetAddrInfoW` and that is the whole of it: a literal, the hosts file,
+the cache, DNS and whatever else that host is configured to consult, all behind one call. Linux
+has nothing to hand it to. D32 says raw syscalls and no libc, and there is no syscall that
+resolves a name, so the resolver is written here: a literal, `/etc/hosts`, then plain UDP DNS to
+the servers in `/etc/resolv.conf`.
+
+The DNS half is deliberately a stub resolver and not more. It asks with recursion desired, so the
+tree is walked on the far side of the socket; it does not follow a `CNAME`, because a resolver
+asked to recurse puts the target's addresses in the same message; and it does not check whose name
+each record sits under, which that same resolver has already decided. Three ceilings are marked in
+the source: 512-byte messages with no EDNS0 and no retry over TCP, so a truncated answer is used
+for whatever it did carry; at most eight addresses and three servers, which is what a caller about
+to connect to one of them uses; and no search-suffix list, so the question asked is the question
+given.
+
+Two things are not optional and are done. The identifier is random rather than fixed, and an
+answer carrying a different one is discarded — a predictable identifier is an invitation. And the
+socket is `connect`ed to the server rather than sent to, so the host itself drops anything
+arriving from any other address; that is the cheap half of not believing a stranger and the
+identifier is the other.
+
+Answers are classified the way a caller can act on. `NXDOMAIN` is `NotFound` and stops the search,
+because a resolver that says a name does not exist has answered the question and asking the next
+one is asking it twice. A name that exists with no address of the family asked for is also
+`NotFound` — there is nothing there to connect to either way. A deadline that ran out is `Timeout`
+rather than `WouldBlock`, since nothing about it says to try again immediately. Nothing configured
+in `/etc/resolv.conf` is `NotFound` and not a failure to reach anyone: there is nobody to reach.
+
+A literal is answered without reading a file or asking anyone, and a literal of the *other* family
+is `NotFound` without asking either — sending `127.0.0.1` to a resolver as an IPv6 name can only
+be told no, slowly. The IPv6 parser takes the compressed form, the full form and an embedded
+dotted quad (`::ffff:127.0.0.1`), and refuses a zone suffix: naming an interface means asking the
+host for its index, which is a syscall family this file does not otherwise touch. Windows accepts
+one, so the fence now says so rather than leaving it to be discovered.
+
+The fixture needs no network, which is not a claim to make without checking. Under `unshare -rn`
+the whole of it still passes, and with the hosts path removed it fails at 40 — so `localhost` on
+Linux is answered by `/etc/hosts` and not by a nameserver that happened to be reachable. That pair
+is a manual check rather than part of the suite, because user namespaces are not available
+everywhere and a suite that needs them fails for the wrong reason. The DNS path itself cannot be in
+the suite at all: it is verified by a scratch program against a real name, whose answer matched the
+host resolver's, and the committed fixture only requires that a name reserved never to exist fails
+— which offline is a timeout and online is a name that is not there, both correct.

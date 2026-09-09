@@ -574,6 +574,24 @@ type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, p
 // host's own order: one struct holding both orders would hide the distinction that matters.
 type RawAddress = struct { bytes: [28]u8 }
 
+// `ADDRINFOW`. `address` is a pointer rather than a `usize` because the bytes behind it have to
+// be read, and there is no way back from an address to a pointer (D96); `next` is `*void` for
+// the same reason with the added one that a type cannot name itself here.
+type AddressInfo = struct {
+    flags: i32,
+    family: i32,
+    kind: i32,
+    protocol: i32,
+    address_len: usize,
+    canonical_name: usize,
+    address: *u8,
+    next: *void,
+}
+
+// The call answers with a pointer, so it is given somewhere to put one: a `*AddressInfo` out
+// parameter would be an address this file could not follow, and this is a pointer it can.
+type AddressInfoHead = struct { node: *void }
+
 // `WSADATA`, which is read but never inspected here: the call insists on somewhere to put
 // it.
 type WsaData = struct { bytes: [408]u8 }
@@ -755,6 +773,12 @@ extern fn raw_socket_shutdown(s: usize, how: i32) -> i32
 extern fn raw_socket_control(s: usize, command: u32, argument: *u32) -> i32
 
 // Sockets keep their own error channel, separate from `GetLastError`.
+@import("ws2_32.dll", "GetAddrInfoW")
+extern fn raw_address_info(node: *const u16, service: usize, hints: *AddressInfo, result: *AddressInfoHead) -> i32
+
+@import("ws2_32.dll", "FreeAddrInfoW")
+extern fn raw_free_address_info(head: *void)
+
 @import("ws2_32.dll", "WSAGetLastError")
 extern fn raw_socket_error() -> i32
 
@@ -1011,6 +1035,11 @@ const MAX_ENVIRONMENT_UNITS: usize = 65536usize
 
 const RAW_IP4_SIZE: usize = 16usize
 const RAW_IP6_SIZE: usize = 28usize
+
+// ponytail: how many addresses one name may answer with here. A name behind more than this is
+// answered with the first of them, which is what a caller about to connect to one of them wants
+// anyway.
+const RESOLVE_ADDRESS_MAX: usize = 8usize
 
 // `FILE_INFORMATION_CLASS`, which numbers its members differently from the Win32
 // `FILE_INFO_BY_HANDLE_CLASS` the wrapper takes.
@@ -1987,6 +2016,68 @@ fn shutdown_value(how: SocketShutdown) -> i32 {
     if how == .Write { ret 1i32 }
     if how == .Both { ret 2i32 }
     ret 0i32
+}
+
+// This host has a resolver and it is the whole of the answer: a literal, the hosts file, the
+// cache and DNS itself are all behind one call, which is why this half is short and the other
+// one is not.
+//
+// The service is not named -- a port is a number the caller already has, and asking this to
+// look one up would mean a second string to build and a table to disagree with.
+fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
+    var nothing: []SocketAddress = zero
+    if host.len == 0usize { ret (nothing, NotFound) }
+    var data: WsaData = zero
+    if raw_wsa_startup(WSA_VERSION, &data) != 0i32 { ret (nothing, Failed) }
+    let (wide_host, wide_host_error) = widen(a, host)
+    if wide_host_error != ok { ret (nothing, wide_host_error) }
+    var hints: AddressInfo = zero
+    hints.family = i32(family_value(family))
+    var head: AddressInfoHead = zero
+    let code = raw_address_info(&wide_host[0usize], 0usize, &hints, &head)
+    if code != 0i32 {
+        // WSAHOST_NOT_FOUND and WSANO_DATA: the name is not there, or is there with nothing of
+        // the family that was asked for. Both are the same answer to a caller.
+        if code == 11001i32 { ret (nothing, NotFound) }
+        if code == 11004i32 { ret (nothing, NotFound) }
+        // WSATRY_AGAIN: the resolver could not reach anyone, which is not the name's fault.
+        if code == 11002i32 { ret (nothing, Timeout) }
+        ret (nothing, Failed)
+    }
+    let (results, results_error) = mem.alloc[SocketAddress](a, RESOLVE_ADDRESS_MAX)
+    if results_error != ok {
+        raw_free_address_info(head.node)
+        ret (nothing, OutOfMemory)
+    }
+    var found = 0usize
+    var entry = mem.cast[*AddressInfo](head.node)
+    while mem.address_of(entry) != 0usize && found < RESOLVE_ADDRESS_MAX {
+        if entry.family == hints.family && entry.address_len != 0usize {
+            // The sockaddr is behind a pointer and `mem.view` is the only way to name it as
+            // bytes, so an `Arena` is built over it -- not to allocate out of, but to describe
+            // the region, the same as a file mapping.
+            var region: mem.Arena = zero
+            region.base = entry.address
+            region.cap = entry.address_len
+            region.off = 0usize
+            let bytes = mem.view(&region, 0usize, entry.address_len)
+            var raw: RawAddress = zero
+            var at = 0usize
+            while at < bytes.len && at < 28usize {
+                raw.bytes[at] = bytes[at]
+                at += 1usize
+            }
+            results[found] = decode_address(raw)
+            // The port comes from the caller, not from a service lookup that was never asked
+            // for, so whatever the resolver left in the sockaddr is overwritten.
+            results[found].port = port
+            found += 1usize
+        }
+        entry = mem.cast[*AddressInfo](entry.next)
+    }
+    raw_free_address_info(head.node)
+    if found == 0usize { ret (nothing, NotFound) }
+    ret (results[0usize..found], ok)
 }
 
 fn socket_shutdown(s: Socket, how: SocketShutdown) -> err {

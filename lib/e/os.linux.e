@@ -106,6 +106,7 @@ const SYS_SHUTDOWN: usize = 48usize
 const SYS_BIND: usize = 49usize
 const SYS_LISTEN: usize = 50usize
 const SYS_GETSOCKNAME: usize = 51usize
+const SYS_SETSOCKOPT: usize = 54usize
 const SYS_MMAP: usize = 9usize
 const SYS_NANOSLEEP: usize = 35usize
 const SYS_KILL: usize = 62usize
@@ -1057,6 +1058,32 @@ type SocketAddress = struct { family: SocketFamily, bytes: [16]u8, scope: u32, p
 // distinction that matters.
 type RawAddress = struct { bytes: [28]u8 }
 
+// `struct timeval`, which is how a receive deadline is spelled here.
+type TimeVal = struct { seconds: i64, microseconds: i64 }
+
+const SOL_SOCKET: usize = 1usize
+const SO_RCVTIMEO: usize = 20usize
+
+const DNS_PORT: u16 = 53u16
+const DNS_TYPE_A: usize = 1usize
+const DNS_TYPE_AAAA: usize = 28usize
+const DNS_CLASS_IN: usize = 1usize
+
+// ponytail: plain 512-byte UDP DNS -- no EDNS0, and no retry over TCP when an answer is
+// truncated. A truncated answer is used for whatever it did carry, which for a name with a
+// handful of addresses is all of them. A name behind dozens wants EDNS0 first.
+const DNS_MESSAGE_MAX: usize = 512usize
+
+// ponytail: how many addresses one name may answer with, and how many resolvers are asked. Both
+// are what a caller about to connect to one of them actually uses.
+const RESOLVE_ADDRESS_MAX: usize = 8usize
+const RESOLVE_SERVER_MAX: usize = 3usize
+const RESOLVE_ATTEMPTS: usize = 2usize
+const RESOLVE_TIMEOUT_SECONDS: i64 = 2i64
+
+const HOSTS_MAX: usize = 262144usize
+const RESOLV_CONF_MAX: usize = 8192usize
+
 const RAW_IP4_SIZE: usize = 16usize
 const RAW_IP6_SIZE: usize = 28usize
 
@@ -1493,6 +1520,516 @@ fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err) {
     let taken = syscall(SYS_RECVFROM, s.raw, mem.address_of(&dst[0usize]), dst.len, 0usize, mem.address_of(&raw), mem.address_of(&length))
     if taken < 0isize { ret (0usize, peer, from_errno(taken)) }
     ret (usize(taken), decode_address(raw), ok)
+}
+
+// A whole file, up to a limit, which is how both of the resolver's configuration files are
+// read. `environment_bytes` cannot be reused for this: a `/proc` file reports a size of zero and
+// has to be read until a short read proves the end, where an ordinary file does not.
+fn read_text_file(a: *mem.Arena, path: str, cap: usize) -> (str, err) {
+    let (path_address, path_error) = c_string(a, path)
+    if path_error != ok { ret ("", path_error) }
+    let (buffer, allocation_error) = mem.alloc[u8](a, cap)
+    if allocation_error != ok { ret ("", OutOfMemory) }
+    let descriptor = syscall(SYS_OPENAT, AT_FDCWD, path_address, OPEN_READ_ONLY, 0usize, 0usize, 0usize)
+    if descriptor < 0isize { ret ("", from_errno(descriptor)) }
+    var filled = 0usize
+    var failure = ok
+    while filled < cap {
+        let taken = syscall(SYS_READ, usize(descriptor), mem.address_of(&buffer[filled]), cap - filled, 0usize, 0usize, 0usize)
+        if taken < 0isize {
+            failure = from_errno(taken)
+            break
+        }
+        if taken == 0isize { break }
+        filled += usize(taken)
+    }
+    let closed = syscall(SYS_CLOSE, usize(descriptor), 0usize, 0usize, 0usize, 0usize, 0usize)
+    if failure != ok { ret ("", failure) }
+    ret (buffer[0usize..filled], ok)
+}
+
+// Host names do not distinguish case, wherever they are written down, so the hosts file is read
+// the way a resolver would answer.
+fn folded(byte: u8) -> u8 {
+    if byte >= 65u8 && byte <= 90u8 { ret byte + 32u8 }
+    ret byte
+}
+
+fn same_folded(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if folded(left[at]) != folded(right[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn hex_value(byte: u8) -> (usize, bool) {
+    if byte >= 48u8 && byte <= 57u8 { ret (usize(byte - 48u8), true) }
+    if byte >= 97u8 && byte <= 102u8 { ret (usize(byte - 97u8) + 10usize, true) }
+    if byte >= 65u8 && byte <= 70u8 { ret (usize(byte - 65u8) + 10usize, true) }
+    ret (0usize, false)
+}
+
+// A dotted quad and nothing else: four parts, each of one to three digits and none above 255,
+// with no room left over. A resolver that accepted `1.2.3` or `1.2.3.4.5` would be answering a
+// question nobody asked.
+fn parse_ip4(text: str) -> (SocketAddress, bool) {
+    var address: SocketAddress = zero
+    address.family = .Ip4
+    var at = 0usize
+    var part = 0usize
+    while part < 4usize {
+        var value = 0usize
+        var digits = 0usize
+        while at < text.len && text[at] >= 48u8 && text[at] <= 57u8 {
+            value = value * 10usize + usize(text[at] - 48u8)
+            digits += 1usize
+            at += 1usize
+        }
+        if digits == 0usize || digits > 3usize || value > 255usize { ret (address, false) }
+        address.bytes[part] = u8(value)
+        part += 1usize
+        if part < 4usize {
+            if at >= text.len || text[at] != 46u8 { ret (address, false) }
+            at += 1usize
+        }
+    }
+    if at != text.len { ret (address, false) }
+    ret (address, true)
+}
+
+// The groups before a `::` and the groups after it: the first go at the front, the last at the
+// back, and whatever is between them stays zero. A group followed by a dot is where the two
+// syntaxes meet -- the rest of the address is a dotted quad, as in `::ffff:127.0.0.1`.
+//
+// ponytail: a zone suffix (`fe80::1%eth0`) is not accepted. Naming an interface means asking the
+// host for its index, which is a syscall family this file does not otherwise touch.
+fn parse_ip6(text: str) -> (SocketAddress, bool) {
+    var address: SocketAddress = zero
+    address.family = .Ip6
+    var head: [16]u8 = zero
+    var tail: [16]u8 = zero
+    var head_len = 0usize
+    var tail_len = 0usize
+    var compressed = false
+    var at = 0usize
+    if text.len < 2usize { ret (address, false) }
+    if text[0usize] == 58u8 {
+        if text[1usize] != 58u8 { ret (address, false) }
+        compressed = true
+        at = 2usize
+        // `::` on its own is every byte zero, and there is nothing more to read.
+        if at == text.len { ret (address, true) }
+    }
+    while at < text.len {
+        var value = 0usize
+        var digits = 0usize
+        var scan = at
+        while scan < text.len {
+            let (nibble, is_hex) = hex_value(text[scan])
+            if !is_hex { break }
+            value = value * 16usize + nibble
+            digits += 1usize
+            scan += 1usize
+        }
+        if digits == 0usize || digits > 4usize { ret (address, false) }
+        if scan < text.len && text[scan] == 46u8 {
+            let (embedded, is_embedded) = parse_ip4(text[at..text.len])
+            if !is_embedded { ret (address, false) }
+            var quad = 0usize
+            while quad < 4usize {
+                if compressed {
+                    if tail_len >= 16usize { ret (address, false) }
+                    tail[tail_len] = embedded.bytes[quad]
+                    tail_len += 1usize
+                } else {
+                    if head_len >= 16usize { ret (address, false) }
+                    head[head_len] = embedded.bytes[quad]
+                    head_len += 1usize
+                }
+                quad += 1usize
+            }
+            at = text.len
+            break
+        }
+        at = scan
+        if compressed {
+            if tail_len + 2usize > 16usize { ret (address, false) }
+            tail[tail_len] = u8(value / 256usize)
+            tail[tail_len + 1usize] = u8(value % 256usize)
+            tail_len += 2usize
+        } else {
+            if head_len + 2usize > 16usize { ret (address, false) }
+            head[head_len] = u8(value / 256usize)
+            head[head_len + 1usize] = u8(value % 256usize)
+            head_len += 2usize
+        }
+        if at == text.len { break }
+        if text[at] != 58u8 { ret (address, false) }
+        at += 1usize
+        if at < text.len && text[at] == 58u8 {
+            // One `::` and no more, or the length it stands for is not decidable.
+            if compressed { ret (address, false) }
+            compressed = true
+            at += 1usize
+            if at == text.len { break }
+        } else {
+            // A single colon at the end is not an address.
+            if at == text.len { ret (address, false) }
+        }
+    }
+    if !compressed && head_len != 16usize { ret (address, false) }
+    if head_len + tail_len > 16usize { ret (address, false) }
+    var index = 0usize
+    while index < head_len {
+        address.bytes[index] = head[index]
+        index += 1usize
+    }
+    index = 0usize
+    while index < tail_len {
+        address.bytes[16usize - tail_len + index] = tail[index]
+        index += 1usize
+    }
+    ret (address, true)
+}
+
+fn parse_literal(text: str, family: SocketFamily) -> (SocketAddress, bool) {
+    if family == .Ip6 {
+        let (six, is_six) = parse_ip6(text)
+        ret (six, is_six)
+    }
+    let (four, is_four) = parse_ip4(text)
+    ret (four, is_four)
+}
+
+// One field of a configuration line, and where to look for the next. Fields are separated by
+// spaces and tabs, and a `#` ends the line wherever it stands.
+fn next_field(line: str, from: usize) -> (str, usize) {
+    var start = from
+    while start < line.len && (line[start] == 32u8 || line[start] == 9u8 || line[start] == 13u8) { start += 1usize }
+    if start >= line.len || line[start] == 35u8 { ret ("", line.len) }
+    var end = start
+    while end < line.len {
+        if line[end] == 32u8 || line[end] == 9u8 || line[end] == 13u8 || line[end] == 35u8 { break }
+        end += 1usize
+    }
+    ret (line[start..end], end)
+}
+
+fn line_end(text: str, from: usize) -> usize {
+    var end = from
+    while end < text.len && text[end] != 10u8 { end += 1usize }
+    ret end
+}
+
+// `/etc/hosts`: an address, then every name it answers to. This is what makes `localhost`
+// resolvable with no network at all, and it is the only part of the resolver that works when
+// there is none.
+fn hosts_lookup(a: *mem.Arena, host: str, family: SocketFamily, port: u16, out: []SocketAddress) -> usize {
+    let (text, text_error) = read_text_file(a, "/etc/hosts", HOSTS_MAX)
+    if text_error != ok { ret 0usize }
+    var found = 0usize
+    var at = 0usize
+    while at < text.len && found < out.len {
+        let end = line_end(text, at)
+        let line = text[at..end]
+        let (address_text, after_address) = next_field(line, 0usize)
+        if address_text.len != 0usize {
+            let (address, is_address) = parse_literal(address_text, family)
+            // A line whose address is of the other family answers a different question.
+            if is_address {
+                var cursor = after_address
+                while cursor < line.len {
+                    let (name, after_name) = next_field(line, cursor)
+                    if name.len == 0usize { break }
+                    if same_folded(name, host) {
+                        out[found] = address
+                        out[found].port = port
+                        found += 1usize
+                        break
+                    }
+                    cursor = after_name
+                }
+            }
+        }
+        at = end + 1usize
+    }
+    ret found
+}
+
+// `/etc/resolv.conf`, for the `nameserver` lines and nothing else. `search` and `options` are
+// not read: a suffix list turns one question into several, and this asks the one it was given.
+fn resolv_servers(a: *mem.Arena, out: []SocketAddress) -> usize {
+    let (text, text_error) = read_text_file(a, "/etc/resolv.conf", RESOLV_CONF_MAX)
+    if text_error != ok { ret 0usize }
+    var found = 0usize
+    var at = 0usize
+    while at < text.len && found < out.len {
+        let end = line_end(text, at)
+        let line = text[at..end]
+        let (keyword, after_keyword) = next_field(line, 0usize)
+        if same_bytes(keyword, "nameserver") {
+            let (address_text, after_address) = next_field(line, after_keyword)
+            if address_text.len != 0usize {
+                // A resolver's own family has nothing to do with the family being asked about.
+                let (four, is_four) = parse_ip4(address_text)
+                let (six, is_six) = parse_ip6(address_text)
+                if is_four {
+                    out[found] = four
+                    out[found].port = DNS_PORT
+                    found += 1usize
+                } else {
+                    if is_six {
+                        out[found] = six
+                        out[found].port = DNS_PORT
+                        found += 1usize
+                    }
+                }
+            }
+        }
+        at = end + 1usize
+    }
+    ret found
+}
+
+// A name on the wire is its labels, each with its length in front, ending in a zero length. A
+// trailing dot is the root and is already what the terminator says.
+fn dns_write_name(message: []u8, at: usize, host: str) -> (usize, bool) {
+    var cursor = at
+    var start = 0usize
+    while start <= host.len {
+        var end = start
+        while end < host.len && host[end] != 46u8 { end += 1usize }
+        let length = end - start
+        // An empty label in the middle of a name is not a name.
+        if length == 0usize && end < host.len { ret (0usize, false) }
+        if length > 63usize { ret (0usize, false) }
+        if length > 0usize {
+            if cursor + 1usize + length >= message.len { ret (0usize, false) }
+            message[cursor] = u8(length)
+            cursor += 1usize
+            var index = 0usize
+            while index < length {
+                message[cursor] = host[start + index]
+                cursor += 1usize
+                index += 1usize
+            }
+        }
+        if end >= host.len { break }
+        start = end + 1usize
+    }
+    if cursor >= message.len { ret (0usize, false) }
+    message[cursor] = 0u8
+    cursor += 1usize
+    ret (cursor, true)
+}
+
+fn dns_build_query(message: []u8, identifier: u16, host: str, kind: usize) -> (usize, bool) {
+    if message.len < 12usize { ret (0usize, false) }
+    var index = 0usize
+    while index < 12usize {
+        message[index] = 0u8
+        index += 1usize
+    }
+    message[0usize] = u8(usize(identifier) / 256usize)
+    message[1usize] = u8(usize(identifier) % 256usize)
+    // Recursion desired: this asks a resolver for the answer rather than walking the tree
+    // itself, which is the difference between a stub and a resolver.
+    message[2usize] = 1u8
+    // One question.
+    message[5usize] = 1u8
+    let (after_name, named) = dns_write_name(message, 12usize, host)
+    if !named { ret (0usize, false) }
+    if after_name + 4usize > message.len { ret (0usize, false) }
+    message[after_name] = u8(kind / 256usize)
+    message[after_name + 1usize] = u8(kind % 256usize)
+    message[after_name + 2usize] = u8(DNS_CLASS_IN / 256usize)
+    message[after_name + 3usize] = u8(DNS_CLASS_IN % 256usize)
+    ret (after_name + 4usize, true)
+}
+
+// Any label in a name may be a pointer to a name earlier in the message instead of a label, and
+// a pointer is the end of the name that holds it. Only where the name ends matters here, so no
+// pointer is ever followed and a message cannot make this loop.
+fn dns_skip_name(message: []const u8, at: usize) -> (usize, bool) {
+    var cursor = at
+    while cursor < message.len {
+        let length = usize(message[cursor])
+        if length == 0usize { ret (cursor + 1usize, true) }
+        if length >= 192usize { ret (cursor + 2usize, true) }
+        if length > 63usize { ret (0usize, false) }
+        cursor = cursor + 1usize + length
+    }
+    ret (0usize, false)
+}
+
+fn dns_parse(message: []const u8, kind: usize, port: u16, out: []SocketAddress) -> (usize, err) {
+    if message.len < 12usize { ret (0usize, Failed) }
+    // The response bit. A query coming back as a query is not an answer.
+    if message[2usize] / 128u8 != 1u8 { ret (0usize, Failed) }
+    let code = message[3usize] % 16u8
+    // NXDOMAIN: the name does not exist. That is an answer, not a failure to get one, and it is
+    // why asking a second resolver would be asking the same question twice.
+    if code == 3u8 { ret (0usize, NotFound) }
+    if code != 0u8 { ret (0usize, Failed) }
+    let questions = usize(message[4usize]) * 256usize + usize(message[5usize])
+    let answers = usize(message[6usize]) * 256usize + usize(message[7usize])
+    var cursor = 12usize
+    var asked = 0usize
+    while asked < questions {
+        let (after, skipped) = dns_skip_name(message, cursor)
+        if !skipped { ret (0usize, Failed) }
+        cursor = after + 4usize
+        asked += 1usize
+    }
+    var found = 0usize
+    var index = 0usize
+    while index < answers && found < out.len {
+        let (after, skipped) = dns_skip_name(message, cursor)
+        if !skipped { ret (0usize, Failed) }
+        cursor = after
+        if cursor + 10usize > message.len { ret (0usize, Failed) }
+        let record = usize(message[cursor]) * 256usize + usize(message[cursor + 1usize])
+        let class = usize(message[cursor + 2usize]) * 256usize + usize(message[cursor + 3usize])
+        let length = usize(message[cursor + 8usize]) * 256usize + usize(message[cursor + 9usize])
+        cursor += 10usize
+        if cursor + length > message.len { ret (0usize, Failed) }
+        // A `CNAME` is not followed. A resolver asked to recurse puts the target's addresses in
+        // the same message, and those are the records this picks up; whose name each one is
+        // under was already decided on the far side of the socket.
+        if record == kind && class == DNS_CLASS_IN {
+            var width = 4usize
+            var family: SocketFamily = .Ip4
+            if kind == DNS_TYPE_AAAA {
+                width = 16usize
+                family = .Ip6
+            }
+            if length == width {
+                var address: SocketAddress = zero
+                address.family = family
+                address.port = port
+                var byte = 0usize
+                while byte < width {
+                    address.bytes[byte] = message[cursor + byte]
+                    byte += 1usize
+                }
+                out[found] = address
+                found += 1usize
+            }
+        }
+        cursor += length
+        index += 1usize
+    }
+    // A name that exists with nothing of the family that was asked about is the same answer as
+    // a name that does not exist: there is nothing here to connect to.
+    if found == 0usize { ret (0usize, NotFound) }
+    ret (found, ok)
+}
+
+fn dns_ask(server: SocketAddress, query: []const u8, response: []u8, identifier: u16, kind: usize, port: u16, out: []SocketAddress) -> (usize, err) {
+    let (socket, open_error) = socket_open(server.family, .Datagram)
+    if open_error != ok { ret (0usize, open_error) }
+    // Connected rather than sent to: the host then drops anything arriving from anywhere else,
+    // which is the cheap half of not believing a stranger. The identifier below is the other.
+    let connect_error = socket_connect(socket, server)
+    if connect_error != ok {
+        let unused = socket_close(socket)
+        ret (0usize, connect_error)
+    }
+    var window: TimeVal = zero
+    window.seconds = RESOLVE_TIMEOUT_SECONDS
+    let timed = syscall(SYS_SETSOCKOPT, socket.raw, SOL_SOCKET, SO_RCVTIMEO, mem.address_of(&window), 16usize, 0usize)
+    if timed < 0isize {
+        let deadline_error = from_errno(timed)
+        let unused = socket_close(socket)
+        ret (0usize, deadline_error)
+    }
+    let (sent, send_error) = socket_send(socket, query)
+    if send_error != ok {
+        let unused = socket_close(socket)
+        ret (0usize, send_error)
+    }
+    let (taken, receive_error) = socket_receive(socket, response)
+    let closed = socket_close(socket)
+    if receive_error != ok {
+        // The deadline running out arrives as "nothing to read", which here means the resolver
+        // never answered rather than that the caller should ask again immediately.
+        if receive_error == WouldBlock { ret (0usize, Timeout) }
+        ret (0usize, receive_error)
+    }
+    if taken < 12usize { ret (0usize, Failed) }
+    // An answer to a different question is not an answer.
+    if usize(response[0usize]) * 256usize + usize(response[1usize]) != usize(identifier) { ret (0usize, Failed) }
+    let (found, parse_error) = dns_parse(response[0usize..taken], kind, port, out)
+    ret (found, parse_error)
+}
+
+// The other host has a resolver behind one call. This one has no libc to ask and no syscall that
+// resolves a name, so the three steps are here: a literal, the hosts file, and DNS over UDP.
+fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err) {
+    var nothing: []SocketAddress = zero
+    if host.len == 0usize { ret (nothing, NotFound) }
+    let (results, results_error) = mem.alloc[SocketAddress](a, RESOLVE_ADDRESS_MAX)
+    if results_error != ok { ret (nothing, OutOfMemory) }
+    // A literal is not a name: nothing is read and nobody is asked.
+    let (literal, is_literal) = parse_literal(host, family)
+    if is_literal {
+        results[0usize] = literal
+        results[0usize].port = port
+        ret (results[0usize..1usize], ok)
+    }
+    // A literal of the other family is not a name either. Sending it to a resolver would ask the
+    // network about an address it can only say no to.
+    var other: SocketFamily = .Ip6
+    if family == .Ip6 { other = .Ip4 }
+    let (crossed, is_crossed) = parse_literal(host, other)
+    if is_crossed { ret (nothing, NotFound) }
+
+    let checkpoint = mem.mark(a)
+    // The hosts file first, because that is what it is for, and because it is the only answer
+    // available when there is no network at all. The addresses are copied out, so the file's
+    // bytes are given back before anything else is allocated.
+    let found = hosts_lookup(a, host, family, port, results)
+    if found != 0usize { ret (results[0usize..found], ok) }
+    mem.reset(a, checkpoint)
+
+    let (servers, servers_error) = mem.alloc[SocketAddress](a, RESOLVE_SERVER_MAX)
+    if servers_error != ok { ret (nothing, OutOfMemory) }
+    let server_count = resolv_servers(a, servers)
+    // Nothing configured is not a failure to reach anyone; there is nobody to reach.
+    if server_count == 0usize { ret (nothing, NotFound) }
+    let (query, query_error) = mem.alloc[u8](a, DNS_MESSAGE_MAX)
+    if query_error != ok { ret (nothing, OutOfMemory) }
+    let (response, response_error) = mem.alloc[u8](a, DNS_MESSAGE_MAX)
+    if response_error != ok { ret (nothing, OutOfMemory) }
+    // A predictable identifier is an invitation: an answer counts only if it carries the one it
+    // was asked with, and the one it was asked with is not guessable.
+    var identifier_bytes: [2]u8 = zero
+    let identifier_error = random(identifier_bytes[..])
+    if identifier_error != ok { ret (nothing, identifier_error) }
+    let identifier = u16(usize(identifier_bytes[0usize]) * 256usize + usize(identifier_bytes[1usize]))
+    var kind = DNS_TYPE_A
+    if family == .Ip6 { kind = DNS_TYPE_AAAA }
+    let (query_length, built) = dns_build_query(query, identifier, host, kind)
+    // A name too long to ask about is a name nothing has.
+    if !built { ret (nothing, NotFound) }
+    var outcome = Timeout
+    var attempt = 0usize
+    while attempt < RESOLVE_ATTEMPTS {
+        var index = 0usize
+        while index < server_count {
+            let (answered, ask_error) = dns_ask(servers[index], query[0usize..query_length], response, identifier, kind, port, results)
+            if ask_error == ok { ret (results[0usize..answered], ok) }
+            // A resolver that said the name does not exist has answered the question.
+            if ask_error == NotFound { ret (nothing, NotFound) }
+            outcome = ask_error
+            index += 1usize
+        }
+        attempt += 1usize
+    }
+    ret (nothing, outcome)
 }
 
 fn shutdown_value(how: SocketShutdown) -> usize {

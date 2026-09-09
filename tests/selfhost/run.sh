@@ -678,6 +678,13 @@ group_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$group_written" = 'executable written' ]
 chmod +x "$test_build/os-group-selfhost"
 (cd "$group_scratch" && "$test_build/os-group-selfhost")
+# `e.os`'s `socket_resolve`. Nothing here needs a network: a literal is parsed and the loopback
+# name comes from /etc/hosts. Verified by isolating it -- under `unshare -rn` the fixture still
+# passes, and fails at 40 if the hosts path is removed.
+resolve_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_resolve/src/main.e" "$repo" x64 linux "$test_build/os-resolve-selfhost")
+[ "$resolve_written" = 'executable written' ]
+chmod +x "$test_build/os-resolve-selfhost"
+"$test_build/os-resolve-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
