@@ -3,15 +3,24 @@
 //
 // `link/meta_reflect` already walks a struct inside one function. What this adds is the handover:
 // the comptime value crosses a call, so the callee is instantiated per field and its own return
-// type depends on which one it was given. Nothing here is reachable without that -- a `Field` has
-// no spelling of its own, so the argument is always a name that already holds one.
+// type depends on which one it was given, and it parameterises a struct the same way. Nothing here
+// is reachable without that -- a `Field` has no spelling of its own, so the argument is always a
+// name that already holds one.
 
+use e.mem
 use e.meta
 
 error Failed
 
 type Point = struct { x: i64, y: i32, tag: u8 }
 type Colour = enum u8 { Red, Green = 7, Blue }
+
+// A struct built around one comptime field, which is the other half of taking one: a `Field` may
+// parameterise a type as readily as a function. Each instantiation is a different struct, and
+// nothing but its one field decides its layout.
+type Boxed[FIELD: meta.Field] = struct {
+    value: FIELD.ty,
+}
 
 // A dependent return type: `FIELD.ty` is a different type in every instantiation.
 fn read_field[FIELD: meta.Field, T: type](v: *const T) -> FIELD.ty {
@@ -90,6 +99,22 @@ fn main() -> err {
     if p.x != 100i64 { ret Failed }
     if p.y != 20i32 { ret Failed }
     if p.tag != 3u8 { ret Failed }
+
+    // --- A `Field` parameterising a type. Reading and writing through the struct lands on the
+    // same value the field holds, and the size of each instantiation is the size of the field it
+    // was built around -- which is what says these are distinct structs and not one.
+    var boxed_total = 0i64
+    var boxed_sizes = 0usize
+    for f in meta.fields[Point]() {
+        var box: Boxed[f] = zero
+        box.value = read_field[f, Point](&p)
+        boxed_total += i64(box.value)
+        if mem.size_of[Boxed[f]]() != f.size { ret Failed }
+        if mem.align_of[Boxed[f]]() != mem.align_of[f.ty]() { ret Failed }
+        boxed_sizes += mem.size_of[Boxed[f]]()
+    }
+    if boxed_total != 123i64 { ret Failed }
+    if boxed_sizes != 13usize { ret Failed }
 
     // --- Members cross a call the same way. 0 + 7 + 8, and "Red" + "Green" + "Blue".
     var values = 0u64

@@ -1682,3 +1682,32 @@ tokens and nothing else, which is exactly what the parser accepts, and that shap
 existing instantiations would now hand the checker a type node where they used to hand a name
 expression -- was not one: `bracket_argument_is_type` answers false for a bare name, so nothing
 about those changed.
+
+## D127 — a comptime `Field` parameterises a type, by the same two edits a function needed
+
+D125 left one thing out: `type Holder[FIELD: Field]` with a field of type `FIELD.ty`, which section 9
+permits and `substitute_aggregate_type` did not do. It is now done, and the interesting part is how
+little it took — the aggregate path needed exactly the two changes the function path had already had,
+in the two places that mirror each other.
+
+`collect_generic_arguments` binds an aggregate's comptime arguments the way `specialize_call` binds a
+function's, and both handled only a type, a `str` and an integer. A comptime value is a name that
+already holds one, so both now resolve it through `find_comptime_binding` and copy the argument
+whole. `substitute_aggregate_type` maps a `TypeParameter` to its bound argument the way
+`substitute_type` does, and both now accept a `Field` there, because the type the bound field has is
+what the declaration's placeholder stood for.
+
+Nothing else was needed. `FIELD.ty` as a *field's* type already resolved: it goes through
+`type_from_node`, `comptime_binding_type_path` and then `find_comptime_binding`, which D125 had
+already taught to answer for a parameter. That is the second time that one funnel has paid for
+itself.
+
+What the fixture asserts is not that the struct works but that each instantiation is its own: the
+size of `Boxed[f]` equals `f.size` and its alignment equals `mem.align_of[f.ty]()`, for every field
+of a struct whose fields are an i64, an i32 and a u8. If substitution had collapsed them to one type,
+or to the placeholder, those would not hold — a value read and written through the struct would still
+look right. Removing the one line that accepts a `Field` in `substitute_aggregate_type` fails the
+fixture at 109 with `MissingContext`.
+
+That closes the last gap `e.meta` had. What remains in the reflection row is not a gap in section 9's
+surface: `Field` and `Member` cannot be inferred, only written, and nothing asks for them to be.

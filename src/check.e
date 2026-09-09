@@ -1274,6 +1274,18 @@ fn collect_generic_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
             var argument: GenericArgument = zero
             argument.kind = parameter.kind
             argument.set = true
+            if parameter.kind == .Field || parameter.kind == .Member {
+                // As at a call: a comptime value has no spelling of its own, so the argument is
+                // a name that already holds one.
+                let value_node = tree.nodes[argument_node]
+                if value_node.kind != .NameExpr { ret (0usize, TypeMismatch) }
+                let value_token = c.tokens[value_node.token_start]
+                if value_token.kind != .Identifier { ret (0usize, TypeMismatch) }
+                let (bound, found_bound) = find_comptime_binding(c, g.modules[module_index].text[value_token.start..value_token.end])
+                if !found_bound || bound.kind != parameter.kind { ret (0usize, TypeMismatch) }
+                argument = bound
+                argument.set = true
+            } else {
             if parameter.kind == .Type {
                 let (argument_type, argument_error) = comptime_type(c, g, tree, module_index, argument_node)
                 if argument_error != ok { ret (0usize, argument_error) }
@@ -1289,6 +1301,7 @@ fn collect_generic_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
                     argument.expression = expression
                     argument.symbolic = true
                 }
+            }
             }
             c.generic_arguments[c.generic_argument_count] = argument
             c.generic_argument_count += 1usize
@@ -2293,7 +2306,11 @@ fn substitute_aggregate_type(c: *Checker, template_index: usize, first_argument:
     if ty.kind == .TypeParameter {
         if !ty.has_element { ret (invalid_type(), InvalidType) }
         let (argument, found) = aggregate_argument(c, template_index, first_argument, ty.element)
-        if !found || argument.kind != .Type || argument.symbolic { ret (invalid_type(), MissingContext) }
+        if !found || argument.symbolic { ret (invalid_type(), MissingContext) }
+        // `FIELD.ty` as the type of a field, which is what a struct built around one comptime
+        // field looks like. The same substitution a function's signature gets.
+        if argument.kind == .Field { ret (argument.ty, ok) }
+        if argument.kind != .Type { ret (invalid_type(), MissingContext) }
         ret (argument.ty, ok)
     }
     if ty.kind == .Named && ty.has_element {
