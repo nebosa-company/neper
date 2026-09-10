@@ -759,6 +759,19 @@ Push-Location $fsScratch
 $csvExit = $LASTEXITCODE
 Pop-Location
 if ($csvExit -ne 0) { throw "an e.fmt.csv read or write answered wrongly: exit $csvExit" }
+# `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
+# `reader` yields have to agree about what the format says. The format has no standard, so
+# what the fixture pins is the choices -- a comment starts a line and nothing else, a
+# case-insensitive parse folds the name it stores rather than the comparison it makes later,
+# and a value is quoted on the way out only when leaving it bare would not read back as itself.
+$iniPath = Join-Path $testBuild 'fmt-ini-selfhost.exe'
+$iniWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_ini\src\main.e') $repo 'x64' 'windows' $iniPath
+if ($LASTEXITCODE -ne 0 -or $iniWritten -ne 'executable written') { throw 'e.fmt.ini emission failed' }
+Push-Location $fsScratch
+& $iniPath
+$iniExit = $LASTEXITCODE
+Pop-Location
+if ($iniExit -ne 0) { throw "an e.fmt.ini read or write answered wrongly: exit $iniExit" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

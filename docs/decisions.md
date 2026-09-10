@@ -2098,3 +2098,38 @@ So `e.fmt.json`'s `encode[T]`/`decode[T]` and `e.fmt.csv`'s `encode_rows[T]`/`de
 (D134, D135) are no longer blocked on reflection reaching a type parameter. What they are blocked
 on now is a comptime `if` over a non-integer constant, which is the "general comptime interpreter"
 row and a separate piece of work.
+## D137 — INI has no standard, so every rule here is a choice; two of them shape the rest
+
+`e.fmt.ini` lands at 12 of 14. The format it implements is one this decision defines, because
+there is no document to defer to: the fence names sections, `key=value`, `;`/`#` line comments,
+quoted values and backslash escapes, and everything past that had to be settled.
+
+**A comment starts a line and nothing else.** `;` and `#` are ordinary bytes anywhere after the
+first byte of a trimmed line -- inside an unquoted value and after a closing quote alike. The
+alternative, a trailing comment, means a value silently loses everything past a `;` that someone
+meant as data, and no spelling of that value reads back the same under both rules. The fence says
+line comments; this is what line comments are when the word is taken literally.
+
+**`case_sensitive: false` folds the name as it is stored, rather than loosening a comparison made
+later.** `get` takes no options and a `Document` carries none, so identity has to be a property of
+what was stored: after folding, two names differing only in case are the same bytes, duplicate
+detection is plain equality, and `get` needs no rule of its own. What a caller gives up is the
+spelling, which `write` then emits folded -- honestly, since they asked for the distinction not to
+matter. A value is not a name and is never touched.
+
+Around those: an entry before any header belongs to the empty section, which is where `write` puts
+one back. An unknown escape is `Invalid` rather than a byte passed through, because `\n` in a path
+that means a newline on one reader and two characters on the next is worse than a refusal. A value
+is quoted on the way out only when leaving it bare would not read back as itself -- an edge space,
+an ending, a quote, a leading `;`/`#`/`[`, or nothing at all -- so the source's own quoting does not
+survive, only its value. `TooLarge` belongs to the streaming reader, which holds a line and a table
+of what it has seen; `parse` holds the source already and needs neither bound.
+
+`encode[T]` and `decode[T]` are blocked, and by now the blocker has a name. D136 let a reflection
+question stand inside a generic, which was necessary and is not sufficient: in an unrolled `for`
+over `meta.fields[T]()`, **both arms of `if meta.kind[f.ty]() == .Int` are checked in every
+iteration**, so the arm that cannot type for this field's type still has to. A codec over a struct
+whose fields differ in kind therefore cannot be written until the comptime interpreter folds a
+branch on a non-integer constant. That is the same missing piece `e.fmt.json`'s `encode`/`decode`
+(D134) and `e.fmt.csv`'s `encode_rows`/`decode_rows` (D135) wait on -- one gap, three modules,
+six declarations.

@@ -766,6 +766,15 @@ csv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$csv_written" = 'executable written' ]
 chmod +x "$test_build/fmt-csv-selfhost"
 (cd "$fs_scratch" && "$test_build/fmt-csv-selfhost")
+# `e.fmt.ini` both ways over the same text: the document `parse` builds and the stream
+# `reader` yields have to agree about what the format says. The format has no standard, so
+# what the fixture pins is the choices -- a comment starts a line and nothing else, a
+# case-insensitive parse folds the name it stores rather than the comparison it makes later,
+# and a value is quoted on the way out only when leaving it bare would not read back as itself.
+ini_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_ini/src/main.e" "$repo" x64 linux "$test_build/fmt-ini-selfhost")
+[ "$ini_written" = 'executable written' ]
+chmod +x "$test_build/fmt-ini-selfhost"
+(cd "$fs_scratch" && "$test_build/fmt-ini-selfhost")
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
