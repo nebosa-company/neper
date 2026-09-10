@@ -452,6 +452,13 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
         try emit_x64.little_u64(output, 0usize)
         slot += 1usize
     }
+    // Module-scope `var`s follow the loader's own slots in the same writable segment: this path
+    // already has one, so there is nothing to add to the headers -- only more of it.
+    let globals_offset = align_up_to(output.count, 8usize)
+    try pad_to(output, globals_offset)
+    let globals_size = nir.global_area_size(builder)
+    try append_globals(builder, output, globals_offset)
+    try pad_to(output, globals_offset + globals_size)
     let data_end = output.count
 
     try patch_dynamic_relocations(builder, output, rela_offset, got_address)
@@ -460,9 +467,18 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try emit_x64.patch_relative32(output, code_offset + 200usize, main_offset)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
-        // A module-scope `var`'s address depends on where the data segment lands, which is
-        // decided after the code is written -- so these are left to the pass that does it.
+        // A module-scope `var`, whose address is known once the writable segment is placed.
         if relocations[relocation_at].global {
+            let global_index = relocations[relocation_at].function_ref
+            if global_index >= builder.global_count { ret InvalidExecutable }
+            let destination = base + globals_offset + nir.global_area_offset(builder, global_index)
+            let site = machine_start + relocations[relocation_at].displacement_at
+            // A file offset is its own distance from the image base here as on the static path:
+            // both segments are mapped at `base` plus their own offset.
+            let next_address = base + site + 4usize
+            if destination < next_address { ret InvalidExecutable }
+            try emit_x64.patch_little_u32(output, site, destination - next_address)
+            relocations[relocation_at].resolved = true
             relocation_at += 1usize
             continue
         }

@@ -2439,7 +2439,13 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                 let (address, address_type, address_error) = global_address(c, global_index, builder, token)
                 if address_error != ok { ret (0usize, address_type, address_error) }
                 let value_type = c.globals[global_index].ty
-                let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, value_type, true, 0usize, token)
+                // The same shape a binding with an address has: an aggregate *is* its address,
+                // and only something that fits a register is loaded -- at its own width, which
+                // the load carries as its immediate.
+                if aggregate_value(c, value_type) { ret (address, value_type, ok) }
+                let (info, info_error) = layout.type_info(c, value_type)
+                if info_error != ok { ret (0usize, value_type, info_error) }
+                let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, value_type, true, info.size, token)
                 if load_error != ok { ret (0usize, value_type, load_error) }
                 let operand_error = nir.add_operand(builder, load_instruction, address)
                 if operand_error != ok { ret (0usize, value_type, operand_error) }

@@ -6838,8 +6838,12 @@ fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
         if token.kind != .Identifier { ret (false, Unsupported) }
         let name = g.modules[module_index].text[token.start..token.end]
         let (local_index, found) = find_local(c, name)
-        if !found { ret (false, Unsupported) }
-        ret (c.locals[local_index].mutable, ok)
+        if found { ret (c.locals[local_index].mutable, ok) }
+        // A module-scope `var` is mutable by the keyword that declares it, so an element or a
+        // field of one is assignable wherever the variable is visible.
+        let (global_index, global_found) = find_global(c, module_index, name)
+        if global_found { ret (true, ok) }
+        ret (false, Unsupported)
     }
     if node.kind == .UnaryExpr && c.tokens[node.token_start].kind == .PunctStar {
         let (child_index, found) = first_node_child(tree, node)
