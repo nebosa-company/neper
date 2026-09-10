@@ -98,7 +98,14 @@ fn writer_with_flush(ctx: *void, write_fn: fn(*void, []const u8) -> (usize, err)
 fn file_read(ctx: *void, dst: []u8) -> (usize, err) {
     var file = mem.cast[*os.File](ctx)
     let (count, read_error) = os.read(*file, dst)
-    ret (count, read_error)
+    if read_error != ok { ret (count, read_error) }
+    // A host read that takes nothing from a non-empty request has reached the end -- that is
+    // what `read(2)` and `ReadFile` both mean by zero, on a file, a pipe and a socket alike.
+    // Saying so here is what makes `End` the answer whatever the source is: `slice_read` says
+    // it already, and without this a file said `NoProgress` instead, so every loop written
+    // against the `Reader` contract ended in an error on a file and in an end on a slice.
+    if count == 0usize && dst.len != 0usize { ret (0usize, End) }
+    ret (count, ok)
 }
 
 fn file_write(ctx: *void, src: []const u8) -> (usize, err) {

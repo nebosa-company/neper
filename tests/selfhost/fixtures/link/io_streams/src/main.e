@@ -33,6 +33,37 @@ fn main(a: *mem.Arena) -> err {
     let (after, after_error) = io.read(&r, spare[..])
     if after_error != io.End { ret Failed }
 
+    // A file says the same thing. The host reports its end as a read that took nothing
+    // rather than as a failure, so without `file_read` turning that into `End` a loop
+    // written against this contract ended in `NoProgress` on a file and in `End` on a
+    // slice -- the same `Reader`, two answers to the same question.
+    let removed_before = os.remove_file(a, "np-io-eof.txt")
+    var make: os.OpenFlags = zero
+    make.write = true
+    make.create = true
+    make.truncate = true
+    let (made, made_error) = os.open(a, "np-io-eof.txt", make)
+    if made_error != ok { ret made_error }
+    let (put, put_error) = os.write(made, "abc")
+    if put_error != ok { ret put_error }
+    if put != 3usize { ret Failed }
+    if os.close(made) != ok { ret Failed }
+    var take: os.OpenFlags = zero
+    take.read = true
+    let (opened, opened_error) = os.open(a, "np-io-eof.txt", take)
+    if opened_error != ok { ret opened_error }
+    var opened_file = opened
+    var from_file = io.file_reader(&opened_file)
+    var file_window: [8]u8 = zero
+    let (from_file_count, from_file_error) = io.read(&from_file, file_window[..])
+    if from_file_error != ok { ret from_file_error }
+    if from_file_count != 3usize { ret Failed }
+    let (past, past_error) = io.read(&from_file, file_window[..])
+    if past_error != io.End { ret Failed }
+    if past != 0usize { ret Failed }
+    if os.close(opened_file) != ok { ret Failed }
+    if os.remove_file(a, "np-io-eof.txt") != ok { ret Failed }
+
     // Writing into a fixed slice, and the sink reporting what it could take.
     var buffer: [4]u8 = zero
     var writer_state = io.SliceWriter { data: buffer[..], off: 0usize }
