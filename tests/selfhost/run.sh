@@ -727,6 +727,16 @@ meta_generic_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$meta_generic_written" = 'executable written' ]
 chmod +x "$test_build/meta-generic-selfhost"
 "$test_build/meta-generic-selfhost"
+# A branch whose condition is settled at compile time has one arm, and the other is not code:
+# not checked, not emitted. Only a `meta` question settles one (D138). The two things that
+# could not be written before are both here -- a walk over `meta.fields` whose arms do not type
+# check for each other's field types, and a generic recursing on `meta.element_type` whose base
+# case is the arm that disappears. An ordinary runtime `if` is here too, to say what is not
+# folded.
+fold_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/comptime_branch/src/main.e" "$repo" x64 linux "$test_build/comptime-branch-selfhost")
+[ "$fold_written" = 'executable written' ]
+chmod +x "$test_build/comptime-branch-selfhost"
+"$test_build/comptime-branch-selfhost"
 # Section 9's `Field` and `Member` as declared names: a comptime value crossing a call, so the
 # callee is instantiated per field and its own return type depends on which one it was given.
 # Without the guard that stops inference rebinding such a parameter, this fails at 88.

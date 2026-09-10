@@ -2983,6 +2983,16 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
         at += 1usize
     }
     if !found_condition || branch_count == 0usize { ret parse.InvalidSyntax }
+    // The same question the checker asked, on the same tree with the same comptime bindings in
+    // place: a settled condition has one arm, and the other was never checked, so emitting it
+    // would emit code nothing has looked at. Nothing was remembered from the checker -- asking
+    // twice is what keeps the two passes from drifting apart.
+    let (taken, settled) = check.comptime_condition(c, g, tree, module_index, condition_index)
+    if settled {
+        if taken { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers) }
+        if branch_count == 2usize { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
+        ret ok
+    }
     let boolean = check.make_type(.Bool, "bool", module_index)
     let (condition, condition_type, condition_error) = lower_expression(c, g, tree, module_index, condition_index, boolean, builder, bindings, *binding_count)
     if condition_error != ok { ret condition_error }

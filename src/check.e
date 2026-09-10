@@ -4356,6 +4356,10 @@ type MetaInfo = struct {
     // Only the layout questions use this: their answer is not a constant this side of
     // lowering, so what travels is the type itself.
     subject: Type,
+    // The subject was still a type parameter, so `value` is a placeholder and not an answer
+    // (D136). A caller that wants to act on the answer has to know the difference; a caller
+    // that only wants the result type does not.
+    deferred: bool,
     function: Function,
 }
 
@@ -5140,6 +5144,7 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     // the answer is a constant only an instance can supply (see `derived_from_subject`). The
     // question keeps its result type, so the body around it still checks; the value it folds to
     // is filled in when the instance is checked.
+    if subject.kind == .TypeParameter { info.deferred = true }
     if query == .Kind {
         info.result = make_type(.Named, "TypeKind", target_module)
         if subject.kind == .TypeParameter { ret (info, ok) }
@@ -5166,6 +5171,101 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     info.name = subject.name
     info.result = make_type(.String, "str", target_module)
     ret (info, ok)
+}
+
+// One side of a foldable condition: a `meta` question whose answer is a number already known
+// here. `false` covers every other call, and covers a question whose subject is still a type
+// parameter -- in a template body nothing is settled, so nothing may be folded (D136).
+fn meta_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, Type, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .CallExpr { ret (0usize, invalid_type(), false) }
+    let (receiver_index, has_receiver) = first_node_child(tree, node)
+    if !has_receiver { ret (0usize, invalid_type(), false) }
+    let receiver = tree.nodes[receiver_index]
+    if receiver.kind != .BracketPostfix { ret (0usize, invalid_type(), false) }
+    let (info, info_error) = meta_info(c, g, tree, module_index, receiver)
+    if info_error != ok || !info.matched || info.deferred { ret (0usize, invalid_type(), false) }
+    if info.query != .Kind && info.query != .ArrayLen { ret (0usize, invalid_type(), false) }
+    ret (info.value, info.result, true)
+}
+
+// The other side, read against the type the question answers with: `.Int` is a member of
+// `TypeKind` and a length is an ordinary integer, so one of the two evaluators has it.
+fn compared_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind == .MemberExpr {
+        let (aggregate_index, found_aggregate) = aggregate_for_type(c, expected)
+        if !found_aggregate { ret (0usize, false) }
+        let aggregate = c.aggregates[aggregate_index]
+        if aggregate.kind != .Enum { ret (0usize, false) }
+        var member = ""
+        var at = node.token_start
+        while at < node.token_end {
+            let token = c.tokens[at]
+            if token.kind == .Identifier { member = g.modules[module_index].text[token.start..token.end] }
+            at += 1usize
+        }
+        let (field_index, found_member) = aggregate_field_for_name(c, aggregate, member)
+        if !found_member { ret (0usize, false) }
+        let field = c.aggregate_fields[field_index]
+        if !field.has_enum_value || field.enum_negative { ret (0usize, false) }
+        ret (field.enum_value, true)
+    }
+    let (value, value_error) = array_length_value(c, g, tree, module_index, node_index)
+    if value_error != ok { ret (0usize, false) }
+    ret (value, true)
+}
+
+// `if meta.kind[f.ty]() == .Int` inside an unrolled `for`. The condition is settled before the
+// program runs, and the arm that is not taken is not this field's code at all -- so without
+// folding it away, that arm still has to type check for a type it was never written for, which
+// is exactly what stopped a codec being written over `meta.fields` (D138).
+//
+// Both the checker and lowering call this, on the same tree with the same comptime bindings in
+// place, which is what makes them agree about which arm exists. Nothing is remembered between
+// them; the question is simply asked twice.
+//
+// ponytail: the narrowest rule that does the job. One side must be a `meta` question, so no
+// condition an ordinary program writes can be folded by accident and no arm stops being checked
+// that a reader would expect to be. A general comptime `if` is the upgrade, and wants the
+// interpreter this compiler does not have.
+fn comptime_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .BinaryExpr { ret (false, false) }
+    let op = binary_operator(c, tree, node)
+    if op != .PunctEqEq && op != .PunctBangEq { ret (false, false) }
+    var children: [2]usize = zero
+    var count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if count == children.len { ret (false, false) }
+            children[count] = tree.children[at].index
+            count += 1usize
+        }
+        at += 1usize
+    }
+    if count != 2usize { ret (false, false) }
+    var question = children[0usize]
+    var other = children[1usize]
+    let (left_value, left_type, left_known) = meta_constant(c, g, tree, module_index, question)
+    var answer = left_value
+    var answer_type = left_type
+    if !left_known {
+        // The question may be written on either side, and only one side may be one: two of them
+        // would be a comparison this does not need to fold.
+        question = children[1usize]
+        other = children[0usize]
+        let (right_value, right_type, right_known) = meta_constant(c, g, tree, module_index, question)
+        if !right_known { ret (false, false) }
+        answer = right_value
+        answer_type = right_type
+    }
+    let (compared, compared_known) = compared_constant(c, g, tree, module_index, other, answer_type)
+    if !compared_known { ret (false, false) }
+    if op == .PunctEqEq { ret (answer == compared, true) }
+    ret (answer != compared, true)
 }
 
 // `os.thread_create[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize)`. The two
@@ -7577,6 +7677,47 @@ fn check_block(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.
 
 fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
     let end = node.first_child + node.child_count
+    // A settled condition means one of the arms is not code at all, so it is not checked. Only
+    // an `if` may fold -- a `while` whose condition never changes is a loop, not a choice -- and
+    // only one whose arms are blocks, which is the shape lowering takes too, so the two passes
+    // cannot disagree about which arm exists.
+    if node.kind == .IfStmt {
+        var condition_index = 0usize
+        var found_condition = false
+        var arms: [2]usize = zero
+        var arm_count = 0usize
+        var foldable = true
+        var scan = node.first_child
+        while scan < end {
+            if tree.children[scan].node {
+                let scanned = tree.children[scan].index
+                if !found_condition {
+                    condition_index = scanned
+                    found_condition = true
+                } else {
+                    if arm_count == arms.len || tree.nodes[scanned].kind != .Block {
+                        foldable = false
+                    } else {
+                        arms[arm_count] = scanned
+                        arm_count += 1usize
+                    }
+                }
+            }
+            scan += 1usize
+        }
+        if found_condition && foldable && arm_count != 0usize {
+            let (condition_type, condition_error) = check_expr(c, g, tree, module_index, condition_index, make_type(.Bool, "bool", module_index))
+            if condition_error == TypeMismatch { ret InvalidCondition }
+            if condition_error != ok { ret condition_error }
+            if condition_type.kind != .Bool { ret InvalidCondition }
+            let (taken, settled) = comptime_condition(c, g, tree, module_index, condition_index)
+            if settled {
+                if taken { ret check_block(c, r, g, tree, module_index, tree.nodes[arms[0usize]], function) }
+                if arm_count == 2usize { ret check_block(c, r, g, tree, module_index, tree.nodes[arms[1usize]], function) }
+                ret ok
+            }
+        }
+    }
     var first = true
     var at = node.first_child
     while at < end {

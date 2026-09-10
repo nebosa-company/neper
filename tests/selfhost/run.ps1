@@ -711,6 +711,17 @@ $metaGenericWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $metaGenericWritten -ne 'executable written') { throw 'e.meta generic emission failed' }
 & $metaGenericPath
 if ($LASTEXITCODE -ne 0) { throw "an e.meta answer inside a generic is wrong: exit $LASTEXITCODE" }
+# A branch whose condition is settled at compile time has one arm, and the other is not code:
+# not checked, not emitted. Only a `meta` question settles one (D138). The two things that
+# could not be written before are both here -- a walk over `meta.fields` whose arms do not type
+# check for each other's field types, and a generic recursing on `meta.element_type` whose base
+# case is the arm that disappears. An ordinary runtime `if` is here too, to say what is not
+# folded.
+$foldPath = Join-Path $testBuild 'comptime-branch-selfhost.exe'
+$foldWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_branch\src\main.e') $repo 'x64' 'windows' $foldPath
+if ($LASTEXITCODE -ne 0 -or $foldWritten -ne 'executable written') { throw 'comptime branch emission failed' }
+& $foldPath
+if ($LASTEXITCODE -ne 0) { throw "a folded branch chose wrongly: exit $LASTEXITCODE" }
 # Section 9's `Field` and `Member` as declared names: a comptime value crossing a call, so the
 # callee is instantiated per field and its own return type depends on which one it was given.
 # Without the guard that stops inference rebinding such a parameter, this fails at 88.

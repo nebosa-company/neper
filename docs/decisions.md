@@ -2133,3 +2133,35 @@ whose fields differ in kind therefore cannot be written until the comptime inter
 branch on a non-integer constant. That is the same missing piece `e.fmt.json`'s `encode`/`decode`
 (D134) and `e.fmt.csv`'s `encode_rows`/`decode_rows` (D135) wait on -- one gap, three modules,
 six declarations.
+## D138 — a branch a `meta` question settles has one arm, and the other is not code
+
+An `if` whose condition is decided before the program runs is folded: the arm that is not taken
+is neither checked nor emitted. Only one shape of condition qualifies -- a comparison with a
+`meta.kind` or `meta.array_len` question on one side and a constant on the other -- and that
+narrowness is the point. Nothing an ordinary program writes can be folded by accident, so no arm
+a reader expects to be checked stops being checked.
+
+This is what the codecs were waiting on, and the reason is the same in both places they were
+stuck. An unrolled `for` over `meta.fields[T]()` gives a body per field, and the bodies differ
+only in what `f.ty` is; but until now every arm of an `if` inside that body had to type check for
+every field, so `usize(slot)` in the integer arm had to be valid for the iteration whose field is
+a `str`. A codec is exactly a walk whose arms are per kind, so a codec could not be written. The
+same fold gives a recursive generic its base case: `depth[T]` recursing into
+`depth[meta.element_type[T]()]` used to instantiate forever, because the guard arm that would
+have stopped it was still live at the point where the element is no longer an array.
+
+Both passes ask the question, and neither remembers the answer. `check_condition_statement` and
+`lower_if` call `comptime_condition` on the same tree with the same comptime bindings in place;
+asking twice is what keeps them from drifting, where a decision recorded by one and read by the
+other would have to survive `check_instance` re-parsing the module into a fresh tree.
+
+A folded condition is still an expression and still checks like one. `meta.array_len[T]()` where
+`T` is not an array is an error whatever arm it guards -- only the arm not chosen is excused, not
+the question. And a question whose subject is still a type parameter never settles: a template
+body folds nothing (D136), which is why `MetaInfo` had to carry whether its value was an answer
+or a placeholder.
+
+The row this moves is "general comptime interpreter", from 0.25 to 0.4. What is still missing is
+an `if` over an arbitrary compile-time expression, which wants an interpreter this compiler does
+not have. What is no longer missing is the six declarations of D134, D135 and D137 --
+`e.fmt.json`, `e.fmt.csv` and `e.fmt.ini` can each be given the codec their fence declares.
