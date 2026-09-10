@@ -409,10 +409,11 @@ __GROUPS__
     against libc, because the compiler emitted every function of every module it touched &mdash;
     which is what dead-function elimination fixed: only what <code>main</code> reaches is emitted,
     so a binary that opens no library is freestanding again and a minimal one went from 221&nbsp;KB
-    to 8&nbsp;KB (D130 corrects D128). What is left is <code>last_error_detail</code> alone:
-    <code>error_message</code> needed none of the ambient state D109 withheld, so it is written,
-    and the missing one waits on a module-scope <code>var</code> in the compiler &mdash; Windows
-    already keeps that state per thread, and Linux has nowhere to put it (D129).
+    to 8&nbsp;KB (D130 corrects D128). Nothing in that fence is unwritten:
+    <code>last_error_detail</code> was the last, and it waited on a module-scope <code>var</code>
+    in the compiler, which is now built. It is a slot per thread keyed by the thread's own
+    identifier, with no atomics available inside <code>e.os</code>'s dependency budget &mdash; so a
+    detail may be absent and is never another thread's (D132).
     <code>e.io</code> is the subset the compiler needs.
     <code>e.io</code> no longer waits on <code>printf</code>: that expands, over a
     4&nbsp;KiB buffer of its own drained through a generated sink.</p>
