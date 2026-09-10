@@ -727,6 +727,14 @@ dl_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtur
 [ "$dl_written" = 'executable written' ]
 chmod +x "$test_build/os-dl-selfhost"
 "$test_build/os-dl-selfhost"
+# D131's property: a program that uses `e.os` and opens no library needs no loader. It checks
+# itself -- it reads its own image and walks its own program headers -- so nothing here has to
+# have `readelf`, and what is asserted is the file that was produced rather than what the
+# compiler says about it. Leaving a dead function's references behind fails it at 51.
+freestanding_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/freestanding/src/main.e" "$repo" x64 linux "$test_build/freestanding-selfhost")
+[ "$freestanding_written" = 'executable written' ]
+chmod +x "$test_build/freestanding-selfhost"
+"$test_build/freestanding-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
