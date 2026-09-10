@@ -61,6 +61,7 @@ compiler = {
   ("Host runtime intrinsics, both platforms", 1, "runtime_pe_x64.asm, runtime_elf_x64_ext.s"),
   ("os.syscall and mem.address_of: the raw kernel path", 1, "link/os_syscall carries a path and a stat buffer through getcwd and newfstatat; link/mem_address pins the address itself and D96 keeps it one-way. It is what lib/e/os.linux.e is written over -- six filesystem primitives in neper rather than asm. Linux only by design; the name does not resolve on Windows"),
   ("`.em` module format with Deps edges", 1, "src/em.e, fixtures/em"),
+  ("Dead-function elimination", 1, "only what `main` reaches is emitted, following calls and taken addresses. Both link paths drop the same functions from the same sequence, so an image linked from `.em` artifacts stays byte-identical to one compiled from source -- which link/function_values compares by hash. A minimal e.os binary went from 221 KB to 8 KB and is freestanding again; the compiler's own stage 2 from 4,170,240 to 3,930,624 bytes (D130)"),
   ("Cross-module inlining, 40 NIR cap", 0, "not started"),
   ("Incremental rebuild on the edge rule", 0, "not started"),
   ("os.thread_create / join / detach", 1, "link/os_thread runs and joins a real thread on both platforms: CreateThread on Windows, clone(2) over a self-allocated stack with a futex join on Linux. detach leaks its mapping, wanting a reaper"),
@@ -403,10 +404,12 @@ __GROUPS__
     over <code>os.syscall</code> on Linux and <code>kernel32</code> through
     <code>@import</code> on Windows, which is what D32 said all along (D97) &mdash; and on Linux
     the resolver is a DNS client written in neper, because that host has nothing to ask (D120).
-    The loader is the one place <code>os.linux.e</code> names a library instead of a syscall,
-    which costs nothing until it is called: an <code>@import</code> that is never reached adds
-    neither <code>PT_INTERP</code> nor <code>DT_NEEDED</code>, so a binary that opens no library
-    stays freestanding (D128). What is left is <code>last_error_detail</code> alone:
+    The loader is the one place <code>os.linux.e</code> names a library instead of a syscall.
+    That did cost something at first &mdash; every binary using <code>e.os</code> came out linked
+    against libc, because the compiler emitted every function of every module it touched &mdash;
+    which is what dead-function elimination fixed: only what <code>main</code> reaches is emitted,
+    so a binary that opens no library is freestanding again and a minimal one went from 221&nbsp;KB
+    to 8&nbsp;KB (D130 corrects D128). What is left is <code>last_error_detail</code> alone:
     <code>error_message</code> needed none of the ambient state D109 withheld, so it is written,
     and the missing one waits on a module-scope <code>var</code> in the compiler &mdash; Windows
     already keeps that state per thread, and Linux has nowhere to put it (D129).
