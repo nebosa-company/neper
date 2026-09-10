@@ -1915,3 +1915,43 @@ was being given up.
 both hosts record on: `dlopen` answers `NotFound` from its own handle check on one of them and never
 reaches the classifier, so a detail read after it would belong to whatever failed before. A zero code
 fails the fixture, which is what a recording that never happened would produce.
+
+## D133 — the root arena is reserved, and committed a chunk at a time as it is used
+
+Every process a neper compiler produces begins by taking its whole root arena, and on Windows it
+took it with `MEM_COMMIT`. Committing charges the commit limit — RAM plus pagefile — whether or not
+a page is ever touched, so a program that allocated a few kilobytes was charged the whole arena
+before `main` ran, and the arena size is baked into the binary rather than passed at run time. A
+suite run is a hundred-odd such processes; each one asked for half a gigabyte it did not use, and
+the machine answered by growing the pagefile until the system drive was full. Reserving instead is
+what the arena wanted all along: the address space is claimed up front, exactly as before, and the
+pages behind it arrive as they are allocated.
+
+Linux needed nothing. An anonymous `mmap` there is already backed only by the pages that are
+touched, which is why this was invisible until it was measured on the other host — the same source,
+the same arena, and one of the two paying for it.
+
+The growth belongs in the allocator, because that is the one place an arena's offset moves. The two
+hosts of that allocator arrived at it differently. `bootstrap/runtime.c` is ordinary C with statics,
+so the startup stub names the region it reserved through `neper_mem_root` and the allocator keeps a
+watermark. The embedded runtime has nowhere to keep one: it is emitted as bare text with no
+writable section and a relocation table that reaches imports and its own labels and nothing else.
+So it derives the watermark instead — what is committed is whatever the *old* offset reached,
+rounded up to a chunk, which is known from the arena it was handed. No state, and nothing to keep
+in step. A reset moves the offset back and the next growth re-commits pages that are already
+committed, which Windows allows and answers without work.
+
+The root arena is told apart by its capacity, which the runtime fixes and no other arena has. An
+arena over a caller's buffer therefore never reaches the growth, which matters because committing
+memory that was never reserved fails, and a spurious failure here would surface as `mem.Exhausted`
+on an allocation that had room.
+
+Measured on Windows, peak commit charge: a fixture compile falls from the flat 512 MB every process
+paid to 28 MB for the smallest and 96 MB for the largest, and the compiler compiling itself peaks at
+388 MB — which agrees with the 384m-fails/400m-succeeds cliff measured independently on Linux, and
+is the first time that number has been visible from outside the process at all.
+
+What this replaces is D-less: `--arena` was lowered from 1g to 512m one commit earlier to buy the
+same relief by giving up headroom. That trade is no longer necessary — the cap now costs only what
+is used, so it can be set by the largest program worth compiling rather than by what the commit
+limit will bear.

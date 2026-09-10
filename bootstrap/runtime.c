@@ -99,12 +99,39 @@ uint64_t neper_hash_bytes(const unsigned char *p, size_t len) {
     return hash ^ (hash >> 32);
 }
 
+/* On Windows the root arena is reserved rather than committed, so that a process is not
+ * charged the whole of it against the commit limit before `main` runs. It grows a chunk at
+ * a time from here, which is the one place an arena's offset moves. Linux needs none of
+ * this: an anonymous mapping there is already backed only by the pages that are touched. */
+#define NP_ROOT_CHUNK ((size_t)0x100000)
+
+static unsigned char *np_root_base;
+static size_t np_root_size;
+static size_t np_root_committed;
+
+#ifdef _WIN32
+static int np_root_grow(size_t need);
+#else
+#define np_root_grow(need) 1
+#endif
+
+/* The startup stub names the region it reserved and how much of it it committed first. A
+ * program whose stub says nothing -- every Linux one -- leaves the base null and never
+ * reaches the growth below. */
+void neper_mem_root(unsigned char *base, size_t size, size_t committed) {
+    np_root_base = base;
+    np_root_size = size;
+    np_root_committed = committed;
+}
+
 static void *np_arena_alloc(NpArena *a, size_t n, size_t alignment) {
     size_t at;
     if (!a || !alignment || (alignment & (alignment - 1))) return 0;
     if (a->off > SIZE_MAX - (alignment - 1)) return 0;
     at = (a->off + alignment - 1) & ~(alignment - 1);
     if (at > a->cap || n > a->cap - at) return 0;
+    if (np_root_base && a->base == np_root_base && a->cap == np_root_size &&
+        at + n > np_root_committed && !np_root_grow(at + n)) return 0;
     a->off = at + n;
     return a->base ? a->base + at : 0;
 }
@@ -417,6 +444,16 @@ void neper_os_reserve(void *result, size_t n) {
     unsigned char *out = (unsigned char *)result;
     void *p = VirtualAlloc(0, n, MEM_RESERVE, PAGE_NOACCESS);
     *(void **)out = p; *(uint32_t *)(out + 8) = p ? NP_OK : np_error(GetLastError());
+}
+
+static int np_root_grow(size_t need) {
+    size_t want = (need + NP_ROOT_CHUNK - 1) & ~(NP_ROOT_CHUNK - 1);
+    if (want > np_root_size) want = np_root_size;
+    if (want <= np_root_committed) return 1;
+    if (!VirtualAlloc(np_root_base + np_root_committed, want - np_root_committed,
+                      MEM_COMMIT, PAGE_READWRITE)) return 0;
+    np_root_committed = want;
+    return 1;
 }
 
 uint32_t neper_os_commit(unsigned char *p, size_t n) {

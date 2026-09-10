@@ -7239,6 +7239,11 @@ static void emit_windows_codeview(Compiler *c, FILE *out) {
     free(debug);
 }
 
+/* One megabyte, or the whole arena when it is smaller than that. */
+static unsigned long long np_root_first_chunk(size_t size) {
+    return size < 0x100000u ? (unsigned long long)size : 0x100000ull;
+}
+
 static void emit_windows_runtime(Compiler *c, FILE *out) {
     int i;
     fputs(
@@ -7250,7 +7255,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
-        "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\n"
+        "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"
         "np_stack_probe PROC\n"
         "    lea r10, [rsp+8]\n    mov r11, rax\n"
@@ -7289,10 +7294,24 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "    sub rsp, 232\n    .allocstack 232\n    .endprolog\n"
         "    xor ecx, ecx\n", out);
     fprintf(out, "    mov rdx, %llu\n", (unsigned long long)c->root_arena_size);
+    /* Reserved, not committed: committing the whole arena here charges every process
+     * the whole of it against the commit limit before it has allocated anything. The
+     * first chunk is committed now, and `neper_mem_root` lets the allocator grow the
+     * rest a chunk at a time. Linux needs none of it -- an anonymous mapping there is
+     * already backed only by the pages that are touched. */
     fputs(
-        "    mov r8d, 3000h\n    mov r9d, 4\n"
+        "    mov r8d, 2000h\n    mov r9d, 4\n"
         "    call VirtualAlloc\n    test rax, rax\n    je np_start_fail\n"
-        "    mov QWORD PTR [rsp+80], rax\n"
+        "    mov QWORD PTR [rsp+80], rax\n", out);
+    fprintf(out,
+        "    mov rcx, rax\n    mov rdx, %llu\n    mov r8d, 1000h\n    mov r9d, 4\n"
+        "    call VirtualAlloc\n    test rax, rax\n    je np_start_fail\n"
+        "    mov rcx, QWORD PTR [rsp+80]\n    mov rdx, %llu\n    mov r8, %llu\n"
+        "    call neper_mem_root\n",
+        np_root_first_chunk(c->root_arena_size),
+        (unsigned long long)c->root_arena_size,
+        np_root_first_chunk(c->root_arena_size));
+    fputs(
         "    call GetCommandLineW\n    mov rcx, rax\n    lea rdx, [rsp+88]\n    call CommandLineToArgvW\n"
         "    test rax, rax\n    je np_start_args_fail\n    mov QWORD PTR [rsp+96], rax\n"
         "    mov eax, DWORD PTR [rsp+88]\n    shl rax, 4\n    mov QWORD PTR [rsp+104], rax\n"

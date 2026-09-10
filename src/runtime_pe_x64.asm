@@ -27,6 +27,12 @@ EXTERN __imp_WideCharToMultiByte:QWORD
 EXTERN __imp_WriteFile:QWORD
 EXTERN __imp_SetFilePointerEx:QWORD
 
+; The root arena is reserved rather than committed, and grows a chunk at a time as it is
+; allocated from. Committing it whole would charge the whole of it against the commit limit
+; before `main` runs, for every process, however little it goes on to allocate.
+NP_ARENA_BYTES EQU 20000000h
+NP_ARENA_CHUNK EQU 100000h
+
 .code
 
 PUBLIC neper_entry
@@ -41,17 +47,25 @@ neper_entry PROC
     sub rsp, 96
 
     xor ecx, ecx
-    mov edx, 20000000h
-    mov r8d, 3000h
+    mov edx, NP_ARENA_BYTES
+    mov r8d, 2000h
     mov r9d, 4
     call qword ptr [__imp_VirtualAlloc]
     test rax, rax
     jz entry_fail
     mov r12, rax
 
+    mov rcx, r12
+    mov edx, NP_ARENA_CHUNK
+    mov r8d, 1000h
+    mov r9d, 4
+    call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jz entry_fail
+
     lea r13, [rsp+48]
     mov [r13], r12
-    mov qword ptr [r13+8], 20000000h
+    mov qword ptr [r13+8], NP_ARENA_BYTES
     mov qword ptr [r13+16], 1000h
     lea r14, [rsp+72]
     mov [r14], r12
@@ -271,6 +285,42 @@ np_arena_alloc PROC
     cmp rdx, r11
     ja arena_fail
     lea r9, [r10+rdx]
+
+; The reserved arena grows here, because this is the one place its offset moves. What was
+; committed is whatever the old offset reached rounded up to a chunk, so no watermark has to
+; be kept anywhere -- which matters, since the runtime is embedded as bare text with nowhere
+; writable to keep one. A reset moves the offset back and the next growth re-commits pages
+; that are already committed, which Windows allows and answers immediately.
+    cmp qword ptr [rcx+8], NP_ARENA_BYTES
+    jne arena_store
+    mov rax, [rcx+16]
+    add rax, NP_ARENA_CHUNK-1
+    and rax, -NP_ARENA_CHUNK
+    mov r11, r9
+    add r11, NP_ARENA_CHUNK-1
+    and r11, -NP_ARENA_CHUNK
+    cmp r11, rax
+    jbe arena_store
+    push rcx
+    push r9
+    push r10
+    push r11
+    sub rsp, 40
+    mov rdx, r11
+    sub rdx, rax
+    mov rcx, [rcx]
+    add rcx, rax
+    mov r8d, 1000h
+    mov r9d, 4
+    call qword ptr [__imp_VirtualAlloc]
+    add rsp, 40
+    pop r11
+    pop r10
+    pop r9
+    pop rcx
+    test rax, rax
+    jz arena_fail
+arena_store:
     mov [rcx+16], r9
     mov rax, [rcx]
     test rax, rax
