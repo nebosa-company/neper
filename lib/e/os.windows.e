@@ -891,6 +891,9 @@ extern fn raw_proc_address(library: usize, symbol: *const u8) -> usize
 @import("kernel32.dll", "FreeLibrary")
 extern fn raw_free_library(library: usize) -> i32
 
+@import("kernel32.dll", "GetCurrentThreadId")
+extern fn raw_current_thread() -> u32
+
 @import("kernel32.dll", "GetLastError")
 extern fn raw_last_error() -> u32
 
@@ -1126,8 +1129,80 @@ fn widen(a: *mem.Arena, text: str) -> ([]u16, err) {
 // Win32 reports failure through a code fetched afterwards rather than in the result,
 // so every call here reads it immediately. Only the codes the fence names are
 // distinguished; everything else is `Failed`.
+fn current_thread_id() -> usize {
+    ret usize(raw_current_thread())
+}
+
+// The same classification `from_last_error` makes, as the enum the fence names. A native code here
+// may be a Win32 error, a socket error or an `NTSTATUS`, and the three do not share a numbering --
+// which is the reason the detail carries the raw code as well as the kind.
+fn error_kind_of(code: i32) -> ErrorKind {
+    if code == 2i32 { ret .NotFound }
+    if code == 3i32 { ret .NotFound }
+    if code == 123i32 { ret .NotFound }
+    if code == 5i32 { ret .Denied }
+    if code == 32i32 { ret .Denied }
+    if code == 80i32 { ret .Exists }
+    if code == 183i32 { ret .Exists }
+    if code == 8i32 { ret .OutOfMemory }
+    if code == 87i32 { ret .Invalid }
+    if code == 50i32 { ret .Unsupported }
+    if code == 258i32 { ret .Timeout }
+    if code == 10035i32 { ret .WouldBlock }
+    if code == 10060i32 { ret .Timeout }
+    ret .Other
+}
+
+// Section 5's per-thread error detail, which is the one piece of ambient state `e.os` keeps.
+// `docs/modules.md` names it an explicit exception rather than an invisible guarantee, and D109
+// spells out that H07 is chartered to delete it -- so it is written to be replaceable and to fail
+// by saying nothing rather than by saying something another thread's.
+//
+// A slot per thread, keyed by the thread's own identifier. `e.os` may depend on `e.mem` and
+// nothing else (docs/modules.json), so there are no atomics to claim a slot with; two threads
+// whose identifiers land on the same slot overwrite each other. That is why a read requires the
+// identifier to match exactly and answers `Other` with no code when it does not: a detail that is
+// absent costs a caller a diagnostic, and one belonging to another thread costs it the truth.
+//
+// ponytail: sixty-four slots, no eviction, no atomics. A program with more live threads than that
+// loses details it would otherwise keep, which is a diagnostic and never a wrong answer. Real
+// thread-local storage would replace the whole of it, and H07 is where that belongs.
+const ERROR_SLOTS: usize = 64usize
+
+var error_slot_thread: [64]usize
+var error_slot_code: [64]i32
+var error_slot_used: [64]u8
+
+// The code is written first and the identifier last, so a reader that sees its own identifier is
+// looking at a slot whose code was already stored. Without atomics that is the most that can be
+// said, and it is enough for the only failure that matters here.
+fn record_error_detail(code: i32) {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    error_slot_code[slot] = code
+    error_slot_used[slot] = 1u8
+    error_slot_thread[slot] = thread
+}
+
+fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
+    var detail: ErrorDetail = zero
+    detail.kind = .Other
+    detail.operation = operation
+    detail.subject = subject
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    // Another thread's slot, or one nothing has written, is no detail at all.
+    if error_slot_used[slot] == 0u8 { ret detail }
+    if error_slot_thread[slot] != thread { ret detail }
+    let code = error_slot_code[slot]
+    detail.native_code = code
+    detail.kind = error_kind_of(code)
+    ret detail
+}
+
 fn from_last_error() -> err {
     let code = raw_last_error()
+    record_error_detail(i32(code))
     // ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_INVALID_NAME: a name that
     // cannot exist and a name that does not are the same answer to a caller.
     if code == 2u32 { ret NotFound }

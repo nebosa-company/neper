@@ -107,6 +107,7 @@ const SYS_BIND: usize = 49usize
 const SYS_LISTEN: usize = 50usize
 const SYS_GETSOCKNAME: usize = 51usize
 const SYS_SETSOCKOPT: usize = 54usize
+const SYS_GETTID: usize = 186usize
 const SYS_MMAP: usize = 9usize
 const SYS_NANOSLEEP: usize = 35usize
 const SYS_KILL: usize = 62usize
@@ -295,8 +296,80 @@ fn c_string(a: *mem.Arena, text: str) -> (usize, err) {
 // The kernel returns its errno negated in the result register. Only the codes the
 // fence names are distinguished; everything else is `Failed`, which is what an
 // `ErrorDetail` is for once `last_error_detail` exists.
+fn current_thread_id() -> usize {
+    let answer = syscall(SYS_GETTID, 0usize, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if answer < 0isize { ret 0usize }
+    ret usize(answer)
+}
+
+// The same classification `from_errno` makes, as the enum the fence names. The two are written
+// apart because one answers with an `err` a caller matches on and the other with a kind a caller
+// prints, and neither is derivable from the other.
+fn error_kind_of(code: i32) -> ErrorKind {
+    if code == 1i32 { ret .Denied }
+    if code == 2i32 { ret .NotFound }
+    if code == 4i32 { ret .Interrupted }
+    if code == 11i32 { ret .WouldBlock }
+    if code == 12i32 { ret .OutOfMemory }
+    if code == 17i32 { ret .Exists }
+    if code == 22i32 { ret .Invalid }
+    if code == 38i32 { ret .Unsupported }
+    if code == 110i32 { ret .Timeout }
+    ret .Other
+}
+
+// Section 5's per-thread error detail, which is the one piece of ambient state `e.os` keeps.
+// `docs/modules.md` names it an explicit exception rather than an invisible guarantee, and D109
+// spells out that H07 is chartered to delete it -- so it is written to be replaceable and to fail
+// by saying nothing rather than by saying something another thread's.
+//
+// A slot per thread, keyed by the thread's own identifier. `e.os` may depend on `e.mem` and
+// nothing else (docs/modules.json), so there are no atomics to claim a slot with; two threads
+// whose identifiers land on the same slot overwrite each other. That is why a read requires the
+// identifier to match exactly and answers `Other` with no code when it does not: a detail that is
+// absent costs a caller a diagnostic, and one belonging to another thread costs it the truth.
+//
+// ponytail: sixty-four slots, no eviction, no atomics. A program with more live threads than that
+// loses details it would otherwise keep, which is a diagnostic and never a wrong answer. Real
+// thread-local storage would replace the whole of it, and H07 is where that belongs.
+const ERROR_SLOTS: usize = 64usize
+
+var error_slot_thread: [64]usize
+var error_slot_code: [64]i32
+var error_slot_used: [64]u8
+
+// The code is written first and the identifier last, so a reader that sees its own identifier is
+// looking at a slot whose code was already stored. Without atomics that is the most that can be
+// said, and it is enough for the only failure that matters here.
+fn record_error_detail(code: i32) {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    error_slot_code[slot] = code
+    error_slot_used[slot] = 1u8
+    error_slot_thread[slot] = thread
+}
+
+fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
+    var detail: ErrorDetail = zero
+    detail.kind = .Other
+    detail.operation = operation
+    detail.subject = subject
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    // Another thread's slot, or one nothing has written, is no detail at all.
+    if error_slot_used[slot] == 0u8 { ret detail }
+    if error_slot_thread[slot] != thread { ret detail }
+    let code = error_slot_code[slot]
+    detail.native_code = code
+    detail.kind = error_kind_of(code)
+    ret detail
+}
+
 fn from_errno(result: isize) -> err {
     if result >= 0isize { ret ok }
+    // Every failing syscall in this file is classified here, which is why the detail is kept here
+    // and not at forty call sites.
+    record_error_detail(i32(0isize - result))
     if result == -1isize { ret Denied }
     if result == -2isize { ret NotFound }
     if result == -4isize { ret Interrupted }

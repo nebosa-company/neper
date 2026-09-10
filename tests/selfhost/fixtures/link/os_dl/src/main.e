@@ -1,5 +1,5 @@
-// `e.os`'s loader -- `dlopen`, `dlsym`, `dlclose` -- and `error_message`, which is here because it
-// is the other call that reaches the host for something a table could not keep in step with.
+// `e.os`'s loader -- `dlopen`, `dlsym`, `dlclose` -- and the error detail pair, which are here
+// because both reach the host for something a table could not keep in step with.
 //
 // The library each host opens is the one it already depends on and is therefore certain to be
 // there -- `kernel32.dll` on Windows, `libc.so.6` on Linux -- so nothing here needs anything
@@ -8,6 +8,16 @@
 
 use e.mem
 use e.os
+
+fn same(left: str, right: str) -> bool {
+    if left.len != right.len { ret false }
+    var at = 0usize
+    while at < left.len {
+        if left[at] != right[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
 
 fn host_library() -> str {
     if os.NATIVE_SEPARATOR == 92u8 { ret "kernel32.dll" }
@@ -64,15 +74,38 @@ fn main(a: *mem.Arena) -> err {
     let (empty, empty_error) = os.dlopen(a, "")
     if empty_error != os.NotFound { os.exit(22i32) }
 
+    // --- `last_error_detail` reports the code of the call that just failed, which is what makes
+    // it more than the portable `err`: two failures can classify the same and carry different
+    // codes. A failing syscall is what it is asked about, because that is the path both hosts
+    // record on -- `dlopen` answers `NotFound` from its own handle check on one of them and never
+    // reaches the classifier, so it would report whatever failed before it.
+    let (missing_info, missing_info_error) = os.stat(a, "np-no-such-file-anywhere")
+    if missing_info_error != os.NotFound { os.exit(50i32) }
+    let detail = os.last_error_detail("stat", "np-no-such-file-anywhere")
+    // The strings are the caller's own, borrowed rather than copied.
+    if !same(detail.operation, "stat") { os.exit(51i32) }
+    if !same(detail.subject, "np-no-such-file-anywhere") { os.exit(52i32) }
+    // Zero would mean nothing was recorded, which is the whole failure this exists to avoid.
+    if detail.native_code == 0i32 { os.exit(53i32) }
+    if detail.kind != .NotFound { os.exit(54i32) }
+    // The message for that code renders, which is the pair working together.
+    let (detail_text, detail_text_error) = os.error_message(a, detail)
+    if detail_text_error != ok { os.exit(55i32) }
+    if detail_text.len == 0usize { os.exit(56i32) }
+    // A later failure of a different kind replaces it: this is the last error, not the first.
+    if os.mkdir(a, "") == ok { os.exit(57i32) }
+    let later_detail = os.last_error_detail("mkdir", "")
+    if later_detail.native_code == 0i32 { os.exit(58i32) }
+
     // --- `error_message` renders a native code. The code is the caller's, carried in the detail,
     // so this needs no ambient state and says nothing about what failed last.
-    var detail: os.ErrorDetail = zero
-    detail.kind = .NotFound
-    detail.operation = "open"
-    detail.subject = "np-nothing"
+    var built: os.ErrorDetail = zero
+    built.kind = .NotFound
+    built.operation = "open"
+    built.subject = "np-nothing"
     // The code for a missing file on each host: ERROR_FILE_NOT_FOUND, and ENOENT.
-    detail.native_code = 2i32
-    let (message, message_error) = os.error_message(a, detail)
+    built.native_code = 2i32
+    let (message, message_error) = os.error_message(a, built)
     if message_error != ok { os.exit(40i32) }
     if message.len == 0usize { os.exit(41i32) }
     // Whatever the wording and locale, it is one line: the trailing period and newline the system

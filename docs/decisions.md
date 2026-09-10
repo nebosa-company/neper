@@ -1878,3 +1878,40 @@ The lesson is narrower than "test more". Three mistakes in this area were caught
 `link/io_streams` here. The one that shipped wrong was the one property no fixture covers, which was
 re-derived by hand and then not re-derived after the design changed under it. A measurement is
 evidence about the code that was measured, and a redesign expires it.
+
+## D132 — the error detail is a slot per thread, and says nothing rather than something wrong
+
+`last_error_detail` completes `e.os` at 131 of 131. D109 decided the exception would not be
+exercised, for three reasons; two of them have since expired and the third is answered rather than
+denied.
+
+It needed a mechanism the language did not have. It does now: module-scope `var` is mutable static
+storage, which spec section 5 always allowed and the compiler did not implement until D129 named it
+as the blocker and it was built. D129 also observed that Windows needs no storage at all, since
+`GetLastError` is per-thread state the host already keeps — but it is stored on both hosts anyway,
+because a native code here may be a Win32 error, a socket error or an `NTSTATUS` and only the
+classifier that produced one knows which it was.
+
+Correct meant all of it, and all of it is one place per host. Every failing call in each variant
+classifies through a single function — `from_errno` on Linux, `from_last_error` on Windows — so the
+code is recorded there rather than at forty call sites. That was the objection's weight and it turned
+out to be the cheapest part.
+
+What remains is the per-thread guarantee, and this is where the answer is a design rather than a
+dismissal. `e.os` may depend on `e.mem` and nothing else, so there are no atomics to claim a slot
+with. The table is a slot per thread keyed by the thread's own identifier, and two threads whose
+identifiers land on the same slot overwrite each other. A read therefore requires the identifier to
+match exactly and answers `Other` with no code when it does not. That is the whole of the guarantee:
+**a detail may be absent, and is never another thread's.** An absent detail costs a caller a
+diagnostic; a detail belonging to another thread would cost it the truth, and the second is the one
+worth refusing. Sixty-four slots, no eviction, marked as a ceiling in both files.
+
+D109's third reason stands unchanged and is not overridden here: H07 is chartered to delete the
+temporal contract, and this is written to be deleted — one recording site, one table, one reader.
+What it buys until then is the raw platform code behind a `Failed`, which is the precision D109 said
+was being given up.
+
+`link/os_dl` asks about a failing syscall rather than a failing `dlopen`, because that is the path
+both hosts record on: `dlopen` answers `NotFound` from its own handle check on one of them and never
+reaches the classifier, so a detail read after it would belong to whatever failed before. A zero code
+fails the fixture, which is what a recording that never happened would produce.
