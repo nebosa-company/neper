@@ -18,7 +18,12 @@ require_fixture() {
 "$repo/scripts/build-bootstrap.sh" >/dev/null
 mkdir -p "$test_build"
 
-$neper build "$repo/src/main.e" --arena 1g --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
+# The arena is committed in full before `main` runs and its size is baked into the binary, so
+# every invocation below charges it. Measured against the heaviest workload there is -- the
+# compiler compiling itself -- 384m exhausts and 400m succeeds, so the mark is near 390m and this
+# is a third over it. The fixtures here are far smaller than that; 1g was eight invocations of
+# headroom nobody was using.
+$neper build "$repo/src/main.e" --arena 512m --output "$test_build/neper-self" --emit-asm "$test_build/neper-self.s"
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
 # below rsp, into the outgoing argument area and past the stack pointer.
