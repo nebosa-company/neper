@@ -8,12 +8,12 @@ New-Item -ItemType Directory -Force -Path $testBuild | Out-Null
 
 $compiler = Join-Path $testBuild 'neper-self.exe'
 $compilerAsm = Join-Path $testBuild 'neper-self.asm'
-# The arena is committed in full before `main` runs and its size is baked into the binary, so
-# every invocation below charges it. Measured against the heaviest workload there is -- the
-# compiler compiling itself -- 384m exhausts and 400m succeeds, so the mark is near 390m and this
-# is a third over it. The fixtures here are far smaller than that; 1g was eight invocations of
-# headroom nobody was using.
-& $neper build (Join-Path $repo 'src\main.e') --arena 512m --output $compiler --emit-asm $compilerAsm
+# The arena is reserved and committed as it is used (D133), so its size is a ceiling rather
+# than a cost -- what a run charges is what it allocates. Measured against the heaviest
+# workload there is, the compiler compiling itself: 384m exhausts, 400m succeeds, and the
+# peak is 388m. A gigabyte is the largest program worth compiling, not the largest the
+# commit limit will bear.
+& $neper build (Join-Path $repo 'src\main.e') --arena 1g --output $compiler --emit-asm $compilerAsm
 if ($LASTEXITCODE -ne 0) { throw 'self-hosted compiler slice did not build' }
 # Every bootstrap frame has to cover the temporaries its statements allocate. A
 # frame sized by guess rather than by measurement lets a deep statement address
