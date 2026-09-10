@@ -1843,3 +1843,38 @@ What is deliberately not done is dead *module-scope* data and dead generic insta
 exists because the checker made one, which happens when a call is checked rather than when it is
 reached, so a module's instances are still over-approximated; nothing measured says that is worth a
 second walk yet.
+
+## D131 — a dead function's references die with it, and D130 claimed otherwise before they did
+
+D130 said a Linux binary that opens no library is freestanding again. When it was written that was
+true of the code that had been measured and not of the code that was committed, and this row is the
+correction.
+
+The first implementation of dead-function elimination filtered while lowering, so a function nobody
+called was never lowered and never made a reference. That version is what the 221,392-to-8,200 and
+`needed=0` measurements came from. It could not stay: filtering during lowering changes the order
+functions are emitted in, and an image linked from `.em` artifacts has to match one compiled from
+source byte for byte. So it was redesigned to lower everything and prune afterwards — and the suites
+were re-run, but the freestanding property was not re-measured. Pruning after lowering removes the
+functions and leaves their references in `function_refs`, which is the list the imports are
+enumerated from, so `DT_NEEDED: libc.so.6` came back. A program whose only `e.os` call was `os.exit`
+depended on libc, exactly as before, while the row and the readiness page said it did not.
+
+The fix is to prune the reference list too, and it is what makes the property hold rather than be
+asserted: a reference no surviving function names is dropped, and the instructions that index one are
+renumbered. Measured after the fix rather than before it — a program using `e.os` without the loader
+has one `DT_NEEDED` fewer than it has segments to put it in, which is to say none.
+
+Renumbering has an order to it, and getting that wrong is silent. Writing each reference's new index
+into the slot it is leaving and compacting in the same pass destroys that mapping as soon as a later
+survivor moves onto the slot, so a reference whose slot was reused resolves to a different function.
+`link/io_streams` failed and nothing else did, because `e.io`'s adapters are callbacks and taking an
+address is the same edge as a call — a wrong callback is a wrong answer where a wrong call would have
+been a crash. The indices are now assigned first, every instruction renumbered while the original
+slots still hold their own mapping, and only then is the array compacted.
+
+The lesson is narrower than "test more". Three mistakes in this area were caught by fixtures --
+`check/constant_operators_valid` on a token scan, `link/function_values` on the artifact divergence,
+`link/io_streams` here. The one that shipped wrong was the one property no fixture covers, which was
+re-derived by hand and then not re-derived after the design changed under it. A measurement is
+evidence about the code that was measured, and a redesign expires it.

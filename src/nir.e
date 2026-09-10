@@ -142,6 +142,10 @@ type FunctionRef = struct {
     module_index: usize,
     name: str,
     instance: usize,
+    // Both are the prune's working state: whether a surviving function still names this, and
+    // where it moved to once the dead ones were dropped.
+    live: bool,
+    renumbered: usize,
     // An `extern fn` bound by `@import`. A reference carrying a library is called
     // through the image's import table rather than by a relative displacement, so the
     // distinction has to survive as far as the linker.
@@ -319,6 +323,75 @@ fn prune_unreachable(builder: *Builder, keep: []bool) -> err {
         at += 1usize
     }
     builder.function_count = written
+    ret prune_references(builder)
+}
+
+// The references a dead function made die with it. This matters beyond tidiness: the imports an
+// image asks its loader for are enumerated from this list, so a reference left behind by a
+// function nobody calls still puts `DT_NEEDED` in the file -- which is how a program whose only
+// `e.os` call was `os.exit` came to depend on libc.
+//
+// Compacting means the surviving instructions' immediates have to be renumbered, since a
+// reference is named by its index.
+fn prune_references(builder: *Builder) -> err {
+    if builder.function_ref_count == 0usize { ret ok }
+    // Marked by walking what is left, which is exactly the set that survived the prune above.
+    var reference_at = 0usize
+    while reference_at < builder.function_ref_count {
+        builder.function_refs[reference_at].live = false
+        reference_at += 1usize
+    }
+    var function_at = 0usize
+    while function_at < builder.function_count {
+        let item = builder.functions[function_at]
+        var instruction_at = 0usize
+        while instruction_at < item.instruction_count {
+            let instruction = builder.instructions[item.first_instruction + instruction_at]
+            if references_function(instruction.opcode) && instruction.immediate < builder.function_ref_count {
+                builder.function_refs[instruction.immediate].live = true
+            }
+            instruction_at += 1usize
+        }
+        function_at += 1usize
+    }
+    // Where each surviving reference will end up, recorded in the slot it still occupies.
+    var written = 0usize
+    reference_at = 0usize
+    while reference_at < builder.function_ref_count {
+        if builder.function_refs[reference_at].live {
+            builder.function_refs[reference_at].renumbered = written
+            written += 1usize
+        }
+        reference_at += 1usize
+    }
+    // The instructions are renumbered before anything moves. Doing it the other way round reads a
+    // mapping out of a slot a later reference has already been moved into, which points a call --
+    // or a callback, since taking an address is the same edge -- at the wrong function.
+    function_at = 0usize
+    while function_at < builder.function_count {
+        let item = builder.functions[function_at]
+        var instruction_at = 0usize
+        while instruction_at < item.instruction_count {
+            let position = item.first_instruction + instruction_at
+            let instruction = builder.instructions[position]
+            if references_function(instruction.opcode) && instruction.immediate < builder.function_ref_count {
+                builder.instructions[position].immediate = builder.function_refs[instruction.immediate].renumbered
+            }
+            instruction_at += 1usize
+        }
+        function_at += 1usize
+    }
+    // Only now is the array compacted, which cannot disturb a mapping that has already been used.
+    var moved_to = 0usize
+    reference_at = 0usize
+    while reference_at < builder.function_ref_count {
+        if builder.function_refs[reference_at].live {
+            builder.function_refs[moved_to] = builder.function_refs[reference_at]
+            moved_to += 1usize
+        }
+        reference_at += 1usize
+    }
+    builder.function_ref_count = written
     ret ok
 }
 
@@ -365,7 +438,7 @@ fn intern_function(builder: *Builder, module_index: usize, name: str, instance: 
     }
     if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
     let index = builder.function_ref_count
-    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, library: "", symbol: "" }
+    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "" }
     builder.function_ref_count += 1usize
     ret (index, ok)
 }
