@@ -270,6 +270,28 @@ fn append_imports(builder: *nir.Builder, output: *emit_x64.Buffer, raw_offset: u
     ret ok
 }
 
+// The globals area's contents. A zero-initialised one needs nothing written -- the section is
+// padded with zeros anyway, which is what section 5's "zero-initialised" costs -- so only a scalar
+// initialiser puts bytes here, little-endian at its own width.
+fn append_globals(builder: *nir.Builder, output: *emit_x64.Buffer, area_offset: usize) -> err {
+    var at = 0usize
+    while at < builder.global_count {
+        let item = builder.globals[at]
+        if item.has_initial && item.initial != 0usize {
+            try pad_to(output, area_offset + nir.global_area_offset(builder, at))
+            var byte_at = 0usize
+            var remaining = item.initial
+            while byte_at < item.size {
+                try emit_x64.byte(output, remaining % 256usize)
+                remaining = remaining / 256usize
+                byte_at += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret InvalidExecutable }
     let (main_index, main_error) = find_main(builder)
@@ -282,7 +304,14 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
     if text_virtual_error != ok { ret text_virtual_error }
     let idata_address = text_address + text_virtual_size
-    let idata_size = import_section_size(builder, idata_address)
+    let import_size = import_section_size(builder, idata_address)
+    // Module-scope `var`s go at the end of `.idata`, which is already the one writable section in
+    // the image -- the import address table has to be written by the loader, so this needs no
+    // section of its own. Eight-aligned so the widest global is aligned whatever precedes it.
+    let (globals_address, globals_align_error) = align_up(idata_address + import_size, 8usize)
+    if globals_align_error != ok { ret globals_align_error }
+    let globals_size = nir.global_area_size(builder)
+    let idata_size = globals_address - idata_address + globals_size
     let (idata_raw_size, idata_raw_error) = align_up(idata_size, 512usize)
     if idata_raw_error != ok { ret idata_raw_error }
     let idata_raw_offset = headers_size + text_raw_size
@@ -392,6 +421,19 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
             if reference_index >= builder.function_ref_count { ret InvalidExecutable }
             // An imported call reads the slot the loader wrote, so what is patched is
             // the displacement from the instruction to that slot rather than to code.
+            // A module-scope `var`: the displacement from the instruction to where the data
+            // was laid out. The same arithmetic an imported slot needs, over a different table.
+            if relocations[relocation_at].global {
+                if reference_index >= builder.global_count { ret InvalidExecutable }
+                let destination = globals_address + nir.global_area_offset(builder, reference_index)
+                let site = machine_file + relocations[relocation_at].displacement_at
+                let next_rva = text_address + site - headers_size + 4usize
+                if destination < next_rva { ret InvalidExecutable }
+                try emit_x64.patch_little_u32(output, site, destination - next_rva)
+                relocations[relocation_at].resolved = true
+                relocation_at += 1usize
+                continue
+            }
             let (import_library, import_entry, is_import) = reference_import_slot(builder, reference_index)
             if is_import {
                 let slot = import_address_table(builder, idata_address, import_library) + import_entry * 8usize
@@ -411,6 +453,8 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     }
     try pad_to(output, idata_raw_offset)
     try append_imports(builder, output, idata_raw_offset, idata_address)
+    try append_globals(builder, output, idata_raw_offset + globals_address - idata_address)
+    try pad_to(output, idata_raw_offset + idata_size)
     if output.count != idata_raw_offset + idata_size { ret InvalidExecutable }
     ret pad_to(output, idata_raw_offset + idata_raw_size)
 }

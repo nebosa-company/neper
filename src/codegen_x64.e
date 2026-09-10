@@ -25,6 +25,10 @@ type Fixup = struct {
 type Relocation = struct {
     displacement_at: usize,
     function_ref: usize,
+    // A reference to a module-scope `var` rather than to a function. The two share this list
+    // because they share everything else about being a displacement the image has to fill;
+    // `global` says which table `function_ref` indexes.
+    global: bool,
     resolved: bool,
 }
 
@@ -49,7 +53,14 @@ fn add_fixup(fixups: []Fixup, count: *usize, displacement_at: usize, block: usiz
 
 fn add_relocation(relocations: []Relocation, count: *usize, displacement_at: usize, function_ref: usize) -> err {
     if *count == relocations.len { ret Unsupported }
-    relocations[*count] = Relocation { displacement_at: displacement_at, function_ref: function_ref, resolved: false }
+    relocations[*count] = Relocation { displacement_at: displacement_at, function_ref: function_ref, global: false, resolved: false }
+    *count += 1usize
+    ret ok
+}
+
+fn add_global_relocation(relocations: []Relocation, count: *usize, displacement_at: usize, global_index: usize) -> err {
+    if *count == relocations.len { ret Unsupported }
+    relocations[*count] = Relocation { displacement_at: displacement_at, function_ref: global_index, global: true, resolved: false }
     *count += 1usize
     ret ok
 }
@@ -58,6 +69,12 @@ fn resolve_calls(builder: *nir.Builder, function_offsets: []usize, relocations: 
     if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret Unsupported }
     var relocation_at = 0usize
     while relocation_at < relocation_count {
+        // A global's address depends on where the image puts its data, which is the linker's to
+        // say and not knowable from a code offset.
+        if relocations[relocation_at].global {
+            relocation_at += 1usize
+            continue
+        }
         let reference_index = relocations[relocation_at].function_ref
         if reference_index >= builder.function_ref_count { ret Unsupported }
         let reference = builder.function_refs[reference_index]
@@ -1116,6 +1133,19 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 try emit_x64.stack_address(output, destination, slot)
                 try store_result(allocations, instruction.result, destination, output)
             } else {
+            if instruction.opcode == .GlobalAddress {
+                // `lea` from the instruction pointer, with the displacement left for whoever
+                // lays the image out. Nothing is emitted inline: the storage is one place in the
+                // image and this only names it.
+                if !instruction.has_result || instruction.operand_count != 0usize || instruction.immediate >= builder.global_count { ret Unsupported }
+                let (address_displacement, address_error) = emit_x64.relative_address(output, 11usize)
+                if address_error != ok { ret address_error }
+                try add_global_relocation(relocations, relocation_count, address_displacement, instruction.immediate)
+                let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
+                if destination_error != ok { ret destination_error }
+                if destination != 11usize { try emit_x64.mov_register(output, destination, 11usize) }
+                try store_result(allocations, instruction.result, destination, output)
+            } else {
             if instruction.opcode == .ConstString {
                 try select_string(builder, current, instruction, allocations, local_base, output)
             } else {
@@ -1465,6 +1495,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         }
         }
         }
+        }
         at += 1usize
     }
     var fixup_at = 0usize
@@ -1571,7 +1602,7 @@ fn self_test() -> err {
     let (call_displacement, call_error) = emit_x64.call(&call_output)
     if call_error != ok { ret call_error }
     while call_output.count < 20usize { try emit_x64.byte(&call_output, 144usize) }
-    relocations[0usize] = Relocation { displacement_at: call_displacement, function_ref: reference_index, resolved: false }
+    relocations[0usize] = Relocation { displacement_at: call_displacement, function_ref: reference_index, global: false, resolved: false }
     var function_offsets: [2]usize = zero
     function_offsets[0usize] = 20usize
     try resolve_calls(&builder, function_offsets[..], relocations[..], 1usize, &call_output)

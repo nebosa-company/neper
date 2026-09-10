@@ -340,6 +340,41 @@ fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, toke
     ret (result, emit_error)
 }
 
+// The address of a module-scope `var`, as a pointer to its own type. Interning is what makes one
+// variable one address however many places reach it; the address itself is a relocation the
+// linker fills, because nothing here knows where the image will put it.
+// Every module-scope `var` the program declares, in the checker's order, so that a global's index
+// is the same number to the checker, the emitter and the linker.
+fn declare_globals(c: *check.Checker, builder: *nir.Builder) -> err {
+    if builder.global_count != 0usize { ret ok }
+    var at = 0usize
+    while at < c.global_count {
+        let item = c.globals[at]
+        let (info, info_error) = layout.type_info(c, item.ty)
+        if info_error != ok { ret info_error }
+
+        let (initial, initial_error) = check.global_initial_bits(c, at)
+        if initial_error != ok { ret initial_error }
+        let (index, add_error) = nir.add_global(builder, item.module_index, item.name, info.size, info.alignment, initial, item.has_expression)
+        if add_error != ok { ret add_error }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn global_address(c: *check.Checker, global_index: usize, builder: *nir.Builder, token: lex.Token) -> (usize, check.Type, err) {
+    if global_index >= c.global_count || global_index >= builder.global_count { ret (0usize, zero, check.InvalidConstant) }
+    let item = c.globals[global_index]
+    let index = global_index
+    let (element_index, store_error) = check.store_type(c, item.ty)
+    if store_error != ok { ret (0usize, item.ty, store_error) }
+    var pointer = check.make_type(.Pointer, "", item.module_index)
+    pointer.element = element_index
+    pointer.has_element = true
+    let (instruction, result, emit_error) = nir.emit(builder, .GlobalAddress, pointer, true, index, token)
+    ret (result, pointer, emit_error)
+}
+
 fn register_return_type(c: *check.Checker, ty: check.Type) -> bool {
     // A function type is an address and comes back in a register, exactly as a pointer does.
     // Leaving it out put `os.dlsym`'s result in a return slot while the lookup it calls returns
@@ -2090,8 +2125,19 @@ fn lower_place(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         if token.kind != .Identifier { ret (0usize, zero, check.Unsupported) }
         let name = g.modules[module_index].text[token.start..token.end]
         let (binding, found) = find_binding(bindings, binding_count, name)
-        if !found || !binding.address { ret (0usize, zero, check.Unsupported) }
-        ret (binding.value, binding.ty, ok)
+        if found {
+            if !binding.address { ret (0usize, zero, check.Unsupported) }
+            ret (binding.value, binding.ty, ok)
+        }
+        // Assigning to a module-scope `var` is a store to the same address reading it loads
+        // from, which is the whole of what makes it one variable rather than a value per use.
+        let (global_index, has_global) = check.find_global(c, module_index, name)
+        if has_global {
+            let (address, address_type, address_error) = global_address(c, global_index, builder, token)
+            if address_error != ok { ret (0usize, address_type, address_error) }
+            ret (address, c.globals[global_index].ty, ok)
+        }
+        ret (0usize, zero, check.Unsupported)
     }
     if node.kind == .BracketPostfix && !check.contains_token(c, node.token_start, node.token_end, .PunctRange) {
         let (address, ty, address_error) = lower_index_address(c, g, tree, module_index, node_index, builder, bindings, binding_count)
@@ -2385,6 +2431,19 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                 if type_error != ok { ret (0usize, result_type, type_error) }
                 let (constant, constant_error) = lower_constant(c, constant_index, result_type, token, builder)
                 ret (constant, result_type, constant_error)
+            }
+            // A module-scope `var` is storage, so reading it is a load -- the one difference from
+            // a local being where the address comes from.
+            let (global_index, has_global) = check.find_global(c, module_index, name)
+            if has_global {
+                let (address, address_type, address_error) = global_address(c, global_index, builder, token)
+                if address_error != ok { ret (0usize, address_type, address_error) }
+                let value_type = c.globals[global_index].ty
+                let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, value_type, true, 0usize, token)
+                if load_error != ok { ret (0usize, value_type, load_error) }
+                let operand_error = nir.add_operand(builder, load_instruction, address)
+                if operand_error != ok { ret (0usize, value_type, operand_error) }
+                ret (loaded, value_type, ok)
             }
             let (symbol_index, has_symbol) = resolve.find(c.resolver, module_index, name, .Value)
             let (intrinsic_function, has_intrinsic_function) = check.find_function(c, module_index, name)
@@ -4607,6 +4666,7 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
 }
 
 fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+    try declare_globals(c, builder)
     var module_index = 0usize
     while module_index < g.count {
         try module(c, g, module_index, builder, signatures, bindings)
@@ -4617,6 +4677,7 @@ fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signat
 
 fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, lowered: []bool) -> err {
     if g.count == 0usize || g.count > lowered.len { ret FunctionNotFound }
+    try declare_globals(c, builder)
     var module_index = 0usize
     while module_index < g.count {
         lowered[module_index] = false

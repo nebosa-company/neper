@@ -290,6 +290,27 @@ fn append_dynamic(builder: *nir.Builder, output: *emit_x64.Buffer, dynstr_addres
 // the code, and the one writable segment holds the dynamic array and the slots the
 // loader fills. The layout is derived in one pass so that every address below is the
 // arithmetic that produced it and none of it is written down twice.
+// The globals area's contents. A zero-initialised one needs nothing written, since padding is
+// already zero -- which is what section 5's "zero-initialised unless given an initialiser" costs.
+fn append_globals(builder: *nir.Builder, output: *emit_x64.Buffer, area_offset: usize) -> err {
+    var at = 0usize
+    while at < builder.global_count {
+        let item = builder.globals[at]
+        if item.has_initial && item.initial != 0usize {
+            try pad_to(output, area_offset + nir.global_area_offset(builder, at))
+            var byte_at = 0usize
+            var remaining = item.initial
+            while byte_at < item.size {
+                try emit_x64.byte(output, remaining % 256usize)
+                remaining = remaining / 256usize
+                byte_at += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
@@ -439,6 +460,12 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try emit_x64.patch_relative32(output, code_offset + 200usize, main_offset)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
+        // A module-scope `var`'s address depends on where the data segment lands, which is
+        // decided after the code is written -- so these are left to the pass that does it.
+        if relocations[relocation_at].global {
+            relocation_at += 1usize
+            continue
+        }
         if !relocations[relocation_at].resolved {
             let reference_index = relocations[relocation_at].function_ref
             if reference_index >= builder.function_ref_count { ret InvalidExecutable }
@@ -511,7 +538,12 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u32(output, 0usize)
     try little_u16(output, 64usize)
     try little_u16(output, 56usize)
-    try little_u16(output, 1usize)
+    // A second segment only when there is something to put in it. An image with no module-scope
+    // `var` keeps the single read-execute segment it has always had, byte for byte -- which the
+    // determinism harness compares, so the absence of the feature has to cost nothing.
+    var segments = 1usize
+    if builder.global_count != 0usize { segments = 2usize }
+    try little_u16(output, segments)
     try little_u16(output, 0usize)
     try little_u16(output, 0usize)
     try little_u16(output, 0usize)
@@ -523,6 +555,19 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u64(output, 0usize)
     try emit_x64.little_u64(output, 0usize)
     try emit_x64.little_u64(output, 4096usize)
+    if segments == 2usize {
+        // Writable, and page-aligned in both the file and memory so the two agree modulo the
+        // page -- which is what the loader requires of a mapping. The offset and size are not
+        // known until the code has been written, so they are patched like the first segment's.
+        try emit_x64.little_u32(output, 1usize)
+        try emit_x64.little_u32(output, 6usize)
+        try emit_x64.little_u64(output, 0usize)
+        try emit_x64.little_u64(output, 0usize)
+        try emit_x64.little_u64(output, 0usize)
+        try emit_x64.little_u64(output, 0usize)
+        try emit_x64.little_u64(output, 0usize)
+        try emit_x64.little_u64(output, 4096usize)
+    }
     try pad_to(output, code_offset)
     try append_startup(output)
     let machine_start = output.count
@@ -538,6 +583,12 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.patch_relative32(output, code_offset + 200usize, main_offset)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
+        // A module-scope `var`'s address depends on where the data segment lands, which is
+        // decided after the code is written -- so these are left to the pass that does it.
+        if relocations[relocation_at].global {
+            relocation_at += 1usize
+            continue
+        }
         if !relocations[relocation_at].resolved {
             let reference_index = relocations[relocation_at].function_ref
             if reference_index >= builder.function_ref_count { ret InvalidExecutable }
@@ -548,8 +599,40 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         }
         relocation_at += 1usize
     }
-    try patch_little_u64(output, 96usize, output.count)
-    try patch_little_u64(output, 104usize, output.count)
+    // The code segment covers everything written so far; the data segment starts on the next page
+    // after it, so that one mapping does not have to be both writable and executable.
+    let code_end = output.count
+    try patch_little_u64(output, 96usize, code_end)
+    try patch_little_u64(output, 104usize, code_end)
+    if builder.global_count != 0usize {
+        let area_offset = align_up_to(code_end, 4096usize)
+        let area_size = nir.global_area_size(builder)
+        try pad_to(output, area_offset)
+        try append_globals(builder, output, area_offset)
+        try pad_to(output, area_offset + area_size)
+        // The second header: offset, virtual and physical address, then both sizes.
+        try patch_little_u64(output, 128usize, area_offset)
+        try patch_little_u64(output, 136usize, 4194304usize + area_offset)
+        try patch_little_u64(output, 144usize, 4194304usize + area_offset)
+        try patch_little_u64(output, 152usize, area_size)
+        try patch_little_u64(output, 160usize, area_size)
+        var global_at = 0usize
+        while global_at < relocation_count {
+            if relocations[global_at].global {
+                let reference_index = relocations[global_at].function_ref
+                if reference_index >= builder.global_count { ret InvalidExecutable }
+                let destination = 4194304usize + area_offset + nir.global_area_offset(builder, reference_index)
+                let site = machine_start + relocations[global_at].displacement_at
+                // The displacement is from the end of the instruction, and an address in the
+                // file is its own offset from the image base on this path.
+                let next_address = 4194304usize + site + 4usize
+                if destination < next_address { ret InvalidExecutable }
+                try emit_x64.patch_little_u32(output, site, destination - next_address)
+                relocations[global_at].resolved = true
+            }
+            global_at += 1usize
+        }
+    }
     ret ok
 }
 
