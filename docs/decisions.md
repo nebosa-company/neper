@@ -2056,3 +2056,45 @@ that takes nothing from a non-empty request is how `read(2)` and `ReadFile` both
 on a file, a pipe and a socket alike. `file_read` is the one place that knows the zero came
 from a file, so the translation belongs there rather than in a guard per caller. `link/io_streams`
 now asks a real file the question it already asked a slice.
+## D136 — a reflection question inside a generic is deferred, not answered
+
+A generic function's body is checked twice: `check_function` checks the template once with
+`active_arguments = false`, before any instance exists, and `check_instance` checks it again per
+instance with the argument bound. In the first pass `comptime_type` resolves `T` to a
+`.TypeParameter`, and every `e.meta` question that has to produce a constant then had nothing to
+produce: `meta.kind[T]()` and `meta.array_len[T]()` returned `InvalidType`, and
+`meta.element_type[T]()` returned it from `derived_from_subject`.
+
+`mem.size_of[T]()` never had the problem, and the reason is the whole of the fix. Its answer is
+not known at check time either -- `layout` is built on `check` -- so it records the subject and
+lets lowering compute the number. The three that failed were answering in the pass that cannot
+answer. So they now do what it does: in the template pass a question whose subject is still a
+type parameter keeps its **result type**, so the body around it goes on checking, and its
+**value** is filled in when the instance is checked. `derived_from_subject` returns the parameter
+as its own answer for the same reason.
+
+The guard is the subject's kind, not a flag. A `.TypeParameter` reaches these two places only in
+the template pass -- in an instance `active_argument` has already substituted the bound type --
+so the deferral cannot fire where an answer was available.
+
+### What it does and does not reach
+
+Deferral composes through a chain: `meta.element_type[T]()` is accepted as the comptime argument
+of another generic, and `link/meta_generic` carries one two deep, so what arrives is the element
+of the element. Every answer in that fixture is the instance's own, and they differ across
+instantiations -- a placeholder that survived the template pass would make them agree.
+
+Two things it does not reach, both of which are the same missing feature rather than this one:
+
+- A **value** whose type is a deferred parameter cannot be operated on in the template pass.
+  `var first: meta.element_type[T]() = zero` is accepted; `u64(first)` after it is not, because
+  the conversion is checked against a type that is not known yet.
+- A **self-recursive** generic over a type does not terminate. `encode[T]` recursing into
+  `encode[meta.element_type[T]()]` is guarded by `if meta.kind[T]() == .Array`, and that branch
+  is only removed if the comptime interpreter folds it -- which it does for integers and nothing
+  else. An acyclic chain of the same shape is fine; a cycle needs the fold.
+
+So `e.fmt.json`'s `encode[T]`/`decode[T]` and `e.fmt.csv`'s `encode_rows[T]`/`decode_rows[T]`
+(D134, D135) are no longer blocked on reflection reaching a type parameter. What they are blocked
+on now is a comptime `if` over a non-integer constant, which is the "general comptime interpreter"
+row and a separate piece of work.

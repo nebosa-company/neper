@@ -4439,6 +4439,13 @@ fn derived_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
 // the same question has two spellings: a call in an expression, and a call where a type is
 // written.
 fn derived_from_subject(c: *Checker, wants_element: bool, subject: Type) -> (Type, err) {
+    // In a generic function's template body the subject is the parameter itself: `check_function`
+    // checks that body once with no argument bound, and `check_instance` checks it again per
+    // instance with the argument in place. There is no derived type to give in the first pass, so
+    // the parameter stands for its own answer there and the second pass settles it -- the same
+    // deferral `size_of` has always had, which is why that one worked inside a generic and these
+    // did not.
+    if subject.kind == .TypeParameter { ret (subject, ok) }
     if wants_element {
         if subject.kind != .Array && subject.kind != .Slice { ret (invalid_type(), InvalidType) }
         if !subject.has_element || subject.element >= c.type_count { ret (invalid_type(), InvalidType) }
@@ -5129,17 +5136,23 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     function.return_count = 1usize
     function.intrinsic = true
     info.function = function
+    // A subject that is still a type parameter is the template pass of a generic function, where
+    // the answer is a constant only an instance can supply (see `derived_from_subject`). The
+    // question keeps its result type, so the body around it still checks; the value it folds to
+    // is filled in when the instance is checked.
     if query == .Kind {
+        info.result = make_type(.Named, "TypeKind", target_module)
+        if subject.kind == .TypeParameter { ret (info, ok) }
         let (value, value_error) = meta_kind_value(c, subject)
         if value_error != ok { ret (info, value_error) }
         info.value = value
-        info.result = make_type(.Named, "TypeKind", target_module)
         ret (info, ok)
     }
     if query == .ArrayLen {
+        info.result = make_type(.Integer, "usize", target_module)
+        if subject.kind == .TypeParameter { ret (info, ok) }
         if subject.kind != .Array { ret (info, InvalidType) }
         info.value = subject.array_length
-        info.result = make_type(.Integer, "usize", target_module)
         ret (info, ok)
     }
     if query == .SizeOf || query == .AlignOf {

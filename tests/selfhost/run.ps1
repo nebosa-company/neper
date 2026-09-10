@@ -701,6 +701,16 @@ $metaTypeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $metaTypeWritten -ne 'executable written') { throw 'e.meta type emission failed' }
 & $metaTypePath
 if ($LASTEXITCODE -ne 0) { throw "an e.meta type answer is wrong: exit $LASTEXITCODE" }
+# Reflection inside a generic function, where the type is a parameter rather than a name. A
+# generic body is checked once as a template with nothing bound and again per instance, and a
+# `meta` question has no answer in the first pass -- so it stands there and the instance settles
+# it, which is the deferral `mem.size_of` always had (D136). Every answer here is the instance's
+# own: a placeholder that survived would make them all agree.
+$metaGenericPath = Join-Path $testBuild 'meta-generic-selfhost.exe'
+$metaGenericWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\meta_generic\src\main.e') $repo 'x64' 'windows' $metaGenericPath
+if ($LASTEXITCODE -ne 0 -or $metaGenericWritten -ne 'executable written') { throw 'e.meta generic emission failed' }
+& $metaGenericPath
+if ($LASTEXITCODE -ne 0) { throw "an e.meta answer inside a generic is wrong: exit $LASTEXITCODE" }
 # Section 9's `Field` and `Member` as declared names: a comptime value crossing a call, so the
 # callee is instantiated per field and its own return type depends on which one it was given.
 # Without the guard that stops inference rebinding such a parameter, this fails at 88.
