@@ -1802,3 +1802,44 @@ one that is honestly absent, because only the absent one is visible to a caller.
 `e.os` is therefore 130 of its 131 declarations, and the one missing is missing for a reason with a
 named unblocker: module-scope `var` in the compiler, after which the Linux capture is a change to
 `from_errno` alone.
+
+## D130 — only what `main` reaches is emitted, and D128 was wrong about what that cost
+
+D128 said an `@import` that is never called adds neither `PT_INTERP` nor `DT_NEEDED`, so naming libc
+in `os.linux.e` for the loader would cost nothing until a program opened a library. That was measured
+on a *program* declaring an unused extern of its own, and generalised to a *module* whose functions
+are all lowered whether or not anything calls them. The generalisation was false. Every Linux binary
+that used `e.os` came out dynamically linked against libc — `link/time_calendar`, which has nothing
+to do with the loader, among them. The claim in D128 and on the readiness page was wrong from the day
+it was written, and this row is the correction.
+
+The fix is the one the mistake pointed at: a function nothing reaches is not emitted. The compiler
+lowered every function of every module it touched, so an image carried all of `e.os`, all of `e.mem`
+and whatever else it named. Now `main` is the root, the walk follows the two opcodes that name a
+function — a call and taking its address, which is the edge set `e.os.thread_create` needs since it
+hands an entry point over as a value — and what is not reached is dropped.
+
+The measurements: a Linux binary that only uses `e.os` goes from 221,392 bytes to 8,200, and is
+freestanding again — one segment, no interpreter, no `DT_NEEDED`. A binary that actually calls
+`os.dlopen` is still dynamic, which it must be. The compiler's own stage-2 image goes from 4,170,240
+to 3,930,624 bytes; 5.7% is a modest share because a compiler calls most of what it contains, and the
+weight it was carrying was `lib/e` surface it never touches.
+
+Where this had to happen is the whole design, and the first attempt got it wrong. Filtering functions
+*while lowering* changes the order they are emitted in as well as the set, and an image linked from
+`.em` artifacts must come out byte for byte identical to one compiled from source — an invariant the
+suite checks and which is the reason to trust an artifact at all. The artifact path's order is fixed
+by the file list, so a source path that reorders can never agree with it. So both paths now do the
+same thing: lower or assemble everything in the canonical order, then drop the same functions from
+that sequence. Only the set changes, never the order.
+
+That means the rule is written twice, once over NIR and once over artifact metadata, and the two have
+to agree. They agree because they use the same edge definition, which `e.em` had already fixed for
+its own use: a relocation records a `Call` or a `FunctionAddress` and nothing else names a function.
+`link/function_values` compares the two images by hash, so a divergence is a failed run rather than a
+subtle difference in something shipped.
+
+What is deliberately not done is dead *module-scope* data and dead generic instances. An instance
+exists because the checker made one, which happens when a call is checked rather than when it is
+reached, so a module's instances are still over-approximated; nothing measured says that is worth a
+second walk yet.

@@ -67,6 +67,10 @@ type Opcode = enum u8 {
     AtomicRmw = 51,
     AtomicCas = 52,
     AtomicFence = 53,
+    // The address of a module-scope `var`. The immediate is an index into the builder's globals,
+    // and the address is not known until the image is laid out -- so this lowers to a relocation
+    // the linker fills, the way a call to an imported symbol does.
+    GlobalAddress = 54,
 }
 
 // `AtomicRmw`'s immediate is `kind * 8 + ordering`, so the two travel in the one
@@ -149,6 +153,18 @@ type StringConstant = struct {
     spelling: str,
 }
 
+// One module-scope `var`, as the linker needs it: somewhere to put it, and what to put there.
+// `initial` carries a scalar initialiser's bits; a global with none is zero, which is what an
+// image gives for free.
+type GlobalData = struct {
+    module_index: usize,
+    name: str,
+    size: usize,
+    alignment: usize,
+    initial: usize,
+    has_initial: bool,
+}
+
 type Signatures = struct {
     entries: []Signature,
     types: []check.Type,
@@ -162,6 +178,8 @@ type Builder = struct {
     operands: []usize,
     function_refs: []FunctionRef,
     strings: []StringConstant,
+    globals: []GlobalData,
+    global_count: usize,
     function_count: usize,
     block_count: usize,
     instruction_count: usize,
@@ -173,6 +191,135 @@ type Builder = struct {
     next_value: usize,
     function_active: bool,
     block_active: bool,
+}
+
+// Given separately from `init` because `init` has eight callers and only one of them compiles a
+// program: a module's own self-check has no module-scope `var` to describe, and a builder without
+// this simply has none.
+fn init_globals(builder: *Builder, globals: []GlobalData) -> err {
+    if globals.len == 0usize { ret Capacity }
+    builder.globals = globals
+    builder.global_count = 0usize
+    ret ok
+}
+
+// Appended in the checker's own order, once per declaration, before anything is lowered. That is
+// what makes one variable one address: not a search that has to agree with itself at every use,
+// but an index that is the same number on both sides. An earlier version interned per use and got
+// a fresh entry each time, which showed up as a data segment far larger than its five variables.
+fn add_global(builder: *Builder, module_index: usize, name: str, size: usize, alignment: usize, initial: usize, has_initial: bool) -> (usize, err) {
+    if builder.global_count == builder.globals.len { ret (0usize, Capacity) }
+    builder.globals[builder.global_count] = GlobalData { module_index: module_index, name: name, size: size, alignment: alignment, initial: initial, has_initial: has_initial }
+    builder.global_count += 1usize
+    ret (builder.global_count - 1usize, ok)
+}
+
+// Where each global sits within the data area, and how big the whole of it is. One answer for
+// every consumer -- both linkers and the emitters -- so a layout cannot drift between them.
+fn global_area_offset(builder: *Builder, index: usize) -> usize {
+    var offset = 0usize
+    var at = 0usize
+    while at < builder.global_count {
+        let item = builder.globals[at]
+        var alignment = item.alignment
+        if alignment == 0usize { alignment = 1usize }
+        let remainder = offset % alignment
+        if remainder != 0usize { offset = offset + alignment - remainder }
+        if at == index { ret offset }
+        offset = offset + item.size
+        at += 1usize
+    }
+    ret offset
+}
+
+fn global_area_size(builder: *Builder) -> usize {
+    if builder.global_count == 0usize { ret 0usize }
+    let last = builder.global_count - 1usize
+    ret global_area_offset(builder, last) + builder.globals[last].size
+}
+
+// The two opcodes that name a function: a call, and taking its address. `e.os.thread_create` hands
+// an entry point over as a value, so following calls alone would drop a function that is very much
+// reached -- just not by a call site in this image.
+fn references_function(opcode: Opcode) -> bool {
+    ret opcode == .Call || opcode == .FunctionAddress
+}
+
+fn function_for_reference(builder: *Builder, reference: FunctionRef) -> (usize, bool) {
+    var at = 0usize
+    while at < builder.function_count {
+        let candidate = builder.functions[at]
+        if candidate.module_index == reference.module_index && candidate.instance == reference.instance && check.same(candidate.name, reference.name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// Everything `main` can reach, and nothing else. Done here rather than while lowering because the
+// order functions are emitted in has to stay exactly what it was: an image linked from `.em`
+// artifacts must come out byte for byte the same as one compiled from source, and that holds only
+// if both drop the same functions from the same sequence rather than building a new one.
+//
+// A function whose body was lowered still contributes its own references, so a walk has to start
+// at `main` and follow edges -- asking "is this referenced anywhere" would answer yes for
+// everything, since dead code refers to things too.
+fn prune_unreachable(builder: *Builder, keep: []bool) -> err {
+    if builder.function_count > keep.len { ret Capacity }
+    var at = 0usize
+    while at < builder.function_count {
+        keep[at] = false
+        at += 1usize
+    }
+    var root = 0usize
+    var rooted = false
+    at = 0usize
+    while at < builder.function_count {
+        if check.same(builder.functions[at].name, "main") {
+            root = at
+            rooted = true
+            break
+        }
+        at += 1usize
+    }
+    // No entry point is not this function's problem to report: the linker says so, with a better
+    // message than a program of no functions would produce.
+    if !rooted { ret ok }
+    keep[root] = true
+    var progress = true
+    while progress {
+        progress = false
+        var function_at = 0usize
+        while function_at < builder.function_count {
+            if keep[function_at] {
+                let item = builder.functions[function_at]
+                var instruction_at = 0usize
+                while instruction_at < item.instruction_count {
+                    let instruction = builder.instructions[item.first_instruction + instruction_at]
+                    if references_function(instruction.opcode) && instruction.immediate < builder.function_ref_count {
+                        let (callee, found) = function_for_reference(builder, builder.function_refs[instruction.immediate])
+                        if found && !keep[callee] {
+                            keep[callee] = true
+                            progress = true
+                        }
+                    }
+                    instruction_at += 1usize
+                }
+            }
+            function_at += 1usize
+        }
+    }
+    // Compacted in place, which keeps what survives in the order it was already in.
+    var written = 0usize
+    at = 0usize
+    while at < builder.function_count {
+        if keep[at] {
+            builder.functions[written] = builder.functions[at]
+            written += 1usize
+        }
+        at += 1usize
+    }
+    builder.function_count = written
+    ret ok
 }
 
 fn is_terminator(opcode: Opcode) -> bool {

@@ -2,6 +2,7 @@
 
 use e.mem
 use binary
+use check
 use codegen_x64
 use em
 use emit_x64
@@ -83,6 +84,103 @@ fn target_module(artifacts: []Artifact, source: []const usize, target_module_ind
     ret (0usize, MissingSymbol)
 }
 
+// Which functions an image needs, read from the artifacts' own tables rather than from code: each
+// records the functions it calls or takes the address of, which is the same edge set `nir` walks.
+// A function is identified by its module and name as the relocations name it, so the two sides
+// agree without either reading the other's form.
+fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, kept: []bool) -> err {
+    var total = 0usize
+    var artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
+        if count_error != ok { ret count_error }
+        total += count
+        artifact_at += 1usize
+    }
+    if total > kept.len { ret InvalidInput }
+    var at = 0usize
+    while at < total {
+        kept[at] = false
+        at += 1usize
+    }
+    var rooted = false
+    var progress = true
+    while progress {
+        progress = false
+        var position = 0usize
+        artifact_at = 0usize
+        while artifact_at < artifacts.len {
+            let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
+            if count_error != ok { ret count_error }
+            var function_at = 0usize
+            while function_at < count {
+                let (function, function_error) = em.artifact_code_function_at(artifacts[artifact_at].bytes, function_at)
+                if function_error != ok { ret function_error }
+                let (name, name_error) = copy_string(a, artifacts[artifact_at].bytes, function.name_index)
+                if name_error != ok { ret name_error }
+                if !rooted && check.same(name, "main") {
+                    kept[position] = true
+                    rooted = true
+                    progress = true
+                }
+                if kept[position] {
+                    var relocation_at = 0usize
+                    while relocation_at < function.relocation_count {
+                        let (stored, stored_error) = em.artifact_code_relocation_at(artifacts[artifact_at].bytes, function, relocation_at)
+                        if stored_error != ok { ret stored_error }
+                        let (module_index, module_error) = target_module(artifacts, artifacts[artifact_at].bytes, stored.module_index)
+                        if module_error != ok { ret module_error }
+                        let (callee_name, callee_error) = copy_string(a, artifacts[artifact_at].bytes, stored.name_index)
+                        if callee_error != ok { ret callee_error }
+                        let (callee, found) = artifact_function_position(a, artifacts, module_index, callee_name, stored.instance)
+                        if found && !kept[callee] {
+                            kept[callee] = true
+                            progress = true
+                        }
+                        relocation_at += 1usize
+                    }
+                }
+                position += 1usize
+                function_at += 1usize
+            }
+            artifact_at += 1usize
+        }
+    }
+    // Nothing named `main` is the linker's own error to report, and it does, with a message a
+    // program of no functions would not produce.
+    if !rooted {
+        var index = 0usize
+        while index < total {
+            kept[index] = true
+            index += 1usize
+        }
+    }
+    ret ok
+}
+
+// Where a function sits in the order the artifacts are read, which is the index the keep-set uses.
+fn artifact_function_position(a: *mem.Arena, artifacts: []Artifact, module_index: usize, name: str, instance: usize) -> (usize, bool) {
+    var position = 0usize
+    var artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
+        if count_error != ok { ret (0usize, false) }
+        var function_at = 0usize
+        while function_at < count {
+            let (function, function_error) = em.artifact_code_function_at(artifacts[artifact_at].bytes, function_at)
+            if function_error != ok { ret (0usize, false) }
+            if artifact_at == module_index && function.instance == instance {
+                let (candidate, candidate_error) = copy_string(a, artifacts[artifact_at].bytes, function.name_index)
+                if candidate_error == ok && check.same(candidate, name) { ret (position, true) }
+            }
+            position += 1usize
+            function_at += 1usize
+        }
+        artifact_at += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     try validate_set(artifacts)
     var function_count = 0usize
@@ -149,6 +247,16 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     if folded_offsets_error != ok { ret folded_offsets_error }
     var folded_count = 0usize
 
+    // The same rule the source path applies after lowering: keep what `main` reaches and drop the
+    // rest. It is done here, before a byte of code is copied, so that both link paths leave out
+    // the same functions from the same sequence -- which is what makes an image linked from
+    // artifacts identical to one compiled from source.
+    let (kept, kept_error) = mem.alloc[bool](a, function_count)
+    if kept_error != ok { ret kept_error }
+    let reach_error = reachable_from_main(a, artifacts, kept)
+    if reach_error != ok { ret reach_error }
+    var global_at = 0usize
+
     artifact_at = 0usize
     while artifact_at < artifacts.len {
         let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
@@ -161,6 +269,14 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             if content_hash_error != ok || content_hash != function.content_hash { ret InvalidInput }
             let (name, name_error) = copy_string(a, artifacts[artifact_at].bytes, function.name_index)
             if name_error != ok { ret name_error }
+            // Counted across every artifact in the order they are read, which is the index the
+            // reachability pass used.
+            let position = global_at
+            global_at += 1usize
+            if !kept[position] {
+                function_at += 1usize
+                continue
+            }
             let global_function = program.builder.function_count
             var assembled_function: nir.Function = zero
             assembled_function.name = name

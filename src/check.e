@@ -309,6 +309,20 @@ type ConstantExpr = struct {
     has_right: bool,
 }
 
+// Spec section 5: `var` at module scope is mutable static storage, zero-initialised unless
+// given a compile-time initialiser. Unlike a `const` it has an address and a lifetime, which is
+// why it is a separate table: a constant is folded into its uses and this one is loaded from.
+type Global = struct {
+    name: str,
+    module_index: usize,
+    ty: Type,
+    // The initialiser, evaluated by the same interpreter a `const` uses. Section 5 says
+    // zero-initialised when there is none, which is what the linker writes anyway.
+    expression: usize,
+    has_expression: bool,
+    token: lex.Token,
+}
+
 type Constant = struct {
     name: str,
     module_index: usize,
@@ -344,6 +358,8 @@ type Checker = struct {
     types: []Type,
     aliases: []Alias,
     constants: []Constant,
+    globals: []Global,
+    global_count: usize,
     constant_exprs: []ConstantExpr,
     diagnostics: []Diagnostic,
     // The merged error table (src/error_table.e), by value. Filled once the whole
@@ -450,9 +466,11 @@ fn default_failure_kind(failure: err, node: syntax.Node) -> DiagnosticKind {
     ret .Generic
 }
 
-fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_types: []Type, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias, constants: []Constant, constant_exprs: []ConstantExpr, diagnostics: []Diagnostic) -> err {
-    if functions.len == 0usize || parameters.len == 0usize || return_types.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize || constants.len == 0usize || constant_exprs.len == 0usize || diagnostics.len == 0usize { ret Capacity }
+fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_types: []Type, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias, constants: []Constant, globals: []Global, constant_exprs: []ConstantExpr, diagnostics: []Diagnostic) -> err {
+    if functions.len == 0usize || parameters.len == 0usize || return_types.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize || constants.len == 0usize || globals.len == 0usize || constant_exprs.len == 0usize || diagnostics.len == 0usize { ret Capacity }
     c.functions = functions
+    c.globals = globals
+    c.global_count = 0usize
     c.parameters = parameters
     c.return_types = return_types
     c.tokens = tokens
@@ -1062,6 +1080,11 @@ fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
             ret (normalized_integer(argument.value, false), contextual_type, ok)
         }
         if !c.constants_ready { ret (normalized_integer(0usize, false), invalid_type(), Unsupported) }
+        // Section 9 lists a module-scope `var`, read or written, first among the things a
+        // compile-time evaluation may not reach. It has storage that exists only at run time,
+        // so there is nothing here for the interpreter to read.
+        let (runtime_global, is_runtime_global) = find_global(c, module_index, name)
+        if is_runtime_global { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let (constant_index, found) = find_constant(c, module_index, name)
         if !found || constant_index >= c.constant_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let item = c.constants[constant_index]
@@ -2917,6 +2940,40 @@ fn find_function(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     ret (0usize, false)
 }
 
+// A module-scope `var`'s starting bits. Section 5 says zero without an initialiser, and the
+// initialiser is compile-time, so it is the same interpreter a `const` goes through.
+//
+// ponytail: a scalar initialiser only. A struct or array one is `Unsupported` rather than
+// silently zero -- what it would take is serialising an aggregate's bytes into the image, which
+// is worth doing when something wants it.
+fn global_initial_bits(c: *Checker, global_index: usize) -> (usize, err) {
+    if global_index >= c.global_count { ret (0usize, InvalidConstant) }
+    let item = c.globals[global_index]
+    if !item.has_expression { ret (0usize, ok) }
+    // The interpreter this goes through evaluates integers, so an integer initialiser is what is
+    // carried. Anything else -- a `bool`, a struct, an array -- is `Unsupported` rather than
+    // quietly zero, and the spelling that works for all of them is to leave the initialiser off:
+    // section 5 zero-initialises then, which is what `false` and an empty aggregate already are.
+    if item.ty.kind != .Integer {
+        record_failure(c, item.module_index, zero, .NotAType, item.name, "")
+        ret (0usize, Unsupported)
+    }
+    let (value, value_type, value_error) = evaluate_constant_expr(c, item.expression, item.ty)
+    if value_error != ok { ret (0usize, value_error) }
+    let width = integer_width(item.ty)
+    if width == 0usize { ret (0usize, InvalidType) }
+    ret (integer_bits(value, width), ok)
+}
+
+fn find_global(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < c.global_count {
+        if c.globals[at].module_index == module_index && same(c.globals[at].name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn find_constant(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     var at = 0usize
     while at < c.constant_count {
@@ -3500,6 +3557,48 @@ fn evaluate_constant(c: *Checker, constant_index: usize) -> err {
     ret ok
 }
 
+// The type is required rather than inferred: a static needs a size before any body is checked,
+// and section 5 says the initialiser is compile-time, not a shape to read a type from.
+fn collect_global_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    if c.global_count == c.globals.len { ret Capacity }
+    let text = g.modules[module_index].text
+    let (name, name_error) = declaration_name(c, text, node)
+    if name_error != ok { ret name_error }
+    var declared_type = invalid_type()
+    var expression_index = 0usize
+    var has_expression = false
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            let child = tree.nodes[child_index]
+            if is_type_node(child.kind) {
+                let (resolved_type, type_error) = type_from_node(c, r, g, tree, module_index, child)
+                if type_error != ok { ret type_error }
+                declared_type = resolved_type
+            } else {
+                expression_index = child_index
+                has_expression = true
+            }
+        }
+        at += 1usize
+    }
+    if declared_type.kind == .Invalid {
+        record_failure(c, module_index, node, .NotAType, name, "")
+        ret InvalidType
+    }
+    var copied_expression = 0usize
+    if has_expression {
+        let (copied, expression_error) = copy_constant_expr(c, g, tree, module_index, expression_index)
+        if expression_error != ok { ret expression_error }
+        copied_expression = copied
+    }
+    c.globals[c.global_count] = Global { name: name, module_index: module_index, ty: declared_type, expression: copied_expression, has_expression: has_expression, token: c.tokens[node.token_start] }
+    c.global_count += 1usize
+    ret ok
+}
+
 fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     c.constant_count = 0usize
     c.constant_expr_count = 0usize
@@ -3514,6 +3613,7 @@ fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err 
         while node_index < tree.count {
             let node = tree.nodes[node_index]
             if node.top_level && node.kind == .ConstDecl { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
+            if node.top_level && node.kind == .VarDecl { try collect_global_declaration(c, r, g, &tree, module_index, node) }
             node_index += 1usize
         }
         module_index += 1usize
@@ -6916,6 +7016,13 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let (constant_type, context_error) = apply_context(c, c.constants[constant_index].ty, expected)
             ret (constant_type, context_error)
         }
+        // Mutable static storage, read the way a local is. Nothing about the type depends on
+        // where it lives; that only decides how lowering reaches it.
+        let (global_index, global_found) = find_global(c, module_index, name)
+        if global_found {
+            let (global_type, context_error) = apply_context(c, c.globals[global_index].ty, expected)
+            ret (global_type, context_error)
+        }
         let (symbol_index, found_symbol) = resolve.find(c.resolver, module_index, name, .Value)
         let (intrinsic_function, has_intrinsic_function) = find_function(c, module_index, name)
         if found_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
@@ -8322,12 +8429,19 @@ fn assignment_place_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         let token = c.tokens[place.token_start]
         let name = g.modules[module_index].text[token.start..token.end]
         let (local_index, found) = find_local(c, name)
-        if !found { ret (invalid_type(), Unsupported) }
-        if !c.locals[local_index].mutable {
-            record_failure(c, module_index, place, .AssignmentImmutable, name, "")
-            ret (invalid_type(), ImmutableAssignment)
+        if found {
+            if !c.locals[local_index].mutable {
+                record_failure(c, module_index, place, .AssignmentImmutable, name, "")
+                ret (invalid_type(), ImmutableAssignment)
+            }
+            ret (c.locals[local_index].ty, ok)
         }
-        ret (c.locals[local_index].ty, ok)
+        // A module-scope `var` is assignable wherever it is visible. It is mutable by its own
+        // keyword -- there is no `const`-spelled static, since that is what `const` already is --
+        // so there is no immutability to check here, only whether the name is one.
+        let (global_index, global_found) = find_global(c, module_index, name)
+        if global_found { ret (c.globals[global_index].ty, ok) }
+        ret (invalid_type(), Unsupported)
     }
     if place.kind == .UnaryExpr && c.tokens[place.token_start].kind == .PunctStar {
         let (child_index, found) = first_node_child(tree, place)

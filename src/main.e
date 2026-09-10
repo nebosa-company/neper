@@ -833,11 +833,15 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     if aliases_error != ok { ret aliases_error }
     let (constants, constants_error) = mem.alloc[check.Constant](a, 4096usize)
     if constants_error != ok { ret constants_error }
+    // Module-scope `var`s. Small on purpose: the whole point of the surface is that ambient
+    // mutable state is rare, and a program that wants hundreds of them wants a struct instead.
+    let (globals, globals_error) = mem.alloc[check.Global](a, 256usize)
+    if globals_error != ok { ret globals_error }
     let (constant_exprs, constant_exprs_error) = mem.alloc[check.ConstantExpr](a, 32768usize)
     if constant_exprs_error != ok { ret constant_exprs_error }
     let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, 4096usize)
     if diagnostics_error != ok { ret diagnostics_error }
-    try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, constant_exprs, diagnostics)
+    try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, globals, constant_exprs, diagnostics)
     try check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
     try check.init_aggregates(checker, aggregates, aggregate_fields)
     ret check.init_control(checker, checked_switches, function_signatures)
@@ -869,6 +873,9 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 8192usize)
     if strings_error != ok { ret strings_error }
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
+    let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, 256usize)
+    if global_data_error != ok { ret global_data_error }
+    try nir.init_globals(builder, global_data)
     // One entry per NIR function, indexed by the same function index: a signature
     // table smaller than the function table makes every function past its end fail to
     // lower, and `begin_signature` reports that as invalid control flow rather than as
@@ -1800,7 +1807,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if bindings_error != ok { ret bindings_error }
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, 128usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
+        let (kept_functions, kept_functions_error) = mem.alloc[bool](a, 65536usize)
+        if kept_functions_error != ok { ret kept_functions_error }
         let lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
+        if lower_error == ok {
+            // Everything was lowered so that the order is the one the artifacts also use; what
+            // nothing reaches is dropped now, which both link paths do identically.
+            let prune_error = nir.prune_unreachable(&builder, kept_functions)
+            if prune_error != ok {
+                try print_lower_diagnostic(&loaded, &checker, prune_error)
+                os.exit(1i32)
+                ret ok
+            }
+        }
         if lower_error != ok {
             try print_lower_diagnostic(&loaded, &checker, lower_error)
             os.exit(1i32)
