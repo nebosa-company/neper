@@ -149,6 +149,19 @@ for mod, nm in re.findall(r'seed\(r,\s*g,\s*"([^"]+)",\s*"([^"]+)"',
                           open('src/resolve.e', encoding='utf-8').read()):
     seeded.setdefault(mod, set()).add(nm)
 
+plan = json.load(open('docs/modules.json'))['modules']
+surf = {}
+for m in plan:
+    surf[m['surface']] = surf.get(m['surface'], 0) + 1
+# `docs/modules.json` is the plan and this table is the plan's, so every module in it gets a
+# row whether or not a line of it exists. A page that listed only what is written cannot be
+# read as a roadmap: what is missing is the part a reader is asking about.
+planned = {m['name']: m for m in plan}
+tier_of = {}
+for tier in json.load(open('docs/modules.json'))['tiers']:
+    for name in tier['modules']:
+        tier_of[name] = tier['id']
+
 mod_rows, dtot, dgot = [], 0, 0
 for mod in sorted(blocks):
     d = decl_names(blocks[mod])
@@ -156,14 +169,14 @@ for mod in sorted(blocks):
     h = sum(1 for n in d if n in have)
     dtot += len(d)
     dgot += h
-    if h:
-        mod_rows.append((mod, h, len(d)))
-mod_rows.sort(key=lambda r: (-r[1] / r[2], r[0]))
-
-plan = json.load(open('docs/modules.json'))['modules']
-surf = {}
-for m in plan:
-    surf[m['surface']] = surf.get(m['surface'], 0) + 1
+    entry = planned.get(mod, {})
+    mod_rows.append((mod, h, len(d), entry.get('surface', 'planned'),
+                     entry.get('milestone'), entry.get('schedule', 'later'),
+                     tier_of.get(mod, ''), entry.get('blocked_by', [])))
+# Written first and most complete first; then what is scheduled, by milestone; then what is not
+# scheduled at all. Read top to bottom that is the order the plan intends to be worked in, which
+# is the only ordering a roadmap can justify.
+mod_rows.sort(key=lambda r: (-r[1] / r[2], r[4] is None, r[4] or '', r[0]))
 
 c_sum = sum(s for g in compiler.values() for _, s, _ in g)
 c_n = sum(len(g) for g in compiler.values())
@@ -215,7 +228,7 @@ for g, items in compiler.items():
                + '</em></h3>' + table(items))
 
 mod_body = ''
-for m, h, d in mod_rows:
+for m, h, d, surface, milestone, schedule, tier, blocked in mod_rows:
     # Both of these are intrinsics plus source now, and saying only "intrinsics" understates
     # how much of them is written down: e.os is mostly its two per-target files, and e.mem gained
     # `copy` and `eq`.
@@ -223,13 +236,23 @@ for m, h, d in mod_rows:
         where = 'compiler intrinsics, lib/e/mem.e'
     elif m == 'e.os':
         where = 'compiler intrinsics, lib/e/os.linux.e, lib/e/os.windows.e'
-    else:
+    elif h:
         where = 'lib/' + m.replace('.', '/') + '.e'
+    elif blocked:
+        where = 'blocked: ' + ', '.join(blocked)
+    elif schedule == 'scheduled':
+        where = 'scheduled, not started'
+    else:
+        where = 'after the scheduled set'
+    when = milestone if milestone else '&mdash;'
     mod_body += ('<tr><td class="nm"><code>' + esc(m) + '</code></td><td class="sc">'
                  + ('%d / %d' % (h, d)) + '</td><td class="sc">'
-                 + ('%.0f%%' % (100 * h / d)) + '</td><td class="nt">' + where + '</td></tr>')
+                 + ('%.0f%%' % (100 * h / d)) + '</td><td class="sc">' + when
+                 + '</td><td class="sc">' + esc(tier) + '</td><td class="nt">'
+                 + esc(surface) + ' &middot; ' + esc(where) + '</td></tr>')
 mod_table = ('<table><thead><tr><th>Module</th><th class="sc">Declarations</th>'
-             '<th class="sc">Share</th><th>Where it comes from</th></tr></thead><tbody>'
+             '<th class="sc">Share</th><th class="sc">Milestone</th><th class="sc">Tier</th>'
+             '<th>Surface and where it comes from</th></tr></thead><tbody>'
              + mod_body + '</tbody></table>')
 
 mod_pct = 100 * (surf.get(SRC, 0) + 0.5 * surf.get(PART, 0)) / len(plan)
@@ -237,7 +260,8 @@ mod_pct = 100 * (surf.get(SRC, 0) + 0.5 * surf.get(PART, 0)) / len(plan)
 # The prose below the table names three modules by their counts. Typing those in is
 # how the page goes stale one increment after it is written, so they come from the
 # same rows the table does.
-counts = {m: (h, d) for m, h, d in mod_rows}
+counts = {row[0]: (row[1], row[2]) for row in mod_rows}
+written_modules = sum(1 for row in mod_rows if row[1])
 
 
 def count_of(module):
@@ -323,6 +347,10 @@ th {
 td { padding:.45rem .75rem .45rem 0; border-bottom:1px solid var(--rule-2); vertical-align:baseline; }
 tbody tr:last-child td { border-bottom:0; }
 .nm { color:var(--ink); width:46%; }
+/* Six columns rather than four, so the name gives most of its width back. */
+.mods table { min-width:46rem; }
+.mods .nm { width:22%; }
+.mods .nt { width:34%; }
 .nt { color:var(--ink-3); font:400 .8125rem/1.45 var(--mono); }
 .sc { font-variant-numeric:tabular-nums; font-family:var(--mono); color:var(--ink-2);
       text-align:right; white-space:nowrap; width:1%; padding-right:1.25rem; }
@@ -389,11 +417,19 @@ __GROUPS__
   <code>surface:"source"</code> and __NPART__ at <code>"partial"</code> out of __NPLAN__,
   or __MODPCT__%.</p>
   <p>The two framings agree because the delivered modules are finished: every container
-  and algorithm module below implements its frozen surface in full. What is missing is
-  breadth, not polish. The design layer is a separate story &mdash; all __NMOD__ modules
-  have a frozen, mechanically extractable API, which is what makes the denominator
-  meaningful.</p>
-  <div class="tw">__MODTABLE__</div>
+  and algorithm module with a count below implements its frozen surface in full. What is
+  missing is breadth, not polish. The design layer is a separate story &mdash; all
+  __NMOD__ modules have a frozen, mechanically extractable API, which is what makes the
+  denominator meaningful.</p>
+  <p>The table is the whole plan, not the part that exists: every one of the __NPLAN__
+  modules in <code>docs/modules.json</code> has a row, __NWRITTEN__ of them with something
+  written. The rest carry what is known about them instead &mdash; the milestone they are
+  scheduled for, the tier that says what stability they will promise, and what they are
+  waiting on. <strong>core</strong> is the required-first set, <strong>extended</strong> is
+  stable but independently delivered, and <strong>experimental</strong> promises no
+  compatibility. A module with no milestone is not scheduled yet, which is a statement
+  about order and not about doubt.</p>
+  <div class="tw mods">__MODTABLE__</div>
   <div class="note">
     <h4>What the two large partials mean</h4>
     <p><code>e.os</code> at __COS__ and <code>e.io</code> at __CIO__ are not stalled
@@ -505,6 +541,7 @@ for key, val in [
     ('__TSUM__', '%.2f' % t_sum), ('__TN__', str(t_n)), ('__TPCT__', '%.0f' % T),
     ('__DGOT__', str(dgot)), ('__DTOT__', str(dtot)), ('__MPCT__', '%.0f' % M),
     ('__NMOD__', str(len(blocks))), ('__NPLAN__', str(len(plan))),
+    ('__NWRITTEN__', str(written_modules)),
     ('__NSRC__', str(surf.get(SRC, 0))), ('__NPART__', str(surf.get(PART, 0))),
     ('__MODPCT__', '%.0f' % mod_pct),
     ('__COS__', count_of('e.os')), ('__CIO__', count_of('e.io')),
