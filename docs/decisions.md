@@ -1955,3 +1955,63 @@ What this replaces is D-less: `--arena` was lowered from 1g to 512m one commit e
 same relief by giving up headroom. That trade is no longer necessary — the cap now costs only what
 is used, so it can be set by the largest program worth compiling rather than by what the commit
 limit will bear.
+
+## D134 — a JSON number is the lexeme it arrived as, and reflection could not carry the codec
+
+`e.fmt.json` turns on one decision, and everything else in the module follows from it: a
+`Number` is the validated text that was written, not a value parsed out of it. JSON's grammar
+admits numbers no binary float can hold -- an integer past 2^53, an exponent spelling that
+meant something to whoever chose it, a negative zero -- and a parser that rounds on the way in
+has discarded them before the caller is asked whether that was acceptable. So `parse` borrows
+the lexeme from the source, every conversion out of it is a named call that can fail, and the
+writers revalidate a `Number` before writing it, because `Number` is a public struct over a
+public `str` and a caller can build one by hand.
+
+The conversions are exact rather than convenient. `number_i64` takes `1.5e1` as `15` and
+refuses `1.5`, which means the lexeme is decomposed into digits and a power of ten and the
+trailing zeros are folded into the exponent before anything is accumulated -- otherwise
+`1e22e-10` overflows on the way to a value that fits comfortably. `number_f64` is `e.str`'s
+correctly-rounded `parse_f64` and nothing more; the one thing it adds is refusing a result that
+came back non-finite, since a JSON number that overflows the format is not a number this can
+answer with.
+
+The depth limit reads zero as a default rather than as no limit, which is the opposite of what
+`e.path`'s globs decided. The two are not inconsistent: there a zero limit costs the caller
+nothing, here it costs them the stack, and a `zero` Options is exactly what a caller writes
+without thinking about it.
+
+### What the first consumer of `e.meta` found
+
+This module was chosen to be the first thing outside the fence to use reflection, and the
+answer is that reflection does not reach far enough to carry a codec. Six intrinsics take a
+type; three of them accept a generic parameter and three do not:
+
+```
+meta.type_name[T]  works        meta.kind[T]          check.InvalidType
+mem.size_of[T]     works        meta.array_len[T]     check.InvalidType
+meta.fields[T]     works        meta.element_type[T]  check.UnknownCallable
+```
+
+All six work when the type is written out. `encode[T]` and `decode[T]` dispatch on `kind` and
+recurse through `element_type`, so they cannot be written at all until a bound type parameter
+is as good as a written one. `meta.kind[T]()` additionally cannot be bound with `let` even for
+a concrete type -- it stands only where it is used. D126 said a type-valued answer stands
+where a type is written; what is missing is the other half, that a type *parameter* stands
+where a type is written.
+
+`reader`/`reader_next_err` and `patch` are unwritten for want of time rather than for want of
+a compiler, so the module is `partial` and the fence is 23 of 28.
+
+### Two defects the module found on its way through
+
+A module-scope `const` of type `str` does not type check, with a catch-all diagnostic and no
+location. Section 5 says `const` is compile-time evaluated and has no storage, and restricts it
+no further; `str` is `[]const u8`, and the checker has no comptime value for a slice even
+though a string literal in an expression is placed without difficulty. The writers here use
+arithmetic and a local literal instead.
+
+`io.memory_writer` returns a `Writer` it never fills in -- the field is declared, zeroed, and
+returned, so the first write jumps through a null pointer. Nothing had called it before. It may
+not be fixable as declared: the context would have to point at state the function returns by
+value, which is why every other constructor in `e.io` takes a `*State` instead. The fixture
+wires its own sink from the pieces the fence does expose.

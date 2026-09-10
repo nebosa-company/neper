@@ -727,6 +727,15 @@ $freestandingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $freestandingWritten -ne 'executable written') { throw 'freestanding emission failed' }
 & $freestandingPath
 if ($LASTEXITCODE -ne 0) { throw "the freestanding image is not the shape it claims: exit $LASTEXITCODE" }
+# `e.fmt.json`'s value tree. The module keeps a number as the lexeme it arrived with, which
+# only a round trip can show: a parser that rounded through an `f64` would agree with itself
+# everywhere except on what came back out. Escapes, surrogate pairs, duplicate keys, the depth
+# limit and RFC 6901 pointers are checked here too.
+$jsonPath = Join-Path $testBuild 'fmt-json-selfhost.exe'
+$jsonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_json\src\main.e') $repo 'x64' 'windows' $jsonPath
+if ($LASTEXITCODE -ne 0 -or $jsonWritten -ne 'executable written') { throw 'e.fmt.json emission failed' }
+& $jsonPath
+if ($LASTEXITCODE -ne 0) { throw "an e.fmt.json parse, write or pointer answered wrongly: exit $LASTEXITCODE" }
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

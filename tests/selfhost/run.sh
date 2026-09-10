@@ -740,6 +740,14 @@ freestanding_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$freestanding_written" = 'executable written' ]
 chmod +x "$test_build/freestanding-selfhost"
 "$test_build/freestanding-selfhost"
+# `e.fmt.json`'s value tree. The module keeps a number as the lexeme it arrived with, which
+# only a round trip can show: a parser that rounded through an `f64` would agree with itself
+# everywhere except on what came back out. Escapes, surrogate pairs, duplicate keys, the depth
+# limit and RFC 6901 pointers are checked here too.
+json_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_json/src/main.e" "$repo" x64 linux "$test_build/fmt-json-selfhost")
+[ "$json_written" = 'executable written' ]
+chmod +x "$test_build/fmt-json-selfhost"
+"$test_build/fmt-json-selfhost"
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions
