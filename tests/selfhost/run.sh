@@ -748,6 +748,15 @@ json_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$json_written" = 'executable written' ]
 chmod +x "$test_build/fmt-json-selfhost"
 "$test_build/fmt-json-selfhost"
+# `e.fmt.csv` reads a bounded stream and writes a row at a time. The reader is a state
+# machine with two bits of memory, so the fixture pins every byte that changes one: the
+# quote that opens a field and the quote that is data, the doubled quote, the CRLF that
+# terminates and the bare CR that does not. It runs over a real file as well as a slice,
+# because a file reports its end by taking nothing rather than by saying so.
+csv_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_csv/src/main.e" "$repo" x64 linux "$test_build/fmt-csv-selfhost")
+[ "$csv_written" = 'executable written' ]
+chmod +x "$test_build/fmt-csv-selfhost"
+(cd "$fs_scratch" && "$test_build/fmt-csv-selfhost")
 # Scalar f32 and f64 end to end. Float values live in general registers as raw bits
 # and move into xmm only for the operation itself, so the fixture pins the literals,
 # the four operators, IEEE comparison against a NaN, both conversion directions

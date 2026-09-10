@@ -2015,3 +2015,44 @@ returned, so the first write jumps through a null pointer. Nothing had called it
 not be fixable as declared: the context would have to point at state the function returns by
 value, which is why every other constructor in `e.io` takes a `*State` instead. The fixture
 wires its own sink from the pieces the fence does expose.
+## D135 — a bounded CSV reader, and the file that ended in a different word than the slice
+
+`e.fmt.csv` is a streaming reader over `io.Reader`, and its two limits are the whole of its
+memory model. `field_limit` and `row_limit` are given once, at construction, and buy a byte
+buffer and a field table that every record is then parsed into; a `Row` borrows both and is
+valid until the next call. Nothing is allocated per record, which is what lets a file larger
+than the arena go through an arena that never moves. The alternative -- a row allocated fresh
+each time -- would make the reader's cost the size of the file rather than the size of a row,
+and an arena has no way to give the earlier rows back.
+
+Zero means the default for both, following `e.fmt.json`'s depth limit and for the same reason:
+a caller who has not thought about the bound is asking for a reasonable one, not for none.
+
+The format is read tolerantly and written strictly. Both line endings are accepted whatever the
+dialect says, and the dialect decides only what is written. A quote inside an unquoted field is
+data, because there is nothing else it can be. A bare CR is data, because this format has no
+other reading for a CR that no LF follows. Two things are refused rather than guessed at: a
+quoted field the source ends in the middle of, whose terminator was going to say where the
+field ends, and a quoted field that closes and then carries on, where whoever wrote it meant
+something a reader would have to invent. `header` in the dialect means the first record is
+consumed at construction and never handed over -- a caller who wants the header asks for a
+dialect that does not claim one.
+
+A `zero` Dialect is refused where it is given rather than where it would first go wrong: its
+delimiter and its quote are both zero, and there is no default dialect worth inventing when
+`csv()` is one call away.
+
+`encode_rows[T]` and `decode_rows[T]` are blocked exactly as `e.fmt.json`'s codec is (D134):
+they dispatch on `meta.kind[T]`, which rejects a bound type parameter. The fence is 10 of 12
+and the module is `partial`.
+
+### The defect the first streaming reader found
+
+`io.read` past the end of a slice answered `End`; past the end of a file it answered
+`NoProgress`. The same contract, two answers, decided by which source a caller happened to
+hold -- so a loop written against `Reader` worked on one and failed on the other, and
+`io.read_all` over a file had been wrong since it was written. The host is not at fault: a read
+that takes nothing from a non-empty request is how `read(2)` and `ReadFile` both report an end,
+on a file, a pipe and a socket alike. `file_read` is the one place that knows the zero came
+from a file, so the translation belongs there rather than in a guard per caller. `link/io_streams`
+now asks a real file the question it already asked a slice.
