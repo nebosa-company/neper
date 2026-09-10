@@ -67,6 +67,15 @@ fn main(a: *mem.Arena) -> err {
     let (nothing, nothing_error) = fs.stat(a, "np-fs")
     if nothing_error != fs.NotFound { os.exit(12i32) }
 
+    // The detail of that failure survives the return: `stat` classified it into `fs.NotFound`
+    // and this is the host code behind that word. Zero would mean nothing was recorded, which
+    // is the failure this call exists to avoid.
+    let detail = fs.last_error_detail("stat", "np-fs")
+    if !same(detail.operation, "stat") { os.exit(13i32) }
+    if !same(detail.subject, "np-fs") { os.exit(14i32) }
+    if detail.native_code == 0i32 { os.exit(15i32) }
+    if detail.kind != .NotFound { os.exit(16i32) }
+
     // `make_dirs` makes every missing component, so one call covers two levels.
     if fs.make_dirs(a, "np-fs/deep") != ok { os.exit(20i32) }
     let (outer, outer_error) = fs.stat(a, "np-fs")

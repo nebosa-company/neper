@@ -56,6 +56,15 @@ fn from_os(source: err) -> err {
     ret Io
 }
 
+// The host's own account of the call that just failed. `from_os` above deliberately loses
+// it -- five errors is what this fence promises and a native code is not one of them -- so a
+// caller that wants to say *why* asks here, before any cleanup that could replace it. The
+// slot is per thread and may be absent, never another thread's (D132), which is `e.os`'s
+// guarantee and not a stronger one made here.
+fn last_error_detail(operation: str, subject: str) -> os.ErrorDetail {
+    ret os.last_error_detail(operation, subject)
+}
+
 fn host_style() -> path.Style {
     if os.NATIVE_SEPARATOR == 92u8 { ret .Windows }
     ret .Posix
