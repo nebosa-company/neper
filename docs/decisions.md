@@ -2366,3 +2366,46 @@ callee yet -- the count was zero, so the binding was a `TypeMismatch` before the
 `check_expr` was ever consulted. A binding initialised by a pending protocol call now follows
 its declared type, the way an expression of it already did. The map's probe is the first code
 to bind a hash rather than return or assign it.
+## D144 — `e.bytes` needs the foundation layer, and one generic `load` needs `size_of` to fold
+
+`e.bytes` lands at 35 of 35, `partial` for its alphabet and digit helpers. The plan listed it
+with no dependencies, and that could not be written: `load[T]` reinterprets bytes as a `T`, which
+takes the size of `T` and whether it is a float, and those are `mem.size_of` and `meta.kind`.
+Both are layer 0; `e.bytes` is layer 1; the layer rule allows exactly this. The plan now says
+`["e.mem", "e.meta"]`, which is the first revision to a module's dependencies since the plan was
+frozen, and is recorded here as such.
+
+### One `load` for every width
+
+The bytes are gathered into a `u64` in the order the endianness names, and the `u64` becomes a
+`T` by conversion for an integer and by a bit-for-bit pun for a float. The pun is the difficulty:
+`bitcast[T]` from a `u32` is right for `f32` and wrong for `f64`, so the generic body holds both
+and the arm for the other width has to be *gone*, not merely not taken -- a bitcast of the wrong
+width is refused at check time. D138 folded a branch on `meta.kind`; this folds one on
+`mem.size_of` when the subject is a scalar, whose size the checker knows without layout. An
+aggregate's size is still lowering's to compute, and a branch on it does not fold.
+
+Three more sites were answering in the template pass rather than deferring, each found by the
+first generic to need it and each fixed the way D136 prescribes:
+
+- `T(bits)`, a conversion to a bare type parameter, was `UnknownCallable`. It is a conversion the
+  same way `u8(x)` is and `f.ty(x)` became in D139, to whatever `T` is bound to; in the template
+  pass it stands as a conversion to a type not yet known.
+- `u64(v)` where `v` is of a type parameter's type was a `TypeMismatch`, because the checker asked
+  whether the operand was numeric before the instance could say. It asks the instance now.
+- `mem.bitcast[T](x)` was refused for a type parameter target, because `punnable_type` had no
+  answer for one. The widths are compared in lowering, which only ever sees an instance, so a
+  type parameter is punnable until the instance says otherwise.
+
+### The encodings
+
+Base64 and base32 are RFC 4648's, both alphabets each, padded or not, and a decoder accepts
+either since padding is stripped before anything is measured. Base85 is ASCII85 without its
+frame and Z85; both go through one digit pair, which is what keeps them one codec with two
+spellings. Z85 is defined only on whole groups and says so rather than padding. ASCII85's `z` is
+accepted on the way in and never written on the way out, and it cost the fixture's one failure:
+a length rule that measured the input in fives before it knew the `z`s were not groups.
+
+`link/bytes_codec` checks each encoder against the vectors its RFC prints before round-tripping
+it, because an encoder and a decoder that agree with each other and with nothing else would pass
+the round trip alone; then every byte value goes through each.

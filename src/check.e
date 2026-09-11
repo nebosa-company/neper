@@ -4647,6 +4647,9 @@ fn punnable_type(c: *Checker, ty: Type, depth: usize) -> bool {
     let (canonical, canonical_error) = canonical_type(c, ty)
     if canonical_error != ok { ret false }
     if canonical.kind == .Bool || canonical.kind == .Err || canonical.kind == .Integer || canonical.kind == .Float { ret true }
+    // A type parameter in a template body: whether it can be punned is the instance's question,
+    // and the widths are compared in lowering, which only ever sees an instance (D136).
+    if canonical.kind == .TypeParameter { ret true }
     if canonical.kind == .Array {
         if !canonical.has_element || canonical.element >= c.type_count { ret false }
         ret punnable_type(c, c.types[canonical.element], depth + 1usize)
@@ -5185,8 +5188,32 @@ fn meta_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     if receiver.kind != .BracketPostfix { ret (0usize, invalid_type(), false) }
     let (info, info_error) = meta_info(c, g, tree, module_index, receiver)
     if info_error != ok || !info.matched || info.deferred { ret (0usize, invalid_type(), false) }
+    // `mem.size_of[T]()` is answered by lowering in general, since only `layout` knows an
+    // aggregate. A scalar's size is a fact the checker holds too, and a branch on it is what
+    // lets one generic reinterpret bytes as a `T` of whichever width it turns out to have --
+    // the arm for the other width has to be gone, not merely not taken (D144).
+    if info.query == .SizeOf {
+        let size = scalar_size(info.subject)
+        if size == 0usize { ret (0usize, invalid_type(), false) }
+        ret (size, info.result, true)
+    }
     if info.query != .Kind && info.query != .ArrayLen { ret (0usize, invalid_type(), false) }
     ret (info.value, info.result, true)
+}
+
+// The size of a scalar, which is the one layout question that needs no layout. Zero for
+// anything that is not one, a type parameter included.
+fn scalar_size(ty: Type) -> usize {
+    if ty.kind == .Bool { ret 1usize }
+    if ty.kind == .Err { ret 4usize }
+    if ty.kind == .Pointer { ret 8usize }
+    if ty.kind == .Integer { ret integer_width(ty) / 8usize }
+    if ty.kind == .Float {
+        if same(ty.name, "f16") || same(ty.name, "bf16") { ret 2usize }
+        if same(ty.name, "f32") { ret 4usize }
+        ret 8usize
+    }
+    ret 0usize
 }
 
 // The other side, read against the type the question answers with: `.Int` is a member of
@@ -5930,6 +5957,27 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         info.function.return_count = signature.return_count
                         has_function = true
                     } else {
+                    // `T(x)` where `T` is this generic's own type parameter: a conversion to
+                    // whatever `T` is bound to, the same one a written `u8(x)` is (D139 did this
+                    // for a `Field`'s `.ty`; this is the type parameter itself). In the template
+                    // pass nothing is bound yet, and the conversion stands as one to a type not
+                    // yet known, the way every other question about `T` does there (D136).
+                    let (parameter_index, is_parameter) = active_comptime_parameter(c, name)
+                    var parameter_cast = invalid_type()
+                    if is_parameter && c.comptime_parameters[parameter_index].kind == .Type {
+                        let (argument, argument_found) = active_argument(c, parameter_index)
+                        if argument_found {
+                            parameter_cast = argument.ty
+                        } else {
+                            parameter_cast = make_type(.TypeParameter, name, module_index)
+                            parameter_cast.element = parameter_index
+                            parameter_cast.has_element = true
+                        }
+                    }
+                    if parameter_cast.kind == .Integer || parameter_cast.kind == .Float || parameter_cast.kind == .TypeParameter {
+                        info.cast = parameter_cast
+                        info.is_cast = true
+                    } else {
                     if cast.kind == .Integer || cast.kind == .Float {
                         info.cast = cast
                         info.is_cast = true
@@ -5944,6 +5992,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.function = c.functions[found_index]
                         }
                         has_function = true
+                    }
                     }
                     }
                 } else {
@@ -6118,7 +6167,9 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                     if argument_error != ok { ret (info, argument_error) }
                     if is_untyped(argument_type) { ret (info, MissingContext) }
-                    if !is_numeric(argument_type) { ret (info, TypeMismatch) }
+                    // A value of a type parameter's type in a template body: whether it is
+                    // numeric is the instance's question (D136).
+                    if !is_numeric(argument_type) && !(c.generic_declaration && type_shape_unknown(argument_type)) { ret (info, TypeMismatch) }
                 } else {
                     if !has_function { ret (info, UnknownCallable) }
                     if info.protocol_pending {

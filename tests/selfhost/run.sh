@@ -650,6 +650,14 @@ data_map_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$data_map_written" = 'executable written' ]
 chmod +x "$test_build/data-map-selfhost"
 "$test_build/data-map-selfhost"
+# `e.bytes`: numbers through bytes in both orders and every width, the bit operations, and
+# base64, base32 and base85 against the vectors their RFCs print, then every byte value round
+# tripped through each. One generic `load` serves every width because `size_of` folds for a
+# scalar, so the arm for the other width is gone rather than merely not taken.
+bytes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/bytes_codec/src/main.e" "$repo" x64 linux "$test_build/bytes-codec-selfhost")
+[ "$bytes_written" = 'executable written' ]
+chmod +x "$test_build/bytes-codec-selfhost"
+"$test_build/bytes-codec-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

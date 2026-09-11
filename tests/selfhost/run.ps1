@@ -617,6 +617,15 @@ $dataMapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $dataMapWritten -ne 'executable written') { throw 'e.data.map emission failed' }
 & $dataMapPath
 if ($LASTEXITCODE -ne 0) { throw "an e.data.map answer is wrong: exit $LASTEXITCODE" }
+# `e.bytes`: numbers through bytes in both orders and every width, the bit operations, and
+# base64, base32 and base85 against the vectors their RFCs print, then every byte value round
+# tripped through each. One generic `load` serves every width because `size_of` folds for a
+# scalar, so the arm for the other width is gone rather than merely not taken.
+$bytesPath = Join-Path $testBuild 'bytes-codec-selfhost.exe'
+$bytesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\bytes_codec\src\main.e') $repo 'x64' 'windows' $bytesPath
+if ($LASTEXITCODE -ne 0 -or $bytesWritten -ne 'executable written') { throw 'e.bytes emission failed' }
+& $bytesPath
+if ($LASTEXITCODE -ne 0) { throw "an e.bytes answer is wrong: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
