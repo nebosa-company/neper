@@ -2409,3 +2409,44 @@ a length rule that measured the input in fives before it knew the `z`s were not 
 `link/bytes_codec` checks each encoder against the vectors its RFC prints before round-tripping
 it, because an encoder and a decoder that agree with each other and with nothing else would pass
 the round trip alone; then every byte value goes through each.
+## D145 — `e.data.iter` is `I.next` through a type parameter, and the argument block is claimed before it is filled
+
+`e.data.iter` lands at 46 of 46 and `surface:"source"`: forty-six declarations, no helpers,
+every adapter lazy and allocating nothing, every fold taking its source by pointer. An adapter
+holds its source by value and does its work in `_next`, so a `Filter` over a `Map` over a list's
+`Iter` is one value that pulls through all three. The `try_` family is the same over `next_err`,
+and a source or callback that fails ends the adapter: the error once, where it happened, and no
+item and `ok` on every pull after. `try_collect` past its limit answers `mem.Exhausted`, the one
+error the fence's dependencies reach that says what happened.
+
+Writing it took three compiler changes. The first two are the iterator protocol reaching a type
+parameter at all; the third is a bug in generic instantiation that nothing had written the shape
+of before.
+
+**`I.next(&it)` through a type parameter.** Rule 3 requires a protocol's first parameter to be
+the receiver by value, and `next` never is: an iterator advances, so its receiver is a pointer to
+one. The `for` statement had always known this and `check_protocol_call` had not. And a generic
+type's `_next` is generic with it -- `iter_next[T]` for `Iter[T]` -- which the protocol call
+refused as unsupported. The receiver instance already holds the arguments it was made with, and
+they bind the function's parameters in order, which is the one convention every `<t>_next` in
+`lib/e` follows; so `Iter[i64].next` is `iter_next[i64]`, instantiated from the receiver.
+
+**A pending protocol in a tuple binding.** `let (value, more) = I.next(it)` in a template body
+has no result count to check against, since the protocol has no callee until the instance binds
+it. Each name is bound to a type not yet known and the count is checked when it is -- D143's rule,
+which had covered only the single binding.
+
+**The argument block.** `collect_generic_arguments` claimed its first slot and then appended one
+argument at a time as it read them. Reading an argument may instantiate a nested generic --
+`Pair[Wrap[i64], u8]` -- whose own arguments go through the same function and were appended
+first, into the slots the outer call was about to fill. The outer then read `[i64, Wrap[i64]]`
+where `[Wrap[i64], u8]` was written, and `Filter[Map[Iter[i64], i64, i64], i64]` as an
+annotation named a type with `I = i64`. It was never noticed because no fixture had written a
+nested instance in a type argument -- every generic container so far held a type parameter
+there, never a concrete instance. The block is now claimed whole before any argument is read.
+The function-call path had always done this; only the aggregate path had not.
+
+The bug was found by making `type_equal` structural for instances first, which did not fix it
+and thereby proved the two types were not equal by argument -- and then by a temporary
+diagnostic that named which argument differed and how. The structural equality stays: an
+instance is its template and its arguments, not its index, whichever path made it.

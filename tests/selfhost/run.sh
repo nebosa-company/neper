@@ -658,6 +658,13 @@ bytes_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fix
 [ "$bytes_written" = 'executable written' ]
 chmod +x "$test_build/bytes-codec-selfhost"
 "$test_build/bytes-codec-selfhost"
+# `e.data.iter`: every adapter over a list's iterator, stacked two and three deep, every fold
+# to its end or its first answer, and the `try_` family over a source that fails where it is
+# told to. It also pins the nested-instance annotation that misread its arguments (D145).
+data_iter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_iter/src/main.e" "$repo" x64 linux "$test_build/data-iter-selfhost")
+[ "$data_iter_written" = 'executable written' ]
+chmod +x "$test_build/data-iter-selfhost"
+"$test_build/data-iter-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

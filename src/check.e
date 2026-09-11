@@ -685,7 +685,16 @@ fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
     if a.kind != b.kind { ret false }
     if a.kind == .Named || a.kind == .Tag {
         if a.module_index != b.module_index || !same(a.name, b.name) || a.has_element != b.has_element { ret false }
-        if a.has_element { ret a.element == b.element }
+        if a.has_element {
+            if a.element == b.element { ret true }
+            // Two instances of one template with the same arguments are one type, whichever
+            // path made each: an instance is its template and its arguments, not its index.
+            if a.element >= c.aggregate_count || b.element >= c.aggregate_count { ret false }
+            let left = c.aggregates[a.element]
+            let right = c.aggregates[b.element]
+            if !left.instance || !right.instance || left.template_index != right.template_index { ret false }
+            ret aggregate_arguments_equal(c, c.aggregates[left.template_index], left.first_argument, right.first_argument)
+        }
         ret true
     }
     if a.kind == .TypeParameter { ret a.has_element && b.has_element && a.element == b.element }
@@ -1287,6 +1296,11 @@ fn collect_generic_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
     let template = c.aggregates[template_index]
     if c.generic_argument_count + template.comptime_count > c.generic_arguments.len { ret (0usize, Capacity) }
     let first_argument = c.generic_argument_count
+    // The block is claimed whole before any argument is read, because reading one may
+    // instantiate a nested generic -- `Pair[Wrap[i64], u8]` -- whose own arguments are
+    // collected through this same function and would otherwise land in the slots this call
+    // was about to fill, one at a time, as it went (D145).
+    c.generic_argument_count += template.comptime_count
     var argument_count = 0usize
     var at = first_child
     while at < child_end {
@@ -1326,8 +1340,7 @@ fn collect_generic_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
                 }
             }
             }
-            c.generic_arguments[c.generic_argument_count] = argument
-            c.generic_argument_count += 1usize
+            c.generic_arguments[first_argument + argument_count] = argument
             argument_count += 1usize
         }
         at += 1usize
@@ -6650,17 +6663,42 @@ fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         record_failure(c, module_index, node, .ProtocolMissing, canonical.name, protocol)
         ret (0usize, .None, UnknownCallable)
     }
-    let function = c.functions[function_index]
+    var function = c.functions[function_index]
     if function.generic {
-        record_failure(c, module_index, node, .ProtocolGenericType, canonical.name, protocol)
-        ret (0usize, .None, Unsupported)
+        // A generic type's protocol is generic with it -- `iter_next[T]` for `Iter[T]` -- and
+        // the receiver instance already holds the arguments it was made with. They bind the
+        // function's parameters in order, which is the one convention every `<t>_next` in
+        // `lib/e` follows, so `Iter[i64].next` is `iter_next[i64]` (D145).
+        let (aggregate_index, found_aggregate) = aggregate_for_type(c, canonical)
+        if !found_aggregate || !c.aggregates[aggregate_index].instance {
+            record_failure(c, module_index, node, .ProtocolGenericType, canonical.name, protocol)
+            ret (0usize, .None, Unsupported)
+        }
+        let aggregate = c.aggregates[aggregate_index]
+        if c.function_generics[function_index].comptime_count != aggregate.comptime_count {
+            record_failure(c, module_index, node, .ProtocolGenericType, canonical.name, protocol)
+            ret (0usize, .None, Unsupported)
+        }
+        let (instance_index, instance_error) = instantiate_function(c, instance_owner(c, module_index), function_index, aggregate.first_argument)
+        if instance_error != ok { ret (0usize, .None, instance_error) }
+        function_index = instance_index
+        function = c.functions[instance_index]
     }
-    // Rule 3: the first parameter is the receiver type, by value.
+    // Rule 3: the first parameter is the receiver type, by value -- except for the iterator
+    // protocol, whose receiver is the iterator itself and advances, so it is a pointer to one.
     if function.parameter_count == 0usize || function.first_parameter >= c.parameter_count {
         record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
         ret (0usize, .None, InvalidType)
     }
-    if !type_equal(c, c.parameters[function.first_parameter].ty, canonical) {
+    var expected_receiver = canonical
+    if same(protocol, "next") || same(protocol, "next_err") {
+        let (stored_receiver, store_error) = store_type(c, canonical)
+        if store_error != ok { ret (0usize, .None, store_error) }
+        expected_receiver = make_type(.Pointer, "", canonical.module_index)
+        expected_receiver.element = stored_receiver
+        expected_receiver.has_element = true
+    }
+    if !type_equal(c, c.parameters[function.first_parameter].ty, expected_receiver) {
         record_failure(c, module_index, node, .ProtocolSignature, canonical.name, function.name)
         ret (0usize, .None, InvalidType)
     }
@@ -7650,8 +7688,19 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
         if call.protocol_pending {
             if tried { ret TryCast }
             if tuple {
-                record_failure(c, module_index, node, .MultipleBindingCount, "", "")
-                ret ArgumentCount
+                // How many results the protocol answers with is the instance's to know, so
+                // every name here is bound to a type not yet known and the count is checked
+                // when it is.
+                var item_at = binding.token_start
+                while item_at < binding.token_end {
+                    let item_token = c.tokens[item_at]
+                    if item_token.kind == .Identifier {
+                        let item_name = g.modules[module_index].text[item_token.start..item_token.end]
+                        try add_local(c, item_name, make_type(.TypeParameter, "", module_index), mutable)
+                    }
+                    item_at += 1usize
+                }
+                ret ok
             }
             let (name, has_name) = first_name(c, g.modules[module_index].text, binding)
             if has_name { try add_local(c, name, dependent_expression_type(make_type(.TypeParameter, "", module_index), declared, module_index), mutable) }

@@ -626,6 +626,14 @@ $bytesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\l
 if ($LASTEXITCODE -ne 0 -or $bytesWritten -ne 'executable written') { throw 'e.bytes emission failed' }
 & $bytesPath
 if ($LASTEXITCODE -ne 0) { throw "an e.bytes answer is wrong: exit $LASTEXITCODE" }
+# `e.data.iter`: every adapter over a list's iterator, stacked two and three deep, every fold
+# to its end or its first answer, and the `try_` family over a source that fails where it is
+# told to. It also pins the nested-instance annotation that misread its arguments (D145).
+$dataIterPath = Join-Path $testBuild 'data-iter-selfhost.exe'
+$dataIterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_iter\src\main.e') $repo 'x64' 'windows' $dataIterPath
+if ($LASTEXITCODE -ne 0 -or $dataIterWritten -ne 'executable written') { throw 'e.data.iter emission failed' }
+& $dataIterPath
+if ($LASTEXITCODE -ne 0) { throw "an e.data.iter answer is wrong: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
