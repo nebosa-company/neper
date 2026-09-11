@@ -882,6 +882,1078 @@ fn pointer(root: *const Value, path: str) -> (*const Value, err) {
     }
     ret (here, ok)
 }
+// --- RFC 6902 patch.
+//
+// Every operation produces a new tree. `root` is copied once on the way in -- strings and number
+// lexemes included, which is what makes the result arena-owned and what keeps `root` untouched --
+// and each operation afterwards rebuilds the spine down to what it changes, sharing the branches
+// it does not. A failure resets the arena to where it started and answers zero, so a patch that
+// does not apply leaves nothing behind.
+//
+// Numbers are compared as `test` requires: exact mathematical equality. `1.0`, `1` and `1e0` are
+// the same number written three ways, and `f64` equality would agree with that by luck and
+// disagree elsewhere, so the lexemes are normalised and compared instead.
+
+const OP_ADD: u8 = 0u8
+const OP_REMOVE: u8 = 1u8
+const OP_REPLACE: u8 = 2u8
+const OP_MOVE: u8 = 3u8
+const OP_COPY: u8 = 4u8
+const OP_TEST: u8 = 5u8
+
+const DEFAULT_MAX_OPERATIONS: usize = 1024usize
+// A path has one token per level, so it is bounded by the same depth the tree is.
+const MAX_PATH_TOKENS: usize = 256usize
+
+fn copy_text(a: *mem.Arena, text: str) -> (str, err) {
+    if text.len == 0usize { ret ("", ok) }
+    let (buffer, allocation_error) = mem.alloc[u8](a, text.len)
+    if allocation_error != ok { ret ("", allocation_error) }
+    mem.copy[u8](buffer, text)
+    ret (buffer, ok)
+}
+
+// A whole subtree into this arena. Nothing of the original is shared, so the result outlives it
+// and cannot be changed by anyone still holding it.
+fn copy_value(a: *mem.Arena, value: *const Value, depth: u16, limit: u16) -> (Value, err) {
+    var out: Value = .Null
+    if depth > limit { ret (out, TooDeep) }
+    switch *value {
+    case .Null:
+        ret (out, ok)
+    case .Bool as flag:
+        ret (Value{ Bool: flag }, ok)
+    case .Number as written:
+        let (lexeme, lexeme_error) = copy_text(a, written.lexeme)
+        if lexeme_error != ok { ret (out, lexeme_error) }
+        ret (Value{ Number: Number { lexeme: lexeme } }, ok)
+    case .String as text:
+        let (copied, copied_error) = copy_text(a, text)
+        if copied_error != ok { ret (out, copied_error) }
+        ret (Value{ String: copied }, ok)
+    case .Array as items:
+        let (elements, elements_error) = mem.alloc[Value](a, items.len)
+        if elements_error != ok { ret (out, elements_error) }
+        var at = 0usize
+        while at < items.len {
+            let (element, element_error) = copy_value(a, &items[at], depth + 1u16, limit)
+            if element_error != ok { ret (out, element_error) }
+            elements[at] = element
+            at += 1usize
+        }
+        ret (Value{ Array: elements }, ok)
+    case .Object as members:
+        let (entries, entries_error) = mem.alloc[Member](a, members.len)
+        if entries_error != ok { ret (out, entries_error) }
+        var at = 0usize
+        while at < members.len {
+            let (key, key_error) = copy_text(a, members[at].key)
+            if key_error != ok { ret (out, key_error) }
+            let (element, element_error) = copy_value(a, &members[at].value, depth + 1u16, limit)
+            if element_error != ok { ret (out, element_error) }
+            entries[at].key = key
+            entries[at].value = element
+            at += 1usize
+        }
+        ret (Value{ Object: entries }, ok)
+    default:
+        ret (out, Invalid)
+    }
+}
+
+// Exact mathematical equality over two validated lexemes. Each is reduced to a sign, a run of
+// significant digits and a power of ten, and the three are compared -- so `1.0`, `1` and `1e0`
+// agree and `0.1` and `0.1000000000000000055511151231257827` do not.
+fn number_parts(lexeme: str) -> (bool, str, i64, bool) {
+    if lexeme.len == 0usize { ret (false, "", 0i64, false) }
+    var at = 0usize
+    var negative = false
+    if lexeme[at] == 45u8 {
+        negative = true
+        at += 1usize
+    }
+    let digits_start = at
+    while at < lexeme.len && str.is_ascii_digit(lexeme[at]) { at += 1usize }
+    let integer_part = lexeme[digits_start..at]
+    var fraction = ""
+    if at < lexeme.len && lexeme[at] == 46u8 {
+        at += 1usize
+        let fraction_start = at
+        while at < lexeme.len && str.is_ascii_digit(lexeme[at]) { at += 1usize }
+        fraction = lexeme[fraction_start..at]
+    }
+    var exponent = 0i64
+    if at < lexeme.len && (lexeme[at] == 101u8 || lexeme[at] == 69u8) {
+        at += 1usize
+        var exponent_negative = false
+        if at < lexeme.len && (lexeme[at] == 43u8 || lexeme[at] == 45u8) {
+            exponent_negative = lexeme[at] == 45u8
+            at += 1usize
+        }
+        let exponent_start = at
+        while at < lexeme.len && str.is_ascii_digit(lexeme[at]) { at += 1usize }
+        let (magnitude, magnitude_error) = str.parse_i64(lexeme[exponent_start..at])
+        if magnitude_error != ok { ret (false, "", 0i64, false) }
+        exponent = magnitude
+        if exponent_negative { exponent = -exponent }
+    }
+    if at != lexeme.len { ret (false, "", 0i64, false) }
+    ret (negative, integer_part, exponent - i64(fraction.len), true)
+}
+
+// The digits of a number with its point already folded into the exponent, then trimmed: leading
+// zeros carry no value and trailing ones move into the exponent.
+fn normalised_digits(integer_part: str, fraction: str, scale: i64) -> (usize, usize, i64, bool) {
+    var total = integer_part.len + fraction.len
+    var lead = 0usize
+    while lead < total {
+        var digit = 48u8
+        if lead < integer_part.len {
+            digit = integer_part[lead]
+        } else {
+            digit = fraction[lead - integer_part.len]
+        }
+        if digit != 48u8 { break }
+        lead += 1usize
+    }
+    if lead == total { ret (0usize, 0usize, 0i64, true) }
+    var trail = total
+    var power = scale
+    while trail > lead {
+        var digit = 48u8
+        if trail - 1usize < integer_part.len {
+            digit = integer_part[trail - 1usize]
+        } else {
+            digit = fraction[trail - 1usize - integer_part.len]
+        }
+        if digit != 48u8 { break }
+        trail -= 1usize
+        power += 1i64
+    }
+    ret (lead, trail, power, false)
+}
+
+fn digit_at(integer_part: str, fraction: str, index: usize) -> u8 {
+    if index < integer_part.len { ret integer_part[index] }
+    ret fraction[index - integer_part.len]
+}
+
+fn numbers_equal(left: Number, right: Number) -> bool {
+    let (left_negative, left_integer, left_scale, left_valid) = number_parts(left.lexeme)
+    let (right_negative, right_integer, right_scale, right_valid) = number_parts(right.lexeme)
+    if !left_valid || !right_valid { ret false }
+    let left_fraction = fraction_of(left.lexeme)
+    let right_fraction = fraction_of(right.lexeme)
+    let (left_lead, left_trail, left_power, left_zero) = normalised_digits(left_integer, left_fraction, left_scale)
+    let (right_lead, right_trail, right_power, right_zero) = normalised_digits(right_integer, right_fraction, right_scale)
+    // Zero is zero however it is spelled, sign included: `-0` and `0` are the same number even
+    // though the module keeps them apart as lexemes.
+    if left_zero || right_zero { ret left_zero && right_zero }
+    if left_negative != right_negative { ret false }
+    if left_power != right_power { ret false }
+    if left_trail - left_lead != right_trail - right_lead { ret false }
+    var at = 0usize
+    while at < left_trail - left_lead {
+        if digit_at(left_integer, left_fraction, left_lead + at) != digit_at(right_integer, right_fraction, right_lead + at) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// The fractional digits of a lexeme, which `number_parts` folds into its scale rather than
+// returning; both halves are needed to compare digit by digit.
+fn fraction_of(lexeme: str) -> str {
+    var at = 0usize
+    if at < lexeme.len && lexeme[at] == 45u8 { at += 1usize }
+    while at < lexeme.len && str.is_ascii_digit(lexeme[at]) { at += 1usize }
+    if at >= lexeme.len || lexeme[at] != 46u8 { ret "" }
+    at += 1usize
+    let start = at
+    while at < lexeme.len && str.is_ascii_digit(lexeme[at]) { at += 1usize }
+    ret lexeme[start..at]
+}
+
+fn values_equal(left: *const Value, right: *const Value) -> bool {
+    switch *left {
+    case .Null:
+        switch *right {
+        case .Null:
+            ret true
+        default:
+            ret false
+        }
+    case .Bool as flag:
+        let (other, is_bool) = bool_of(*right)
+        ret is_bool && other == flag
+    case .Number as written:
+        let (other, is_number) = number_of(*right)
+        ret is_number && numbers_equal(written, other)
+    case .String as text:
+        let (other, is_string) = string_of(*right)
+        ret is_string && str.eq(other, text)
+    case .Array as items:
+        let (other, is_array) = array_of(*right)
+        if !is_array || other.len != items.len { ret false }
+        var at = 0usize
+        while at < items.len {
+            if !values_equal(&items[at], &other[at]) { ret false }
+            at += 1usize
+        }
+        ret true
+    case .Object as members:
+        let (other, is_object) = object_of(*right)
+        if !is_object || other.len != members.len { ret false }
+        // Order is not part of what an object means to `test`, so each member is looked up.
+        var at = 0usize
+        while at < members.len {
+            let (found, present) = member_of(other, members[at].key)
+            if !present { ret false }
+            var held = found
+            if !values_equal(&members[at].value, &held) { ret false }
+            at += 1usize
+        }
+        ret true
+    default:
+        ret false
+    }
+}
+
+fn array_of(value: Value) -> ([]const Value, bool) {
+    var none: []const Value = zero
+    switch value {
+    case .Array as items:
+        ret (items, true)
+    default:
+        ret (none, false)
+    }
+}
+
+// A pointer split into its tokens, unescaped. The empty pointer is the root and has none.
+fn path_tokens(path: str, into: []str) -> (usize, err) {
+    if path.len == 0usize { ret (0usize, ok) }
+    if path[0usize] != 47u8 { ret (0usize, InvalidPointer) }
+    var count = 0usize
+    var at = 1usize
+    while true {
+        var end = at
+        while end < path.len && path[end] != 47u8 { end += 1usize }
+        if count == into.len { ret (0usize, TooLarge) }
+        into[count] = path[at..end]
+        count += 1usize
+        if end >= path.len { break }
+        at = end + 1usize
+    }
+    ret (count, ok)
+}
+
+// A token names a member of this object, if any does. Tokens carry `~0`/`~1` escapes, so the
+// comparison is `token_eq` rather than plain equality.
+fn member_index(members: []const Member, token: str) -> (usize, bool) {
+    var at = 0usize
+    while at < members.len {
+        if token_eq(token, members[at].key) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The unescaped spelling of a token, which becomes a key when `add` creates one.
+fn token_key(a: *mem.Arena, token: str) -> (str, err) {
+    let (buffer, allocation_error) = mem.alloc[u8](a, token.len)
+    if allocation_error != ok { ret ("", allocation_error) }
+    var written = 0usize
+    var at = 0usize
+    while at < token.len {
+        var byte = token[at]
+        at += 1usize
+        if byte == 126u8 {
+            if at >= token.len { ret ("", InvalidPointer) }
+            let escaped = token[at]
+            at += 1usize
+            if escaped == 48u8 {
+                byte = 126u8
+            } else {
+                if escaped != 49u8 { ret ("", InvalidPointer) }
+                byte = 47u8
+            }
+        }
+        buffer[written] = byte
+        written += 1usize
+    }
+    ret (buffer[0usize..written], ok)
+}
+
+// What an operation does where the path ends. `payload` is the value `add` and `replace` put
+// there; `removed` comes back out so `move` can carry it to its destination.
+fn edit_here(a: *mem.Arena, container: *const Value, token: str, action: u8, payload: *const Value) -> (Value, Value, err) {
+    var out: Value = .Null
+    var taken: Value = .Null
+    let (members, is_object) = object_of(*container)
+    if is_object {
+        let (found, present) = member_index(members, token)
+        if action == OP_REMOVE || action == OP_REPLACE {
+            if !present { ret (out, taken, PatchFailed) }
+        }
+        if present { taken = members[found].value }
+        if action == OP_REMOVE {
+            let (entries, entries_error) = mem.alloc[Member](a, members.len - 1usize)
+            if entries_error != ok { ret (out, taken, entries_error) }
+            var at = 0usize
+            var written = 0usize
+            while at < members.len {
+                if at != found {
+                    entries[written] = members[at]
+                    written += 1usize
+                }
+                at += 1usize
+            }
+            ret (Value{ Object: entries }, taken, ok)
+        }
+        if present {
+            // `add` over an existing member replaces it, and order is kept: RFC 6902 says the
+            // member's position is not what changed.
+            let (entries, entries_error) = mem.alloc[Member](a, members.len)
+            if entries_error != ok { ret (out, taken, entries_error) }
+            mem.copy[Member](entries, members)
+            entries[found].value = *payload
+            ret (Value{ Object: entries }, taken, ok)
+        }
+        let (entries, entries_error) = mem.alloc[Member](a, members.len + 1usize)
+        if entries_error != ok { ret (out, taken, entries_error) }
+        mem.copy[Member](entries, members)
+        let (key, key_error) = token_key(a, token)
+        if key_error != ok { ret (out, taken, key_error) }
+        entries[members.len].key = key
+        entries[members.len].value = *payload
+        ret (Value{ Object: entries }, taken, ok)
+    }
+    let (items, is_array) = array_of(*container)
+    if !is_array { ret (out, taken, PatchFailed) }
+    // `-` is the position after the last element: somewhere to add and nowhere to find.
+    var index = items.len
+    if !(token.len == 1usize && token[0usize] == 45u8) {
+        let (parsed, valid) = array_index(token)
+        if !valid { ret (out, taken, InvalidPointer) }
+        index = parsed
+    } else {
+        if action != OP_ADD { ret (out, taken, InvalidPointer) }
+    }
+    if action == OP_REMOVE || action == OP_REPLACE {
+        if index >= items.len { ret (out, taken, PatchFailed) }
+        taken = items[index]
+    }
+    if action == OP_REMOVE {
+        let (elements, elements_error) = mem.alloc[Value](a, items.len - 1usize)
+        if elements_error != ok { ret (out, taken, elements_error) }
+        var at = 0usize
+        var written = 0usize
+        while at < items.len {
+            if at != index {
+                elements[written] = items[at]
+                written += 1usize
+            }
+            at += 1usize
+        }
+        ret (Value{ Array: elements }, taken, ok)
+    }
+    if action == OP_REPLACE {
+        let (elements, elements_error) = mem.alloc[Value](a, items.len)
+        if elements_error != ok { ret (out, taken, elements_error) }
+        mem.copy[Value](elements, items)
+        elements[index] = *payload
+        ret (Value{ Array: elements }, taken, ok)
+    }
+    // `add` inserts, so an index one past the end is the append and anything beyond it is not a
+    // position in this array at all.
+    if index > items.len { ret (out, taken, PatchFailed) }
+    let (elements, elements_error) = mem.alloc[Value](a, items.len + 1usize)
+    if elements_error != ok { ret (out, taken, elements_error) }
+    var at = 0usize
+    while at < index {
+        elements[at] = items[at]
+        at += 1usize
+    }
+    elements[index] = *payload
+    while at < items.len {
+        elements[at + 1usize] = items[at]
+        at += 1usize
+    }
+    ret (Value{ Array: elements }, taken, ok)
+}
+
+// The spine down to the edit, rebuilt. Everything off the path is shared, which is sound because
+// nothing in this tree is ever written through again.
+fn edit_at(a: *mem.Arena, node: *const Value, tokens: []const str, at: usize, action: u8, payload: *const Value) -> (Value, Value, err) {
+    if at + 1usize == tokens.len {
+        let (edited, taken, edit_error) = edit_here(a, node, tokens[at], action, payload)
+        ret (edited, taken, edit_error)
+    }
+    var out: Value = .Null
+    var taken: Value = .Null
+    let (members, is_object) = object_of(*node)
+    if is_object {
+        let (found, present) = member_index(members, tokens[at])
+        if !present { ret (out, taken, PatchFailed) }
+        let (entries, entries_error) = mem.alloc[Member](a, members.len)
+        if entries_error != ok { ret (out, taken, entries_error) }
+        mem.copy[Member](entries, members)
+        let (child, child_taken, child_error) = edit_at(a, &members[found].value, tokens, at + 1usize, action, payload)
+        if child_error != ok { ret (out, taken, child_error) }
+        entries[found].value = child
+        ret (Value{ Object: entries }, child_taken, ok)
+    }
+    let (items, is_array) = array_of(*node)
+    if !is_array { ret (out, taken, PatchFailed) }
+    let (index, valid) = array_index(tokens[at])
+    if !valid { ret (out, taken, InvalidPointer) }
+    if index >= items.len { ret (out, taken, PatchFailed) }
+    let (elements, elements_error) = mem.alloc[Value](a, items.len)
+    if elements_error != ok { ret (out, taken, elements_error) }
+    mem.copy[Value](elements, items)
+    let (child, child_taken, child_error) = edit_at(a, &items[index], tokens, at + 1usize, action, payload)
+    if child_error != ok { ret (out, taken, child_error) }
+    elements[index] = child
+    ret (Value{ Array: elements }, child_taken, ok)
+}
+
+fn operation_code(name: str) -> (u8, bool) {
+    if str.eq(name, "add") { ret (OP_ADD, true) }
+    if str.eq(name, "remove") { ret (OP_REMOVE, true) }
+    if str.eq(name, "replace") { ret (OP_REPLACE, true) }
+    if str.eq(name, "move") { ret (OP_MOVE, true) }
+    if str.eq(name, "copy") { ret (OP_COPY, true) }
+    if str.eq(name, "test") { ret (OP_TEST, true) }
+    ret (0u8, false)
+}
+
+// A `from` that is a prefix of `path` at a token boundary would move a subtree inside itself.
+fn is_prefix_of(from_tokens: []const str, from_count: usize, path_tokens_list: []const str, path_count: usize) -> bool {
+    if from_count > path_count { ret false }
+    var at = 0usize
+    while at < from_count {
+        if !str.eq(from_tokens[at], path_tokens_list[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// Duplicate keys anywhere in the patch input make the operation it describes ambiguous, so the
+// whole input is refused rather than the object that carries them.
+fn free_of_duplicates(value: *const Value) -> bool {
+    switch *value {
+    case .Array as items:
+        var at = 0usize
+        while at < items.len {
+            if !free_of_duplicates(&items[at]) { ret false }
+            at += 1usize
+        }
+        ret true
+    case .Object as members:
+        var at = 0usize
+        while at < members.len {
+            var against = at + 1usize
+            while against < members.len {
+                if str.eq(members[at].key, members[against].key) { ret false }
+                against += 1usize
+            }
+            if !free_of_duplicates(&members[at].value) { ret false }
+            at += 1usize
+        }
+        ret true
+    default:
+        ret true
+    }
+}
+
+fn patch(a: *mem.Arena, root: *const Value, operations: *const Value, max_operations: usize, max_depth: u16) -> (Value, err) {
+    var out: Value = .Null
+    let start = mem.mark(a)
+    var limit = max_depth
+    if limit == 0u16 { limit = DEFAULT_MAX_DEPTH }
+    var allowed = max_operations
+    if allowed == 0usize { allowed = DEFAULT_MAX_OPERATIONS }
+    let (list, is_array) = array_of(*operations)
+    if !is_array {
+        mem.reset(a, start)
+        ret (out, Invalid)
+    }
+    if list.len > allowed {
+        mem.reset(a, start)
+        ret (out, TooLarge)
+    }
+    if !free_of_duplicates(operations) {
+        mem.reset(a, start)
+        ret (out, DuplicateKey)
+    }
+    // The one copy that makes the result this arena's. Every rebuild after it shares within what
+    // this produced, so nothing of `root` is ever reachable from the answer.
+    let (working, copy_error) = copy_value(a, root, 0u16, limit)
+    if copy_error != ok {
+        mem.reset(a, start)
+        ret (out, copy_error)
+    }
+    var current = working
+    var path_store: [MAX_PATH_TOKENS]str = zero
+    var from_store: [MAX_PATH_TOKENS]str = zero
+    var index = 0usize
+    while index < list.len {
+        let (fields, is_object) = object_of(list[index])
+        if !is_object {
+            mem.reset(a, start)
+            ret (out, Invalid)
+        }
+        let (op_value, has_op) = member_of(fields, "op")
+        if !has_op {
+            mem.reset(a, start)
+            ret (out, Invalid)
+        }
+        let (op_name, op_is_string) = string_of(op_value)
+        if !op_is_string {
+            mem.reset(a, start)
+            ret (out, Invalid)
+        }
+        let (action, known) = operation_code(op_name)
+        if !known {
+            mem.reset(a, start)
+            ret (out, Invalid)
+        }
+        let (path_value, has_path) = member_of(fields, "path")
+        if !has_path {
+            mem.reset(a, start)
+            ret (out, Invalid)
+        }
+        let (path, path_is_string) = string_of(path_value)
+        if !path_is_string {
+            mem.reset(a, start)
+            ret (out, Invalid)
+        }
+        let (path_count, path_error) = path_tokens(path, path_store[..])
+        if path_error != ok {
+            mem.reset(a, start)
+            ret (out, path_error)
+        }
+        if usize(limit) < path_count {
+            mem.reset(a, start)
+            ret (out, TooDeep)
+        }
+        var payload: Value = .Null
+        var from_count = 0usize
+        if action == OP_MOVE || action == OP_COPY {
+            let (from_value, has_from) = member_of(fields, "from")
+            if !has_from {
+                mem.reset(a, start)
+                ret (out, Invalid)
+            }
+            let (from_path, from_is_string) = string_of(from_value)
+            if !from_is_string {
+                mem.reset(a, start)
+                ret (out, Invalid)
+            }
+            let (counted, from_error) = path_tokens(from_path, from_store[..])
+            if from_error != ok {
+                mem.reset(a, start)
+                ret (out, from_error)
+            }
+            from_count = counted
+            // Moving a subtree into itself would build a tree that contains itself.
+            if action == OP_MOVE && is_prefix_of(from_store[..], from_count, path_store[..], path_count) {
+                mem.reset(a, start)
+                ret (out, PatchFailed)
+            }
+            let (source, source_error) = pointer(&current, from_path)
+            if source_error != ok {
+                mem.reset(a, start)
+                ret (out, source_error)
+            }
+            let (lifted, lifted_error) = copy_value(a, source, 0u16, limit)
+            if lifted_error != ok {
+                mem.reset(a, start)
+                ret (out, lifted_error)
+            }
+            payload = lifted
+            if action == OP_MOVE {
+                if from_count == 0usize {
+                    mem.reset(a, start)
+                    ret (out, PatchFailed)
+                }
+                let (without, taken, remove_error) = edit_at(a, &current, from_store[0usize..from_count], 0usize, OP_REMOVE, &payload)
+                if remove_error != ok {
+                    mem.reset(a, start)
+                    ret (out, remove_error)
+                }
+                current = without
+            }
+        }
+        if action == OP_ADD || action == OP_REPLACE || action == OP_TEST {
+            let (given, has_value) = member_of(fields, "value")
+            if !has_value {
+                mem.reset(a, start)
+                ret (out, Invalid)
+            }
+            let (copied, copied_error) = copy_value(a, &given, 0u16, limit)
+            if copied_error != ok {
+                mem.reset(a, start)
+                ret (out, copied_error)
+            }
+            payload = copied
+        }
+        if action == OP_TEST {
+            let (found, found_error) = pointer(&current, path)
+            if found_error != ok {
+                mem.reset(a, start)
+                ret (out, found_error)
+            }
+            if !values_equal(found, &payload) {
+                mem.reset(a, start)
+                ret (out, PatchFailed)
+            }
+            index += 1usize
+            continue
+        }
+        // The root is not inside any container, so there is nothing to rebuild: it is replaced
+        // outright, and removing it is not something a tree can express.
+        if path_count == 0usize {
+            if action == OP_REMOVE {
+                mem.reset(a, start)
+                ret (out, PatchFailed)
+            }
+            current = payload
+            index += 1usize
+            continue
+        }
+        var effect = action
+        if action == OP_MOVE || action == OP_COPY { effect = OP_ADD }
+        let (edited, taken, edit_error) = edit_at(a, &current, path_store[0usize..path_count], 0usize, effect, &payload)
+        if edit_error != ok {
+            mem.reset(a, start)
+            ret (out, edit_error)
+        }
+        current = edited
+        index += 1usize
+    }
+    ret (current, ok)
+}
+
+// --- The streaming reader.
+//
+// The same grammar as `parse`, over a source that arrives a piece at a time and a document that
+// is never held whole. What it costs is that a caller sees the shape rather than the value: an
+// object is `BeginObject`, then a `Key` and whatever that key's value turns out to be, then
+// `EndObject`. What it buys is that the document may be larger than memory.
+//
+// Every string and every number lexeme borrows one buffer the reader owns, so an event is good
+// until the next call and no further -- which is the fence's rule and the reason nothing here
+// allocates per event.
+
+const OPEN_ARRAY: u8 = 0u8
+const OPEN_OBJECT: u8 = 1u8
+
+const READ_CAPACITY: usize = 4096usize
+// The longest string or number a single event may carry. A document past it is `TooLarge`
+// rather than a truncated value.
+const EVENT_TEXT: usize = 65536usize
+// ponytail: duplicate detection keeps the keys of every open object, so it is a linear scan per
+// key and capped rather than unbounded. `e.data.map` is the upgrade once that module exists.
+const OPEN_KEYS: usize = 4096usize
+
+type ReaderState = struct {
+    source: io.Reader,
+    options: Options,
+    arena: *mem.Arena,
+    input: []u8,
+    input_at: usize,
+    input_len: usize,
+    text: []u8,
+    stack_kind: []u8,
+    stack_count: []usize,
+    stack_keys: []usize,
+    depth: usize,
+    keys: []str,
+    key_count: usize,
+    pending_value: bool,
+    started: bool,
+    finished: bool,
+    spent: bool,
+}
+
+// One byte, or `false` at the end of the source.
+fn stream_take(s: *ReaderState) -> (u8, bool, err) {
+    if s.input_at == s.input_len {
+        if s.spent { ret (0u8, false, ok) }
+        let (count, read_error) = io.read(&s.source, s.input)
+        if read_error == io.End {
+            s.spent = true
+            ret (0u8, false, ok)
+        }
+        if read_error != ok { ret (0u8, false, read_error) }
+        s.input_len = count
+        s.input_at = 0usize
+    }
+    let byte = s.input[s.input_at]
+    s.input_at += 1usize
+    ret (byte, true, ok)
+}
+
+// The byte a decision is made on, left where it was. Every caller either consumes it next or
+// hands it to whoever does.
+fn stream_peek(s: *ReaderState) -> (u8, bool, err) {
+    let (byte, more, take_error) = stream_take(s)
+    if take_error != ok { ret (0u8, false, take_error) }
+    if !more { ret (0u8, false, ok) }
+    s.input_at -= 1usize
+    ret (byte, true, ok)
+}
+
+fn stream_skip_space(s: *ReaderState) -> err {
+    while true {
+        let (byte, more, take_error) = stream_take(s)
+        if take_error != ok { ret take_error }
+        if !more { ret ok }
+        if !is_space(byte) {
+            s.input_at -= 1usize
+            ret ok
+        }
+    }
+    ret ok
+}
+
+fn stream_expect(s: *ReaderState, wanted: u8) -> err {
+    let (byte, more, take_error) = stream_take(s)
+    if take_error != ok { ret take_error }
+    if !more || byte != wanted { ret Invalid }
+    ret ok
+}
+
+fn keep_byte(s: *ReaderState, at: usize, byte: u8) -> (usize, err) {
+    if at == s.text.len { ret (at, TooLarge) }
+    s.text[at] = byte
+    ret (at + 1usize, ok)
+}
+
+// A `\u` escape's four digits, taken from the stream rather than from a slice.
+fn stream_hex4(s: *ReaderState) -> (u32, bool, err) {
+    var value = 0u32
+    var index = 0usize
+    while index < 4usize {
+        let (byte, more, take_error) = stream_take(s)
+        if take_error != ok { ret (0u32, false, take_error) }
+        if !more { ret (0u32, false, ok) }
+        let (digit, valid) = hex_value(byte)
+        if !valid { ret (0u32, false, ok) }
+        value = value * 16u32 + digit
+        index += 1usize
+    }
+    ret (value, true, ok)
+}
+
+// A string into the reader's buffer, the opening quote already behind. Unlike `parse_string`
+// there is no borrowing to be done: the bytes are gone from the stream once read, so every
+// string is decoded, escaped or not.
+fn stream_string(s: *ReaderState) -> (str, err) {
+    var at = 0usize
+    while true {
+        let (byte, more, take_error) = stream_take(s)
+        if take_error != ok { ret ("", take_error) }
+        if !more { ret ("", Invalid) }
+        if byte == 34u8 { break }
+        if byte < 32u8 { ret ("", Invalid) }
+        if byte != 92u8 {
+            let (kept, keep_error) = keep_byte(s, at, byte)
+            if keep_error != ok { ret ("", keep_error) }
+            at = kept
+            continue
+        }
+        let (escape, escaped, escape_error) = stream_take(s)
+        if escape_error != ok { ret ("", escape_error) }
+        if !escaped { ret ("", Invalid) }
+        var decoded = 0u8
+        var simple = true
+        if escape == 34u8 { decoded = 34u8 } else {
+        if escape == 92u8 { decoded = 92u8 } else {
+        if escape == 47u8 { decoded = 47u8 } else {
+        if escape == 98u8 { decoded = 8u8 } else {
+        if escape == 102u8 { decoded = 12u8 } else {
+        if escape == 110u8 { decoded = 10u8 } else {
+        if escape == 114u8 { decoded = 13u8 } else {
+        if escape == 116u8 { decoded = 9u8 } else {
+        if escape == 117u8 { simple = false } else { ret ("", Invalid) }
+        }
+        }
+        }
+        }
+        }
+        }
+        }
+        }
+        if simple {
+            let (kept, keep_error) = keep_byte(s, at, decoded)
+            if keep_error != ok { ret ("", keep_error) }
+            at = kept
+            continue
+        }
+        let (first, first_valid, first_error) = stream_hex4(s)
+        if first_error != ok { ret ("", first_error) }
+        if !first_valid { ret ("", Invalid) }
+        var point = first
+        // A leading surrogate is only half a character, and the half that follows it is written
+        // as a second escape -- so the pair is read here rather than left to whoever gets the
+        // bytes.
+        if first >= 55296u32 && first <= 56319u32 {
+            let backslash_error = stream_expect(s, 92u8)
+            if backslash_error != ok { ret ("", Invalid) }
+            let marker_error = stream_expect(s, 117u8)
+            if marker_error != ok { ret ("", Invalid) }
+            let (second, second_valid, second_error) = stream_hex4(s)
+            if second_error != ok { ret ("", second_error) }
+            if !second_valid { ret ("", Invalid) }
+            if second < 56320u32 || second > 57343u32 { ret ("", Invalid) }
+            point = 65536u32 + ((first - 55296u32) << 10u8) + (second - 56320u32)
+        } else {
+            // A trailing surrogate with nothing before it is not a character.
+            if first >= 56320u32 && first <= 57343u32 { ret ("", Invalid) }
+        }
+        if at + 4usize > s.text.len { ret ("", TooLarge) }
+        at = encode_utf8(s.text, at, point)
+    }
+    ret (s.text[0usize..at], ok)
+}
+
+// A number into the reader's buffer, then through the same validator a parsed one goes through,
+// so the two agree about what a number is.
+fn stream_number(s: *ReaderState) -> (Number, err) {
+    var empty: Number = zero
+    var at = 0usize
+    while true {
+        let (byte, more, take_error) = stream_take(s)
+        if take_error != ok { ret (empty, take_error) }
+        if !more { break }
+        if str.is_ascii_digit(byte) || byte == 45u8 || byte == 43u8 || byte == 46u8 || byte == 101u8 || byte == 69u8 {
+            let (kept, keep_error) = keep_byte(s, at, byte)
+            if keep_error != ok { ret (empty, keep_error) }
+            at = kept
+            continue
+        }
+        s.input_at -= 1usize
+        break
+    }
+    let (checked, checked_error) = number(s.text[0usize..at])
+    ret (checked, checked_error)
+}
+
+// The word a literal is, its first byte still unread: the caller decided on that byte by
+// peeking at it, so consuming it is this function's to do.
+fn stream_literal(s: *ReaderState, word: str) -> err {
+    s.input_at += 1usize
+    var at = 1usize
+    while at < word.len {
+        let error_code = stream_expect(s, word[at])
+        if error_code != ok { ret error_code }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn stream_push(s: *ReaderState, kind: u8) -> err {
+    if s.depth == s.stack_kind.len { ret TooDeep }
+    if usize(s.options.max_depth) != 0usize && s.depth == usize(s.options.max_depth) { ret TooDeep }
+    s.stack_kind[s.depth] = kind
+    s.stack_count[s.depth] = 0usize
+    s.stack_keys[s.depth] = s.key_count
+    s.depth += 1usize
+    ret ok
+}
+
+// A key is remembered only while its object is open; closing one takes the whole run off.
+fn stream_remember(s: *ReaderState, key: str) -> err {
+    if s.options.allow_duplicate_keys { ret ok }
+    let level = s.depth - 1usize
+    var at = s.stack_keys[level]
+    while at < s.key_count {
+        if str.eq(s.keys[at], key) { ret DuplicateKey }
+        at += 1usize
+    }
+    if s.key_count == s.keys.len { ret TooLarge }
+    // The text buffer is the next event's, so what is remembered has to be a copy.
+    let (kept, copy_error) = mem.alloc[u8](s.arena, key.len)
+    if copy_error != ok { ret copy_error }
+    mem.copy[u8](kept, key)
+    s.keys[s.key_count] = kept
+    s.key_count += 1usize
+    ret ok
+}
+
+// The value a token begins. Containers push and announce themselves; scalars are the event.
+fn stream_value(s: *ReaderState) -> (Event, bool, err) {
+    var event: Event = .Null
+    let (byte, more, peek_error) = stream_peek(s)
+    if peek_error != ok { ret (event, false, peek_error) }
+    if !more { ret (event, false, Invalid) }
+    if byte == 123u8 {
+        s.input_at += 1usize
+        let push_error = stream_push(s, OPEN_OBJECT)
+        if push_error != ok { ret (event, false, push_error) }
+        var opened: Event = .BeginObject
+        ret (opened, true, ok)
+    }
+    if byte == 91u8 {
+        s.input_at += 1usize
+        let push_error = stream_push(s, OPEN_ARRAY)
+        if push_error != ok { ret (event, false, push_error) }
+        var opened: Event = .BeginArray
+        ret (opened, true, ok)
+    }
+    if byte == 34u8 {
+        s.input_at += 1usize
+        let (text, text_error) = stream_string(s)
+        if text_error != ok { ret (event, false, text_error) }
+        ret (Event{ String: text }, true, ok)
+    }
+    if byte == 116u8 {
+        let literal_error = stream_literal(s, "true")
+        if literal_error != ok { ret (event, false, Invalid) }
+        ret (Event{ Bool: true }, true, ok)
+    }
+    if byte == 102u8 {
+        let literal_error = stream_literal(s, "false")
+        if literal_error != ok { ret (event, false, Invalid) }
+        ret (Event{ Bool: false }, true, ok)
+    }
+    if byte == 110u8 {
+        let literal_error = stream_literal(s, "null")
+        if literal_error != ok { ret (event, false, Invalid) }
+        ret (event, true, ok)
+    }
+    if byte == 45u8 || str.is_ascii_digit(byte) {
+        let (parsed, parsed_error) = stream_number(s)
+        if parsed_error != ok { ret (event, false, parsed_error) }
+        ret (Event{ Number: parsed }, true, ok)
+    }
+    ret (event, false, Invalid)
+}
+
+fn reader(a: *mem.Arena, source: io.Reader, options: Options) -> (Reader, err) {
+    var handle: Reader = zero
+    let (state, state_error) = mem.alloc[ReaderState](a, 1usize)
+    if state_error != ok { ret (handle, state_error) }
+    let (input, input_error) = mem.alloc[u8](a, READ_CAPACITY)
+    if input_error != ok { ret (handle, input_error) }
+    let (text, text_error) = mem.alloc[u8](a, EVENT_TEXT)
+    if text_error != ok { ret (handle, text_error) }
+    var levels = usize(options.max_depth)
+    if levels == 0usize { levels = usize(DEFAULT_MAX_DEPTH) }
+    let (kinds, kinds_error) = mem.alloc[u8](a, levels)
+    if kinds_error != ok { ret (handle, kinds_error) }
+    let (counts, counts_error) = mem.alloc[usize](a, levels)
+    if counts_error != ok { ret (handle, counts_error) }
+    let (key_marks, key_marks_error) = mem.alloc[usize](a, levels)
+    if key_marks_error != ok { ret (handle, key_marks_error) }
+    state[0usize].source = source
+    state[0usize].options = options
+    state[0usize].arena = a
+    state[0usize].input = input
+    state[0usize].input_at = 0usize
+    state[0usize].input_len = 0usize
+    state[0usize].text = text
+    state[0usize].stack_kind = kinds
+    state[0usize].stack_count = counts
+    state[0usize].stack_keys = key_marks
+    state[0usize].depth = 0usize
+    state[0usize].key_count = 0usize
+    state[0usize].pending_value = false
+    state[0usize].started = false
+    state[0usize].finished = false
+    state[0usize].spent = false
+    if !options.allow_duplicate_keys {
+        let (keys, keys_error) = mem.alloc[str](a, OPEN_KEYS)
+        if keys_error != ok { ret (handle, keys_error) }
+        state[0usize].keys = keys
+    }
+    handle.state = mem.cast[*void](&state[0usize])
+    ret (handle, ok)
+}
+
+// One event per call, `false` when the document is complete. Everything an event carries borrows
+// the reader's own buffer and is good until the next call.
+fn reader_next_err(r: *Reader) -> (Event, bool, err) {
+    let s = mem.cast[*ReaderState](r.state)
+    var event: Event = .Null
+    if s.finished { ret (event, false, ok) }
+    let space_error = stream_skip_space(s)
+    if space_error != ok { ret (event, false, space_error) }
+    if s.depth == 0usize {
+        if s.started {
+            // A document is one value. Whatever follows it is not part of it, and silence about
+            // that would let two documents in a row look like one.
+            let (trailing, has_trailing, trailing_error) = stream_peek(s)
+            if trailing_error != ok { ret (event, false, trailing_error) }
+            if has_trailing { ret (event, false, Invalid) }
+            s.finished = true
+            ret (event, false, ok)
+        }
+        s.started = true
+        let (first, first_more, first_error) = stream_value(s)
+        ret (first, first_more, first_error)
+    }
+    let level = s.depth - 1usize
+    if s.stack_kind[level] == OPEN_OBJECT {
+        if s.pending_value {
+            s.pending_value = false
+            let (member, member_more, member_error) = stream_value(s)
+            ret (member, member_more, member_error)
+        }
+        let (byte, more, peek_error) = stream_peek(s)
+        if peek_error != ok { ret (event, false, peek_error) }
+        if !more { ret (event, false, Invalid) }
+        if byte == 125u8 {
+            s.input_at += 1usize
+            s.key_count = s.stack_keys[level]
+            s.depth -= 1usize
+            var closed: Event = .EndObject
+            ret (closed, true, ok)
+        }
+        if s.stack_count[level] != 0usize {
+            let comma_error = stream_expect(s, 44u8)
+            if comma_error != ok { ret (event, false, Invalid) }
+            let after_error = stream_skip_space(s)
+            if after_error != ok { ret (event, false, after_error) }
+        }
+        let quote_error = stream_expect(s, 34u8)
+        if quote_error != ok { ret (event, false, Invalid) }
+        let (key, key_error) = stream_string(s)
+        if key_error != ok { ret (event, false, key_error) }
+        let duplicate_error = stream_remember(s, key)
+        if duplicate_error != ok { ret (event, false, duplicate_error) }
+        let before_error = stream_skip_space(s)
+        if before_error != ok { ret (event, false, before_error) }
+        let colon_error = stream_expect(s, 58u8)
+        if colon_error != ok { ret (event, false, Invalid) }
+        let value_error = stream_skip_space(s)
+        if value_error != ok { ret (event, false, value_error) }
+        s.stack_count[level] += 1usize
+        s.pending_value = true
+        ret (Event{ Key: key }, true, ok)
+    }
+    let (byte, more, peek_error) = stream_peek(s)
+    if peek_error != ok { ret (event, false, peek_error) }
+    if !more { ret (event, false, Invalid) }
+    if byte == 93u8 {
+        s.input_at += 1usize
+        s.key_count = s.stack_keys[level]
+        s.depth -= 1usize
+        var closed: Event = .EndArray
+        ret (closed, true, ok)
+    }
+    if s.stack_count[level] != 0usize {
+        let comma_error = stream_expect(s, 44u8)
+        if comma_error != ok { ret (event, false, Invalid) }
+        let after_error = stream_skip_space(s)
+        if after_error != ok { ret (event, false, after_error) }
+    }
+    s.stack_count[level] += 1usize
+    let (element, element_more, element_error) = stream_value(s)
+    ret (element, element_more, element_error)
+}
+
 // --- The typed codec.
 //
 // A struct is an object: one member per field, named as the field is named, in declaration

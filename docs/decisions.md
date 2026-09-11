@@ -2214,3 +2214,47 @@ already consumed it by the time a row arrives.
 `str` field is now copied into the arena; everything else a field holds is a value and travels by
 itself. The fixture caught it because it compares the field's contents and not just the row
 count, which is the difference between a test and a tally.
+## D140 — `e.fmt.json` complete: the stream, and the patch that copies before it changes anything
+
+28 of 28. Two pieces were left, and each turned on one decision.
+
+### The streaming reader
+
+`parse` and `reader` read the same grammar; what differs is that a stream has no source to borrow
+from. `parse_string` can hand back a span of the document when a string carries no escape, and a
+reader cannot -- the bytes are gone from the stream once read. So every string and every number
+lexeme is decoded into **one buffer the reader owns**, and an event is good until the next call
+and no further. That is the fence's rule, and it is also why nothing here allocates per event: the
+document may be larger than memory, and a reader that kept a piece of every event would not be.
+
+A caller sees the shape rather than the value: `BeginObject`, a `Key`, whatever that key's value
+turns out to be, `EndObject`. The depth limit and the duplicate-key rule belong here too -- a
+stream is where an unbounded document is most likely to arrive from -- so a level's keys are
+remembered while its object is open and the whole run is dropped when it closes.
+
+### Patch
+
+`patch` copies `root` once, wholly, strings and number lexemes included, and every operation
+afterwards rebuilds only the spine down to what it changes. Sharing the untouched branches is
+sound because nothing in the new tree is ever written through again, and copying first is what
+makes the result arena-owned and `root` unreachable from it. A failure resets the arena to the
+mark it took on entry, so a patch that does not apply leaves nothing behind.
+
+**`test` compares numbers as mathematics, not as `f64`.** This is the module's founding decision
+arriving where it matters most: a `Number` is the lexeme, so `1.0`, `1` and `1e0` are one number
+written three ways and must compare equal, while `9007199254740993` and `9007199254740992` are two
+numbers that `f64` cannot tell apart and must not. Each lexeme is reduced to a sign, a run of
+significant digits and a power of ten, and the three are compared. Zero is zero however it is
+spelled, `-0` included, even though the module keeps those apart as lexemes.
+
+An object compares by membership rather than by order, because order is not what an object means
+to a test -- though `parse` and `write` preserve it, because order is what a *document* means.
+
+The explicit failures are the ones the fence names: a missing target, an array index past the end,
+`-` anywhere but an `add`, a pointer that does not begin with `/`, an operation the standard does
+not define, one missing the member it needs, more operations than allowed, duplicate keys anywhere
+in the input, and a `move` whose `from` is a prefix of its `path` -- which would build a tree that
+contains itself.
+
+With this the M2 format set is finished: `e.fmt.json` at 28 of 28, `e.fmt.csv` at 12 of 12,
+`e.fmt.ini` at 14 of 14 (D134, D135, D137, D139).
