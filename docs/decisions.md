@@ -2484,3 +2484,47 @@ that means an exact reduction of arguments past 2^60; for `pow` it means the spe
 table section 11 fixes, entry by entry. That is a libm, and section 11 asks for its per-function
 bounds to be recorded in the source when it is implemented -- which is the right shape for
 it: written once, with its bounds, not approximated now and tightened later.
+## D147 — `e.math` complete: `fma` in integer arithmetic, the transcendentals from fdlibm, and every bound measured
+
+`e.math` lands at 24 of 24. D146 said what was not written and why it was not sketched; this is
+that work done, and the reasons held.
+
+**`fma` is computed the way the instruction computes it.** The product of the two significands
+is exact -- 106 bits -- the addend is aligned to it, the sum is taken exactly, and the result is
+rounded once. A 256-bit accumulator holds the pair; an operand so far below the other that it
+cannot reach the rounding position is folded into the lowest bit instead, the jam bit, which is
+all a rounding needs to know about it and which carries the direction through a subtraction.
+Every special value is settled before the arithmetic. `link/math_exact` checks sixty vectors
+against the exact rational `a * b + c` rounded once, which Python's `Fraction` computes with no
+float in the way -- including the twelve where `a * b + c` in two roundings disagrees.
+
+**The transcendentals are fdlibm's algorithms** as FreeBSD's msun carries them, over `f64`, with
+`f32` going through `f64` and rounding once more. Every constant is the published decimal stored
+as its bits. The one piece not ported is the large-argument reduction for `sin`, `cos` and
+`tan`: Payne-Hanek written here over 1280 bits of 2/pi, on the observation that for `m * 2^e`
+the only bits of 2/pi that can reach the result are the 256 around bit `e`, so `m` times that
+window modulo 2^256 holds the quotient's low two bits and 253 bits of the fraction -- more than
+the 61 bits the worst double cancels.
+
+**Every bound is measured, not derived.** Section 11 asks for per-function bounds to be
+recorded in the source; they are, and the four `link/math_*` fixtures are what keeps them true:
+880 inputs chosen to reach every reduction path and every special value, each compared against
+mpmath at 200 bits rounded once. Every function is within 1 ULP of the correctly rounded result
+at every point, `log2` and `log10` at 0, so within 1.5 ULP of the true value, inside the 2 the
+section allows. Where mpmath has no answer -- the signed zeros and infinite quadrants of
+`atan2`, the signs and zeros of `pow` -- the IEEE answer is written in.
+
+### What the measurement caught
+
+Seven defects, none of them in an algorithm: a `2^-1000` constant that was `1e-300`; the
+half-log-2 reduction threshold as `0x3FC62E42` where fdlibm has `0x3FD62E42`, which reduced
+inputs in `[0.17, 0.35]` by a whole log of two; `atan2`'s `x == 1` shortcut testing `|x|`, so
+`x = -1` took it; the fraction mask of the reduction masking bit 51 of a limb where bit 61 was
+meant; and four fold thresholds mis-converted from hex by hand, one of them "corrected" from a
+right value to a wrong one. Every one showed as a distance of hundreds or thousands of ULP at
+some input and nowhere else, which is the argument for the fixtures being what they are.
+
+Two limits met on the way: a fixture of 880 checks in one function crossed a per-module
+lowering capacity around 450, so there are four fixtures rather than one; and the scratch
+directory holding the generators was wiped mid-session, so the vectors live in the fixtures and
+their provenance in their headers. A generator in `scripts/` would be the tidier arrangement.

@@ -642,6 +642,30 @@ $mathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $mathWritten -ne 'executable written') { throw 'e.math emission failed' }
 & $mathPath
 if ($LASTEXITCODE -ne 0) { throw "an e.math answer is wrong: exit $LASTEXITCODE" }
+# `exp`, `exp2`, `log`, `log2` and `log10` against mpmath at 200 bits: within 1 ULP of the correctly rounded answer at every input, the reductions and the subnormal results included.
+$mathExpLogPath = Join-Path $testBuild 'math-exp-log-selfhost.exe'
+$mathExpLogWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_exp_log\src\main.e') $repo 'x64' 'windows' $mathExpLogPath
+if ($LASTEXITCODE -ne 0 -or $mathExpLogWritten -ne 'executable written') { throw 'math_exp_log emission failed' }
+& $mathExpLogPath
+if ($LASTEXITCODE -ne 0) { throw "an e.math answer is outside its bound: exit $LASTEXITCODE" }
+# `atan`, `atan2`, `asin` and `acos` against the same reference, on every fold point and every signed zero and infinity IEEE assigns a quadrant to.
+$mathInversePath = Join-Path $testBuild 'math-inverse-selfhost.exe'
+$mathInverseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_inverse\src\main.e') $repo 'x64' 'windows' $mathInversePath
+if ($LASTEXITCODE -ne 0 -or $mathInverseWritten -ne 'executable written') { throw 'math_inverse emission failed' }
+& $mathInversePath
+if ($LASTEXITCODE -ne 0) { throw "an e.math answer is outside its bound: exit $LASTEXITCODE" }
+# `sin`, `cos` and `tan` against the same reference, through the direct kernel, the Cody-Waite reduction and the Payne-Hanek one, on the double that cancels the most bits of any.
+$mathTrigPath = Join-Path $testBuild 'math-trig-selfhost.exe'
+$mathTrigWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_trig\src\main.e') $repo 'x64' 'windows' $mathTrigPath
+if ($LASTEXITCODE -ne 0 -or $mathTrigWritten -ne 'executable written') { throw 'math_trig emission failed' }
+& $mathTrigPath
+if ($LASTEXITCODE -ne 0) { throw "an e.math answer is outside its bound: exit $LASTEXITCODE" }
+# `pow` against the same reference and the whole of section 11's special-value table, plus one value through each single-precision wrapper.
+$mathPowPath = Join-Path $testBuild 'math-pow-selfhost.exe'
+$mathPowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_pow\src\main.e') $repo 'x64' 'windows' $mathPowPath
+if ($LASTEXITCODE -ne 0 -or $mathPowWritten -ne 'executable written') { throw 'math_pow emission failed' }
+& $mathPowPath
+if ($LASTEXITCODE -ne 0) { throw "an e.math answer is outside its bound: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
