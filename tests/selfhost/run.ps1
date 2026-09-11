@@ -609,6 +609,14 @@ $testAssertWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $testAssertWritten -ne 'executable written') { throw 'e.test emission failed' }
 & $testAssertPath
 if ($LASTEXITCODE -ne 0) { throw "an e.test assertion answered wrongly: exit $LASTEXITCODE" }
+# `e.data.map`: open addressing with linear probing, keyed by anything with a `hash` and an
+# `eq`. The fixture fills past several doublings, removes from the middle so that keys placed
+# past a hole must still be reached through the dead slot, reinserts into it, and iterates.
+$dataMapPath = Join-Path $testBuild 'data-map-selfhost.exe'
+$dataMapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_map\src\main.e') $repo 'x64' 'windows' $dataMapPath
+if ($LASTEXITCODE -ne 0 -or $dataMapWritten -ne 'executable written') { throw 'e.data.map emission failed' }
+& $dataMapPath
+if ($LASTEXITCODE -ne 0) { throw "an e.data.map answer is wrong: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

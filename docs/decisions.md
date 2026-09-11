@@ -2331,3 +2331,38 @@ pins the three cases the rule names.
 
 `near` is where IEEE's answer shows instead: a NaN is near nothing, itself included, because
 the comparisons say so on their own and no rule overrides them there.
+## D143 — `e.data.map` is open addressing over three parallel arrays, and a binding may wait for its protocol
+
+`e.data.map` lands at 20 of 20, `partial` only because the table behind `state: *void` has to be
+a type and the fence does not name one -- the same reason `e.io` named `BufferState` in its
+fence and this one could not.
+
+**Open addressing with linear probing, over three parallel arrays.** Keys, values and one mark
+byte per slot, so a probe reads marks first and touches a key only where a mark says one is
+there. Capacity is a power of two; the load stays under three quarters counting the slots a
+removal left behind as well as the live ones, because a table whose dead slots went uncounted
+would probe longer and longer while its `len` stayed small. A removal leaves a dead mark rather
+than an empty one -- a probe that stopped at the hole would never reach whatever was placed
+past it while the hole was full -- and an insertion reuses the first dead slot it passed, so the
+hole nearest a key's home is the one filled and no later probe gets longer for it. Rehashing
+copies only the live entries, which is how a table that has churned gets its probe lengths back.
+
+Growth takes a fresh table from the arena and abandons the old one, since an arena gives
+nothing back; `reserve` up front is what avoids leaving a trail, and a reclaiming allocator is
+the upgrade. A key that is already there keeps its slot under `put`, so iteration order does
+not change under updates. `Set[K]` is `Map[K, bool]` with the value left out of the surface,
+exactly as the fence has it.
+
+Three `ponytail:` comments in `e.fmt.csv`, `e.fmt.ini` and `e.fmt.json` name this module as
+the upgrade for their linear duplicate-key scans. It exists now; those scans are unchanged,
+because each is bounded and none has been measured to matter.
+
+### The compiler gap
+
+`let digest: u64 = K.hash(key)` failed to check inside a generic, while `ret K.hash(key)` and
+`d = K.hash(key)` both passed. The call-initialiser branch of `check_binding` reads the
+callee's result count, and a protocol call whose receiver is still a type parameter has no
+callee yet -- the count was zero, so the binding was a `TypeMismatch` before the deferral in
+`check_expr` was ever consulted. A binding initialised by a pending protocol call now follows
+its declared type, the way an expression of it already did. The map's probe is the first code
+to bind a hash rather than return or assign it.

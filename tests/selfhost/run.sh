@@ -643,6 +643,13 @@ test_assert_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$test_assert_written" = 'executable written' ]
 chmod +x "$test_build/test-assert-selfhost"
 "$test_build/test-assert-selfhost"
+# `e.data.map`: open addressing with linear probing, keyed by anything with a `hash` and an
+# `eq`. The fixture fills past several doublings, removes from the middle so that keys placed
+# past a hole must still be reached through the dead slot, reinserts into it, and iterates.
+data_map_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_map/src/main.e" "$repo" x64 linux "$test_build/data-map-selfhost")
+[ "$data_map_written" = 'executable written' ]
+chmod +x "$test_build/data-map-selfhost"
+"$test_build/data-map-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

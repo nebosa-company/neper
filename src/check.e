@@ -7593,6 +7593,19 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
             if has_name { try add_local(c, name, actual, mutable) }
             ret ok
         }
+        // A protocol call in a template body has no signature until the instantiation binds
+        // its receiver, so it has no result count to read either: the binding follows the
+        // declared type, as `check_expr` already lets an expression of it do.
+        if call.protocol_pending {
+            if tried { ret TryCast }
+            if tuple {
+                record_failure(c, module_index, node, .MultipleBindingCount, "", "")
+                ret ArgumentCount
+            }
+            let (name, has_name) = first_name(c, g.modules[module_index].text, binding)
+            if has_name { try add_local(c, name, dependent_expression_type(make_type(.TypeParameter, "", module_index), declared, module_index), mutable) }
+            ret ok
+        }
         let callee = call.function
         var result_count = callee.return_count
         if tried {
