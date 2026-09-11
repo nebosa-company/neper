@@ -634,6 +634,14 @@ $dataIterWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $dataIterWritten -ne 'executable written') { throw 'e.data.iter emission failed' }
 & $dataIterPath
 if ($LASTEXITCODE -ne 0) { throw "an e.data.iter answer is wrong: exit $LASTEXITCODE" }
+# `e.math`'s exact set: `sqrt` as the instruction, correctly rounded on both widths and checked
+# by its bits, and the rounders, `abs`, `copysign`, `min` and `max` as source. Exact means
+# bit-for-bit, so `-0` and `+0` are told apart wherever a sign could hide.
+$mathPath = Join-Path $testBuild 'math-exact-selfhost.exe'
+$mathWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\math_exact\src\main.e') $repo 'x64' 'windows' $mathPath
+if ($LASTEXITCODE -ne 0 -or $mathWritten -ne 'executable written') { throw 'e.math emission failed' }
+& $mathPath
+if ($LASTEXITCODE -ne 0) { throw "an e.math answer is wrong: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

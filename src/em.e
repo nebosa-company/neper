@@ -322,6 +322,7 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     if opcode == .AtomicRmw { ret 51usize }
     if opcode == .AtomicCas { ret 52usize }
     if opcode == .AtomicFence { ret 53usize }
+    if opcode == .Sqrt { ret 55usize }
     ret 0usize
 }
 

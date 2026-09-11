@@ -2614,7 +2614,7 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if node.kind == .CallExpr {
         let (call_info, call_info_error) = check.check_call(c, g, tree, module_index, node)
         if call_info_error != ok { ret (0usize, zero, call_info_error) }
-        if call_info.is_cast || call_info.mem_cast || call_info.mem_bitcast || call_info.mem_address {
+        if call_info.is_cast || call_info.mem_cast || call_info.mem_bitcast || call_info.mem_address || call_info.math_sqrt {
             var argument_index = 0usize
             var child_position = 0usize
             let end = node.first_child + node.child_count
@@ -2641,6 +2641,13 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             if call_info.mem_bitcast {
                 let (punned, punned_error) = lower_bitcast(c, argument, lowered_argument_type, call_info.cast, builder, c.tokens[node.token_start])
                 ret (punned, call_info.cast, punned_error)
+            }
+            if call_info.math_sqrt {
+                let (root_instruction, root, root_error) = nir.emit(builder, .Sqrt, call_info.cast, true, 0usize, c.tokens[node.token_start])
+                if root_error != ok { ret (0usize, call_info.cast, root_error) }
+                let root_operand_error = nir.add_operand(builder, root_instruction, argument)
+                if root_operand_error != ok { ret (0usize, call_info.cast, root_operand_error) }
+                ret (root, call_info.cast, ok)
             }
             let (instruction, result, emit_error) = nir.emit(builder, .Cast, call_info.cast, true, 0usize, c.tokens[node.token_start])
             if emit_error != ok { ret (0usize, call_info.cast, emit_error) }

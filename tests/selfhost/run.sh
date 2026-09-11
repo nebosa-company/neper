@@ -665,6 +665,13 @@ data_iter_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$data_iter_written" = 'executable written' ]
 chmod +x "$test_build/data-iter-selfhost"
 "$test_build/data-iter-selfhost"
+# `e.math`'s exact set: `sqrt` as the instruction, correctly rounded on both widths and checked
+# by its bits, and the rounders, `abs`, `copysign`, `min` and `max` as source. Exact means
+# bit-for-bit, so `-0` and `+0` are told apart wherever a sign could hide.
+math_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_exact/src/main.e" "$repo" x64 linux "$test_build/math-exact-selfhost")
+[ "$math_written" = 'executable written' ]
+chmod +x "$test_build/math-exact-selfhost"
+"$test_build/math-exact-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

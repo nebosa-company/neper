@@ -316,6 +316,13 @@ fn float_binary(buffer: *Buffer, destination: usize, source: usize, opcode: usiz
     ret sse(buffer, mandatory, false, destination, source, opcode)
 }
 
+// `sqrtss` 0x51 / `sqrtsd`, with the same prefix rule as the arithmetic.
+fn float_sqrt(buffer: *Buffer, destination: usize, source: usize, wide: bool) -> err {
+    var mandatory = 243usize
+    if wide { mandatory = 242usize }
+    ret sse(buffer, mandatory, false, destination, source, 81usize)
+}
+
 // `ucomiss` / `ucomisd`. Unordered sets ZF, PF and CF together, which is what makes
 // `above` and `above or equal` the two conditions that answer false for a NaN.
 fn float_compare(buffer: *Buffer, left: usize, right: usize, wide: bool) -> err {

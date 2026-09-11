@@ -392,7 +392,7 @@ fn comparison_condition(opcode: nir.Opcode, unsigned: bool) -> (usize, err) {
 // type says which file the value lives in.
 fn float_operation(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction) -> bool {
     let opcode = instruction.opcode
-    if opcode == .Add || opcode == .Subtract || opcode == .Multiply || opcode == .Divide || opcode == .Negate {
+    if opcode == .Add || opcode == .Subtract || opcode == .Multiply || opcode == .Divide || opcode == .Negate || opcode == .Sqrt {
         ret instruction.ty.kind == .Float
     }
     if opcode == .Cast {
@@ -530,6 +530,24 @@ fn select_float_negate(builder: *nir.Builder, instruction: nir.Instruction, allo
     ret store_result(allocations, instruction.result, destination, output)
 }
 
+// `sqrtss` / `sqrtsd`: correctly rounded by the hardware, which is the whole reason
+// `math.sqrt` is an instruction and the rest of `e.math` is source. A negative finite
+// operand gives the default NaN, which the canonicalization leaves as it is.
+fn select_float_sqrt(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+    if instruction.operand_count != 1usize || !instruction.has_result { ret Unsupported }
+    let width = float_width(instruction.ty)
+    if width == 0usize { ret Unsupported }
+    let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
+    if source_error != ok { ret source_error }
+    let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
+    if destination_error != ok { ret destination_error }
+    try emit_x64.move_to_float(output, 0usize, source, width == 64usize)
+    try emit_x64.float_sqrt(output, 0usize, 0usize, width == 64usize)
+    try canonicalize_nan(width, output)
+    try emit_x64.move_from_float(output, destination, 0usize, width == 64usize)
+    ret store_result(allocations, instruction.result, destination, output)
+}
+
 // Only a 64-bit unsigned integer can hold a value the signed conversion instructions
 // cannot express. Everything narrower already sits zero-extended in a general
 // register and converts as the signed value it equals.
@@ -631,6 +649,7 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
 fn select_float(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
     if instruction.opcode == .Cast { ret select_float_cast(builder, current, instruction, allocations, output) }
     if instruction.opcode == .Negate { ret select_float_negate(builder, instruction, allocations, output) }
+    if instruction.opcode == .Sqrt { ret select_float_sqrt(builder, instruction, allocations, output) }
     if comparison(instruction.opcode) { ret select_float_comparison(builder, current, instruction, allocations, output) }
     ret select_float_binary(builder, current, instruction, allocations, output)
 }

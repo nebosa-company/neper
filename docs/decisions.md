@@ -2450,3 +2450,37 @@ The bug was found by making `type_equal` structural for instances first, which d
 and thereby proved the two types were not equal by argument -- and then by a temporary
 diagnostic that named which argument differed and how. The structural equality stays: an
 instance is its template and its arguments, not its index, whichever path made it.
+## D146 — `e.math`'s exact set: `sqrt` is the instruction, the rest is bits, and what is not written is said
+
+`e.math` lands at 11 of 24. Section 11 splits the fence in two -- an exact set, whose answer is
+one value on every target, and an approximate set, within a stated bound -- and what lands is
+the exact set less `fma`, plus `rsqrt`.
+
+**`sqrt` is the one intrinsic.** A correctly rounded square root is the hardware's to give and
+no software's to approximate, so `math.sqrt[F](x)` is a NIR opcode of its own, `Sqrt`, selected
+as `sqrtss`/`sqrtsd` -- SSE2, so it is on every x64 this compiler targets. Everything else exact
+is bits and comparisons: `abs` and `copysign` mask the sign, `min` and `max` are IEEE 754-2019
+`minimum` and `maximum` with a NaN winning and `-0` below `+0`, and the four rounders fold the
+value through an `i64` where one fits and answer the value itself where one does not, since a
+float past 2^52 has no fraction left to round. `round` is ties to even, as SPIR-V's `RoundEven`
+and every CPU's round-to-nearest are, and the tie is tested exactly because `x - trunc(x)` is
+exact below the threshold. The sign of a zero result is the input's, which `i64(-0.5)` would
+have lost. `rsqrt` is `1 / sqrt(x)`: two correctly rounded operations, within 1 ULP, inside the
+2 ULP section 11 allows, and that bound is recorded in `lib/e/math.e` as the section asks.
+
+The plan listed the module with no dependencies; the sign masks are `mem.bitcast`, which is
+layer 0 as this module is, and the plan now says `["e.mem"]` (D144's precedent).
+
+### What is not written, and why it is not sketched
+
+`fma` is one rounding on every target. The baseline this compiler emits for is SSE2, which has
+no fused instruction, and a software fused multiply-add is exact arithmetic on the significands
+that must be verified against known answers. It waits either for a CPU level with `vfmadd` or
+for that verification, and a version that rounds twice would be worse than none: a caller who
+reaches for `fma` is reaching for the one rounding.
+
+The thirteen transcendentals are within 2 ULP over the whole domain. For `sin`, `cos` and `tan`
+that means an exact reduction of arguments past 2^60; for `pow` it means the special-value
+table section 11 fixes, entry by entry. That is a libm, and section 11 asks for its per-function
+bounds to be recorded in the source when it is implemented -- which is the right shape for
+it: written once, with its bounds, not approximated now and tightened later.

@@ -71,6 +71,9 @@ type Opcode = enum u8 {
     // and the address is not known until the image is laid out -- so this lowers to a relocation
     // the linker fills, the way a call to an imported symbol does.
     GlobalAddress = 54,
+    // `math.sqrt`: the one float operation that is an instruction on every target and has no
+    // operator, so it is an opcode of its own rather than a call.
+    Sqrt = 55,
 }
 
 // `AtomicRmw`'s immediate is `kind * 8 + ordering`, so the two travel in the one

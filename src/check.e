@@ -4287,6 +4287,10 @@ type CallInfo = struct {
     mem_cast: bool,
     mem_bitcast: bool,
     mem_address: bool,
+    // `math.sqrt[F](x)`: the one `e.math` function that is an instruction rather than source,
+    // because a correctly rounded square root is the hardware's to give and no software's to
+    // approximate. `cast` carries `F`, as it does for the three above.
+    math_sqrt: bool,
     // `os.dlsym[F]`. The call that is made is the variant's own address lookup; what this flag
     // changes is only the type of its first result, which is `cast` as it is for the three above.
     dl_symbol: bool,
@@ -4729,6 +4733,57 @@ fn bitcast_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     function.intrinsic = true
     info.function = function
     info.target = punned
+    ret (info, ok)
+}
+
+// `math.sqrt[F](x)`. The type argument is the float type, or a type parameter in a template
+// body that an instance settles (D136); the one runtime argument is checked against it below.
+fn sqrt_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (BitcastInfo, err) {
+    var info: BitcastInfo = zero
+    if receiver.kind != .BracketPostfix { ret (info, ok) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count == 0usize { ret (info, ok) }
+    let base = tree.nodes[base_index]
+    var target_module = module_index
+    if base.kind == .FieldExpr {
+        let (member_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+        if !found_member || !same(g.modules[member_module].name, "e.math") || !same(member, "sqrt") { ret (info, ok) }
+        target_module = member_module
+    } else {
+        // `sqrt[F](x)` unqualified is the module's own spelling of its own intrinsic, which
+        // `rsqrt` needs: a module cannot import itself.
+        if base.kind != .NameExpr || !same(g.modules[module_index].name, "e.math") { ret (info, ok) }
+        let base_token = c.tokens[base.token_start]
+        if base_token.kind != .Identifier || !same(g.modules[module_index].text[base_token.start..base_token.end], "sqrt") { ret (info, ok) }
+    }
+    info.matched = true
+    if child_count != 2usize { ret (info, ArgumentCount) }
+    let (float_type, float_error) = comptime_type(c, g, tree, module_index, type_index)
+    if float_error != ok { ret (info, float_error) }
+    if float_type.kind != .Float && float_type.kind != .TypeParameter { ret (info, InvalidType) }
+    var function: Function = zero
+    function.name = "sqrt"
+    function.module_index = target_module
+    function.parameter_count = 1usize
+    function.return_count = 1usize
+    function.intrinsic = true
+    info.function = function
+    info.target = float_type
     ret (info, ok)
 }
 
@@ -6070,6 +6125,13 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.cast = pun.target
                             info.mem_bitcast = true
                         } else {
+                        let (root, root_error) = sqrt_info(c, g, tree, module_index, receiver)
+                        if root_error != ok { ret (info, root_error) }
+                        if root.matched {
+                            info.function = root.function
+                            info.cast = root.target
+                            info.math_sqrt = true
+                        } else {
                         let (formatter, formatter_error) = formatter_info(c, g, tree, module_index, receiver)
                         if formatter_error != ok { ret (info, formatter_error) }
                         if formatter.matched {
@@ -6084,6 +6146,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             let (specialized_index, specialize_error) = specialize_call(c, g, tree, module_index, node, receiver, template_index)
                             if specialize_error != ok { ret (info, specialize_error) }
                             info.function = c.functions[specialized_index]
+                        }
                         }
                         }
                         }
@@ -6271,6 +6334,15 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         // read as another type.
                         if is_untyped(punned) { ret (info, MissingContext) }
                         if !punnable_type(c, punned, 0usize) { ret (info, TypeMismatch) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
+                    if info.math_sqrt {
+                        // The argument is the float named in the brackets, and in a template
+                        // body both may still be a type parameter.
+                        let (radicand, radicand_error) = check_expr(c, g, tree, module_index, child_index, info.cast)
+                        if radicand_error != ok { ret (info, radicand_error) }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -6738,7 +6810,7 @@ fn call_return(c: *Checker, call: CallInfo, index: usize) -> (Type, err) {
         ret (make_type(.TypeParameter, "", 0usize), ok)
     }
     if index >= call.function.return_count { ret (invalid_type(), InvalidType) }
-    if call.mem_cast || call.mem_bitcast || call.mem_address {
+    if call.mem_cast || call.mem_bitcast || call.mem_address || call.math_sqrt {
         if index != 0usize { ret (invalid_type(), InvalidType) }
         ret (call.cast, ok)
     }
