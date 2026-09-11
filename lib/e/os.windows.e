@@ -657,6 +657,9 @@ extern fn raw_create_file(name: *const u16, access: u32, share: u32, security: u
 @import("kernel32.dll", "CloseHandle")
 extern fn raw_close_handle(handle: usize) -> i32
 
+@import("kernel32.dll", "SetHandleInformation")
+extern fn raw_set_handle_information(handle: usize, mask: u32, flags: u32) -> i32
+
 @import("kernel32.dll", "GetFileInformationByHandle")
 extern fn raw_handle_information(handle: usize, info: *ByHandleFileInformation) -> i32
 
@@ -1054,6 +1057,7 @@ const LOCK_POLL_MS: u32 = 10u32
 const CREATE_SUSPENDED: u32 = 4u32
 const CREATE_UNICODE_ENVIRONMENT: u32 = 1024u32
 const STARTF_USESTDHANDLES: u32 = 256u32
+const HANDLE_FLAG_INHERIT: u32 = 1u32
 
 // `STD_INPUT_HANDLE` and its two neighbours, which are negative numbers passed as unsigned.
 const STD_INPUT: u32 = 4294967286u32
@@ -1833,6 +1837,21 @@ type StartResult = struct { group: ProcGroup, child: Proc }
 
 // One place for both spawns: `grouped` decides whether a job is made and whether the child is
 // held suspended long enough to be put in it.
+// Every handle the child is to receive, marked so that `CreateProcess` passes it on: the three
+// standard streams the caller set, and whatever `inherit` names besides. A zero stream is the
+// parent's own and already inheritable.
+fn make_inheritable(stdio: Stdio) -> err {
+    if stdio.stdin.raw != 0usize && raw_set_handle_information(stdio.stdin.raw, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0i32 { ret from_last_error() }
+    if stdio.stdout.raw != 0usize && raw_set_handle_information(stdio.stdout.raw, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0i32 { ret from_last_error() }
+    if stdio.stderr.raw != 0usize && raw_set_handle_information(stdio.stderr.raw, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0i32 { ret from_last_error() }
+    var at = 0usize
+    while at < stdio.inherit.len {
+        if raw_set_handle_information(stdio.inherit[at].raw, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) == 0i32 { ret from_last_error() }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartResult, err) {
     var result: StartResult = zero
     let (line, line_error) = command_line(a, options.argv)
@@ -1875,6 +1894,16 @@ fn start_process(a: *mem.Arena, options: SpawnOptions, grouped: bool) -> (StartR
     if startup.standard_output == 0usize { startup.standard_output = raw_std_handle(STD_OUTPUT) }
     startup.standard_error = options.stdio.stderr.raw
     if startup.standard_error == 0usize { startup.standard_error = raw_std_handle(STD_ERROR) }
+    // A handle reaches the child only if it is marked inheritable, and a caller's handles
+    // generally are not: `pipe` makes its ends the opposite on purpose, so that a pipe never
+    // leaks into an unrelated child. The marking is done here, at the one moment the caller has
+    // said which child should have them -- which is what the `spawn` intrinsic has always done
+    // and this path had not, so a pipe handed to it arrived in the child as nothing.
+    let inherit_error = make_inheritable(options.stdio)
+    if inherit_error != ok {
+        if job != 0usize { let unused_job = raw_close_handle(job) }
+        ret (result, inherit_error)
+    }
     var information: ProcessInformation = zero
     // Handles are inherited, which is what makes the three above reach the child at all.
     if raw_create_process(0usize, &wide_line[0usize], 0usize, 0usize, 1i32, flags, environment, directory, &startup, &information) == 0i32 {

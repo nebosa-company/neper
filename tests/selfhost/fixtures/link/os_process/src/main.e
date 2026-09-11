@@ -39,7 +39,24 @@ fn is_child(a: *mem.Arena) -> bool {
     ret false
 }
 
+fn says(a: *mem.Arena) -> bool {
+    let (arguments, arguments_error) = os.args(a)
+    if arguments_error != ok { ret false }
+    var at = 0usize
+    while at < arguments.len {
+        if same(arguments[at], "np-say") { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn main(a: *mem.Arena) -> err {
+    // The other child: it says one word on its stdout and leaves, which is how the parent can
+    // tell whether a stream it handed over arrived.
+    if says(a) {
+        let (_, said_error) = os.write(os.stdout(), "said")
+        os.exit(0i32)
+    }
     // The child's whole job is to still be running when the parent kills it. Waiting on a flag
     // nothing will ever set is how it blocks without a sleep of its own.
     if is_child(a) {
@@ -125,5 +142,34 @@ fn main(a: *mem.Arena) -> err {
     let (status, wait_error) = os.wait(child)
     if wait_error != ok { os.exit(43i32) }
     if status == 0i32 { os.exit(44i32) }
+
+    // --- A pipe handed to `spawn_with_options` reaches the child. The `spawn` intrinsic marks
+    // its handles inheritable before creating the process and this path did not, so on Windows
+    // a pipe given here arrived in the child as nothing and its first write failed.
+    let (said_read, said_write, said_pipe_error) = os.pipe()
+    if said_pipe_error != ok { os.exit(50i32) }
+    var options: os.SpawnOptions = zero
+    var said_argv: [2]str = zero
+    said_argv[0usize] = image
+    said_argv[1usize] = "np-say"
+    options.argv = said_argv[..]
+    options.inherit_env = true
+    options.stdio.stdout = said_write
+    let (speaker, speaker_error) = os.spawn_with_options(a, options)
+    if speaker_error != ok { os.exit(51i32) }
+    if os.close(said_write) != ok { os.exit(52i32) }
+    var said: [8]u8 = zero
+    var said_len = 0usize
+    while said_len < said.len {
+        let (count, said_error) = os.read(said_read, said[said_len..])
+        if said_error != ok { os.exit(53i32) }
+        if count == 0usize { break }
+        said_len += count
+    }
+    if !same(said[0usize..said_len], "said") { os.exit(54i32) }
+    if os.close(said_read) != ok { os.exit(55i32) }
+    let (said_status, said_wait) = os.wait(speaker)
+    if said_wait != ok { os.exit(56i32) }
+    if said_status != 0i32 { os.exit(57i32) }
     ret ok
 }
