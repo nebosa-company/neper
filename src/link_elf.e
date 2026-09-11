@@ -533,7 +533,16 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     }
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
-    let code_offset = 4096usize
+    // A second segment only when there is something to put in it. An image with no module-scope
+    // `var` keeps the single read-execute segment it has always had, byte for byte -- which the
+    // determinism harness compares, so the absence of the feature has to cost nothing.
+    var segments = 1usize
+    if builder.global_count != 0usize { segments = 2usize }
+    // The code starts where the program headers end. The loader asks only that a segment's file
+    // offset and address agree modulo the page, not that either be a page boundary; padding the
+    // code out to 4096 cost an empty program half its size for nothing (D149). The address is
+    // still the base plus the file offset, so every relocation below stays a file offset.
+    let code_offset = 64usize + 56usize * segments
     let startup_size = 235usize
     try emit_x64.byte(output, 127usize)
     try emit_x64.byte(output, 69usize)
@@ -548,17 +557,12 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try little_u16(output, 2usize)
     try little_u16(output, 62usize)
     try emit_x64.little_u32(output, 1usize)
-    try emit_x64.little_u64(output, 4198400usize)
+    try emit_x64.little_u64(output, 4194304usize + code_offset)
     try emit_x64.little_u64(output, 64usize)
     try emit_x64.little_u64(output, 0usize)
     try emit_x64.little_u32(output, 0usize)
     try little_u16(output, 64usize)
     try little_u16(output, 56usize)
-    // A second segment only when there is something to put in it. An image with no module-scope
-    // `var` keeps the single read-execute segment it has always had, byte for byte -- which the
-    // determinism harness compares, so the absence of the feature has to cost nothing.
-    var segments = 1usize
-    if builder.global_count != 0usize { segments = 2usize }
     try little_u16(output, segments)
     try little_u16(output, 0usize)
     try little_u16(output, 0usize)
@@ -572,9 +576,9 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try emit_x64.little_u64(output, 0usize)
     try emit_x64.little_u64(output, 4096usize)
     if segments == 2usize {
-        // Writable, and page-aligned in both the file and memory so the two agree modulo the
-        // page -- which is what the loader requires of a mapping. The offset and size are not
-        // known until the code has been written, so they are patched like the first segment's.
+        // Writable, and placed so its file offset and address agree modulo the page -- which is
+        // what the loader requires of a mapping. The offset and size are not known until the
+        // code has been written, so they are patched like the first segment's.
         try emit_x64.little_u32(output, 1usize)
         try emit_x64.little_u32(output, 6usize)
         try emit_x64.little_u64(output, 0usize)
@@ -615,21 +619,32 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         }
         relocation_at += 1usize
     }
-    // The code segment covers everything written so far; the data segment starts on the next page
-    // after it, so that one mapping does not have to be both writable and executable.
+    // The code segment covers everything written so far. The data follows it in the file, rounded
+    // up only to the strictest alignment a global asks for, and is mapped one page further along
+    // than its offset would say, so that it lands on a page of its own -- one mapping never has to
+    // be both writable and executable -- while the offset and the address still agree modulo the
+    // page. The globals' own offsets are relative to the area, so the area must carry the
+    // alignment they assume.
     let code_end = output.count
     try patch_little_u64(output, 96usize, code_end)
     try patch_little_u64(output, 104usize, code_end)
     if builder.global_count != 0usize {
-        let area_offset = align_up_to(code_end, 4096usize)
+        var area_alignment = 1usize
+        var alignment_at = 0usize
+        while alignment_at < builder.global_count {
+            if builder.globals[alignment_at].alignment > area_alignment { area_alignment = builder.globals[alignment_at].alignment }
+            alignment_at += 1usize
+        }
+        let area_offset = align_up_to(code_end, area_alignment)
+        let area_address = 4194304usize + area_offset + 4096usize
         let area_size = nir.global_area_size(builder)
         try pad_to(output, area_offset)
         try append_globals(builder, output, area_offset)
         try pad_to(output, area_offset + area_size)
         // The second header: offset, virtual and physical address, then both sizes.
         try patch_little_u64(output, 128usize, area_offset)
-        try patch_little_u64(output, 136usize, 4194304usize + area_offset)
-        try patch_little_u64(output, 144usize, 4194304usize + area_offset)
+        try patch_little_u64(output, 136usize, area_address)
+        try patch_little_u64(output, 144usize, area_address)
         try patch_little_u64(output, 152usize, area_size)
         try patch_little_u64(output, 160usize, area_size)
         var global_at = 0usize
@@ -637,10 +652,10 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
             if relocations[global_at].global {
                 let reference_index = relocations[global_at].function_ref
                 if reference_index >= builder.global_count { ret InvalidExecutable }
-                let destination = 4194304usize + area_offset + nir.global_area_offset(builder, reference_index)
+                let destination = area_address + nir.global_area_offset(builder, reference_index)
                 let site = machine_start + relocations[global_at].displacement_at
-                // The displacement is from the end of the instruction, and an address in the
-                // file is its own offset from the image base on this path.
+                // The displacement is from the end of the instruction, and a code address on
+                // this path is the image base plus the file offset.
                 let next_address = 4194304usize + site + 4usize
                 if destination < next_address { ret InvalidExecutable }
                 try emit_x64.patch_little_u32(output, site, destination - next_address)
@@ -680,13 +695,13 @@ fn self_test() -> err {
     // against it keeps this test honest across that change, and the machine code
     // is checked where `write` puts it rather than at a literal offset.
     let base_runtime_size = 1441usize
-    let machine_start = 4096usize + 235usize
+    let machine_start = 120usize + 235usize
     let total = machine_start + machine.count + base_runtime_size + runtime_elf_x64_ext.size()
     if executable.count != total { ret InvalidExecutable }
-    if executable.bytes[0usize] != 127usize || executable.bytes[16usize] != 2usize || executable.bytes[18usize] != 62usize || executable.bytes[24usize] != 0usize || executable.bytes[25usize] != 16usize || executable.bytes[26usize] != 64usize { ret InvalidExecutable }
+    if executable.bytes[0usize] != 127usize || executable.bytes[16usize] != 2usize || executable.bytes[18usize] != 62usize || executable.bytes[24usize] != 120usize || executable.bytes[25usize] != 0usize || executable.bytes[26usize] != 64usize { ret InvalidExecutable }
     if executable.bytes[64usize] != 1usize || executable.bytes[68usize] != 5usize { ret InvalidExecutable }
     if executable.bytes[96usize] != total % 256usize || executable.bytes[97usize] != (total / 256usize) % 256usize { ret InvalidExecutable }
-    if executable.bytes[4096usize] != 73usize || executable.bytes[4295usize] != 232usize { ret InvalidExecutable }
+    if executable.bytes[120usize] != 73usize || executable.bytes[319usize] != 232usize { ret InvalidExecutable }
     if executable.bytes[machine_start] != 195usize || executable.bytes[machine_start + 1usize] != 184usize { ret InvalidExecutable }
     ret ok
 }

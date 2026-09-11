@@ -2528,3 +2528,25 @@ Two limits met on the way: a fixture of 880 checks in one function crossed a per
 lowering capacity around 450, so there are four fixtures rather than one; and the scratch
 directory holding the generators was wiped mid-session, so the vectors live in the fixtures and
 their provenance in their headers. A generator in `scripts/` would be the tidier arrangement.
+
+## D149 — an ELF segment starts where the headers end, not on the next page
+
+A static Linux image put its code at file offset 4096 and its data on the page after the code,
+so an empty program was 7,780 bytes of which 3,982 were zeros, and hello world 13,120 with 6,138.
+The loader never asked for that: a `PT_LOAD` needs its file offset and its address to agree
+modulo the page, nothing more. The code now follows the program headers directly, at offset 120
+or 176, and its address is still the base plus the offset, so every relocation on the path stays
+a file offset. The data area follows the code in the file, rounded up to the strictest
+alignment any global asks for, and is mapped one page beyond its offset so it lands on a page of
+its own -- the two mappings share a file page and that is allowed; what is not allowed is one
+mapping that is both writable and executable, and there is none.
+
+Measured after: empty program 3,804 bytes, hello world 7,048, `module_var` 8,136 (was on two
+pages); every link fixture unchanged in behaviour and stage 3 still equal to stage 2. What is
+left of an empty program is 120 bytes of headers, 235 of startup and 3,438 of runtime, which is
+appended whole whether the program reaches `spawn` and `thread_create` or not -- the next floor,
+and a larger job than this one, since the runtime is opaque bytes behind a symbol-offset table.
+
+The Windows image was not padded to speak of -- 345 bytes in 7,168 -- and the dynamic Linux
+path (an `@import`) keeps its page-aligned layout, since a program that loads libc is not
+counting bytes.
