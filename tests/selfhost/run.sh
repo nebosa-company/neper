@@ -624,6 +624,13 @@ fs_basics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$fs_basics_written" = 'executable written' ]
 chmod +x "$test_build/fs-basics-selfhost"
 (cd "$fs_scratch" && "$test_build/fs-basics-selfhost")
+# `e.proc` against a real child, which is the fixture's own image. The child fills its stderr
+# pipe before its stdout is drained, so `output` returning at all is what proves the two
+# streams are read at once; a child that never stops is what proves the limit ends it.
+proc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/proc_output/src/main.e" "$repo" x64 linux "$test_build/proc-output-selfhost")
+[ "$proc_written" = 'executable written' ]
+chmod +x "$test_build/proc-output-selfhost"
+"$test_build/proc-output-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

@@ -2258,3 +2258,44 @@ contains itself.
 
 With this the M2 format set is finished: `e.fmt.json` at 28 of 28, `e.fmt.csv` at 12 of 12,
 `e.fmt.ini` at 14 of 14 (D134, D135, D137, D139).
+## D141 — `e.proc` reads both pipes at once, and the spawn path that never marked a handle inheritable
+
+`e.proc` lands at 12 of 14. `run` and `RunOptions` wait on `e.cancel`, which the plan defers to
+M2.5: a `Control` is what bounds the running work, and there is no writing `run` without one.
+`Outcome` and `RunResult` are written, because they are what `run` will answer with and nothing
+in them waits on anything.
+
+### The one thing this module adds
+
+Everything else is `e.os` in the shape a caller wants -- a program and its arguments rather than
+an argv, three streams rather than a `Stdio`, and the child's ends of `spawn_piped`'s pipes closed
+on the side that is not the caller's. What `e.os` does not have is the second reader. A child that
+writes to both of its streams fills one pipe while the parent is blocked on the other, and then
+neither moves. `output` drains stderr on a thread and stdout on the caller's, which is the only
+way two pipes are read at once without a poller that both hosts have for pipes -- Windows does
+not. The thread reads into a buffer that already exists and calls nothing that allocates, which
+is what lets two readers share one arena that neither touches.
+
+A limit is exact: a stream of exactly `limit` bytes is allowed, one more is `TooLarge`, and the
+child is ended at that byte rather than read to exhaustion. A program producing more than it was
+allowed is not one to wait on, and one that never stops would otherwise never let `output` return.
+Whatever happened, the child is reaped before `output` returns -- a process left behind is worse
+than any error.
+
+A program that does not exist answers differently on the two hosts and `e.os` chose not to hide
+it: Windows refuses at `CreateProcess`, so it is the spawn's error; Linux forks first and the
+`execve` fails in the child, which exits 127 -- there is nothing else to report it to. What both
+promise is that it is never a success with a status of zero, and that is what the fixture pins.
+
+### The defect the first user of `spawn_with_options` found
+
+A pipe handed to `os.spawn_with_options` on Windows arrived in the child as nothing, and the
+child's first write to it failed. The `spawn` intrinsic, written in assembly, has always called
+`SetHandleInformation` on each standard handle before `CreateProcess`; the source path written
+later did not, and `pipe` makes its ends non-inheritable on purpose so that a pipe never leaks into
+an unrelated child. Every earlier fixture went through the intrinsic, so nothing had noticed.
+`start_process` now marks the three streams and everything `Stdio.inherit` names, which is what
+the fence said it did, and `link/os_process` hands a pipe through that path and reads the word
+the child says into it. Without the fix that check fails at 54; the probe that found it took
+three wrong turns first, because a debug edit that does not compile leaves the old binary to
+answer.

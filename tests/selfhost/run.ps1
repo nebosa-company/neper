@@ -587,6 +587,14 @@ Push-Location $fsScratch
 $fsBasicsExit = $LASTEXITCODE
 Pop-Location
 if ($fsBasicsExit -ne 0) { throw "e.fs answered wrongly: exit $fsBasicsExit" }
+# `e.proc` against a real child, which is the fixture's own image. The child fills its stderr
+# pipe before its stdout is drained, so `output` returning at all is what proves the two
+# streams are read at once; a child that never stops is what proves the limit ends it.
+$procPath = Join-Path $testBuild 'proc-output-selfhost.exe'
+$procWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\proc_output\src\main.e') $repo 'x64' 'windows' $procPath
+if ($LASTEXITCODE -ne 0 -or $procWritten -ne 'executable written') { throw 'e.proc emission failed' }
+& $procPath
+if ($LASTEXITCODE -ne 0) { throw "an e.proc child answered wrongly: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
