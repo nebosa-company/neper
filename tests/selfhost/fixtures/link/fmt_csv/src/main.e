@@ -11,6 +11,9 @@ use e.fmt.csv
 
 error Failed
 
+// The codec maps a struct to a row, so the fixture needs one field of each kind it handles.
+type Person = struct { id: u16, name: str, score: f64, active: bool }
+
 fn source_over(text: str) -> io.SliceReader {
     ret io.SliceReader { data: text, off: 0usize }
 }
@@ -191,6 +194,69 @@ fn main(a: *mem.Arena) -> err {
     crlf_written.fields = crlf_fields[..]
     try csv.write_row(&crlf_out, crlf_written, crlf_dialect)
     if !str.eq(crlf_buffer[0usize..crlf_state.off], "a,b\r\n") { ret Failed }
+
+    // --- The typed codec. A struct is a row and its fields are columns, in declaration order,
+    // matched by position because that is what a delimited file is.
+    var people: [3]Person = zero
+    people[0usize] = Person { id: 1u16, name: "ada", score: 0.5f64, active: true }
+    people[1usize] = Person { id: 2u16, name: "with, comma", score: -1.5f64, active: false }
+    people[2usize] = Person { id: 65535u16, name: "edge", score: 0.0f64, active: true }
+    var typed_buffer: [256]u8 = zero
+    var typed_state = io.SliceWriter { data: typed_buffer[..], off: 0usize }
+    var typed_out = io.slice_writer(&typed_state)
+    if csv.encode_rows[Person](&typed_out, people[..], csv.csv()) != ok { os.exit(80i32) }
+    let typed_text = typed_buffer[0usize..typed_state.off]
+    if !str.eq(typed_text, "1,ada,0.5,true\n2,\"with, comma\",-1.5,false\n65535,edge,0,true\n") { os.exit(81i32) }
+
+    // And back. The comma inside a quoted field is a byte of the name and not a column break,
+    // which is the pair of quoting rules working together.
+    var typed_back_state = source_over(typed_text)
+    let (decoded, decoded_error) = csv.decode_rows[Person](a, io.slice_reader(&typed_back_state), csv.csv())
+    if decoded_error != ok { ret decoded_error }
+    if decoded.len != 3usize { os.exit(82i32) }
+    if decoded[0usize].id != 1u16 { os.exit(83i32) }
+    if !str.eq(decoded[0usize].name, "ada") { os.exit(84i32) }
+    if decoded[0usize].score != 0.5f64 { os.exit(85i32) }
+    if !decoded[0usize].active { os.exit(86i32) }
+    if !str.eq(decoded[1usize].name, "with, comma") { os.exit(87i32) }
+    if decoded[1usize].score != -1.5f64 { os.exit(88i32) }
+    if decoded[1usize].active { os.exit(89i32) }
+    if decoded[2usize].id != 65535u16 { os.exit(90i32) }
+
+    // A dialect that claims a header gets one, named as the fields are; the reader consumes it
+    // and the rows come back the same either way.
+    var headed_dialect = csv.csv()
+    headed_dialect.header = true
+    var headed_state = io.SliceWriter { data: typed_buffer[..], off: 0usize }
+    var headed_out = io.slice_writer(&headed_state)
+    if csv.encode_rows[Person](&headed_out, people[0usize..1usize], headed_dialect) != ok { os.exit(91i32) }
+    let headed_text = typed_buffer[0usize..headed_state.off]
+    if !str.eq(headed_text, "id,name,score,active\n1,ada,0.5,true\n") { os.exit(92i32) }
+    var headed_back_state = source_over(headed_text)
+    let (headed_rows, headed_rows_error) = csv.decode_rows[Person](a, io.slice_reader(&headed_back_state), headed_dialect)
+    if headed_rows_error != ok { ret headed_rows_error }
+    if headed_rows.len != 1usize { os.exit(93i32) }
+    if !str.eq(headed_rows[0usize].name, "ada") { os.exit(94i32) }
+
+    // More rows than the first claim holds, so the growing claim is copied at least once.
+    var many_state = source_over("1,a,0,true\n2,b,0,true\n3,c,0,true\n4,d,0,true\n5,e,0,true\n6,f,0,true\n7,g,0,true\n8,h,0,true\n9,i,0,true\n10,j,0,true\n11,k,0,true\n12,l,0,true\n13,m,0,true\n14,n,0,true\n15,o,0,true\n16,p,0,true\n17,q,0,true\n18,r,0,true\n")
+    let (many, many_error) = csv.decode_rows[Person](a, io.slice_reader(&many_state), csv.csv())
+    if many_error != ok { ret many_error }
+    if many.len != 18usize { os.exit(95i32) }
+    if many[17usize].id != 18u16 { os.exit(96i32) }
+    if !str.eq(many[17usize].name, "r") { os.exit(97i32) }
+
+    // A row with fewer columns than the struct has fields leaves the rest as they were, and a
+    // column that is not what the field holds is refused.
+    var short_state = source_over("9,only\n")
+    let (short_rows, short_error) = csv.decode_rows[Person](a, io.slice_reader(&short_state), csv.csv())
+    if short_error != ok { ret short_error }
+    if short_rows.len != 1usize { os.exit(98i32) }
+    if short_rows[0usize].id != 9u16 { os.exit(99i32) }
+    if short_rows[0usize].score != 0.0f64 { os.exit(100i32) }
+    var wrong_state = source_over("x,a,0,true\n")
+    let (_, wrong_error) = csv.decode_rows[Person](a, io.slice_reader(&wrong_state), csv.csv())
+    if wrong_error != csv.Invalid { os.exit(101i32) }
 
     // --- Over a real file, where the source ends by taking nothing rather than by saying so,
     // and where a row spans more than one read of the reader's own input buffer.

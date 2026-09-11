@@ -2165,3 +2165,52 @@ The row this moves is "general comptime interpreter", from 0.25 to 0.4. What is 
 an `if` over an arbitrary compile-time expression, which wants an interpreter this compiler does
 not have. What is no longer missing is the six declarations of D134, D135 and D137 --
 `e.fmt.json`, `e.fmt.csv` and `e.fmt.ini` can each be given the codec their fence declares.
+## D139 — `f.ty(x)` is a conversion, and with it the three codecs are written
+
+A call whose callee is a comptime-bound field type is a conversion, the same one a written
+`u8(x)` is. The checker recognised a conversion only when the callee was a `NameExpr` naming a
+scalar type; a `FieldExpr` went looking for a function and answered `UnknownCallable`. Now, when
+the receiver is a binding's `.ty` and that type is an integer or a float, the call is a cast.
+`comptime_binding_base` says yes only to an actual comptime binding, so an ordinary
+`module.function(x)` is untouched.
+
+It is a small rule with one purpose: **every parser answers in one width and every field has its
+own.** A walk over `meta.fields[T]()` reads text, and `str.parse_i64` gives an `i64` whatever the
+field is; without a conversion whose target is the field's own type, the value has nowhere to go.
+D138 made the arms of such a walk possible and this makes them useful.
+
+### The three codecs
+
+`e.fmt.ini` is complete at 14 of 14, `e.fmt.csv` at 12 of 12, `e.fmt.json` at 25 of 28 --
+`reader`/`reader_next_err` and `patch` remain, unwritten rather than blocked. All three share a
+shape, because all three are the same problem:
+
+- A struct is the flat thing the format already has: an object for JSON, a row for CSV, the
+  empty section for INI. Nesting is a struct inside a struct, which is the recursion none of
+  them can do, so a field that is not a number, a bool or a `str` is `Invalid` rather than
+  quietly skipped.
+- A member, column or key the source does not carry **leaves its field as it was**. A partial
+  document is the normal case, and a decoder that insisted on every name would make adding a
+  field to a program break every file already written for it.
+- An integer is read through `parse_i64` or `parse_u64` according to whether its text begins
+  with a minus, so a `u64` past the signed maximum and a negative are both exact. JSON's fence
+  requires this in so many words -- a typed integer never takes a floating-point detour -- and
+  the other two follow it because the reason is the same.
+- **Signedness is not a question reflection answers, and the value is**, so writing asks the
+  value: `if slot < 0` picks `push_i64` over `push_u64`, and for an unsigned field the test is
+  simply never true.
+- Rendering is `e.str` over `mem.arena_from` on a stack buffer. `encode` is given no arena and
+  needs none -- nothing it builds outlives the field it was built for -- and no module grows
+  number formatting of its own.
+
+CSV matches columns by **position**, not by name, because that is what a delimited file is. A
+header is written when the dialect claims one and never read back for meaning: `reader` has
+already consumed it by the time a row arrives.
+
+### What the fixtures found
+
+`decode_rows` kept a `str` field borrowing the reader's row buffer, which the next row overwrites
+-- the reader's documented contract, and the decoder was the first caller to outlive a row. A
+`str` field is now copied into the arena; everything else a field holds is a value and travels by
+itself. The fixture caught it because it compares the field's contents and not just the row
+count, which is the difference between a test and a tally.

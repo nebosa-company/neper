@@ -18,6 +18,7 @@
 
 use e.io
 use e.mem
+use e.meta
 use e.str
 
 type Entry = struct {
@@ -578,6 +579,154 @@ fn write(writer: *io.Writer, document: *const Document) -> err {
         }
         try io.write_all(writer, "\n")
         at += 1usize
+    }
+    ret ok
+}
+// --- The typed codec.
+//
+// A struct is a flat document: one key per field, in the empty section, named as the field is
+// named. Nesting would be sections, and a section is a struct inside a struct -- which is the
+// recursion this cannot do, so a field that is not a number, a bool or a `str` is `Invalid`
+// rather than quietly skipped.
+//
+// The walk over `meta.fields` is unrolled, so each copy below sees one concrete field type. The
+// arms are chosen by `meta.kind[f.ty]()`, and only the chosen one is checked -- an arm written
+// for an integer never has to be valid for the iteration whose field is a `str` (D138).
+
+const MINUS: u8 = 45u8
+
+// Enough for any integer or float `e.str` will render, with room for the builder's own claim.
+const FIELD_TEXT: usize = 128usize
+
+fn matches(stored: str, name: str, case_sensitive: bool) -> bool {
+    if case_sensitive { ret same_text(stored, name) }
+    if stored.len != name.len { ret false }
+    var at = 0usize
+    while at < name.len {
+        if stored[at] != lower(name[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// A field's entry: the empty section only, since that is where `encode` puts them and what a
+// flat struct means.
+fn field_entry(document: *const Document, name: str, case_sensitive: bool) -> (str, bool) {
+    var at = 0usize
+    while at < document.entries.len {
+        let entry = document.entries[at]
+        if entry.section.len == 0usize && matches(entry.key, name, case_sensitive) { ret (entry.value, true) }
+        at += 1usize
+    }
+    ret ("", false)
+}
+
+fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
+    var out: T = zero
+    let (document, parse_error) = parse(a, source, options)
+    if parse_error != ok { ret (out, parse_error) }
+    for f in meta.fields[T]() {
+        let (text, present) = field_entry(&document, f.name, options.case_sensitive)
+        // A key the source does not carry leaves its field as it was. A configuration file is
+        // partial by nature, and a decoder that insisted on every key would make adding a field
+        // to a program break every file already written for it.
+        if present {
+            if meta.kind[f.ty]() == .Slice {
+                meta.set[f, T](&out, text)
+            } else {
+            if meta.kind[f.ty]() == .Bool {
+                if same_text(text, "true") {
+                    meta.set[f, T](&out, true)
+                } else {
+                    if !same_text(text, "false") { ret (out, Invalid) }
+                    meta.set[f, T](&out, false)
+                }
+            } else {
+            if meta.kind[f.ty]() == .Int {
+                var slot: f.ty = zero
+                // Read through whichever of the two the text fits, so a `u64` past the signed
+                // maximum and a negative are both exact. Neither takes a floating-point detour.
+                if text.len != 0usize && text[0usize] == MINUS {
+                    let (signed, signed_error) = str.parse_i64(text)
+                    if signed_error != ok { ret (out, Invalid) }
+                    slot = f.ty(signed)
+                } else {
+                    let (unsigned, unsigned_error) = str.parse_u64(text)
+                    if unsigned_error != ok { ret (out, Invalid) }
+                    slot = f.ty(unsigned)
+                }
+                meta.set[f, T](&out, slot)
+            } else {
+            if meta.kind[f.ty]() == .Float {
+                let (number, number_error) = str.parse_f64(text)
+                if number_error != ok { ret (out, Invalid) }
+                var slot: f.ty = zero
+                slot = f.ty(number)
+                meta.set[f, T](&out, slot)
+            } else {
+                ret (out, Invalid)
+            }
+            }
+            }
+            }
+        }
+    }
+    ret (out, ok)
+}
+
+fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
+    for f in meta.fields[T]() {
+        var slot: f.ty = zero
+        slot = meta.get[f, T](value)
+        // A buffer per field, and an arena over it, so `e.str` does the rendering and this
+        // module carries no number formatting of its own. `encode` is given no arena and needs
+        // none: nothing it builds outlives the field it was built for.
+        var scratch: [FIELD_TEXT]u8 = zero
+        var holder = mem.arena_from(scratch[..])
+        var text = ""
+        if meta.kind[f.ty]() == .Slice {
+            text = slot
+        } else {
+        if meta.kind[f.ty]() == .Bool {
+            if slot {
+                text = "true"
+            } else {
+                text = "false"
+            }
+        } else {
+        if meta.kind[f.ty]() == .Int {
+            let (rendered, builder_error) = str.builder(&holder, FIELD_TEXT / 2usize)
+            if builder_error != ok { ret builder_error }
+            var built = rendered
+            // Signedness is not a question reflection answers, and the value is, so it is asked
+            // of the value: only a signed type holds anything below zero.
+            if slot < 0 {
+                try str.push_i64(&built, i64(slot))
+            } else {
+                try str.push_u64(&built, u64(slot))
+            }
+            text = str.done(&built)
+        } else {
+        if meta.kind[f.ty]() == .Float {
+            let (rendered, builder_error) = str.builder(&holder, FIELD_TEXT / 2usize)
+            if builder_error != ok { ret builder_error }
+            var built = rendered
+            try str.push_f64(&built, f64(slot))
+            text = str.done(&built)
+        } else {
+            ret Invalid
+        }
+        }
+        }
+        }
+        try io.write_all(writer, f.name)
+        try io.write_all(writer, "=")
+        if needs_quote(text) {
+            try write_escaped(writer, text)
+        } else {
+            try io.write_all(writer, text)
+        }
+        try io.write_all(writer, "\n")
     }
     ret ok
 }

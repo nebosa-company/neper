@@ -13,6 +13,8 @@
 
 use e.io
 use e.mem
+use e.meta
+use e.str
 
 type Dialect = struct {
     delimiter: u8,
@@ -264,37 +266,221 @@ fn needs_quote(field: str, dialect: Dialect) -> bool {
     ret false
 }
 
+// One field, quoted if it has to be. Shared, because `encode_rows` writes the same field from a
+// struct and has nowhere to build a `Row` it would only take apart again.
+fn write_field(writer: *io.Writer, field: str, dialect: Dialect) -> err {
+    var mark: [1]u8 = zero
+    mark[0usize] = dialect.quote
+    if !needs_quote(field, dialect) { ret io.write_all(writer, field) }
+    try io.write_all(writer, mark[..])
+    var start = 0usize
+    var at = 0usize
+    while at < field.len {
+        // The quote itself is doubled, so the run up to and including it is written and then
+        // the quote once more.
+        if field[at] == dialect.quote {
+            try io.write_all(writer, field[start..at + 1usize])
+            try io.write_all(writer, mark[..])
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    try io.write_all(writer, field[start..field.len])
+    ret io.write_all(writer, mark[..])
+}
+
+fn write_ending(writer: *io.Writer, dialect: Dialect) -> err {
+    if dialect.crlf { ret io.write_all(writer, "\r\n") }
+    ret io.write_all(writer, "\n")
+}
+
 fn write_row(writer: *io.Writer, row: Row, dialect: Dialect) -> err {
     if !usable(dialect) { ret Invalid }
     var separator: [1]u8 = zero
     separator[0usize] = dialect.delimiter
-    var mark: [1]u8 = zero
-    mark[0usize] = dialect.quote
     var index = 0usize
     while index < row.fields.len {
         if index != 0usize { try io.write_all(writer, separator[..]) }
-        let field = row.fields[index]
-        if needs_quote(field, dialect) {
-            try io.write_all(writer, mark[..])
-            var start = 0usize
-            var at = 0usize
-            while at < field.len {
-                // The quote itself is doubled, so the run up to and including it is written
-                // and then the quote once more.
-                if field[at] == dialect.quote {
-                    try io.write_all(writer, field[start..at + 1usize])
-                    try io.write_all(writer, mark[..])
-                    start = at + 1usize
-                }
-                at += 1usize
-            }
-            try io.write_all(writer, field[start..field.len])
-            try io.write_all(writer, mark[..])
-        } else {
-            try io.write_all(writer, field)
-        }
+        try write_field(writer, row.fields[index], dialect)
         index += 1usize
     }
-    if dialect.crlf { ret io.write_all(writer, "\r\n") }
-    ret io.write_all(writer, "\n")
+    ret write_ending(writer, dialect)
+}
+// --- The typed codec.
+//
+// A struct is a row and its fields are columns, in declaration order. Columns are matched by
+// position and not by name: that is what a delimited file is, and it is why a header is written
+// when the dialect claims one but never read back for meaning -- `reader` has already consumed
+// it by the time a row arrives.
+//
+// The walk over `meta.fields` is unrolled, so each copy sees one concrete field type and the arm
+// chosen by `meta.kind[f.ty]()` is the only one that has to check (D138).
+
+const MINUS: u8 = 45u8
+
+// Enough for any integer or float `e.str` will render, with room for the builder's own claim.
+const FIELD_TEXT: usize = 128usize
+
+// Where a decode starts, and how it grows. An arena gives back nothing, so a claim that outgrows
+// itself is copied into a larger one and the old one is left behind.
+// ponytail: doubling wastes under half the arena a decode uses. A reader that knew its row count
+// in advance would not need it, and a delimited stream does not.
+const FIRST_ROWS: usize = 16usize
+
+// A `Row` borrows the reader's own buffers and the next call overwrites them, so a `str` field
+// that is going to outlive the row it came from has to be copied. Everything else a field holds
+// is a value and travels by itself.
+fn copy_text(a: *mem.Arena, text: str) -> (str, err) {
+    if text.len == 0usize { ret ("", ok) }
+    let (buffer, allocation_error) = mem.alloc[u8](a, text.len)
+    if allocation_error != ok { ret ("", allocation_error) }
+    mem.copy[u8](buffer, text)
+    ret (buffer, ok)
+}
+
+fn decode_rows[T: type](a: *mem.Arena, source: io.Reader, dialect: Dialect) -> ([]T, err) {
+    var empty: []T = zero
+    let (handle, reader_error) = reader(a, source, dialect, 0usize, 0usize)
+    if reader_error != ok { ret (empty, reader_error) }
+    var stream = handle
+    let (first, first_error) = mem.alloc[T](a, FIRST_ROWS)
+    if first_error != ok { ret (empty, first_error) }
+    var rows = first
+    var count = 0usize
+    while true {
+        let (row, more, next_error) = reader_next_err(&stream)
+        if next_error != ok { ret (empty, next_error) }
+        if !more { break }
+        if count == rows.len {
+            let (larger, larger_error) = mem.alloc[T](a, rows.len * 2usize)
+            if larger_error != ok { ret (empty, larger_error) }
+            mem.copy[T](larger, rows)
+            rows = larger
+        }
+        var value: T = zero
+        var column = 0usize
+        for f in meta.fields[T]() {
+            // A row with fewer columns than the struct has fields leaves the rest as they are,
+            // the way a missing key does in `e.fmt.ini`. A row with more is not an error either:
+            // the extra columns are simply not this struct's.
+            if column < row.fields.len {
+                let text = row.fields[column]
+                if meta.kind[f.ty]() == .Slice {
+                    let (kept, copy_error) = copy_text(a, text)
+                    if copy_error != ok { ret (empty, copy_error) }
+                    meta.set[f, T](&value, kept)
+                } else {
+                if meta.kind[f.ty]() == .Bool {
+                    if str.eq(text, "true") {
+                        meta.set[f, T](&value, true)
+                    } else {
+                        if !str.eq(text, "false") { ret (empty, Invalid) }
+                        meta.set[f, T](&value, false)
+                    }
+                } else {
+                if meta.kind[f.ty]() == .Int {
+                    var slot: f.ty = zero
+                    // Whichever of the two the text fits, so a `u64` past the signed maximum and
+                    // a negative are both exact and neither takes a floating-point detour.
+                    if text.len != 0usize && text[0usize] == MINUS {
+                        let (signed, signed_error) = str.parse_i64(text)
+                        if signed_error != ok { ret (empty, Invalid) }
+                        slot = f.ty(signed)
+                    } else {
+                        let (unsigned, unsigned_error) = str.parse_u64(text)
+                        if unsigned_error != ok { ret (empty, Invalid) }
+                        slot = f.ty(unsigned)
+                    }
+                    meta.set[f, T](&value, slot)
+                } else {
+                if meta.kind[f.ty]() == .Float {
+                    let (number, number_error) = str.parse_f64(text)
+                    if number_error != ok { ret (empty, Invalid) }
+                    var slot: f.ty = zero
+                    slot = f.ty(number)
+                    meta.set[f, T](&value, slot)
+                } else {
+                    ret (empty, Invalid)
+                }
+                }
+                }
+                }
+            }
+            column += 1usize
+        }
+        rows[count] = value
+        count += 1usize
+    }
+    ret (rows[0usize..count], ok)
+}
+
+fn encode_rows[T: type](writer: *io.Writer, rows: []const T, dialect: Dialect) -> err {
+    if !usable(dialect) { ret Invalid }
+    var separator: [1]u8 = zero
+    separator[0usize] = dialect.delimiter
+    // A dialect that claims a header gets one, named as the fields are. `reader` consumes it
+    // without reading it, so it is for whoever opens the file rather than for the round trip.
+    if dialect.header {
+        var named = 0usize
+        for f in meta.fields[T]() {
+            if named != 0usize { try io.write_all(writer, separator[..]) }
+            try write_field(writer, f.name, dialect)
+            named += 1usize
+        }
+        try write_ending(writer, dialect)
+    }
+    var index = 0usize
+    while index < rows.len {
+        var written = 0usize
+        for f in meta.fields[T]() {
+            if written != 0usize { try io.write_all(writer, separator[..]) }
+            var slot: f.ty = zero
+            slot = meta.get[f, T](&rows[index])
+            // A buffer per field and an arena over it, so `e.str` does the rendering and this
+            // module carries no number formatting of its own.
+            var scratch: [FIELD_TEXT]u8 = zero
+            var holder = mem.arena_from(scratch[..])
+            var text = ""
+            if meta.kind[f.ty]() == .Slice {
+                text = slot
+            } else {
+            if meta.kind[f.ty]() == .Bool {
+                if slot {
+                    text = "true"
+                } else {
+                    text = "false"
+                }
+            } else {
+            if meta.kind[f.ty]() == .Int {
+                let (rendered, builder_error) = str.builder(&holder, FIELD_TEXT / 2usize)
+                if builder_error != ok { ret builder_error }
+                var built = rendered
+                // Signedness is not a question reflection answers and the value is, so it is
+                // asked of the value: only a signed type holds anything below zero.
+                if slot < 0 {
+                    try str.push_i64(&built, i64(slot))
+                } else {
+                    try str.push_u64(&built, u64(slot))
+                }
+                text = str.done(&built)
+            } else {
+            if meta.kind[f.ty]() == .Float {
+                let (rendered, builder_error) = str.builder(&holder, FIELD_TEXT / 2usize)
+                if builder_error != ok { ret builder_error }
+                var built = rendered
+                try str.push_f64(&built, f64(slot))
+                text = str.done(&built)
+            } else {
+                ret Invalid
+            }
+            }
+            }
+            }
+            try write_field(writer, text, dialect)
+            written += 1usize
+        }
+        try write_ending(writer, dialect)
+        index += 1usize
+    }
+    ret ok
 }

@@ -12,6 +12,11 @@ use e.fmt.ini
 
 error Failed
 
+// The codec maps a struct to a flat document, so the fixture needs one of each kind it
+// handles, and one that only an unsigned parser reaches.
+type Settings = struct { port: u16, retries: i64, host: str, ratio: f64, verbose: bool }
+type Wide = struct { big: u64 }
+
 // A module-scope `const` of type `str` does not type check (D134), so the sample is a call.
 fn sample() -> str {
     ret "; a leading comment\n[server]\nhost = example.test\nport=8080\n\n# another comment\n[paths]\nhome = \"/tmp/with space\"\nescaped = \"a\\tb\\nc\"\nbare = value with ; inside\n"
@@ -182,6 +187,63 @@ fn main(a: *mem.Arena) -> err {
     if edge_back_error != ok { ret edge_back_error }
     if expect_get(&edge_back, "e", "empty", "") != ok { os.exit(48i32) }
     if expect_get(&edge_back, "e", "spaces", "  ") != ok { os.exit(49i32) }
+
+    // --- The typed codec. A struct is a flat document: one key per field, in the empty section,
+    // named as the field is. The walk is unrolled and each arm is chosen by the field's kind, so
+    // the arm that reads an integer never has to be valid for the field that holds a `str`.
+    var settings: Settings = zero
+    settings.port = 8080u16
+    settings.retries = -3i64
+    settings.host = "example.test"
+    settings.ratio = 0.5f64
+    settings.verbose = true
+    var codec_buffer: [256]u8 = zero
+    var codec_state = io.SliceWriter { data: codec_buffer[..], off: 0usize }
+    var codec_out = io.slice_writer(&codec_state)
+    if ini.encode[Settings](&codec_out, &settings) != ok { os.exit(60i32) }
+    let encoded = codec_buffer[0usize..codec_state.off]
+    if !str.eq(encoded, "port=8080\nretries=-3\nhost=example.test\nratio=0.5\nverbose=true\n") { os.exit(61i32) }
+
+    // And back, to the same values. A `u16` past the signed range and a negative both survive,
+    // because each is read through whichever parser fits it and neither goes by way of a float.
+    let (round_trip, round_trip_error) = ini.decode[Settings](a, encoded, strict)
+    if round_trip_error != ok { ret round_trip_error }
+    if round_trip.port != 8080u16 { os.exit(62i32) }
+    if round_trip.retries != -3i64 { os.exit(63i32) }
+    if !str.eq(round_trip.host, "example.test") { os.exit(64i32) }
+    if round_trip.ratio != 0.5f64 { os.exit(65i32) }
+    if !round_trip.verbose { os.exit(66i32) }
+
+    // The whole unsigned range, which a decoder that went through `i64` would lose.
+    let (wide, wide_error) = ini.decode[Wide](a, "big=18446744073709551615\n", strict)
+    if wide_error != ok { ret wide_error }
+    if wide.big != 18446744073709551615u64 { os.exit(67i32) }
+
+    // A key the source does not carry leaves its field alone: a configuration file is partial by
+    // nature, and adding a field to a program should not break the files already written for it.
+    let (sparse, sparse_error) = ini.decode[Settings](a, "host=only\n", strict)
+    if sparse_error != ok { ret sparse_error }
+    if !str.eq(sparse.host, "only") { os.exit(68i32) }
+    if sparse.port != 0u16 { os.exit(69i32) }
+
+    // A value that is not what the field holds is refused rather than rounded or ignored.
+    let (_, bad_number) = ini.decode[Settings](a, "port=eight\n", strict)
+    if bad_number != ini.Invalid { os.exit(70i32) }
+    let (_, bad_bool) = ini.decode[Settings](a, "verbose=yes\n", strict)
+    if bad_bool != ini.Invalid { os.exit(71i32) }
+
+    // A quoted value reaches the field with its quoting undone, and a value that needs quoting
+    // gets it on the way out.
+    let (spaced, spaced_error) = ini.decode[Settings](a, "host=\"two words\"\n", strict)
+    if spaced_error != ok { ret spaced_error }
+    if !str.eq(spaced.host, "two words") { os.exit(72i32) }
+    var quoting_state = io.SliceWriter { data: codec_buffer[..], off: 0usize }
+    var quoting_out = io.slice_writer(&quoting_state)
+    var spacey: Settings = zero
+    spacey.host = " padded "
+    if ini.encode[Settings](&quoting_out, &spacey) != ok { os.exit(73i32) }
+    let quoted_back = codec_buffer[0usize..quoting_state.off]
+    if !str.eq(quoted_back, "port=0\nretries=0\nhost=\" padded \"\nratio=0\nverbose=false\n") { os.exit(74i32) }
 
     // --- Over a real file, where a line spans more than one read of the reader's input buffer
     // and the source ends by taking nothing rather than by saying so.

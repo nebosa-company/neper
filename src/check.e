@@ -6032,6 +6032,17 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         }
                     } else {
                         if receiver.kind != .FieldExpr { ret (info, Unsupported) }
+                        // `f.ty(x)` where `f` is an unrolled `for`'s binding. The callee is not a
+                        // function but a type, so the call is a conversion, the same one a written
+                        // `u8(x)` is. It is how a walk over `meta.fields` puts a value into the
+                        // field it belongs to: every parser answers in one width and every field
+                        // has its own (D139). `comptime_binding_base` only says yes to an actual
+                        // binding, so an ordinary `module.function(x)` is untouched.
+                        let (bound, bound_member, is_bound) = comptime_binding_base(c, text, tree, receiver)
+                        if is_bound && bound.kind == .Field && same(bound_member, "ty") && (bound.ty.kind == .Integer || bound.ty.kind == .Float) {
+                            info.cast = bound.ty
+                            info.is_cast = true
+                        } else {
                         let (address, address_error) = address_info(c, g, tree, module_index, receiver)
                         if address_error != ok { ret (info, address_error) }
                         if address.matched {
@@ -6095,6 +6106,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                                 info.function.return_count = signature.return_count
                             }
                             has_function = true
+                        }
                         }
                         }
                         }

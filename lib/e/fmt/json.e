@@ -882,3 +882,189 @@ fn pointer(root: *const Value, path: str) -> (*const Value, err) {
     }
     ret (here, ok)
 }
+// --- The typed codec.
+//
+// A struct is an object: one member per field, named as the field is named, in declaration
+// order. Nesting is a struct inside a struct, which is the recursion this cannot do, so a field
+// that is not a number, a bool or a `str` is `Invalid` rather than quietly skipped.
+//
+// The walk over `meta.fields` is unrolled, so each copy sees one concrete field type and the arm
+// chosen by `meta.kind[f.ty]()` is the only one that has to check (D138). It is what lets one
+// walk hold an arm that reads an integer beside one that reads a string.
+
+const MINUS_BYTE: u8 = 45u8
+
+// Enough for any integer or float `e.str` will render, with room for the builder's own claim.
+const NUMBER_TEXT: usize = 128usize
+
+// A `Value` is asked what it is one shape at a time, so the codec below stays flat. A `switch`
+// per field would nest a match inside an unrolled loop inside a match.
+fn string_of(value: Value) -> (str, bool) {
+    switch value {
+    case .String as text:
+        ret (text, true)
+    default:
+        ret ("", false)
+    }
+}
+
+fn bool_of(value: Value) -> (bool, bool) {
+    switch value {
+    case .Bool as flag:
+        ret (flag, true)
+    default:
+        ret (false, false)
+    }
+}
+
+fn number_of(value: Value) -> (Number, bool) {
+    var empty: Number = zero
+    switch value {
+    case .Number as written:
+        ret (written, true)
+    default:
+        ret (empty, false)
+    }
+}
+
+fn object_of(value: Value) -> ([]const Member, bool) {
+    var none: []const Member = zero
+    switch value {
+    case .Object as members:
+        ret (members, true)
+    default:
+        ret (none, false)
+    }
+}
+
+fn member_of(members: []const Member, name: str) -> (Value, bool) {
+    var empty: Value = .Null
+    var at = 0usize
+    while at < members.len {
+        if str.eq(members[at].key, name) { ret (members[at].value, true) }
+        at += 1usize
+    }
+    ret (empty, false)
+}
+
+fn decode[T: type](a: *mem.Arena, source: str, options: Options) -> (T, err) {
+    var out: T = zero
+    let (root, parse_error) = parse(a, source, options)
+    if parse_error != ok { ret (out, parse_error) }
+    // Only an object can be a struct: an array is positional and a scalar is not a record, and
+    // which field either meant is not something a decoder should guess.
+    let (members, is_object) = object_of(root)
+    if !is_object { ret (out, Invalid) }
+    for f in meta.fields[T]() {
+        let (found, present) = member_of(members, f.name)
+        // A member the document does not carry leaves its field as it was, so adding a field to
+        // a program does not break the documents already written for it.
+        if present {
+            if meta.kind[f.ty]() == .Slice {
+                // The text is already the parser's own copy in this arena, so it outlives the
+                // decode without being copied again.
+                let (text, is_string) = string_of(found)
+                if !is_string { ret (out, Invalid) }
+                meta.set[f, T](&out, text)
+            } else {
+            if meta.kind[f.ty]() == .Bool {
+                let (flag, is_bool) = bool_of(found)
+                if !is_bool { ret (out, Invalid) }
+                meta.set[f, T](&out, flag)
+            } else {
+            if meta.kind[f.ty]() == .Int {
+                let (written, is_number) = number_of(found)
+                if !is_number { ret (out, Invalid) }
+                var slot: f.ty = zero
+                // Read through whichever of the two the lexeme fits, so a `u64` past the signed
+                // maximum and a negative are both exact -- the fence's rule that a typed integer
+                // never takes a floating-point detour.
+                if written.lexeme.len != 0usize && written.lexeme[0usize] == MINUS_BYTE {
+                    let (signed, signed_error) = number_i64(written)
+                    if signed_error != ok { ret (out, signed_error) }
+                    slot = f.ty(signed)
+                } else {
+                    let (unsigned, unsigned_error) = number_u64(written)
+                    if unsigned_error != ok { ret (out, unsigned_error) }
+                    slot = f.ty(unsigned)
+                }
+                meta.set[f, T](&out, slot)
+            } else {
+            if meta.kind[f.ty]() == .Float {
+                let (written, is_number) = number_of(found)
+                if !is_number { ret (out, Invalid) }
+                let (number_value, number_error) = number_f64(written)
+                if number_error != ok { ret (out, number_error) }
+                var slot: f.ty = zero
+                slot = f.ty(number_value)
+                meta.set[f, T](&out, slot)
+            } else {
+                ret (out, Invalid)
+            }
+            }
+            }
+            }
+        }
+    }
+    ret (out, ok)
+}
+
+fn encode[T: type](writer: *io.Writer, value: *const T) -> err {
+    try io.write_all(writer, "{")
+    var written = 0usize
+    for f in meta.fields[T]() {
+        if written != 0usize { try io.write_all(writer, ",") }
+        try write_string(writer, f.name)
+        try io.write_all(writer, ":")
+        var slot: f.ty = zero
+        slot = meta.get[f, T](value)
+        // A buffer per field and an arena over it, so `e.str` does the rendering and this module
+        // carries no number formatting of its own. `encode` is given no arena and needs none:
+        // nothing it builds outlives the field it was built for.
+        var scratch: [NUMBER_TEXT]u8 = zero
+        var holder = mem.arena_from(scratch[..])
+        if meta.kind[f.ty]() == .Slice {
+            try write_string(writer, slot)
+        } else {
+        if meta.kind[f.ty]() == .Bool {
+            if slot {
+                try io.write_all(writer, "true")
+            } else {
+                try io.write_all(writer, "false")
+            }
+        } else {
+        if meta.kind[f.ty]() == .Int {
+            let (rendered, builder_error) = str.builder(&holder, NUMBER_TEXT / 2usize)
+            if builder_error != ok { ret builder_error }
+            var built = rendered
+            // Signedness is not a question reflection answers and the value is, so it is asked
+            // of the value: only a signed type holds anything below zero.
+            if slot < 0 {
+                try str.push_i64(&built, i64(slot))
+            } else {
+                try str.push_u64(&built, u64(slot))
+            }
+            try io.write_all(writer, str.done(&built))
+        } else {
+        if meta.kind[f.ty]() == .Float {
+            let (rendered, builder_error) = str.builder(&holder, NUMBER_TEXT / 2usize)
+            if builder_error != ok { ret builder_error }
+            var built = rendered
+            try str.push_f64(&built, f64(slot))
+            let text = str.done(&built)
+            // JSON has no spelling for a non-finite number, and writing one produces a document
+            // no reader can take back. `e.str` renders those as words, so a leading letter is
+            // what one looks like here.
+            if text.len == 0usize { ret Invalid }
+            if !str.is_ascii_digit(text[0usize]) && text[0usize] != MINUS_BYTE { ret Invalid }
+            try io.write_all(writer, text)
+        } else {
+            ret Invalid
+        }
+        }
+        }
+        }
+        written += 1usize
+    }
+    ret io.write_all(writer, "}")
+}

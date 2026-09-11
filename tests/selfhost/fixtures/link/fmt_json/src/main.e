@@ -9,6 +9,11 @@ use e.mem
 use e.os
 use e.str
 
+// The codec maps a struct to an object, so the fixture needs one field of each kind it
+// handles, and one that only an unsigned reading reaches.
+type Record = struct { id: u16, name: str, ratio: f64, ready: bool }
+type Wide = struct { big: u64 }
+
 fn roundtrip(a: *mem.Arena, source: str) -> ([]const u8, err) {
     var options: json.Options = zero
     let (value, parse_error) = json.parse(a, source, options)
@@ -131,5 +136,50 @@ fn main(a: *mem.Arena) -> err {
     // An index with a leading zero is not an index.
     let (padded, padded_error) = json.pointer(&document, "/a/b/01")
     if padded_error != json.InvalidPointer { os.exit(91i32) }
+    // --- The typed codec. A struct is an object: one member per field, named as the field is,
+    // in declaration order. The walk is unrolled and each arm is chosen by the field's kind, so
+    // the arm reading a number never has to be valid for the field holding a `str`.
+    var record: Record = zero
+    record.id = 65535u16
+    record.name = "with \"quote\""
+    record.ratio = -0.25f64
+    record.ready = true
+    var codec_buffer: [256]u8 = zero
+    var codec_state = io.SliceWriter { data: codec_buffer[..], off: 0usize }
+    var codec_out = io.slice_writer(&codec_state)
+    if json.encode[Record](&codec_out, &record) != ok { os.exit(120i32) }
+    let encoded = codec_buffer[0usize..codec_state.off]
+    if !str.eq(encoded, "{\"id\":65535,\"name\":\"with \\\"quote\\\"\",\"ratio\":-0.25,\"ready\":true}") { os.exit(121i32) }
+
+    // And back, to the same values -- the quote inside the name survives being escaped and
+    // unescaped, which is the pair of string rules working together.
+    var codec_options: json.Options = zero
+    let (round_trip, round_trip_error) = json.decode[Record](a, encoded, codec_options)
+    if round_trip_error != ok { ret round_trip_error }
+    if round_trip.id != 65535u16 { os.exit(122i32) }
+    if !str.eq(round_trip.name, "with \"quote\"") { os.exit(123i32) }
+    if round_trip.ratio != -0.25f64 { os.exit(124i32) }
+    if !round_trip.ready { os.exit(125i32) }
+
+    // The whole unsigned range, which a decoder that went by way of `i64` or a float would lose.
+    // This is the module's founding decision reaching the codec: a number is the lexeme, so the
+    // integer that comes out is the integer that went in.
+    let (wide, wide_error) = json.decode[Wide](a, "{\"big\":18446744073709551615}", codec_options)
+    if wide_error != ok { ret wide_error }
+    if wide.big != 18446744073709551615u64 { os.exit(126i32) }
+
+    // A member the document does not carry leaves its field alone.
+    let (sparse, sparse_error) = json.decode[Record](a, "{\"name\":\"only\"}", codec_options)
+    if sparse_error != ok { ret sparse_error }
+    if !str.eq(sparse.name, "only") { os.exit(127i32) }
+    if sparse.id != 0u16 { os.exit(128i32) }
+
+    // A member whose shape is not the field's is refused rather than coerced, and a document
+    // that is not an object is not a struct at all.
+    let (_, wrong_shape) = json.decode[Record](a, "{\"id\":\"eight\"}", codec_options)
+    if wrong_shape != json.Invalid { os.exit(129i32) }
+    let (_, not_object) = json.decode[Record](a, "[1,2]", codec_options)
+    if not_object != json.Invalid { os.exit(130i32) }
+
     ret ok
 }
