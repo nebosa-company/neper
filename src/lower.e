@@ -1320,6 +1320,30 @@ fn emit_scalar_eq(c: *check.Checker, slot: usize, boolean: check.Type, left: usi
     ret nir.add_operand(builder, store_instruction, equal)
 }
 
+// Rule 4's float equality is the container rule, not IEEE's: every NaN equals every other
+// and the two zeros are one. `==` already makes the zeros one, so what is added is the pair
+// of self-comparisons that only a NaN fails -- `a == b || (a != a && b != b)`.
+fn emit_float_eq(c: *check.Checker, slot: usize, boolean: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let (equal, equal_error) = emit_supplied_compare(builder, .Equal, boolean, left, right, token)
+    if equal_error != ok { ret equal_error }
+    let (left_nan, left_nan_error) = emit_supplied_compare(builder, .NotEqual, boolean, left, left, token)
+    if left_nan_error != ok { ret left_nan_error }
+    let (right_nan, right_nan_error) = emit_supplied_compare(builder, .NotEqual, boolean, right, right, token)
+    if right_nan_error != ok { ret right_nan_error }
+    let (both_nan_instruction, both_nan, both_nan_error) = nir.emit(builder, .BitAnd, boolean, true, 0usize, token)
+    if both_nan_error != ok { ret both_nan_error }
+    try nir.add_operand(builder, both_nan_instruction, left_nan)
+    try nir.add_operand(builder, both_nan_instruction, right_nan)
+    let (either_instruction, either, either_error) = nir.emit(builder, .BitOr, boolean, true, 0usize, token)
+    if either_error != ok { ret either_error }
+    try nir.add_operand(builder, either_instruction, equal)
+    try nir.add_operand(builder, either_instruction, both_nan)
+    let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, boolean, false, 0usize, token)
+    if store_error != ok { ret store_error }
+    try nir.add_operand(builder, store_instruction, slot)
+    ret nir.add_operand(builder, store_instruction, either)
+}
+
 // A slice's `eq` is over its contents, so unequal lengths are unequal outright and
 // the walk stops at the first element that differs.
 fn emit_sequence_eq(c: *check.Checker, ty: check.Type, slot: usize, boolean: check.Type, left: usize, right: usize, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
@@ -1521,6 +1545,7 @@ fn emit_eq_into(c: *check.Checker, ty: check.Type, slot: usize, boolean: check.T
     if ty.kind == .Array || ty.kind == .Slice || ty.kind == .String {
         ret emit_sequence_eq(c, ty, slot, boolean, left, right, builder, token, depth)
     }
+    if ty.kind == .Float { ret emit_float_eq(c, slot, boolean, left, right, builder, token) }
     let (function_index, has_function) = check.element_eq_function(c, ty)
     if has_function { ret emit_declared_eq(c, c.functions[function_index], slot, boolean, left, right, builder, token) }
     if check.is_tagged_union_type(c, ty) {

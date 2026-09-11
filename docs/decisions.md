@@ -2299,3 +2299,35 @@ the fence said it did, and `link/os_process` hands a pipe through that path and 
 the child says into it. Without the fix that check fails at 54; the probe that found it took
 three wrong turns first, because a debug edit that does not compile leaves the old binary to
 answer.
+## D142 — `e.thread` and `e.test` complete, and the float `eq` rule 4 always listed
+
+Two five-declaration modules, both at `surface:"source"` -- the first modules since `e.str` to
+declare exactly their fence and nothing more.
+
+**`e.thread`** is `e.os`'s three intrinsics with one convenience, a stack that may be left to
+the module, and one name: `Thread` is `os.Thread` by alias, so a handle from either module is
+the other's, and `link/thread_spawn` joins one spawned here over there and the other way round.
+Zero means `DEFAULT_STACK` rather than a thread with nowhere to run, which is the reading of
+zero every other bound in `lib/e` has. The generic `spawn[Ctx]` wraps `os.thread_create[Ctx]`
+without ceremony, which D136's deferral is what allows: the intrinsic's own checking sees a type
+parameter in the template pass and lets it stand.
+
+**`e.test`** answers `ok` or `Failed` and nothing else. The fence says discovery, isolation and
+reporting belong to `neper test`, and its dependency list enforces it -- `e.math`, `e.meta` and
+`e.str` produce no output, so nothing here can print. The message is what `neper test` will
+show once the trap protocol carries it (spec 11); until then it is accepted and the error is the
+whole report. `eq[T]` is `T.eq`, the protocol, not `==`, the operator: section 6 keeps `==` to
+the scalars and rule 4 supplies `eq` for the rest, and a struct has no fallback at all -- it
+says what equal means, or it cannot be compared, which the fixture shows by declaring one.
+
+### The gap the fixture found
+
+Rule 4 has always listed the floats among the types the compiler supplies `eq` for, with a rule
+of its own: "container float equality treats all NaNs equal and both zeros equal". The compiler
+supplied nothing, and `test.eq[f64]` was the first call to ask. It is now `a == b || (a != a &&
+b != b)` -- `==` already makes the two zeros one, and the pair of self-comparisons is what only
+a NaN fails. The row was scored complete and was not; it is complete now, and `link/test_assert`
+pins the three cases the rule names.
+
+`near` is where IEEE's answer shows instead: a NaN is near nothing, itself included, because
+the comparisons say so on their own and no rule overrides them there.

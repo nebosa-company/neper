@@ -631,6 +631,18 @@ proc_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$proc_written" = 'executable written' ]
 chmod +x "$test_build/proc-output-selfhost"
 "$test_build/proc-output-selfhost"
+# `e.thread` over `e.os`'s three intrinsics: spawned and joined, the work in the context it
+# was given, a zero stack meaning the default, and `Thread` being `os.Thread` in every respect.
+thread_spawn_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/thread_spawn/src/main.e" "$repo" x64 linux "$test_build/thread-spawn-selfhost")
+[ "$thread_spawn_written" = 'executable written' ]
+chmod +x "$test_build/thread-spawn-selfhost"
+"$test_build/thread-spawn-selfhost"
+# `e.test`'s four assertions, each in both directions, and `eq` across every kind rule 4
+# supplies equality for -- the floats now among them, under the container rule.
+test_assert_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_assert/src/main.e" "$repo" x64 linux "$test_build/test-assert-selfhost")
+[ "$test_assert_written" = 'executable written' ]
+chmod +x "$test_build/test-assert-selfhost"
+"$test_build/test-assert-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

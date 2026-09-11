@@ -595,6 +595,20 @@ $procWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\li
 if ($LASTEXITCODE -ne 0 -or $procWritten -ne 'executable written') { throw 'e.proc emission failed' }
 & $procPath
 if ($LASTEXITCODE -ne 0) { throw "an e.proc child answered wrongly: exit $LASTEXITCODE" }
+# `e.thread` over `e.os`'s three intrinsics: spawned and joined, the work in the context it
+# was given, a zero stack meaning the default, and `Thread` being `os.Thread` in every respect.
+$threadSpawnPath = Join-Path $testBuild 'thread-spawn-selfhost.exe'
+$threadSpawnWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\thread_spawn\src\main.e') $repo 'x64' 'windows' $threadSpawnPath
+if ($LASTEXITCODE -ne 0 -or $threadSpawnWritten -ne 'executable written') { throw 'e.thread emission failed' }
+& $threadSpawnPath
+if ($LASTEXITCODE -ne 0) { throw "an e.thread answer is wrong: exit $LASTEXITCODE" }
+# `e.test`'s four assertions, each in both directions, and `eq` across every kind rule 4
+# supplies equality for -- the floats now among them, under the container rule.
+$testAssertPath = Join-Path $testBuild 'test-assert-selfhost.exe'
+$testAssertWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_assert\src\main.e') $repo 'x64' 'windows' $testAssertPath
+if ($LASTEXITCODE -ne 0 -or $testAssertWritten -ne 'executable written') { throw 'e.test emission failed' }
+& $testAssertPath
+if ($LASTEXITCODE -ne 0) { throw "an e.test assertion answered wrongly: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

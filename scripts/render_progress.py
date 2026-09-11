@@ -38,7 +38,7 @@ compiler = {
   ("Iterator protocol <t>_next", 1, "tests/neper0"),
   ("Supplied cmp (rule 4)", 1, "link/sequence_cmp, tagged_union_cmp"),
   ("Supplied hash (rule 4)", 1, "link/supplied_hash, folded_hash"),
-  ("Supplied eq (rule 4)", 1, "link/supplied_eq"),
+  ("Supplied eq (rule 4)", 1, "link/supplied_eq; link/test_assert pins the floats, which rule 4 always listed and the compiler had not supplied: every NaN equals every other and the two zeros are one (D142)"),
   ("Supplied format (rule 4)", 0.85, "link/str_format, link/io_printf expand scalars, str, bool and err; slices, arrays and a type's own format need the expansion to recurse"),
   ("Scalar floating point f32 / f64", 1, "link/float_scalar; f16 / bf16 still unlowered"),
   ("Vec[T,N] / Mask[T,N] and SIMD lowering", 0, "absent from check.e"),

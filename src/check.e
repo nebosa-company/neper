@@ -6521,7 +6521,7 @@ fn tagged_union_hashable(c: *Checker, ty: Type, depth: usize) -> bool {
 
 fn supplied_eq_shape(c: *Checker, ty: Type, depth: usize) -> bool {
     if depth > 8usize { ret false }
-    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Err || ty.kind == .Pointer { ret true }
+    if ty.kind == .Integer || ty.kind == .Bool || ty.kind == .Err || ty.kind == .Pointer || ty.kind == .Float { ret true }
     let (enum_backing, is_enum) = enum_backing_type(c, ty)
     if is_enum && enum_backing.kind == .Integer { ret true }
     if ty.kind == .Named { ret tagged_union_equatable(c, ty, depth) }
