@@ -997,6 +997,21 @@ fmt_zstd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_zstd_written" = 'executable written' ]
 chmod +x "$test_build/fmt-zstd-selfhost"
 "$test_build/fmt-zstd-selfhost"
+# `e.fmt.html`: a document tokenized and built, serialized and read back, a bare fragment, four refusals.
+fmt_html_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_html/src/main.e" "$repo" x64 linux "$test_build/fmt-html-selfhost")
+[ "$fmt_html_written" = 'executable written' ]
+chmod +x "$test_build/fmt-html-selfhost"
+"$test_build/fmt-html-selfhost"
+# `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
+async_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/async/src/main.e" "$repo" x64 linux "$test_build/async-selfhost")
+[ "$async_written" = 'executable written' ]
+chmod +x "$test_build/async-selfhost"
+"$test_build/async-selfhost"
+# `e.fmt.mail`: addresses, lists, dates against email.utils, a message with a folded header, encoded words.
+fmt_mail_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mail/src/main.e" "$repo" x64 linux "$test_build/fmt-mail-selfhost")
+[ "$fmt_mail_written" = 'executable written' ]
+chmod +x "$test_build/fmt-mail-selfhost"
+"$test_build/fmt-mail-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

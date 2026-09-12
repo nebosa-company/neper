@@ -3390,3 +3390,46 @@ code as what libzstd does.
 The writer emits frames of raw blocks with a checksum at every level -- valid
 Zstandard that libzstd read back during development -- and the header says the
 level is accepted and ignored; the entropy coders on the writing side are the upgrade.
+
+## D186 — `e.fmt.html`, the common path of the WHATWG algorithm
+
+The tokenizer follows the specification's data, tag, attribute, comment, DOCTYPE,
+RCDATA and RAWTEXT states, and decodes named references from the full HTML5 table
+(2231 entries generated from Python's `html.entities` by the script beside the
+fixture, longest match, the legacy names without a semicolon left alone in an
+attribute before `=` or a letter, as the specification says) and numeric ones with
+the replacement character for what is not a scalar. The tree builder carries the
+rules that shape ordinary documents -- implied `html`, `head` and `body`, head-only
+elements before the body, void elements, `p` closed by a block, `li`, `dt`/`dd`,
+`option`, cells, rows and headings closing their open sibling, an end tag closing
+back to its element or ignored, `svg` and `math` opening their namespaces where
+self-closing tags close -- and recovers malformed input rather than refusing it.
+Nodes live in one arena table with parent, child and sibling links; adjacent text
+merges into one node; the serializer escapes text and attribute values and leaves
+raw-text elements as they are.
+
+What is not written, and the header says so: the adoption agency for mis-nested
+formatting elements, foster parenting of text inside a table, the `template`
+element and the in-table insertion modes beyond cell and row closing; and the
+html5lib tree-construction fixtures have not been run. The fence names the whole
+algorithm with those fixtures recorded in a build manifest; this module is the path
+real documents take and marks its surface `partial` for the rest. The plan's
+`e.text.utf8` dependency is not needed: UTF-8 is validated in twenty lines here.
+
+## D187 — `e.async` and `e.fmt.mail`
+
+`e.async` is the fence over `e.os`'s poller: the loop is the host's registration set
+and each call is the matching `os.poller_*` call with the token and interest carried
+across, `Unsupported` where the host has no poller and `Invalid` after `close`. Its
+fixture is `link/os_poller`'s shape with the module in front of it: two loopback
+datagram sockets, the empty poll, both readable, the interest changed, the wake.
+
+Mail parses addresses in every form RFC 5322 puts in a header and splits a list on
+the commas outside quotes, brackets and comments; dates take numeric zones and the
+obsolete names; `read_message` unfolds continuation lines -- mime refuses a line that
+starts with a space, rightly, so the fold is undone first -- and hands the body back
+as a reader over what was buffered past the block and then the source. Encoded words
+decode B and Q in UTF-8, US-ASCII and ISO-8859-1, with the whitespace between two of
+them dropped; a word in another charset or of another shape is left as written. The
+plan's dependencies on multipart, quoted-printable and encoding are not used: a body
+is the caller's to route through them, as the fence itself says.

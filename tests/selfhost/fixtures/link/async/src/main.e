@@ -1,0 +1,153 @@
+// `e.async` over two loopback datagram sockets, the shape of link/os_poller: a loop
+// registers both, an empty poll, both readable after a send, a drain, an interest
+// changed to writable, an unregister, a wake that returns a long poll early, a poll
+// after close being Invalid. A host without a poller ends the run happily at `init`,
+// as the os fixture does. Every check has its own exit code.
+
+use e.mem
+use e.os
+use e.time
+use e.async
+const READ_TOKEN: usize = 4242usize
+const WRITE_TOKEN: usize = 9182usize
+
+fn loopback() -> os.SocketAddress {
+    var address: os.SocketAddress = zero
+    address.family = .Ip4
+    address.bytes[0usize] = 127u8
+    address.bytes[3usize] = 1u8
+    ret address
+}
+
+// Port zero asks the host to choose, and `socket_local_address` is how the choice comes
+// back. Nothing here guesses a port or hopes one is free, so nothing here can collide with
+// whatever else the machine is running.
+fn bind_ephemeral(s: os.Socket) -> (u16, err) {
+    var address = loopback()
+    address.port = 0u16
+    let bind_error = os.socket_bind(s, address)
+    if bind_error != ok { ret (0u16, bind_error) }
+    let (local, local_error) = os.socket_local_address(s)
+    if local_error != ok { ret (0u16, local_error) }
+    // A chosen port is never zero, so this is also the check that the report is real.
+    if local.port == 0u16 { ret (0u16, os.Failed) }
+    ret (local.port, ok)
+}
+
+fn main(a: *mem.Arena) -> err {
+    let (loop0, loop_error) = async.init(a)
+    if loop_error == async.Unsupported { ret ok }
+    if loop_error != ok { os.exit(10i32) }
+    var loop = loop0
+
+    // Two receivers, each with a token of its own, so a wait that reported the wrong one
+    // would be visible rather than merely wrong in the count.
+    let (first, first_error) = os.socket_open(.Ip4, .Datagram)
+    if first_error != ok { os.exit(11i32) }
+    let (first_port, first_bind_error) = bind_ephemeral(first)
+    if first_bind_error != ok { os.exit(12i32) }
+    let (second, second_error) = os.socket_open(.Ip4, .Datagram)
+    if second_error != ok { os.exit(13i32) }
+    let (second_port, second_bind_error) = bind_ephemeral(second)
+    if second_bind_error != ok { os.exit(14i32) }
+
+    var readable: async.Interest = zero
+    readable.readable = true
+    if async.register(&loop, os.socket_handle(first), async.Token { value: READ_TOKEN }, readable) != ok { os.exit(15i32) }
+    if async.register(&loop, os.socket_handle(second), async.Token { value: WRITE_TOKEN }, readable) != ok { os.exit(16i32) }
+
+    // Nothing has arrived, so a wait that does not block reports nothing.
+    var events: [8]async.Event = zero
+    let (idle, idle_error) = async.poll(&loop, events[..], time.Duration { nanos: 0i64 })
+    if idle_error != ok { os.exit(17i32) }
+    if idle != 0usize { os.exit(18i32) }
+
+    // Make both readable at once. Two events from one wait is also what says the entries
+    // are read at the right stride: the kernel's are packed, and a second one read from the
+    // wrong offset would carry a token that is neither of these.
+    let (sender, sender_error) = os.socket_open(.Ip4, .Datagram)
+    if sender_error != ok { os.exit(19i32) }
+    var payload: [1]u8 = zero
+    payload[0usize] = 65u8
+    var to_first = loopback()
+    to_first.port = first_port
+    var to_second = loopback()
+    to_second.port = second_port
+    let (sent_one, sent_one_error) = os.socket_send_to(sender, to_first, payload[..])
+    if sent_one_error != ok { os.exit(20i32) }
+    let (sent_two, sent_two_error) = os.socket_send_to(sender, to_second, payload[..])
+    if sent_two_error != ok { os.exit(21i32) }
+
+    let (ready, ready_error) = async.poll(&loop, events[..], time.Duration { nanos: 2000000000i64 })
+    if ready_error != ok { os.exit(22i32) }
+    if ready != 2usize { os.exit(23i32) }
+    var saw_read = false
+    var saw_write = false
+    var at = 0usize
+    while at < ready {
+        if events[at].token.value == READ_TOKEN { saw_read = true }
+        if events[at].token.value == WRITE_TOKEN { saw_write = true }
+        if !events[at].readable { os.exit(24i32) }
+        if events[at].failed { os.exit(25i32) }
+        at += 1usize
+    }
+    if !saw_read { os.exit(26i32) }
+    if !saw_write { os.exit(27i32) }
+
+    // Drain both, so the next wait has nothing of its own to report.
+    var sink: [8]u8 = zero
+    let (drained_one, drain_one_source, drain_one_error) = os.socket_receive_from(first, sink[..])
+    if drain_one_error != ok { os.exit(28i32) }
+    let (drained_two, drain_two_source, drain_two_error) = os.socket_receive_from(second, sink[..])
+    if drain_two_error != ok { os.exit(29i32) }
+    let (drained, drained_error) = async.poll(&loop, events[..], time.Duration { nanos: 0i64 })
+    if drained_error != ok { os.exit(30i32) }
+    if drained != 0usize { os.exit(31i32) }
+
+    // Interest is changed, not re-registered: a datagram socket is always writable, so
+    // asking about writing finds one immediately where asking about reading found none.
+    var writable: async.Interest = zero
+    writable.writable = true
+    if async.modify(&loop, os.socket_handle(first), async.Token { value: READ_TOKEN }, writable) != ok { os.exit(40i32) }
+    let (sendable, sendable_error) = async.poll(&loop, events[..], time.Duration { nanos: 1000000000i64 })
+    if sendable_error != ok { os.exit(41i32) }
+    if sendable != 1usize { os.exit(42i32) }
+    if events[0usize].token.value != READ_TOKEN { os.exit(43i32) }
+    if !events[0usize].writable { os.exit(44i32) }
+
+    // Unregistering takes it back out of the set, so the same wait now finds nothing.
+    if async.unregister(&loop, os.socket_handle(first)) != ok { os.exit(45i32) }
+    let (after_removal, after_removal_error) = async.poll(&loop, events[..], time.Duration { nanos: 0i64 })
+    if after_removal_error != ok { os.exit(46i32) }
+    if after_removal != 0usize { os.exit(47i32) }
+
+    // A wake returns a wait that would otherwise have waited, and reports no events of its
+    // own -- the loop's own descriptor is not the caller's. The clock is what says it
+    // returned because of the wake rather than because the timeout ran out.
+    if async.wake(&loop) != ok { os.exit(50i32) }
+    let (before, before_error) = os.clock(.Monotonic)
+    if before_error != ok { os.exit(51i32) }
+    let (woken, woken_error) = async.poll(&loop, events[..], time.Duration { nanos: 4000000000i64 })
+    if woken_error != ok { os.exit(52i32) }
+    if woken != 0usize { os.exit(53i32) }
+    let (after, after_error) = os.clock(.Monotonic)
+    if after_error != ok { os.exit(54i32) }
+    // Well under the four seconds asked for: a wake that did nothing would have waited them
+    // out and still returned zero, so the time is the only thing that tells the two apart.
+    if after - before > 1000000000i64 { os.exit(55i32) }
+
+    // And the wake does not linger: the next wait with no timeout left finds nothing.
+    let (settled, settled_error) = async.poll(&loop, events[..], time.Duration { nanos: 0i64 })
+    if settled_error != ok { os.exit(56i32) }
+    if settled != 0usize { os.exit(57i32) }
+
+    if async.unregister(&loop, os.socket_handle(second)) != ok { os.exit(60i32) }
+    if async.close(&loop) != ok { os.exit(61i32) }
+    let (closed_count, closed_error) = async.poll(&loop, events[..], time.Duration { nanos: 0i64 })
+    if closed_error != async.Invalid { os.exit(65i32) }
+    if async.close(&loop) != async.Invalid { os.exit(66i32) }
+    if os.socket_close(sender) != ok { os.exit(62i32) }
+    if os.socket_close(second) != ok { os.exit(63i32) }
+    if os.socket_close(first) != ok { os.exit(64i32) }
+    ret ok
+}

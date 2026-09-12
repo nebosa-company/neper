@@ -1031,6 +1031,24 @@ $fmtZstdWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtZstdWritten -ne 'executable written') { throw 'fmt_zstd emission failed' }
 & $fmtZstdPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_zstd check failed: exit $LASTEXITCODE" }
+# `e.fmt.html`: a document tokenized and built, serialized and read back, a bare fragment, four refusals.
+$fmtHtmlPath = Join-Path $testBuild 'fmt-html-selfhost.exe'
+$fmtHtmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_html\src\main.e') $repo 'x64' 'windows' $fmtHtmlPath
+if ($LASTEXITCODE -ne 0 -or $fmtHtmlWritten -ne 'executable written') { throw 'fmt_html emission failed' }
+& $fmtHtmlPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_html check failed: exit $LASTEXITCODE" }
+# `e.async`: the loop over two loopback datagram sockets, the os_poller shape.
+$asyncPath = Join-Path $testBuild 'async-selfhost.exe'
+$asyncWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\async\src\main.e') $repo 'x64' 'windows' $asyncPath
+if ($LASTEXITCODE -ne 0 -or $asyncWritten -ne 'executable written') { throw 'async emission failed' }
+& $asyncPath
+if ($LASTEXITCODE -ne 0) { throw "a async check failed: exit $LASTEXITCODE" }
+# `e.fmt.mail`: addresses, lists, dates against email.utils, a message with a folded header, encoded words.
+$fmtMailPath = Join-Path $testBuild 'fmt-mail-selfhost.exe'
+$fmtMailWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_mail\src\main.e') $repo 'x64' 'windows' $fmtMailPath
+if ($LASTEXITCODE -ne 0 -or $fmtMailWritten -ne 'executable written') { throw 'fmt_mail emission failed' }
+& $fmtMailPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_mail check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
