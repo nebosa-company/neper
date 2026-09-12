@@ -3455,3 +3455,16 @@ begins with the core engine's `nodes` field and adds the context table, so the
 same pointer serves both `template.validate` and this module's `execute`. A first
 draft kept them in a module-level table and found that a module-scope `var` is not
 lowered yet; the prefix layout needs no global and is the better shape anyway.
+
+## D189 — `str.format` recurses into slices and arrays
+
+The formatter expansion, which lowered one `e.str` push per verb and refused a
+slice or an array, now writes a sequence as `[` elements `]` with `, ` between,
+each element through the same function -- so a slice of `str` prints its texts and
+an array of arrays nests -- in the loop shape `emit_sequence_cmp` already used: a
+counter on the stack, a condition block, a body with a separator branch, an exit
+block. `sequence_parts` and `element_operand` were there for `cmp`; the verb rides
+down to the elements, so `{:x}` on a slice of integers would be hex -- the checker
+still refuses that at the call, as it did before, and lifting it is a checker
+change for another day. Enums and a type's own `format` are what rule 4 still
+leaves to the expansion.

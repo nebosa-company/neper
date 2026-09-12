@@ -4430,8 +4430,8 @@ fn formatter_push_name(c: *check.Checker, ty: check.Type, verb: check.FormatVerb
         if check.same(canonical.name, "f64") { ret ("push_f64", ok) }
         ret ("", check.InvalidFormat)
     }
-    // The slices, arrays and enums are formattable under section 4 but need the
-    // expansion to recurse into an element at a time, which it does not do yet.
+    // Slices and arrays go through `emit_formatter_sequence`; enums are formattable
+    // under section 4 but need their variant names, which the expansion has not yet.
     ret ("", check.Unsupported)
 }
 
@@ -4460,8 +4460,6 @@ fn emit_formatter_byte(c: *check.Checker, g: *graph.Graph, module_index: usize, 
 // expansions share it; they differ only in the builder they open and what they do
 // with what `done` leaves.
 fn lower_formatter_pieces(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, spelling: str, parameters: []usize, first_verb: usize, handle: usize, arena_form: bool, builder: *nir.Builder, token: lex.Token) -> err {
-    var arguments: [4]usize = zero
-    var results: CallResults = zero
     var raw = false
     let (body, body_error) = check.literal_contents(spelling, &raw)
     if body_error != ok { ret body_error }
@@ -4502,40 +4500,148 @@ fn lower_formatter_pieces(c: *check.Checker, g: *graph.Graph, module_index: usiz
         let parameter_index = first_verb + verb_index
         if parameter_index >= instance.parameter_count { ret check.ArgumentCount }
         let argument_type = c.parameters[instance.first_parameter + parameter_index].ty
-        let (push_name, push_name_error) = formatter_push_name(c, argument_type, verb)
-        if push_name_error != ok { ret push_name_error }
-        arguments[0usize] = handle
-        arguments[1usize] = parameters[parameter_index]
-        var argument_count = 2usize
-        if verb == .Fixed {
-            let precision_type = check.make_type(.Integer, "u8", module_index)
-            let (precision_instruction, precision_value, precision_error) = nir.emit(builder, .ConstInteger, precision_type, true, usize(precision), token)
-            if precision_error != ok { ret precision_error }
-            arguments[2usize] = precision_value
-            argument_count = 3usize
-        }
-        if check.same(push_name, "push_err") {
-            // `push_err` has no exported body: what exists is one generated instance
-            // per module, so the call goes to this module's rather than to `e.str`'s.
-            let (str_module, found_str) = graph.find_module(g, "e.str")
-            if !found_str { ret FunctionNotFound }
-            let (push_err_index, push_err_error) = check.error_push_instance(c, module_index, str_module)
-            if push_err_error != ok { ret push_err_error }
-            var push_err_call: check.CallInfo = zero
-            push_err_call.cast = check.invalid_type()
-            push_err_call.alloc_return = check.invalid_type()
-            push_err_call.alloc_arena = check.invalid_type()
-            push_err_call.function = c.functions[push_err_index]
-            try emit_call_results(c, push_err_call, 0usize, arguments[..], argument_count, builder, token, &results)
-        } else {
-            try emit_library_call(c, g, "e.str", push_name, arguments[..], argument_count, builder, token, &results)
-        }
-        if results.count != 1usize { ret check.ArgumentCount }
-        let verb_guard_error = emit_formatter_guard(c, module_index, instance, return_slot, results.values[0usize], arena_form, builder, token)
-        if verb_guard_error != ok { ret verb_guard_error }
+        try emit_formatter_value(c, g, module_index, instance, return_slot, handle, parameters[parameter_index], argument_type, verb, precision, arena_form, builder, token, 0usize)
         verb_index += 1usize
     }
     ret ok
+}
+
+// One value into the builder: a scalar, `str`, bool or `err` by its `e.str` push; an
+// array or slice as `[` elements `]` with `, ` between, each element through this
+// function again, so a slice of slices nests; a `str` is text and not a sequence.
+fn emit_formatter_value(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, handle: usize, value: usize, ty: check.Type, verb: check.FormatVerb, precision: u8, arena_form: bool, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
+    if depth > 8usize { ret check.Unsupported }
+    let (canonical, canonical_error) = check.canonical_type(c, ty)
+    if canonical_error != ok { ret canonical_error }
+    let (vector_lanes, is_vector) = check.vector_lanes(c, canonical)
+    if (canonical.kind == .Slice || canonical.kind == .Array) && !is_vector {
+        ret emit_formatter_sequence(c, g, module_index, instance, return_slot, handle, value, canonical, verb, precision, arena_form, builder, token, depth)
+    }
+    var arguments: [4]usize = zero
+    var results: CallResults = zero
+    let (push_name, push_name_error) = formatter_push_name(c, canonical, verb)
+    if push_name_error != ok { ret push_name_error }
+    arguments[0usize] = handle
+    arguments[1usize] = value
+    var argument_count = 2usize
+    if verb == .Fixed {
+        let precision_type = check.make_type(.Integer, "u8", module_index)
+        let (precision_instruction, precision_value, precision_error) = nir.emit(builder, .ConstInteger, precision_type, true, usize(precision), token)
+        if precision_error != ok { ret precision_error }
+        arguments[2usize] = precision_value
+        argument_count = 3usize
+    }
+    if check.same(push_name, "push_err") {
+        // `push_err` has no exported body: what exists is one generated instance
+        // per module, so the call goes to this module's rather than to `e.str`'s.
+        let (str_module, found_str) = graph.find_module(g, "e.str")
+        if !found_str { ret FunctionNotFound }
+        let (push_err_index, push_err_error) = check.error_push_instance(c, module_index, str_module)
+        if push_err_error != ok { ret push_err_error }
+        var push_err_call: check.CallInfo = zero
+        push_err_call.cast = check.invalid_type()
+        push_err_call.alloc_return = check.invalid_type()
+        push_err_call.alloc_arena = check.invalid_type()
+        push_err_call.function = c.functions[push_err_index]
+        try emit_call_results(c, push_err_call, 0usize, arguments[..], argument_count, builder, token, &results)
+    } else {
+        try emit_library_call(c, g, "e.str", push_name, arguments[..], argument_count, builder, token, &results)
+    }
+    if results.count != 1usize { ret check.ArgumentCount }
+    ret emit_formatter_guard(c, module_index, instance, return_slot, results.values[0usize], arena_form, builder, token)
+}
+
+// A sequence in index order, the loop in the shape `emit_sequence_cmp` uses: a
+// counter on the stack, a condition block, a body that pushes `, ` after the first
+// element and the element itself, and the exit block that closes the bracket.
+fn emit_formatter_sequence(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, handle: usize, value: usize, ty: check.Type, verb: check.FormatVerb, precision: u8, arena_form: bool, builder: *nir.Builder, token: lex.Token, depth: usize) -> err {
+    let (element_type, element_type_error) = check.index_element_type(c, ty, ty.module_index)
+    if element_type_error != ok { ret element_type_error }
+    let (element_info, element_info_error) = layout.type_info(c, element_type)
+    if element_info_error != ok { ret element_info_error }
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    try emit_formatter_byte(c, g, module_index, instance, return_slot, handle, 91u8, arena_form, builder, token)
+    let (data, length, parts_error) = sequence_parts(c, ty, value, builder, token)
+    if parts_error != ok { ret parts_error }
+    let (counter_slot_instruction, counter_slot, counter_slot_error) = nir.emit(builder, .Stack, usize_type, true, 0usize, token)
+    if counter_slot_error != ok { ret counter_slot_error }
+    let (start_instruction, start, start_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+    if start_error != ok { ret start_error }
+    let (start_store_instruction, start_store_ignored, start_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if start_store_error != ok { ret start_store_error }
+    try nir.add_operand(builder, start_store_instruction, counter_slot)
+    try nir.add_operand(builder, start_store_instruction, start)
+    let (entry_branch, entry_branch_error) = emit_branch(builder, token)
+    if entry_branch_error != ok { ret entry_branch_error }
+
+    let condition_block = builder.block_count
+    let (condition_index, condition_error) = nir.begin_block(builder)
+    if condition_error != ok || condition_index != condition_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, entry_branch, condition_block, 0usize)
+    let (condition_load_instruction, condition_counter, condition_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if condition_load_error != ok { ret condition_load_error }
+    try nir.add_operand(builder, condition_load_instruction, counter_slot)
+    let (has_next, has_next_error) = emit_supplied_compare(builder, .Less, boolean, condition_counter, length, token)
+    if has_next_error != ok { ret has_next_error }
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, has_next)
+
+    // The body: the separator after the first element, then the element.
+    let body_block = builder.block_count
+    let (body_index, body_error) = nir.begin_block(builder)
+    if body_error != ok || body_index != body_block { ret nir.InvalidControlFlow }
+    let (first_load_instruction, first_counter, first_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if first_load_error != ok { ret first_load_error }
+    try nir.add_operand(builder, first_load_instruction, counter_slot)
+    let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+    if zero_error != ok { ret zero_error }
+    let (is_later, is_later_error) = emit_supplied_compare(builder, .Greater, boolean, first_counter, zero_value, token)
+    if is_later_error != ok { ret is_later_error }
+    let (separator_decision, separator_ignored, separator_decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if separator_decision_error != ok { ret separator_decision_error }
+    try nir.add_operand(builder, separator_decision, is_later)
+    let separator_block = builder.block_count
+    let (separator_index, separator_error) = nir.begin_block(builder)
+    if separator_error != ok || separator_index != separator_block { ret nir.InvalidControlFlow }
+    try emit_formatter_byte(c, g, module_index, instance, return_slot, handle, 44u8, arena_form, builder, token)
+    try emit_formatter_byte(c, g, module_index, instance, return_slot, handle, 32u8, arena_form, builder, token)
+    let (separator_branch, separator_branch_error) = emit_branch(builder, token)
+    if separator_branch_error != ok { ret separator_branch_error }
+    let element_block = builder.block_count
+    let (element_index, element_block_error) = nir.begin_block(builder)
+    if element_block_error != ok || element_index != element_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, separator_decision, separator_block, element_block)
+    try nir.set_branch_targets(builder, separator_branch, element_block, 0usize)
+    let (element_load_instruction, element_counter, element_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if element_load_error != ok { ret element_load_error }
+    try nir.add_operand(builder, element_load_instruction, counter_slot)
+    let (element, element_error) = element_operand(c, element_type, element_info.size, data, element_counter, length, builder, token)
+    if element_error != ok { ret element_error }
+    try emit_formatter_value(c, g, module_index, instance, return_slot, handle, element, element_type, verb, precision, arena_form, builder, token, depth + 1usize)
+    let (increment_load_instruction, increment_counter, increment_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if increment_load_error != ok { ret increment_load_error }
+    try nir.add_operand(builder, increment_load_instruction, counter_slot)
+    let (one_instruction, one, one_error) = nir.emit(builder, .ConstInteger, usize_type, true, 1usize, token)
+    if one_error != ok { ret one_error }
+    let (add_instruction, incremented, add_error) = nir.emit(builder, .Add, usize_type, true, 0usize, token)
+    if add_error != ok { ret add_error }
+    try nir.add_operand(builder, add_instruction, increment_counter)
+    try nir.add_operand(builder, add_instruction, one)
+    let (increment_store_instruction, increment_store_ignored, increment_store_error) = nir.emit(builder, .Store, usize_type, false, 8usize, token)
+    if increment_store_error != ok { ret increment_store_error }
+    try nir.add_operand(builder, increment_store_instruction, counter_slot)
+    try nir.add_operand(builder, increment_store_instruction, incremented)
+    let (back_edge, back_edge_error) = emit_branch(builder, token)
+    if back_edge_error != ok { ret back_edge_error }
+    try nir.set_branch_targets(builder, back_edge, condition_block, 0usize)
+
+    let exit_block = builder.block_count
+    let (exit_index, exit_error) = nir.begin_block(builder)
+    if exit_error != ok || exit_index != exit_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, decision, body_block, exit_block)
+    ret emit_formatter_byte(c, g, module_index, instance, return_slot, handle, 93u8, arena_form, builder, token)
 }
 
 // `format` builds into the caller's arena and hands back what `done` leaves, so the

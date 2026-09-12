@@ -566,9 +566,9 @@ format_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$format_written" = 'executable written' ]
 chmod +x "$test_build/str-format-selfhost"
 "$test_build/str-format-selfhost"
-# A slice is formattable under section 4 but needs the expansion to recurse into an
-# element at a time, which it does not do yet, so the build stops rather than quietly
-# formatting nothing. Rejected at lowering, not at checking, so it needs an emission.
+# An enum is formattable under section 4 but needs its variant name pushed, which the
+# expansion does not do yet (slices and arrays recurse since D189), so the build stops
+# rather than quietly formatting nothing. Rejected at lowering, so it needs an emission.
 require_fixture "check/format_compound_argument"
 if $test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/check/format_compound_argument/src/main.e" "$repo" x64 linux "$test_build/format-compound-argument" >/dev/null 2>&1; then
     printf '%s\n' 'a format verb with no push was lowered' >&2

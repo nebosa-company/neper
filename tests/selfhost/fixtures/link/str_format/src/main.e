@@ -87,5 +87,26 @@ fn main(a: *mem.Arena) -> err {
     let (nested, nested_error) = str.format["[{}]"](a, counted)
     if nested_error != ok { ret nested_error }
     if !str.eq(nested, "[n=42 done]") { ret Failed }
+
+    // Rule 4's sequences: a slice and an array as `[` elements `]` with `, ` between,
+    // an empty one as `[]`, a slice of `str` as its texts, and an array of arrays
+    // nesting -- the expansion recurses an element at a time (D189).
+    var items: [3]i64 = [3]i64{ 1, -2, 30 }
+    let (sequence, sequence_error) = str.format["n={} s={}"](a, items[0..], items)
+    if sequence_error != ok { ret sequence_error }
+    if !str.eq(sequence, "n=[1, -2, 30] s=[1, -2, 30]") { ret Failed }
+    var names: [2]str = [2]str{ "ab", "c" }
+    let (names_text, names_error) = str.format["{}"](a, names[0..])
+    if names_error != ok { ret names_error }
+    if !str.eq(names_text, "[ab, c]") { ret Failed }
+    let empty: [0]u8 = zero
+    let (empty_text, empty_error) = str.format["<{}>"](a, empty[0..])
+    if empty_error != ok { ret empty_error }
+    if !str.eq(empty_text, "<[]>") { ret Failed }
+    var grid: [2][2]u8 = zero
+    grid[1][0] = 7u8
+    let (grid_text, grid_error) = str.format["{}"](a, grid)
+    if grid_error != ok { ret grid_error }
+    if !str.eq(grid_text, "[[0, 0], [7, 0]]") { ret Failed }
     ret ok
 }
