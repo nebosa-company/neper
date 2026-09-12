@@ -94,6 +94,8 @@ fn type_info_depth(c: *check.Checker, ty: check.Type, depth: usize) -> (Info, er
     }
     if aggregate.kind == .Struct {
         if aggregate.field_count == 0usize { size = 1usize }
+        // Section 4: a `Vec[T, N]` or `Mask[T, N]` is aligned to its own width.
+        if c.has_simd && aggregate.module_index == c.simd_module && (check.same(aggregate.name, "Vec") || check.same(aggregate.name, "Mask")) { alignment = size }
         let (rounded, rounded_error) = align_up(size, alignment)
         if rounded_error != ok { ret (invalid, rounded_error) }
         ret (Info { size: rounded, alignment: alignment }, ok)

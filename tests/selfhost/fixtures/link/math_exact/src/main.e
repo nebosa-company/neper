@@ -232,6 +232,10 @@ fn main(a: *mem.Arena) -> err {
     if bits32(math.fma[f32](f32_of(3390532202u32), f32_of(990595219u32), f32_of(1165140885u32))) != 3299722873u32 { os.exit(258i32) }
     // naive differs
     if bits32(math.fma[f32](f32_of(958620429u32), f32_of(1156000344u32), f32_of(3109569554u32))) != 1049849439u32 { os.exit(259i32) }
+    // (1 + 2^-p)^2 - (1 + 2^-(p-1)) = 2^-2p: the deepest cancellation there is, leaving one
+    // bit below the format's width -- the case that D147's sixty random vectors never reached.
+    if bits64(math.fma[f64](f64_of(4607182418800017409u64), f64_of(4607182418800017409u64), f64_of(13830554455654793218u64))) != 4138808057553485824u64 { os.exit(260i32) }
+    if bits32(math.fma[f32](f32_of(1065353217u32), f32_of(1065353217u32), f32_of(3212836866u32))) != 679477248u32 { os.exit(261i32) }
     ret ok
 }
 

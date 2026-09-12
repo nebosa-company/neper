@@ -451,9 +451,9 @@ fn fma_bits(a: u64, b: u64, c: u64, mantissa: u32, exponent_bits: u32) -> u64 {
     if lowest_exponent - base > keep { keep = lowest_exponent - base }
     var kept = 0u64
     if keep < 0i64 {
-        // Fewer bits than the format holds, and room to place them exactly.
+        // Fewer bits than the format holds, and room to place them exactly. `keep` stays
+        // negative: the lowest kept bit sits that far below `base`, and the field says so.
         kept = wide_extract(&total, 0u32, msb + 1u32) << u32(0i64 - keep)
-        keep = 0i64
     } else {
         kept = wide_extract(&total, u32(keep), mantissa)
         if keep > 0i64 {

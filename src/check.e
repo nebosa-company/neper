@@ -79,6 +79,7 @@ type DiagnosticKind = enum u8 {
     ProtocolGenericType,
     AtomicElement,
     AtomicOrdering,
+    VectorShape,
     MetaShape,
     MetaFieldOwner,
     ExternWithoutImport,
@@ -295,6 +296,10 @@ type ConstantExprKind = enum u8 {
     Name,
     Unary,
     Binary,
+    // `meta.array_len[X]()` where a length is written, with `X` in `ty` -- a parameter or
+    // a still-generic vector until the arguments are bound, and then the array or vector
+    // whose length it is. It is how `Mask[T, N]` is spelled for a `V` in `e.simd`.
+    ArrayLen,
 }
 
 type ConstantExpr = struct {
@@ -380,6 +385,10 @@ type Checker = struct {
     signature_function_count: usize,
     aggregate_count: usize,
     aggregate_field_count: usize,
+    // Section 4's `Vec` and `Mask` are seeded into `e.simd` when that module is in the
+    // graph; layout and `e.meta` recognise an instance by this module and the name.
+    simd_module: usize,
+    has_simd: bool,
     checked_switch_count: usize,
     function_signature_count: usize,
     token_count: usize,
@@ -697,7 +706,7 @@ fn type_equal(c: *Checker, a: Type, b: Type) -> bool {
         }
         ret true
     }
-    if a.kind == .TypeParameter { ret a.has_element && b.has_element && a.element == b.element }
+    if a.kind == .TypeParameter { ret a.has_element && b.has_element && a.element == b.element && a.has_length == b.has_length }
     if a.kind == .Integer || a.kind == .Float { ret same(a.name, b.name) }
     if a.kind == .Pointer || a.kind == .Slice {
         if a.is_const != b.is_const || !a.has_element || !b.has_element { ret false }
@@ -1066,6 +1075,15 @@ fn integer_literal_value(c: *Checker, text: str, node: syntax.Node) -> (usize, T
 fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     let node = tree.nodes[node_index]
     let text = g.modules[module_index].text
+    if node.kind == .CallExpr {
+        let (subject, is_array_len) = array_len_subject(c, g, tree, module_index, node)
+        if !is_array_len { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        let (length, length_error) = length_of_subject(c, subject)
+        if length_error != ok { ret (normalized_integer(0usize, false), invalid_type(), length_error) }
+        let (contextual_type, context_error) = apply_context(c, make_type(.Integer, "usize", module_index), expected)
+        if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+        ret (normalized_integer(length, false), contextual_type, ok)
+    }
     if node.kind == .LiteralExpr {
         let (magnitude, parsed_type, literal_error) = integer_literal_value(c, text, node)
         if literal_error != ok { ret (normalized_integer(0usize, false), invalid_type(), literal_error) }
@@ -1545,6 +1563,14 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
             atomic_named = true
         }
     }
+    // Section 4 reserves `Vec` and `Mask` the same way; both are the builtins seeded in
+    // `e.simd`, and which `(T, N)` they admit is the closed table, checked at the
+    // instantiation like `Atomic`'s element.
+    var vector_named = false
+    if !has_qualifier && (same(name, "Vec") || same(name, "Mask")) && c.has_simd {
+        target_module = c.simd_module
+        vector_named = true
+    }
     var result = make_type(.Named, name, target_module)
     if has_arguments {
         let (template_index, found_template) = find_aggregate(c, target_module, name)
@@ -1560,6 +1586,10 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
                 record_failure(c, module_index, node, .AtomicElement, argument.ty.name, "")
                 ret (invalid_type(), InvalidType)
             }
+        }
+        if vector_named && !vector_shape_legal(c, first_argument) {
+            record_failure(c, module_index, node, .VectorShape, name, "")
+            ret (invalid_type(), InvalidType)
         }
         let (instance_index, instance_error) = instantiate_aggregate(c, template_index, first_argument)
         if instance_error != ok { ret (invalid_type(), instance_error) }
@@ -2002,7 +2032,135 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
         c.aggregate_field_count += 1usize
         c.aggregate_count += 1usize
     }
+    // Section 4: `Vec[T, N]` and `Mask[T, N]` are builtins too, seeded into `e.simd`. Each
+    // is one field `lanes: [N]T` -- a `[N]bool` for the mask -- which gives the width for
+    // free; the alignment, which section 4 says equals the width, is layout's one special
+    // case. The lanes field is what `e.simd`'s source works over, lane by lane.
+    // ponytail: every operation is a scalar loop over `lanes`; a vector register class and
+    // SSE selection are the upgrade path, and nothing in the source changes for it.
+    let (simd_module, has_simd) = graph.find_module(g, "e.simd")
+    if has_simd {
+        c.simd_module = simd_module
+        c.has_simd = true
+        var which = 0usize
+        while which < 2usize {
+            if c.aggregate_count == c.aggregates.len || c.aggregate_field_count == c.aggregate_fields.len { ret Capacity }
+            if c.comptime_parameter_count + 2usize > c.comptime_parameters.len { ret Capacity }
+            let parameter_index = c.comptime_parameter_count
+            c.comptime_parameters[parameter_index] = ComptimeParameter { name: "T", kind: .Type, ty: invalid_type() }
+            c.comptime_parameters[parameter_index + 1usize] = ComptimeParameter { name: "N", kind: .Integer, ty: make_type(.Integer, "usize", simd_module) }
+            c.comptime_parameter_count += 2usize
+            var lane = make_type(.TypeParameter, "T", simd_module)
+            lane.element = parameter_index
+            lane.has_element = true
+            if which == 1usize { lane = make_type(.Bool, "bool", simd_module) }
+            let (stored_lane, store_error) = store_type(c, lane)
+            if store_error != ok { ret store_error }
+            var count: ConstantExpr = zero
+            count.kind = .Name
+            count.module_index = simd_module
+            count.name = "N"
+            let (count_index, count_error) = store_constant_expr(c, count)
+            if count_error != ok { ret count_error }
+            var lanes = make_type(.Array, "", simd_module)
+            lanes.element = stored_lane
+            lanes.has_element = true
+            lanes.array_length = count_index
+            lanes.has_length = false
+            var name = "Vec"
+            if which == 1usize { name = "Mask" }
+            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero }
+            c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "lanes", ty: lanes, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
+            c.aggregate_field_count += 1usize
+            c.aggregate_count += 1usize
+            which += 1usize
+        }
+    }
     ret ok
+}
+
+// Section 4's closed table: `T` an integer or float primitive other than `usize` and
+// `isize`, and `N * size_of(T)` one of 16, 32 or 64 bytes. Arguments still symbolic --
+// a `Vec[T, N]` inside another generic -- are settled when they are bound.
+fn vector_shape_legal(c: *Checker, first_argument: usize) -> bool {
+    let lane = c.generic_arguments[first_argument]
+    let count = c.generic_arguments[first_argument + 1usize]
+    if lane.kind != .Type || count.kind != .Integer { ret false }
+    if lane.ty.kind == .TypeParameter || count.symbolic { ret true }
+    if lane.ty.kind != .Integer && lane.ty.kind != .Float { ret false }
+    if same(lane.ty.name, "usize") || same(lane.ty.name, "isize") { ret false }
+    var width = 8usize
+    if same(lane.ty.name, "i8") || same(lane.ty.name, "u8") { width = 1usize }
+    if same(lane.ty.name, "i16") || same(lane.ty.name, "u16") || same(lane.ty.name, "f16") || same(lane.ty.name, "bf16") { width = 2usize }
+    if same(lane.ty.name, "i32") || same(lane.ty.name, "u32") || same(lane.ty.name, "f32") { width = 4usize }
+    let bytes = count.value * width
+    ret bytes == 16usize || bytes == 32usize || bytes == 64usize
+}
+
+// A concrete `Vec[T, N]` or `Mask[T, N]` instance, answered as its `lanes` field: the
+// `[N]T` whose element and length are the two things `e.meta` asks a vector for.
+fn vector_lanes(c: *Checker, ty: Type) -> (Type, bool) {
+    if !is_vector_type(c, ty) || c.aggregates[ty.element].generic { ret (invalid_type(), false) }
+    let aggregate = c.aggregates[ty.element]
+    if aggregate.field_count != 1usize || aggregate.first_field >= c.aggregate_field_count { ret (invalid_type(), false) }
+    ret (c.aggregate_fields[aggregate.first_field].ty, true)
+}
+
+// Any instance of the two, concrete or not: `Vec[T, N]` inside another generic's
+// template is one whose lanes are not known yet, and a question about it defers the
+// way one about `T` itself does.
+fn is_vector_type(c: *Checker, ty: Type) -> bool {
+    if !c.has_simd || ty.kind != .Named || !ty.has_element || ty.element >= c.aggregate_count { ret false }
+    let aggregate = c.aggregates[ty.element]
+    if aggregate.module_index != c.simd_module || !aggregate.instance { ret false }
+    ret same(aggregate.name, "Vec") || same(aggregate.name, "Mask")
+}
+
+fn vector_pending(c: *Checker, ty: Type) -> bool {
+    ret is_vector_type(c, ty) && c.aggregates[ty.element].generic
+}
+
+// `meta.array_len[X]()` written where a length is: the call's callee is the bracketed
+// question and `X` is its one argument, read as a type. Anything else is not one.
+fn array_len_subject(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, bool) {
+    let (receiver_index, has_receiver) = first_node_child(tree, node)
+    if !has_receiver { ret (invalid_type(), false) }
+    let receiver = tree.nodes[receiver_index]
+    if receiver.kind != .BracketPostfix { ret (invalid_type(), false) }
+    let end = receiver.first_child + receiver.child_count
+    var at = receiver.first_child
+    var child_count = 0usize
+    var base_index = 0usize
+    var type_index = 0usize
+    while at < end {
+        if tree.children[at].node {
+            if child_count == 0usize {
+                base_index = tree.children[at].index
+            } else {
+                type_index = tree.children[at].index
+            }
+            child_count += 1usize
+        }
+        at += 1usize
+    }
+    if child_count != 2usize { ret (invalid_type(), false) }
+    let base = tree.nodes[base_index]
+    if base.kind != .FieldExpr { ret (invalid_type(), false) }
+    let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
+    if !found_member || !same(g.modules[target_module].name, "e.meta") || !same(member, "array_len") { ret (invalid_type(), false) }
+    let (subject, subject_error) = comptime_type(c, g, tree, module_index, type_index)
+    if subject_error != ok { ret (invalid_type(), false) }
+    ret (subject, true)
+}
+
+// The length `meta.array_len` answers for a subject once it is concrete: an array's, or
+// a vector's lane count. A parameter or a still-generic vector has none yet.
+fn length_of_subject(c: *Checker, subject: Type) -> (usize, err) {
+    if subject.kind == .TypeParameter || vector_pending(c, subject) { ret (0usize, MissingContext) }
+    let (lanes, is_vector) = vector_lanes(c, subject)
+    if is_vector { ret (lanes.array_length, ok) }
+    if subject.kind != .Array || !subject.has_length { ret (0usize, InvalidType) }
+    ret (subject.array_length, ok)
 }
 
 // Section 8: `Atomic[T]` is legal for exactly an integer type of section 4 or a
@@ -2216,6 +2374,15 @@ fn aggregate_argument(c: *Checker, template_index: usize, first_argument: usize,
 fn evaluate_aggregate_bound(c: *Checker, template_index: usize, first_argument: usize, expression_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
     let expression = c.constant_exprs[expression_index]
+    if expression.kind == .ArrayLen {
+        let (subject, subject_error) = substitute_aggregate_type(c, template_index, first_argument, expression.ty)
+        if subject_error != ok { ret (normalized_integer(0usize, false), invalid_type(), subject_error) }
+        let (length, length_error) = length_of_subject(c, subject)
+        if length_error != ok { ret (normalized_integer(0usize, false), invalid_type(), length_error) }
+        let (contextual_type, context_error) = apply_context(c, make_type(.Integer, "usize", expression.module_index), expected)
+        if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+        ret (normalized_integer(length, false), contextual_type, ok)
+    }
     if expression.kind == .Literal {
         let (contextual_type, context_error) = apply_context(c, expression.ty, expected)
         if context_error != ok || (contextual_type.kind == .Integer && !integer_representable(expression.value, contextual_type)) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
@@ -3116,6 +3283,15 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     let node = tree.nodes[node_index]
     let text = g.modules[module_index].text
     var item: ConstantExpr = zero
+    if node.kind == .CallExpr {
+        let (subject, is_array_len) = array_len_subject(c, g, tree, module_index, node)
+        if !is_array_len { ret (0usize, InvalidConstant) }
+        item.kind = .ArrayLen
+        item.module_index = module_index
+        item.ty = subject
+        let (stored_index, store_error) = store_constant_expr(c, item)
+        ret (stored_index, store_error)
+    }
     if node.kind == .LiteralExpr {
         let (magnitude, parsed_type, literal_error) = integer_literal_value(c, text, node)
         if literal_error != ok { ret (0usize, literal_error) }
@@ -3471,6 +3647,13 @@ fn evaluate_integer_binary(op: lex.Kind, left: IntegerValue, right: IntegerValue
 fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
     let expression = c.constant_exprs[expression_index]
+    if expression.kind == .ArrayLen {
+        let (length, length_error) = length_of_subject(c, expression.ty)
+        if length_error != ok { ret (normalized_integer(0usize, false), invalid_type(), length_error) }
+        let (contextual_type, context_error) = apply_context(c, make_type(.Integer, "usize", expression.module_index), expected)
+        if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+        ret (normalized_integer(length, false), contextual_type, ok)
+    }
     if expression.kind == .Literal {
         let (contextual_type, context_error) = apply_context(c, expression.ty, expected)
         if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
@@ -3762,6 +3945,15 @@ fn instance_argument(c: *Checker, function_index: usize, first_argument: usize, 
 fn evaluate_bound_expression(c: *Checker, function_index: usize, first_argument: usize, expression_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     if expression_index >= c.constant_expr_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
     let expression = c.constant_exprs[expression_index]
+    if expression.kind == .ArrayLen {
+        let (subject, subject_error) = substitute_type(c, function_index, first_argument, expression.ty)
+        if subject_error != ok { ret (normalized_integer(0usize, false), invalid_type(), subject_error) }
+        let (length, length_error) = length_of_subject(c, subject)
+        if length_error != ok { ret (normalized_integer(0usize, false), invalid_type(), length_error) }
+        let (contextual_type, context_error) = apply_context(c, make_type(.Integer, "usize", expression.module_index), expected)
+        if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+        ret (normalized_integer(length, false), contextual_type, ok)
+    }
     if expression.kind == .Literal {
         let (contextual_type, context_error) = apply_context(c, expression.ty, expected)
         if context_error != ok || (contextual_type.kind == .Integer && !integer_representable(expression.value, contextual_type)) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
@@ -3850,6 +4042,10 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
         // members, so there is nothing for one to stand for and it is not accepted here.
         if argument.kind == .Field { ret (argument.ty, ok) }
         if argument.kind != .Type { ret (invalid_type(), MissingContext) }
+        if ty.has_length {
+            let (derived, derived_error) = derived_from_subject(c, true, argument.ty)
+            ret (derived, derived_error)
+        }
         ret (argument.ty, ok)
     }
     if ty.kind == .Named && ty.has_element {
@@ -3982,6 +4178,9 @@ fn infer_comptime_type(c: *Checker, function_index: usize, first_argument: usize
     if formal.kind == .TypeParameter {
         if is_untyped(actual) || actual.kind == .Invalid || actual.kind == .Other { ret ok }
         if !formal.has_element { ret InvalidType }
+        // `meta.element_type[V]()` as a parameter type names a part of `V`, not `V`: nothing
+        // to infer from the argument.
+        if formal.has_length { ret ok }
         // A `FIELD.ty` parameter is a `TypeParameter` standing for a comptime `Field`, not for a
         // type parameter of its own, and there is nothing to infer: the field was named at the
         // call and its type follows from it. Inferring here would rebind `FIELD` to whatever the
@@ -4466,11 +4665,22 @@ fn derived_from_subject(c: *Checker, wants_element: bool, subject: Type) -> (Typ
     // the parameter stands for its own answer there and the second pass settles it -- the same
     // deferral `size_of` has always had, which is why that one worked inside a generic and these
     // did not.
-    if subject.kind == .TypeParameter { ret (subject, ok) }
+    if subject.kind == .TypeParameter {
+        // `element_type` of a parameter is a placeholder of its own: the same parameter with
+        // `has_length` set, which `substitute_type` answers once the argument is bound. That is
+        // how `fn splat[V: type](x: meta.element_type[V]())` keeps `x` as the lane type of `V`.
+        var derived = subject
+        if wants_element { derived.has_length = true }
+        ret (derived, ok)
+    }
     if wants_element {
-        if subject.kind != .Array && subject.kind != .Slice { ret (invalid_type(), InvalidType) }
-        if !subject.has_element || subject.element >= c.type_count { ret (invalid_type(), InvalidType) }
-        ret (c.types[subject.element], ok)
+        if vector_pending(c, subject) { ret (make_type(.TypeParameter, "", c.simd_module), ok) }
+        var container = subject
+        let (lanes, is_vector) = vector_lanes(c, subject)
+        if is_vector { container = lanes }
+        if container.kind != .Array && container.kind != .Slice { ret (invalid_type(), InvalidType) }
+        if !container.has_element || container.element >= c.type_count { ret (invalid_type(), InvalidType) }
+        ret (c.types[container.element], ok)
     }
     let (aggregate_index, found_aggregate) = aggregate_for_type(c, subject)
     if !found_aggregate { ret (invalid_type(), InvalidType) }
@@ -4598,6 +4808,7 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
                 let (atomic_module, has_atomic) = graph.find_module(g, "e.atomic")
                 if has_atomic { target_module = atomic_module }
             }
+            if (same(name, "Vec") || same(name, "Mask")) && c.has_simd { target_module = c.simd_module }
         } else {
             let (member_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
             if !found_member { ret (invalid_type(), InvalidType) }
@@ -4608,6 +4819,10 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         if !found_template { ret (invalid_type(), InvalidType) }
         let (first_argument, collect_error) = collect_generic_arguments(c, g, tree, module_index, template_index, base_slot + 1usize, child_end)
         if collect_error != ok { ret (invalid_type(), collect_error) }
+        if c.has_simd && target_module == c.simd_module && (same(name, "Vec") || same(name, "Mask")) && !vector_shape_legal(c, first_argument) {
+            record_failure(c, module_index, node, .VectorShape, name, "")
+            ret (invalid_type(), InvalidType)
+        }
         let (instance_index, instance_error) = instantiate_aggregate(c, template_index, first_argument)
         if instance_error != ok { ret (invalid_type(), instance_error) }
         var instance = make_type(.Named, name, target_module)
@@ -5142,6 +5357,7 @@ fn meta_kind_value(c: *Checker, ty: Type) -> (usize, err) {
     if ty.kind == .Pointer { ret (4usize, ok) }
     if ty.kind == .Slice || ty.kind == .String { ret (5usize, ok) }
     if ty.kind == .Array { ret (6usize, ok) }
+    if is_vector_type(c, ty) { ret (10usize, ok) }
     if ty.kind == .Named || ty.kind == .Tag {
         let (aggregate_index, found) = aggregate_for_type(c, ty)
         if !found { ret (0usize, InvalidType) }
@@ -5227,8 +5443,15 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     if query == .ArrayLen {
         info.result = make_type(.Integer, "usize", target_module)
         if subject.kind == .TypeParameter { ret (info, ok) }
-        if subject.kind != .Array { ret (info, InvalidType) }
-        info.value = subject.array_length
+        if vector_pending(c, subject) {
+            info.deferred = true
+            ret (info, ok)
+        }
+        var counted = subject
+        let (lanes, is_vector) = vector_lanes(c, subject)
+        if is_vector { counted = lanes }
+        if counted.kind != .Array { ret (info, InvalidType) }
+        info.value = counted.array_length
         ret (info, ok)
     }
     if query == .SizeOf || query == .AlignOf {
@@ -6156,6 +6379,16 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         }
                         }
                     } else {
+                        if receiver.kind == .CallExpr {
+                        // `meta.element_type[W]()(x)`: the callee is a type-valued question, so
+                        // the call is a conversion to its answer -- how `simd.convert` writes
+                        // `T(x)` for a lane type it can only name through `W`.
+                        let (derived, derived_error) = derived_type(c, g, tree, module_index, receiver)
+                        if derived_error != ok { ret (info, derived_error) }
+                        if derived.kind != .Integer && derived.kind != .Float && derived.kind != .TypeParameter { ret (info, InvalidType) }
+                        info.cast = derived
+                        info.is_cast = true
+                        } else {
                         if receiver.kind != .FieldExpr { ret (info, Unsupported) }
                         // `f.ty(x)` where `f` is an unrolled `for`'s binding. The callee is not a
                         // function but a type, so the call is a conversion, the same one a written
@@ -6231,6 +6464,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                                 info.function.return_count = signature.return_count
                             }
                             has_function = true
+                        }
                         }
                         }
                         }

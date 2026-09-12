@@ -666,6 +666,14 @@ $mathPowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $mathPowWritten -ne 'executable written') { throw 'math_pow emission failed' }
 & $mathPowPath
 if ($LASTEXITCODE -ne 0) { throw "an e.math answer is outside its bound: exit $LASTEXITCODE" }
+# `e.simd` over the two builtins: the closed table's layout, every intrinsic but `shuffle` on
+# integer and float lanes, the pairwise reduction order, masked loads at a slice's tail, and
+# `pdep`/`pext` against their definitions.
+$simdLanesPath = Join-Path $testBuild 'simd-lanes-selfhost.exe'
+$simdLanesWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\simd_lanes\src\main.e') $repo 'x64' 'windows' $simdLanesPath
+if ($LASTEXITCODE -ne 0 -or $simdLanesWritten -ne 'executable written') { throw 'simd_lanes emission failed' }
+& $simdLanesPath
+if ($LASTEXITCODE -ne 0) { throw "an e.simd check failed: exit $LASTEXITCODE" }
 # A module-scope `var` is storage: a function that writes and another that reads agree, and each
 # global keeps its own width. Never wired when it was written (849fa5b), and on Windows it did not
 # link until D150 -- a global's index was bounded against the function references.

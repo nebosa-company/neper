@@ -2528,7 +2528,58 @@ Two limits met on the way: a fixture of 880 checks in one function crossed a per
 lowering capacity around 450, so there are four fixtures rather than one; and the scratch
 directory holding the generators was wiped mid-session, so the vectors live in the fixtures and
 their provenance in their headers. A generator in `scripts/` would be the tidier arrangement.
+## D148 — `Vec[T, N]` and `Mask[T, N]` are seeded aggregates, and `e.simd` is source over their lanes
 
+`e.simd` lands at 27 of 28, and the two vector types exist. The shape is the smallest one
+that is correct, and it is chosen so that the register-class work later changes nothing
+written in the library.
+
+**The types are builtins the way `Atomic[T]` is (D-series precedent in `check.e`):** seeded
+into `e.simd` when that module is in the graph, each a generic struct of one field --
+`lanes: [N]T` for `Vec`, `lanes: [N]bool` for `Mask` -- with `T: type` and `N: usize` as
+its comptime parameters. That gives section 4's width for free, `= zero` for free, and the
+alignment-equals-width rule is one line in `layout.e`. The closed `(T, N)` table is
+checked where the type is written, in both spellings (a type node, and a comptime argument
+slot), with its own diagnostic. `meta.kind` answers `.Vec` for both, and `element_type`
+and `array_len` answer the lane type and count, which is what the surface's dependent
+names `T`, `N` and `M` are: `fn splat[V: type](x: meta.element_type[V]()) -> V`.
+
+**Two pieces of the checker were needed for that spelling to be writable, and both are
+general, not vector-specific.** First, `meta.element_type[V]()` in a parameter or return
+position of a generic is a placeholder of its own -- the same `TypeParameter` with a mark --
+that `substitute_type` answers once `V` is bound; before, the template's placeholder was
+`V` itself, so the instance's parameter became the vector rather than its lane. Second,
+`meta.array_len[X]()` written where a length is -- in `Mask[meta.element_type[V](),
+meta.array_len[V]()]` -- is a constant-expression kind (`ArrayLen`) holding `X`, evaluated
+after substitution in the aggregate, function and module evaluators. With those,
+`Mask[T, N]` for a `V` is spelled entirely in the library, and `meta.element_type[W]()(x)`
+is accepted as the conversion `simd.convert` needs.
+
+**Every operation is a scalar loop over `lanes`.** Section 4 says every width compiles on
+every target and a width the hardware lacks is split; N lanes of one is the degenerate
+split, and the instruction count is the only thing the register class will change. The
+pairwise reduction tree is in place (`2i >= i`); `reduce_min`/`max` are `e.math`'s IEEE
+minimum/maximum on float lanes; integer `reduce_add` is `+%`; `convert` is the scalar
+conversion per lane; `fma` is `math.fma` per lane; `pdep`/`pext` are the bit loops
+section 4 prescribes for targets without the instruction.
+
+### What is not in this increment
+
+`shuffle`: its `IDX: [N]u8` is a comptime array parameter, a kind the generic machinery
+does not have. The lane-wise operators `+ - * /`, the mask operators, the `Vec[T, N]{ }`
+literal and `v[i]`: all the checker's, none the module's, and each a bounded increment
+over the same one-field representation. The mask register-only rule: a `Mask` is a struct
+here, so `&m` and a `Mask` field compile where section 4 says they must not. The `align`
+check of the aligned loads. And the readiness row stays a fraction until the register
+class exists.
+
+### What the fixture caught
+
+`math.fma`, sixty vectors old, was wrong whenever the exact result had fewer significant
+bits than the format and was still normal: the kept bits were shifted up into place and
+the exponent field was computed as though they had not been. `(1 + 2^-23)^2 - (1 + 2^-22)`
+is `2^-46`, and came out `2^-23`. D147's random rationals never cancelled that deeply;
+`link/math_exact` now carries the case in both widths.
 ## D149 — an ELF segment starts where the headers end, not on the next page
 
 A static Linux image put its code at file offset 4096 and its data on the page after the code,
@@ -2550,7 +2601,6 @@ and a larger job than this one, since the runtime is opaque bytes behind a symbo
 The Windows image was not padded to speak of -- 345 bytes in 7,168 -- and the dynamic Linux
 path (an `@import`) keeps its page-aligned layout, since a program that loads libc is not
 counting bytes.
-
 ## D150 — the runtime is a prefix, cut after the last function the program reaches
 
 D149 left an empty Linux program at 3,804 bytes, 3,438 of them runtime appended whole; the
@@ -2586,3 +2636,26 @@ all, so a program with more globals than calls was refused. The check moved insi
 branch it belongs to, and the fixture runs on both hosts now. And the base Linux runtime,
 1,441 bytes with no source left, is now the largest single thing in an empty program on
 either host -- the next floor, and one that needs the source rewritten before it can move.
+## D151 — the Linux runtime is one source file again, recovered from its bytes
+
+D150 left 1,441 bytes of Linux runtime that could not be cut because it had no source: the
+arena allocator, the errno map and the file calls had been embedded in `link_elf.e` as hex
+since the first ELF link (06987db) and reordered never. They were disassembled, given labels
+and written down as `runtime_elf_x64.s` alongside what used to be the extension; the result
+reassembles to the same 1,441 bytes exactly, which is the proof the recovery is faithful. The
+extension's private copy of the allocator, a shorter twin of the base one, is gone -- both
+callers use the one that also checks for a null base.
+
+So there is one runtime source and one generated module, `runtime_elf_x64.e`, ordered as
+D150 prescribes, and the linker cuts it after the last function reached on both the static
+and the dynamic path. A program that reaches nothing gets no runtime at all: an empty program
+is 120 bytes of headers, 235 of startup and its `ret` -- 366 bytes. Hello world is 3,984, of
+which the runtime is `np_error` through `neper_os_write`, 377 bytes.
+
+The linker's self-test used to know the runtime followed the code by checking the first byte
+after it; that byte is now whatever comes next, and the check is gone with the assumption.
+
+Windows is unchanged at 2,048 and 6,144. Its floor is the entry's 941 bytes -- command-line
+parsing and the arena -- and the four imports those need; the Linux startup does the same
+work in 235 bytes because a process there begins with `argc` and `argv` on the stack, where a
+Windows one begins with a call to `GetCommandLineW` and a UTF-16 string to split and convert.
