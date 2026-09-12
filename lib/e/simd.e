@@ -17,9 +17,8 @@
 // literal and `v[i]` are the checker's and lowering's, over this same representation
 // (D158, D159).
 //
-// Not here yet: `shuffle`, whose `IDX: [N]u8` is a comptime array parameter the
-// generic machinery has no kind for, and the `align` check of the aligned forms, which
-// read as the unaligned ones.
+// Not here yet: the `align` check of the aligned forms, which read as the unaligned
+// ones.
 
 use e.meta
 use e.math
@@ -83,6 +82,24 @@ fn gather[V: type](s: []const meta.element_type[V](), indices: Vec[u32, meta.arr
     var i = 0usize
     while i < meta.array_len[V]() {
         v.lanes[i] = s[usize(indices.lanes[i])]
+        i += 1usize
+    }
+    ret v
+}
+
+// Section 4: lane `i` of the result is lane `IDX[i]` of the 2N lanes of `a` then `b`.
+// `IDX` is a comptime array (section 9), so the permutation is fixed at the call;
+// here it is read lane by lane, and a register class would select it as one shuffle.
+fn shuffle[V: type, IDX: [meta.array_len[V]()]u8](a: V, b: V) -> V {
+    var v: V = zero
+    var i = 0usize
+    while i < meta.array_len[V]() {
+        let source = usize(IDX[i])
+        if source < meta.array_len[V]() {
+            v[i] = a[source]
+        } else {
+            v[i] = b[source - meta.array_len[V]()]
+        }
         i += 1usize
     }
     ret v

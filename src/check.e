@@ -133,6 +133,10 @@ type ComptimeKind = enum u8 {
     // step with it.
     Field,
     Member,
+    // A comptime array of integers -- `shuffle`'s `IDX: [N]u8`. The argument is a literal
+    // of integer literals, kept as its spelling the way a `Str` is (`text`), decoded by
+    // whoever needs the items; `ty` is the array type the literal wrote.
+    Array,
 }
 
 // One name bound by an unrolled `for`, which the enclosing instantiation's contiguous
@@ -2724,10 +2728,110 @@ fn collect_comptime_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
             ret ok
         }
     }
+    if ty.kind == .Array && ty.has_element && ty.element < c.type_count && c.types[ty.element].kind == .Integer {
+        c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Array, ty: ty }
+        c.comptime_parameter_count += 1usize
+        ret ok
+    }
     if ty.kind != .Integer || !same(ty.name, "usize") { ret InvalidType }
     c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Integer, ty: ty }
     c.comptime_parameter_count += 1usize
     ret ok
+}
+
+// A comptime array argument: an array literal whose items are integer literals, each
+// representable in the element type, exactly the declared count once that is known.
+// What is bound is the literal's spelling and the array type it wrote.
+fn bind_array_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function_index: usize, first_argument: usize, parameter_index: usize, node_index: usize) -> err {
+    let node = tree.nodes[node_index]
+    let text = g.modules[module_index].text
+    // Forwarding another generic's comptime array by name.
+    if node.kind == .NameExpr {
+        let token = c.tokens[node.token_start]
+        if token.kind != .Identifier { ret TypeMismatch }
+        let (outer_index, is_outer) = active_comptime_parameter(c, text[token.start..token.end])
+        if !is_outer || c.comptime_parameters[outer_index].kind != .Array { ret TypeMismatch }
+        let (outer, has_outer) = active_argument(c, outer_index)
+        if !has_outer {
+            if !c.generic_declaration { ret MissingContext }
+            ret ok
+        }
+        ret bind_spelled_argument(c, function_index, first_argument, parameter_index, .Array, outer.ty, outer.text)
+    }
+    if node.kind != .AggregateLiteral { ret TypeMismatch }
+    let (bound_array, literal_error) = check_expr(c, g, tree, module_index, node_index, invalid_type())
+    if literal_error != ok { ret literal_error }
+    if bound_array.kind != .Array || !bound_array.has_element || bound_array.element >= c.type_count { ret TypeMismatch }
+    let element = c.types[bound_array.element]
+    let declared = c.comptime_parameters[parameter_index].ty
+    if !declared.has_element || declared.element >= c.type_count || !type_equal(c, element, c.types[declared.element]) { ret TypeMismatch }
+    // The declared length may name an earlier argument (`[meta.array_len[V]()]u8`), bound by
+    // now; the literal must have exactly that many items.
+    var expected_length = declared
+    if !declared.has_length {
+        let (substituted, substitute_error) = substitute_type(c, function_index, first_argument, declared)
+        if substitute_error == ok { expected_length = substituted }
+    }
+    if expected_length.has_length && expected_length.array_length != bound_array.array_length { ret TypeMismatch }
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let item = tree.nodes[tree.children[at].index]
+            if item.kind == .LiteralItem {
+                let (expression, has_expression) = literal_item_expression(tree, item)
+                if !has_expression { ret parse.InvalidSyntax }
+                let (_, _, item_error) = evaluate_array_length_expr(c, g, tree, module_index, expression, element)
+                if item_error != ok { ret InvalidConstant }
+            }
+        }
+        at += 1usize
+    }
+    ret bind_spelled_argument(c, function_index, first_argument, parameter_index, .Array, bound_array, text[c.tokens[node.token_start].start..c.tokens[node.token_end - 1usize].end])
+}
+
+fn bind_spelled_argument(c: *Checker, function_index: usize, first_argument: usize, parameter_index: usize, kind: ComptimeKind, ty: Type, spelling: str) -> err {
+    if function_index >= c.signature_function_count { ret InvalidType }
+    let function = c.function_generics[function_index]
+    if parameter_index < function.first_comptime { ret InvalidType }
+    let offset = parameter_index - function.first_comptime
+    if offset >= function.comptime_count { ret InvalidType }
+    let argument_index = first_argument + offset
+    if argument_index >= c.generic_argument_count { ret Capacity }
+    if c.generic_arguments[argument_index].set {
+        if c.generic_arguments[argument_index].kind != kind { ret TypeMismatch }
+        if !same(c.generic_arguments[argument_index].text, spelling) { ret TypeMismatch }
+        ret ok
+    }
+    c.generic_arguments[argument_index].kind = kind
+    c.generic_arguments[argument_index].ty = ty
+    c.generic_arguments[argument_index].text = spelling
+    c.generic_arguments[argument_index].set = true
+    ret ok
+}
+
+// The items of a bound comptime array, decoded from its spelling: the integer literals
+// between the braces, in order. `at` walks the spelling; each call gives the next item.
+fn comptime_array_item(spelling: str, at: *usize) -> (usize, bool) {
+    var index = *at
+    // Skip to the first digit after the opening brace, or after the previous item.
+    if index == 0usize {
+        while index < spelling.len && spelling[index] != 123u8 { index += 1usize }
+    }
+    while index < spelling.len && (spelling[index] < 48u8 || spelling[index] > 57u8) {
+        if spelling[index] == 125u8 { ret (0usize, false) }
+        index += 1usize
+    }
+    if index >= spelling.len { ret (0usize, false) }
+    var value = 0usize
+    while index < spelling.len && spelling[index] >= 48u8 && spelling[index] <= 57u8 {
+        value = value * 10usize + usize(spelling[index] - 48u8)
+        index += 1usize
+    }
+    // A width suffix (`3u8`) is letters and digits; step past it.
+    while index < spelling.len && spelling[index] != 44u8 && spelling[index] != 125u8 { index += 1usize }
+    *at = index
+    ret (value, true)
 }
 
 fn store_return_type(c: *Checker, ty: Type) -> err {
@@ -4241,7 +4345,7 @@ fn generic_arguments_equal(c: *Checker, function_index: usize, first: usize, sec
         if left.kind == .Type {
             if !type_equal(c, left.ty, right.ty) { ret false }
         } else {
-            if left.kind == .Str {
+            if left.kind == .Str || left.kind == .Array {
                 if !same(left.text, right.text) { ret false }
             } else {
                 if left.value != right.value { ret false }
@@ -4411,6 +4515,10 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                         let bind_error = bind_inferred_argument(c, template_index, first_argument, generic.first_comptime + argument_position, ty, 0usize, .Type)
                         if bind_error != ok { ret (0usize, bind_error) }
                     } else {
+                    if parameter.kind == .Array {
+                        let bind_error = bind_array_argument(c, g, tree, module_index, template_index, first_argument, generic.first_comptime + argument_position, node_index)
+                        if bind_error != ok { ret (0usize, bind_error) }
+                    } else {
                     if parameter.kind == .Str {
                         let argument_node = tree.nodes[node_index]
                         if argument_node.kind != .LiteralExpr { ret (0usize, TypeMismatch) }
@@ -4433,6 +4541,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                             c.generic_arguments[argument_index].symbolic = true
                             c.generic_arguments[argument_index].set = true
                         }
+                    }
                     }
                     }
                     }
@@ -7589,6 +7698,14 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             if c.comptime_parameters[parameter_index].kind == .Str {
                 let (text_type, text_context_error) = apply_context(c, make_type(.String, "str", module_index), expected)
                 ret (text_type, text_context_error)
+            }
+            if c.comptime_parameters[parameter_index].kind == .Array {
+                // The bound literal's own array type; in the template, the declared one.
+                var array_type = c.comptime_parameters[parameter_index].ty
+                let (array_argument, has_array) = active_argument(c, parameter_index)
+                if has_array { array_type = array_argument.ty }
+                let (contextual_array, array_context_error) = apply_context(c, array_type, expected)
+                ret (contextual_array, array_context_error)
             }
             if c.comptime_parameters[parameter_index].kind != .Integer { ret (invalid_type(), InvalidType) }
             let (argument, argument_found) = active_argument(c, parameter_index)

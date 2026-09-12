@@ -1,5 +1,5 @@
 // `e.simd` over `Vec[T, N]` and `Mask[T, N]`: the closed table's layout, every intrinsic
-// but `shuffle` on integer and float lanes, the pairwise reduction order, the masked
+// on integer and float lanes, the pairwise reduction order, the masked
 // forms at a slice's tail, the two bit intrinsics against their definitions, and section
 // 4's lane-wise operators on float, integer and mask lanes, in a generic too, and the
 // `Vec[T, N]{ ... }` literal with `v[i]` on both sides of an assignment.
@@ -254,6 +254,26 @@ fn spellings() {
     if simd.reduce_add[Vec[u8, 16]](wide) != 120u8 || wide[15] != 15u8 { os.exit(106) }
 }
 
+fn twice_shuffled[V: type, IDX: [meta.array_len[V]()]u8](v: V) -> V {
+    let once = simd.shuffle[V, IDX](v, v)
+    ret simd.shuffle[V, IDX](once, once)
+}
+
+fn shuffles() {
+    let a = Vec[i32, 4]{ 10, 11, 12, 13 }
+    let b = Vec[i32, 4]{ 20, 21, 22, 23 }
+    // Lanes from both operands, `a` first.
+    let r = simd.shuffle[Vec[i32, 4], [4]u8{ 3, 0, 5, 7 }](a, b)
+    if r[0] != 13i32 || r[1] != 10i32 || r[2] != 21i32 || r[3] != 23i32 { os.exit(110) }
+    let rev = simd.shuffle[Vec[i32, 4], [_]u8{ 3u8, 2u8, 1u8, 0u8 }](a, a)
+    if rev[0] != 13i32 || rev[3] != 10i32 { os.exit(111) }
+    let f = simd.shuffle[Vec[f64, 2], [2]u8{ 1, 2 }](Vec[f64, 2]{ 1.5, 2.5 }, Vec[f64, 2]{ 3.5, 4.5 })
+    if f[0] != 2.5 || f[1] != 3.5 { os.exit(112) }
+    // The comptime array forwarded by name through another generic.
+    let t = twice_shuffled[Vec[i32, 4], [4]u8{ 1, 2, 3, 0 }](a)
+    if t[0] != 12i32 || t[3] != 11i32 { os.exit(113) }
+}
+
 fn main() {
     layout()
     moves()
@@ -263,5 +283,6 @@ fn main() {
     bit_intrinsics()
     operators()
     spellings()
+    shuffles()
     os.exit(0)
 }

@@ -2464,6 +2464,10 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                     let (text_value, text_type, text_error) = lower_comptime_text(c, g, tree, module_index, node_index, expected, argument.text, token, builder)
                     ret (text_value, text_type, text_error)
                 }
+                if has_argument && argument.kind == .Array {
+                    let (array_value, array_error) = lower_comptime_array(c, argument, token, builder)
+                    ret (array_value, argument.ty, array_error)
+                }
                 if !has_argument || argument.kind != .Integer || argument.symbolic { ret (0usize, zero, check.InvalidConstant) }
                 let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
                 if type_error != ok { ret (0usize, result_type, type_error) }
@@ -3502,6 +3506,32 @@ fn store_lane(c: *check.Checker, lane: check.Type, size: usize, base: usize, off
     if store_error != ok { ret store_error }
     try nir.add_operand(builder, store_instruction, address)
     ret nir.add_operand(builder, store_instruction, value)
+}
+
+// A comptime array in a body is the array its literal spelled, materialised in a slot:
+// one constant store per item. ponytail: a data-section constant would do, and the
+// register class will fold an index into it away; a slot is what every other array
+// literal gets today.
+fn lower_comptime_array(c: *check.Checker, argument: check.GenericArgument, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
+    let array = argument.ty
+    if array.kind != .Array || !array.has_element || array.element >= c.type_count { ret (0usize, check.InvalidType) }
+    let element = c.types[array.element]
+    let (element_info, element_info_error) = layout.type_info(c, element)
+    if element_info_error != ok { ret (0usize, element_info_error) }
+    let (stack, stack_error) = vector_slot(c, array, builder, token)
+    if stack_error != ok { ret (0usize, stack_error) }
+    var at = 0usize
+    var item = 0usize
+    while item < array.array_length {
+        let (value, has_item) = check.comptime_array_item(argument.text, &at)
+        if !has_item { ret (0usize, check.InvalidConstant) }
+        let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstInteger, element, true, value, token)
+        if constant_error != ok { ret (0usize, constant_error) }
+        let store_error = store_lane(c, element, element_info.size, stack, item * element_info.size, constant, builder, token)
+        if store_error != ok { ret (0usize, store_error) }
+        item += 1usize
+    }
+    ret (stack, ok)
 }
 
 fn lower_binding_member_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder) -> (usize, check.Type, bool, err) {

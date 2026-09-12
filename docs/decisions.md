@@ -2853,3 +2853,24 @@ defer as every other question about `V` does, and the instance settles them.
 What remains for vectors is the register class -- one instruction per operator rather
 than `N` -- the mask register-only rule, and `shuffle`, which waits on a comptime array
 parameter kind.
+## D160 — a comptime array parameter, and `shuffle` with it: `e.simd` at 28 of 28
+
+`shuffle[V, IDX: [N]u8]` was the one declaration `e.simd` lacked, because section 9's
+comptime array had no parameter kind. It has one now, made the way the comptime `str`
+was: the argument is an array literal whose items are integer literals, and what is
+bound is its spelling and the array type it wrote. Nothing decodes the spelling until a
+body reads the name, where the array is materialised as a slot of constant stores --
+`IDX[i]` is then an ordinary indexed read. Two literals that spell the same array
+differently are two instances, which costs a duplicate function and nothing else.
+
+The declared length may name an earlier argument -- the library writes
+`IDX: [meta.array_len[V]()]u8`, D148's `ArrayLen` constant -- and by the time `IDX` is
+bound `V` is, so the count is checked against the substituted length: exactly `N`
+items. A comptime array forwards by name through another generic, so a permutation can
+be passed down as a whole.
+
+`shuffle` itself is a lane loop: source lane `IDX[i]` from `a`, or from `b` when it is
+at or past `N`; an index past `2N` is the array's bounds trap. With it every surface
+name of `e.simd` is written. The module stays `partial` because the lane helpers
+(`lane_add`, `lane_min`, `lane_max`) are public declarations the fence does not list --
+the D121 rule, not a gap in the surface.
