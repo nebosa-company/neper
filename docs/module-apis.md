@@ -815,13 +815,13 @@ fn len(s: *const DisjointSet) -> usize
 fn set_count(s: *const DisjointSet) -> usize
 fn find(s: *DisjointSet, value: u32) -> u32
 fn same(s: *DisjointSet, a: u32, b: u32) -> bool
-fn union(s: *DisjointSet, a: u32, b: u32) -> bool
+fn join(s: *DisjointSet, a: u32, b: u32) -> bool
 fn reset(s: *DisjointSet)
 ```
 
 The caller supplies storage. `count` must fit `u32` and both slices. `find` performs
-path compression and `union` uses union by rank; indices outside `count` follow the
-ordinary bounds-trap rule.
+path compression and `join` uses union by rank (it is not spelled `union`: that is a
+keyword, D161); indices outside `count` follow the ordinary bounds-trap rule.
 
 ### `e.algo.stat`
 

@@ -730,6 +730,14 @@ if ($LASTEXITCODE -ne 0 -or $globalArtifactLinkWritten -ne 'artifact executable 
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $globalArtifactLinked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $globalArtifactPath).Hash) { throw 'a module-scope var links differently from artifacts than from source' }
 & $globalArtifactLinked
 if ($LASTEXITCODE -ne 0) { throw 'a module-scope var answer is wrong from artifacts' }
+# `e.data.stack` and `e.data.queue` over their storage modules, and `e.algo.disjoint_set`
+# on caller storage: order, peek, non-mutating iteration, growth, and union-find with path
+# compression and union by rank.
+$dataAdaptersPath = Join-Path $testBuild 'data-adapters-selfhost.exe'
+$dataAdaptersWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_adapters\src\main.e') $repo 'x64' 'windows' $dataAdaptersPath
+if ($LASTEXITCODE -ne 0 -or $dataAdaptersWritten -ne 'executable written') { throw 'data_adapters emission failed' }
+& $dataAdaptersPath
+if ($LASTEXITCODE -ne 0) { throw "a data adapter check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

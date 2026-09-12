@@ -2874,3 +2874,23 @@ at or past `N`; an index past `2N` is the array's bounds trap. With it every sur
 name of `e.simd` is written. The module stays `partial` because the lane helpers
 (`lane_add`, `lane_min`, `lane_max`) are public declarations the fence does not list --
 the D121 rule, not a gap in the surface.
+## D161 — `e.data.stack`, `e.data.queue` and `e.algo.disjoint_set`; `union` cannot be a function
+
+Three small modules at `surface:"source"`, each exactly its fence. The two adapters are
+what D76 asked for: a `Stack[T]` is a `list.List[T]` whose end is the top, a `Queue[T]` is
+a `deque.Deque[T]` entered at the back and left at the front, and each iterator walks its
+storage without moving it -- LIFO from the top, FIFO from the front. `e.algo.disjoint_set`
+is union-find on the caller's two slices, path compression in `find` and union by rank in
+the join, `TooLarge` when `count` does not fit a `u32` and `TooSmall` when a slice does not
+fit `count`.
+
+**The fence spelled the join `union`, and `union` is a keyword** (section 6's `union` and
+`union enum`); a declaration may carry it but no caller can spell `s.union(...)`, so the
+surface as written was uncallable. It is `join` now, in `docs/module-apis.md` and in the
+source, with the note beside it. The one-line rule for the rest of the plan: a fence name
+that is a keyword is a defect in the fence, corrected when the module is written and
+recorded here.
+
+`link/data_adapters` carries all three. Two idioms it re-taught: a two-value call is bound
+before it is returned (`ret f()` does not forward a pair), and a `main` that ends in
+`os.exit` still needs its `ret ok`.

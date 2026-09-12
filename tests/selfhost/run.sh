@@ -747,6 +747,13 @@ global_artifact_link_written=$($test_build/neper-self link-em "$test_build/globa
 chmod +x "$test_build/global-artifact-from-artifacts"
 cmp "$test_build/global-artifact-selfhost" "$test_build/global-artifact-from-artifacts"
 "$test_build/global-artifact-from-artifacts"
+# `e.data.stack` and `e.data.queue` over their storage modules, and `e.algo.disjoint_set`
+# on caller storage: order, peek, non-mutating iteration, growth, and union-find with path
+# compression and union by rank.
+data_adapters_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_adapters/src/main.e" "$repo" x64 linux "$test_build/data-adapters-selfhost")
+[ "$data_adapters_written" = 'executable written' ]
+chmod +x "$test_build/data-adapters-selfhost"
+"$test_build/data-adapters-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
