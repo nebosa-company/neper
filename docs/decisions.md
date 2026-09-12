@@ -2982,3 +2982,21 @@ One gap stays open, worked around: comparing two `*const` pointers to a generic 
 inside that instance's own generic (`right_of_up != child`) fails to lower, while the
 same comparison outside generics and over mutable pointers is fine. The iterator casts
 its `*const void` to the node's mutable pointer type and reads only.
+## D166 — `e.algo.complex`, `e.algo.linalg.matrix` and `e.algo.linalg.tensor`; assignability in lowering
+
+Three `partial` modules over `e.math` and `e.mem`. `complex` is the textbook formulas
+with the two classic guards -- a scaled modulus and Smith's division -- and the
+principal branch through `math.atan2`'s sign rules; C99 Annex G's table of infinite and
+NaN operands is not reproduced, and the header says so. `matrix` is row-major strided
+views over caller storage, so a transpose is a view and costs nothing, with Gaussian
+elimination under partial pivoting for the determinant and Gauss-Jordan on `[A | I]` for
+the inverse, both on arena scratch. `tensor` is N-dimensional strided views walked by an
+odometer over the index, `reshape` reusing storage when the view is row-major and
+copying otherwise.
+
+One lowering defect: an assignment's value was required to be *equal* to its place's
+type, where the checker had admitted *assignability* -- a `[]T` into a `[]const T`
+field, a `*T` into a `*const T` local -- so `c.data = m.data` failed to lower with an
+"invalid type" while `let d: []const T = m.data; c.data = d` did. Both assignment paths
+use `type_assignable` now. (The `*const` comparison gap D165 worked around is the same
+family, not yet fixed.)

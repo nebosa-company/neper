@@ -771,6 +771,18 @@ $dataTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $dataTreeWritten -ne 'executable written') { throw 'data_tree emission failed' }
 & $dataTreePath
 if ($LASTEXITCODE -ne 0) { throw "a tree check failed: exit $LASTEXITCODE" }
+# `e.algo.complex` against closed forms: Smith's division, the scaled modulus, both sides of the cut.
+$algoComplexPath = Join-Path $testBuild 'algo-complex-selfhost.exe'
+$algoComplexWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_complex\src\main.e') $repo 'x64' 'windows' $algoComplexPath
+if ($LASTEXITCODE -ne 0 -or $algoComplexWritten -ne 'executable written') { throw 'algo_complex emission failed' }
+& $algoComplexPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_complex check failed: exit $LASTEXITCODE" }
+# `e.algo.linalg.matrix` and `.tensor`: strided views, multiply, determinant, inverse, reshape.
+$algoLinalgPath = Join-Path $testBuild 'algo-linalg-selfhost.exe'
+$algoLinalgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_linalg\src\main.e') $repo 'x64' 'windows' $algoLinalgPath
+if ($LASTEXITCODE -ne 0 -or $algoLinalgWritten -ne 'executable written') { throw 'algo_linalg emission failed' }
+& $algoLinalgPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_linalg check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

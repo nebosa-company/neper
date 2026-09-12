@@ -782,6 +782,16 @@ data_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$data_tree_written" = 'executable written' ]
 chmod +x "$test_build/data-tree-selfhost"
 "$test_build/data-tree-selfhost"
+# `e.algo.complex` against closed forms: Smith's division, the scaled modulus, both sides of the cut.
+algo_complex_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_complex/src/main.e" "$repo" x64 linux "$test_build/algo-complex-selfhost")
+[ "$algo_complex_written" = 'executable written' ]
+chmod +x "$test_build/algo-complex-selfhost"
+"$test_build/algo-complex-selfhost"
+# `e.algo.linalg.matrix` and `.tensor`: strided views, multiply, determinant, inverse, reshape.
+algo_linalg_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_linalg/src/main.e" "$repo" x64 linux "$test_build/algo-linalg-selfhost")
+[ "$algo_linalg_written" = 'executable written' ]
+chmod +x "$test_build/algo-linalg-selfhost"
+"$test_build/algo-linalg-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
