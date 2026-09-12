@@ -124,7 +124,7 @@ selection, and direct binary emission. The main files are:
   `emit_x64.e`;
 - object formats: `object_elf.e`, `object_coff.e`;
 - native linkers: `link_elf.e`, `link_pe.e`;
-- runtime payloads: `runtime_elf_x64_ext.e`, `runtime_pe_x64.e`, and their source
+- runtime payloads: `runtime_elf_x64.e`, `runtime_pe_x64.e`, and their source
   assembly files.
 
 Implemented behavior includes:
@@ -253,7 +253,7 @@ For quick navigation in a new session:
 | ELF/PE linking | `src/link_elf.e`, `src/link_pe.e` |
 | `.em` artifacts | `src/artifact_hash.e`, `src/binary.e`, `src/em.e`, `src/em_link.e` |
 | Error identity | `src/error_table.e` |
-| Embedded runtimes | `src/runtime_elf_x64_ext.*`, `src/runtime_pe_x64.*` |
+| Embedded runtimes | `src/runtime_elf_x64.*`, `src/runtime_pe_x64.*` |
 | C bootstrap | `bootstrap/neper.c`, `bootstrap/runtime.c` |
 
 ## 5. Tests and useful commands
@@ -937,7 +937,7 @@ pattern `neper_mem_*` and `neper_os_*` already follow, it needs no module-graph
 machinery, and one implementation serves every shape.
 
 `neper_hash_bytes(ptr, len) -> u64` is therefore in all three runtimes: C in
-`bootstrap/runtime.c`, GNU-as Intel syntax in `runtime_elf_x64_ext.s`, MASM in
+`bootstrap/runtime.c`, GNU-as Intel syntax in `runtime_elf_x64.s`, MASM in
 `runtime_pe_x64.asm`. Both assemblers take Intel syntax, so the instruction text is
 one body differing only in directives, label prefixes and the ABI move that puts
 the two arguments in `r8` and `r9`. The C form was written first and checked
@@ -1086,7 +1086,7 @@ build/linux/      cc output:   neper, neper-self, lib/, tests/
 This replaced the earlier sibling `build/` and `build-linux/` directories on
 2026-09-06. `.gitignore` now needs the single entry `/build/`. The paths are named
 in `scripts/build-bootstrap.{ps1,sh}`, `scripts/build-selfhost.{ps1,sh}`,
-`scripts/embed-pe-runtime.ps1`, `scripts/embed-elf-runtime-ext.ps1`, the three
+`scripts/embed-pe-runtime.ps1`, `scripts/embed-elf-runtime.ps1`, the three
 `tests/*/run.ps1` and the three `tests/*/run.sh`, and in `README.md`. Both halves
 are fully regenerable -- `scripts/build-selfhost.ps1` rebuilds the Windows chain
 from `bootstrap/neper.c` and `src/` (it needs MSVC via `NEPER_VSDEVCMD` or

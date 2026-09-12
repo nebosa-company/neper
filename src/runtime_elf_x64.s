@@ -1,36 +1,313 @@
 .intel_syntax noprefix
 .text
 
+# The x86-64 Linux runtime: raw system calls, no libc. One file, embedded whole into
+# `runtime_elf_x64.e` by scripts/embed-elf-runtime.ps1.
+#
 # Order matters: the linker appends this runtime as a prefix, cut after the last function
-# the program reaches (D150), so the shared helper comes first and the functions follow
+# the program reaches (D150), so the two shared helpers come first and the functions follow
 # from the ones nearly every program needs to the ones few do. A function may call only
 # what precedes it here.
+#
+# The first fourteen -- `np_error` through `neper_os_readdir` -- had lost their source and
+# lived as bytes in link_elf.e until D151; they were recovered from those bytes and reassemble
+# to them exactly, which is why their spelling differs from the rest.
 
-.Lext_alloc:
-    test rdi, rdi
-    jz .Lalloc_fail
-    test rdx, rdx
-    jz .Lalloc_fail
-    lea rcx, [rdx - 1]
-    test rcx, rdx
-    jnz .Lalloc_fail
-    mov rax, qword ptr [rdi + 16]
-    add rcx, rax
-    jc .Lalloc_fail
-    neg rdx
-    and rcx, rdx
-    mov r8, qword ptr [rdi + 8]
-    sub r8, rcx
-    jc .Lalloc_fail
-    cmp rsi, r8
-    ja .Lalloc_fail
-    lea rax, [rcx + rsi]
-    mov qword ptr [rdi + 16], rax
-    mov rax, qword ptr [rdi]
-    add rax, rcx
+# errno to the `e.os` error code: rax gets the code for the errno in edi, with the
+# generic code for anything unlisted.
+
+np_error:
+    mov eax,0x6f777ebf
+    cmp edi,0x2
+    je .Lerror_1
+    cmp edi,0x14
+    je .Lerror_1
+    cmp edi,0xd
+    je .Lerror_2
+    cmp edi,0x1
+    je .Lerror_2
+    cmp edi,0x11
+    je .Lerror_3
+    cmp edi,0x4
+    je .Lerror_4
+    cmp edi,0xc
+    je .Lerror_5
+    cmp edi,0x6e
+    je .Lerror_6
+    cmp edi,0xb
+    je .Lerror_7
+    cmp edi,0x26
+    je .Lerror_8
+    cmp edi,0x5f
+    je .Lerror_8
     ret
-.Lalloc_fail:
-    xor eax, eax
+.Lerror_1:
+    mov eax,0x7683e2cd
+    ret
+.Lerror_2:
+    mov eax,0xb0cb971d
+    ret
+.Lerror_3:
+    mov eax,0x197f5566
+    ret
+.Lerror_4:
+    mov eax,0xb66d7668
+    ret
+.Lerror_5:
+    mov eax,0x6979aadc
+    ret
+.Lerror_6:
+    mov eax,0x52812f09
+    ret
+.Lerror_7:
+    mov eax,0xa18174bc
+    ret
+.Lerror_8:
+    mov eax,0x2f8bb651
+    ret
+
+np_alloc:
+    test rdi,rdi
+    je .Lalloc_1
+    test rdx,rdx
+    je .Lalloc_1
+    lea rcx,[rdx-0x1]
+    test rdx,rcx
+    jne .Lalloc_1
+    mov rax,QWORD PTR [rdi+0x10]
+    mov r8,rax
+    add r8,rcx
+    jb .Lalloc_1
+    neg rdx
+    and r8,rdx
+    mov r9,QWORD PTR [rdi+0x8]
+    cmp r8,r9
+    ja .Lalloc_1
+    sub r9,r8
+    cmp rsi,r9
+    ja .Lalloc_1
+    lea rcx,[r8+rsi*1]
+    mov QWORD PTR [rdi+0x10],rcx
+    mov rax,QWORD PTR [rdi]
+    test rax,rax
+    je .Lalloc_1
+    add rax,r8
+    ret
+.Lalloc_1:
+    xor eax,eax
+    ret
+
+.global neper_mem_alloc
+neper_mem_alloc:
+    push r12
+    push r13
+    push r14
+    mov r12,rdi
+    mov r13,rsi
+    mov r14,rdx
+    mov QWORD PTR [r12],0x0
+    mov QWORD PTR [r12+0x8],0x0
+    mov DWORD PTR [r12+0x10],0x0
+    mov rax,r14
+    mul rcx
+    test rdx,rdx
+    jne .Lmem_alloc_1
+    mov rsi,rax
+    mov rdi,r13
+    mov rdx,r8
+    call np_alloc
+    test rax,rax
+    je .Lmem_alloc_1
+    mov QWORD PTR [r12],rax
+    mov QWORD PTR [r12+0x8],r14
+    jmp .Lmem_alloc_2
+.Lmem_alloc_1:
+    mov DWORD PTR [r12+0x10],0x8f63623a
+.Lmem_alloc_2:
+    pop r14
+    pop r13
+    pop r12
+    ret
+
+.global neper_mem_mark
+neper_mem_mark:
+    mov rax,QWORD PTR [rdi+0x10]
+    ret
+
+.global neper_mem_reset
+neper_mem_reset:
+    mov QWORD PTR [rdi+0x10],rsi
+    ret
+
+.global neper_mem_stats
+neper_mem_stats:
+    mov rax,QWORD PTR [rsi+0x10]
+    mov QWORD PTR [rdi],rax
+    mov rax,QWORD PTR [rsi+0x8]
+    mov QWORD PTR [rdi+0x8],rax
+    ret
+
+.global neper_os_stdout
+neper_os_stdout:
+    mov QWORD PTR [rdi],0x1
+    ret
+
+.global neper_os_stderr
+neper_os_stderr:
+    mov QWORD PTR [rdi],0x2
+    ret
+
+.global neper_os_exit
+neper_os_exit:
+    mov eax,0x3c
+    syscall
+    ud2
+
+.global neper_os_write
+neper_os_write:
+    push rbx
+    mov rdx,QWORD PTR [rsi+0x8]
+    mov rsi,QWORD PTR [rsi]
+    mov rdi,QWORD PTR [rdi]
+    mov eax,0x1
+    syscall
+    test rax,rax
+    js .Los_write_1
+    xor edx,edx
+    pop rbx
+    ret
+.Los_write_1:
+    neg eax
+    mov edi,eax
+    call np_error
+    mov edx,eax
+    xor eax,eax
+    pop rbx
+    ret
+
+.global neper_os_read
+neper_os_read:
+    push rbx
+    mov rdx,QWORD PTR [rsi+0x8]
+    mov rsi,QWORD PTR [rsi]
+    mov rdi,QWORD PTR [rdi]
+    xor eax,eax
+    syscall
+    test rax,rax
+    js .Los_read_1
+    xor edx,edx
+    pop rbx
+    ret
+.Los_read_1:
+    neg eax
+    mov edi,eax
+    call np_error
+    mov edx,eax
+    xor eax,eax
+    pop rbx
+    ret
+
+.global neper_os_close
+neper_os_close:
+    push rbx
+    mov rdi,QWORD PTR [rdi]
+    mov eax,0x3
+    syscall
+    test rax,rax
+    js .Los_close_1
+    xor eax,eax
+    pop rbx
+    ret
+.Los_close_1:
+    neg eax
+    mov edi,eax
+    call np_error
+    pop rbx
+    ret
+
+.global neper_os_open
+neper_os_open:
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp,0x8
+    mov r12,rdi
+    mov r13,rsi
+    mov r14,rdx
+    mov r15,rcx
+    mov QWORD PTR [r12],0x0
+    mov DWORD PTR [r12+0x8],0x0
+    mov rax,QWORD PTR [r13+0x10]
+    mov QWORD PTR [rsp],rax
+    mov rsi,QWORD PTR [r14+0x8]
+    inc rsi
+    je .Los_open_7
+    mov rdi,r13
+    mov edx,0x1
+    call np_alloc
+    test rax,rax
+    je .Los_open_7
+    mov r8,rax
+    mov rcx,QWORD PTR [r14+0x8]
+    mov rsi,QWORD PTR [r14]
+    mov rdi,r8
+    rep movs BYTE PTR es:[rdi],BYTE PTR ds:[rsi]
+    mov BYTE PTR [rdi],0x0
+    xor edx,edx
+    mov al,BYTE PTR [r15]
+    test al,al
+    je .Los_open_1
+    mov al,BYTE PTR [r15+0x1]
+    test al,al
+    je .Los_open_1
+    mov edx,0x2
+    jmp .Los_open_2
+.Los_open_1:
+    mov al,BYTE PTR [r15+0x1]
+    test al,al
+    je .Los_open_2
+    mov edx,0x1
+.Los_open_2:
+    cmp BYTE PTR [r15+0x2],0x0
+    je .Los_open_3
+    or edx,0x40
+.Los_open_3:
+    cmp BYTE PTR [r15+0x3],0x0
+    je .Los_open_4
+    or edx,0x200
+.Los_open_4:
+    cmp BYTE PTR [r15+0x4],0x0
+    je .Los_open_5
+    or edx,0x400
+.Los_open_5:
+    mov eax,0x101
+    mov edi,0xffffff9c
+    mov rsi,r8
+    mov r10d,0x1b6
+    syscall
+    mov r9,QWORD PTR [rsp]
+    mov QWORD PTR [r13+0x10],r9
+    test rax,rax
+    js .Los_open_6
+    mov QWORD PTR [r12],rax
+    jmp .Los_open_8
+.Los_open_6:
+    neg eax
+    mov edi,eax
+    call np_error
+    mov DWORD PTR [r12+0x8],eax
+    jmp .Los_open_8
+.Los_open_7:
+    mov r9,QWORD PTR [rsp]
+    mov QWORD PTR [r13+0x10],r9
+    mov DWORD PTR [r12+0x8],0x6979aadc
+.Los_open_8:
+    add rsp,0x8
+    pop r15
+    pop r14
+    pop r13
+    pop r12
     ret
 
 .global neper_os_args
@@ -57,7 +334,7 @@ neper_os_args:
     shl rsi, 4
     mov rdi, rbx
     mov edx, 8
-    call .Lext_alloc
+    call np_alloc
     test rax, rax
     jz .Largs_oom
     mov qword ptr [rsp + 8], rax
@@ -73,7 +350,7 @@ neper_os_args:
     mov edx, 1
     push r10
     push r11
-    call .Lext_alloc
+    call np_alloc
     pop r11
     pop r10
     test rax, rax
@@ -212,6 +489,192 @@ neper_os_seek:
 // value's canonical little-endian bytes. This must agree bit for bit with
 // algo.hash.xxhash64 and with neper_hash_bytes in bootstrap/runtime.c; a fixture
 // asserts all three agree on both platforms.
+
+.global neper_os_readdir
+neper_os_readdir:
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp,0x1040
+    mov r12,rdi
+    mov r13,rsi
+    mov r14,rdx
+    mov r15,QWORD PTR [r13+0x10]
+    mov QWORD PTR [r12],0x0
+    mov QWORD PTR [r12+0x8],0x0
+    mov DWORD PTR [r12+0x10],0x0
+    mov rsi,QWORD PTR [r14+0x8]
+    inc rsi
+    je .Los_readdir_15
+    mov rdi,r13
+    mov edx,0x1
+    call np_alloc
+    test rax,rax
+    je .Los_readdir_15
+    mov r8,rax
+    mov rcx,QWORD PTR [r14+0x8]
+    mov rsi,QWORD PTR [r14]
+    mov rdi,r8
+    rep movs BYTE PTR es:[rdi],BYTE PTR ds:[rsi]
+    mov BYTE PTR [rdi],0x0
+    mov eax,0x101
+    mov edi,0xffffff9c
+    mov rsi,r8
+    mov edx,0x90000
+    xor r10d,r10d
+    syscall
+    mov QWORD PTR [r13+0x10],r15
+    test rax,rax
+    js .Los_readdir_12
+    mov rbx,rax
+    mov rdi,r13
+    mov esi,0x180
+    mov edx,0x8
+    call np_alloc
+    test rax,rax
+    je .Los_readdir_14
+    mov QWORD PTR [rsp+0x1000],rax
+    mov QWORD PTR [rsp+0x1008],0x0
+    mov QWORD PTR [rsp+0x1010],0x10
+.Los_readdir_1:
+    mov eax,0xd9
+    mov rdi,rbx
+    mov rsi,rsp
+    mov edx,0x1000
+    syscall
+    test rax,rax
+    js .Los_readdir_13
+    je .Los_readdir_11
+    mov QWORD PTR [rsp+0x1018],rax
+    xor r8d,r8d
+.Los_readdir_2:
+    cmp r8,QWORD PTR [rsp+0x1018]
+    jae .Los_readdir_1
+    lea r10,[rsp+r8*1]
+    movzx r11d,WORD PTR [r10+0x10]
+    lea rsi,[r10+0x13]
+    cmp BYTE PTR [rsi],0x2e
+    jne .Los_readdir_3
+    cmp BYTE PTR [rsi+0x1],0x0
+    je .Los_readdir_10
+    cmp BYTE PTR [rsi+0x1],0x2e
+    jne .Los_readdir_3
+    cmp BYTE PTR [rsi+0x2],0x0
+    je .Los_readdir_10
+.Los_readdir_3:
+    xor ecx,ecx
+.Los_readdir_4:
+    cmp BYTE PTR [rsi+rcx*1],0x0
+    je .Los_readdir_5
+    inc rcx
+    jmp .Los_readdir_4
+.Los_readdir_5:
+    mov QWORD PTR [rsp+0x1020],r8
+    mov QWORD PTR [rsp+0x1028],r11
+    mov QWORD PTR [rsp+0x1030],rcx
+    mov rax,QWORD PTR [rsp+0x1008]
+    cmp rax,QWORD PTR [rsp+0x1010]
+    jne .Los_readdir_6
+    mov rdx,QWORD PTR [rsp+0x1010]
+    shl rdx,1
+    mov QWORD PTR [rsp+0x1010],rdx
+    imul rsi,rdx,0x18
+    mov rdi,r13
+    mov edx,0x8
+    call np_alloc
+    test rax,rax
+    je .Los_readdir_14
+    mov rdi,rax
+    mov rsi,QWORD PTR [rsp+0x1000]
+    mov rcx,QWORD PTR [rsp+0x1008]
+    imul rcx,rcx,0x18
+    rep movs BYTE PTR es:[rdi],BYTE PTR ds:[rsi]
+    mov QWORD PTR [rsp+0x1000],rax
+.Los_readdir_6:
+    mov rdi,r13
+    mov rsi,QWORD PTR [rsp+0x1030]
+    mov edx,0x1
+    call np_alloc
+    test rax,rax
+    je .Los_readdir_14
+    mov rdi,rax
+    mov r8,QWORD PTR [rsp+0x1020]
+    lea rsi,[rsp+r8*1+0x13]
+    mov rcx,QWORD PTR [rsp+0x1030]
+    rep movs BYTE PTR es:[rdi],BYTE PTR ds:[rsi]
+    mov rdx,QWORD PTR [rsp+0x1008]
+    imul rdx,rdx,0x18
+    add rdx,QWORD PTR [rsp+0x1000]
+    mov QWORD PTR [rdx],rax
+    mov rcx,QWORD PTR [rsp+0x1030]
+    mov QWORD PTR [rdx+0x8],rcx
+    mov r8,QWORD PTR [rsp+0x1020]
+    mov al,BYTE PTR [rsp+r8*1+0x12]
+    mov BYTE PTR [rdx+0x10],0x3
+    cmp al,0x8
+    jne .Los_readdir_7
+    mov BYTE PTR [rdx+0x10],0x0
+    jmp .Los_readdir_9
+.Los_readdir_7:
+    cmp al,0x4
+    jne .Los_readdir_8
+    mov BYTE PTR [rdx+0x10],0x1
+    jmp .Los_readdir_9
+.Los_readdir_8:
+    cmp al,0xa
+    jne .Los_readdir_9
+    mov BYTE PTR [rdx+0x10],0x2
+.Los_readdir_9:
+    inc QWORD PTR [rsp+0x1008]
+    mov r8,QWORD PTR [rsp+0x1020]
+    add r8,QWORD PTR [rsp+0x1028]
+    jmp .Los_readdir_2
+.Los_readdir_10:
+    add r8,r11
+    jmp .Los_readdir_2
+.Los_readdir_11:
+    mov eax,0x3
+    mov rdi,rbx
+    syscall
+    mov rax,QWORD PTR [rsp+0x1000]
+    mov QWORD PTR [r12],rax
+    mov rax,QWORD PTR [rsp+0x1008]
+    mov QWORD PTR [r12+0x8],rax
+    jmp .Los_readdir_16
+.Los_readdir_12:
+    neg eax
+    mov edi,eax
+    call np_error
+    mov DWORD PTR [r12+0x10],eax
+    jmp .Los_readdir_16
+.Los_readdir_13:
+    neg eax
+    mov edi,eax
+    call np_error
+    mov DWORD PTR [r12+0x10],eax
+    mov eax,0x3
+    mov rdi,rbx
+    syscall
+    mov QWORD PTR [r13+0x10],r15
+    jmp .Los_readdir_16
+.Los_readdir_14:
+    mov eax,0x3
+    mov rdi,rbx
+    syscall
+.Los_readdir_15:
+    mov QWORD PTR [r13+0x10],r15
+    mov DWORD PTR [r12+0x10],0x6979aadc
+.Los_readdir_16:
+    add rsp,0x1040
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
 .global neper_hash_bytes
 neper_hash_bytes:
     mov r8, rdi
@@ -588,7 +1051,7 @@ neper_os_spawn:
     shl rsi, 3
     mov rdi, r13
     mov edx, 8
-    call .Lext_alloc
+    call np_alloc
     test rax, rax
     jz .Lspawn_oom
     mov qword ptr [rsp + 8], rax
@@ -605,7 +1068,7 @@ neper_os_spawn:
     mov edx, 1
     push r10
     push r11
-    call .Lext_alloc
+    call np_alloc
     pop r11
     pop r10
     test rax, rax

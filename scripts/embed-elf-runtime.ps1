@@ -1,8 +1,8 @@
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
-$source = Join-Path $repo 'src\runtime_elf_x64_ext.s'
-$output = Join-Path $repo 'src\runtime_elf_x64_ext.e'
+$source = Join-Path $repo 'src\runtime_elf_x64.s'
+$output = Join-Path $repo 'src\runtime_elf_x64.e'
 $build = Join-Path $repo 'build\windows\runtime-embed'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
@@ -12,21 +12,21 @@ function Convert-ToWslPath([string]$Path) {
     return '/mnt/' + $drive + $full.Substring(2).Replace('\', '/')
 }
 
-$object = Join-Path $build 'runtime_elf_x64_ext.o'
-$binary = Join-Path $build 'runtime_elf_x64_ext.bin'
+$object = Join-Path $build 'runtime_elf_x64.o'
+$binary = Join-Path $build 'runtime_elf_x64.bin'
 $sourceWsl = Convert-ToWslPath $source
 $objectWsl = Convert-ToWslPath $object
 $binaryWsl = Convert-ToWslPath $binary
 & wsl -d Ubuntu-24.04 -- as --64 $sourceWsl -o $objectWsl
-if ($LASTEXITCODE -ne 0) { throw 'assembling the ELF runtime extension failed' }
+if ($LASTEXITCODE -ne 0) { throw 'assembling the ELF runtime failed' }
 & wsl -d Ubuntu-24.04 -- objcopy -O binary --only-section=.text $objectWsl $binaryWsl
-if ($LASTEXITCODE -ne 0) { throw 'extracting the ELF runtime extension failed' }
+if ($LASTEXITCODE -ne 0) { throw 'extracting the ELF runtime failed' }
 $symbols = & wsl -d Ubuntu-24.04 -- nm -n --defined-only $objectWsl
 if ($LASTEXITCODE -ne 0) { throw 'reading ELF runtime symbols failed' }
 
 $bytes = [IO.File]::ReadAllBytes($binary)
 $builder = [Text.StringBuilder]::new()
-[void]$builder.AppendLine('// Generated x86-64 Linux syscall runtime extension. Source: runtime_elf_x64_ext.s.')
+[void]$builder.AppendLine('// Generated x86-64 Linux syscall runtime. Source: runtime_elf_x64.s.')
 [void]$builder.AppendLine()
 [void]$builder.AppendLine('use check')
 [void]$builder.AppendLine('use emit_x64')
