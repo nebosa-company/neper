@@ -2761,3 +2761,35 @@ hand is a standing test.
 
 What remains is linear scans with no CRC in them -- `resolve_calls` and the module-slice lookup
 -- which the source path pays too and which no measurement yet calls for indexing.
+## D156 — the artifact linker keeps every reachable function, so D130 holds universally
+
+D155 left one fixture, `link/os_process`, whose artifact-linked image was 792 bytes smaller than
+its source build and not byte-identical to it -- the one violation of D130 ("an image linked from
+`.em` artifacts is byte-for-byte the image compiled from source"). A controlled bisection settled
+it: every feature in isolation (`page_size`, `file_handle`, a `wait_u32` on an atomic, `spawn`,
+`pipe`, `spawn_with_options`, the `args`-reading child logic) linked identically both ways; the
+divergence needed a program with two functions that compile to the same bytes. The minimal
+reproduction is two functions with identical bodies, both reached: source keeps both, the artifact
+image had one.
+
+The cause was the artifact linker alone folding functions by content hash -- D36's "the same
+concrete instance arrives from several artifacts, share one copy." The whole-program path
+(`link_elf`/`link_pe` straight off codegen) folds nothing: it emits every reachable function, a
+duplicate instance once per module. So the fold made an artifact image smaller than the source
+build whenever two kept functions shared a content hash -- a duplicate cross-module instance, or
+two distinct functions that happen to compile alike. Every determinism fixture passed only because
+none of them had such a duplicate; `os_process`, reaching `e.os`, `e.atomic` and `e.mem` at once,
+did.
+
+D36's fold and D130's identity are in tension, and only the artifact path had the fold, so the
+fold was the anomaly: the canonical output is the source build, which shares nothing. The fold is
+removed. Both paths now emit every reachable function, a duplicate instance once per module, the
+same bytes on both. Measured with it gone: `os_process` 59,024 on both, and `element_cmp`,
+`function_values`, `supplied_hash`, `folded_hash`, `generic` and `generic_folding` all
+byte-identical source-to-artifact on both hosts. `generic_folding` now asserts that identity where
+it only checked the link succeeded before, so the gap that hid this cannot reopen unnoticed.
+
+The cost is that a program with a duplicate cross-module instance carries it once per module in
+both builds rather than once overall -- the size the source build always had. Sharing one copy is
+still worth doing; it just has to be done on both paths to keep D130, which is a symmetric
+optimisation for another day, not a divergence in the linker that has it.

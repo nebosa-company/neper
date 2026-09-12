@@ -1138,6 +1138,8 @@ folded_written=$($test_build/neper-self link-em "$folded_executable" "$folding_a
 [ "$folded_written" = 'artifact executable written' ]
 chmod +x "$folded_executable"
 "$folded_executable"
+# A shared instance links byte-for-byte the same from artifacts as from source (D156).
+cmp "$folded_executable" "$folding_direct"
 bitwise_executable_path="$test_build/bitwise-selfhost"
 bitwise_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/bitwise/src/main.e" "$repo" x64 linux "$bitwise_executable_path")
 [ "$bitwise_executable_written" = 'executable written' ]

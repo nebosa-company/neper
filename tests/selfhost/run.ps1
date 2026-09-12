@@ -1162,6 +1162,10 @@ $foldedWritten = & $compiler link-em $foldedExecutable (Join-Path $foldingArtifa
 if ($LASTEXITCODE -ne 0 -or $foldedWritten -ne 'artifact executable written') { throw 'compiled modules with a shared instance did not link' }
 & $foldedExecutable
 if ($LASTEXITCODE -ne 0) { throw 'executable linked from folded compiled modules failed' }
+# A shared instance is emitted once per module, so an artifact link keeps two identical copies
+# where the whole-program build keeps two as well: the two must match byte for byte, the property
+# D156 restored by not sharing one copy in the artifact linker alone.
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $foldedExecutable).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $foldingDirect).Hash) { throw 'a shared generic instance links differently from artifacts than from source' }
 $bitwiseExecutablePath = Join-Path $testBuild 'bitwise-selfhost.exe'
 $bitwiseExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\bitwise\src\main.e') $repo 'x64' 'windows' $bitwiseExecutablePath
 if ($LASTEXITCODE -ne 0 -or $bitwiseExecutableWritten -ne 'executable written') { throw 'bitwise PE executable emission failed' }
