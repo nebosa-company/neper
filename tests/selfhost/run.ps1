@@ -795,6 +795,18 @@ $algoBignumWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $algoBignumWritten -ne 'executable written') { throw 'algo_bignum emission failed' }
 & $algoBignumPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_bignum check failed: exit $LASTEXITCODE" }
+# `e.fmt.uri`: RFC 3986 parsing, the section 5.4 resolution examples, normalisation, escapes.
+$fmtUriPath = Join-Path $testBuild 'fmt-uri-selfhost.exe'
+$fmtUriWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_uri\src\main.e') $repo 'x64' 'windows' $fmtUriPath
+if ($LASTEXITCODE -ne 0 -or $fmtUriWritten -ne 'executable written') { throw 'fmt_uri emission failed' }
+& $fmtUriPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_uri check failed: exit $LASTEXITCODE" }
+# `e.algo.decimal`: exact arithmetic over a 128-bit coefficient, every rounding mode, the edges.
+$algoDecimalPath = Join-Path $testBuild 'algo-decimal-selfhost.exe'
+$algoDecimalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_decimal\src\main.e') $repo 'x64' 'windows' $algoDecimalPath
+if ($LASTEXITCODE -ne 0 -or $algoDecimalWritten -ne 'executable written') { throw 'algo_decimal emission failed' }
+& $algoDecimalPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_decimal check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

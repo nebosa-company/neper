@@ -802,6 +802,16 @@ algo_bignum_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$algo_bignum_written" = 'executable written' ]
 chmod +x "$test_build/algo-bignum-selfhost"
 "$test_build/algo-bignum-selfhost"
+# `e.fmt.uri`: RFC 3986 parsing, the section 5.4 resolution examples, normalisation, escapes.
+fmt_uri_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_uri/src/main.e" "$repo" x64 linux "$test_build/fmt-uri-selfhost")
+[ "$fmt_uri_written" = 'executable written' ]
+chmod +x "$test_build/fmt-uri-selfhost"
+"$test_build/fmt-uri-selfhost"
+# `e.algo.decimal`: exact arithmetic over a 128-bit coefficient, every rounding mode, the edges.
+algo_decimal_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_decimal/src/main.e" "$repo" x64 linux "$test_build/algo-decimal-selfhost")
+[ "$algo_decimal_written" = 'executable written' ]
+chmod +x "$test_build/algo-decimal-selfhost"
+"$test_build/algo-decimal-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

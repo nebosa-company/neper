@@ -3017,3 +3017,19 @@ nothing, because a `str.Builder` holds the top of its arena and a scratch taken 
 the same arena would land on top of it: the scratch is on the stack, which caps a
 formatted value at 1024 limbs (about 9864 decimal digits) and says `Invalid` past
 that. A rational is kept in lowest terms with a positive denominator.
+## D168 — `e.fmt.uri` and `e.algo.decimal`
+
+`e.fmt.uri` is RFC 3986: a parse that borrows every part from its source and checks
+each percent for its two hex digits; section 5.2's reference resolution with 5.2.4's
+dot-segment removal, checked against the section 5.4 examples; the normalisations that
+keep the meaning -- lower-case scheme and host, upper-case hex, unreserved characters
+unescaped, the authority rebuilt from its parts; and per-component percent-encoding.
+`+` is never a space, as the fence says.
+
+`e.algo.decimal` is a signed 128-bit coefficient and a scale, sign-magnitude inside over
+two limbs, two's-complement `(low, high)` at the surface. `add`, `sub` and `mul` are
+exact or `Overflow`; `div` computes one guard digit past the requested scale and folds
+the division remainder into a sticky digit, then `quantize` rounds once under the mode,
+so a tie is seen as a tie only when nothing below it is nonzero. `Inexact` is declared
+by the surface and never returned: every operation that could be inexact carries a
+rounding mode, and the header says so rather than inventing a case for it.
