@@ -1,0 +1,94 @@
+// `e.crypto.x509`: an Ed25519 chain built by Python's cryptography package
+// (reference.py beside this fixture) -- names rendered, validity, DNS names and the
+// CA bit read; the root and intermediate taken from one PEM text; `verify_signature`
+// accepting the real issuer and refusing another; `verify` building the two-link
+// chain with a matching name, a wildcard, a bare `Any` usage, and refusing a wrong
+// name, a client-auth use, an expired leaf, a leaf from an unknown CA, a missing
+// intermediate and a depth of one. Every check has its own exit code.
+use e.os
+use e.mem
+use e.str
+use e.time
+use e.crypto.x509 as x509
+
+fn options(roots: []const x509.Certificate, intermediates: []const x509.Certificate, dns_name: str, usage: x509.KeyUsage, depth: u16) -> x509.VerifyOptions {
+    var o: x509.VerifyOptions = zero
+    o.roots = x509.Pool { certificates: roots }
+    o.intermediates = x509.Pool { certificates: intermediates }
+    o.dns_name = dns_name
+    o.now = time.Instant { nanos: 1780272000i64 * 1000000000i64 }
+    o.usage = usage
+    o.max_depth = depth
+    ret o
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let root_der = "0\x82\x01\x0b0\x81\xbe\xa0\x03\x02\x01\x02\x02\x01\x010\x05\x06\x03+ep0%1\x130\x11\x06\x03U\x04\x03\x0c\x0aNeper Root1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0%1\x130\x11\x06\x03U\x04\x03\x0c\x0aNeper Root1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0*0\x05\x06\x03+ep\x03!\x00\x8a\x88\xe3\xddt\x09\xf1\x95\xfdR\xdb-<\xba]r\xcag\x09\xbf\x1d\x94\x12\x1b\xf3t\x88\x01\xb4\x0fo\x5c\xa3\x130\x110\x0f\x06\x03U\x1d\x13\x01\x01\xff\x04\x050\x03\x01\x01\xff0\x05\x06\x03+ep\x03A\x00<\xef\xca\x80\x97\x1d(\xb5g\xf8\x05c0\x8a\x9d~\xa8O\xf9%\xee\xe5\xa8L)0\xfe[6i\xf5\xdaX\xb2$Dz\x91\xcde\xa7\xdc\x08\x86x\x8d\xab\x05\xc4(\x97\x1a\x1b\xeemtb\xa2g\x98\x9b\xb4\xfa\x0e"
+    let mid_der = "0\x82\x01\x130\x81\xc6\xa0\x03\x02\x01\x02\x02\x01\x020\x05\x06\x03+ep0%1\x130\x11\x06\x03U\x04\x03\x0c\x0aNeper Root1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0*0\x05\x06\x03+ep\x03!\x00\x819w\x0e\xa8}\x17_V\xa3Tf\xc3L~\xcc\xcb\x8d\x8a\x91\xb4\xee7\xa2]\xf6\x0f[\x8f\xc9\xb3\x94\xa3\x130\x110\x0f\x06\x03U\x1d\x13\x01\x01\xff\x04\x050\x03\x01\x01\xff0\x05\x06\x03+ep\x03A\x00R^\x187\xb39[\xa4N\xc4\x83\x10\xde\xfc\x7f\xa0\xbfF[\xa8^\x04S\xa1\xb2\xf8\xbcM\xc7\xfb\xf1t\x89\xa0\x0e\x07\xcc\xbf\x8f6R\x16\x15\xab\x99\x0e\xdd\xc1,\x8d\x8f*\xd4\xaf\x97\xaae\x8b\xab\xe5\x0d\x8e'\x08"
+    let leaf_der = "0\x82\x01=0\x81\xf0\xa0\x03\x02\x01\x02\x02\x01\x030\x05\x06\x03+ep0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0\x161\x140\x12\x06\x03U\x04\x03\x0c\x0bexample.com0*0\x05\x06\x03+ep\x03!\x00\xedI(\xc6(\xd1\xc2\xc6\xea\xe9\x038\x90Y\x95a)Y':\x5cc\xf966\xc1F\x14\xac\x877\xd1\xa3L0J0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000%\x06\x03U\x1d\x11\x04\x1e0\x1c\x82\x0bexample.com\x82\x0d*.example.org0\x13\x06\x03U\x1d%\x04\x0c0\x0a\x06\x08+\x06\x01\x05\x05\x07\x03\x010\x05\x06\x03+ep\x03A\x00\x84Pf\xea\x11\xb7\xdb-w\xdf\xd2\xa8\xden\xd3\xbey|r`B'h\xfc\x22\x08\xca\x8e%u\xa8\xa7)\xd3\xb3\x15Tc\xc8\x10\xa0\x97\x84C\xaaU4\xf0>\x00\x0f\xfau\xe7\xaa\xb9\xae\x9e\x9br\xe8Bv\x09"
+    let plain_der = "0\x81\xfb0\x81\xae\xa0\x03\x02\x01\x02\x02\x01\x040\x05\x06\x03+ep0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0\x101\x0e0\x0c\x06\x03U\x04\x03\x0c\x05plain0*0\x05\x06\x03+ep\x03!\x00\xedI(\xc6(\xd1\xc2\xc6\xea\xe9\x038\x90Y\x95a)Y':\x5cc\xf966\xc1F\x14\xac\x877\xd1\xa3\x100\x0e0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x05\x06\x03+ep\x03A\x00\xc4^\xd7&\xa9\x86\xb5o\xe7\xdf\x1e8\xd8\xd3\x03\xe2\xd5\xdfV\x19\x8e\xe1N\xc7\xcf\xdd\x0bL\xb1\xe6U\xcb\x1cg\x15\xbf\xd1\x1aPK\xd5\xc7\x9a\x92\xd4&P'!j\xca\xb6\xf6\xa4\xbbykRA\xbbC\xf0\xd0\x0e"
+    let expired_der = "0\x82\x01!0\x81\xd4\xa0\x03\x02\x01\x02\x02\x01\x050\x05\x06\x03+ep0-1\x1b0\x19\x06\x03U\x04\x03\x0c\x12Neper Intermediate1\x0e0\x0c\x06\x03U\x04\x0a\x0c\x05Neper0\x1e\x17\x0d200101000000Z\x17\x0d210101000000Z0\x1a1\x180\x16\x06\x03U\x04\x03\x0c\x0fold.example.com0*0\x05\x06\x03+ep\x03!\x00\xedI(\xc6(\xd1\xc2\xc6\xea\xe9\x038\x90Y\x95a)Y':\x5cc\xf966\xc1F\x14\xac\x877\xd1\xa3,0*0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x1a\x06\x03U\x1d\x11\x04\x130\x11\x82\x0fold.example.com0\x05\x06\x03+ep\x03A\x00#dr\x99~\xf1\x81A\xbf:gi\xbe\x1a*)0\x9dl\x98\x89b,\x96\xf7;|\xee\xd0\xb7\x17\xc5\x8e\xe4.\xa20\xf4h\x94jO\x0f\xb06OT\xe2\x06\x8a\xee\xc7\xfe\xc2?\xb6m\xe6\xf6xKES\x0d"
+    let stranger_der = "0\x81\xe40\x81\x97\xa0\x03\x02\x01\x02\x02\x01\x060\x05\x06\x03+ep0\x131\x110\x0f\x06\x03U\x04\x03\x0c\x08Other CA0\x1e\x17\x0d250101000000Z\x17\x0d350101000000Z0\x131\x110\x0f\x06\x03U\x04\x03\x0c\x08stranger0*0\x05\x06\x03+ep\x03!\x00\xedI(\xc6(\xd1\xc2\xc6\xea\xe9\x038\x90Y\x95a)Y':\x5cc\xf966\xc1F\x14\xac\x877\xd1\xa3\x100\x0e0\x0c\x06\x03U\x1d\x13\x01\x01\xff\x04\x020\x000\x05\x06\x03+ep\x03A\x00\xe5\xa9q\xd2U`\xbb&\xbcY\x17\xbe^\x837-\xae\x1c0\xef\xf5\xb82}\xe6)_\xebd8\xe8\x0a\x81y\xb5=\xa3N\x98\x95q1\x06E\xc8\xa6\xe7\x8d]\x93\xa5\x9c\x9elG\x1b>&\xbf\x06\xedk\x17\x00"
+    let pem_text = "-----BEGIN CERTIFICATE-----\x0aMIIBCzCBvqADAgECAgEBMAUGAytlcDAlMRMwEQYDVQQDDApOZXBlciBSb290MQ4w\x0aDAYDVQQKDAVOZXBlcjAeFw0yNTAxMDEwMDAwMDBaFw0zNTAxMDEwMDAwMDBaMCUx\x0aEzARBgNVBAMMCk5lcGVyIFJvb3QxDjAMBgNVBAoMBU5lcGVyMCowBQYDK2VwAyEA\x0aiojj3XQJ8ZX9UtstPLpdcspnCb8dlBIb83SIAbQPb1yjEzARMA8GA1UdEwEB/wQF\x0aMAMBAf8wBQYDK2VwA0EAPO/KgJcdKLVn+AVjMIqdfqhP+SXu5ahMKTD+WzZp9dpY\x0asiREepHNZafcCIZ4jasFxCiXGhvubXRiomeYm7T6Dg==\x0a-----END CERTIFICATE-----\x0a-----BEGIN CERTIFICATE-----\x0aMIIBEzCBxqADAgECAgECMAUGAytlcDAlMRMwEQYDVQQDDApOZXBlciBSb290MQ4w\x0aDAYDVQQKDAVOZXBlcjAeFw0yNTAxMDEwMDAwMDBaFw0zNTAxMDEwMDAwMDBaMC0x\x0aGzAZBgNVBAMMEk5lcGVyIEludGVybWVkaWF0ZTEOMAwGA1UECgwFTmVwZXIwKjAF\x0aBgMrZXADIQCBOXcOqH0XX1ajVGbDTH7My42KkbTuN6Jd9g9bj8mzlKMTMBEwDwYD\x0aVR0TAQH/BAUwAwEB/zAFBgMrZXADQQBSXhg3szlbpE7EgxDe/H+gv0ZbqF4EU6Gy\x0a+LxNx/vxdImgDgfMv482UhYVq5kO3cEsjY8q1K+XqmWLq+UNjicI\x0a-----END CERTIFICATE-----\x0a"
+    let (root, e1) = x509.parse(a, root_der)
+    if e1 != ok { os.exit(1) }
+    if !str.eq(root.subject, "CN=Neper Root, O=Neper") || !str.eq(root.issuer, root.subject) || !root.is_ca { os.exit(2) }
+    if root.not_before.nanos != 1735689600000000000i64 || root.not_after.nanos != 2051222400000000000i64 { os.exit(3) }
+    let (mid, e2) = x509.parse(a, mid_der)
+    if e2 != ok || !str.eq(mid.subject, "CN=Neper Intermediate, O=Neper") || !str.eq(mid.issuer, root.subject) || !mid.is_ca { os.exit(4) }
+    let (leaf, e3) = x509.parse(a, leaf_der)
+    if e3 != ok || !str.eq(leaf.subject, "CN=example.com") || leaf.is_ca { os.exit(5) }
+    if leaf.dns_names.len != 2usize || !str.eq(leaf.dns_names[0], "example.com") || !str.eq(leaf.dns_names[1], "*.example.org") { os.exit(6) }
+    switch leaf.public_key {
+    case .Ed25519 as key:
+        if key.bytes[0] == 0u8 && key.bytes[1] == 0u8 { os.exit(7) }
+    default:
+        os.exit(8)
+    }
+    let (plain, e4) = x509.parse(a, plain_der)
+    if e4 != ok || plain.dns_names.len != 0usize { os.exit(9) }
+    let (expired, e5) = x509.parse(a, expired_der)
+    if e5 != ok { os.exit(10) }
+    let (stranger, e6) = x509.parse(a, stranger_der)
+    if e6 != ok || !str.eq(stranger.issuer, "CN=Other CA") { os.exit(11) }
+    let (broken, e7) = x509.parse(a, root_der[..100])
+    if e7 != x509.InvalidCertificate { os.exit(12) }
+    // PEM.
+    let (from_pem, e8) = x509.parse_pem(a, pem_text)
+    if e8 != ok || from_pem.len != 2usize || !str.eq(from_pem[0].subject, root.subject) || !str.eq(from_pem[1].subject, mid.subject) { os.exit(13) }
+    // Signatures.
+    if x509.verify_signature(mid, root) != ok || x509.verify_signature(leaf, mid) != ok || x509.verify_signature(root, root) != ok { os.exit(14) }
+    if x509.verify_signature(leaf, root) != x509.InvalidCertificate { os.exit(15) }
+    // Chains.
+    var roots: [1]x509.Certificate = zero
+    roots[0] = root
+    var intermediates: [1]x509.Certificate = zero
+    intermediates[0] = mid
+    let (chain, e9) = x509.verify(a, leaf, options(roots[0..], intermediates[0..], "example.com", .ServerAuth, 4u16))
+    if e9 != ok || chain.certificates.len != 3usize || !str.eq(chain.certificates[1].subject, mid.subject) || !str.eq(chain.certificates[2].subject, root.subject) { os.exit(16) }
+    let (chain2, e10) = x509.verify(a, leaf, options(roots[0..], intermediates[0..], "www.EXAMPLE.org", .Any, 4u16))
+    if e10 != ok { os.exit(17) }
+    let (chain3, e11) = x509.verify(a, leaf, options(roots[0..], intermediates[0..], "", .Any, 4u16))
+    if e11 != ok { os.exit(18) }
+    let (chain4, e12) = x509.verify(a, plain, options(roots[0..], intermediates[0..], "", .ClientAuth, 4u16))
+    if e12 != ok { os.exit(19) }
+    let (chain5, e13) = x509.verify(a, mid, options(roots[0..], zero, "", .Any, 4u16))
+    if e13 != ok || chain5.certificates.len != 2usize { os.exit(20) }
+    let (chain6, e14) = x509.verify(a, root, options(roots[0..], zero, "", .Any, 4u16))
+    if e14 != ok || chain6.certificates.len != 1usize { os.exit(21) }
+    let (bad1, e15) = x509.verify(a, leaf, options(roots[0..], intermediates[0..], "example.org", .Any, 4u16))
+    if e15 != x509.NameMismatch { os.exit(22) }
+    let (bad2, e16) = x509.verify(a, leaf, options(roots[0..], intermediates[0..], "a.b.example.org", .Any, 4u16))
+    if e16 != x509.NameMismatch { os.exit(23) }
+    let (bad3, e17) = x509.verify(a, leaf, options(roots[0..], intermediates[0..], "example.com", .ClientAuth, 4u16))
+    if e17 != x509.InvalidUsage { os.exit(24) }
+    let (bad4, e18) = x509.verify(a, expired, options(roots[0..], intermediates[0..], "old.example.com", .Any, 4u16))
+    if e18 != x509.Expired { os.exit(25) }
+    let (bad5, e19) = x509.verify(a, stranger, options(roots[0..], intermediates[0..], "", .Any, 4u16))
+    if e19 != x509.UnknownAuthority { os.exit(26) }
+    let (bad6, e20) = x509.verify(a, leaf, options(roots[0..], zero, "", .Any, 4u16))
+    if e20 != x509.UnknownAuthority { os.exit(27) }
+    let (bad7, e21) = x509.verify(a, leaf, options(roots[0..], intermediates[0..], "", .Any, 1u16))
+    if e21 != x509.TooDeep { os.exit(28) }
+    ret ok
+}

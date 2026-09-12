@@ -1,0 +1,542 @@
+// X.509 certificates over DER through `e.fmt.asn1`, with the algorithm set pinned to
+// Ed25519 (RFC 8410): `parse` reads a certificate's version, names, validity,
+// subject public key, the subjectAltName DNS names and basicConstraints; `parse_pem`
+// takes every CERTIFICATE block of a PEM text; `verify_signature` checks a
+// certificate's signature over its TBSCertificate bytes with its issuer's key; and
+// `verify` builds the chain from a leaf through the intermediates to a root by name,
+// checking each signature, each validity window against the caller's `now`, each
+// intermediate's CA bit, the leaf's DNS name (a leftmost wildcard allowed) and its
+// extended key usage. A name is written `CN=x, O=y` from its attributes in order.
+// Any other signature or key algorithm is `InvalidCertificate`; nothing here reads a
+// host store, clock or network.
+use e.mem
+use e.str
+use e.time
+use e.crypto.sign as sign
+use e.fmt.asn1 as asn1
+use e.fmt.pem as pem
+
+type PublicKey = union enum u8 { Ed25519: sign.Ed25519PublicKey }
+type Certificate = struct { der: []const u8, subject: str, issuer: str, dns_names: []const str, not_before: time.Instant, not_after: time.Instant, public_key: PublicKey, is_ca: bool }
+type Pool = struct { certificates: []const Certificate }
+type VerifyOptions = struct { roots: Pool, intermediates: Pool, dns_name: str, now: time.Instant, usage: KeyUsage, max_depth: u16 }
+type KeyUsage = enum u8 { ServerAuth, ClientAuth, CodeSigning, EmailProtection, Any }
+type Chain = struct { certificates: []const Certificate }
+error InvalidCertificate
+error UnknownAuthority
+error Expired
+error NameMismatch
+error InvalidUsage
+error TooDeep
+
+const DEPTH: u16 = 16u16
+
+// The next value of a reader, or `InvalidCertificate` when there is none.
+fn next(r: *asn1.Reader) -> (asn1.Value, err) {
+    let (value, present, next_error) = asn1.reader_next_err(r)
+    if next_error != ok { ret (zero, InvalidCertificate) }
+    if !present { ret (zero, InvalidCertificate) }
+    ret (value, ok)
+}
+
+fn expect(r: *asn1.Reader, number: u32, constructed: bool) -> (asn1.Value, err) {
+    let (value, next_error) = next(r)
+    if next_error != ok { ret (zero, next_error) }
+    if value.tag.class != .Universal || value.tag.number != number || value.tag.constructed != constructed { ret (zero, InvalidCertificate) }
+    ret (value, ok)
+}
+
+fn inside(value: asn1.Value) -> (asn1.Reader, err) {
+    let (r, children_error) = asn1.children(value, DEPTH)
+    if children_error != ok { ret (zero, InvalidCertificate) }
+    ret (r, ok)
+}
+
+fn oid_equal(content: []const u8, expected: []const u8) -> bool {
+    if content.len != expected.len { ret false }
+    var i = 0usize
+    while i < content.len {
+        if content[i] != expected[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+fn attribute_name(oid: []const u8) -> str {
+    if oid.len == 3usize && oid[0] == 85u8 && oid[1] == 4u8 {
+        if oid[2] == 3u8 { ret "CN" }
+        if oid[2] == 6u8 { ret "C" }
+        if oid[2] == 7u8 { ret "L" }
+        if oid[2] == 8u8 { ret "ST" }
+        if oid[2] == 10u8 { ret "O" }
+        if oid[2] == 11u8 { ret "OU" }
+    }
+    if oid.len == 9usize && oid[0] == 42u8 && oid[8] == 1u8 { ret "emailAddress" }
+    ret "OID"
+}
+
+// A Name as `CN=x, O=y`, the attributes in the order they are written.
+fn render_name(a: *mem.Arena, name: asn1.Value) -> (str, err) {
+    let (b0, builder_error) = str.builder(a, 256usize)
+    if builder_error != ok { ret ("", builder_error) }
+    var b = b0
+    let (rdns0, rdns_error) = inside(name)
+    if rdns_error != ok { ret ("", rdns_error) }
+    var rdns = rdns0
+    var first = true
+    while true {
+        let (rdn, present, rdn_error) = asn1.reader_next_err(&rdns)
+        if rdn_error != ok { ret ("", InvalidCertificate) }
+        if !present { break }
+        let (attributes0, attributes_error) = inside(rdn)
+        if attributes_error != ok { ret ("", attributes_error) }
+        var attributes = attributes0
+        while true {
+            let (attribute, has_attribute, attribute_error) = asn1.reader_next_err(&attributes)
+            if attribute_error != ok { ret ("", InvalidCertificate) }
+            if !has_attribute { break }
+            let (pair0, pair_error) = inside(attribute)
+            if pair_error != ok { ret ("", pair_error) }
+            var pair = pair0
+            let (oid, oid_error) = expect(&pair, 6u32, false)
+            if oid_error != ok { ret ("", oid_error) }
+            let (value, value_error) = next(&pair)
+            if value_error != ok { ret ("", value_error) }
+            if !first {
+                let separator_error = str.push(&b, ", ")
+                if separator_error != ok { ret ("", separator_error) }
+            }
+            first = false
+            let name_error = str.push(&b, attribute_name(oid.content))
+            if name_error != ok { ret ("", name_error) }
+            let equals_error = str.push(&b, "=")
+            if equals_error != ok { ret ("", equals_error) }
+            let text_error = str.push(&b, value.content)
+            if text_error != ok { ret ("", text_error) }
+        }
+    }
+    ret (str.done(&b), ok)
+}
+
+fn two_digits(text: []const u8, at: usize) -> (i64, bool) {
+    if at + 2usize > text.len { ret (0i64, false) }
+    if !str.is_ascii_digit(text[at]) || !str.is_ascii_digit(text[at + 1usize]) { ret (0i64, false) }
+    ret (i64(text[at] - 48u8) * 10i64 + i64(text[at + 1usize] - 48u8), true)
+}
+
+// UTCTime `YYMMDDHHMMSSZ` or GeneralizedTime `YYYYMMDDHHMMSSZ` as an instant.
+fn parse_time(value: asn1.Value) -> (time.Instant, err) {
+    let text = value.content
+    var at = 0usize
+    var year = 0i64
+    if value.tag.number == 23u32 {
+        let (yy, yy_ok) = two_digits(text, 0usize)
+        if !yy_ok { ret (zero, InvalidCertificate) }
+        year = 2000i64 + yy
+        if yy >= 50i64 { year = 1900i64 + yy }
+        at = 2usize
+    } else {
+        if value.tag.number != 24u32 { ret (zero, InvalidCertificate) }
+        let (high, high_ok) = two_digits(text, 0usize)
+        let (low, low_ok) = two_digits(text, 2usize)
+        if !high_ok || !low_ok { ret (zero, InvalidCertificate) }
+        year = high * 100i64 + low
+        at = 4usize
+    }
+    let (month, month_ok) = two_digits(text, at)
+    let (day, day_ok) = two_digits(text, at + 2usize)
+    let (hour, hour_ok) = two_digits(text, at + 4usize)
+    let (minute, minute_ok) = two_digits(text, at + 6usize)
+    let (second, second_ok) = two_digits(text, at + 8usize)
+    if !month_ok || !day_ok || !hour_ok || !minute_ok || !second_ok { ret (zero, InvalidCertificate) }
+    if at + 11usize != text.len || text[at + 10usize] != 90u8 { ret (zero, InvalidCertificate) }
+    let date = time.Date { year: i32(year), month: u8(month), day: u8(day) }
+    let clock = time.Time { hour: u8(hour), minute: u8(minute), second: u8(second), nanos: 0u32 }
+    let (stamp, civil_error) = time.from_civil(date, clock)
+    if civil_error != ok { ret (zero, InvalidCertificate) }
+    ret (time.Instant { nanos: stamp.nanos }, ok)
+}
+
+// The pieces `verify_signature` needs beside the fields: the TBS bytes and the
+// signature, found by walking the outer SEQUENCE again.
+fn signed_parts(der: []const u8) -> ([]const u8, []const u8, err) {
+    var top = asn1.reader(der, DEPTH)
+    let (outer, outer_error) = expect(&top, 16u32, true)
+    if outer_error != ok { ret (zero, zero, outer_error) }
+    let (parts0, parts_error) = inside(outer)
+    if parts_error != ok { ret (zero, zero, parts_error) }
+    var parts = parts0
+    let (tbs, tbs_error) = expect(&parts, 16u32, true)
+    if tbs_error != ok { ret (zero, zero, tbs_error) }
+    let (algorithm, algorithm_error) = expect(&parts, 16u32, true)
+    if algorithm_error != ok { ret (zero, zero, algorithm_error) }
+    let (algorithm_inner0, inner_error) = inside(algorithm)
+    if inner_error != ok { ret (zero, zero, inner_error) }
+    var algorithm_inner = algorithm_inner0
+    let (oid, oid_error) = expect(&algorithm_inner, 6u32, false)
+    if oid_error != ok { ret (zero, zero, oid_error) }
+    let ed25519: [3]u8 = [3]u8{ 43, 101, 112 }
+    if !oid_equal(oid.content, ed25519[0..]) { ret (zero, zero, InvalidCertificate) }
+    let (signature, signature_error) = expect(&parts, 3u32, false)
+    if signature_error != ok { ret (zero, zero, signature_error) }
+    if signature.content.len != 65usize || signature.content[0] != 0u8 { ret (zero, zero, InvalidCertificate) }
+    ret (tbs.encoded, signature.content[1usize..], ok)
+}
+
+fn parse(a: *mem.Arena, der: []const u8) -> (Certificate, err) {
+    var certificate: Certificate = zero
+    certificate.der = der
+    let (tbs_bytes, signature, parts_error) = signed_parts(der)
+    if parts_error != ok { ret (zero, parts_error) }
+    var top = asn1.reader(tbs_bytes, DEPTH)
+    let (tbs, tbs_error) = expect(&top, 16u32, true)
+    if tbs_error != ok { ret (zero, tbs_error) }
+    let (fields0, fields_error) = inside(tbs)
+    if fields_error != ok { ret (zero, fields_error) }
+    var fields = fields0
+    // version [0] EXPLICIT, present for v2 and v3.
+    let (first_item, item_error) = next(&fields)
+    if item_error != ok { ret (zero, item_error) }
+    var item = first_item
+    var version = 0i64
+    if item.tag.class == .Context && item.tag.number == 0u32 {
+        let (version_inner0, version_error) = inside(item)
+        if version_error != ok { ret (zero, version_error) }
+        var version_inner = version_inner0
+        let (version_value, value_error) = expect(&version_inner, 2u32, false)
+        if value_error != ok { ret (zero, value_error) }
+        if version_value.content.len != 1usize { ret (zero, InvalidCertificate) }
+        version = i64(version_value.content[0])
+        let (serial, serial_error) = next(&fields)
+        if serial_error != ok { ret (zero, serial_error) }
+        item = serial
+    }
+    if item.tag.number != 2u32 { ret (zero, InvalidCertificate) }
+    let (inner_algorithm, inner_algorithm_error) = expect(&fields, 16u32, true)
+    if inner_algorithm_error != ok { ret (zero, inner_algorithm_error) }
+    let (issuer, issuer_error) = expect(&fields, 16u32, true)
+    if issuer_error != ok { ret (zero, issuer_error) }
+    let (issuer_text, issuer_render_error) = render_name(a, issuer)
+    if issuer_render_error != ok { ret (zero, issuer_render_error) }
+    certificate.issuer = issuer_text
+    let (validity, validity_error) = expect(&fields, 16u32, true)
+    if validity_error != ok { ret (zero, validity_error) }
+    let (window0, window_error) = inside(validity)
+    if window_error != ok { ret (zero, window_error) }
+    var window = window0
+    let (before, before_error) = next(&window)
+    if before_error != ok { ret (zero, before_error) }
+    let (after, after_error) = next(&window)
+    if after_error != ok { ret (zero, after_error) }
+    let (not_before, not_before_error) = parse_time(before)
+    if not_before_error != ok { ret (zero, not_before_error) }
+    let (not_after, not_after_error) = parse_time(after)
+    if not_after_error != ok { ret (zero, not_after_error) }
+    certificate.not_before = not_before
+    certificate.not_after = not_after
+    let (subject, subject_error) = expect(&fields, 16u32, true)
+    if subject_error != ok { ret (zero, subject_error) }
+    let (subject_text, subject_render_error) = render_name(a, subject)
+    if subject_render_error != ok { ret (zero, subject_render_error) }
+    certificate.subject = subject_text
+    // subjectPublicKeyInfo: the algorithm must be Ed25519 and the key 32 bytes.
+    let (spki, spki_error) = expect(&fields, 16u32, true)
+    if spki_error != ok { ret (zero, spki_error) }
+    let (spki_inner0, spki_inner_error) = inside(spki)
+    if spki_inner_error != ok { ret (zero, spki_inner_error) }
+    var spki_inner = spki_inner0
+    let (key_algorithm, key_algorithm_error) = expect(&spki_inner, 16u32, true)
+    if key_algorithm_error != ok { ret (zero, key_algorithm_error) }
+    let (key_algorithm_inner0, key_inner_error) = inside(key_algorithm)
+    if key_inner_error != ok { ret (zero, key_inner_error) }
+    var key_algorithm_inner = key_algorithm_inner0
+    let (key_oid, key_oid_error) = expect(&key_algorithm_inner, 6u32, false)
+    if key_oid_error != ok { ret (zero, key_oid_error) }
+    let ed25519: [3]u8 = [3]u8{ 43, 101, 112 }
+    if !oid_equal(key_oid.content, ed25519[0..]) { ret (zero, InvalidCertificate) }
+    let (key_bits, key_bits_error) = expect(&spki_inner, 3u32, false)
+    if key_bits_error != ok { ret (zero, key_bits_error) }
+    if key_bits.content.len != 33usize || key_bits.content[0] != 0u8 { ret (zero, InvalidCertificate) }
+    var public: sign.Ed25519PublicKey = zero
+    mem.copy[u8](public.bytes[0..], key_bits.content[1usize..])
+    certificate.public_key = PublicKey{ Ed25519: public }
+    // Extensions [3] EXPLICIT, v3 only: subjectAltName and basicConstraints.
+    var names: []const str = zero
+    while true {
+        let (rest, has_rest, rest_error) = asn1.reader_next_err(&fields)
+        if rest_error != ok { ret (zero, InvalidCertificate) }
+        if !has_rest { break }
+        if rest.tag.class == .Context && rest.tag.number == 3u32 && rest.tag.constructed {
+            if version != 2i64 { ret (zero, InvalidCertificate) }
+            let (wrapper0, wrapper_error) = inside(rest)
+            if wrapper_error != ok { ret (zero, wrapper_error) }
+            var wrapper = wrapper0
+            let (list, list_error) = expect(&wrapper, 16u32, true)
+            if list_error != ok { ret (zero, list_error) }
+            let (extensions0, extensions_error) = inside(list)
+            if extensions_error != ok { ret (zero, extensions_error) }
+            var extensions = extensions0
+            while true {
+                let (extension, has_extension, extension_error) = asn1.reader_next_err(&extensions)
+                if extension_error != ok { ret (zero, InvalidCertificate) }
+                if !has_extension { break }
+                let (parts0, extension_parts_error) = inside(extension)
+                if extension_parts_error != ok { ret (zero, extension_parts_error) }
+                var parts = parts0
+                let (extension_oid, extension_oid_error) = expect(&parts, 6u32, false)
+                if extension_oid_error != ok { ret (zero, extension_oid_error) }
+                let (first_payload, payload_error) = next(&parts)
+                if payload_error != ok { ret (zero, payload_error) }
+                var payload = first_payload
+                if payload.tag.number == 1u32 {
+                    let (after_critical, critical_error) = next(&parts)
+                    if critical_error != ok { ret (zero, critical_error) }
+                    payload = after_critical
+                }
+                if payload.tag.number != 4u32 { ret (zero, InvalidCertificate) }
+                let san: [3]u8 = [3]u8{ 85, 29, 17 }
+                let basic: [3]u8 = [3]u8{ 85, 29, 19 }
+                if oid_equal(extension_oid.content, san[0..]) {
+                    let (parsed, san_error) = parse_dns_names(a, payload.content)
+                    if san_error != ok { ret (zero, san_error) }
+                    names = parsed
+                }
+                if oid_equal(extension_oid.content, basic[0..]) {
+                    var constraints = asn1.reader(payload.content, DEPTH)
+                    let (sequence, sequence_error) = expect(&constraints, 16u32, true)
+                    if sequence_error != ok { ret (zero, sequence_error) }
+                    let (flags0, flags_error) = inside(sequence)
+                    if flags_error != ok { ret (zero, flags_error) }
+                    var flags = flags0
+                    let (ca, has_ca, ca_error) = asn1.reader_next_err(&flags)
+                    if ca_error != ok { ret (zero, InvalidCertificate) }
+                    if has_ca && ca.tag.number == 1u32 && ca.content.len == 1usize && ca.content[0] == 255u8 { certificate.is_ca = true }
+                }
+            }
+        }
+    }
+    certificate.dns_names = names
+    ret (certificate, ok)
+}
+
+// The dNSName entries ([2] IMPLICIT IA5String) of a GeneralNames sequence.
+fn parse_dns_names(a: *mem.Arena, content: []const u8) -> ([]const str, err) {
+    var top = asn1.reader(content, DEPTH)
+    let (sequence, sequence_error) = expect(&top, 16u32, true)
+    if sequence_error != ok { ret (zero, sequence_error) }
+    var count = 0usize
+    let (probe0, probe_error) = inside(sequence)
+    if probe_error != ok { ret (zero, probe_error) }
+    var probe = probe0
+    while true {
+        let (general, present, general_error) = asn1.reader_next_err(&probe)
+        if general_error != ok { ret (zero, InvalidCertificate) }
+        if !present { break }
+        if general.tag.class == .Context && general.tag.number == 2u32 { count += 1usize }
+    }
+    let (names, names_error) = mem.alloc[str](a, count)
+    if names_error != ok { ret (zero, names_error) }
+    let (walk0, walk_error) = inside(sequence)
+    if walk_error != ok { ret (zero, walk_error) }
+    var walk = walk0
+    var index = 0usize
+    while index < count {
+        let (general, present, general_error) = asn1.reader_next_err(&walk)
+        if general_error != ok || !present { ret (zero, InvalidCertificate) }
+        if general.tag.class == .Context && general.tag.number == 2u32 {
+            names[index] = general.content
+            index += 1usize
+        }
+    }
+    ret (names[0..], ok)
+}
+
+fn parse_pem(a: *mem.Arena, source: str) -> ([]const Certificate, err) {
+    var count = 0usize
+    var rest = source
+    while true {
+        let (block, after, decode_error) = pem.decode(a, rest, 1048576usize)
+        if decode_error != ok { break }
+        if str.eq(block.label, "CERTIFICATE") { count += 1usize }
+        rest = after
+    }
+    let (certificates, certificates_error) = mem.alloc[Certificate](a, count)
+    if certificates_error != ok { ret (zero, certificates_error) }
+    rest = source
+    var index = 0usize
+    while index < count {
+        let (block, after, decode_error) = pem.decode(a, rest, 1048576usize)
+        if decode_error != ok { ret (zero, InvalidCertificate) }
+        rest = after
+        if !str.eq(block.label, "CERTIFICATE") { continue }
+        let (certificate, parse_error) = parse(a, block.bytes)
+        if parse_error != ok { ret (zero, parse_error) }
+        certificates[index] = certificate
+        index += 1usize
+    }
+    ret (certificates[0..], ok)
+}
+
+fn pool(a: *mem.Arena, certificates: []const Certificate) -> Pool {
+    ret Pool { certificates: certificates }
+}
+
+fn verify_signature(certificate: Certificate, issuer: Certificate) -> err {
+    let (tbs, signature_bytes, parts_error) = signed_parts(certificate.der)
+    if parts_error != ok { ret parts_error }
+    var signature: sign.Ed25519Signature = zero
+    mem.copy[u8](signature.bytes[0..], signature_bytes)
+    switch issuer.public_key {
+    case .Ed25519 as key:
+        if sign.ed25519_verify(key, tbs, signature) { ret ok }
+        ret InvalidCertificate
+    default:
+        ret InvalidCertificate
+    }
+}
+
+fn same_der(a: []const u8, b: []const u8) -> bool {
+    if a.len != b.len { ret false }
+    var i = 0usize
+    while i < a.len {
+        if a[i] != b[i] { ret false }
+        i += 1usize
+    }
+    ret true
+}
+
+// A DNS name against a certificate name, case-insensitively, with a leftmost `*`
+// label standing for exactly one label.
+fn dns_match(pattern: str, name: str) -> bool {
+    if pattern.len > 2usize && pattern[0] == 42u8 && pattern[1] == 46u8 {
+        let (dot, has_dot) = str.find(name, ".")
+        if !has_dot || dot == 0usize { ret false }
+        ret str.compare_ascii_fold(pattern[2usize..], name[dot + 1usize..]) == 0
+    }
+    ret str.compare_ascii_fold(pattern, name) == 0
+}
+
+fn usage_oid(usage: KeyUsage) -> [8]u8 {
+    var oid: [8]u8 = [8]u8{ 43, 6, 1, 5, 5, 7, 3, 1 }
+    if usage == .ClientAuth { oid[7] = 2u8 }
+    if usage == .CodeSigning { oid[7] = 3u8 }
+    if usage == .EmailProtection { oid[7] = 4u8 }
+    ret oid
+}
+
+// True when the leaf carries an extendedKeyUsage that excludes `usage`.
+fn usage_excluded(certificate: Certificate, usage: KeyUsage) -> bool {
+    if usage == .Any { ret false }
+    let wanted = usage_oid(usage)
+    let (tbs_bytes, signature, parts_error) = signed_parts(certificate.der)
+    if parts_error != ok { ret true }
+    var top = asn1.reader(tbs_bytes, DEPTH)
+    let (tbs, tbs_error) = expect(&top, 16u32, true)
+    if tbs_error != ok { ret true }
+    let (fields0, fields_error) = inside(tbs)
+    if fields_error != ok { ret true }
+    var fields = fields0
+    while true {
+        let (item, present, item_error) = asn1.reader_next_err(&fields)
+        if item_error != ok || !present { ret false }
+        if item.tag.class != .Context || item.tag.number != 3u32 { continue }
+        let (wrapper0, wrapper_error) = inside(item)
+        if wrapper_error != ok { ret true }
+        var wrapper = wrapper0
+        let (list, list_error) = expect(&wrapper, 16u32, true)
+        if list_error != ok { ret true }
+        let (extensions0, extensions_error) = inside(list)
+        if extensions_error != ok { ret true }
+        var extensions = extensions0
+        while true {
+            let (extension, has_extension, extension_error) = asn1.reader_next_err(&extensions)
+            if extension_error != ok { ret true }
+            if !has_extension { ret false }
+            let (parts0, parts_inner_error) = inside(extension)
+            if parts_inner_error != ok { ret true }
+            var parts = parts0
+            let (oid, oid_error) = expect(&parts, 6u32, false)
+            if oid_error != ok { ret true }
+            let eku: [3]u8 = [3]u8{ 85, 29, 37 }
+            if !oid_equal(oid.content, eku[0..]) { continue }
+            let (first_payload, payload_error) = next(&parts)
+            if payload_error != ok { ret true }
+            var payload = first_payload
+            if payload.tag.number == 1u32 {
+                let (after_critical, critical_error) = next(&parts)
+                if critical_error != ok { ret true }
+                payload = after_critical
+            }
+            var purposes = asn1.reader(payload.content, DEPTH)
+            let (sequence, sequence_error) = expect(&purposes, 16u32, true)
+            if sequence_error != ok { ret true }
+            let (allowed0, allowed_error) = inside(sequence)
+            if allowed_error != ok { ret true }
+            var allowed = allowed0
+            while true {
+                let (purpose, has_purpose, purpose_error) = asn1.reader_next_err(&allowed)
+                if purpose_error != ok { ret true }
+                if !has_purpose { ret true }
+                if oid_equal(purpose.content, wanted[0..]) { ret false }
+            }
+        }
+    }
+}
+
+fn find_issuer(pool_of: Pool, subject: str) -> (Certificate, bool) {
+    var i = 0usize
+    while i < pool_of.certificates.len {
+        if str.eq(pool_of.certificates[i].subject, subject) { ret (pool_of.certificates[i], true) }
+        i += 1usize
+    }
+    ret (zero, false)
+}
+
+fn in_window(certificate: Certificate, now: time.Instant) -> bool {
+    ret now.nanos >= certificate.not_before.nanos && now.nanos <= certificate.not_after.nanos
+}
+
+fn verify(a: *mem.Arena, leaf: Certificate, options: VerifyOptions) -> (Chain, err) {
+    var limit = usize(options.max_depth)
+    if limit == 0usize { limit = 8usize }
+    let (links, links_error) = mem.alloc[Certificate](a, limit + 1usize)
+    if links_error != ok { ret (zero, links_error) }
+    if !in_window(leaf, options.now) { ret (zero, Expired) }
+    if options.dns_name.len > 0usize {
+        var matched = false
+        var i = 0usize
+        while i < leaf.dns_names.len {
+            if dns_match(leaf.dns_names[i], options.dns_name) { matched = true }
+            i += 1usize
+        }
+        if !matched { ret (zero, NameMismatch) }
+    }
+    if usage_excluded(leaf, options.usage) { ret (zero, InvalidUsage) }
+    links[0] = leaf
+    var count = 1usize
+    var current = leaf
+    while true {
+        // A root by name closes the chain; an intermediate extends it.
+        let (root, has_root) = find_issuer(options.roots, current.issuer)
+        if has_root {
+            if !in_window(root, options.now) { ret (zero, Expired) }
+            if verify_signature(current, root) != ok { ret (zero, UnknownAuthority) }
+            if !same_der(root.der, current.der) {
+                if count > limit { ret (zero, TooDeep) }
+                links[count] = root
+                count += 1usize
+            }
+            break
+        }
+        let (intermediate, has_intermediate) = find_issuer(options.intermediates, current.issuer)
+        if !has_intermediate || same_der(intermediate.der, current.der) { ret (zero, UnknownAuthority) }
+        if !intermediate.is_ca { ret (zero, UnknownAuthority) }
+        if !in_window(intermediate, options.now) { ret (zero, Expired) }
+        if verify_signature(current, intermediate) != ok { ret (zero, UnknownAuthority) }
+        if count >= limit { ret (zero, TooDeep) }
+        links[count] = intermediate
+        count += 1usize
+        current = intermediate
+    }
+    ret (Chain { certificates: links[..count] }, ok)
+}

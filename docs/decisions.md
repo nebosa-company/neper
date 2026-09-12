@@ -3323,3 +3323,44 @@ rather than grown; the console sink writes to an `os.File` directly and the JSON
 lines sink to an `io.Writer`. An `err` field prints as `ok` or `error`: an error has
 no name at run time until the trap protocol carries one (spec 11), and inventing a
 number for it would be read as meaning something.
+
+## D183 — `e.fmt.yaml` and `e.crypto.x509`
+
+The YAML subset is parsed from logical lines -- indent and content with the comment
+stripped once, quotes respected -- by recursive descent on indentation, with a
+sequence item that begins a mapping or a nested sequence re-read as that node two
+columns in. Plain scalars resolve by the core schema; the writer quotes a string
+that would resolve to anything else, or that starts or ends with something YAML
+gives meaning to, and writes block style throughout. Folding follows the spec: the
+break before the first empty line becomes the newline, which the first draft doubled.
+Anchors, aliases, tags, directives and a second document are `Unsupported`, as the
+fence says; a mapping or sequence holds at most 256 entries per level and a flow
+collection 64, limits a configuration file does not reach and the header states.
+
+X.509 is read through `e.fmt.asn1` with the algorithm set pinned to Ed25519 -- any
+other signature or key algorithm is `InvalidCertificate` -- and the chain built by
+name from a leaf through the intermediates to a root, each link's signature checked
+over its TBSCertificate bytes, each window against the caller's `now`, each
+intermediate's CA bit, the leaf's DNS name with a leftmost wildcard, and its extended
+key usage when it carries one. A name renders as `CN=x, O=y` in written order. The
+plan listed `e.text.unicode` among its dependencies; DNS labels are ASCII and the
+comparison folds ASCII case through `e.str`, so it is not needed and not listed.
+The chain in the fixture is built by Python's cryptography package, which verifies
+it itself before this module is asked to.
+
+## D184 — `e.text.unicode`
+
+The property tables are generated from Python's `unicodedata` -- Unicode 15.0.0,
+which `version` reports -- by the script beside the fixture, which also writes the
+fixture's expectations from the same source: the general category as 4007 runs of
+(start, category), the canonical combining class as 581 runs, simple lower and upper
+mappings and full case folding as sorted pairs with a small side table for the 104
+scalars that fold to two or three. All of it is byte strings in the module read
+little-endian, 42 KB in all, searched by binary search; the source is large and the
+compiler took it without complaint. White_Space is the property's own 25 scalars,
+written in the code. What is a reduction and says so: `is_alphabetic` is the letter
+categories and Nl rather than the Alphabetic derived property, and graphemes are
+extended clusters by a reduced rule set -- CR LF, marks, ZWJ and variation selectors,
+regional indicators in pairs, Hangul jamo -- with the Grapheme_Cluster_Break table
+and UAX #29 in full as the upgrade. The plan listed `e.text.utf8` as a dependency;
+the module reads UTF-8 with its own twenty lines and does not need it.

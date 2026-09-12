@@ -1007,6 +1007,24 @@ $logDebugWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $logDebugWritten -ne 'executable written') { throw 'log_debug emission failed' }
 & $logDebugPath
 if ($LASTEXITCODE -ne 0) { throw "a log_debug check failed: exit $LASTEXITCODE" }
+# `e.fmt.yaml`: every scalar and collection form, the writer read back, the typed codec, eight refusals.
+$fmtYamlPath = Join-Path $testBuild 'fmt-yaml-selfhost.exe'
+$fmtYamlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_yaml\src\main.e') $repo 'x64' 'windows' $fmtYamlPath
+if ($LASTEXITCODE -ne 0 -or $fmtYamlWritten -ne 'executable written') { throw 'fmt_yaml emission failed' }
+& $fmtYamlPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_yaml check failed: exit $LASTEXITCODE" }
+# `e.crypto.x509`: an Ed25519 chain from Python parsed, signatures checked, chains built and refused.
+$cryptoX509Path = Join-Path $testBuild 'crypto-x509-selfhost.exe'
+$cryptoX509Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_x509\src\main.e') $repo 'x64' 'windows' $cryptoX509Path
+if ($LASTEXITCODE -ne 0 -or $cryptoX509Written -ne 'executable written') { throw 'crypto_x509 emission failed' }
+& $cryptoX509Path
+if ($LASTEXITCODE -ne 0) { throw "a crypto_x509 check failed: exit $LASTEXITCODE" }
+# `e.text.unicode`: properties and case mappings against unicodedata, grapheme clusters.
+$textUnicodePath = Join-Path $testBuild 'text-unicode-selfhost.exe'
+$textUnicodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_unicode\src\main.e') $repo 'x64' 'windows' $textUnicodePath
+if ($LASTEXITCODE -ne 0 -or $textUnicodeWritten -ne 'executable written') { throw 'text_unicode emission failed' }
+& $textUnicodePath
+if ($LASTEXITCODE -ne 0) { throw "a text_unicode check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

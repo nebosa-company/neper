@@ -977,6 +977,21 @@ log_debug_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$log_debug_written" = 'executable written' ]
 chmod +x "$test_build/log-debug-selfhost"
 "$test_build/log-debug-selfhost"
+# `e.fmt.yaml`: every scalar and collection form, the writer read back, the typed codec, eight refusals.
+fmt_yaml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_yaml/src/main.e" "$repo" x64 linux "$test_build/fmt-yaml-selfhost")
+[ "$fmt_yaml_written" = 'executable written' ]
+chmod +x "$test_build/fmt-yaml-selfhost"
+"$test_build/fmt-yaml-selfhost"
+# `e.crypto.x509`: an Ed25519 chain from Python parsed, signatures checked, chains built and refused.
+crypto_x509_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_x509/src/main.e" "$repo" x64 linux "$test_build/crypto-x509-selfhost")
+[ "$crypto_x509_written" = 'executable written' ]
+chmod +x "$test_build/crypto-x509-selfhost"
+"$test_build/crypto-x509-selfhost"
+# `e.text.unicode`: properties and case mappings against unicodedata, grapheme clusters.
+text_unicode_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_unicode/src/main.e" "$repo" x64 linux "$test_build/text-unicode-selfhost")
+[ "$text_unicode_written" = 'executable written' ]
+chmod +x "$test_build/text-unicode-selfhost"
+"$test_build/text-unicode-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
