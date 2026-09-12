@@ -857,6 +857,21 @@ fmt_msgpack_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$fmt_msgpack_written" = 'executable written' ]
 chmod +x "$test_build/fmt-msgpack-selfhost"
 "$test_build/fmt-msgpack-selfhost"
+# `e.crypto.hash`: six digests on four inputs against hashlib, streaming across block edges.
+crypto_hash_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_hash/src/main.e" "$repo" x64 linux "$test_build/crypto-hash-selfhost")
+[ "$crypto_hash_written" = 'executable written' ]
+chmod +x "$test_build/crypto-hash-selfhost"
+"$test_build/crypto-hash-selfhost"
+# `e.crypto.mac`, `.kdf`, `.random`: RFC 4231, RFC 5869 and RFC 8439 vectors, exhaustion, bounded draws.
+crypto_mac_kdf_random_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_mac_kdf_random/src/main.e" "$repo" x64 linux "$test_build/crypto-mac-kdf-random-selfhost")
+[ "$crypto_mac_kdf_random_written" = 'executable written' ]
+chmod +x "$test_build/crypto-mac-kdf-random-selfhost"
+"$test_build/crypto-mac-kdf-random-selfhost"
+# `e.crypto.aead`: NIST GCM cases 4 and 16 and RFC 8439's ChaCha20-Poly1305, tampering refused.
+crypto_aead_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_aead/src/main.e" "$repo" x64 linux "$test_build/crypto-aead-selfhost")
+[ "$crypto_aead_written" = 'executable written' ]
+chmod +x "$test_build/crypto-aead-selfhost"
+"$test_build/crypto-aead-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

@@ -3095,3 +3095,23 @@ fixture matches every family's bytes to the specification, not to a round trip.
 One trap for the record: `io.memory_writer` returns a `Writer` it never fills in (its
 fence has no callback to name), and writing through it is a null call. `e.fmt.json`'s
 fixture wires `io.memory_write` by hand; the fixtures here use slice writers.
+## D173 — the crypto set: `hash`, `mac`, `kdf`, `random` and `aead`
+
+Five modules, each checked against published vectors rather than against itself:
+SHA-256, SHA-512, SHA3-256, SHA3-512, SHA-1 and MD5 against `hashlib` on four inputs
+with the streaming forms fed across every block edge; HMAC against RFC 4231 cases 2
+and 6; HKDF against RFC 5869 cases 1 and 3 plus the length refusal; ChaCha20 against
+RFC 8439's block and keystream, with the counter refusing to wrap; AES-GCM at both key
+sizes against NIST's GCM test cases 4 and 16; ChaCha20-Poly1305 against RFC 8439 2.8.2.
+
+Two things the vectors caught. Five of the eighty SHA-512 round constants typed by hand
+were wrong -- D147's lesson again, and the tables are now generated from the primes'
+cube roots by a script. And the AEAD's Poly1305 pads `aad` and the ciphertext to a
+multiple of sixteen with zeros inside the block stream, which is not what a bare
+Poly1305 message's partial-block rule does; a first draft used the message rule and the
+tag was wrong while the ciphertext was right.
+
+What is written plainly: AES is byte-oriented over its S-box and not constant-time
+against cache timing, GHASH is the bit-by-bit multiply, and the headers say so; a
+bitsliced AES and a table GHASH are the upgrade. `hash` and `random` are `partial` for
+their helpers; `mac` and `kdf` are exactly their fences.

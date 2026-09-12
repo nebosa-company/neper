@@ -863,6 +863,24 @@ $fmtMsgpackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $fmtMsgpackWritten -ne 'executable written') { throw 'fmt_msgpack emission failed' }
 & $fmtMsgpackPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_msgpack check failed: exit $LASTEXITCODE" }
+# `e.crypto.hash`: six digests on four inputs against hashlib, streaming across block edges.
+$cryptoHashPath = Join-Path $testBuild 'crypto-hash-selfhost.exe'
+$cryptoHashWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_hash\src\main.e') $repo 'x64' 'windows' $cryptoHashPath
+if ($LASTEXITCODE -ne 0 -or $cryptoHashWritten -ne 'executable written') { throw 'crypto_hash emission failed' }
+& $cryptoHashPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_hash check failed: exit $LASTEXITCODE" }
+# `e.crypto.mac`, `.kdf`, `.random`: RFC 4231, RFC 5869 and RFC 8439 vectors, exhaustion, bounded draws.
+$cryptoMacKdfRandomPath = Join-Path $testBuild 'crypto-mac-kdf-random-selfhost.exe'
+$cryptoMacKdfRandomWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_mac_kdf_random\src\main.e') $repo 'x64' 'windows' $cryptoMacKdfRandomPath
+if ($LASTEXITCODE -ne 0 -or $cryptoMacKdfRandomWritten -ne 'executable written') { throw 'crypto_mac_kdf_random emission failed' }
+& $cryptoMacKdfRandomPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_mac_kdf_random check failed: exit $LASTEXITCODE" }
+# `e.crypto.aead`: NIST GCM cases 4 and 16 and RFC 8439's ChaCha20-Poly1305, tampering refused.
+$cryptoAeadPath = Join-Path $testBuild 'crypto-aead-selfhost.exe'
+$cryptoAeadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_aead\src\main.e') $repo 'x64' 'windows' $cryptoAeadPath
+if ($LASTEXITCODE -ne 0 -or $cryptoAeadWritten -ne 'executable written') { throw 'crypto_aead emission failed' }
+& $cryptoAeadPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_aead check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
