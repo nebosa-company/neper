@@ -932,6 +932,36 @@ cli_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtu
 [ "$cli_written" = 'executable written' ]
 chmod +x "$test_build/cli-selfhost"
 "$test_build/cli-selfhost"
+# `e.text.template`: interpolation, if/else, repeat with index, seven refusals, the typed path.
+text_template_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_template/src/main.e" "$repo" x64 linux "$test_build/text-template-selfhost")
+[ "$text_template_written" = 'executable written' ]
+chmod +x "$test_build/text-template-selfhost"
+"$test_build/text-template-selfhost"
+# `e.fmt.multipart`: three parts read in 5-byte chunks, the writer read back, six refusals.
+fmt_multipart_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_multipart/src/main.e" "$repo" x64 linux "$test_build/fmt-multipart-selfhost")
+[ "$fmt_multipart_written" = 'executable written' ]
+chmod +x "$test_build/fmt-multipart-selfhost"
+"$test_build/fmt-multipart-selfhost"
+# `e.db`: the contract over an in-memory driver, every handle Closed after its close.
+db_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/db/src/main.e" "$repo" x64 linux "$test_build/db-selfhost")
+[ "$db_written" = 'executable written' ]
+chmod +x "$test_build/db-selfhost"
+"$test_build/db-selfhost"
+# `e.fmt.xml`: a document walked as events, the writer read back, seven refusals.
+fmt_xml_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_xml/src/main.e" "$repo" x64 linux "$test_build/fmt-xml-selfhost")
+[ "$fmt_xml_written" = 'executable written' ]
+chmod +x "$test_build/fmt-xml-selfhost"
+"$test_build/fmt-xml-selfhost"
+# `e.tz`: the builtin database against zoneinfo, transitions and footer rules, resolve three ways.
+tz_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/tz/src/main.e" "$repo" x64 linux "$test_build/tz-selfhost")
+[ "$tz_written" = 'executable written' ]
+chmod +x "$test_build/tz-selfhost"
+"$test_build/tz-selfhost"
+# `e.concurrent.queue` and `e.concurrent.map`: try, blocking, timed and closed forms; threads through both.
+concurrent_queue_map_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/concurrent_queue_map/src/main.e" "$repo" x64 linux "$test_build/concurrent-queue-map-selfhost")
+[ "$concurrent_queue_map_written" = 'executable written' ]
+chmod +x "$test_build/concurrent-queue-map-selfhost"
+"$test_build/concurrent-queue-map-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

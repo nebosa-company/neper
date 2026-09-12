@@ -953,6 +953,42 @@ $cliWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\lin
 if ($LASTEXITCODE -ne 0 -or $cliWritten -ne 'executable written') { throw 'cli emission failed' }
 & $cliPath
 if ($LASTEXITCODE -ne 0) { throw "a cli check failed: exit $LASTEXITCODE" }
+# `e.text.template`: interpolation, if/else, repeat with index, seven refusals, the typed path.
+$textTemplatePath = Join-Path $testBuild 'text-template-selfhost.exe'
+$textTemplateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_template\src\main.e') $repo 'x64' 'windows' $textTemplatePath
+if ($LASTEXITCODE -ne 0 -or $textTemplateWritten -ne 'executable written') { throw 'text_template emission failed' }
+& $textTemplatePath
+if ($LASTEXITCODE -ne 0) { throw "a text_template check failed: exit $LASTEXITCODE" }
+# `e.fmt.multipart`: three parts read in 5-byte chunks, the writer read back, six refusals.
+$fmtMultipartPath = Join-Path $testBuild 'fmt-multipart-selfhost.exe'
+$fmtMultipartWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_multipart\src\main.e') $repo 'x64' 'windows' $fmtMultipartPath
+if ($LASTEXITCODE -ne 0 -or $fmtMultipartWritten -ne 'executable written') { throw 'fmt_multipart emission failed' }
+& $fmtMultipartPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_multipart check failed: exit $LASTEXITCODE" }
+# `e.db`: the contract over an in-memory driver, every handle Closed after its close.
+$dbPath = Join-Path $testBuild 'db-selfhost.exe'
+$dbWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\db\src\main.e') $repo 'x64' 'windows' $dbPath
+if ($LASTEXITCODE -ne 0 -or $dbWritten -ne 'executable written') { throw 'db emission failed' }
+& $dbPath
+if ($LASTEXITCODE -ne 0) { throw "a db check failed: exit $LASTEXITCODE" }
+# `e.fmt.xml`: a document walked as events, the writer read back, seven refusals.
+$fmtXmlPath = Join-Path $testBuild 'fmt-xml-selfhost.exe'
+$fmtXmlWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_xml\src\main.e') $repo 'x64' 'windows' $fmtXmlPath
+if ($LASTEXITCODE -ne 0 -or $fmtXmlWritten -ne 'executable written') { throw 'fmt_xml emission failed' }
+& $fmtXmlPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_xml check failed: exit $LASTEXITCODE" }
+# `e.tz`: the builtin database against zoneinfo, transitions and footer rules, resolve three ways.
+$tzPath = Join-Path $testBuild 'tz-selfhost.exe'
+$tzWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\tz\src\main.e') $repo 'x64' 'windows' $tzPath
+if ($LASTEXITCODE -ne 0 -or $tzWritten -ne 'executable written') { throw 'tz emission failed' }
+& $tzPath
+if ($LASTEXITCODE -ne 0) { throw "a tz check failed: exit $LASTEXITCODE" }
+# `e.concurrent.queue` and `e.concurrent.map`: try, blocking, timed and closed forms; threads through both.
+$concurrentQueueMapPath = Join-Path $testBuild 'concurrent-queue-map-selfhost.exe'
+$concurrentQueueMapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\concurrent_queue_map\src\main.e') $repo 'x64' 'windows' $concurrentQueueMapPath
+if ($LASTEXITCODE -ne 0 -or $concurrentQueueMapWritten -ne 'executable written') { throw 'concurrent_queue_map emission failed' }
+& $concurrentQueueMapPath
+if ($LASTEXITCODE -ne 0) { throw "a concurrent_queue_map check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
