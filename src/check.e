@@ -2491,10 +2491,28 @@ fn aggregate_arguments_concrete(c: *Checker, template: Aggregate, first_argument
     while at < template.comptime_count {
         let argument = c.generic_arguments[first_argument + at]
         if !argument.set || argument.symbolic { ret false }
-        if argument.kind == .Type && argument.ty.kind == .TypeParameter { ret false }
+        if argument.kind == .Type && type_still_generic(c, argument.ty) { ret false }
         at += 1usize
     }
     ret true
+}
+
+// A type that still mentions a parameter: the parameter itself, an instance built over
+// one (`Node[T]` in a template), or a pointer, slice or array of either. An aggregate
+// instantiated over such a type is not concrete, whatever its argument's kind says --
+// `List[Node[T]]` written in a struct and again in a function name two parameters, and
+// only an instance that knows it is still generic can be told to match the other.
+fn type_still_generic(c: *Checker, ty: Type) -> bool {
+    if ty.kind == .TypeParameter { ret true }
+    if ty.kind == .Named {
+        if !ty.has_element || ty.element >= c.aggregate_count { ret false }
+        ret c.aggregates[ty.element].instance && c.aggregates[ty.element].generic
+    }
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Array {
+        if !ty.has_element || ty.element >= c.type_count { ret false }
+        ret type_still_generic(c, c.types[ty.element])
+    }
+    ret false
 }
 
 fn aggregate_arguments_equal(c: *Checker, template: Aggregate, first: usize, second: usize) -> bool {
@@ -2546,7 +2564,11 @@ fn substitute_aggregate_type(c: *Checker, template_index: usize, first_argument:
         let source = c.aggregates[ty.element]
         let nested_template = c.aggregates[source.template_index]
         if c.generic_argument_count + nested_template.comptime_count > c.generic_arguments.len { ret (invalid_type(), Capacity) }
+        // The block is claimed whole before any argument is substituted: substituting one may
+        // instantiate a nested generic -- `list.List[Node[T]]` -- whose own arguments would
+        // otherwise land in the slots this instance is about to fill (D145's rule, again).
         let nested_first = c.generic_argument_count
+        c.generic_argument_count += nested_template.comptime_count
         var at = 0usize
         while at < nested_template.comptime_count {
             let source_argument = c.generic_arguments[source.first_argument + at]
@@ -2563,8 +2585,7 @@ fn substitute_aggregate_type(c: *Checker, template_index: usize, first_argument:
                     nested_argument.symbolic = false
                 }
             }
-            c.generic_arguments[c.generic_argument_count] = nested_argument
-            c.generic_argument_count += 1usize
+            c.generic_arguments[nested_first + at] = nested_argument
             at += 1usize
         }
         let (nested_instance, instance_error) = instantiate_aggregate(c, source.template_index, nested_first)
@@ -4178,7 +4199,10 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
         let source = c.aggregates[ty.element]
         let template = c.aggregates[source.template_index]
         if c.generic_argument_count + template.comptime_count > c.generic_arguments.len { ret (invalid_type(), Capacity) }
+        // Claimed whole before any argument is substituted, for the same reason as in
+        // `substitute_aggregate_type`: a nested instance would otherwise take these slots.
         let aggregate_first = c.generic_argument_count
+        c.generic_argument_count += template.comptime_count
         var argument_at = 0usize
         while argument_at < template.comptime_count {
             let source_argument = c.generic_arguments[source.first_argument + argument_at]
@@ -4195,8 +4219,7 @@ fn substitute_type(c: *Checker, function_index: usize, first_argument: usize, ty
                     aggregate_argument_value.symbolic = false
                 }
             }
-            c.generic_arguments[c.generic_argument_count] = aggregate_argument_value
-            c.generic_argument_count += 1usize
+            c.generic_arguments[aggregate_first + argument_at] = aggregate_argument_value
             argument_at += 1usize
         }
         let (aggregate_instance, aggregate_error) = instantiate_aggregate(c, source.template_index, aggregate_first)

@@ -738,6 +738,20 @@ $dataAdaptersWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fix
 if ($LASTEXITCODE -ne 0 -or $dataAdaptersWritten -ne 'executable written') { throw 'data_adapters emission failed' }
 & $dataAdaptersPath
 if ($LASTEXITCODE -ne 0) { throw "a data adapter check failed: exit $LASTEXITCODE" }
+# `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
+# generational keys: stale after removal, reused with the next generation, retired at the last.
+$statSlotsPath = Join-Path $testBuild 'stat-slots-selfhost.exe'
+$statSlotsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\stat_slots\src\main.e') $repo 'x64' 'windows' $statSlotsPath
+if ($LASTEXITCODE -ne 0 -or $statSlotsWritten -ne 'executable written') { throw 'stat_slots emission failed' }
+& $statSlotsPath
+if ($LASTEXITCODE -ne 0) { throw "a stat or slot_map check failed: exit $LASTEXITCODE" }
+# `e.data.linked`: stable node identifiers through insertion at both ends and beside a node,
+# removal that never reuses one, and `clear` invalidating every identifier.
+$dataLinkedPath = Join-Path $testBuild 'data-linked-selfhost.exe'
+$dataLinkedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_linked\src\main.e') $repo 'x64' 'windows' $dataLinkedPath
+if ($LASTEXITCODE -ne 0 -or $dataLinkedWritten -ne 'executable written') { throw 'data_linked emission failed' }
+& $dataLinkedPath
+if ($LASTEXITCODE -ne 0) { throw "a linked-list check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

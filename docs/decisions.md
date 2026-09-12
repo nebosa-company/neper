@@ -2894,3 +2894,49 @@ recorded here.
 `link/data_adapters` carries all three. Two idioms it re-taught: a two-value call is bound
 before it is returned (`ret f()` does not forward a pair), and a `main` that ends in
 `os.exit` still needs its `ret ok`.
+## D162 — `e.algo.stat` and `e.data.slot_map`
+
+`e.algo.stat` is Welford's running mean and second moment, Chan's merge of two
+accumulators, and the bivariate form of the same for a least-squares line and Pearson's
+`r`; the square roots are `e.math`'s, so the plan's empty dependency list gains `e.math`.
+Every question that needs data it does not have -- a variance of nothing, a sample
+variance of one, a slope with no spread in `x` -- says `false` rather than dividing.
+
+`e.data.slot_map` is the generational handle map the fence describes, over a `State[T]`
+behind the `*void` the way `e.channel` keeps its state: values, generations, a live bit
+and a free chain, all caller-funded at `init` and never grown. A removal moves the slot's
+generation on and chains it back; at the last generation it retires instead, so no key
+is ever issued twice. `clear` moves every live slot on and rebuilds the chain over what
+has not retired. The state type and two helpers are public declarations beyond the fence,
+so the module is `partial` (D121's rule). `link/stat_slots` drives the generation to its
+last value by hand through the state to see a slot retire.
+## D163 — `e.data.linked`, and the two generic-substitution defects it exposed
+
+`e.data.linked` is D76's stable-identifier list: nodes in one `list.List[Node[T]]`,
+addressed by index, a removed slot never reused, so a `NodeId` is valid exactly while its
+node is live and `InvalidNode` ever after; `clear` invalidates every identifier issued
+and keeps the storage. It is `partial` for one helper beyond the fence (`allocate`).
+
+Writing it was the first time a generic struct held an instance of another module's
+generic over its own parameter (`nodes: list.List[Node[T]]`) and a generic function
+instantiated the same shape over *its* parameter. Two checker defects came out:
+
+1. **An instance built over a still-generic instance counted as concrete.** The
+   concreteness test looked for a bare parameter among the arguments; `Node[T]` is not
+   one, so `list.List[Node[T]]` was instantiated -- and cached -- as if concrete, with
+   fields substituted over a parameter that was not bound. `type_still_generic` now
+   walks into instances, pointers, slices and arrays, and only a type mentioning no
+   parameter makes an instance concrete.
+2. **Both substituters read their argument block after recursing into it.** D145 made
+   `collect_generic_arguments` claim its slots before reading any argument; the two
+   substitution paths (`substitute_type`, `substitute_aggregate_type`) had the same
+   shape and the same defect, so substituting `List[Node[T]]` wrote `Node[i32]`'s
+   argument where `List`'s was read, and the field came out as `List[i32]`. Both claim
+   the block first now. The symptom was an `E-TYPE-0002` on a plain field assignment
+   in the instance pass, and finding it took a probe that names which of the equality's
+   checks failed -- worth keeping in mind, since the checker has no way to say.
+
+One bootstrap limit, too: `MAX_TRAP_SITES` was 4096 and the compiler's own source sat
+within a handful of it; past the table the bootstrap emitted `np_trap_site_-1` and the
+assembler refused the program with an undefined symbol. It is 16384 now and the
+bootstrap says when it is reached.

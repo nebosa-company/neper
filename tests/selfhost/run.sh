@@ -754,6 +754,18 @@ data_adapters_written=$($test_build/neper-self emit-executable "$repo/tests/self
 [ "$data_adapters_written" = 'executable written' ]
 chmod +x "$test_build/data-adapters-selfhost"
 "$test_build/data-adapters-selfhost"
+# `e.algo.stat` against closed-form moments and a least-squares line, and `e.data.slot_map`'s
+# generational keys: stale after removal, reused with the next generation, retired at the last.
+stat_slots_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/stat_slots/src/main.e" "$repo" x64 linux "$test_build/stat-slots-selfhost")
+[ "$stat_slots_written" = 'executable written' ]
+chmod +x "$test_build/stat-slots-selfhost"
+"$test_build/stat-slots-selfhost"
+# `e.data.linked`: stable node identifiers through insertion at both ends and beside a node,
+# removal that never reuses one, and `clear` invalidating every identifier.
+data_linked_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_linked/src/main.e" "$repo" x64 linux "$test_build/data-linked-selfhost")
+[ "$data_linked_written" = 'executable written' ]
+chmod +x "$test_build/data-linked-selfhost"
+"$test_build/data-linked-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

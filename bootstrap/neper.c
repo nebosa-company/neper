@@ -48,7 +48,7 @@
 #define MAX_USES 128
 #define MAX_STRINGS 4096
 #define MAX_DIAGNOSTICS 4096
-#define MAX_TRAP_SITES 4096
+#define MAX_TRAP_SITES 16384
 #define MAX_PATH_LEN 4096
 #define MAX_LOOP_DEPTH 64
 #define MAX_ARRAY_ELEMENTS 4096
@@ -5128,6 +5128,13 @@ static void collect_traps_expr(Compiler *c, Function *fn, Expr *expr) {
     }
     else if (expr->kind == EX_BINARY && (expr->as.binary.op == TK_SLASH || expr->as.binary.op == TK_PERCENT)) {
         kind = "divide"; detail = "invalid integer division";
+    }
+    if (kind && c->program.trap_site_count >= MAX_TRAP_SITES) {
+        /* Past the table a site would be emitted as np_trap_site_-1 and the assembler
+           would refuse the whole program with an undefined symbol; say so here instead. */
+        fprintf(stderr, "neper: error[E-LIMIT-9999]: the bootstrap's %d trap sites are used up at %s:%d:%d\n",
+                MAX_TRAP_SITES, c->source_path, expr->token.line, expr->token.column);
+        exit(1);
     }
     if (kind && c->program.trap_site_count < MAX_TRAP_SITES) {
         struct TrapSite *site = &c->program.trap_sites[c->program.trap_site_count];
