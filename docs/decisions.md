@@ -3033,3 +3033,18 @@ the division remainder into a sticky digit, then `quantize` rounds once under th
 so a tie is seen as a tie only when nothing below it is nonzero. `Inexact` is declared
 by the surface and never returned: every operation that could be inexact carries a
 rounding mode, and the header says so rather than inventing a case for it.
+## D169 — `e.time.calendar` and `e.fmt.quoted_printable`
+
+`e.time.calendar` is proleptic Gregorian arithmetic with one currency, the day count
+`e.time` already keeps: weekdays and ISO 8601 weeks (the Thursday of a date's week
+decides its week-year), month and year arithmetic clamping the day to the month landed
+in, and `Components` both ways with the derived fields checked on the way back. The
+pattern verbs of `format` and `parse` are a comptime `str` -- the `Str` parameter kind
+`e.fmt`'s `format` introduced -- read at run time here; a pattern is small and the run is short, so folding it
+into the instance buys nothing yet.
+
+`e.fmt.quoted_printable` is RFC 2045 6.7 over `e.io` streams and caller storage, the
+state at the front of the storage and the rest a buffer. Decoding is strict: upper-case
+hex, CRLF only, nothing above 126. Encoding breaks with `=CRLF` when the next piece
+would not leave room for the `=` of a break, and escapes a trailing space or tab before
+every break and at the end, since a receiver may strip white space at a line end.

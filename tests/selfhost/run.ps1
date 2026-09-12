@@ -807,6 +807,18 @@ $algoDecimalWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $algoDecimalWritten -ne 'executable written') { throw 'algo_decimal emission failed' }
 & $algoDecimalPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_decimal check failed: exit $LASTEXITCODE" }
+# `e.time.calendar`: weekdays, ISO weeks, month arithmetic with the clamped day, comptime patterns.
+$timeCalendarPath = Join-Path $testBuild 'time-calendar-selfhost.exe'
+$timeCalendarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\time_calendar\src\main.e') $repo 'x64' 'windows' $timeCalendarPath
+if ($LASTEXITCODE -ne 0 -or $timeCalendarWritten -ne 'executable written') { throw 'time_calendar emission failed' }
+& $timeCalendarPath
+if ($LASTEXITCODE -ne 0) { throw "a time_calendar check failed: exit $LASTEXITCODE" }
+# `e.fmt.quoted_printable`: escapes, soft breaks at the limit, strict decoding, one-byte reads.
+$fmtQuotedPrintablePath = Join-Path $testBuild 'fmt-quoted-printable-selfhost.exe'
+$fmtQuotedPrintableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_quoted_printable\src\main.e') $repo 'x64' 'windows' $fmtQuotedPrintablePath
+if ($LASTEXITCODE -ne 0 -or $fmtQuotedPrintableWritten -ne 'executable written') { throw 'fmt_quoted_printable emission failed' }
+& $fmtQuotedPrintablePath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_quoted_printable check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

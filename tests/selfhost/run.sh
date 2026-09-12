@@ -812,6 +812,16 @@ algo_decimal_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$algo_decimal_written" = 'executable written' ]
 chmod +x "$test_build/algo-decimal-selfhost"
 "$test_build/algo-decimal-selfhost"
+# `e.time.calendar`: weekdays, ISO weeks, month arithmetic with the clamped day, comptime patterns.
+time_calendar_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/time_calendar/src/main.e" "$repo" x64 linux "$test_build/time-calendar-selfhost")
+[ "$time_calendar_written" = 'executable written' ]
+chmod +x "$test_build/time-calendar-selfhost"
+"$test_build/time-calendar-selfhost"
+# `e.fmt.quoted_printable`: escapes, soft breaks at the limit, strict decoding, one-byte reads.
+fmt_quoted_printable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_quoted_printable/src/main.e" "$repo" x64 linux "$test_build/fmt-quoted-printable-selfhost")
+[ "$fmt_quoted_printable_written" = 'executable written' ]
+chmod +x "$test_build/fmt-quoted-printable-selfhost"
+"$test_build/fmt-quoted-printable-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
