@@ -1012,6 +1012,11 @@ fmt_mail_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_mail_written" = 'executable written' ]
 chmod +x "$test_build/fmt-mail-selfhost"
 "$test_build/fmt-mail-selfhost"
+# `e.fmt.html.template`: every context escaped, an unsafe scheme replaced, the typed path, six refusals.
+fmt_html_template_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_html_template/src/main.e" "$repo" x64 linux "$test_build/fmt-html-template-selfhost")
+[ "$fmt_html_template_written" = 'executable written' ]
+chmod +x "$test_build/fmt-html-template-selfhost"
+"$test_build/fmt-html-template-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

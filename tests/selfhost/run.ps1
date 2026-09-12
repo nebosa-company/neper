@@ -1049,6 +1049,12 @@ $fmtMailWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtMailWritten -ne 'executable written') { throw 'fmt_mail emission failed' }
 & $fmtMailPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_mail check failed: exit $LASTEXITCODE" }
+# `e.fmt.html.template`: every context escaped, an unsafe scheme replaced, the typed path, six refusals.
+$fmtHtmlTemplatePath = Join-Path $testBuild 'fmt-html-template-selfhost.exe'
+$fmtHtmlTemplateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_html_template\src\main.e') $repo 'x64' 'windows' $fmtHtmlTemplatePath
+if ($LASTEXITCODE -ne 0 -or $fmtHtmlTemplateWritten -ne 'executable written') { throw 'fmt_html_template emission failed' }
+& $fmtHtmlTemplatePath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_html_template check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

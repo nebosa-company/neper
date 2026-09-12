@@ -3433,3 +3433,25 @@ decode B and Q in UTF-8, US-ASCII and ISO-8859-1, with the whitespace between tw
 them dropped; a word in another charset or of another shape is left as written. The
 plan's dependencies on multipart, quoted-printable and encoding are not used: a body
 is the caller's to route through them, as the fence itself says.
+
+## D188 — `e.fmt.html.template`, escaping by context
+
+The HTML template reuses the core engine's parse and node table and decides, once
+at parse time, the context of every interpolation by running the literal text
+before it through a small HTML state machine: element text, an attribute value in
+either quote, a URI attribute, a `style` attribute or element, a `script` element.
+Execution walks the same nodes with the core engine's lookup, truthiness and count,
+and writes each value through the escaper its context names -- entities in text and
+attributes, percent-encoding with the scheme checked for a URI (`javascript:` and
+any scheme but http, https and mailto become `#unsafe`), CSS hex escapes, a
+JavaScript string literal with hex escapes for everything that could form a tag or
+a quote. An interpolation in a tag or attribute name, in an unquoted value, in an
+event handler attribute or in a comment is `UnsafeContext` at parse, since no
+escaping makes those safe; a template that ends inside a tag is refused the same
+way. There is no raw insertion, as the fence says.
+
+The contexts ride behind the inner template's state pointer: this module's state
+begins with the core engine's `nodes` field and adds the context table, so the
+same pointer serves both `template.validate` and this module's `execute`. A first
+draft kept them in a module-level table and found that a module-scope `var` is not
+lowered yet; the prefix layout needs no global and is the better shape anyway.
