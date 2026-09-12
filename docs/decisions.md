@@ -2793,3 +2793,27 @@ The cost is that a program with a duplicate cross-module instance carries it onc
 both builds rather than once overall -- the size the source build always had. Sharing one copy is
 still worth doing; it just has to be done on both paths to keep D130, which is a symmetric
 optimisation for another day, not a divergence in the linker that has it.
+## D157 — the same fold on both link paths: the size win back, D130 kept
+
+D156 removed the artifact linker's content-hash fold because the whole-program path had none, so
+sharing one copy of a duplicate function made an artifact image smaller than the source build. That
+kept D130 but gave up a real optimisation: a duplicate generic instance, or two functions that
+compile alike, was carried once per module in every image.
+
+Now both paths fold, by the same key and in the same order, so they stay byte-identical while
+sharing the copy. The artifact linker folds as it did (D36), keyed by the `content_hash` each `.em`
+carries. The whole-program path folds in its codegen loop: a function is emitted, its hash is
+formed by `em.write_code_hash_input` -- the exact bytes the `.em` hash is taken over, code plus
+each relocation's target by name -- and if an earlier function in the same order already has that
+hash, the just-emitted bytes and their relocations are rewound and the function points at the
+first copy. The order is the one both paths already share (the canonical lowering order the
+artifacts also use), so first-occurrence-wins picks the same copy on both. Folding is only for an
+executable; an `.em` or `.o` still carries every function, so the fold happens once at the link
+that consumes it.
+
+Measured, source and artifact byte-identical on both hosts, and smaller than D156 where a
+duplicate existed: `os_process` 59,024 to 58,232, `supplied_hash` 39,620 to 39,114; `element_cmp`,
+`function_values`, `folded_hash` and `generic`, which have no duplicate, unchanged. The self-hosted
+compiler still reproduces itself byte-for-byte (stage 2 equals stage 3), now with the fold applied
+to its own build. `generic_folding` continues to assert the shared-instance image is identical
+source-to-artifact -- now with both paths sharing rather than both keeping every copy.

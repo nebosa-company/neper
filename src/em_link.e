@@ -350,12 +350,16 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     if relocations_error != ok { ret relocations_error }
     program.relocations = relocations
     program.relocation_count = 0usize
-    // A module owns its own copy of every generic instance it uses, so the same concrete
-    // function arrives from several artifacts. The incremental linker (D36) once shared one copy
-    // by content hash, but the whole-program path emits every reachable function and shares
-    // nothing, so a shared copy made an artifact image smaller than the source build and broke
-    // D130. Both paths now keep every reachable function; a duplicate instance is emitted once
-    // per module, the same on both (D156).
+    // Every module owns its own copy of the generic instances it uses, so the same concrete
+    // function arrives from several artifacts, and two distinct functions can compile alike.
+    // Either way one copy is shared, keyed by the content hash the artifact carries. The
+    // whole-program path folds by the same hash over the same order (D157), so an image linked
+    // from artifacts stays byte-identical to one compiled from source (D130).
+    let (folded_hashes, folded_hashes_error) = mem.alloc[usize](a, function_count)
+    if folded_hashes_error != ok { ret folded_hashes_error }
+    let (folded_offsets, folded_offsets_error) = mem.alloc[usize](a, function_count)
+    if folded_offsets_error != ok { ret folded_offsets_error }
+    var folded_count = 0usize
 
     // The same rule the source path applies after lowering: keep what `main` reaches and drop the
     // rest. It is done here, before a byte of code is copied, so that both link paths leave out
@@ -387,7 +391,25 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             assembled_function.instance = function.instance
             functions[global_function] = assembled_function
             program.builder.function_count += 1usize
+            var folded = false
+            var fold_at = 0usize
+            while fold_at < folded_count {
+                if folded_hashes[fold_at] == function.content_hash {
+                    program.function_offsets[global_function] = folded_offsets[fold_at]
+                    folded = true
+                    break
+                }
+                fold_at += 1usize
+            }
+            if folded {
+                position += 1usize
+                continue
+            }
             program.function_offsets[global_function] = program.machine.count
+            if folded_count == folded_hashes.len { ret InvalidInput }
+            folded_hashes[folded_count] = function.content_hash
+            folded_offsets[folded_count] = program.machine.count
+            folded_count += 1usize
             var code_at = 0usize
             while code_at < function.code_length {
                 try emit_x64.byte(&program.machine, artifacts[owner_at].bytes[function.code_start + code_at])

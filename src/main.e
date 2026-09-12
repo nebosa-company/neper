@@ -1874,6 +1874,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // function count and not to a constant of its own.
         let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.function_count + 1usize)
         if function_offsets_error != ok { ret function_offsets_error }
+        // Two functions that compile to the same bytes -- a duplicate generic instance, or two
+        // distinct functions that happen to agree -- share one copy in the image, keyed by the
+        // same content hash the `.em` carries and folded in the same order, so an executable
+        // linked from artifacts and one compiled from source come out identical (D130, D157).
+        // Only when producing an executable: an `.em` or `.o` keeps every function so the fold
+        // can happen once, at the link that consumes it.
+        let want_fold = writes_executable
+        var fold_hashes = function_offsets
+        var fold_offsets = function_offsets
+        var fold_count = 0usize
+        var fold_scratch: binary.Buffer = zero
+        if want_fold {
+            let (fh, fh_error) = mem.alloc[usize](a, builder.function_count + 1usize)
+            if fh_error != ok { ret fh_error }
+            fold_hashes = fh
+            let (fo, fo_error) = mem.alloc[usize](a, builder.function_count + 1usize)
+            if fo_error != ok { ret fo_error }
+            fold_offsets = fo
+            let (fs, fs_error) = mem.alloc[usize](a, 2097152usize)
+            if fs_error != ok { ret fs_error }
+            try binary.init(&fold_scratch, fs)
+        }
         var relocation_count = 0usize
         var function_at = 0usize
         var machine_abi: codegen_x64.Abi = .SystemV
@@ -1890,11 +1912,41 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 5usize, ranges, allocations)
             if allocation_error != ok { ret allocation_error }
             if emit_machine_code {
-                function_offsets[function_at] = machine.count
+                let function_start = machine.count
+                function_offsets[function_at] = function_start
+                let relocation_start = relocation_count
                 let codegen_error = codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
                 if codegen_error != ok {
                     try print_codegen_diagnostic(&loaded, builder.functions[function_at], &codegen_context)
                     ret codegen_error
+                }
+                if want_fold {
+                    fold_scratch.count = 0usize
+                    let hash_input_error = em.write_code_hash_input(&loaded, &builder, &machine, function_start, machine.count, relocations, relocation_count, &fold_scratch)
+                    // A function too large for the scratch is simply not folded: the hash cannot be
+                    // formed, so it is left unique, which is always safe.
+                    if hash_input_error == ok {
+                        let (content, content_error) = artifact_hash.xxhash64(fold_scratch.bytes[0usize..fold_scratch.count])
+                        if content_error == ok {
+                            var fold_at = 0usize
+                            var duplicate = false
+                            while fold_at < fold_count {
+                                if fold_hashes[fold_at] == content {
+                                    machine.count = function_start
+                                    relocation_count = relocation_start
+                                    function_offsets[function_at] = fold_offsets[fold_at]
+                                    duplicate = true
+                                    break
+                                }
+                                fold_at += 1usize
+                            }
+                            if !duplicate {
+                                fold_hashes[fold_count] = content
+                                fold_offsets[fold_count] = function_start
+                                fold_count += 1usize
+                            }
+                        }
+                    }
                 }
             }
             function_at += 1usize
