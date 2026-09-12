@@ -3063,3 +3063,19 @@ are what Python's `tarfile` writes, trimmed to the two end blocks and carried as
 literals -- an array literal of ten thousand bytes is ten thousand stores in one
 function, and that is past the register allocator's table. `generate.py` beside the
 fixture regenerates them.
+## D171 — `e.metrics` and `e.fmt.lzw`
+
+`e.metrics` is three atomics: a counter and a gauge as one relaxed instruction each, and
+a histogram whose buckets are cumulative in its snapshot and whose `f64` sum is kept as
+bits in an `Atomic[u64]` and added under a compare-and-swap loop. Bounds must be finite
+and strictly increasing; the bucket above the last bound is implicit. The plan's
+dependency list gains `e.math` for `abs`.
+
+`e.fmt.lzw` is the variable-width LZW of GIF and TIFF with the bit order and literal
+width explicit, over caller storage sized by `storage_required`: the writer's dictionary
+a hash of (prefix, byte) probed linearly, the reader's a prefix chain unwound into a
+stack, both cleared when the 12-bit table fills. The tables are byte-packed because
+`mem.cast` is pointer-only and the storage is `[]u8`. TIFF's early-change variant is not
+applied; the header says so. The encoder's bytes are checked against an independent
+Python encoder on five streams, by length and FNV-1a -- a round trip alone would prove
+only that the two halves agree with each other.

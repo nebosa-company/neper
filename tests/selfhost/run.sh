@@ -832,6 +832,16 @@ fmt_tar_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_tar_written" = 'executable written' ]
 chmod +x "$test_build/fmt-tar-selfhost"
 "$test_build/fmt-tar-selfhost"
+# `e.metrics`: a counter, a gauge, cumulative histogram buckets and the sum under a CAS loop.
+metrics_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/metrics/src/main.e" "$repo" x64 linux "$test_build/metrics-selfhost")
+[ "$metrics_written" = 'executable written' ]
+chmod +x "$test_build/metrics-selfhost"
+"$test_build/metrics-selfhost"
+# `e.fmt.lzw`: both bit orders, two literal widths, table clears, and bytes matched to a reference.
+fmt_lzw_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_lzw/src/main.e" "$repo" x64 linux "$test_build/fmt-lzw-selfhost")
+[ "$fmt_lzw_written" = 'executable written' ]
+chmod +x "$test_build/fmt-lzw-selfhost"
+"$test_build/fmt-lzw-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

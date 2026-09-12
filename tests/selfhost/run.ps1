@@ -831,6 +831,18 @@ $fmtTarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtTarWritten -ne 'executable written') { throw 'fmt_tar emission failed' }
 & $fmtTarPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_tar check failed: exit $LASTEXITCODE" }
+# `e.metrics`: a counter, a gauge, cumulative histogram buckets and the sum under a CAS loop.
+$metricsPath = Join-Path $testBuild 'metrics-selfhost.exe'
+$metricsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\metrics\src\main.e') $repo 'x64' 'windows' $metricsPath
+if ($LASTEXITCODE -ne 0 -or $metricsWritten -ne 'executable written') { throw 'metrics emission failed' }
+& $metricsPath
+if ($LASTEXITCODE -ne 0) { throw "a metrics check failed: exit $LASTEXITCODE" }
+# `e.fmt.lzw`: both bit orders, two literal widths, table clears, and bytes matched to a reference.
+$fmtLzwPath = Join-Path $testBuild 'fmt-lzw-selfhost.exe'
+$fmtLzwWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_lzw\src\main.e') $repo 'x64' 'windows' $fmtLzwPath
+if ($LASTEXITCODE -ne 0 -or $fmtLzwWritten -ne 'executable written') { throw 'fmt_lzw emission failed' }
+& $fmtLzwPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_lzw check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
