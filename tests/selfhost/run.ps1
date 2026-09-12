@@ -935,6 +935,24 @@ $fmtGzipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtGzipWritten -ne 'executable written') { throw 'fmt_gzip emission failed' }
 & $fmtGzipPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_gzip check failed: exit $LASTEXITCODE" }
+# `e.fmt.zip`: Python's archive and a hand-built ZIP64 one read, seven refusals.
+$fmtZipPath = Join-Path $testBuild 'fmt-zip-selfhost.exe'
+$fmtZipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_zip\src\main.e') $repo 'x64' 'windows' $fmtZipPath
+if ($LASTEXITCODE -ne 0 -or $fmtZipWritten -ne 'executable written') { throw 'fmt_zip emission failed' }
+& $fmtZipPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_zip check failed: exit $LASTEXITCODE" }
+# `e.test.support`: the clock, the scripted reader and writer, the schedule.
+$testSupportPath = Join-Path $testBuild 'test-support-selfhost.exe'
+$testSupportWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\test_support\src\main.e') $repo 'x64' 'windows' $testSupportPath
+if ($LASTEXITCODE -ne 0 -or $testSupportWritten -ne 'executable written') { throw 'test_support emission failed' }
+& $testSupportPath
+if ($LASTEXITCODE -ne 0) { throw "a test_support check failed: exit $LASTEXITCODE" }
+# `e.cli`: a command tree parsed, validated, refused and rendered; parse_into over a struct.
+$cliPath = Join-Path $testBuild 'cli-selfhost.exe'
+$cliWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\cli\src\main.e') $repo 'x64' 'windows' $cliPath
+if ($LASTEXITCODE -ne 0 -or $cliWritten -ne 'executable written') { throw 'cli emission failed' }
+& $cliPath
+if ($LASTEXITCODE -ne 0) { throw "a cli check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

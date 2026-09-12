@@ -3193,3 +3193,28 @@ the CRC-32 and ISIZE; both tell the decoder when the source has ended and let it
 drain its accumulator first, which the first draft did not and refused a valid
 stream. Protobuf is the wire-format primitive set with the ten-byte negative varint,
 zigzag and the field-number ranges enforced.
+
+## D177 — `e.fmt.zip`, `e.test.support` and `e.cli`
+
+ZIP is read from its tail: the end-of-central-directory record is found under the
+comment, the ZIP64 locator and record take over when a count is saturated, and the
+central directory is read once into the arena and checked against every `Limits`
+field before an entry is exposed. An entry is read through a seek to its local
+header, stored bytes straight from the source and DEFLATE through `e.algo.deflate`,
+with the CRC-32 and size compared at the end; the reader's storage must be 8-aligned
+because it is cast to the state, and `extract` takes it from the arena as `u64`s and
+views the bytes. That is the general rule now written down: `mem.alloc[u8]` aligns to
+one, so storage a module casts is allocated as `u64` and viewed. Encryption and any
+method but 0 and 8 are `Unsupported`; an absolute name, a `..` segment, a backslash or
+a bad signature is `Invalid`. The fixture's ZIP64 archive is hand-built, since Python
+only writes the extension when a size needs it, and Python reads it back.
+
+`e.test.support` is what its fence says: a clock moved only by `advance`, a reader that
+plays chunks and failures, a writer capped per call into a capture, a schedule that
+admits participants in order and fails once exhausted. `e.cli` parses a `Command`
+tree -- long, short, inline and repeated options, `--`, a subcommand by its first bare
+word, the rest positionals, required options read from their `env` variable before
+`Missing` -- validates the spec, renders wrapped help and reads a struct's fields as
+options through `meta`. Values are collected eight per option in a scratch table
+during the parse; more is `InvalidArgument`, a limit that a real command line does not
+reach and the fixture does not test.

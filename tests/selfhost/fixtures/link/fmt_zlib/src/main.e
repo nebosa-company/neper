@@ -35,6 +35,14 @@ fn inflate(storage: []u8, framed: []const u8, out: []u8, limit: u64) -> (usize, 
     ret (total, ok)
 }
 
+// Storage the module casts to its state struct: taken as u64s so it is 8-aligned.
+fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err) {
+    let words = bytes / 8usize + 1usize
+    let (taken, taken_error) = mem.alloc[u64](a, words)
+    if taken_error != ok { ret (zero, taken_error) }
+    ret (mem.view(a, a.off - words * 8usize, words * 8usize), ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let framed: [70]u8 = [70]u8{ 120, 218, 203, 72, 205, 201, 201, 87, 200, 64, 39, 117, 20, 170, 114, 50, 147, 20, 210, 138, 18, 115, 51, 243, 210, 21, 242, 203, 82, 139, 20, 242, 82, 11, 128, 100, 74, 106, 90, 78, 98, 73, 42, 87, 198, 168, 198, 81, 141, 163, 26, 71, 53, 142, 106, 28, 213, 56, 170, 113, 84, 227, 224, 214, 8, 0, 205, 57, 63, 30 }
     let line = "hello hello hello hello, zlib framing over neper deflate\n"
@@ -46,7 +54,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         i += 1usize
     }
     let needed = zlib.storage_required(.Balanced)
-    let (storage, s_error) = mem.alloc[u8](a, needed)
+    let (storage, s_error) = aligned(a, needed)
     if s_error != ok { os.exit(2) }
     let (out, o_error) = mem.alloc[u8](a, 4096usize)
     if o_error != ok { os.exit(3) }

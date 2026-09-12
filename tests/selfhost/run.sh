@@ -917,6 +917,21 @@ fmt_gzip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_gzip_written" = 'executable written' ]
 chmod +x "$test_build/fmt-gzip-selfhost"
 "$test_build/fmt-gzip-selfhost"
+# `e.fmt.zip`: Python's archive and a hand-built ZIP64 one read, seven refusals.
+fmt_zip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_zip/src/main.e" "$repo" x64 linux "$test_build/fmt-zip-selfhost")
+[ "$fmt_zip_written" = 'executable written' ]
+chmod +x "$test_build/fmt-zip-selfhost"
+"$test_build/fmt-zip-selfhost"
+# `e.test.support`: the clock, the scripted reader and writer, the schedule.
+test_support_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/test_support/src/main.e" "$repo" x64 linux "$test_build/test-support-selfhost")
+[ "$test_support_written" = 'executable written' ]
+chmod +x "$test_build/test-support-selfhost"
+"$test_build/test-support-selfhost"
+# `e.cli`: a command tree parsed, validated, refused and rendered; parse_into over a struct.
+cli_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/cli/src/main.e" "$repo" x64 linux "$test_build/cli-selfhost")
+[ "$cli_written" = 'executable written' ]
+chmod +x "$test_build/cli-selfhost"
+"$test_build/cli-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

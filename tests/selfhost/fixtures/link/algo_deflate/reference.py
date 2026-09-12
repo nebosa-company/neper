@@ -59,12 +59,20 @@ fn deflate_all(storage: []u8, source: []const u8, out: []u8, level: deflate.Leve
     ret (written, ok)
 }
 
+// Storage the module casts to its state struct: taken as u64s so it is 8-aligned.
+fn aligned(a: *mem.Arena, bytes: usize) -> ([]u8, err) {
+    let words = bytes / 8usize + 1usize
+    let (taken, taken_error) = mem.alloc[u64](a, words)
+    if taken_error != ok { ret (zero, taken_error) }
+    ret (mem.view(a, a.off - words * 8usize, words * 8usize), ok)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
 '''
 
-BODY = '''    let (dec_storage, s1) = mem.alloc[u8](a, 40000usize)
+BODY = '''    let (dec_storage, s1) = aligned(a, 40000usize)
     if s1 != ok { os.exit(1) }
-    let (enc_storage, s2) = mem.alloc[u8](a, 150000usize)
+    let (enc_storage, s2) = aligned(a, 150000usize)
     if s2 != ok { os.exit(2) }
     let (out, s3) = mem.alloc[u8](a, 80000usize)
     if s3 != ok { os.exit(3) }
