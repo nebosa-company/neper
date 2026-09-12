@@ -2940,3 +2940,20 @@ One bootstrap limit, too: `MAX_TRAP_SITES` was 4096 and the compiler's own sourc
 within a handful of it; past the table the bootstrap emitted `np_trap_site_-1` and the
 assembler refused the program with an undefined symbol. It is 16384 now and the
 bootstrap says when it is reached.
+## D164 — `e.data.graph` and `e.algo.graph`
+
+`e.data.graph` is the immutable CSR of D76: a builder that only collects edges, and
+`finish` counting each node's edges into offsets and placing them in insertion order, so
+node `n`'s edges are one contiguous slice. A node named by an edge past the builder's
+count grows the count; an undirected edge reserves its two slots before adding either.
+Exactly its fence, so `source`.
+
+`e.algo.graph` is the traversal and path set over it, each deterministic from node order
+and adjacency order: BFS with the visit order as its own queue; preorder DFS on an
+explicit stack of edge cursors, so the order is the recursive one; Kahn's topological
+order with a min-heap of the ready nodes, `Cycle` and nothing else when a node is left
+over; weak components by flooding over the graph and its transpose; strong components by
+Kosaraju over the same transpose, renumbered by smallest node afterwards; Dijkstra over
+`heap.HeapBy` with a `(distance, node)` entry ordered by both, refusing a negative, NaN or
+infinite weight before it is added. The transpose builder and three small declarations
+are beyond the fence, so `partial`.

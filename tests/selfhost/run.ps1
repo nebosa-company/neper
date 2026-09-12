@@ -752,6 +752,18 @@ $dataLinkedWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $dataLinkedWritten -ne 'executable written') { throw 'data_linked emission failed' }
 & $dataLinkedPath
 if ($LASTEXITCODE -ne 0) { throw "a linked-list check failed: exit $LASTEXITCODE" }
+# `e.data.graph`: CSR adjacency from a builder, insertion order kept, undirected edges as two.
+$dataGraphPath = Join-Path $testBuild 'data-graph-selfhost.exe'
+$dataGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_graph\src\main.e') $repo 'x64' 'windows' $dataGraphPath
+if ($LASTEXITCODE -ne 0 -or $dataGraphWritten -ne 'executable written') { throw 'data_graph emission failed' }
+& $dataGraphPath
+if ($LASTEXITCODE -ne 0) { throw "a data_graph check failed: exit $LASTEXITCODE" }
+# `e.algo.graph`: BFS, DFS, topological order and its Cycle, weak and strong components, Dijkstra.
+$algoGraphPath = Join-Path $testBuild 'algo-graph-selfhost.exe'
+$algoGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_graph\src\main.e') $repo 'x64' 'windows' $algoGraphPath
+if ($LASTEXITCODE -ne 0 -or $algoGraphWritten -ne 'executable written') { throw 'algo_graph emission failed' }
+& $algoGraphPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_graph check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

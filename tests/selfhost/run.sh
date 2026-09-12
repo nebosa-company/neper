@@ -766,6 +766,16 @@ data_linked_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$data_linked_written" = 'executable written' ]
 chmod +x "$test_build/data-linked-selfhost"
 "$test_build/data-linked-selfhost"
+# `e.data.graph`: CSR adjacency from a builder, insertion order kept, undirected edges as two.
+data_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_graph/src/main.e" "$repo" x64 linux "$test_build/data-graph-selfhost")
+[ "$data_graph_written" = 'executable written' ]
+chmod +x "$test_build/data-graph-selfhost"
+"$test_build/data-graph-selfhost"
+# `e.algo.graph`: BFS, DFS, topological order and its Cycle, weak and strong components, Dijkstra.
+algo_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_graph/src/main.e" "$repo" x64 linux "$test_build/algo-graph-selfhost")
+[ "$algo_graph_written" = 'executable written' ]
+chmod +x "$test_build/algo-graph-selfhost"
+"$test_build/algo-graph-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
