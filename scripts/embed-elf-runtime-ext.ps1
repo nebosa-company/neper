@@ -31,16 +31,19 @@ $builder = [Text.StringBuilder]::new()
 [void]$builder.AppendLine('use check')
 [void]$builder.AppendLine('use emit_x64')
 [void]$builder.AppendLine()
-[void]$builder.AppendLine('fn append_blob(output: *emit_x64.Buffer, bytes: str) -> err {')
+[void]$builder.AppendLine('// The first `limit` bytes of a chunk that starts `from` bytes into the runtime.')
+[void]$builder.AppendLine('fn append_blob(output: *emit_x64.Buffer, bytes: str, from: usize, limit: usize) -> err {')
 [void]$builder.AppendLine('    var at = 0usize')
-[void]$builder.AppendLine('    while at < bytes.len {')
+[void]$builder.AppendLine('    while at < bytes.len && from + at < limit {')
 [void]$builder.AppendLine('        try emit_x64.byte(output, usize(bytes[at]))')
 [void]$builder.AppendLine('        at += 1usize')
 [void]$builder.AppendLine('    }')
 [void]$builder.AppendLine('    ret ok')
 [void]$builder.AppendLine('}')
 [void]$builder.AppendLine()
-[void]$builder.AppendLine('fn append(output: *emit_x64.Buffer) -> err {')
+[void]$builder.AppendLine('// The runtime up to `limit` bytes: a prefix, because the source is ordered so that a')
+[void]$builder.AppendLine('// function calls only what precedes it, and the linker cuts after the last one reached.')
+[void]$builder.AppendLine('fn append(output: *emit_x64.Buffer, limit: usize) -> err {')
 for ($offset = 0; $offset -lt $bytes.Length; $offset += 64) {
     $end = [Math]::Min($offset + 64, $bytes.Length)
     $escaped = [Text.StringBuilder]::new()
@@ -48,18 +51,30 @@ for ($offset = 0; $offset -lt $bytes.Length; $offset += 64) {
         [void]$escaped.Append(('\x{0:x2}' -f $bytes[$at]))
     }
     $prefix = if ($end -eq $bytes.Length) { '    ret append_blob(output, "' } else { '    try append_blob(output, "' }
-    [void]$builder.AppendLine($prefix + $escaped + '")')
+    [void]$builder.AppendLine($prefix + $escaped + ('", {0}usize, limit)' -f $offset))
 }
 [void]$builder.AppendLine('}')
 [void]$builder.AppendLine()
 [void]$builder.AppendLine(('fn size() -> usize {{ ret {0}usize }}' -f $bytes.Length))
 [void]$builder.AppendLine()
-[void]$builder.AppendLine('fn symbol_offset(name: str) -> (usize, bool) {')
+$table = @()
 foreach ($line in $symbols) {
     if ($line -match '^([0-9a-fA-F]+)\s+[A-Z]\s+(neper_[a-z0-9_]+)$') {
-        $offset = [Convert]::ToUInt64($matches[1], 16)
-        [void]$builder.AppendLine(('    if check.same(name, "{0}") {{ ret ({1}usize, true) }}' -f $matches[2], $offset))
+        $table += [pscustomobject]@{ Name = $matches[2]; Offset = [Convert]::ToUInt64($matches[1], 16) }
     }
+}
+[void]$builder.AppendLine('fn symbol_offset(name: str) -> (usize, bool) {')
+foreach ($entry in $table) {
+    [void]$builder.AppendLine(('    if check.same(name, "{0}") {{ ret ({1}usize, true) }}' -f $entry.Name, $entry.Offset))
+}
+[void]$builder.AppendLine('    ret (0usize, false)')
+[void]$builder.AppendLine('}')
+[void]$builder.AppendLine()
+[void]$builder.AppendLine('// Where a function ends: the start of the next, or the end of the runtime for the last.')
+[void]$builder.AppendLine('fn symbol_end(name: str) -> (usize, bool) {')
+for ($index = 0; $index -lt $table.Count; $index++) {
+    $end = if ($index + 1 -lt $table.Count) { $table[$index + 1].Offset } else { $bytes.Length }
+    [void]$builder.AppendLine(('    if check.same(name, "{0}") {{ ret ({1}usize, true) }}' -f $table[$index].Name, $end))
 }
 [void]$builder.AppendLine('    ret (0usize, false)')
 [void]$builder.AppendLine('}')

@@ -47,53 +47,15 @@ fn append_name(output: *emit_x64.Buffer, name: str, width: usize) -> err {
     ret ok
 }
 
-// Every symbol the runtime imports from KERNEL32, in the order the import tables
-// list them. This is the only place the set is written down: the descriptor, the
-// lookup table, the address table and every thunk offset are computed from it, so
-// adding one is adding a line here.
+// The runtime's imports from KERNEL32 are listed by the runtime module, in the order the runtime
+// first reaches them, so that the imports a prefix of the runtime needs are a prefix of the list.
+// The descriptor, the lookup table, the address table and every thunk offset are computed from
+// that list and `builder.runtime_prefix`, so nothing here names a symbol or an index.
 //
-// It used to be four hand-maintained lists and three magic offsets, and getting one
-// of them wrong produced a binary that loaded and then jumped through the wrong
-// thunk -- a segfault in whatever the program did first, with nothing pointing back
-// at the import table.
-//
-// The runtime's own imports are library 0 and are fixed. A user `extern fn` bound by
-// `@import` adds to them: its library joins the list in first-appearance order and its
-// symbol joins that library's. Everything below is derived from those two orders, so a
-// program with no `extern` lays out exactly as it did when there was only one library.
-fn runtime_import_count() -> usize {
-    ret 25usize
-}
-
-fn runtime_import_name(index: usize) -> str {
-    if index == 0usize { ret "CloseHandle" }
-    if index == 1usize { ret "CreateFileW" }
-    if index == 2usize { ret "ExitProcess" }
-    if index == 3usize { ret "FindClose" }
-    if index == 4usize { ret "FindFirstFileW" }
-    if index == 5usize { ret "FindNextFileW" }
-    if index == 6usize { ret "GetCommandLineW" }
-    if index == 7usize { ret "GetLastError" }
-    if index == 8usize { ret "GetStdHandle" }
-    if index == 9usize { ret "MultiByteToWideChar" }
-    if index == 10usize { ret "ReadFile" }
-    if index == 11usize { ret "VirtualAlloc" }
-    if index == 12usize { ret "WideCharToMultiByte" }
-    if index == 13usize { ret "WriteFile" }
-    if index == 14usize { ret "GetSystemTimeAsFileTime" }
-    if index == 15usize { ret "QueryPerformanceCounter" }
-    if index == 16usize { ret "QueryPerformanceFrequency" }
-    if index == 17usize { ret "CreateProcessW" }
-    if index == 18usize { ret "SetHandleInformation" }
-    if index == 19usize { ret "WaitForSingleObject" }
-    if index == 20usize { ret "GetExitCodeProcess" }
-    if index == 21usize { ret "SetFilePointerEx" }
-    if index == 22usize { ret "CreateThread" }
-    if index == 23usize { ret "GetModuleHandleW" }
-    if index == 24usize { ret "GetProcAddress" }
-    ret ""
-}
-
+// The runtime's own imports are library 0. A user `extern fn` bound by `@import` adds to them:
+// its library joins the list in first-appearance order and its symbol joins that library's.
+// Everything below is derived from those two orders, so a program with no `extern` lays out
+// exactly as it did when there was only one library.
 // Library 0 is the runtime's own and is fixed; a user library follows it, in the
 // order `nir` enumerates them.
 fn library_count(builder: *nir.Builder) -> usize {
@@ -106,12 +68,12 @@ fn library_name(builder: *nir.Builder, library: usize) -> str {
 }
 
 fn library_entry_count(builder: *nir.Builder, library: usize) -> usize {
-    if library == 0usize { ret runtime_import_count() }
+    if library == 0usize { ret runtime_pe_x64.imports_within(builder.runtime_prefix) }
     ret nir.import_symbol_count(builder, library - 1usize)
 }
 
 fn library_entry_name(builder: *nir.Builder, library: usize, entry: usize) -> str {
-    if library == 0usize { ret runtime_import_name(entry) }
+    if library == 0usize { ret runtime_pe_x64.import_name(entry) }
     ret nir.import_symbol_name(builder, library - 1usize, entry)
 }
 
@@ -292,13 +254,36 @@ fn append_globals(builder: *nir.Builder, output: *emit_x64.Buffer, area_offset: 
     ret ok
 }
 
+// How much of the runtime a program needs: the entry and its callees, which every program runs,
+// and then up to the end of the last procedure the code reaches. The runtime's source is ordered
+// so that a procedure calls only what precedes it, which is what lets a prefix stand in for the
+// set -- one cut instead of a relocation table.
+// ponytail: prefix, not per-procedure; a program that reaches `wait` carries `spawn` too.
+fn runtime_prefix(builder: *nir.Builder, relocations: []codegen_x64.Relocation, relocation_count: usize) -> (usize, err) {
+    var limit = runtime_pe_x64.floor()
+    var at = 0usize
+    while at < relocation_count {
+        if !relocations[at].global && !relocations[at].resolved {
+            let reference_index = relocations[at].function_ref
+            if reference_index >= builder.function_ref_count { ret (0usize, InvalidExecutable) }
+            let (end, found) = runtime_pe_x64.symbol_end(builder.function_refs[reference_index].name)
+            if found && end > limit { limit = end }
+        }
+        at += 1usize
+    }
+    ret (limit, ok)
+}
+
 fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret InvalidExecutable }
     let (main_index, main_error) = find_main(builder)
     if main_error != ok { ret main_error }
     let headers_size = 512usize
     let text_address = 4096usize
-    let text_size = runtime_pe_x64.size() + machine.count
+    let (runtime_size, runtime_error) = runtime_prefix(builder, relocations, relocation_count)
+    if runtime_error != ok { ret runtime_error }
+    builder.runtime_prefix = runtime_size
+    let text_size = runtime_size + machine.count
     let (text_raw_size, text_raw_error) = align_up(text_size, 512usize)
     if text_raw_error != ok { ret text_raw_error }
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
@@ -405,7 +390,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try pad_to(output, headers_size)
 
     let runtime_file = output.count
-    try runtime_pe_x64.append(output)
+    try runtime_pe_x64.append(output, runtime_size)
     let machine_file = output.count
     var machine_at = 0usize
     while machine_at < machine.count {
@@ -413,16 +398,17 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         machine_at += 1usize
     }
     let main_file = machine_file + function_offsets[main_index]
-    try runtime_pe_x64.patch(output, runtime_file, text_address, main_file, import_address_address)
+    try runtime_pe_x64.patch(output, runtime_file, text_address, main_file, import_address_address, runtime_size)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         if !relocations[relocation_at].resolved {
             let reference_index = relocations[relocation_at].function_ref
-            if reference_index >= builder.function_ref_count { ret InvalidExecutable }
             // An imported call reads the slot the loader wrote, so what is patched is
             // the displacement from the instruction to that slot rather than to code.
             // A module-scope `var`: the displacement from the instruction to where the data
             // was laid out. The same arithmetic an imported slot needs, over a different table.
+            // Its index is into the globals, so it is bounded there and not against the
+            // function references -- which a program with more globals than calls has fewer of.
             if relocations[relocation_at].global {
                 if reference_index >= builder.global_count { ret InvalidExecutable }
                 let destination = globals_address + nir.global_area_offset(builder, reference_index)
@@ -434,6 +420,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
                 relocation_at += 1usize
                 continue
             }
+            if reference_index >= builder.function_ref_count { ret InvalidExecutable }
             let (import_library, import_entry, is_import) = reference_import_slot(builder, reference_index)
             if is_import {
                 let slot = import_address_table(builder, idata_address, import_library) + import_entry * 8usize
@@ -488,7 +475,10 @@ fn self_test() -> err {
     // the layout above puts it, so a runtime change cannot silently invalidate
     // this test and a layout change still fails it.
     let headers_size = 512usize
-    let text_size = runtime_pe_x64.size() + machine.count
+    // No relocation reaches the runtime, so the image carries its floor: the entry and the
+    // two procedures it calls (D150).
+    let runtime_size = runtime_pe_x64.floor()
+    let text_size = runtime_size + machine.count
     let (text_raw_size, text_raw_error) = align_up(text_size, 512usize)
     if text_raw_error != ok { ret text_raw_error }
     let (text_virtual_size, text_virtual_error) = align_up(text_size, 4096usize)
@@ -496,17 +486,22 @@ fn self_test() -> err {
     let idata_raw_offset = headers_size + text_raw_size
     let idata_address = 4096usize + text_virtual_size
     let import_address_address = import_address_table(&builder, idata_address, 0usize)
-    let code_at = headers_size + runtime_pe_x64.size()
-    if executable.count != idata_raw_offset + 1024usize { ret InvalidExecutable }
+    let code_at = headers_size + runtime_size
+    // The import section holds the imports the kept runtime reaches -- four, for the floor --
+    // and is rounded up to the file alignment, which used to be a literal 1024 for all 25.
+    let (idata_raw_size, idata_raw_error) = align_up(import_section_size(&builder, idata_address), 512usize)
+    if idata_raw_error != ok { ret idata_raw_error }
+    if executable.count != idata_raw_offset + idata_raw_size { ret InvalidExecutable }
     if executable.bytes[0usize] != 77usize || executable.bytes[1usize] != 90usize || executable.bytes[60usize] != 128usize { ret InvalidExecutable }
     if executable.bytes[128usize] != 80usize || executable.bytes[129usize] != 69usize || executable.bytes[132usize] != 100usize || executable.bytes[133usize] != 134usize || executable.bytes[134usize] != 2usize { ret InvalidExecutable }
     if executable.bytes[168usize] != 0usize || executable.bytes[169usize] != 16usize { ret InvalidExecutable }
     if executable.bytes[272usize] != idata_address % 256usize || executable.bytes[273usize] != (idata_address / 256usize) % 256usize { ret InvalidExecutable }
     if executable.bytes[360usize] != import_address_address % 256usize || executable.bytes[361usize] != (import_address_address / 256usize) % 256usize { ret InvalidExecutable }
     if executable.bytes[392usize] != 46usize || executable.bytes[432usize] != 46usize { ret InvalidExecutable }
-    // The runtime's first import thunk, patched to reach entry 11 of the address
-    // table: `patch_import` writes the displacement from the instruction after it.
-    let first_import = import_address_address + 88usize - 4136usize
+    // The runtime's first import thunk, patched to reach entry 0 of the address table --
+    // the first import the entry reaches is the first in the list: `patch_import` writes
+    // the displacement from the instruction after it.
+    let first_import = import_address_address - 4136usize
     if executable.bytes[512usize] != 83usize { ret InvalidExecutable }
     if executable.bytes[548usize] != first_import % 256usize || executable.bytes[549usize] != (first_import / 256usize) % 256usize { ret InvalidExecutable }
     if executable.bytes[code_at] != 195usize { ret InvalidExecutable }
@@ -518,6 +513,6 @@ fn self_test() -> err {
     // here is the thing that made adding one a hazard.
     let dll_at = idata_raw_offset + import_dll_address(&builder, idata_address, 0usize) - idata_address
     let first_name_at = idata_raw_offset + import_thunk(&builder, idata_address, 0usize, 0usize) - idata_address + 2usize
-    if executable.bytes[dll_at] != 75usize || executable.bytes[first_name_at] != 67usize { ret InvalidExecutable }
+    if executable.bytes[dll_at] != 75usize || executable.bytes[first_name_at] != usize(runtime_pe_x64.import_name(0usize)[0usize]) { ret InvalidExecutable }
     ret ok
 }

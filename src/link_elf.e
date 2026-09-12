@@ -71,6 +71,26 @@ fn runtime_symbol_offset(name: str) -> (usize, bool) {
     ret (0usize, false)
 }
 
+// How much of the runtime extension a program needs: up to the end of the last function it
+// reaches. The extension's source is ordered so that a function calls only what precedes it,
+// which is what lets a prefix stand in for the set -- one cut instead of a relocation table.
+// The base runtime is appended whole; it has no source to reorder.
+// ponytail: prefix, not per-function; a program that reaches `wait` carries `spawn` too.
+fn extension_prefix(builder: *nir.Builder, relocations: []codegen_x64.Relocation, relocation_count: usize) -> (usize, err) {
+    var limit = 0usize
+    var at = 0usize
+    while at < relocation_count {
+        if !relocations[at].global && !relocations[at].resolved {
+            let reference_index = relocations[at].function_ref
+            if reference_index >= builder.function_ref_count { ret (0usize, InvalidExecutable) }
+            let (end, found) = runtime_elf_x64_ext.symbol_end(builder.function_refs[reference_index].name)
+            if found && end > limit { limit = end }
+        }
+        at += 1usize
+    }
+    ret (limit, ok)
+}
+
 fn patch_little_u64(output: *emit_x64.Buffer, offset: usize, value: usize) -> err {
     if offset + 8usize > output.count { ret InvalidExecutable }
     var at = 0usize
@@ -434,7 +454,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     }
     let runtime_start = output.count
     try append_runtime(output)
-    try runtime_elf_x64_ext.append(output)
+    try runtime_elf_x64_ext.append(output, runtime_elf_x64_ext.size())
     let text_end = output.count
 
     // The writable segment starts on the next page, at the same offset within it as
@@ -598,7 +618,9 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     }
     let runtime_start = output.count
     try append_runtime(output)
-    try runtime_elf_x64_ext.append(output)
+    let (extension_limit, limit_error) = extension_prefix(builder, relocations, relocation_count)
+    if limit_error != ok { ret limit_error }
+    try runtime_elf_x64_ext.append(output, extension_limit)
     let main_offset = machine_start + function_offsets[main_index]
     try emit_x64.patch_relative32(output, code_offset + 200usize, main_offset)
     var relocation_at = 0usize
@@ -690,13 +712,13 @@ fn self_test() -> err {
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
-    // Startup and the base runtime are fixed in this file; the extension grows
-    // whenever a host intrinsic is added. Checking the total and the segment size
-    // against it keeps this test honest across that change, and the machine code
-    // is checked where `write` puts it rather than at a literal offset.
+    // Startup and the base runtime are fixed in this file, and a program with no relocation
+    // into the extension gets none of it (D150). Checking the total and the segment size
+    // keeps this test honest, and the machine code is checked where `write` puts it rather
+    // than at a literal offset.
     let base_runtime_size = 1441usize
     let machine_start = 120usize + 235usize
-    let total = machine_start + machine.count + base_runtime_size + runtime_elf_x64_ext.size()
+    let total = machine_start + machine.count + base_runtime_size
     if executable.count != total { ret InvalidExecutable }
     if executable.bytes[0usize] != 127usize || executable.bytes[16usize] != 2usize || executable.bytes[18usize] != 62usize || executable.bytes[24usize] != 120usize || executable.bytes[25usize] != 0usize || executable.bytes[26usize] != 64usize { ret InvalidExecutable }
     if executable.bytes[64usize] != 1usize || executable.bytes[68usize] != 5usize { ret InvalidExecutable }

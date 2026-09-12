@@ -187,6 +187,10 @@ type Builder = struct {
     strings: []StringConstant,
     globals: []GlobalData,
     global_count: usize,
+    // How many bytes of the embedded runtime the PE linker kept, which decides how many of the
+    // runtime's imports the image declares. Set by `link_pe.write` and read by its layout
+    // helpers, which reach everything else through this builder too.
+    runtime_prefix: usize,
     function_count: usize,
     block_count: usize,
     instruction_count: usize,
@@ -415,6 +419,7 @@ fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions:
     builder.instruction_count = 0usize
     builder.operand_count = 0usize
     builder.function_ref_count = 0usize
+    builder.runtime_prefix = 0usize
     builder.string_count = 0usize
     builder.current_function = 0usize
     builder.current_block = 0usize

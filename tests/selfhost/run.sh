@@ -692,6 +692,12 @@ math_pow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$math_pow_written" = 'executable written' ]
 chmod +x "$test_build/math-pow-selfhost"
 "$test_build/math-pow-selfhost"
+# A module-scope `var` is storage: a function that writes and another that reads agree, and each
+# global keeps its own width. Never wired when it was written (849fa5b), and on Windows it did not
+# link until D150 -- a global's index was bounded against the function references.
+module_var_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/module_var/src/main.e" "$repo" x64 linux "$test_build/module-var-selfhost")
+[ "$module_var_written" = 'executable written' ]
+chmod +x "$test_build/module-var-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

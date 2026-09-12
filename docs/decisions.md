@@ -2550,3 +2550,39 @@ and a larger job than this one, since the runtime is opaque bytes behind a symbo
 The Windows image was not padded to speak of -- 345 bytes in 7,168 -- and the dynamic Linux
 path (an `@import`) keeps its page-aligned layout, since a program that loads libc is not
 counting bytes.
+
+## D150 — the runtime is a prefix, cut after the last function the program reaches
+
+D149 left an empty Linux program at 3,804 bytes, 3,438 of them runtime appended whole; the
+Windows one was 7,168 with 5,370 of runtime. Both runtimes are opaque machine code behind a
+symbol-offset table, so the dead-function pass stopped at their edge: a program that wrote one
+line carried `spawn`, `wait`, three thread calls, the futex pair and xxHash64.
+
+The cheap cut is an ordering. Each runtime's source is now arranged so that a function calls
+only what precedes it -- the shared helper first, then the functions from the ones nearly every
+program needs to the ones few do, each helper directly before its first caller -- and the
+generator records where each function ends. The linker takes the furthest end among the
+runtime symbols its relocations name and appends that many bytes. No relocation table, no
+per-function chunks; one number. On Windows the floor is the entry and the two procedures it
+calls, which every program runs before `main`; the base Linux runtime, which has no source
+left to reorder, is still appended whole at 1,441 bytes. The import patch table of the PE
+runtime skips the sites that were cut.
+
+The PE import table follows the same rule. The runtime module lists its KERNEL32 imports in
+the order the runtime first reaches them, so the imports a prefix of the runtime needs are a
+prefix of that list, and the linker declares only as many as the kept bytes reach -- four for
+the floor, seven for hello world, twenty-five for a program that reaches everything. The
+kept length rides in the NIR builder, which is what every layout helper already receives.
+
+Measured: empty program 3,804 to 1,807 bytes on Linux and 7,168 to 2,048 on Windows; hello
+world 7,048 to 5,048 and 10,752 to 6,144. What a program that reaches `os.wait` carries is
+`spawn` as well, since the two are neighbours at the tail; that is the ceiling of a prefix,
+and a per-function table is the upgrade if a measurement ever asks for it.
+
+Two things found on the way. `link/module_var` was written with D-row 849fa5b and never
+wired into either runner, and on Windows it did not link: the PE writer bounded a global's
+index against the function references before asking whether the relocation was a global at
+all, so a program with more globals than calls was refused. The check moved inside the
+branch it belongs to, and the fixture runs on both hosts now. And the base Linux runtime,
+1,441 bytes with no source left, is now the largest single thing in an empty program on
+either host -- the next floor, and one that needs the source rewritten before it can move.

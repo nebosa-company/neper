@@ -1,6 +1,38 @@
 .intel_syntax noprefix
 .text
 
+# Order matters: the linker appends this runtime as a prefix, cut after the last function
+# the program reaches (D150), so the shared helper comes first and the functions follow
+# from the ones nearly every program needs to the ones few do. A function may call only
+# what precedes it here.
+
+.Lext_alloc:
+    test rdi, rdi
+    jz .Lalloc_fail
+    test rdx, rdx
+    jz .Lalloc_fail
+    lea rcx, [rdx - 1]
+    test rcx, rdx
+    jnz .Lalloc_fail
+    mov rax, qword ptr [rdi + 16]
+    add rcx, rax
+    jc .Lalloc_fail
+    neg rdx
+    and rcx, rdx
+    mov r8, qword ptr [rdi + 8]
+    sub r8, rcx
+    jc .Lalloc_fail
+    cmp rsi, r8
+    ja .Lalloc_fail
+    lea rax, [rcx + rsi]
+    mov qword ptr [rdi + 16], rax
+    mov rax, qword ptr [rdi]
+    add rax, rcx
+    ret
+.Lalloc_fail:
+    xor eax, eax
+    ret
+
 .global neper_os_args
 neper_os_args:
     push rbx
@@ -109,6 +141,30 @@ neper_os_commit:
     mov eax, 0x6f777ebf
     ret
 
+# The raw system call, and the reason a Linux executable can import nothing. Six
+# arguments always, so nothing here inspects the number to decide how many to move.
+#
+# Two conventions meet: the caller's is SysV (rdi, rsi, rdx, rcx, r8, r9, then the
+# stack) and the kernel's is (rax, rdi, rsi, rdx, r10, r8, r9). Every move below reads
+# its source before anything writes it -- a3 is lifted out of r8 before r8 is reloaded,
+# and a4 is parked in r11 because r9 is overwritten first. `syscall` clobbers rcx and
+# r11, neither of which is live past it.
+#
+# The result is the kernel's own: a negative errno on failure, which is why the return
+# type is `isize` and not an `err`. Turning one into the other is `e.os`'s job.
+.global neper_os_syscall
+neper_os_syscall:
+    mov rax, rdi
+    mov r10, r8
+    mov rdi, rsi
+    mov rsi, rdx
+    mov rdx, rcx
+    mov r11, r9
+    mov r9, qword ptr [rsp + 8]
+    mov r8, r11
+    syscall
+    ret
+
 .global neper_os_clock
 neper_os_clock:
     sub rsp, 16
@@ -150,6 +206,238 @@ neper_os_seek:
 .Lseek_failed:
     xor eax, eax
     mov edx, 0x6f777ebf
+    ret
+
+// Spec section 9 rule 4: the supplied `hash` is xxHash64 with seed 0 over a
+// value's canonical little-endian bytes. This must agree bit for bit with
+// algo.hash.xxhash64 and with neper_hash_bytes in bootstrap/runtime.c; a fixture
+// asserts all three agree on both platforms.
+.global neper_hash_bytes
+neper_hash_bytes:
+    mov r8, rdi
+    mov r9, rsi
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    movabs r13, 11400714785074694791
+    movabs r14, 14029467366897019727
+    xor ecx, ecx
+    cmp r9, 32
+    jb .Lhash_small
+    mov r10, r13
+    add r10, r14
+    mov r11, r14
+    xor ebx, ebx
+    xor r12d, r12d
+    sub r12, r13
+    mov rdx, r9
+    sub rdx, 32
+.Lhash_block:
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r10, rax
+    rol r10, 31
+    imul r10, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r11, rax
+    rol r11, 31
+    imul r11, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add rbx, rax
+    rol rbx, 31
+    imul rbx, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r12, rax
+    rol r12, 31
+    imul r12, r13
+    add rcx, 8
+    cmp rcx, rdx
+    jbe .Lhash_block
+    mov r15, r10
+    rol r15, 1
+    mov rax, r11
+    rol rax, 7
+    add r15, rax
+    mov rax, rbx
+    rol rax, 12
+    add r15, rax
+    mov rax, r12
+    rol rax, 18
+    add r15, rax
+    mov rax, r10
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    movabs rax, 9650029242287828579
+    add r15, rax
+    mov rax, r11
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    movabs rax, 9650029242287828579
+    add r15, rax
+    mov rax, rbx
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    movabs rax, 9650029242287828579
+    add r15, rax
+    mov rax, r12
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    movabs rax, 9650029242287828579
+    add r15, rax
+    jmp .Lhash_sized
+.Lhash_small:
+    movabs r15, 2870177450012600261
+.Lhash_sized:
+    add r15, r9
+.Lhash_tail8:
+    mov rax, rcx
+    add rax, 8
+    cmp rax, r9
+    ja .Lhash_tail4
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    rol r15, 27
+    imul r15, r13
+    movabs rax, 9650029242287828579
+    add r15, rax
+    add rcx, 8
+    jmp .Lhash_tail8
+.Lhash_tail4:
+    mov rax, rcx
+    add rax, 4
+    cmp rax, r9
+    ja .Lhash_tail1
+    mov eax, dword ptr [r8 + rcx]
+    imul rax, r13
+    xor r15, rax
+    rol r15, 23
+    imul r15, r14
+    movabs rax, 1609587929392839161
+    add r15, rax
+    add rcx, 4
+.Lhash_tail1:
+    cmp rcx, r9
+    jae .Lhash_final
+    movzx rax, byte ptr [r8 + rcx]
+    movabs rdx, 2870177450012600261
+    imul rax, rdx
+    xor r15, rax
+    rol r15, 11
+    imul r15, r13
+    add rcx, 1
+    jmp .Lhash_tail1
+.Lhash_final:
+    mov rax, r15
+    shr rax, 33
+    xor r15, rax
+    imul r15, r14
+    mov rax, r15
+    shr rax, 29
+    xor r15, rax
+    movabs rax, 1609587929392839161
+    imul r15, rax
+    mov rax, r15
+    shr rax, 32
+    xor rax, r15
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+# Section 8's blocking primitives, futex(2) directly: this runtime has no libc.
+# `op` is FUTEX_WAIT_PRIVATE (128) and FUTEX_WAKE_PRIVATE (129) -- the private forms
+# skip the shared-mapping lookup, and every address here is process-local.
+#
+# wait_u32(p, expected, timeout_ns) -> err. A wake, a value that already differs
+# (EAGAIN) and a signal (EINTR) are all `ok`: the fence promises spurious wakes, so
+# every caller rechecks its own state and none can tell them apart.
+.global neper_os_wait_u32
+neper_os_wait_u32:
+    sub rsp, 16
+    xor r10d, r10d
+    test rdx, rdx
+    js .Lwait_go
+    # A timeout builds a timespec in the red-zone-free frame above; zero nanoseconds
+    # is a zero timespec, which futex returns ETIMEDOUT from at once -- one poll.
+    mov rax, rdx
+    mov rcx, 1000000000
+    xor edx, edx
+    div rcx
+    mov qword ptr [rsp], rax
+    mov qword ptr [rsp + 8], rdx
+    mov r10, rsp
+.Lwait_go:
+    mov edx, esi
+    mov esi, 128
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    test rax, rax
+    jns .Lwait_ok
+    cmp rax, -11
+    je .Lwait_ok
+    cmp rax, -4
+    je .Lwait_ok
+    cmp rax, -110
+    je .Lwait_timeout
+    mov eax, 0x6f777ebf
+    add rsp, 16
+    ret
+.Lwait_ok:
+    xor eax, eax
+    add rsp, 16
+    ret
+.Lwait_timeout:
+    mov eax, 0x52812f09
+    add rsp, 16
+    ret
+
+.global neper_os_wake_one_u32
+neper_os_wake_one_u32:
+    mov esi, 129
+    mov edx, 1
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
+    ret
+
+.global neper_os_wake_all_u32
+neper_os_wake_all_u32:
+    mov esi, 129
+    mov edx, 2147483647
+    xor r10d, r10d
+    xor r8d, r8d
+    xor r9d, r9d
+    mov eax, 202
+    syscall
     ret
 
 .global neper_os_thread_create
@@ -428,287 +716,4 @@ neper_os_wait:
 .Lwait_done:
     add rsp, 16
     pop r12
-    ret
-
-.Lext_alloc:
-    test rdi, rdi
-    jz .Lalloc_fail
-    test rdx, rdx
-    jz .Lalloc_fail
-    lea rcx, [rdx - 1]
-    test rcx, rdx
-    jnz .Lalloc_fail
-    mov rax, qword ptr [rdi + 16]
-    add rcx, rax
-    jc .Lalloc_fail
-    neg rdx
-    and rcx, rdx
-    mov r8, qword ptr [rdi + 8]
-    sub r8, rcx
-    jc .Lalloc_fail
-    cmp rsi, r8
-    ja .Lalloc_fail
-    lea rax, [rcx + rsi]
-    mov qword ptr [rdi + 16], rax
-    mov rax, qword ptr [rdi]
-    add rax, rcx
-    ret
-.Lalloc_fail:
-    xor eax, eax
-    ret
-
-// Spec section 9 rule 4: the supplied `hash` is xxHash64 with seed 0 over a
-// value's canonical little-endian bytes. This must agree bit for bit with
-// algo.hash.xxhash64 and with neper_hash_bytes in bootstrap/runtime.c; a fixture
-// asserts all three agree on both platforms.
-.global neper_hash_bytes
-neper_hash_bytes:
-    mov r8, rdi
-    mov r9, rsi
-    push rbx
-    push r12
-    push r13
-    push r14
-    push r15
-    movabs r13, 11400714785074694791
-    movabs r14, 14029467366897019727
-    xor ecx, ecx
-    cmp r9, 32
-    jb .Lhash_small
-    mov r10, r13
-    add r10, r14
-    mov r11, r14
-    xor ebx, ebx
-    xor r12d, r12d
-    sub r12, r13
-    mov rdx, r9
-    sub rdx, 32
-.Lhash_block:
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    add r10, rax
-    rol r10, 31
-    imul r10, r13
-    add rcx, 8
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    add r11, rax
-    rol r11, 31
-    imul r11, r13
-    add rcx, 8
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    add rbx, rax
-    rol rbx, 31
-    imul rbx, r13
-    add rcx, 8
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    add r12, rax
-    rol r12, 31
-    imul r12, r13
-    add rcx, 8
-    cmp rcx, rdx
-    jbe .Lhash_block
-    mov r15, r10
-    rol r15, 1
-    mov rax, r11
-    rol rax, 7
-    add r15, rax
-    mov rax, rbx
-    rol rax, 12
-    add r15, rax
-    mov rax, r12
-    rol rax, 18
-    add r15, rax
-    mov rax, r10
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    imul r15, r13
-    movabs rax, 9650029242287828579
-    add r15, rax
-    mov rax, r11
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    imul r15, r13
-    movabs rax, 9650029242287828579
-    add r15, rax
-    mov rax, rbx
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    imul r15, r13
-    movabs rax, 9650029242287828579
-    add r15, rax
-    mov rax, r12
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    imul r15, r13
-    movabs rax, 9650029242287828579
-    add r15, rax
-    jmp .Lhash_sized
-.Lhash_small:
-    movabs r15, 2870177450012600261
-.Lhash_sized:
-    add r15, r9
-.Lhash_tail8:
-    mov rax, rcx
-    add rax, 8
-    cmp rax, r9
-    ja .Lhash_tail4
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    rol r15, 27
-    imul r15, r13
-    movabs rax, 9650029242287828579
-    add r15, rax
-    add rcx, 8
-    jmp .Lhash_tail8
-.Lhash_tail4:
-    mov rax, rcx
-    add rax, 4
-    cmp rax, r9
-    ja .Lhash_tail1
-    mov eax, dword ptr [r8 + rcx]
-    imul rax, r13
-    xor r15, rax
-    rol r15, 23
-    imul r15, r14
-    movabs rax, 1609587929392839161
-    add r15, rax
-    add rcx, 4
-.Lhash_tail1:
-    cmp rcx, r9
-    jae .Lhash_final
-    movzx rax, byte ptr [r8 + rcx]
-    movabs rdx, 2870177450012600261
-    imul rax, rdx
-    xor r15, rax
-    rol r15, 11
-    imul r15, r13
-    add rcx, 1
-    jmp .Lhash_tail1
-.Lhash_final:
-    mov rax, r15
-    shr rax, 33
-    xor r15, rax
-    imul r15, r14
-    mov rax, r15
-    shr rax, 29
-    xor r15, rax
-    movabs rax, 1609587929392839161
-    imul r15, rax
-    mov rax, r15
-    shr rax, 32
-    xor rax, r15
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rbx
-    ret
-
-# Section 8's blocking primitives, futex(2) directly: this runtime has no libc.
-# `op` is FUTEX_WAIT_PRIVATE (128) and FUTEX_WAKE_PRIVATE (129) -- the private forms
-# skip the shared-mapping lookup, and every address here is process-local.
-#
-# wait_u32(p, expected, timeout_ns) -> err. A wake, a value that already differs
-# (EAGAIN) and a signal (EINTR) are all `ok`: the fence promises spurious wakes, so
-# every caller rechecks its own state and none can tell them apart.
-.global neper_os_wait_u32
-neper_os_wait_u32:
-    sub rsp, 16
-    xor r10d, r10d
-    test rdx, rdx
-    js .Lwait_go
-    # A timeout builds a timespec in the red-zone-free frame above; zero nanoseconds
-    # is a zero timespec, which futex returns ETIMEDOUT from at once -- one poll.
-    mov rax, rdx
-    mov rcx, 1000000000
-    xor edx, edx
-    div rcx
-    mov qword ptr [rsp], rax
-    mov qword ptr [rsp + 8], rdx
-    mov r10, rsp
-.Lwait_go:
-    mov edx, esi
-    mov esi, 128
-    xor r8d, r8d
-    xor r9d, r9d
-    mov eax, 202
-    syscall
-    test rax, rax
-    jns .Lwait_ok
-    cmp rax, -11
-    je .Lwait_ok
-    cmp rax, -4
-    je .Lwait_ok
-    cmp rax, -110
-    je .Lwait_timeout
-    mov eax, 0x6f777ebf
-    add rsp, 16
-    ret
-.Lwait_ok:
-    xor eax, eax
-    add rsp, 16
-    ret
-.Lwait_timeout:
-    mov eax, 0x52812f09
-    add rsp, 16
-    ret
-
-.global neper_os_wake_one_u32
-neper_os_wake_one_u32:
-    mov esi, 129
-    mov edx, 1
-    xor r10d, r10d
-    xor r8d, r8d
-    xor r9d, r9d
-    mov eax, 202
-    syscall
-    ret
-
-.global neper_os_wake_all_u32
-neper_os_wake_all_u32:
-    mov esi, 129
-    mov edx, 2147483647
-    xor r10d, r10d
-    xor r8d, r8d
-    xor r9d, r9d
-    mov eax, 202
-    syscall
-    ret
-
-# The raw system call, and the reason a Linux executable can import nothing. Six
-# arguments always, so nothing here inspects the number to decide how many to move.
-#
-# Two conventions meet: the caller's is SysV (rdi, rsi, rdx, rcx, r8, r9, then the
-# stack) and the kernel's is (rax, rdi, rsi, rdx, r10, r8, r9). Every move below reads
-# its source before anything writes it -- a3 is lifted out of r8 before r8 is reloaded,
-# and a4 is parked in r11 because r9 is overwritten first. `syscall` clobbers rcx and
-# r11, neither of which is live past it.
-#
-# The result is the kernel's own: a negative errno on failure, which is why the return
-# type is `isize` and not an `err`. Turning one into the other is `e.os`'s job.
-.global neper_os_syscall
-neper_os_syscall:
-    mov rax, rdi
-    mov r10, r8
-    mov rdi, rsi
-    mov rsi, rdx
-    mov rdx, rcx
-    mov r11, r9
-    mov r9, qword ptr [rsp + 8]
-    mov r8, r11
-    syscall
     ret

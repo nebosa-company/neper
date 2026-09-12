@@ -666,6 +666,14 @@ $mathPowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $mathPowWritten -ne 'executable written') { throw 'math_pow emission failed' }
 & $mathPowPath
 if ($LASTEXITCODE -ne 0) { throw "an e.math answer is outside its bound: exit $LASTEXITCODE" }
+# A module-scope `var` is storage: a function that writes and another that reads agree, and each
+# global keeps its own width. Never wired when it was written (849fa5b), and on Windows it did not
+# link until D150 -- a global's index was bounded against the function references.
+$moduleVarPath = Join-Path $testBuild 'module-var-selfhost.exe'
+$moduleVarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\module_var\src\main.e') $repo 'x64' 'windows' $moduleVarPath
+if ($LASTEXITCODE -ne 0 -or $moduleVarWritten -ne 'executable written') { throw 'module_var emission failed' }
+& $moduleVarPath
+if ($LASTEXITCODE -ne 0) { throw "a module-scope var answer is wrong: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

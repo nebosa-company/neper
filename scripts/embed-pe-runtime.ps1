@@ -73,8 +73,6 @@ for ($index = 0; $index -lt $symbolCount;) {
 }
 
 $imports = @('CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile','GetSystemTimeAsFileTime','QueryPerformanceCounter','QueryPerformanceFrequency','CreateProcessW','SetHandleInformation','WaitForSingleObject','GetExitCodeProcess','SetFilePointerEx','CreateThread','GetModuleHandleW','GetProcAddress')
-$importIndices = @{}
-for ($index = 0; $index -lt $imports.Count; $index++) { $importIndices['__imp_' + $imports[$index]] = $index }
 $relocations = @()
 for ($index = 0; $index -lt $text.RelocationCount; $index++) {
     $offset = $text.Relocations + $index * 10
@@ -99,6 +97,19 @@ $relocations = @($relocations | Where-Object {
         $false
     } else { $true }
 })
+# The imports in the order the runtime first reaches them, so that the imports a prefix of
+# the runtime needs are a prefix of this list, and the linker emits only that many.
+$firstSite = @{}
+foreach ($relocation in $relocations) {
+    if ($relocation.Name -ne 'main' -and (-not $firstSite.ContainsKey($relocation.Name) -or $relocation.Address -lt $firstSite[$relocation.Name])) {
+        $firstSite[$relocation.Name] = [int]$relocation.Address
+    }
+}
+foreach ($name in $imports) { if (-not $firstSite.ContainsKey('__imp_' + $name)) { throw "PE runtime never reaches import $name" } }
+foreach ($key in $firstSite.Keys) { if (($imports | ForEach-Object { '__imp_' + $_ }) -notcontains $key) { throw "PE runtime reaches unlisted import $key" } }
+$imports = @($imports | Sort-Object { $firstSite['__imp_' + $_] })
+$importIndices = @{}
+for ($index = 0; $index -lt $imports.Count; $index++) { $importIndices['__imp_' + $imports[$index]] = $index }
 $builder = [Text.StringBuilder]::new()
 [void]$builder.AppendLine('// Generated x86-64 Windows runtime image. Source: runtime_pe_x64.asm.')
 [void]$builder.AppendLine()
@@ -107,22 +118,25 @@ $builder = [Text.StringBuilder]::new()
 [void]$builder.AppendLine()
 [void]$builder.AppendLine('error InvalidRuntime')
 [void]$builder.AppendLine()
-[void]$builder.AppendLine('fn append_blob(output: *emit_x64.Buffer, bytes: str) -> err {')
+[void]$builder.AppendLine('// The first `limit` bytes of a chunk that starts `from` bytes into the runtime.')
+[void]$builder.AppendLine('fn append_blob(output: *emit_x64.Buffer, bytes: str, from: usize, limit: usize) -> err {')
 [void]$builder.AppendLine('    var at = 0usize')
-[void]$builder.AppendLine('    while at < bytes.len {')
+[void]$builder.AppendLine('    while at < bytes.len && from + at < limit {')
 [void]$builder.AppendLine('        try emit_x64.byte(output, usize(bytes[at]))')
 [void]$builder.AppendLine('        at += 1usize')
 [void]$builder.AppendLine('    }')
 [void]$builder.AppendLine('    ret ok')
 [void]$builder.AppendLine('}')
 [void]$builder.AppendLine()
-[void]$builder.AppendLine('fn append(output: *emit_x64.Buffer) -> err {')
+[void]$builder.AppendLine('// The runtime up to `limit` bytes: a prefix, because the source is ordered so that a')
+[void]$builder.AppendLine('// procedure calls only what precedes it, and the linker cuts after the last one reached.')
+[void]$builder.AppendLine('fn append(output: *emit_x64.Buffer, limit: usize) -> err {')
 for ($offset = 0; $offset -lt $image.Length; $offset += 64) {
     $end = [Math]::Min($offset + 64, $image.Length)
     $escaped = [Text.StringBuilder]::new()
     for ($at = $offset; $at -lt $end; $at++) { [void]$escaped.Append(('\x{0:x2}' -f $image[$at])) }
     $prefix = if ($end -eq $image.Length) { '    ret append_blob(output, "' } else { '    try append_blob(output, "' }
-    [void]$builder.AppendLine($prefix + $escaped + '")')
+    [void]$builder.AppendLine($prefix + $escaped + ('", {0}usize, limit)' -f $offset))
 }
 [void]$builder.AppendLine('}')
 [void]$builder.AppendLine()
@@ -133,6 +147,40 @@ foreach ($symbol in ($publicSymbols | Sort-Object Value)) { [void]$builder.Appen
 [void]$builder.AppendLine('    ret (0usize, false)')
 [void]$builder.AppendLine('}')
 [void]$builder.AppendLine()
+# Where each procedure ends: the start of the next in source order, read from the source
+# because the object's symbol table does not tell a procedure from a label inside one.
+$procedures = @()
+foreach ($line in [IO.File]::ReadAllLines($source)) {
+    if ($line -match '^(\w+)\s+PROC') { $procedures += $matches[1] }
+}
+[void]$builder.AppendLine('// Where a procedure ends: the start of the next in source order, or the end of the')
+[void]$builder.AppendLine('// runtime for the last. The entry and its callees are the first three, so their end')
+[void]$builder.AppendLine('// is the least any program carries.')
+[void]$builder.AppendLine(('fn floor() -> usize {{ ret {0}usize }}' -f $textSymbols[$procedures[3]]))
+[void]$builder.AppendLine()
+[void]$builder.AppendLine('fn symbol_end(name: str) -> (usize, bool) {')
+for ($index = 0; $index -lt $procedures.Count; $index++) {
+    $end = if ($index + 1 -lt $procedures.Count) { $textSymbols[$procedures[$index + 1]] } else { $image.Length }
+    [void]$builder.AppendLine(('    if check.same(name, "{0}") {{ ret ({1}usize, true) }}' -f $procedures[$index], $end))
+}
+[void]$builder.AppendLine('    ret (0usize, false)')
+[void]$builder.AppendLine('}')
+[void]$builder.AppendLine()
+[void]$builder.AppendLine('// The KERNEL32 imports, in the order the runtime first reaches them: the linker lays the')
+[void]$builder.AppendLine('// import tables out from this list, and a runtime cut at `limit` needs only a prefix of it.')
+[void]$builder.AppendLine(('fn import_count() -> usize {{ ret {0}usize }}' -f $imports.Count))
+[void]$builder.AppendLine()
+[void]$builder.AppendLine('fn import_name(index: usize) -> str {')
+for ($index = 0; $index -lt $imports.Count; $index++) { [void]$builder.AppendLine(('    if index == {0}usize {{ ret "{1}" }}' -f $index, $imports[$index])) }
+[void]$builder.AppendLine('    ret ""')
+[void]$builder.AppendLine('}')
+[void]$builder.AppendLine()
+[void]$builder.AppendLine('// How many imports the first `limit` bytes of the runtime reach.')
+[void]$builder.AppendLine('fn imports_within(limit: usize) -> usize {')
+for ($index = $imports.Count - 1; $index -ge 0; $index--) { [void]$builder.AppendLine(('    if {0}usize < limit {{ ret {1}usize }}' -f $firstSite['__imp_' + $imports[$index]], ($index + 1))) }
+[void]$builder.AppendLine('    ret 0usize')
+[void]$builder.AppendLine('}')
+[void]$builder.AppendLine()
 [void]$builder.AppendLine('fn patch_import(output: *emit_x64.Buffer, runtime_file: usize, runtime_rva: usize, displacement_at: usize, iat_rva: usize, import_index: usize) -> err {')
 [void]$builder.AppendLine('    let next_rva = runtime_rva + displacement_at + 4usize')
 [void]$builder.AppendLine('    let target_rva = iat_rva + import_index * 8usize')
@@ -140,10 +188,11 @@ foreach ($symbol in ($publicSymbols | Sort-Object Value)) { [void]$builder.Appen
 [void]$builder.AppendLine('    ret emit_x64.patch_little_u32(output, runtime_file + displacement_at, target_rva - next_rva)')
 [void]$builder.AppendLine('}')
 [void]$builder.AppendLine()
-[void]$builder.AppendLine('fn patch(output: *emit_x64.Buffer, runtime_file: usize, runtime_rva: usize, main_file: usize, iat_rva: usize) -> err {')
-foreach ($relocation in $relocations) {
-    if ($relocation.Name -eq 'main') { [void]$builder.AppendLine(('    try emit_x64.patch_relative32(output, runtime_file + {0}usize, main_file)' -f $relocation.Address)) }
-    elseif ($importIndices.ContainsKey($relocation.Name)) { [void]$builder.AppendLine(('    try patch_import(output, runtime_file, runtime_rva, {0}usize, iat_rva, {1}usize)' -f $relocation.Address, $importIndices[$relocation.Name])) }
+[void]$builder.AppendLine('// Only the sites inside the first `limit` bytes exist in the image.')
+[void]$builder.AppendLine('fn patch(output: *emit_x64.Buffer, runtime_file: usize, runtime_rva: usize, main_file: usize, iat_rva: usize, limit: usize) -> err {')
+foreach ($relocation in ($relocations | Sort-Object Address)) {
+    if ($relocation.Name -eq 'main') { [void]$builder.AppendLine(('    if {0}usize < limit {{ try emit_x64.patch_relative32(output, runtime_file + {0}usize, main_file) }}' -f $relocation.Address)) }
+    elseif ($importIndices.ContainsKey($relocation.Name)) { [void]$builder.AppendLine(('    if {0}usize < limit {{ try patch_import(output, runtime_file, runtime_rva, {0}usize, iat_rva, {1}usize) }}' -f $relocation.Address, $importIndices[$relocation.Name])) }
     else { throw "unsupported PE runtime relocation $($relocation.Name)" }
 }
 [void]$builder.AppendLine('    ret ok')

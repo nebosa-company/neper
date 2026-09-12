@@ -36,6 +36,13 @@ NP_ARENA_CHUNK EQU 100000h
 .code
 
 PUBLIC neper_entry
+
+; Order matters: the linker places this runtime as a prefix, cut after the last procedure
+; the program reaches (D150). The entry and its two callees come first, since every
+; program runs them; then the procedures from the ones nearly every program needs to
+; the ones few do, each helper directly before its first caller. A procedure may call
+; only what precedes it here.
+
 neper_entry PROC
     push rbx
     push rsi
@@ -210,60 +217,6 @@ entry_fail:
     int 3
 neper_entry ENDP
 
-np_error PROC
-    mov eax, 06F777EBFh
-    cmp ecx, 2
-    je error_not_found
-    cmp ecx, 3
-    je error_not_found
-    cmp ecx, 15
-    je error_not_found
-    cmp ecx, 5
-    je error_denied
-    cmp ecx, 32
-    je error_denied
-    cmp ecx, 80
-    je error_exists
-    cmp ecx, 183
-    je error_exists
-    cmp ecx, 995
-    je error_interrupted
-    cmp ecx, 8
-    je error_oom
-    cmp ecx, 14
-    je error_oom
-    cmp ecx, 1460
-    je error_timeout
-    cmp ecx, 258
-    je error_timeout
-    cmp ecx, 50
-    je error_unsupported
-    cmp ecx, 120
-    je error_unsupported
-    ret
-error_not_found:
-    mov eax, 07683E2CDh
-    ret
-error_denied:
-    mov eax, 0B0CB971Dh
-    ret
-error_exists:
-    mov eax, 0197F5566h
-    ret
-error_interrupted:
-    mov eax, 0B66D7668h
-    ret
-error_oom:
-    mov eax, 06979AADCh
-    ret
-error_timeout:
-    mov eax, 052812F09h
-    ret
-error_unsupported:
-    mov eax, 02F8BB651h
-    ret
-np_error ENDP
-
 np_arena_alloc PROC
     test rcx, rcx
     jz arena_fail
@@ -395,6 +348,424 @@ utf16_done:
     ret
 np_utf16_to_utf8 ENDP
 
+np_error PROC
+    mov eax, 06F777EBFh
+    cmp ecx, 2
+    je error_not_found
+    cmp ecx, 3
+    je error_not_found
+    cmp ecx, 15
+    je error_not_found
+    cmp ecx, 5
+    je error_denied
+    cmp ecx, 32
+    je error_denied
+    cmp ecx, 80
+    je error_exists
+    cmp ecx, 183
+    je error_exists
+    cmp ecx, 995
+    je error_interrupted
+    cmp ecx, 8
+    je error_oom
+    cmp ecx, 14
+    je error_oom
+    cmp ecx, 1460
+    je error_timeout
+    cmp ecx, 258
+    je error_timeout
+    cmp ecx, 50
+    je error_unsupported
+    cmp ecx, 120
+    je error_unsupported
+    ret
+error_not_found:
+    mov eax, 07683E2CDh
+    ret
+error_denied:
+    mov eax, 0B0CB971Dh
+    ret
+error_exists:
+    mov eax, 0197F5566h
+    ret
+error_interrupted:
+    mov eax, 0B66D7668h
+    ret
+error_oom:
+    mov eax, 06979AADCh
+    ret
+error_timeout:
+    mov eax, 052812F09h
+    ret
+error_unsupported:
+    mov eax, 02F8BB651h
+    ret
+np_error ENDP
+
+neper_mem_alloc PROC
+    mov r10, [rsp+40]
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 40
+    mov r12, rcx
+    mov r13, rdx
+    mov r14, r8
+    mov r15, r9
+    mov qword ptr [r12], 0
+    mov qword ptr [r12+8], 0
+    mov dword ptr [r12+16], 0
+    mov rax, r14
+    mul r15
+    test rdx, rdx
+    jnz mem_exhausted
+    mov rdx, rax
+    mov rcx, r13
+    mov r8, r10
+    call np_arena_alloc
+    test rax, rax
+    jz mem_exhausted
+    mov [r12], rax
+    mov [r12+8], r14
+    jmp mem_done
+mem_exhausted:
+    mov dword ptr [r12+16], 08F63623Ah
+mem_done:
+    add rsp, 40
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    ret
+neper_mem_alloc ENDP
+
+neper_mem_mark PROC
+    mov rax, [rcx+16]
+    ret
+neper_mem_mark ENDP
+
+neper_mem_reset PROC
+    mov [rcx+16], rdx
+    ret
+neper_mem_reset ENDP
+
+neper_mem_stats PROC
+    mov rax, [rdx+16]
+    mov [rcx], rax
+    mov rax, [rdx+8]
+    mov [rcx+8], rax
+    ret
+neper_mem_stats ENDP
+
+neper_os_stdout PROC
+    push rbx
+    sub rsp, 32
+    mov rbx, rcx
+    mov ecx, -11
+    call qword ptr [__imp_GetStdHandle]
+    mov [rbx], rax
+    add rsp, 32
+    pop rbx
+    ret
+neper_os_stdout ENDP
+
+neper_os_stderr PROC
+    push rbx
+    sub rsp, 32
+    mov rbx, rcx
+    mov ecx, -12
+    call qword ptr [__imp_GetStdHandle]
+    mov [rbx], rax
+    add rsp, 32
+    pop rbx
+    ret
+neper_os_stderr ENDP
+
+neper_os_exit PROC
+    sub rsp, 40
+    call qword ptr [__imp_ExitProcess]
+    int 3
+neper_os_exit ENDP
+
+neper_os_write PROC
+    push rbx
+    sub rsp, 48
+    mov dword ptr [rsp+40], 0
+    mov rcx, [rcx]
+    mov r8, [rdx+8]
+    cmp r8, 0ffffffffh
+    jbe write_size_ready
+    mov r8d, 0ffffffffh
+write_size_ready:
+    mov rdx, [rdx]
+    lea r9, [rsp+40]
+    mov qword ptr [rsp+32], 0
+    call qword ptr [__imp_WriteFile]
+    test eax, eax
+    jz write_failed
+    mov eax, [rsp+40]
+    xor edx, edx
+    jmp write_done
+write_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov edx, eax
+    xor eax, eax
+write_done:
+    add rsp, 48
+    pop rbx
+    ret
+neper_os_write ENDP
+
+neper_os_read PROC
+    push rbx
+    sub rsp, 48
+    mov dword ptr [rsp+40], 0
+    mov rcx, [rcx]
+    mov r8, [rdx+8]
+    cmp r8, 0ffffffffh
+    jbe read_size_ready
+    mov r8d, 0ffffffffh
+read_size_ready:
+    mov rdx, [rdx]
+    lea r9, [rsp+40]
+    mov qword ptr [rsp+32], 0
+    call qword ptr [__imp_ReadFile]
+    test eax, eax
+    jz read_failed
+    mov eax, [rsp+40]
+    xor edx, edx
+    jmp read_done
+read_failed:
+    call qword ptr [__imp_GetLastError]
+    ; ERROR_BROKEN_PIPE: the writer is gone, which is the end of the stream and not a
+    ; failure. Without this a pipe read reports an error where the other platform reports
+    ; zero bytes, so a caller reading to the end cannot be written once.
+    cmp eax, 109
+    je read_at_end
+    mov ecx, eax
+    call np_error
+    mov edx, eax
+    xor eax, eax
+    jmp read_done
+read_at_end:
+    xor eax, eax
+    xor edx, edx
+read_done:
+    add rsp, 48
+    pop rbx
+    ret
+neper_os_read ENDP
+
+neper_os_close PROC
+    sub rsp, 40
+    mov rcx, [rcx]
+    call qword ptr [__imp_CloseHandle]
+    test eax, eax
+    jz close_failed
+    xor eax, eax
+    jmp close_done
+close_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+close_done:
+    add rsp, 40
+    ret
+neper_os_close ENDP
+
+neper_os_seek PROC
+    push rbx
+    sub rsp, 48
+    mov qword ptr [rsp+40], 0
+    movzx r9d, r8b
+    cmp r9d, 2
+    ja seek_failed
+    mov rcx, [rcx]
+    lea r8, [rsp+40]
+    call qword ptr [__imp_SetFilePointerEx]
+    test eax, eax
+    jz seek_last_error
+    mov rax, [rsp+40]
+    xor edx, edx
+    jmp seek_done
+seek_last_error:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov edx, eax
+    xor eax, eax
+    jmp seek_done
+seek_failed:
+    mov ecx, 87
+    call np_error
+    mov edx, eax
+    xor eax, eax
+seek_done:
+    add rsp, 48
+    pop rbx
+    ret
+neper_os_seek ENDP
+
+neper_os_reserve PROC
+    sub rsp, 40
+    mov rdx, rcx
+    xor ecx, ecx
+    mov r8d, 2000h
+    mov r9d, 1
+    call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jz reserve_failed
+    xor edx, edx
+    add rsp, 40
+    ret
+reserve_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov edx, eax
+    xor eax, eax
+    add rsp, 40
+    ret
+neper_os_reserve ENDP
+
+neper_os_commit PROC
+    sub rsp, 40
+    mov r8d, 1000h
+    mov r9d, 4
+    call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jz commit_failed
+    xor eax, eax
+    add rsp, 40
+    ret
+commit_failed:
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    add rsp, 40
+    ret
+neper_os_commit ENDP
+
+neper_os_clock PROC
+    sub rsp, 56
+    cmp ecx, 1
+    ja clock_unsupported
+    test ecx, ecx
+    jnz clock_monotonic
+    lea rcx, [rsp+40]
+    call qword ptr [__imp_GetSystemTimeAsFileTime]
+    mov rax, qword ptr [rsp+40]
+    mov rcx, 116444736000000000
+    sub rax, rcx
+    imul rax, rax, 100
+    xor edx, edx
+    add rsp, 56
+    ret
+clock_monotonic:
+    lea rcx, [rsp+32]
+    call qword ptr [__imp_QueryPerformanceCounter]
+    test eax, eax
+    jz clock_failed
+    lea rcx, [rsp+40]
+    call qword ptr [__imp_QueryPerformanceFrequency]
+    test eax, eax
+    jz clock_failed
+    mov rax, qword ptr [rsp+32]
+    xor edx, edx
+    div qword ptr [rsp+40]
+    imul rax, rax, 1000000000
+    mov r8, rax
+    mov rax, rdx
+    imul rax, rax, 1000000000
+    xor edx, edx
+    div qword ptr [rsp+40]
+    add rax, r8
+    xor edx, edx
+    add rsp, 56
+    ret
+clock_unsupported:
+    xor eax, eax
+    mov edx, 02F8BB651h
+    add rsp, 56
+    ret
+clock_failed:
+    xor eax, eax
+    mov edx, 06F777EBFh
+    add rsp, 56
+    ret
+neper_os_clock ENDP
+
+neper_os_args PROC
+    push rbx
+    push rsi
+    push rdi
+    push r12
+    push r13
+    push r14
+    push r15
+    sub rsp, 48
+    mov r13, rcx
+    mov r14, rdx
+    mov rbx, r12
+    mov rax, [r14+16]
+    mov [rsp+32], rax
+    mov qword ptr [r13], 0
+    mov qword ptr [r13+8], 0
+    mov dword ptr [r13+16], 0
+    mov rax, r15
+    shl rax, 4
+    jc args_oom
+    mov rdx, rax
+    mov rcx, r14
+    mov r8d, 8
+    call np_arena_alloc
+    test rax, rax
+    jz args_oom
+    mov [r13], rax
+    mov [r13+8], r15
+    mov r12, rax
+args_copy_loop:
+    test r15, r15
+    jz args_copied
+    mov rdx, [rbx+8]
+    mov rcx, r14
+    mov r8d, 1
+    call np_arena_alloc
+    test rax, rax
+    jz args_oom
+    mov [r12], rax
+    mov rcx, [rbx+8]
+    mov [r12+8], rcx
+    mov rdi, rax
+    mov rsi, [rbx]
+    rep movsb
+    add rbx, 16
+    add r12, 16
+    dec r15
+    jmp args_copy_loop
+args_copied:
+    jmp args_done
+args_oom:
+    mov rax, [rsp+32]
+    mov [r14+16], rax
+    mov qword ptr [r13], 0
+    mov qword ptr [r13+8], 0
+    mov dword ptr [r13+16], 06979AADCh
+args_done:
+    add rsp, 48
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+neper_os_args ENDP
+
 np_utf8_to_wide PROC
     push r12
     push r13
@@ -448,163 +819,6 @@ wide_done:
     ret
 np_utf8_to_wide ENDP
 
-np_quoted_size PROC
-    mov r8, [rcx]
-    mov r9, [rcx+8]
-    mov eax, 2
-    xor r10d, r10d
-    xor r11d, r11d
-quoted_size_loop:
-    cmp r10, r9
-    jae quoted_size_tail
-    movzx ecx, byte ptr [r8+r10]
-    cmp ecx, 5ch
-    jne quoted_size_not_slash
-    inc r11
-    inc rax
-    jc quoted_size_overflow
-    jmp quoted_size_next
-quoted_size_not_slash:
-    cmp ecx, 22h
-    jne quoted_size_plain
-    add rax, r11
-    jc quoted_size_overflow
-    add rax, 2
-    jc quoted_size_overflow
-    xor r11d, r11d
-    jmp quoted_size_next
-quoted_size_plain:
-    add rax, 1
-    jc quoted_size_overflow
-    xor r11d, r11d
-quoted_size_next:
-    inc r10
-    jmp quoted_size_loop
-quoted_size_tail:
-    add rax, r11
-    jc quoted_size_overflow
-    ret
-quoted_size_overflow:
-    xor eax, eax
-    ret
-np_quoted_size ENDP
-
-np_quote PROC
-    mov r8, [rdx]
-    mov r9, [rdx+8]
-    mov byte ptr [rcx], 22h
-    inc rcx
-    xor r10d, r10d
-    xor r11d, r11d
-quote_loop:
-    cmp r10, r9
-    jae quote_tail
-    mov al, [r8+r10]
-    cmp al, 5ch
-    jne quote_not_slash
-    mov [rcx], al
-    inc rcx
-    inc r11
-    jmp quote_next
-quote_not_slash:
-    cmp al, 22h
-    jne quote_plain
-    mov rdx, r11
-    inc rdx
-quote_escape_quote:
-    test rdx, rdx
-    jz quote_write_quote
-    mov byte ptr [rcx], 5ch
-    inc rcx
-    dec rdx
-    jmp quote_escape_quote
-quote_write_quote:
-    mov byte ptr [rcx], 22h
-    inc rcx
-    xor r11d, r11d
-    jmp quote_next
-quote_plain:
-    mov [rcx], al
-    inc rcx
-    xor r11d, r11d
-quote_next:
-    inc r10
-    jmp quote_loop
-quote_tail:
-    test r11, r11
-    jz quote_close
-quote_escape_tail:
-    mov byte ptr [rcx], 5ch
-    inc rcx
-    dec r11
-    jnz quote_escape_tail
-quote_close:
-    mov byte ptr [rcx], 22h
-    lea rax, [rcx+1]
-    ret
-np_quote ENDP
-
-PUBLIC neper_mem_alloc
-neper_mem_alloc PROC
-    mov r10, [rsp+40]
-    push r12
-    push r13
-    push r14
-    push r15
-    sub rsp, 40
-    mov r12, rcx
-    mov r13, rdx
-    mov r14, r8
-    mov r15, r9
-    mov qword ptr [r12], 0
-    mov qword ptr [r12+8], 0
-    mov dword ptr [r12+16], 0
-    mov rax, r14
-    mul r15
-    test rdx, rdx
-    jnz mem_exhausted
-    mov rdx, rax
-    mov rcx, r13
-    mov r8, r10
-    call np_arena_alloc
-    test rax, rax
-    jz mem_exhausted
-    mov [r12], rax
-    mov [r12+8], r14
-    jmp mem_done
-mem_exhausted:
-    mov dword ptr [r12+16], 08F63623Ah
-mem_done:
-    add rsp, 40
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    ret
-neper_mem_alloc ENDP
-
-PUBLIC neper_mem_mark
-neper_mem_mark PROC
-    mov rax, [rcx+16]
-    ret
-neper_mem_mark ENDP
-
-PUBLIC neper_mem_reset
-neper_mem_reset PROC
-    mov [rcx+16], rdx
-    ret
-neper_mem_reset ENDP
-
-PUBLIC neper_mem_stats
-neper_mem_stats PROC
-    mov rax, [rdx+16]
-    mov [rcx], rax
-    mov rax, [rdx+8]
-    mov [rcx+8], rax
-    ret
-neper_mem_stats ENDP
-
-PUBLIC neper_os_open
 neper_os_open PROC
     push rbx
     push r12
@@ -684,243 +898,6 @@ open_done:
     ret
 neper_os_open ENDP
 
-PUBLIC neper_os_read
-neper_os_read PROC
-    push rbx
-    sub rsp, 48
-    mov dword ptr [rsp+40], 0
-    mov rcx, [rcx]
-    mov r8, [rdx+8]
-    cmp r8, 0ffffffffh
-    jbe read_size_ready
-    mov r8d, 0ffffffffh
-read_size_ready:
-    mov rdx, [rdx]
-    lea r9, [rsp+40]
-    mov qword ptr [rsp+32], 0
-    call qword ptr [__imp_ReadFile]
-    test eax, eax
-    jz read_failed
-    mov eax, [rsp+40]
-    xor edx, edx
-    jmp read_done
-read_failed:
-    call qword ptr [__imp_GetLastError]
-    ; ERROR_BROKEN_PIPE: the writer is gone, which is the end of the stream and not a
-    ; failure. Without this a pipe read reports an error where the other platform reports
-    ; zero bytes, so a caller reading to the end cannot be written once.
-    cmp eax, 109
-    je read_at_end
-    mov ecx, eax
-    call np_error
-    mov edx, eax
-    xor eax, eax
-    jmp read_done
-read_at_end:
-    xor eax, eax
-    xor edx, edx
-read_done:
-    add rsp, 48
-    pop rbx
-    ret
-neper_os_read ENDP
-
-PUBLIC neper_os_write
-neper_os_write PROC
-    push rbx
-    sub rsp, 48
-    mov dword ptr [rsp+40], 0
-    mov rcx, [rcx]
-    mov r8, [rdx+8]
-    cmp r8, 0ffffffffh
-    jbe write_size_ready
-    mov r8d, 0ffffffffh
-write_size_ready:
-    mov rdx, [rdx]
-    lea r9, [rsp+40]
-    mov qword ptr [rsp+32], 0
-    call qword ptr [__imp_WriteFile]
-    test eax, eax
-    jz write_failed
-    mov eax, [rsp+40]
-    xor edx, edx
-    jmp write_done
-write_failed:
-    call qword ptr [__imp_GetLastError]
-    mov ecx, eax
-    call np_error
-    mov edx, eax
-    xor eax, eax
-write_done:
-    add rsp, 48
-    pop rbx
-    ret
-neper_os_write ENDP
-
-PUBLIC neper_os_close
-neper_os_close PROC
-    sub rsp, 40
-    mov rcx, [rcx]
-    call qword ptr [__imp_CloseHandle]
-    test eax, eax
-    jz close_failed
-    xor eax, eax
-    jmp close_done
-close_failed:
-    call qword ptr [__imp_GetLastError]
-    mov ecx, eax
-    call np_error
-close_done:
-    add rsp, 40
-    ret
-neper_os_close ENDP
-
-PUBLIC neper_os_seek
-neper_os_seek PROC
-    push rbx
-    sub rsp, 48
-    mov qword ptr [rsp+40], 0
-    movzx r9d, r8b
-    cmp r9d, 2
-    ja seek_failed
-    mov rcx, [rcx]
-    lea r8, [rsp+40]
-    call qword ptr [__imp_SetFilePointerEx]
-    test eax, eax
-    jz seek_last_error
-    mov rax, [rsp+40]
-    xor edx, edx
-    jmp seek_done
-seek_last_error:
-    call qword ptr [__imp_GetLastError]
-    mov ecx, eax
-    call np_error
-    mov edx, eax
-    xor eax, eax
-    jmp seek_done
-seek_failed:
-    mov ecx, 87
-    call np_error
-    mov edx, eax
-    xor eax, eax
-seek_done:
-    add rsp, 48
-    pop rbx
-    ret
-neper_os_seek ENDP
-
-PUBLIC neper_os_thread_create
-neper_os_thread_create PROC
-    ; (Thread, err) returns through the hidden slot in rcx, as os.open does.
-    ; rdx = entry, r8 = ctx, r9 = stack.
-    push rbx
-    push rsi
-    sub rsp, 56
-    mov rbx, rcx
-    mov rsi, rdx
-    mov qword ptr [rsp+32], 0
-    mov qword ptr [rsp+40], 0
-    xor ecx, ecx
-    mov rdx, r9
-    mov r9, r8
-    mov r8, rsi
-    call qword ptr [__imp_CreateThread]
-    test rax, rax
-    jz thread_create_failed
-    mov [rbx], rax
-    mov dword ptr [rbx+8], 0
-    jmp thread_create_done
-thread_create_failed:
-    mov qword ptr [rbx], 0
-    call qword ptr [__imp_GetLastError]
-    mov ecx, eax
-    call np_error
-    mov [rbx+8], eax
-thread_create_done:
-    add rsp, 56
-    pop rsi
-    pop rbx
-    ret
-neper_os_thread_create ENDP
-
-PUBLIC neper_os_thread_join
-neper_os_thread_join PROC
-    push rbx
-    sub rsp, 32
-    mov rbx, [rcx]
-    mov rcx, rbx
-    mov edx, 0FFFFFFFFh
-    call qword ptr [__imp_WaitForSingleObject]
-    cmp eax, 0FFFFFFFFh
-    je thread_join_failed
-    mov rcx, rbx
-    call qword ptr [__imp_CloseHandle]
-    test eax, eax
-    jz thread_join_failed
-    xor eax, eax
-    jmp thread_join_done
-thread_join_failed:
-    call qword ptr [__imp_GetLastError]
-    mov ecx, eax
-    call np_error
-thread_join_done:
-    add rsp, 32
-    pop rbx
-    ret
-neper_os_thread_join ENDP
-
-PUBLIC neper_os_thread_detach
-neper_os_thread_detach PROC
-    sub rsp, 40
-    mov rcx, [rcx]
-    call qword ptr [__imp_CloseHandle]
-    test eax, eax
-    jz thread_detach_failed
-    xor eax, eax
-    jmp thread_detach_done
-thread_detach_failed:
-    call qword ptr [__imp_GetLastError]
-    mov ecx, eax
-    call np_error
-thread_detach_done:
-    add rsp, 40
-    ret
-neper_os_thread_detach ENDP
-
-PUBLIC neper_os_stdout
-neper_os_stdout PROC
-    push rbx
-    sub rsp, 32
-    mov rbx, rcx
-    mov ecx, -11
-    call qword ptr [__imp_GetStdHandle]
-    mov [rbx], rax
-    add rsp, 32
-    pop rbx
-    ret
-neper_os_stdout ENDP
-
-PUBLIC neper_os_stderr
-neper_os_stderr PROC
-    push rbx
-    sub rsp, 32
-    mov rbx, rcx
-    mov ecx, -12
-    call qword ptr [__imp_GetStdHandle]
-    mov [rbx], rax
-    add rsp, 32
-    pop rbx
-    ret
-neper_os_stderr ENDP
-
-PUBLIC neper_os_exit
-neper_os_exit PROC
-    sub rsp, 40
-    call qword ptr [__imp_ExitProcess]
-    int 3
-neper_os_exit ENDP
-
-PUBLIC neper_os_readdir
 neper_os_readdir PROC
     push rbx
     push rsi
@@ -1102,168 +1079,334 @@ dir_done:
     ret
 neper_os_readdir ENDP
 
-PUBLIC neper_os_args
-neper_os_args PROC
+neper_hash_bytes PROC
+    mov r8, rcx
+    mov r9, rdx
     push rbx
-    push rsi
-    push rdi
     push r12
     push r13
     push r14
     push r15
-    sub rsp, 48
-    mov r13, rcx
-    mov r14, rdx
-    mov rbx, r12
-    mov rax, [r14+16]
-    mov [rsp+32], rax
-    mov qword ptr [r13], 0
-    mov qword ptr [r13+8], 0
-    mov dword ptr [r13+16], 0
+    mov r13, 11400714785074694791
+    mov r14, 14029467366897019727
+    xor ecx, ecx
+    cmp r9, 32
+    jb Lhash_small
+    mov r10, r13
+    add r10, r14
+    mov r11, r14
+    xor ebx, ebx
+    xor r12d, r12d
+    sub r12, r13
+    mov rdx, r9
+    sub rdx, 32
+Lhash_block:
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r10, rax
+    rol r10, 31
+    imul r10, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r11, rax
+    rol r11, 31
+    imul r11, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add rbx, rax
+    rol rbx, 31
+    imul rbx, r13
+    add rcx, 8
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    add r12, rax
+    rol r12, 31
+    imul r12, r13
+    add rcx, 8
+    cmp rcx, rdx
+    jbe Lhash_block
+    mov r15, r10
+    rol r15, 1
+    mov rax, r11
+    rol rax, 7
+    add r15, rax
+    mov rax, rbx
+    rol rax, 12
+    add r15, rax
+    mov rax, r12
+    rol rax, 18
+    add r15, rax
+    mov rax, r10
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    mov rax, r11
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    mov rax, rbx
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    mov rax, r12
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    jmp Lhash_sized
+Lhash_small:
+    mov r15, 2870177450012600261
+Lhash_sized:
+    add r15, r9
+Lhash_tail8:
+    mov rax, rcx
+    add rax, 8
+    cmp rax, r9
+    ja Lhash_tail4
+    mov rax, qword ptr [r8 + rcx]
+    imul rax, r14
+    rol rax, 31
+    imul rax, r13
+    xor r15, rax
+    rol r15, 27
+    imul r15, r13
+    mov rax, 9650029242287828579
+    add r15, rax
+    add rcx, 8
+    jmp Lhash_tail8
+Lhash_tail4:
+    mov rax, rcx
+    add rax, 4
+    cmp rax, r9
+    ja Lhash_tail1
+    mov eax, dword ptr [r8 + rcx]
+    imul rax, r13
+    xor r15, rax
+    rol r15, 23
+    imul r15, r14
+    mov rax, 1609587929392839161
+    add r15, rax
+    add rcx, 4
+Lhash_tail1:
+    cmp rcx, r9
+    jae Lhash_final
+    movzx rax, byte ptr [r8 + rcx]
+    mov rdx, 2870177450012600261
+    imul rax, rdx
+    xor r15, rax
+    rol r15, 11
+    imul r15, r13
+    add rcx, 1
+    jmp Lhash_tail1
+Lhash_final:
     mov rax, r15
-    shl rax, 4
-    jc args_oom
-    mov rdx, rax
-    mov rcx, r14
-    mov r8d, 8
-    call np_arena_alloc
-    test rax, rax
-    jz args_oom
-    mov [r13], rax
-    mov [r13+8], r15
-    mov r12, rax
-args_copy_loop:
-    test r15, r15
-    jz args_copied
-    mov rdx, [rbx+8]
-    mov rcx, r14
-    mov r8d, 1
-    call np_arena_alloc
-    test rax, rax
-    jz args_oom
-    mov [r12], rax
-    mov rcx, [rbx+8]
-    mov [r12+8], rcx
-    mov rdi, rax
-    mov rsi, [rbx]
-    rep movsb
-    add rbx, 16
-    add r12, 16
-    dec r15
-    jmp args_copy_loop
-args_copied:
-    jmp args_done
-args_oom:
-    mov rax, [rsp+32]
-    mov [r14+16], rax
-    mov qword ptr [r13], 0
-    mov qword ptr [r13+8], 0
-    mov dword ptr [r13+16], 06979AADCh
-args_done:
-    add rsp, 48
+    shr rax, 33
+    xor r15, rax
+    imul r15, r14
+    mov rax, r15
+    shr rax, 29
+    xor r15, rax
+    mov rax, 1609587929392839161
+    imul r15, rax
+    mov rax, r15
+    shr rax, 32
+    xor rax, r15
     pop r15
     pop r14
     pop r13
     pop r12
-    pop rdi
+    pop rbx
+    ret
+neper_hash_bytes ENDP
+
+neper_os_thread_create PROC
+    ; (Thread, err) returns through the hidden slot in rcx, as os.open does.
+    ; rdx = entry, r8 = ctx, r9 = stack.
+    push rbx
+    push rsi
+    sub rsp, 56
+    mov rbx, rcx
+    mov rsi, rdx
+    mov qword ptr [rsp+32], 0
+    mov qword ptr [rsp+40], 0
+    xor ecx, ecx
+    mov rdx, r9
+    mov r9, r8
+    mov r8, rsi
+    call qword ptr [__imp_CreateThread]
+    test rax, rax
+    jz thread_create_failed
+    mov [rbx], rax
+    mov dword ptr [rbx+8], 0
+    jmp thread_create_done
+thread_create_failed:
+    mov qword ptr [rbx], 0
+    call qword ptr [__imp_GetLastError]
+    mov ecx, eax
+    call np_error
+    mov [rbx+8], eax
+thread_create_done:
+    add rsp, 56
     pop rsi
     pop rbx
     ret
-neper_os_args ENDP
+neper_os_thread_create ENDP
 
-PUBLIC neper_os_reserve
-neper_os_reserve PROC
-    sub rsp, 40
-    mov rdx, rcx
-    xor ecx, ecx
-    mov r8d, 2000h
-    mov r9d, 1
-    call qword ptr [__imp_VirtualAlloc]
-    test rax, rax
-    jz reserve_failed
-    xor edx, edx
-    add rsp, 40
-    ret
-reserve_failed:
+neper_os_thread_join PROC
+    push rbx
+    sub rsp, 32
+    mov rbx, [rcx]
+    mov rcx, rbx
+    mov edx, 0FFFFFFFFh
+    call qword ptr [__imp_WaitForSingleObject]
+    cmp eax, 0FFFFFFFFh
+    je thread_join_failed
+    mov rcx, rbx
+    call qword ptr [__imp_CloseHandle]
+    test eax, eax
+    jz thread_join_failed
+    xor eax, eax
+    jmp thread_join_done
+thread_join_failed:
     call qword ptr [__imp_GetLastError]
     mov ecx, eax
     call np_error
-    mov edx, eax
-    xor eax, eax
-    add rsp, 40
+thread_join_done:
+    add rsp, 32
+    pop rbx
     ret
-neper_os_reserve ENDP
+neper_os_thread_join ENDP
 
-PUBLIC neper_os_commit
-neper_os_commit PROC
+neper_os_thread_detach PROC
     sub rsp, 40
-    mov r8d, 1000h
-    mov r9d, 4
-    call qword ptr [__imp_VirtualAlloc]
-    test rax, rax
-    jz commit_failed
+    mov rcx, [rcx]
+    call qword ptr [__imp_CloseHandle]
+    test eax, eax
+    jz thread_detach_failed
     xor eax, eax
-    add rsp, 40
-    ret
-commit_failed:
+    jmp thread_detach_done
+thread_detach_failed:
     call qword ptr [__imp_GetLastError]
     mov ecx, eax
     call np_error
+thread_detach_done:
     add rsp, 40
     ret
-neper_os_commit ENDP
+neper_os_thread_detach ENDP
 
-PUBLIC neper_os_clock
-neper_os_clock PROC
-    sub rsp, 56
-    cmp ecx, 1
-    ja clock_unsupported
-    test ecx, ecx
-    jnz clock_monotonic
-    lea rcx, [rsp+40]
-    call qword ptr [__imp_GetSystemTimeAsFileTime]
-    mov rax, qword ptr [rsp+40]
-    mov rcx, 116444736000000000
-    sub rax, rcx
-    imul rax, rax, 100
-    xor edx, edx
-    add rsp, 56
+np_quoted_size PROC
+    mov r8, [rcx]
+    mov r9, [rcx+8]
+    mov eax, 2
+    xor r10d, r10d
+    xor r11d, r11d
+quoted_size_loop:
+    cmp r10, r9
+    jae quoted_size_tail
+    movzx ecx, byte ptr [r8+r10]
+    cmp ecx, 5ch
+    jne quoted_size_not_slash
+    inc r11
+    inc rax
+    jc quoted_size_overflow
+    jmp quoted_size_next
+quoted_size_not_slash:
+    cmp ecx, 22h
+    jne quoted_size_plain
+    add rax, r11
+    jc quoted_size_overflow
+    add rax, 2
+    jc quoted_size_overflow
+    xor r11d, r11d
+    jmp quoted_size_next
+quoted_size_plain:
+    add rax, 1
+    jc quoted_size_overflow
+    xor r11d, r11d
+quoted_size_next:
+    inc r10
+    jmp quoted_size_loop
+quoted_size_tail:
+    add rax, r11
+    jc quoted_size_overflow
     ret
-clock_monotonic:
-    lea rcx, [rsp+32]
-    call qword ptr [__imp_QueryPerformanceCounter]
-    test eax, eax
-    jz clock_failed
-    lea rcx, [rsp+40]
-    call qword ptr [__imp_QueryPerformanceFrequency]
-    test eax, eax
-    jz clock_failed
-    mov rax, qword ptr [rsp+32]
-    xor edx, edx
-    div qword ptr [rsp+40]
-    imul rax, rax, 1000000000
-    mov r8, rax
-    mov rax, rdx
-    imul rax, rax, 1000000000
-    xor edx, edx
-    div qword ptr [rsp+40]
-    add rax, r8
-    xor edx, edx
-    add rsp, 56
-    ret
-clock_unsupported:
+quoted_size_overflow:
     xor eax, eax
-    mov edx, 02F8BB651h
-    add rsp, 56
     ret
-clock_failed:
-    xor eax, eax
-    mov edx, 06F777EBFh
-    add rsp, 56
-    ret
-neper_os_clock ENDP
+np_quoted_size ENDP
 
-PUBLIC neper_os_spawn
+np_quote PROC
+    mov r8, [rdx]
+    mov r9, [rdx+8]
+    mov byte ptr [rcx], 22h
+    inc rcx
+    xor r10d, r10d
+    xor r11d, r11d
+quote_loop:
+    cmp r10, r9
+    jae quote_tail
+    mov al, [r8+r10]
+    cmp al, 5ch
+    jne quote_not_slash
+    mov [rcx], al
+    inc rcx
+    inc r11
+    jmp quote_next
+quote_not_slash:
+    cmp al, 22h
+    jne quote_plain
+    mov rdx, r11
+    inc rdx
+quote_escape_quote:
+    test rdx, rdx
+    jz quote_write_quote
+    mov byte ptr [rcx], 5ch
+    inc rcx
+    dec rdx
+    jmp quote_escape_quote
+quote_write_quote:
+    mov byte ptr [rcx], 22h
+    inc rcx
+    xor r11d, r11d
+    jmp quote_next
+quote_plain:
+    mov [rcx], al
+    inc rcx
+    xor r11d, r11d
+quote_next:
+    inc r10
+    jmp quote_loop
+quote_tail:
+    test r11, r11
+    jz quote_close
+quote_escape_tail:
+    mov byte ptr [rcx], 5ch
+    inc rcx
+    dec r11
+    jnz quote_escape_tail
+quote_close:
+    mov byte ptr [rcx], 22h
+    lea rax, [rcx+1]
+    ret
+np_quote ENDP
+
 neper_os_spawn PROC
     push rbx
     push rsi
@@ -1507,7 +1650,6 @@ spawn_done:
     ret
 neper_os_spawn ENDP
 
-PUBLIC neper_os_wait
 neper_os_wait PROC
     push rbx
     sub rsp, 48
@@ -1540,169 +1682,6 @@ wait_failed:
     ret
 neper_os_wait ENDP
 
-; Spec section 9 rule 4: the supplied `hash` is xxHash64 with seed 0 over a
-; value's canonical little-endian bytes. This must agree bit for bit with
-; algo.hash.xxhash64 and with neper_hash_bytes in bootstrap/runtime.c; a fixture
-; asserts all three agree on both platforms.
-PUBLIC neper_hash_bytes
-neper_hash_bytes PROC
-    mov r8, rcx
-    mov r9, rdx
-    push rbx
-    push r12
-    push r13
-    push r14
-    push r15
-    mov r13, 11400714785074694791
-    mov r14, 14029467366897019727
-    xor ecx, ecx
-    cmp r9, 32
-    jb Lhash_small
-    mov r10, r13
-    add r10, r14
-    mov r11, r14
-    xor ebx, ebx
-    xor r12d, r12d
-    sub r12, r13
-    mov rdx, r9
-    sub rdx, 32
-Lhash_block:
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    add r10, rax
-    rol r10, 31
-    imul r10, r13
-    add rcx, 8
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    add r11, rax
-    rol r11, 31
-    imul r11, r13
-    add rcx, 8
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    add rbx, rax
-    rol rbx, 31
-    imul rbx, r13
-    add rcx, 8
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    add r12, rax
-    rol r12, 31
-    imul r12, r13
-    add rcx, 8
-    cmp rcx, rdx
-    jbe Lhash_block
-    mov r15, r10
-    rol r15, 1
-    mov rax, r11
-    rol rax, 7
-    add r15, rax
-    mov rax, rbx
-    rol rax, 12
-    add r15, rax
-    mov rax, r12
-    rol rax, 18
-    add r15, rax
-    mov rax, r10
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    imul r15, r13
-    mov rax, 9650029242287828579
-    add r15, rax
-    mov rax, r11
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    imul r15, r13
-    mov rax, 9650029242287828579
-    add r15, rax
-    mov rax, rbx
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    imul r15, r13
-    mov rax, 9650029242287828579
-    add r15, rax
-    mov rax, r12
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    imul r15, r13
-    mov rax, 9650029242287828579
-    add r15, rax
-    jmp Lhash_sized
-Lhash_small:
-    mov r15, 2870177450012600261
-Lhash_sized:
-    add r15, r9
-Lhash_tail8:
-    mov rax, rcx
-    add rax, 8
-    cmp rax, r9
-    ja Lhash_tail4
-    mov rax, qword ptr [r8 + rcx]
-    imul rax, r14
-    rol rax, 31
-    imul rax, r13
-    xor r15, rax
-    rol r15, 27
-    imul r15, r13
-    mov rax, 9650029242287828579
-    add r15, rax
-    add rcx, 8
-    jmp Lhash_tail8
-Lhash_tail4:
-    mov rax, rcx
-    add rax, 4
-    cmp rax, r9
-    ja Lhash_tail1
-    mov eax, dword ptr [r8 + rcx]
-    imul rax, r13
-    xor r15, rax
-    rol r15, 23
-    imul r15, r14
-    mov rax, 1609587929392839161
-    add r15, rax
-    add rcx, 4
-Lhash_tail1:
-    cmp rcx, r9
-    jae Lhash_final
-    movzx rax, byte ptr [r8 + rcx]
-    mov rdx, 2870177450012600261
-    imul rax, rdx
-    xor r15, rax
-    rol r15, 11
-    imul r15, r13
-    add rcx, 1
-    jmp Lhash_tail1
-Lhash_final:
-    mov rax, r15
-    shr rax, 33
-    xor r15, rax
-    imul r15, r14
-    mov rax, r15
-    shr rax, 29
-    xor r15, rax
-    mov rax, 1609587929392839161
-    imul r15, rax
-    mov rax, r15
-    shr rax, 32
-    xor rax, r15
-    pop r15
-    pop r14
-    pop r13
-    pop r12
-    pop rbx
-    ret
-neper_hash_bytes ENDP
-
-
 ; Section 8's blocking primitives. `WaitOnAddress` and the two wakes are not in
 ; kernel32, and this linker emits one import descriptor for one DLL, so they are
 ; resolved through `GetModuleHandleW` on KernelBase -- which exports all three and is
@@ -1727,7 +1706,17 @@ resolve_synch_done:
     ret
 np_resolve_synch ENDP
 
-PUBLIC neper_os_wait_u32
+; Read-only bytes beside the code they belong to. `.text` is not writable, which is
+; exactly why none of the three addresses above is cached.
+np_kernelbase_name:
+    DW 04Bh, 065h, 072h, 06Eh, 065h, 06Ch, 042h, 061h, 073h, 065h, 02Eh, 064h, 06Ch, 06Ch, 0000h
+np_wait_on_address_name:
+    DB "WaitOnAddress", 0
+np_wake_single_name:
+    DB "WakeByAddressSingle", 0
+np_wake_all_name:
+    DB "WakeByAddressAll", 0
+
 neper_os_wait_u32 PROC
     ; rcx = p, rdx = expected, r8 = timeout_ns. Returns err in eax.
     push rbx
@@ -1786,7 +1775,6 @@ wait_u32_done:
     ret
 neper_os_wait_u32 ENDP
 
-PUBLIC neper_os_wake_one_u32
 neper_os_wake_one_u32 PROC
     push rbx
     sub rsp, 32
@@ -1803,7 +1791,6 @@ wake_one_done:
     ret
 neper_os_wake_one_u32 ENDP
 
-PUBLIC neper_os_wake_all_u32
 neper_os_wake_all_u32 PROC
     push rbx
     sub rsp, 32
@@ -1819,16 +1806,5 @@ wake_all_done:
     pop rbx
     ret
 neper_os_wake_all_u32 ENDP
-
-; Read-only bytes beside the code they belong to. `.text` is not writable, which is
-; exactly why none of the three addresses above is cached.
-np_kernelbase_name:
-    DW 04Bh, 065h, 072h, 06Eh, 065h, 06Ch, 042h, 061h, 073h, 065h, 02Eh, 064h, 06Ch, 06Ch, 0000h
-np_wait_on_address_name:
-    DB "WaitOnAddress", 0
-np_wake_single_name:
-    DB "WakeByAddressSingle", 0
-np_wake_all_name:
-    DB "WakeByAddressAll", 0
 
 END
