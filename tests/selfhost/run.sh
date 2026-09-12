@@ -842,6 +842,21 @@ fmt_lzw_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/f
 [ "$fmt_lzw_written" = 'executable written' ]
 chmod +x "$test_build/fmt-lzw-selfhost"
 "$test_build/fmt-lzw-selfhost"
+# `e.fs.mmap` and `e.fs.watch`: a file mapped by path both ways, and a directory watch seeing a file added.
+# Run from a local filesystem for the same reason `os_watch` is: no inotify event ever
+# arrives on the 9p mount.
+fs_watch_scratch="${TMPDIR:-/tmp}/neper-fs-watch-scratch"
+rm -rf "$fs_watch_scratch"
+mkdir -p "$fs_watch_scratch"
+fs_mmap_watch_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fs_mmap_watch/src/main.e" "$repo" x64 linux "$test_build/fs-mmap-watch-selfhost")
+[ "$fs_mmap_watch_written" = 'executable written' ]
+chmod +x "$test_build/fs-mmap-watch-selfhost"
+(cd "$fs_watch_scratch" && "$test_build/fs-mmap-watch-selfhost")
+# `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
+fmt_msgpack_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_msgpack/src/main.e" "$repo" x64 linux "$test_build/fmt-msgpack-selfhost")
+[ "$fmt_msgpack_written" = 'executable written' ]
+chmod +x "$test_build/fmt-msgpack-selfhost"
+"$test_build/fmt-msgpack-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

@@ -843,6 +843,26 @@ $fmtLzwWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $fmtLzwWritten -ne 'executable written') { throw 'fmt_lzw emission failed' }
 & $fmtLzwPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_lzw check failed: exit $LASTEXITCODE" }
+# `e.fs.mmap` and `e.fs.watch`: a file mapped by path both ways, and a directory watch seeing a file added.
+$fsMmapWatchPath = Join-Path $testBuild 'fs-mmap-watch-selfhost.exe'
+$fsMmapWatchWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fs_mmap_watch\src\main.e') $repo 'x64' 'windows' $fsMmapWatchPath
+if ($LASTEXITCODE -ne 0 -or $fsMmapWatchWritten -ne 'executable written') { throw 'fs_mmap_watch emission failed' }
+$fsWatchScratch = Join-Path $testBuild 'fs-watch-scratch'
+if (Test-Path -LiteralPath $fsWatchScratch) { Remove-Item -LiteralPath $fsWatchScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $fsWatchScratch | Out-Null
+Push-Location $fsWatchScratch
+try {
+    & $fsMmapWatchPath
+    if ($LASTEXITCODE -ne 0) { throw "a fs_mmap_watch check failed: exit $LASTEXITCODE" }
+} finally {
+    Pop-Location
+}
+# `e.fmt.msgpack`: every family byte-exact against the specification, the tree reader, the typed codec.
+$fmtMsgpackPath = Join-Path $testBuild 'fmt-msgpack-selfhost.exe'
+$fmtMsgpackWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_msgpack\src\main.e') $repo 'x64' 'windows' $fmtMsgpackPath
+if ($LASTEXITCODE -ne 0 -or $fmtMsgpackWritten -ne 'executable written') { throw 'fmt_msgpack emission failed' }
+& $fmtMsgpackPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_msgpack check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

@@ -3079,3 +3079,19 @@ stack, both cleared when the 12-bit table fills. The tables are byte-packed beca
 applied; the header says so. The encoder's bytes are checked against an independent
 Python encoder on five streams, by length and FNV-1a -- a round trip alone would prove
 only that the two halves agree with each other.
+## D172 — `e.fs.mmap`, `e.fs.watch` and `e.fmt.msgpack`
+
+`e.fs.mmap` opens the file, maps it through `e.os`, and closes the file: the mapping
+keeps what it needs. Its one `bytes` returns `[]u8` for a read-only mapping too, built
+the way `e.os` builds its own view, since the surface has one accessor and a write to a
+read-only page is the host's fault to report. `e.fs.watch` is `e.os`'s watch with the
+actions renamed into this module. Both are the thinnest layer the fence allows.
+
+`e.fmt.msgpack` is the whole format both ways: every integer written in its smallest
+form, every family read into an arena `Value` tree under `max_depth`, and the typed codec
+in `e.fmt.json`'s shape -- a struct as a map of its fields, one arm per field kind. The
+fixture matches every family's bytes to the specification, not to a round trip.
+
+One trap for the record: `io.memory_writer` returns a `Writer` it never fills in (its
+fence has no callback to name), and writing through it is a null call. `e.fmt.json`'s
+fixture wires `io.memory_write` by hand; the fixtures here use slice writers.

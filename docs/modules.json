@@ -79,8 +79,8 @@
     {"name":"e.io","layer":4,"surface":"source","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.mem","e.os","e.str"],"blocked_by":[]},
     {"name":"e.text.io","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.text.encoding"],"blocked_by":[]},
     {"name":"e.fs","layer":4,"surface":"partial","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.mem","e.os","e.path"],"blocked_by":[]},
-    {"name":"e.fs.mmap","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.mem","e.os"],"blocked_by":[]},
-    {"name":"e.fs.watch","layer":4,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.mem","e.os"],"blocked_by":[]},
+    {"name":"e.fs.mmap","layer":4,"surface":"source","milestone":null,"schedule":"later","direct_dependencies":["e.mem","e.os"],"blocked_by":[]},
+    {"name":"e.fs.watch","layer":4,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.mem","e.os"],"blocked_by":[]},
     {"name":"e.proc","layer":4,"surface":"partial","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.cancel","e.mem","e.os","e.time"],"blocked_by":[]},
     {"name":"e.thread","layer":4,"surface":"source","milestone":"M1","schedule":"scheduled","direct_dependencies":["e.os"],"blocked_by":[]},
     {"name":"e.sync","layer":4,"surface":"partial","milestone":"M2","schedule":"scheduled","direct_dependencies":["e.atomic","e.mem","e.os","e.time"],"blocked_by":[]},
@@ -143,7 +143,7 @@
     {"name":"e.fmt.jpeg","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io","e.mem","e.gfx.image"],"blocked_by":["image-codec-conformance"]},
     {"name":"e.fmt.webp","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io","e.mem","e.gfx.image"],"blocked_by":["image-codec-conformance"]},
     {"name":"e.fmt.bson","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.meta"],"blocked_by":[]},
-    {"name":"e.fmt.msgpack","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.meta"],"blocked_by":[]},
+    {"name":"e.fmt.msgpack","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.meta","e.str"],"blocked_by":[]},
     {"name":"e.fmt.protobuf","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io"],"blocked_by":[]}
   ],
   "packages":[
