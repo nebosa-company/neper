@@ -2659,3 +2659,23 @@ Windows is unchanged at 2,048 and 6,144. Its floor is the entry's 941 bytes -- c
 parsing and the arena -- and the four imports those need; the Linux startup does the same
 work in 235 bytes because a process there begins with `argc` and `argv` on the stack, where a
 Windows one begins with a call to `GetCommandLineW` and a UTF-16 string to split and convert.
+## D152 — the Windows floor stays where it is: a smaller one is a Meterpreter stager to Defender
+
+The Windows entry parses the command line before `main` runs, for the `args` a `main` may
+declare, and that parser with its two callees is 941 of the 2,048 bytes an empty program
+carries. Moving it out was straightforward and was done: the parser became a procedure the
+entry calls only when a byte the linker writes says `main` declares `args`, `neper_os_args`
+called the same procedure for everyone else, and the NIR parameter count travelled through
+the `.em` code record (format version 3) so a link from artifacts knew the same. An empty
+program came out at 1,536 bytes with two imports, `VirtualAlloc` and `ExitProcess`.
+
+Windows Defender quarantined it on first run as `Trojan:Win64/Meterpreter.AMTB`. That is
+the shape of a stager -- a few hundred bytes that allocate memory and hand control to it --
+and a heuristic cannot tell `fn main() -> err { ret ok }` from one. The same program
+declaring `args`, 2,560 bytes with the parser and four imports, ran untouched; so did every
+image of the previous layout, which always carried the parser.
+
+So the change is reverted whole, format version included, and this row is what remains of
+it. The Windows floor is 2,048 bytes and the parser is part of it on purpose: a compiler
+whose smallest program is quarantined has not made a smaller program. Linux has no such
+reader and keeps its 366 bytes.
