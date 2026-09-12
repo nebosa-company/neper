@@ -1,7 +1,8 @@
 // `e.simd` over `Vec[T, N]` and `Mask[T, N]`: the closed table's layout, every intrinsic
 // but `shuffle` on integer and float lanes, the pairwise reduction order, the masked
 // forms at a slice's tail, the two bit intrinsics against their definitions, and section
-// 4's lane-wise operators on float, integer and mask lanes, in a generic too.
+// 4's lane-wise operators on float, integer and mask lanes, in a generic too, and the
+// `Vec[T, N]{ ... }` literal with `v[i]` on both sides of an assignment.
 // Every check has its own exit code.
 use e.os
 use e.mem
@@ -232,6 +233,27 @@ fn operators() {
     if s.lanes[0] == s.lanes[0] || s.lanes[1] != 2.0 { os.exit(94) }
 }
 
+fn first_two[V: type](v: V) -> f64 {
+    ret f64(v[0]) + f64(v[1])
+}
+
+fn spellings() {
+    let c = Vec[i32, 4]{ 1, 2, 3, 4 }
+    if c[0] != 1i32 || c[3] != 4i32 { os.exit(100) }
+    var v = Vec[f32, 4]{ 0.5, 1.5, 2.5, 3.5 }
+    v[2] = 9.0
+    if v[2] != 9.0 || v.lanes[1] != 1.5 { os.exit(101) }
+    let i = 3usize
+    if v[i] != 3.5 { os.exit(102) }
+    let d = (c +% c)[1]
+    if d != 4i32 { os.exit(103) }
+    if first_two[Vec[f64, 2]](Vec[f64, 2]{ 1.25, 2.0 }) != 3.25 { os.exit(104) }
+    let m = Mask[i32, 4]{ true, false, true, false }
+    if simd.bits[Vec[i32, 4]](m) != 5u64 { os.exit(105) }
+    let wide = Vec[u8, 16]{ 0u8, 1u8, 2u8, 3u8, 4u8, 5u8, 6u8, 7u8, 8u8, 9u8, 10u8, 11u8, 12u8, 13u8, 14u8, 15u8 }
+    if simd.reduce_add[Vec[u8, 16]](wide) != 120u8 || wide[15] != 15u8 { os.exit(106) }
+}
+
 fn main() {
     layout()
     moves()
@@ -240,5 +262,6 @@ fn main() {
     conversions()
     bit_intrinsics()
     operators()
+    spellings()
     os.exit(0)
 }

@@ -2088,8 +2088,11 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     if index_error != ok { ret (0usize, index_type, index_error) }
     var data = base
     var length = 0usize
-    if base_type.kind == .Array {
-        let (length_instruction, length_result, length_error) = nir.emit(builder, .ConstInteger, usize_type, true, base_type.array_length, c.tokens[node.token_start])
+    let (vector_lanes, is_vector) = check.vector_lanes(c, base_type)
+    if base_type.kind == .Array || is_vector {
+        var count = base_type.array_length
+        if is_vector { count = vector_lanes.array_length }
+        let (length_instruction, length_result, length_error) = nir.emit(builder, .ConstInteger, usize_type, true, count, c.tokens[node.token_start])
         if length_error != ok { ret (0usize, element_type, length_error) }
         length = length_result
     } else {
@@ -2345,9 +2348,22 @@ fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree
     }
     var array_element: check.Type = zero
     var array_info: layout.Info = zero
+    var positional = result_type.kind == .Array
+    var positional_count = result_type.array_length
     if result_type.kind == .Array {
         if !result_type.has_element || result_type.element >= c.type_count { ret (0usize, result_type, check.InvalidType) }
         array_element = c.types[result_type.element]
+    }
+    // A vector literal is its lanes in order, the array it holds (D159).
+    let (vector_lanes, is_vector) = check.vector_lanes(c, result_type)
+    if is_vector {
+        let (lane, has_lane) = check.vector_lane_type(c, result_type)
+        if !has_lane { ret (0usize, result_type, check.InvalidType) }
+        array_element = lane
+        positional = true
+        positional_count = vector_lanes.array_length
+    }
+    if positional {
         let (element_info, element_info_error) = layout.type_info(c, array_element)
         if element_info_error != ok { ret (0usize, result_type, element_info_error) }
         array_info = element_info
@@ -2361,8 +2377,8 @@ fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree
             if item.kind == .LiteralItem {
                 var item_type: check.Type = zero
                 var item_offset = 0usize
-                if result_type.kind == .Array {
-                    if item_at >= result_type.array_length { ret (0usize, result_type, check.ArgumentCount) }
+                if positional {
+                    if item_at >= positional_count { ret (0usize, result_type, check.ArgumentCount) }
                     item_type = array_element
                     item_offset = item_at * array_info.size
                 } else {

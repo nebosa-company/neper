@@ -2838,3 +2838,18 @@ ponytail: N scalar instructions per operator. The vector register class, when it
 selects one instruction for the same NIR shape; nothing in the checker or the library
 moves for it. `link/simd_lanes` carries the table on every lane kind, the refusals are
 probed by hand, and a generic `a * x + y` over `V` goes through both passes.
+## D159 — `Vec[T, N]{ ... }` and `v[i]`: the two spellings, over the same lanes
+
+Section 4's last two spellings on a vector are in: the literal, which is exactly `N`
+unnamed items of the lane type in lane order, and `v[i]`, which reads or writes one lane
+with an array's bounds check. Both are the one-field representation of D148 read the
+obvious way. A vector's address is its lanes' address, so `v[i]` is the array index path
+with the length being `N` rather than the array's own; the literal is the array literal's
+positional path with the lane as the element. `Mask[T, N]{ true, false, ... }` comes for
+free and is not refused. The count mismatch is the array literal's diagnostic; an
+out-of-range lane is the array's trap. Inside a generic, `Vec[T, N]{ ... }` and `v[i]`
+defer as every other question about `V` does, and the instance settles them.
+
+What remains for vectors is the register class -- one instruction per operator rather
+than `N` -- the mask register-only rule, and `shuffle`, which waits on a comptime array
+parameter kind.

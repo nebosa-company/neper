@@ -7151,6 +7151,11 @@ fn read_bracket(c: *Checker, tree: *parse.Tree, node: syntax.Node, info: *Bracke
 
 fn index_element_type(c: *Checker, base: Type, module_index: usize) -> (Type, err) {
     if base.kind == .String { ret (make_type(.Integer, "u8", module_index), ok) }
+    // Section 4: `v[i]` reads or writes one lane of a vector, bounds-checked like an
+    // array's element; a vector still generic answers with a placeholder.
+    if vector_pending(c, base) { ret (make_type(.TypeParameter, "", module_index), ok) }
+    let (lane, is_vector) = vector_lane_type(c, base)
+    if is_vector { ret (lane, ok) }
     if base.kind != .Array && base.kind != .Slice { ret (invalid_type(), InvalidOperator) }
     if !base.has_element || base.element >= c.type_count { ret (invalid_type(), InvalidType) }
     ret (c.types[base.element], ok)
@@ -7368,8 +7373,49 @@ fn check_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modu
         let (array, array_error) = check_array_literal(c, g, tree, module_index, node, header_index, item_count, expected)
         ret (array, array_error)
     }
+    if tree.nodes[header_index].kind == .NamedType {
+        let (named, named_error) = type_from_node(c, c.resolver, g, tree, module_index, tree.nodes[header_index])
+        if named_error == ok && is_vector_type(c, named) {
+            let (vector, vector_error) = check_vector_literal(c, g, tree, module_index, node, named, item_count, expected)
+            ret (vector, vector_error)
+        }
+    }
     let (aggregate, aggregate_error) = check_named_aggregate_literal(c, g, tree, module_index, node, header_index, item_count, expected)
     ret (aggregate, aggregate_error)
+}
+
+// Section 4: `Vec[i32, 4]{ 1, 2, 3, 4 }` -- one unnamed item per lane, each of the lane
+// type, exactly `N` of them. Inside a generic the vector may still be `Vec[T, N]`, and
+// then the count and the lane type wait for the instance.
+fn check_vector_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, vector: Type, item_count: usize, expected: Type) -> (Type, err) {
+    var lane = make_type(.TypeParameter, "", module_index)
+    if !vector_pending(c, vector) {
+        let (lanes, is_vector) = vector_lanes(c, vector)
+        let (lane_type, has_lane) = vector_lane_type(c, vector)
+        if !is_vector || !has_lane { ret (invalid_type(), InvalidType) }
+        if lanes.array_length != item_count {
+            record_failure(c, module_index, node, .ArrayElementCount, "", "")
+            ret (invalid_type(), TypeMismatch)
+        }
+        lane = lane_type
+    }
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let item = tree.nodes[tree.children[at].index]
+            if item.kind == .LiteralItem {
+                if literal_item_named(c, tree, item) { ret (invalid_type(), InvalidType) }
+                let (expression, has_expression) = literal_item_expression(tree, item)
+                if !has_expression { ret (invalid_type(), parse.InvalidSyntax) }
+                let (_, expression_error) = check_expr(c, g, tree, module_index, expression, lane)
+                if expression_error != ok { ret (invalid_type(), expression_error) }
+            }
+        }
+        at += 1usize
+    }
+    let (contextual, context_error) = apply_context(c, vector, expected)
+    ret (contextual, context_error)
 }
 
 fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
@@ -7407,7 +7453,7 @@ fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
         if c.generic_declaration && type_shape_unknown(base) { ret (true, ok) }
         if base.kind == .Slice { ret (!base.is_const, ok) }
         if base.kind == .String { ret (false, ok) }
-        if base.kind != .Array { ret (false, InvalidOperator) }
+        if base.kind != .Array && !is_vector_type(c, base) { ret (false, InvalidOperator) }
         let (mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, bracket.base)
         ret (mutable, mutable_error)
     }
@@ -9094,13 +9140,13 @@ fn assignment_place_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         if index_error != ok { ret (invalid_type(), index_error) }
         var mutable = false
         if base.kind == .Slice { mutable = !base.is_const }
-        if base.kind == .Array {
+        if base.kind == .Array || is_vector_type(c, base) {
             let (place_mutable, mutable_error) = direct_place_mutable(c, g, tree, module_index, bracket.base)
             if mutable_error != ok { ret (invalid_type(), mutable_error) }
             mutable = place_mutable
         }
         if !mutable {
-            if base.kind == .Array {
+            if base.kind == .Array || is_vector_type(c, base) {
                 record_failure(c, module_index, place, .IndexedArrayImmutable, "", "")
             } else {
                 record_failure(c, module_index, place, .IndexedElementsImmutable, "", "")
