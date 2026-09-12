@@ -776,6 +776,12 @@ algo_graph_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$algo_graph_written" = 'executable written' ]
 chmod +x "$test_build/algo-graph-selfhost"
 "$test_build/algo-graph-selfhost"
+# `e.data.tree`: an ordered map as a treap keyed by hash priority: ascending iteration, bounds,
+# removal with reuse, clear, a set of strings, and two thousand keys.
+data_tree_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/data_tree/src/main.e" "$repo" x64 linux "$test_build/data-tree-selfhost")
+[ "$data_tree_written" = 'executable written' ]
+chmod +x "$test_build/data-tree-selfhost"
+"$test_build/data-tree-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

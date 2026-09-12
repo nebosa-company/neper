@@ -150,7 +150,9 @@ fn declaration_name(c: *check.Checker, text: str, node: syntax.Node) -> (str, er
 fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type, builder: *nir.Builder) -> (usize, err) {
     if node.kind != .LiteralExpr || node.token_start >= c.token_count { ret (0usize, check.Unsupported) }
     let token = c.tokens[node.token_start]
-    if token.kind == .KwZero && aggregate_value(c, expected) {
+    // Section 4: `nil` is the zero pointer and the empty slice, which is exactly what
+    // `zero` is for those two types, so it lowers the same way.
+    if (token.kind == .KwZero || token.kind == .KwNil) && aggregate_value(c, expected) {
         let (info, info_error) = layout.type_info(c, expected)
         if info_error != ok { ret (0usize, info_error) }
         var slots = (info.size + 7usize) / 8usize
@@ -173,7 +175,7 @@ fn literal(c: *check.Checker, text: str, node: syntax.Node, expected: check.Type
             opcode = .ConstBool
             if token.kind == .KwTrue { immediate = 1usize }
         } else {
-            if token.kind == .KwZero {
+            if token.kind == .KwZero || token.kind == .KwNil {
                 opcode = .Zero
             } else {
                 if token.kind == .String || token.kind == .RawString {
@@ -2960,7 +2962,7 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         while place_at < place_count {
             let (result_type, result_type_error) = check.call_return(c, results.call, place_at)
             if result_type_error != ok { ret result_type_error }
-            if !check.type_equal(c, place_types[place_at], result_type) { ret check.InvalidType }
+            if !check.type_assignable(c, result_type, place_types[place_at]) { ret check.InvalidType }
             try store_assignment_value(c, place_types[place_at], addresses[place_at], results.values[place_at], c.tokens[node.token_start], builder)
             place_at += 1usize
         }
@@ -2990,7 +2992,9 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     }
     let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, children[1usize], place_type, builder, bindings, binding_count)
     if value_error != ok { ret value_error }
-    if !check.type_equal(c, place_type, value_type) { ret check.InvalidType }
+    // What the checker admitted here is assignability, not equality: a `[]T` into a
+    // `[]const T` place, a `*T` into a `*const T`. Both are the same bits.
+    if !check.type_assignable(c, value_type, place_type) { ret check.InvalidType }
     ret store_assignment_value(c, place_type, address, value, c.tokens[node.token_start], builder)
 }
 

@@ -2957,3 +2957,28 @@ Kosaraju over the same transpose, renumbered by smallest node afterwards; Dijkst
 `heap.HeapBy` with a `(distance, node)` entry ordered by both, refusing a negative, NaN or
 infinite weight before it is added. The transpose builder and three small declarations
 are beyond the fence, so `partial`.
+## D165 — `e.data.tree` as a treap, and two more compiler gaps closed on the way
+
+`e.data.tree` is an ordered map whose shape is a function of its keys: a treap with each
+node's priority the stirred hash of its key, so the same keys give the same tree on every
+run, with parent pointers so that an iterator is one node pointer and steps to the
+in-order successor with no reference to the map -- which is what the fence's
+`Iter { state: *const void }` allows. Nodes are individual arena allocations, reused
+through a free list after removal. `init` cannot fail by its signature, so a map whose
+state could not be allocated is the empty map every later `put` refuses with
+`mem.Exhausted`. `partial`: the node, state and rotation helpers are beyond the fence.
+
+Two things the compiler could not do before this module:
+
+1. **A generic struct that points to itself** (`left: *Node[K, V]` inside `Node[K, V]`)
+   instantiated without end: `instantiate_aggregate` substituted the fields before it
+   registered the instance, so the pointee's own instantiation never found it in the
+   cache. The instance is registered first now and its fields filled in place.
+2. **`nil` did not lower.** The checker accepted it for any pointer or slice; lowering had
+   no case for the keyword. It is the zero pointer and the empty slice, exactly what
+   `zero` is for those types, and it lowers as `zero` does.
+
+One gap stays open, worked around: comparing two `*const` pointers to a generic instance
+inside that instance's own generic (`right_of_up != child`) fails to lower, while the
+same comparison outside generics and over mutable pointers is fine. The iterator casts
+its `*const void` to the node's mutable pointer type and reads only.

@@ -2658,22 +2658,34 @@ fn instantiate_aggregate(c: *Checker, template_index: usize, first_argument: usi
     instance.first_argument = first_argument
     instance.generic = !concrete
     instance.instance = true
+    // The instance is registered before its fields are substituted, so that a field
+    // naming the instance itself -- `left: *Node[K, V]` inside `Node[K, V]` -- finds it in
+    // the cache instead of instantiating it again without end. Its fields are filled in
+    // place below; a field read through the pointer meanwhile sees the count already set.
+    let index = c.aggregate_count
+    c.aggregate_count += 1usize
     if concrete {
         if c.aggregate_field_count + template.field_count > c.aggregate_fields.len { ret (0usize, Capacity) }
         c.aggregate_field_count += template.field_count
         instance.field_count = template.field_count
+    }
+    c.aggregates[index] = instance
+    if concrete {
         var at = 0usize
+        while at < template.field_count {
+            let source = c.aggregate_fields[template.first_field + at]
+            c.aggregate_fields[instance.first_field + at] = AggregateField { name: source.name, ty: invalid_type(), enum_value: source.enum_value, enum_negative: source.enum_negative, has_enum_value: source.has_enum_value, token: source.token }
+            at += 1usize
+        }
+        at = 0usize
         while at < template.field_count {
             let source = c.aggregate_fields[template.first_field + at]
             let (specialized, specialize_error) = substitute_aggregate_type(c, template_index, first_argument, source.ty)
             if specialize_error != ok { ret (0usize, specialize_error) }
-            c.aggregate_fields[instance.first_field + at] = AggregateField { name: source.name, ty: specialized, enum_value: source.enum_value, enum_negative: source.enum_negative, has_enum_value: source.has_enum_value, token: source.token }
+            c.aggregate_fields[instance.first_field + at].ty = specialized
             at += 1usize
         }
     }
-    let index = c.aggregate_count
-    c.aggregates[index] = instance
-    c.aggregate_count += 1usize
     ret (index, ok)
 }
 

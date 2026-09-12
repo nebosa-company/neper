@@ -764,6 +764,13 @@ $algoGraphWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $algoGraphWritten -ne 'executable written') { throw 'algo_graph emission failed' }
 & $algoGraphPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_graph check failed: exit $LASTEXITCODE" }
+# `e.data.tree`: an ordered map as a treap keyed by hash priority: ascending iteration, bounds,
+# removal with reuse, clear, a set of strings, and two thousand keys.
+$dataTreePath = Join-Path $testBuild 'data-tree-selfhost.exe'
+$dataTreeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\data_tree\src\main.e') $repo 'x64' 'windows' $dataTreePath
+if ($LASTEXITCODE -ne 0 -or $dataTreeWritten -ne 'executable written') { throw 'data_tree emission failed' }
+& $dataTreePath
+if ($LASTEXITCODE -ne 0) { throw "a tree check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
