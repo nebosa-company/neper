@@ -3284,3 +3284,42 @@ its share of the capacity -- an uneven hash can fill one shard before the map ho
 in the header. `len` sums the shards in turn and is the point-in-time figure the
 fence promised. Both were driven by real threads in the fixture: a producer through
 a queue of four, two fillers into sixteen shards under a reader.
+
+## D181 — `e.fmt.bzip2` and `e.text.io`
+
+bzip2 decompression is bounded the way the fence asks: the storage holds the state,
+a 4 KiB input buffer and four bytes per byte of the largest block it will accept, and
+a stream whose header names a bigger block is `TooLarge` before a byte is decoded.
+A block is decoded whole into the `tt` array -- Huffman groups over the MTF/RLE2
+symbols, the origin pointer, the cumulative counts threaded into links -- but the
+inverse Burrows-Wheeler walk and the first-stage run-length decode happen as `read`
+asks, one byte at a time out of the links, so a block never needs an output buffer
+and the output limit is enforced as bytes leave. The block CRC is bzip2's MSB-first
+CRC-32 computed per byte; the combined CRC is rotated and mixed per block and checked
+at the end-of-stream marker. Python's bz2 output for a 264 KB text with long runs
+is the reference, read back in 7000-byte pulls across three blocks. Compression is
+not written, as the fence says.
+
+`e.text.io` reads lines out of a decoded buffer twice the raw capacity, since UTF-16
+grows by up to half when it becomes UTF-8, and hands out the text before a bad byte
+before reporting it -- a first draft lost the good line in front of the error.
+`Newline.Native` resolves to LF on every host, written plainly in the header: a
+portable module cannot learn its host, the gap D97-D132 record, and a per-target
+variant of the file is the upgrade.
+
+## D182 — `e.debug` and `e.log`
+
+`e.debug` is its fence and nothing behind it: `backtrace` answers no frames and
+`symbolize` an address with empty names and line zero, which is exactly the shape
+the fence assigns to missing symbol data. There is no frame walk because the
+compiler has no intrinsic to read the frame chain and no symbol table in the
+executable; writing a guess would be worse than writing nothing. When those land,
+both functions fill in and no caller changes -- `e.log` already threads the frames.
+
+`e.log` stamps each record from the wall clock and hands it to every sink in turn,
+stopping at the first failure. Both sinks render through a `str.Builder` over a
+4 KiB stack arena, so a sink allocates nothing and a record longer than that is cut
+rather than grown; the console sink writes to an `os.File` directly and the JSON
+lines sink to an `io.Writer`. An `err` field prints as `ok` or `error`: an error has
+no name at run time until the trap protocol carries one (spec 11), and inventing a
+number for it would be read as meaning something.

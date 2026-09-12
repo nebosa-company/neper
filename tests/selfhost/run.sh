@@ -962,6 +962,21 @@ concurrent_queue_map_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$concurrent_queue_map_written" = 'executable written' ]
 chmod +x "$test_build/concurrent-queue-map-selfhost"
 "$test_build/concurrent-queue-map-selfhost"
+# `e.fmt.bzip2`: Python's three-block stream read back in pulls, six refusals.
+fmt_bzip2_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_bzip2/src/main.e" "$repo" x64 linux "$test_build/fmt-bzip2-selfhost")
+[ "$fmt_bzip2_written" = 'executable written' ]
+chmod +x "$test_build/fmt-bzip2-selfhost"
+"$test_build/fmt-bzip2-selfhost"
+# `e.text.io`: lines across LF, CRLF and a bare CR, BOM sniffing, limits, both writers.
+text_io_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_io/src/main.e" "$repo" x64 linux "$test_build/text-io-selfhost")
+[ "$text_io_written" = 'executable written' ]
+chmod +x "$test_build/text-io-selfhost"
+"$test_build/text-io-selfhost"
+# `e.log` and `e.debug`: the level gate, both sinks, a file read back, the empty backtrace.
+log_debug_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/log_debug/src/main.e" "$repo" x64 linux "$test_build/log-debug-selfhost")
+[ "$log_debug_written" = 'executable written' ]
+chmod +x "$test_build/log-debug-selfhost"
+"$test_build/log-debug-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

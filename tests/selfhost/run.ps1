@@ -989,6 +989,24 @@ $concurrentQueueMapWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $concurrentQueueMapWritten -ne 'executable written') { throw 'concurrent_queue_map emission failed' }
 & $concurrentQueueMapPath
 if ($LASTEXITCODE -ne 0) { throw "a concurrent_queue_map check failed: exit $LASTEXITCODE" }
+# `e.fmt.bzip2`: Python's three-block stream read back in pulls, six refusals.
+$fmtBzip2Path = Join-Path $testBuild 'fmt-bzip2-selfhost.exe'
+$fmtBzip2Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_bzip2\src\main.e') $repo 'x64' 'windows' $fmtBzip2Path
+if ($LASTEXITCODE -ne 0 -or $fmtBzip2Written -ne 'executable written') { throw 'fmt_bzip2 emission failed' }
+& $fmtBzip2Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_bzip2 check failed: exit $LASTEXITCODE" }
+# `e.text.io`: lines across LF, CRLF and a bare CR, BOM sniffing, limits, both writers.
+$textIoPath = Join-Path $testBuild 'text-io-selfhost.exe'
+$textIoWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_io\src\main.e') $repo 'x64' 'windows' $textIoPath
+if ($LASTEXITCODE -ne 0 -or $textIoWritten -ne 'executable written') { throw 'text_io emission failed' }
+& $textIoPath
+if ($LASTEXITCODE -ne 0) { throw "a text_io check failed: exit $LASTEXITCODE" }
+# `e.log` and `e.debug`: the level gate, both sinks, a file read back, the empty backtrace.
+$logDebugPath = Join-Path $testBuild 'log-debug-selfhost.exe'
+$logDebugWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\log_debug\src\main.e') $repo 'x64' 'windows' $logDebugPath
+if ($LASTEXITCODE -ne 0 -or $logDebugWritten -ne 'executable written') { throw 'log_debug emission failed' }
+& $logDebugPath
+if ($LASTEXITCODE -ne 0) { throw "a log_debug check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
