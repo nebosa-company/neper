@@ -1899,7 +1899,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 try binary.init(&scratch, scratch_storage)
                 let (string_values, string_values_error) = mem.alloc[str](a, 32768usize)
                 if string_values_error != ok { ret string_values_error }
-                let (sections, sections_error) = mem.alloc[em.Section](a, 6usize)
+                let (sections, sections_error) = mem.alloc[em.Section](a, 7usize)
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
                 if triple_error != ok { ret triple_error }

@@ -360,7 +360,10 @@ built at `88c20f3` and exits zero after this change.
   except compiler-owned intrinsics, which stay at 0.
 - `src/em.e` records it in the NIR section, in code function records and
   relocations, and in the canonical NIR and code content hashes. The
-  compiled-module format is therefore **version 2**; `em_link` reads it back.
+  compiled-module format became **version 2** for it; `em_link` reads it back.
+- A code relocation carries a kind -- a function or a module-scope `var` -- and a
+  seventh section lists the module's `var`s, so a program that reaches one links
+  from `.em` files (D154): **version 3**.
 - `em.checked_function_for_nir` matches an instance exactly instead of guessing
   from lowering order.
 - Distinct instances of one foreign template resolve to a single source
@@ -1245,7 +1248,7 @@ needs general `T.cmp` protocol resolution first.
   through `alloc_temp`, and anything that writes a new outgoing argument must go
   through `emit_argument_lane`; otherwise the measuring pass will not see it and
   the frame will be too small again. Both suites check the invariant.
-- The compiled-module format is version 2. Artifacts written by an earlier
+- The compiled-module format is version 3. Artifacts written by an earlier
   compiler are rejected with `UnsupportedVersion`; delete stale `.em` files
   rather than trying to read them.
 - Linker relocation names remain runtime symbols (`neper_os_*`); dependency records

@@ -187,11 +187,15 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     var relocation_count = 0usize
     var code_size = 0usize
     var hash_scratch_size = 0usize
+    var global_count = 0usize
     var artifact_at = 0usize
     while artifact_at < artifacts.len {
         let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
         if count_error != ok { ret count_error }
         function_count += count
+        let (globals_here, globals_error) = em.artifact_global_count(artifacts[artifact_at].bytes)
+        if globals_error != ok { ret globals_error }
+        global_count += globals_here
         var function_at = 0usize
         while function_at < count {
             let (function, function_error) = em.artifact_code_function_at(artifacts[artifact_at].bytes, function_at)
@@ -227,6 +231,28 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 1usize)
     if strings_error != ok { ret strings_error }
     try nir.init(&program.builder, functions, blocks, instructions, operands, references, strings)
+    // Every module's `var`s, in artifact order and each artifact's own order: the linker lays
+    // them out from the builder exactly as the source path does, and a relocation finds its
+    // global by the module and name the artifact recorded.
+    let (global_storage, globals_storage_error) = mem.alloc[nir.GlobalData](a, capacity(global_count))
+    if globals_storage_error != ok { ret globals_storage_error }
+    try nir.init_globals(&program.builder, global_storage)
+    artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let (count, count_error) = em.artifact_global_count(artifacts[artifact_at].bytes)
+        if count_error != ok { ret count_error }
+        var global_index = 0usize
+        while global_index < count {
+            let (record, record_error) = em.artifact_global_at(artifacts[artifact_at].bytes, global_index)
+            if record_error != ok { ret record_error }
+            let (name, name_error) = copy_string(a, artifacts[artifact_at].bytes, record.name_index)
+            if name_error != ok { ret name_error }
+            let (added, add_error) = nir.add_global(&program.builder, artifact_at, name, record.size, record.alignment, record.initial, record.has_initial)
+            if add_error != ok { ret add_error }
+            global_index += 1usize
+        }
+        artifact_at += 1usize
+    }
     let (machine_storage, machine_error) = mem.alloc[usize](a, capacity(code_size))
     if machine_error != ok { ret machine_error }
     try emit_x64.init(&program.machine, machine_storage)
@@ -316,6 +342,13 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
                 if module_error != ok { ret module_error }
                 let (target_name, target_name_error) = copy_string(a, artifacts[artifact_at].bytes, stored.name_index)
                 if target_name_error != ok { ret target_name_error }
+                if stored.global {
+                    let (global_index, found_global) = find_global(&program.builder, module_index, target_name)
+                    if !found_global { ret MissingSymbol }
+                    try codegen_x64.add_global_relocation(program.relocations, &program.relocation_count, program.function_offsets[global_function] + stored.displacement_at, global_index)
+                    relocation_at += 1usize
+                    continue
+                }
                 let reference_index = program.builder.function_ref_count
                 var assembled_reference: nir.FunctionRef = zero
                 assembled_reference.module_index = module_index
@@ -338,7 +371,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
     var relocation_at = 0usize
     while relocation_at < program.relocation_count {
-        if !program.relocations[relocation_at].resolved {
+        if !program.relocations[relocation_at].resolved && !program.relocations[relocation_at].global {
             let reference_index = program.relocations[relocation_at].function_ref
             if reference_index >= program.builder.function_ref_count { ret InvalidInput }
             if !host_runtime_symbol(program.builder.function_refs[reference_index].name) { ret MissingSymbol }
@@ -346,6 +379,15 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
         relocation_at += 1usize
     }
     ret ok
+}
+
+fn find_global(builder: *nir.Builder, module_index: usize, name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < builder.global_count {
+        if builder.globals[at].module_index == module_index && check.same(builder.globals[at].name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
 }
 
 // A call the artifacts cannot satisfy is a missing artifact, except where the host

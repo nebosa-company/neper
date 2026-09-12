@@ -276,7 +276,7 @@ function Get-EmCodeRecords([string]$path) {
             Instance = [BitConverter]::ToUInt32($bytes, $cursor + 4)
             ContentHash = [BitConverter]::ToUInt64($bytes, $cursor + 8)
         }
-        $cursor += 24 + $length + $relocations * 16
+        $cursor += 24 + $length + $relocations * 20
     }
     return ,$records
 }
@@ -699,6 +699,24 @@ $mainArgsLinkWritten = & $compiler link-em $mainArgsLinked (Join-Path $mainArgsA
 if ($LASTEXITCODE -ne 0 -or $mainArgsLinkWritten -ne 'artifact executable written') { throw 'main_args compiled modules did not link' }
 & $mainArgsLinked one 'two words'
 if ($LASTEXITCODE -ne 0) { throw 'main did not receive its arguments from artifacts' }
+# A module-scope `var` links the same from source and from `.em` artifacts (D154): the format
+# carries a section for it and a code relocation says which of a function or a var it names.
+# This one imports nothing, so its single artifact links at once.
+$globalArtifactPath = Join-Path $testBuild 'global-artifact-selfhost.exe'
+$globalArtifactWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\global_artifact\src\main.e') $repo 'x64' 'windows' $globalArtifactPath
+if ($LASTEXITCODE -ne 0 -or $globalArtifactWritten -ne 'executable written') { throw 'global_artifact emission failed' }
+& $globalArtifactPath
+if ($LASTEXITCODE -ne 0) { throw 'a module-scope var answer is wrong from source' }
+$globalArtifacts = Join-Path $testBuild 'global-artifact'
+New-Item -ItemType Directory -Force -Path $globalArtifacts | Out-Null
+$globalArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\global_artifact\src\main.e') $repo 'x64' 'windows' $globalArtifacts
+if ($LASTEXITCODE -ne 0 -or $globalArtifactsWritten -ne 'compiled modules written') { throw 'global_artifact artifact emission failed' }
+$globalArtifactLinked = Join-Path $testBuild 'global-artifact-from-artifacts.exe'
+$globalArtifactLinkWritten = & $compiler link-em $globalArtifactLinked (Join-Path $globalArtifacts 'main.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $globalArtifactLinkWritten -ne 'artifact executable written') { throw 'global_artifact compiled module did not link' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $globalArtifactLinked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $globalArtifactPath).Hash) { throw 'a module-scope var links differently from artifacts than from source' }
+& $globalArtifactLinked
+if ($LASTEXITCODE -ne 0) { throw 'a module-scope var answer is wrong from artifacts' }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'
@@ -1363,8 +1381,8 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 2 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
-if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 6) { throw 'compiled-module section count is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 3 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 7) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'
 $interfaceArtifactWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\em\interface\src\main.e') $repo 'x64' 'windows' $interfaceArtifactPath

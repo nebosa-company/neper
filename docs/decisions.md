@@ -2709,3 +2709,25 @@ Linux is what D149 to D151 left: headers, startup and the code, plus 377 bytes o
 for the one that writes. Windows is its 512-byte file alignment over a 941-byte entry that
 parses the command line for everyone (D152 is why it stays), and hello world's `.idata`
 carries `e.io`'s buffer as well as seven imports.
+## D154 — the `.em` format carries a module's `var`s, so a program that reaches one links from artifacts
+
+D153 found that a compiled-module artifact recorded no module-scope `var`, so a program
+reaching one -- anything using `e.os`, whose per-target variants hold three -- could be built
+from source but not linked from `.em` files. The artifact format is **version 3**: a seventh
+section lists each `var` the module declares (name, size, alignment, whether an initial value
+was written and its bits), a code relocation carries a kind saying whether it names a function
+or a `var`, and the canonical NIR writes a `GlobalAddress` by module and name rather than by
+its program-wide index. `em_link` fills the builder's globals from those sections in artifact
+order -- the same order the module index already uses -- and resolves a global relocation
+against them, so `link_pe` and `link_elf` lay a `var` out exactly as they do on the source
+path. `link/global_artifact` links a module of five `var`s from its artifact and checks the
+image is byte-identical to the one compiled from source, on both hosts.
+
+`e.os` now links from artifacts too, which is what the row was for; it is verified by hand at
+99 seconds. That time is not the `var`s: the reach walk in `em_link` re-derives every
+artifact's function list from the bytes on every pass and re-validates each artifact -- a
+CRC over the whole file -- inside the nested loops, so a module with hundreds of functions
+costs O(passes * functions^2 * size). No artifact-link fixture had pulled a module that big
+before, so the cost was there and unmeasured. Caching each artifact's function table once is
+the fix; the fixture stays on an import-free module so the suite does not pay the 99 seconds
+to prove the `var`s, and the perf is the artifact linker's own next row.

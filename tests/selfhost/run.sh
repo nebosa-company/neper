@@ -721,6 +721,22 @@ main_args_link_written=$($test_build/neper-self link-em "$test_build/main-args-f
 [ "$main_args_link_written" = 'artifact executable written' ]
 chmod +x "$test_build/main-args-from-artifacts"
 "$test_build/main-args-from-artifacts" one 'two words'
+# A module-scope `var` links the same from source and from `.em` artifacts (D154): the format
+# carries a section for it and a code relocation says which of a function or a var it names.
+# This one imports nothing, so its single artifact links at once.
+global_artifact_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/global_artifact/src/main.e" "$repo" x64 linux "$test_build/global-artifact-selfhost")
+[ "$global_artifact_written" = 'executable written' ]
+chmod +x "$test_build/global-artifact-selfhost"
+"$test_build/global-artifact-selfhost"
+global_artifacts="$test_build/global-artifact"
+mkdir -p "$global_artifacts"
+global_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/global_artifact/src/main.e" "$repo" x64 linux "$global_artifacts")
+[ "$global_artifacts_written" = 'compiled modules written' ]
+global_artifact_link_written=$($test_build/neper-self link-em "$test_build/global-artifact-from-artifacts" "$global_artifacts/main.x64-linux.em")
+[ "$global_artifact_link_written" = 'artifact executable written' ]
+chmod +x "$test_build/global-artifact-from-artifacts"
+cmp "$test_build/global-artifact-selfhost" "$test_build/global-artifact-from-artifacts"
+"$test_build/global-artifact-from-artifacts"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
@@ -1080,7 +1096,7 @@ em_code_field() {
     while [ "$em_index" -lt "$2" ]; do
         em_length=$(od -An -tu4 -j$((em_cursor + 16)) -N4 "$1" | tr -d ' ')
         em_relocations=$(od -An -tu4 -j$((em_cursor + 20)) -N4 "$1" | tr -d ' ')
-        em_cursor=$((em_cursor + 24 + em_length + em_relocations * 16))
+        em_cursor=$((em_cursor + 24 + em_length + em_relocations * 20))
         em_index=$((em_index + 1))
     done
     if [ "$3" = 'instance' ]; then
@@ -1408,9 +1424,9 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '2' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '3' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
-[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '6' ]
+[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '7' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
 interface_artifact_path="$test_build/interface.x64-linux.em"
 interface_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/em/interface/src/main.e" "$repo" x64 linux "$interface_artifact_path")
