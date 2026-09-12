@@ -881,6 +881,36 @@ $cryptoAeadWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $cryptoAeadWritten -ne 'executable written') { throw 'crypto_aead emission failed' }
 & $cryptoAeadPath
 if ($LASTEXITCODE -ne 0) { throw "a crypto_aead check failed: exit $LASTEXITCODE" }
+# `e.crypto.kx`: X25519 against RFC 7748's exchange and 5.2 vector, the zero peer refused.
+$cryptoKxPath = Join-Path $testBuild 'crypto-kx-selfhost.exe'
+$cryptoKxWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_kx\src\main.e') $repo 'x64' 'windows' $cryptoKxPath
+if ($LASTEXITCODE -ne 0 -or $cryptoKxWritten -ne 'executable written') { throw 'crypto_kx emission failed' }
+& $cryptoKxPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_kx check failed: exit $LASTEXITCODE" }
+# `e.crypto.sign`: Ed25519 against RFC 8032 7.1 tests 1-3, five refusals.
+$cryptoSignPath = Join-Path $testBuild 'crypto-sign-selfhost.exe'
+$cryptoSignWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\crypto_sign\src\main.e') $repo 'x64' 'windows' $cryptoSignPath
+if ($LASTEXITCODE -ne 0 -or $cryptoSignWritten -ne 'executable written') { throw 'crypto_sign emission failed' }
+& $cryptoSignPath
+if ($LASTEXITCODE -ne 0) { throw "a crypto_sign check failed: exit $LASTEXITCODE" }
+# `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
+$fmtPemPath = Join-Path $testBuild 'fmt-pem-selfhost.exe'
+$fmtPemWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_pem\src\main.e') $repo 'x64' 'windows' $fmtPemPath
+if ($LASTEXITCODE -ne 0 -or $fmtPemWritten -ne 'executable written') { throw 'fmt_pem emission failed' }
+& $fmtPemPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_pem check failed: exit $LASTEXITCODE" }
+# `e.fmt.asn1`: a DER SEQUENCE walked, decoded and re-encoded, the long length form, six refusals.
+$fmtAsn1Path = Join-Path $testBuild 'fmt-asn1-selfhost.exe'
+$fmtAsn1Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_asn1\src\main.e') $repo 'x64' 'windows' $fmtAsn1Path
+if ($LASTEXITCODE -ne 0 -or $fmtAsn1Written -ne 'executable written') { throw 'fmt_asn1 emission failed' }
+& $fmtAsn1Path
+if ($LASTEXITCODE -ne 0) { throw "a fmt_asn1 check failed: exit $LASTEXITCODE" }
+# `e.fmt.bson`: every carried tag parsed, sized and written back, the typed codec, five refusals.
+$fmtBsonPath = Join-Path $testBuild 'fmt-bson-selfhost.exe'
+$fmtBsonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_bson\src\main.e') $repo 'x64' 'windows' $fmtBsonPath
+if ($LASTEXITCODE -ne 0 -or $fmtBsonWritten -ne 'executable written') { throw 'fmt_bson emission failed' }
+& $fmtBsonPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_bson check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

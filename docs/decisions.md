@@ -3115,3 +3115,51 @@ What is written plainly: AES is byte-oriented over its S-box and not constant-ti
 against cache timing, GHASH is the bit-by-bit multiply, and the headers say so; a
 bitsliced AES and a table GHASH are the upgrade. `hash` and `random` are `partial` for
 their helpers; `mac` and `kdf` are exactly their fences.
+
+## D174 — `e.crypto.kx` and `e.crypto.sign`: X25519 and Ed25519
+
+Both curves over 2^255 - 19 share one field representation: ten signed 64-bit limbs
+alternating 26 and 25 bits, the reference implementation's layout, so a limb product
+and the ten-term sums of a multiply stay inside a word. The field core is written
+once in `kx.e` and duplicated into `sign.e`, because a fence exposes only its
+declarations and the plan has no private module to share helpers through; a shared
+`e.crypto.field` would be a plan change, not an implementation choice.
+
+X25519 is RFC 7748's ladder with the swap by an arithmetic mask, checked against the
+section 6.1 exchange and the first section 5.2 vector; the all-zero result of a
+small-order peer is `InvalidKey`. Ed25519 is RFC 8032 in extended coordinates with the
+unified addition formula used for doubling too, checked against section 7.1 tests 1
+to 3 byte for byte. Scalars mod L are eight 32-bit limbs; the 512-bit hash outputs and
+the products are reduced one bit at a time (512 shift-compare-subtract steps), which
+is a few microseconds and far shorter than the reference's 21-bit-limb reduction.
+Verification refuses a non-canonical `y` (at or above p), a non-canonical `S` (at or
+above L), and a public key of small order (eight times it is the identity) -- the
+fixture drives each refusal plus a flipped bit and a changed message.
+
+What is written plainly: scalar multiplication is double-and-add and its timing
+depends on the scalar; the hand-typed `L` limb that was off by one was caught by the
+signature vector, the fourth time a constant typed by hand has been wrong in this
+project, so the constants now come from a Python line kept beside the fixture.
+
+## D175 — `e.fmt.pem`, `e.fmt.asn1` and `e.fmt.bson`
+
+Three small codecs, each the shape its fence fixed. PEM (RFC 7468) takes the first
+block and returns the unconsumed suffix; RFC 1421 `Name: value` lines before an empty
+line are carried as `mime.Header`s and not interpreted; text before the first BEGIN
+is skipped as the RFC allows, a body byte outside base64 or a mismatched END label
+is `Invalid`, and the decoded size is checked against the byte limit before the
+buffer is taken. ASN.1 is DER only: the reader walks one level of TLVs, `children`
+descends one constructed value against the depth limit, and the typed codec maps a
+flat struct to a SEQUENCE of its fields in order -- INTEGER, BOOLEAN and OCTET STRING
+(a UTF8String or PrintableString is accepted on the way in). Every non-minimal length,
+tag number, integer or boolean is `NonCanonical`; a length past the data is `Invalid`;
+a length over eight bytes is `TooLarge`. BSON parses from a slice into the value tree
+and writes back over `e.io`; the nine element tags in the fence are carried and any
+other tag is `Invalid`, so JavaScript, regex and the deprecated tags never enter the
+model. Its typed codec follows msgpack's: integers go out as int64 and doubles as
+double, both integer widths are accepted on the way in.
+
+What is written plainly: array keys are not checked against their positions on the
+way in, a `str` field is encoded as OCTET STRING rather than UTF8String, and none of
+the three streams -- each takes the whole source as a slice, which is what a
+certificate, a key file or a document from a socket frame is in practice.

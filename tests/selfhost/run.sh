@@ -872,6 +872,31 @@ crypto_aead_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$crypto_aead_written" = 'executable written' ]
 chmod +x "$test_build/crypto-aead-selfhost"
 "$test_build/crypto-aead-selfhost"
+# `e.crypto.kx`: X25519 against RFC 7748's exchange and 5.2 vector, the zero peer refused.
+crypto_kx_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_kx/src/main.e" "$repo" x64 linux "$test_build/crypto-kx-selfhost")
+[ "$crypto_kx_written" = 'executable written' ]
+chmod +x "$test_build/crypto-kx-selfhost"
+"$test_build/crypto-kx-selfhost"
+# `e.crypto.sign`: Ed25519 against RFC 8032 7.1 tests 1-3, five refusals.
+crypto_sign_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/crypto_sign/src/main.e" "$repo" x64 linux "$test_build/crypto-sign-selfhost")
+[ "$crypto_sign_written" = 'executable written' ]
+chmod +x "$test_build/crypto-sign-selfhost"
+"$test_build/crypto-sign-selfhost"
+# `e.fmt.pem`: blocks with a suffix and with headers, encode in 64 columns, five refusals.
+fmt_pem_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_pem/src/main.e" "$repo" x64 linux "$test_build/fmt-pem-selfhost")
+[ "$fmt_pem_written" = 'executable written' ]
+chmod +x "$test_build/fmt-pem-selfhost"
+"$test_build/fmt-pem-selfhost"
+# `e.fmt.asn1`: a DER SEQUENCE walked, decoded and re-encoded, the long length form, six refusals.
+fmt_asn1_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_asn1/src/main.e" "$repo" x64 linux "$test_build/fmt-asn1-selfhost")
+[ "$fmt_asn1_written" = 'executable written' ]
+chmod +x "$test_build/fmt-asn1-selfhost"
+"$test_build/fmt-asn1-selfhost"
+# `e.fmt.bson`: every carried tag parsed, sized and written back, the typed codec, five refusals.
+fmt_bson_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_bson/src/main.e" "$repo" x64 linux "$test_build/fmt-bson-selfhost")
+[ "$fmt_bson_written" = 'executable written' ]
+chmod +x "$test_build/fmt-bson-selfhost"
+"$test_build/fmt-bson-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
