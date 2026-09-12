@@ -682,6 +682,23 @@ $moduleVarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $moduleVarWritten -ne 'executable written') { throw 'module_var emission failed' }
 & $moduleVarPath
 if ($LASTEXITCODE -ne 0) { throw "a module-scope var answer is wrong: exit $LASTEXITCODE" }
+# `main` declaring `args` receives the command line whether the image was linked from source or
+# from `.em` artifacts, and a quoted argument arrives whole. The root artifact goes first: the
+# linker finds `main` in module 0, which is whichever artifact is named first.
+$mainArgsPath = Join-Path $testBuild 'main-args-selfhost.exe'
+$mainArgsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\main_args\src\main.e') $repo 'x64' 'windows' $mainArgsPath
+if ($LASTEXITCODE -ne 0 -or $mainArgsWritten -ne 'executable written') { throw 'main_args emission failed' }
+& $mainArgsPath one 'two words'
+if ($LASTEXITCODE -ne 0) { throw 'main did not receive its arguments from source' }
+$mainArgsArtifacts = Join-Path $testBuild 'main-args-artifacts'
+New-Item -ItemType Directory -Force -Path $mainArgsArtifacts | Out-Null
+$mainArgsArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\main_args\src\main.e') $repo 'x64' 'windows' $mainArgsArtifacts
+if ($LASTEXITCODE -ne 0 -or $mainArgsArtifactsWritten -ne 'compiled modules written') { throw 'main_args artifact emission failed' }
+$mainArgsLinked = Join-Path $testBuild 'main-args-from-artifacts.exe'
+$mainArgsLinkWritten = & $compiler link-em $mainArgsLinked (Join-Path $mainArgsArtifacts 'main.x64-windows.em') (Join-Path $mainArgsArtifacts 'e.mem.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $mainArgsLinkWritten -ne 'artifact executable written') { throw 'main_args compiled modules did not link' }
+& $mainArgsLinked one 'two words'
+if ($LASTEXITCODE -ne 0) { throw 'main did not receive its arguments from artifacts' }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

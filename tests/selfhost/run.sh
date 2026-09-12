@@ -706,6 +706,21 @@ module_var_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$module_var_written" = 'executable written' ]
 chmod +x "$test_build/module-var-selfhost"
 "$test_build/module-var-selfhost"
+# `main` declaring `args` receives the command line whether the image was linked from source or
+# from `.em` artifacts, and a quoted argument arrives whole. The root artifact goes first: the
+# linker finds `main` in module 0, which is whichever artifact is named first.
+main_args_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/main_args/src/main.e" "$repo" x64 linux "$test_build/main-args-selfhost")
+[ "$main_args_written" = 'executable written' ]
+chmod +x "$test_build/main-args-selfhost"
+"$test_build/main-args-selfhost" one 'two words'
+main_args_artifacts="$test_build/main-args-artifacts"
+mkdir -p "$main_args_artifacts"
+main_args_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/main_args/src/main.e" "$repo" x64 linux "$main_args_artifacts")
+[ "$main_args_artifacts_written" = 'compiled modules written' ]
+main_args_link_written=$($test_build/neper-self link-em "$test_build/main-args-from-artifacts" "$main_args_artifacts/main.x64-linux.em" "$main_args_artifacts/e.mem.x64-linux.em")
+[ "$main_args_link_written" = 'artifact executable written' ]
+chmod +x "$test_build/main-args-from-artifacts"
+"$test_build/main-args-from-artifacts" one 'two words'
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

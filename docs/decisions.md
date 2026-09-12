@@ -2679,3 +2679,33 @@ So the change is reverted whole, format version included, and this row is what r
 it. The Windows floor is 2,048 bytes and the parser is part of it on purpose: a compiler
 whose smallest program is quarantined has not made a smaller program. Linux has no such
 reader and keeps its 366 bytes.
+## D153 — `main`'s `args` are checked on both link paths, and the sizes as they stand
+
+`link/main_args` passes two arguments, one with a space, to a `main` that declares `args`,
+linked once from source and once from `.em` artifacts through `link-em`, on both hosts. No
+fixture had linked a `main` with parameters from artifacts before; the path worked, and the
+fixture is what says so from now on.
+
+Two things it found. `link-em` takes the root artifact first and nothing says so: `find_main`
+looks for `main` in module 0, which is whichever artifact was named first, and any other
+order fails with `InvalidExecutable` and no message. Every runner already named the root
+first, so the contract was kept by habit; it is written down here, and the fixture's comment,
+until the linker learns to say it. And an artifact carries no module-scope `var`, so a program
+that reaches `e.os` -- whose per-target variants hold three -- does not link from `.em` files
+at all; the fixture stays on `e.mem` for that reason, and the gap is the next thing the
+artifact format owes.
+
+The sizes at this row, freestanding on Linux and importing KERNEL32 alone on Windows:
+
+| program | Linux | Windows |
+|---|---|---|
+| `fn main() -> err { ret ok }` | 366 | 2,048 |
+| `fn main(a: *mem.Arena) -> err { ret ok }` | 395 | 2,048 |
+| `fn main(a: *mem.Arena, args: []str) -> err { ret ok }` | 409 | 2,048 |
+| `io.print("Hello, world!
+")` | 3,984 | 6,144 |
+
+Linux is what D149 to D151 left: headers, startup and the code, plus 377 bytes of runtime
+for the one that writes. Windows is its 512-byte file alignment over a 941-byte entry that
+parses the command line for everyone (D152 is why it stays), and hello world's `.idata`
+carries `e.io`'s buffer as well as seven imports.
