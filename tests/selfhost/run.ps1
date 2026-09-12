@@ -911,6 +911,30 @@ $fmtBsonWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures
 if ($LASTEXITCODE -ne 0 -or $fmtBsonWritten -ne 'executable written') { throw 'fmt_bson emission failed' }
 & $fmtBsonPath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_bson check failed: exit $LASTEXITCODE" }
+# `e.fmt.protobuf`: every wire type read and written back byte for byte, sizes, four refusals.
+$fmtProtobufPath = Join-Path $testBuild 'fmt-protobuf-selfhost.exe'
+$fmtProtobufWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_protobuf\src\main.e') $repo 'x64' 'windows' $fmtProtobufPath
+if ($LASTEXITCODE -ne 0 -or $fmtProtobufWritten -ne 'executable written') { throw 'fmt_protobuf emission failed' }
+& $fmtProtobufPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_protobuf check failed: exit $LASTEXITCODE" }
+# `e.algo.deflate`: zlib's dynamic stream inflated whole and in steps, every level round-tripped, three blocks, six refusals.
+$algoDeflatePath = Join-Path $testBuild 'algo-deflate-selfhost.exe'
+$algoDeflateWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_deflate\src\main.e') $repo 'x64' 'windows' $algoDeflatePath
+if ($LASTEXITCODE -ne 0 -or $algoDeflateWritten -ne 'executable written') { throw 'algo_deflate emission failed' }
+& $algoDeflatePath
+if ($LASTEXITCODE -ne 0) { throw "a algo_deflate check failed: exit $LASTEXITCODE" }
+# `e.fmt.zlib`: Python's stream read back, the writer read back, five refusals.
+$fmtZlibPath = Join-Path $testBuild 'fmt-zlib-selfhost.exe'
+$fmtZlibWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_zlib\src\main.e') $repo 'x64' 'windows' $fmtZlibPath
+if ($LASTEXITCODE -ne 0 -or $fmtZlibWritten -ne 'executable written') { throw 'fmt_zlib emission failed' }
+& $fmtZlibPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_zlib check failed: exit $LASTEXITCODE" }
+# `e.fmt.gzip`: Python's member with FNAME read back, the writer read back, seven refusals.
+$fmtGzipPath = Join-Path $testBuild 'fmt-gzip-selfhost.exe'
+$fmtGzipWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_gzip\src\main.e') $repo 'x64' 'windows' $fmtGzipPath
+if ($LASTEXITCODE -ne 0 -or $fmtGzipWritten -ne 'executable written') { throw 'fmt_gzip emission failed' }
+& $fmtGzipPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_gzip check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

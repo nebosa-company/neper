@@ -48,7 +48,7 @@
     {"name":"e.algo.complex","layer":2,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.math"],"blocked_by":[]},
     {"name":"e.algo.decimal","layer":2,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.str"],"blocked_by":[]},
     {"name":"e.algo.bignum","layer":2,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.mem","e.str"],"blocked_by":[]},
-    {"name":"e.algo.deflate","layer":2,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.bytes"],"blocked_by":[]},
+    {"name":"e.algo.deflate","layer":2,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.mem"],"blocked_by":[]},
     {"name":"e.algo.linalg.matrix","layer":2,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.mem"],"blocked_by":[]},
     {"name":"e.algo.linalg.tensor","layer":2,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.mem"],"blocked_by":[]},
     {"name":"e.text.encoding","layer":2,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.mem"],"blocked_by":[]},
@@ -128,11 +128,11 @@
     {"name":"e.fmt.multipart","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.str","e.fmt.mime"],"blocked_by":[]},
     {"name":"e.fmt.mail","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.str","e.fmt.mime","e.fmt.multipart","e.fmt.quoted_printable","e.text.encoding"],"blocked_by":[]},
     {"name":"e.fmt.quoted_printable","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.str"],"blocked_by":[]},
-    {"name":"e.fmt.gzip","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.algo.deflate","e.bytes","e.io"],"blocked_by":[]},
+    {"name":"e.fmt.gzip","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.algo.deflate","e.algo.hash","e.io","e.mem"],"blocked_by":[]},
     {"name":"e.fmt.zstd","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io"],"blocked_by":[]},
     {"name":"e.fmt.bzip2","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io"],"blocked_by":[]},
     {"name":"e.fmt.lzw","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io"],"blocked_by":[]},
-    {"name":"e.fmt.zlib","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.algo.deflate","e.bytes","e.io"],"blocked_by":[]},
+    {"name":"e.fmt.zlib","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.algo.deflate","e.io","e.mem"],"blocked_by":[]},
     {"name":"e.fmt.zip","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.algo.deflate","e.bytes","e.io","e.mem","e.str"],"blocked_by":[]},
     {"name":"e.fmt.tar","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.str"],"blocked_by":[]},
     {"name":"e.fmt.yaml","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.meta","e.str"],"blocked_by":[]},
@@ -144,7 +144,7 @@
     {"name":"e.fmt.webp","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io","e.mem","e.gfx.image"],"blocked_by":["image-codec-conformance"]},
     {"name":"e.fmt.bson","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.meta"],"blocked_by":[]},
     {"name":"e.fmt.msgpack","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.io","e.mem","e.meta","e.str"],"blocked_by":[]},
-    {"name":"e.fmt.protobuf","layer":6,"surface":"planned","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io"],"blocked_by":[]}
+    {"name":"e.fmt.protobuf","layer":6,"surface":"partial","milestone":null,"schedule":"later","direct_dependencies":["e.bytes","e.io"],"blocked_by":[]}
   ],
   "packages":[
     {"name":"x.sqlite.sqlite","schedule":"later","blocked_by":["e.db"]},

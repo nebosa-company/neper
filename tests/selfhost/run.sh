@@ -897,6 +897,26 @@ fmt_bson_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$fmt_bson_written" = 'executable written' ]
 chmod +x "$test_build/fmt-bson-selfhost"
 "$test_build/fmt-bson-selfhost"
+# `e.fmt.protobuf`: every wire type read and written back byte for byte, sizes, four refusals.
+fmt_protobuf_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_protobuf/src/main.e" "$repo" x64 linux "$test_build/fmt-protobuf-selfhost")
+[ "$fmt_protobuf_written" = 'executable written' ]
+chmod +x "$test_build/fmt-protobuf-selfhost"
+"$test_build/fmt-protobuf-selfhost"
+# `e.algo.deflate`: zlib's dynamic stream inflated whole and in steps, every level round-tripped, three blocks, six refusals.
+algo_deflate_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_deflate/src/main.e" "$repo" x64 linux "$test_build/algo-deflate-selfhost")
+[ "$algo_deflate_written" = 'executable written' ]
+chmod +x "$test_build/algo-deflate-selfhost"
+"$test_build/algo-deflate-selfhost"
+# `e.fmt.zlib`: Python's stream read back, the writer read back, five refusals.
+fmt_zlib_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_zlib/src/main.e" "$repo" x64 linux "$test_build/fmt-zlib-selfhost")
+[ "$fmt_zlib_written" = 'executable written' ]
+chmod +x "$test_build/fmt-zlib-selfhost"
+"$test_build/fmt-zlib-selfhost"
+# `e.fmt.gzip`: Python's member with FNAME read back, the writer read back, seven refusals.
+fmt_gzip_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_gzip/src/main.e" "$repo" x64 linux "$test_build/fmt-gzip-selfhost")
+[ "$fmt_gzip_written" = 'executable written' ]
+chmod +x "$test_build/fmt-gzip-selfhost"
+"$test_build/fmt-gzip-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

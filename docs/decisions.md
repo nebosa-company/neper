@@ -3163,3 +3163,33 @@ What is written plainly: array keys are not checked against their positions on t
 way in, a `str` field is encoded as OCTET STRING rather than UTF8String, and none of
 the three streams -- each takes the whole source as a slice, which is what a
 certificate, a key file or a document from a socket frame is in practice.
+
+## D176 — `e.algo.deflate` with `e.fmt.zlib`, `e.fmt.gzip` and `e.fmt.protobuf`
+
+DEFLATE is written as the fence asked: caller storage, no allocation, and resumable
+at any byte of input or output. The decoder is a stage machine in the shape of zlib's
+`puff`: a 64-bit accumulator refilled from the input, every symbol decoded against it
+and committed only when all of its bits -- code, extra bits, distance code, distance
+extra, at most 48 -- are present, so a call that runs dry leaves the state where the
+next call resumes. Output history is a ring of `window_limit` bytes; a distance past
+what was produced or past the ring is `Invalid`. Stored, fixed and dynamic blocks are
+all decoded, checked against zlib's own dynamic stream of a 3758-byte text whole and
+in seven-byte input, thirteen-byte output steps.
+
+The encoder collects a 32 KiB block, compresses it into a staging area and drains
+that across calls. `Fast` writes stored blocks; `Balanced` and `Best` write
+fixed-Huffman blocks over an LZ77 hash chain 16 and 256 candidates deep within the
+block. Its output was decompressed by Python's zlib during development (70000 bytes
+across three blocks to 21399), and the fixture decodes it back through the module.
+What is not written: a dynamic-tree writer, lazy matching and matches across a block
+boundary -- the ratio ceiling, not a correctness one.
+
+The accumulator reads up to seven bytes past a finished stream; `leftover` hands them
+back so a framing reader gets its trailer. It is beyond the fence, called by `zlib`
+and `gzip`, the way any private helper is reachable (spec 12 has no visibility).
+Those two are pull readers and push writers over 4 KiB buffers; zlib checks the
+header pair and the Adler-32, gzip skips FEXTRA, FNAME, FCOMMENT and FHCRC and checks
+the CRC-32 and ISIZE; both tell the decoder when the source has ended and let it
+drain its accumulator first, which the first draft did not and refused a valid
+stream. Protobuf is the wire-format primitive set with the ten-byte negative varint,
+zigzag and the field-number ranges enforced.
