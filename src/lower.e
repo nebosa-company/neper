@@ -4430,8 +4430,8 @@ fn formatter_push_name(c: *check.Checker, ty: check.Type, verb: check.FormatVerb
         if check.same(canonical.name, "f64") { ret ("push_f64", ok) }
         ret ("", check.InvalidFormat)
     }
-    // Slices and arrays go through `emit_formatter_sequence`; enums are formattable
-    // under section 4 but need their variant names, which the expansion has not yet.
+    // Slices, arrays and enums go through `emit_formatter_value`'s own emitters; a
+    // struct with a `format` of its own is what the expansion has not reached.
     ret ("", check.Unsupported)
 }
 
@@ -4517,6 +4517,10 @@ fn emit_formatter_value(c: *check.Checker, g: *graph.Graph, module_index: usize,
     if (canonical.kind == .Slice || canonical.kind == .Array) && !is_vector {
         ret emit_formatter_sequence(c, g, module_index, instance, return_slot, handle, value, canonical, verb, precision, arena_form, builder, token, depth)
     }
+    let (aggregate_index, is_aggregate) = layout.aggregate_index(c, canonical)
+    if is_aggregate && c.aggregates[aggregate_index].kind == .Enum && verb != .Hex && verb != .Binary {
+        ret emit_formatter_enum(c, g, module_index, instance, return_slot, handle, value, canonical, aggregate_index, arena_form, builder, token)
+    }
     var arguments: [4]usize = zero
     var results: CallResults = zero
     let (push_name, push_name_error) = formatter_push_name(c, canonical, verb)
@@ -4549,6 +4553,60 @@ fn emit_formatter_value(c: *check.Checker, g: *graph.Graph, module_index: usize,
     }
     if results.count != 1usize { ret check.ArgumentCount }
     ret emit_formatter_guard(c, module_index, instance, return_slot, results.values[0usize], arena_form, builder, token)
+}
+
+// An enum by its variant's name: one comparison per variant, the match pushing the
+// name a byte at a time and leaving; a value no variant declares pushes nothing.
+fn emit_formatter_enum(c: *check.Checker, g: *graph.Graph, module_index: usize, instance: check.Function, return_slot: usize, handle: usize, value: usize, ty: check.Type, aggregate_index: usize, arena_form: bool, builder: *nir.Builder, token: lex.Token) -> err {
+    let aggregate = c.aggregates[aggregate_index]
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    var exits: [256]usize = zero
+    var exit_count = 0usize
+    var field_at = aggregate.first_field
+    let field_end = aggregate.first_field + aggregate.field_count
+    while field_at < field_end {
+        let member = c.aggregate_fields[field_at]
+        let (member_bits, member_bits_error) = check.enum_member_bits(aggregate.backing_type, member.enum_value, member.enum_negative)
+        if member_bits_error != ok { ret member_bits_error }
+        let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstInteger, ty, true, member_bits, token)
+        if constant_error != ok { ret constant_error }
+        let (matches, matches_error) = emit_supplied_compare(builder, .Equal, boolean, value, constant, token)
+        if matches_error != ok { ret matches_error }
+        let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+        if decision_error != ok { ret decision_error }
+        try nir.add_operand(builder, decision, matches)
+        let name_block = builder.block_count
+        let (name_index, name_error) = nir.begin_block(builder)
+        if name_error != ok || name_index != name_block { ret nir.InvalidControlFlow }
+        var at = 0usize
+        while at < member.name.len {
+            try emit_formatter_byte(c, g, module_index, instance, return_slot, handle, member.name[at], arena_form, builder, token)
+            at += 1usize
+        }
+        if exit_count == exits.len { ret check.Capacity }
+        let (leave, leave_error) = emit_branch(builder, token)
+        if leave_error != ok { ret leave_error }
+        exits[exit_count] = leave
+        exit_count += 1usize
+        let next_block = builder.block_count
+        let (next_index, next_error) = nir.begin_block(builder)
+        if next_error != ok || next_index != next_block { ret nir.InvalidControlFlow }
+        try nir.set_branch_targets(builder, decision, name_block, next_block)
+        field_at += 1usize
+    }
+    // The block after the last comparison is where every name's branch lands too.
+    let (join, join_error) = emit_branch(builder, token)
+    if join_error != ok { ret join_error }
+    let exit_block = builder.block_count
+    let (exit_index, exit_error) = nir.begin_block(builder)
+    if exit_error != ok || exit_index != exit_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, join, exit_block, 0usize)
+    var i = 0usize
+    while i < exit_count {
+        try nir.set_branch_targets(builder, exits[i], exit_block, 0usize)
+        i += 1usize
+    }
+    ret ok
 }
 
 // A sequence in index order, the loop in the shape `emit_sequence_cmp` uses: a

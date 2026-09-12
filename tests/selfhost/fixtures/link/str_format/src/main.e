@@ -8,6 +8,9 @@ use e.str
 
 error Failed
 
+type Color = enum u8 { Red, Green = 5, Blue }
+type Wide = enum i16 { Low = -3, High }
+
 fn main(a: *mem.Arena) -> err {
     // No verbs at all: the expansion is text and nothing else.
     let (plain, plain_error) = str.format["hello"](a)
@@ -108,5 +111,20 @@ fn main(a: *mem.Arena) -> err {
     let (grid_text, grid_error) = str.format["{}"](a, grid)
     if grid_error != ok { ret grid_error }
     if !str.eq(grid_text, "[[0, 0], [7, 0]]") { ret Failed }
+
+    // Rule 4's enums: a variant by its name, an explicit value and a negative backing
+    // value included, and a slice of them through the sequence path (D190).
+    let shade: Color = .Green
+    let (shade_text, shade_error) = str.format["c={} d={}"](a, shade, Color.Blue)
+    if shade_error != ok { ret shade_error }
+    if !str.eq(shade_text, "c=Green d=Blue") { ret Failed }
+    var shades: [2]Color = [2]Color{ .Red, .Blue }
+    let (shades_text, shades_error) = str.format["{}"](a, shades[0..])
+    if shades_error != ok { ret shades_error }
+    if !str.eq(shades_text, "[Red, Blue]") { ret Failed }
+    let low: Wide = .Low
+    let (low_text, low_error) = str.format["{}"](a, low)
+    if low_error != ok { ret low_error }
+    if !str.eq(low_text, "Low") { ret Failed }
     ret ok
 }

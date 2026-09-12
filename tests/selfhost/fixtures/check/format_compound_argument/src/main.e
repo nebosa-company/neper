@@ -1,15 +1,16 @@
-// An enum is formattable under section 4, but the expansion reaches it only by
-// pushing its variant name, which it does not do yet (slices and arrays recurse
-// since D189). Rejected at lowering rather than silently formatting nothing.
+// A struct with a `format` of its own is formattable under section 4, but the
+// expansion reaches it only by calling that format, which it does not do yet
+// (slices, arrays and enums are expanded since D189 and D190). Refused rather
+// than silently formatting nothing.
 
 use e.mem
 use e.str
 
-type Color = enum u8 { Red, Green }
+type Point = struct { x: i64, y: i64 }
 
 fn main(a: *mem.Arena) -> err {
-    let shade: Color = .Green
-    let (text, text_error) = str.format["{}"](a, shade)
+    let p = Point { x: 1i64, y: 2i64 }
+    let (text, text_error) = str.format["{}"](a, p)
     if text_error != ok { ret text_error }
     ret ok
 }

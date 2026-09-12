@@ -518,9 +518,9 @@ $formatWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $formatWritten -ne 'executable written') { throw 'format executable emission failed' }
 & $formatPath
 if ($LASTEXITCODE -ne 0) { throw 'a format string expanded to the wrong pushes' }
-# An enum is formattable under section 4 but needs its variant name pushed, which the
-# expansion does not do yet (slices and arrays recurse since D189), so the build stops
-# rather than quietly formatting nothing. Rejected at lowering, so it needs an emission.
+# A struct with its own format is formattable under section 4 but needs that format
+# called, which the expansion does not do yet (slices, arrays and enums are expanded
+# since D189 and D190), so the build stops rather than quietly formatting nothing.
 $formatRejectPath = Join-Path $testBuild 'format-compound-argument.exe'
 & $compiler emit-executable (Join-Path $repo 'tests\selfhost\fixtures\check\format_compound_argument\src\main.e') $repo 'x64' 'windows' $formatRejectPath 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 1) { throw 'a format verb with no push was lowered' }

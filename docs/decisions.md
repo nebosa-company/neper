@@ -3468,3 +3468,14 @@ down to the elements, so `{:x}` on a slice of integers would be hex -- the check
 still refuses that at the call, as it did before, and lifting it is a checker
 change for another day. Enums and a type's own `format` are what rule 4 still
 leaves to the expansion.
+
+## D190 — `str.format` prints an enum by its variant name
+
+The expansion compares the value against each variant's backing bits in
+declaration order and pushes the matching name a byte at a time, one block per
+variant and one exit they all reach; a value no variant declares pushes nothing,
+which is the honest answer for an enum that was never given a name for it. Explicit
+and negative backing values go through `enum_member_bits` the way a `switch` arm
+does, and a slice of enums reaches this through D189's sequence path. The hex and
+binary verbs still take the integer -- an enum under `{:x}` is refused by the
+checker as it was. A struct with a `format` of its own is what rule 4 still leaves.
