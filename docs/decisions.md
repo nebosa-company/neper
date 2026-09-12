@@ -3048,3 +3048,18 @@ state at the front of the storage and the rest a buffer. Decoding is strict: upp
 hex, CRLF only, nothing above 126. Encoding breaks with `=CRLF` when the next piece
 would not leave room for the `=` of a break, and escapes a trailing space or tab before
 every break and at the end, since a receiver may strip white space at a line end.
+## D170 — `e.fmt.mime` and `e.fmt.tar`
+
+`e.fmt.mime` is RFC 2045's media type with its token-or-quoted parameters, formatted
+back with quoting only where a value needs it, a small extension table of what a
+toolchain serves, and RFC 5322 header blocks read from a stream into the arena so the
+names and values borrow from one buffer; names compare case-folded and the obsolete
+folding is `Invalid`, both as the fence says.
+
+`e.fmt.tar` reads POSIX ustar with the PAX `path`, `linkpath` and `size` records applied
+to the entry that follows; an entry's content is a limited `io.Reader` over the archive,
+and `next` drains whatever was not read plus the block padding. The fixture's archives
+are what Python's `tarfile` writes, trimmed to the two end blocks and carried as string
+literals -- an array literal of ten thousand bytes is ten thousand stores in one
+function, and that is past the register allocator's table. `generate.py` beside the
+fixture regenerates them.

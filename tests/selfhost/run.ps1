@@ -819,6 +819,18 @@ $fmtQuotedPrintableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $fmtQuotedPrintableWritten -ne 'executable written') { throw 'fmt_quoted_printable emission failed' }
 & $fmtQuotedPrintablePath
 if ($LASTEXITCODE -ne 0) { throw "a fmt_quoted_printable check failed: exit $LASTEXITCODE" }
+# `e.fmt.mime`: media types both ways, the extension table, header blocks with case-folded lookup.
+$fmtMimePath = Join-Path $testBuild 'fmt-mime-selfhost.exe'
+$fmtMimeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_mime\src\main.e') $repo 'x64' 'windows' $fmtMimePath
+if ($LASTEXITCODE -ne 0 -or $fmtMimeWritten -ne 'executable written') { throw 'fmt_mime emission failed' }
+& $fmtMimePath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_mime check failed: exit $LASTEXITCODE" }
+# `e.fmt.tar`: ustar and PAX archives from Python's tarfile, partial reads, skips, limits, `..` refused.
+$fmtTarPath = Join-Path $testBuild 'fmt-tar-selfhost.exe'
+$fmtTarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_tar\src\main.e') $repo 'x64' 'windows' $fmtTarPath
+if ($LASTEXITCODE -ne 0 -or $fmtTarWritten -ne 'executable written') { throw 'fmt_tar emission failed' }
+& $fmtTarPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_tar check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

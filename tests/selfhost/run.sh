@@ -822,6 +822,16 @@ fmt_quoted_printable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$fmt_quoted_printable_written" = 'executable written' ]
 chmod +x "$test_build/fmt-quoted-printable-selfhost"
 "$test_build/fmt-quoted-printable-selfhost"
+# `e.fmt.mime`: media types both ways, the extension table, header blocks with case-folded lookup.
+fmt_mime_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_mime/src/main.e" "$repo" x64 linux "$test_build/fmt-mime-selfhost")
+[ "$fmt_mime_written" = 'executable written' ]
+chmod +x "$test_build/fmt-mime-selfhost"
+"$test_build/fmt-mime-selfhost"
+# `e.fmt.tar`: ustar and PAX archives from Python's tarfile, partial reads, skips, limits, `..` refused.
+fmt_tar_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_tar/src/main.e" "$repo" x64 linux "$test_build/fmt-tar-selfhost")
+[ "$fmt_tar_written" = 'executable written' ]
+chmod +x "$test_build/fmt-tar-selfhost"
+"$test_build/fmt-tar-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
