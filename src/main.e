@@ -971,41 +971,56 @@ fn print_artifact_error_collision(a: *mem.Arena, left_bytes: []const usize, left
 }
 
 fn merge_artifact_error_tables(a: *mem.Arena, artifacts: []em_link.Artifact) -> (bool, err) {
-    var left_artifact = 0usize
-    while left_artifact < artifacts.len {
-        let (left_count, left_count_error) = em.artifact_error_count(artifacts[left_artifact].bytes)
-        if left_count_error != ok { ret (false, left_count_error) }
-        var left_at = 0usize
-        while left_at < left_count {
-            let (left, left_error) = em.artifact_error_at(artifacts[left_artifact].bytes, left_at)
-            if left_error != ok { ret (false, left_error) }
-            var right_artifact = left_artifact
-            while right_artifact < artifacts.len {
-                let (right_count, right_count_error) = em.artifact_error_count(artifacts[right_artifact].bytes)
-                if right_count_error != ok { ret (false, right_count_error) }
-                var right_at = 0usize
-                if right_artifact == left_artifact { right_at = left_at + 1usize }
-                while right_at < right_count {
-                    let (right, right_error) = em.artifact_error_at(artifacts[right_artifact].bytes, right_at)
-                    if right_error != ok { ret (false, right_error) }
-                    if left.value == right.value {
-                        let (same_module, module_error) = em.strings_equal(artifacts[left_artifact].bytes, left.module_index, artifacts[right_artifact].bytes, right.module_index)
-                        if module_error != ok { ret (false, module_error) }
-                        let (same_name, name_error) = em.strings_equal(artifacts[left_artifact].bytes, left.name_index, artifacts[right_artifact].bytes, right.name_index)
-                        if name_error != ok { ret (false, name_error) }
-                        if !same_module || !same_name {
-                            let print_error = print_artifact_error_collision(a, artifacts[left_artifact].bytes, left, artifacts[right_artifact].bytes, right)
-                            if print_error != ok { ret (false, print_error) }
-                            ret (false, ok)
-                        }
-                    }
-                    right_at += 1usize
-                }
-                right_artifact += 1usize
-            }
-            left_at += 1usize
+    // Read every artifact's error table once. Reading them entry by entry re-validated the whole
+    // artifact -- a CRC -- and re-walked its interface on each call, so the value comparison below
+    // was O(errors^2) CRCs; over the collected tables it is O(errors^2) integer compares, and a
+    // name is only fetched when two values actually collide.
+    var total = 0usize
+    var artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let (count, count_error) = em.artifact_error_count(artifacts[artifact_at].bytes)
+        if count_error != ok { ret (false, count_error) }
+        total += count
+        artifact_at += 1usize
+    }
+    if total == 0usize { ret (true, ok) }
+    let (errors, errors_alloc_error) = mem.alloc[em.ErrorValue](a, total)
+    if errors_alloc_error != ok { ret (false, errors_alloc_error) }
+    let (owners, owners_alloc_error) = mem.alloc[usize](a, total)
+    if owners_alloc_error != ok { ret (false, owners_alloc_error) }
+    var filled = 0usize
+    artifact_at = 0usize
+    while artifact_at < artifacts.len {
+        let (count, count_error) = em.read_error_table(artifacts[artifact_at].bytes, errors[filled..total])
+        if count_error != ok { ret (false, count_error) }
+        var at = 0usize
+        while at < count {
+            owners[filled + at] = artifact_at
+            at += 1usize
         }
-        left_artifact += 1usize
+        filled += count
+        artifact_at += 1usize
+    }
+    var left_at = 0usize
+    while left_at < total {
+        var right_at = left_at + 1usize
+        while right_at < total {
+            if errors[left_at].value == errors[right_at].value {
+                let left_owner = owners[left_at]
+                let right_owner = owners[right_at]
+                let (same_module, module_error) = em.strings_equal(artifacts[left_owner].bytes, errors[left_at].module_index, artifacts[right_owner].bytes, errors[right_at].module_index)
+                if module_error != ok { ret (false, module_error) }
+                let (same_name, name_error) = em.strings_equal(artifacts[left_owner].bytes, errors[left_at].name_index, artifacts[right_owner].bytes, errors[right_at].name_index)
+                if name_error != ok { ret (false, name_error) }
+                if !same_module || !same_name {
+                    let print_error = print_artifact_error_collision(a, artifacts[left_owner].bytes, errors[left_at], artifacts[right_owner].bytes, errors[right_at])
+                    if print_error != ok { ret (false, print_error) }
+                    ret (false, ok)
+                }
+            }
+            right_at += 1usize
+        }
+        left_at += 1usize
     }
     ret (true, ok)
 }

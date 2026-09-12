@@ -706,6 +706,16 @@ module_var_written=$($test_build/neper-self emit-executable "$repo/tests/selfhos
 [ "$module_var_written" = 'executable written' ]
 chmod +x "$test_build/module-var-selfhost"
 "$test_build/module-var-selfhost"
+# And from `.em` artifacts (D154), quickly because the reach walk reads each module once (D155).
+module_var_artifacts="$test_build/module-var-artifacts"
+mkdir -p "$module_var_artifacts"
+module_var_artifacts_written=$($test_build/neper-self emit-em-all "$repo/tests/selfhost/fixtures/link/module_var/src/main.e" "$repo" x64 linux "$module_var_artifacts")
+[ "$module_var_artifacts_written" = 'compiled modules written' ]
+module_var_link_written=$($test_build/neper-self link-em "$test_build/module-var-from-artifacts" "$module_var_artifacts/main.x64-linux.em" "$module_var_artifacts/e.mem.x64-linux.em" "$module_var_artifacts/e.os.x64-linux.em")
+[ "$module_var_link_written" = 'artifact executable written' ]
+chmod +x "$test_build/module-var-from-artifacts"
+cmp "$test_build/module-var-selfhost" "$test_build/module-var-from-artifacts"
+"$test_build/module-var-from-artifacts"
 # `main` declaring `args` receives the command line whether the image was linked from source or
 # from `.em` artifacts, and a quoted argument arrives whole. The root artifact goes first: the
 # linker finds `main` in module 0, which is whichever artifact is named first.

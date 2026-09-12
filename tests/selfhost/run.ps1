@@ -682,6 +682,19 @@ $moduleVarWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtur
 if ($LASTEXITCODE -ne 0 -or $moduleVarWritten -ne 'executable written') { throw 'module_var emission failed' }
 & $moduleVarPath
 if ($LASTEXITCODE -ne 0) { throw "a module-scope var answer is wrong: exit $LASTEXITCODE" }
+# And from `.em` artifacts: `module_var` reaches `e.os`, whose per-target variants hold the
+# module-scope `var`s the format learned to carry (D154), and the link stays quick because the
+# reach walk reads each module once rather than re-validating it per function (D155).
+$moduleVarArtifacts = Join-Path $testBuild 'module-var-artifacts'
+New-Item -ItemType Directory -Force -Path $moduleVarArtifacts | Out-Null
+$moduleVarArtifactsWritten = & $compiler emit-em-all (Join-Path $PSScriptRoot 'fixtures\link\module_var\src\main.e') $repo 'x64' 'windows' $moduleVarArtifacts
+if ($LASTEXITCODE -ne 0 -or $moduleVarArtifactsWritten -ne 'compiled modules written') { throw 'module_var artifact emission failed' }
+$moduleVarLinked = Join-Path $testBuild 'module-var-from-artifacts.exe'
+$moduleVarLinkWritten = & $compiler link-em $moduleVarLinked (Join-Path $moduleVarArtifacts 'main.x64-windows.em') (Join-Path $moduleVarArtifacts 'e.mem.x64-windows.em') (Join-Path $moduleVarArtifacts 'e.os.x64-windows.em')
+if ($LASTEXITCODE -ne 0 -or $moduleVarLinkWritten -ne 'artifact executable written') { throw 'module_var compiled modules did not link' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $moduleVarLinked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleVarPath).Hash) { throw 'module_var links differently from artifacts than from source' }
+& $moduleVarLinked
+if ($LASTEXITCODE -ne 0) { throw "a module-scope var answer is wrong from artifacts: exit $LASTEXITCODE" }
 # `main` declaring `args` receives the command line whether the image was linked from source or
 # from `.em` artifacts, and a quoted argument arrives whole. The root artifact goes first: the
 # linker finds `main` in module 0, which is whichever artifact is named first.

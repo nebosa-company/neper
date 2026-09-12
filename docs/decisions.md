@@ -2731,3 +2731,33 @@ costs O(passes * functions^2 * size). No artifact-link fixture had pulled a modu
 before, so the cost was there and unmeasured. Caching each artifact's function table once is
 the fix; the fixture stays on an import-free module so the suite does not pay the 99 seconds
 to prove the `var`s, and the perf is the artifact linker's own next row.
+## D155 — the artifact linker reads each module once, not per function and not per error
+
+D154 made a program that reaches a module-scope `var` link from `.em` files, and noted the link
+took 99 seconds for one that pulls `e.os`. None of that was the `var`s. Three places re-derived
+an artifact from its bytes inside a loop, and every `em.artifact_*` reader runs `validate` first
+-- a CRC over the whole file -- so a per-item loop was a per-item CRC.
+
+- The reach walk resolved every call edge of every function on every fixpoint pass, and each
+  callee lookup re-parsed a whole module and, through `target_module`, re-validated every
+  artifact. It now builds a function table once (one forward pass per artifact, via
+  `em.read_code_functions`), caches each artifact's interface module index once, resolves a
+  callee to a table position by a scan of its own module's slice, and reaches from `main` by a
+  breadth-first walk that visits each function once -- so a module the program never enters is
+  never scanned.
+- The copy loop content-hashed every function including the ones reachability had already
+  dropped; it now hashes only what it keeps.
+- `merge_artifact_error_tables` compared error values in an O(errors^2) loop whose every step
+  called `em.artifact_error_count`/`artifact_error_at`, each re-validating the artifact and
+  re-walking its interface. `e.os` declares many errors, so this was most of the 99 seconds. It
+  now reads each table once through `em.read_error_table` and compares in memory.
+
+Two readers also validated a function's name by walking the string table to it, O(index) per
+function; the name is checked where it is read, so that walk is gone. Measured, `module_var`
+linked from artifacts: 99s to 4s; `os_process`, which pulls `e.os`, `e.proc`, `e.mem` and
+`e.atomic`: 81s to 14s. The suite now links `module_var` from artifacts and checks the image is
+byte-identical to the source build, so the `e.os`-from-artifacts path D154 could only verify by
+hand is a standing test.
+
+What remains is linear scans with no CRC in them -- `resolve_calls` and the module-slice lookup
+-- which the source path pays too and which no measurement yet calls for indexing.

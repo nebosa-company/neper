@@ -1829,6 +1829,47 @@ fn find_section_unchecked(bytes: []const usize, kind: usize) -> (Section, bool, 
     ret (empty, false, ok)
 }
 
+// The number of strings, and every string's start once into `starts` (sized to at least the
+// count). `string_bounds` walks the table from the front on each call -- O(index) -- so asking
+// it per function or per relocation is quadratic over a module; a caller that will touch many
+// strings reads their starts once through this and indexes in O(1). `validate` is the caller's.
+fn string_count(bytes: []const usize) -> (usize, err) {
+    let (strings, found_strings, section_error) = find_section_unchecked(bytes, strings_kind())
+    if section_error != ok || !found_strings || strings.length < 4usize { ret (0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, strings.offset)
+    if count_error != ok { ret (0usize, InvalidArtifact) }
+    ret (count, ok)
+}
+
+fn read_string_starts(bytes: []const usize, starts: []usize) -> (usize, err) {
+    let (strings, found_strings, section_error) = find_section_unchecked(bytes, strings_kind())
+    if section_error != ok || !found_strings || strings.length < 4usize { ret (0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, strings.offset)
+    if count_error != ok { ret (0usize, InvalidArtifact) }
+    if count > starts.len { ret (0usize, Capacity) }
+    let end = strings.offset + strings.length
+    var cursor = strings.offset + 4usize
+    var at = 0usize
+    while at < count {
+        let (length, length_error) = binary.read_u32(bytes, cursor)
+        if length_error != ok { ret (0usize, InvalidArtifact) }
+        cursor += 4usize
+        if cursor > end || length > end - cursor { ret (0usize, InvalidArtifact) }
+        starts[at] = cursor
+        cursor += length
+        at += 1usize
+    }
+    ret (count, ok)
+}
+
+// The byte length of the string at `start`, which `read_string_starts` recorded. The length
+// prefix sits four bytes before the start.
+fn string_length_at(bytes: []const usize, start: usize) -> (usize, err) {
+    if start < 4usize { ret (0usize, InvalidArtifact) }
+    let (length, length_error) = binary.read_u32(bytes, start - 4usize)
+    ret (length, length_error)
+}
+
 fn string_bounds(bytes: []const usize, index: usize) -> (usize, usize, err) {
     let (strings, found_strings, section_error) = find_section_unchecked(bytes, strings_kind())
     if section_error != ok || !found_strings || strings.length < 4usize { ret (0usize, 0usize, InvalidArtifact) }
@@ -1948,6 +1989,30 @@ fn interface_errors(bytes: []const usize) -> (InterfaceErrors, err) {
     ret (table, table_error)
 }
 
+// Every error in one validated pass, into `out` (sized to at least the count). The per-index
+// reader validates the whole artifact and re-walks the interface on each call, so reading an
+// error table entry by entry is quadratic with a CRC on every step; this is one validate and
+// one walk.
+fn read_error_table(bytes: []const usize, out: []ErrorValue) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (table, table_error) = interface_errors_unchecked(bytes)
+    if table_error != ok { ret (0usize, table_error) }
+    if table.count > out.len { ret (0usize, Capacity) }
+    var index = 0usize
+    while index < table.count {
+        let entry = table.entries + index * 8usize
+        let (value, value_error) = binary.read_u32(bytes, entry)
+        let (name_index, name_error) = binary.read_u32(bytes, entry + 4usize)
+        if value_error != ok || name_error != ok || value == 0usize { ret (0usize, InvalidArtifact) }
+        let (expected, expected_error) = indexed_error_value(bytes, table.module_index, name_index)
+        if expected_error != ok || expected != value { ret (0usize, InvalidArtifact) }
+        out[index] = ErrorValue { value: value, module_index: table.module_index, name_index: name_index }
+        index += 1usize
+    }
+    ret (table.count, ok)
+}
+
 fn artifact_error_count(bytes: []const usize) -> (usize, err) {
     let (table, table_error) = interface_errors(bytes)
     if table_error != ok { ret (0usize, table_error) }
@@ -1988,8 +2053,6 @@ fn code_function_at_unchecked(bytes: []const usize, query: usize) -> (CodeFuncti
         let (code_length, length_error) = binary.read_u32(bytes, cursor + 16usize)
         let (relocation_count, relocation_count_error) = binary.read_u32(bytes, cursor + 20usize)
         if name_error != ok || instance_error != ok || hash_error != ok || length_error != ok || relocation_count_error != ok { ret (empty, count, InvalidArtifact) }
-        let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
-        if name_bounds_error != ok || name_length == 0usize || name_start >= bytes.len { ret (empty, count, InvalidArtifact) }
         let code_start = cursor + 24usize
         if code_start > end || code_length > end - code_start { ret (empty, count, InvalidArtifact) }
         let relocations = code_start + code_length
@@ -2016,6 +2079,41 @@ fn code_function_at_unchecked(bytes: []const usize, query: usize) -> (CodeFuncti
         at += 1usize
     }
     ret (empty, count, InvalidArtifact)
+}
+
+// Every code function in one forward pass, into `out` (sized to at least the count). The
+// per-index reader re-parses from function 0 each call, which is O(n^2) over a whole module;
+// the linker reads every function anyway, so it reads them once through this. `validate` is
+// the caller's to have run.
+fn read_code_functions(bytes: []const usize, out: []CodeFunction) -> (usize, err) {
+    let (code, found_code, section_error) = find_section_unchecked(bytes, code_kind())
+    if section_error != ok || !found_code || code.length < 4usize { ret (0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, code.offset)
+    if count_error != ok { ret (0usize, InvalidArtifact) }
+    if count > out.len { ret (0usize, Capacity) }
+    let end = code.offset + code.length
+    var cursor = code.offset + 4usize
+    var at = 0usize
+    while at < count {
+        if cursor > end || 24usize > end - cursor { ret (0usize, InvalidArtifact) }
+        let (name_index, name_error) = binary.read_u32(bytes, cursor)
+        let (instance, instance_error) = binary.read_u32(bytes, cursor + 4usize)
+        let (content_hash, hash_error) = binary.read_u64(bytes, cursor + 8usize)
+        let (code_length, length_error) = binary.read_u32(bytes, cursor + 16usize)
+        let (relocation_count, relocation_count_error) = binary.read_u32(bytes, cursor + 20usize)
+        if name_error != ok || instance_error != ok || hash_error != ok || length_error != ok || relocation_count_error != ok { ret (0usize, InvalidArtifact) }
+        // The name's own bytes are validated where the name is read; walking the string table to
+        // it here (O(index)) once per function made counting and reading a module quadratic.
+        let code_start = cursor + 24usize
+        if code_start > end || code_length > end - code_start { ret (0usize, InvalidArtifact) }
+        let relocations = code_start + code_length
+        if relocations > end || relocation_count > (end - relocations) / relocation_record_size() { ret (0usize, InvalidArtifact) }
+        out[at] = CodeFunction { name_index: name_index, instance: instance, content_hash: content_hash, code_start: code_start, code_length: code_length, relocations: relocations, relocation_count: relocation_count }
+        cursor = relocations + relocation_count * relocation_record_size()
+        at += 1usize
+    }
+    if cursor != end { ret (0usize, InvalidArtifact) }
+    ret (count, ok)
 }
 
 fn artifact_code_count(bytes: []const usize) -> (usize, err) {
