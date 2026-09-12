@@ -783,6 +783,18 @@ $algoLinalgWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $algoLinalgWritten -ne 'executable written') { throw 'algo_linalg emission failed' }
 & $algoLinalgPath
 if ($LASTEXITCODE -ne 0) { throw "a algo_linalg check failed: exit $LASTEXITCODE" }
+# `e.text.encoding`: UTF-16 and UTF-32 both ways, BOMs, rejection and replacement, streaming.
+$textEncodingPath = Join-Path $testBuild 'text-encoding-selfhost.exe'
+$textEncodingWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\text_encoding\src\main.e') $repo 'x64' 'windows' $textEncodingPath
+if ($LASTEXITCODE -ne 0 -or $textEncodingWritten -ne 'executable written') { throw 'text_encoding emission failed' }
+& $textEncodingPath
+if ($LASTEXITCODE -ne 0) { throw "a text_encoding check failed: exit $LASTEXITCODE" }
+# `e.algo.bignum`: three radices, the four operations, truncating division, gcd, rationals.
+$algoBignumPath = Join-Path $testBuild 'algo-bignum-selfhost.exe'
+$algoBignumWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\algo_bignum\src\main.e') $repo 'x64' 'windows' $algoBignumPath
+if ($LASTEXITCODE -ne 0 -or $algoBignumWritten -ne 'executable written') { throw 'algo_bignum emission failed' }
+& $algoBignumPath
+if ($LASTEXITCODE -ne 0) { throw "a algo_bignum check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

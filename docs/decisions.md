@@ -3000,3 +3000,20 @@ field, a `*T` into a `*const T` local -- so `c.data = m.data` failed to lower wi
 "invalid type" while `let d: []const T = m.data; c.data = d` did. Both assignment paths
 use `type_assignable` now. (The `*const` comparison gap D165 worked around is the same
 family, not yet fixed.)
+## D167 — `e.text.encoding` and `e.algo.bignum`
+
+`e.text.encoding` is the four transformation formats beside UTF-8, streamed: a decoder
+keeps the bytes of an unfinished scalar between calls and an encoder remembers its BOM,
+so a stream can be cut anywhere; `Reject` and `Replace` are the two answers to an
+invalid sequence. Two simplifications, both in the header: an overlong form or a
+surrogate is judged once its sequence is complete, so it is one U+FFFD rather than
+Unicode's two or three; and a BOM is looked for only in the first call's bytes.
+
+`e.algo.bignum` is sign-and-magnitude in base 2^32 over arena limbs, every result a
+fresh allocation. Multiplication is schoolbook and division is binary long division,
+a bit at a time -- quadratic times 32, which is what a first version should be, with
+Knuth's algorithm D as the upgrade when a profile asks. The formatter allocates
+nothing, because a `str.Builder` holds the top of its arena and a scratch taken from
+the same arena would land on top of it: the scratch is on the stack, which caps a
+formatted value at 1024 limbs (about 9864 decimal digits) and says `Invalid` past
+that. A rational is kept in lowest terms with a positive denominator.

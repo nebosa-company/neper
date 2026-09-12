@@ -792,6 +792,16 @@ algo_linalg_written=$($test_build/neper-self emit-executable "$repo/tests/selfho
 [ "$algo_linalg_written" = 'executable written' ]
 chmod +x "$test_build/algo-linalg-selfhost"
 "$test_build/algo-linalg-selfhost"
+# `e.text.encoding`: UTF-16 and UTF-32 both ways, BOMs, rejection and replacement, streaming.
+text_encoding_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_encoding/src/main.e" "$repo" x64 linux "$test_build/text-encoding-selfhost")
+[ "$text_encoding_written" = 'executable written' ]
+chmod +x "$test_build/text-encoding-selfhost"
+"$test_build/text-encoding-selfhost"
+# `e.algo.bignum`: three radices, the four operations, truncating division, gcd, rationals.
+algo_bignum_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/algo_bignum/src/main.e" "$repo" x64 linux "$test_build/algo-bignum-selfhost")
+[ "$algo_bignum_written" = 'executable written' ]
+chmod +x "$test_build/algo-bignum-selfhost"
+"$test_build/algo-bignum-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")
