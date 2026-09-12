@@ -12,11 +12,13 @@
 // only how many instructions come out (section 4: "every vector width compiles on
 // every target").
 //
+// The lane-wise operators of section 4 (`+ - * /` on float lanes, `+% -% *% & | ^ ~`
+// and a scalar shift on integer lanes, `& | ^ ~` on masks) are the checker's and
+// lowering's, over this same representation (D158).
+//
 // Not here yet: `shuffle`, whose `IDX: [N]u8` is a comptime array parameter the
-// generic machinery has no kind for; the lane-wise operators `+ - * /` and the mask
-// operators `& | ^ ~`, the `Vec[T, N]{ ... }` literal and `v[i]`, which are the
-// checker's rather than this module's; and the `align` check of the aligned forms,
-// which read as the unaligned ones.
+// generic machinery has no kind for; the `Vec[T, N]{ ... }` literal and `v[i]`; and
+// the `align` check of the aligned forms, which read as the unaligned ones.
 
 use e.meta
 use e.math

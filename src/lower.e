@@ -2291,6 +2291,10 @@ fn lower_unary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if operator == .PunctMinus { opcode = .Negate }
     if operator == .PunctTilde { opcode = .BitNot }
     if opcode == .Invalid { ret (0usize, zero, check.Unsupported) }
+    if operator == .PunctTilde && check.is_vector_type(c, result_type) {
+        let (vector, vector_error) = lower_vector_not(c, node, operand, result_type, builder)
+        ret (vector, result_type, vector_error)
+    }
     let (instruction, result, emit_error) = nir.emit(builder, opcode, result_type, true, 0usize, c.tokens[node.token_start])
     if emit_error != ok { ret (0usize, result_type, emit_error) }
     let add_error = nir.add_operand(builder, instruction, operand)
@@ -3339,6 +3343,10 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     }
     let opcode = binary_opcode(operator)
     if opcode == .Invalid { ret (0usize, zero, check.InvalidOperator) }
+    if check.is_vector_type(c, result_type) {
+        let (vector, vector_error) = lower_vector_binary(c, g, tree, module_index, node, children[0usize], children[1usize], result_type, opcode, builder, bindings, binding_count)
+        ret (vector, result_type, vector_error)
+    }
     var operand_expected = result_type
     if check.is_comparison(operator) { operand_expected = check.invalid_type() }
     let (left_type, left_type_error) = check.check_expr(c, g, tree, module_index, children[0usize], operand_expected)
@@ -3370,6 +3378,116 @@ fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     ret (result, result_type, ok)
     ret (0usize, check.invalid_type(), check.Unsupported)
 }
+// Section 4's lane-wise operators over the one-field representation of a vector
+// (D148): both operands are addresses, the result is a fresh slot, and each lane is
+// one scalar instruction between a load and a store at the lane's offset. A shift's
+// right operand is the one scalar count, applied to every lane.
+// ponytail: N scalar instructions per operator; a vector register class selects one.
+fn lower_vector_binary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, left_index: usize, right_index: usize, result_type: check.Type, opcode: nir.Opcode, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, err) {
+    let token = c.tokens[node.token_start]
+    let (lanes, is_vector) = check.vector_lanes(c, result_type)
+    let (lane, has_lane) = check.vector_lane_type(c, result_type)
+    if !is_vector || !has_lane { ret (0usize, check.InvalidType) }
+    let (lane_info, lane_info_error) = layout.type_info(c, lane)
+    if lane_info_error != ok { ret (0usize, lane_info_error) }
+    let shifting = opcode == .ShiftLeft || opcode == .ShiftRight
+    let (left, left_type, left_error) = lower_expression(c, g, tree, module_index, left_index, result_type, builder, bindings, binding_count)
+    if left_error != ok { ret (0usize, left_error) }
+    var right_expected = result_type
+    if shifting {
+        let (count_type, count_error) = check.check_expr(c, g, tree, module_index, right_index, check.invalid_type())
+        if count_error != ok { ret (0usize, count_error) }
+        right_expected = count_type
+        if count_type.kind == .UntypedInteger { right_expected = check.make_type(.Integer, "u32", module_index) }
+    }
+    let (right, right_type, right_error) = lower_expression(c, g, tree, module_index, right_index, right_expected, builder, bindings, binding_count)
+    if right_error != ok { ret (0usize, right_error) }
+    let (stack, stack_error) = vector_slot(c, result_type, builder, token)
+    if stack_error != ok { ret (0usize, stack_error) }
+    var at = 0usize
+    while at < lanes.array_length {
+        let offset = at * lane_info.size
+        let (left_lane, left_lane_error) = component_at(c, lane, left, offset, builder, token)
+        if left_lane_error != ok { ret (0usize, left_lane_error) }
+        var right_lane = right
+        if !shifting {
+            let (loaded, right_lane_error) = component_at(c, lane, right, offset, builder, token)
+            if right_lane_error != ok { ret (0usize, right_lane_error) }
+            right_lane = loaded
+        }
+        let (instruction, value, emit_error) = nir.emit(builder, opcode, lane, true, 0usize, token)
+        if emit_error != ok { ret (0usize, emit_error) }
+        let left_operand_error = nir.add_operand(builder, instruction, left_lane)
+        if left_operand_error != ok { ret (0usize, left_operand_error) }
+        let right_operand_error = nir.add_operand(builder, instruction, right_lane)
+        if right_operand_error != ok { ret (0usize, right_operand_error) }
+        let store_error = store_lane(c, lane, lane_info.size, stack, offset, value, builder, token)
+        if store_error != ok { ret (0usize, store_error) }
+        at += 1usize
+    }
+    ret (stack, ok)
+}
+
+// `~v` on integer lanes is the bitwise not of each; on a mask it is each lane's `!`,
+// spelled the way `!` is lowered -- equal to `false`.
+fn lower_vector_not(c: *check.Checker, node: syntax.Node, operand: usize, result_type: check.Type, builder: *nir.Builder) -> (usize, err) {
+    let token = c.tokens[node.token_start]
+    let (lanes, is_vector) = check.vector_lanes(c, result_type)
+    let (lane, has_lane) = check.vector_lane_type(c, result_type)
+    if !is_vector || !has_lane { ret (0usize, check.InvalidType) }
+    let (lane_info, lane_info_error) = layout.type_info(c, lane)
+    if lane_info_error != ok { ret (0usize, lane_info_error) }
+    let (stack, stack_error) = vector_slot(c, result_type, builder, token)
+    if stack_error != ok { ret (0usize, stack_error) }
+    var at = 0usize
+    while at < lanes.array_length {
+        let offset = at * lane_info.size
+        let (loaded, load_error) = component_at(c, lane, operand, offset, builder, token)
+        if load_error != ok { ret (0usize, load_error) }
+        var value = 0usize
+        if lane.kind == .Bool {
+            let (false_instruction, false_value, false_error) = nir.emit(builder, .ConstBool, lane, true, 0usize, token)
+            if false_error != ok { ret (0usize, false_error) }
+            let (instruction, flipped, emit_error) = nir.emit(builder, .Equal, lane, true, 0usize, token)
+            if emit_error != ok { ret (0usize, emit_error) }
+            let loaded_error = nir.add_operand(builder, instruction, loaded)
+            if loaded_error != ok { ret (0usize, loaded_error) }
+            let false_operand_error = nir.add_operand(builder, instruction, false_value)
+            if false_operand_error != ok { ret (0usize, false_operand_error) }
+            value = flipped
+        } else {
+            let (instruction, inverted, emit_error) = nir.emit(builder, .BitNot, lane, true, 0usize, token)
+            if emit_error != ok { ret (0usize, emit_error) }
+            let loaded_error = nir.add_operand(builder, instruction, loaded)
+            if loaded_error != ok { ret (0usize, loaded_error) }
+            value = inverted
+        }
+        let store_error = store_lane(c, lane, lane_info.size, stack, offset, value, builder, token)
+        if store_error != ok { ret (0usize, store_error) }
+        at += 1usize
+    }
+    ret (stack, ok)
+}
+
+fn vector_slot(c: *check.Checker, ty: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret (0usize, info_error) }
+    var slots = (info.size + 7usize) / 8usize
+    if slots == 0usize { slots = 1usize }
+    let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, ty, true, slots, token)
+    ret (stack, stack_error)
+}
+
+fn store_lane(c: *check.Checker, lane: check.Type, size: usize, base: usize, offset: usize, value: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, lane, true, offset, token)
+    if address_error != ok { ret address_error }
+    try nir.add_operand(builder, address_instruction, base)
+    let (store_instruction, ignored, store_error) = nir.emit(builder, .Store, lane, false, size, token)
+    if store_error != ok { ret store_error }
+    try nir.add_operand(builder, store_instruction, address)
+    ret nir.add_operand(builder, store_instruction, value)
+}
+
 fn lower_binding_member_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder) -> (usize, check.Type, bool, err) {
     let node = tree.nodes[node_index]
     let (bound, bound_member, is_bound) = check.comptime_binding_base(c, g.modules[module_index].text, tree, node)

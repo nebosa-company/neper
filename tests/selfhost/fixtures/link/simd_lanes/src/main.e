@@ -1,6 +1,7 @@
 // `e.simd` over `Vec[T, N]` and `Mask[T, N]`: the closed table's layout, every intrinsic
 // but `shuffle` on integer and float lanes, the pairwise reduction order, the masked
-// forms at a slice's tail, and the two bit intrinsics against their definitions.
+// forms at a slice's tail, the two bit intrinsics against their definitions, and section
+// 4's lane-wise operators on float, integer and mask lanes, in a generic too.
 // Every check has its own exit code.
 use e.os
 use e.mem
@@ -180,6 +181,57 @@ fn bit_intrinsics() {
     if simd.pext(simd.pdep(2989u64, 1234605616436508552u64), 1234605616436508552u64) != 2989u64 { os.exit(79) }
 }
 
+fn axpy[V: type](a: V, x: V, y: V) -> V {
+    ret a * x + y
+}
+
+fn spread[V: type](v: V) -> V {
+    let shifted = v << 1u32
+    ret shifted | v
+}
+
+fn operators() {
+    let a = simd.splat[Vec[f32, 4]](1.5)
+    let b = simd.splat[Vec[f32, 4]](2.0)
+    let c = a * b + a
+    if c.lanes[0] != 4.5 || c.lanes[3] != 4.5 { os.exit(80) }
+    let d = (c - b) / b
+    if d.lanes[2] != 1.25 { os.exit(81) }
+    var x: Vec[i32, 4] = zero
+    x.lanes[0] = 2147483647i32
+    x.lanes[1] = 6i32
+    let y = simd.splat[Vec[i32, 4]](1i32)
+    // The wrapping forms are the only arithmetic an integer vector has.
+    let w = x +% y
+    if w.lanes[0] != -2147483648i32 || w.lanes[1] != 7i32 || w.lanes[2] != 1i32 { os.exit(82) }
+    let m = (x *% y) -% y
+    if m.lanes[1] != 5i32 { os.exit(83) }
+    let bits = (x & y) | (y ^ y)
+    if bits.lanes[0] != 1i32 || bits.lanes[1] != 0i32 { os.exit(84) }
+    let sh = y << 3u32
+    if sh.lanes[3] != 8i32 { os.exit(85) }
+    let back = sh >> 2u32
+    if back.lanes[3] != 2i32 { os.exit(86) }
+    let inv = ~y
+    if inv.lanes[0] != -2i32 { os.exit(87) }
+    let p = simd.mask[Vec[i32, 4]](3u64)
+    let q = simd.mask[Vec[i32, 4]](6u64)
+    if simd.bits[Vec[i32, 4]](p & q) != 2u64 { os.exit(88) }
+    if simd.bits[Vec[i32, 4]](p | q) != 7u64 { os.exit(89) }
+    if simd.bits[Vec[i32, 4]](p ^ q) != 5u64 { os.exit(90) }
+    if simd.bits[Vec[i32, 4]](~p) != 12u64 { os.exit(91) }
+    // Through a generic, where the vector is still `V` when the operator is checked.
+    let r = axpy[Vec[f64, 2]](simd.splat[Vec[f64, 2]](2.0), simd.splat[Vec[f64, 2]](3.0), simd.splat[Vec[f64, 2]](1.0))
+    if r.lanes[1] != 7.0 { os.exit(92) }
+    let t = spread[Vec[u8, 16]](simd.splat[Vec[u8, 16]](5u8))
+    if t.lanes[15] != 15u8 { os.exit(93) }
+    // A NaN lane stays a NaN lane; the others are untouched by it.
+    var n = simd.splat[Vec[f64, 2]](1.0)
+    n.lanes[0] = mem.bitcast[f64](9221120237041090560u64)
+    let s = n + n
+    if s.lanes[0] == s.lanes[0] || s.lanes[1] != 2.0 { os.exit(94) }
+}
+
 fn main() {
     layout()
     moves()
@@ -187,5 +239,6 @@ fn main() {
     reductions()
     conversions()
     bit_intrinsics()
+    operators()
     os.exit(0)
 }

@@ -2120,6 +2120,27 @@ fn vector_pending(c: *Checker, ty: Type) -> bool {
     ret is_vector_type(c, ty) && c.aggregates[ty.element].generic
 }
 
+// The lane type of a concrete vector, for the operator table and for lowering.
+fn vector_lane_type(c: *Checker, ty: Type) -> (Type, bool) {
+    let (lanes, is_vector) = vector_lanes(c, ty)
+    if !is_vector || !lanes.has_element || lanes.element >= c.type_count { ret (invalid_type(), false) }
+    ret (c.types[lanes.element], true)
+}
+
+// Section 4's operator table, lane by lane: float lanes take the four IEEE operations;
+// integer lanes only the wrapping forms, the bitwise ones and a scalar shift, because a
+// vector unit has no overflow flag and `/` is no target's one instruction; a mask takes
+// the bitwise ones. Comparisons are never operators on a vector -- `simd.cmp_*` are.
+fn vector_operator_legal(c: *Checker, ty: Type, op: lex.Kind) -> bool {
+    let (lane, is_vector) = vector_lane_type(c, ty)
+    if !is_vector { ret false }
+    if lane.kind == .Float { ret op == .PunctPlus || op == .PunctMinus || op == .PunctStar || op == .PunctSlash }
+    let bitwise = op == .PunctAmp || op == .PunctPipe || op == .PunctCaret || op == .PunctTilde
+    if lane.kind == .Bool { ret bitwise }
+    if lane.kind != .Integer { ret false }
+    ret bitwise || op == .PunctAddWrap || op == .PunctSubWrap || op == .PunctMulWrap || is_shift(op)
+}
+
 // `meta.array_len[X]()` written where a length is: the call's callee is the bracketed
 // question and `X` is its one argument, read as a type. Anything else is not one.
 fn array_len_subject(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, bool) {
@@ -7726,7 +7747,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         if op == .PunctMinus && !is_numeric(value_type) {
             if !c.generic_declaration || !type_shape_unknown(value_type) { ret (invalid_type(), InvalidOperator) }
         }
-        if op == .PunctTilde && !is_integer(value_type) {
+        if op == .PunctTilde && !is_integer(value_type) && !vector_operator_legal(c, value_type, op) && !vector_pending(c, value_type) {
             if !c.generic_declaration || !type_shape_unknown(value_type) { ret (invalid_type(), InvalidOperator) }
         }
         if op != .PunctMinus && op != .PunctTilde { ret (invalid_type(), Unsupported) }
@@ -7751,7 +7772,9 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let (left_type, left_error) = check_expr(c, g, tree, module_index, children[0usize], expected)
             if left_error != ok { ret (invalid_type(), left_error) }
             if !is_integer(left_type) || is_untyped(left_type) {
-                if !c.generic_declaration || !type_shape_unknown(left_type) { ret (invalid_type(), InvalidOperator) }
+                if !vector_operator_legal(c, left_type, op) && !vector_pending(c, left_type) {
+                    if !c.generic_declaration || !type_shape_unknown(left_type) { ret (invalid_type(), InvalidOperator) }
+                }
             }
             let (right_type, right_error) = check_expr(c, g, tree, module_index, children[1usize], invalid_type())
             if right_error != ok { ret (invalid_type(), right_error) }
@@ -7809,6 +7832,10 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             }
             let (result_type, context_error) = apply_context(c, make_type(.Bool, "bool", module_index), expected)
             ret (result_type, context_error)
+        }
+        if is_vector_type(c, final_left) {
+            if vector_pending(c, final_left) || vector_operator_legal(c, final_left, op) { ret (final_left, ok) }
+            ret (invalid_type(), InvalidOperator)
         }
         if !is_numeric(final_left) {
             if c.generic_declaration && type_shape_unknown(final_left) { ret (final_left, ok) }

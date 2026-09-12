@@ -2817,3 +2817,24 @@ duplicate existed: `os_process` 59,024 to 58,232, `supplied_hash` 39,620 to 39,1
 compiler still reproduces itself byte-for-byte (stage 2 equals stage 3), now with the fold applied
 to its own build. `generic_folding` continues to assert the shared-instance image is identical
 source-to-artifact -- now with both paths sharing rather than both keeping every copy.
+## D158 — the lane-wise operators, lowered over the lanes
+
+Section 4's operator table for vectors is in: on float lanes `+ - * /`, IEEE and one
+rounding each; on integer lanes only `+% -% *%`, `& | ^ ~` and `<< >>` by one scalar
+count; on a mask `& | ^ ~`. Plain `+ - *` on an integer vector, `/` and `%` anywhere on
+one, and every comparison are compile errors, as the section says -- the `simd.cmp_*`
+intrinsics are the comparisons.
+
+The checker's part is one table (`vector_operator_legal`) consulted from the three
+places a binary or unary operator is typed, with the same deferral a still-generic
+vector gets everywhere else: inside a template `V * V` is `V`, and the instance decides.
+Lowering's part is D148's representation put to use: both operands are addresses, the
+result is a fresh slot of the vector's width, and each lane is one scalar instruction
+between a load and a store at the lane's offset -- `lower_vector_binary`, and
+`lower_vector_not` for `~`, which on a mask is each lane's `!`. A shift loads its count
+once and applies it to every lane.
+
+ponytail: N scalar instructions per operator. The vector register class, when it comes,
+selects one instruction for the same NIR shape; nothing in the checker or the library
+moves for it. `link/simd_lanes` carries the table on every lane kind, the refusals are
+probed by hand, and a generic `a * x + y` over `V` goes through both passes.
