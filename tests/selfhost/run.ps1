@@ -1025,6 +1025,12 @@ $textUnicodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $textUnicodeWritten -ne 'executable written') { throw 'text_unicode emission failed' }
 & $textUnicodePath
 if ($LASTEXITCODE -ne 0) { throw "a text_unicode check failed: exit $LASTEXITCODE" }
+# `e.fmt.zstd`: libzstd's frames at three levels read back, the writer's frame read back, six refusals.
+$fmtZstdPath = Join-Path $testBuild 'fmt-zstd-selfhost.exe'
+$fmtZstdWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_zstd\src\main.e') $repo 'x64' 'windows' $fmtZstdPath
+if ($LASTEXITCODE -ne 0 -or $fmtZstdWritten -ne 'executable written') { throw 'fmt_zstd emission failed' }
+& $fmtZstdPath
+if ($LASTEXITCODE -ne 0) { throw "a fmt_zstd check failed: exit $LASTEXITCODE" }
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 $socketPath = Join-Path $testBuild 'os-socket-selfhost.exe'

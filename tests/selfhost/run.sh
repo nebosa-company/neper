@@ -992,6 +992,11 @@ text_unicode_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$text_unicode_written" = 'executable written' ]
 chmod +x "$test_build/text-unicode-selfhost"
 "$test_build/text-unicode-selfhost"
+# `e.fmt.zstd`: libzstd's frames at three levels read back, the writer's frame read back, six refusals.
+fmt_zstd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_zstd/src/main.e" "$repo" x64 linux "$test_build/fmt-zstd-selfhost")
+[ "$fmt_zstd_written" = 'executable written' ]
+chmod +x "$test_build/fmt-zstd-selfhost"
+"$test_build/fmt-zstd-selfhost"
 # `e.os`'s sockets over the loopback interface: a real TCP connection and a real UDP
 # datagram inside one process, so nothing waits on a peer that has not already acted.
 socket_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/os_socket/src/main.e" "$repo" x64 linux "$test_build/os-socket-selfhost")

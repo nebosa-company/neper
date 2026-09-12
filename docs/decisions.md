@@ -3364,3 +3364,29 @@ extended clusters by a reduced rule set -- CR LF, marks, ZWJ and variation selec
 regional indicators in pairs, Hangul jamo -- with the Grapheme_Cluster_Break table
 and UAX #29 in full as the upgrade. The plan listed `e.text.utf8` as a dependency;
 the module reads UTF-8 with its own twenty lines and does not need it.
+
+## D185 — `e.fmt.zstd`
+
+The reader decodes RFC 8878 frames a block at a time into a history buffer of the
+window plus one block: raw and RLE blocks, and compressed blocks with their Huffman
+literals (weights direct or FSE-coded, one or four streams) and FSE-coded sequences in
+every mode -- predefined, RLE, compressed, repeat -- with the three repeat offsets and
+the zero-literal-length shift. Backward bit streams count the zero bytes they feed
+past their start, so "ended exactly" and "read too far" are both plain checks. The
+XXH64 of the content is compared at the frame's end. Storage holds the input block,
+the literals, the tables and the history, and a frame asking for a window past the
+storage is `Unsupported`, as is a dictionary or a skippable frame.
+
+Two things libzstd's own decoder settled where my reading of the RFC had gone wrong.
+The match-length default distribution has seven "less than one" symbols, not
+seventeen -- a table built from the misremembered list decoded the first sample
+block to the wrong length, and the truth was recovered by feeding libzstd every
+state of a hand-built block and reading what it produced. And the interleaved
+weight stream ends when a state update reads past the stream's start, with one more
+symbol from the other state; ending it when the bits are exactly consumed drops the
+last weight, which shifted every literal by one symbol. Both are now written in the
+code as what libzstd does.
+
+The writer emits frames of raw blocks with a checksum at every level -- valid
+Zstandard that libzstd read back during development -- and the header says the
+level is accepted and ignored; the entropy coders on the writing side are the upgrade.
