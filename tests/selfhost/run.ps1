@@ -1708,6 +1708,13 @@ if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" 
 # duration_ms is real wall time (D241): normalise it out before the byte-exact compare.
 [IO.File]::WriteAllText($testActual, ([IO.File]::ReadAllText($testActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test.expected.jsonl')).Hash) { throw "test --json differs from the conformance corpus" }
+# `test --json` with a deadline (D246): a test that never returns is ended by the runner's
+# own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
+$timeoutActual = Join-Path $testBuild 'conformance-tools-test-timeout.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_timeout.e')`" `"$repo`" x64 windows `"$testBuild`" 400 --json > `"$timeoutActual`""
+if ($LASTEXITCODE -ne 1) { throw "test --json deadline exited $LASTEXITCODE, expected 1" }
+[IO.File]::WriteAllText($timeoutActual, ([IO.File]::ReadAllText($timeoutActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $timeoutActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_timeout.expected.jsonl')).Hash) { throw "test --json deadline differs from the conformance corpus" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'
@@ -2121,6 +2128,12 @@ $elseIfExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $elseIfExecutableWritten -ne 'executable written') { throw 'else-if PE executable emission failed' }
 & $elseIfExecutablePath
 if ($LASTEXITCODE -ne 0) { throw "else-if chains failed check $LASTEXITCODE in the self-hosted PE executable" }
+# `ret (expr) op y` (D246): a grouped return value that carries a binary operator.
+$retGroupExecutablePath = Join-Path $testBuild 'ret-group-selfhost.exe'
+$retGroupExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\linket_group\src\main.e') $repo 'x64' 'windows' $retGroupExecutablePath
+if ($LASTEXITCODE -ne 0 -or $retGroupExecutableWritten -ne 'executable written') { throw 'ret-group PE executable emission failed' }
+& $retGroupExecutablePath
+if ($LASTEXITCODE -ne 0) { throw "grouped return expressions failed check $LASTEXITCODE in the self-hosted PE executable" }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }

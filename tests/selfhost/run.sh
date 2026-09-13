@@ -1849,6 +1849,15 @@ $test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 li
 sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_actual"
 cmp -s "$test_actual" "$conformance_root/tools/test.expected.jsonl" || { printf '%s
 ' "test --json differs from the conformance corpus" >&2; exit 1; }
+# `test --json` with a deadline (D246): a test that never returns is ended by the runner's
+# own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
+timeout_actual="$test_build/conformance-tools-test-timeout.jsonl"
+timeout_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test_timeout.e" "$repo" x64 linux "$test_build" 400 --json > "$timeout_actual" || timeout_status=$?
+[ "$timeout_status" -eq 1 ]
+sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$timeout_actual"
+cmp -s "$timeout_actual" "$conformance_root/tools/test_timeout.expected.jsonl" || { printf '%s
+' "test --json deadline differs from the conformance corpus" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"
@@ -2344,6 +2353,12 @@ else_if_executable_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$else_if_executable_written" = 'executable written' ]
 chmod +x "$else_if_executable_path"
 "$else_if_executable_path"
+# `ret (expr) op y` (D246): a grouped return value that carries a binary operator.
+ret_group_executable_path="$test_build/ret-group-selfhost"
+ret_group_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ret_group/src/main.e" "$repo" x64 linux "$ret_group_executable_path")
+[ "$ret_group_executable_written" = 'executable written' ]
+chmod +x "$ret_group_executable_path"
+"$ret_group_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]

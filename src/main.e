@@ -979,7 +979,7 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize) -> (us
 // The runner source: the operand verbatim, a string-equality helper, and a `main` that
 // dispatches to the @test named by its index in argv, returning that test's `err` -- so the
 // runtime prints `error: ...` and exits 1 for a failure, and a trap aborts for a crash.
-fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize) -> ([]u8, err) {
+fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize, timeout_ns: usize) -> ([]u8, err) {
     var size = text.len + 4096usize
     var at = 0usize
     while at < count {
@@ -988,18 +988,28 @@ fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize) -
     }
     let (buffer, buffer_error) = mem.alloc[u8](a, size)
     if buffer_error != ok { ret (buffer, buffer_error) }
-    var written = nptest_append(buffer, 0usize, text)
-    written = nptest_append(buffer, written, "\nfn nptest_eq(x: str, y: str) -> bool {\n    if x.len != y.len { ret false }\n    var i = 0usize\n    while i < x.len {\n        if x[i] != y[i] { ret false }\n        i += 1usize\n    }\n    ret true\n}\nfn main(a: *mem.Arena, args: []str) -> err {\n    if args.len < 2usize { ret ok }\n")
+    // `use` leads the file, so the watchdog's imports go before the operand; unique aliases
+    // never collide with what the operand already imports.
+    var written = nptest_append(buffer, 0usize, "use e.os as nptest_os\nuse e.atomic as nptest_atomic\n")
+    written = nptest_append(buffer, written, text)
+    // A watchdog thread waits on a futex that main sets when the test returns; if the wait
+    // times out first the test is still running, so the process exits 124 (D246).
+    written = nptest_append(buffer, written, "\ntype NptestGuard = struct { done: Atomic[u32] }\nfn nptest_watchdog(guard: *NptestGuard) {\n    while nptest_atomic.load(&guard.done, .Acquire) == 0u32 {\n        let nptest_wait = nptest_os.wait_u32(&guard.done, 0u32, ")
+    written = nptest_append_decimal(buffer, written, timeout_ns)
+    written = nptest_append(buffer, written, "i64)\n        if nptest_wait == nptest_os.Timeout { nptest_os.exit(124i32) }\n    }\n}\n")
+    written = nptest_append(buffer, written, "\nfn nptest_eq(x: str, y: str) -> bool {\n    if x.len != y.len { ret false }\n    var i = 0usize\n    while i < x.len {\n        if x[i] != y[i] { ret false }\n        i += 1usize\n    }\n    ret true\n}\nfn nptest_dispatch(a: *mem.Arena, which: str) -> err {\n")
     at = 0usize
     while at < count {
-        written = nptest_append(buffer, written, "    if nptest_eq(args[1usize], \"")
+        written = nptest_append(buffer, written, "    if nptest_eq(which, \"")
         written = nptest_append_decimal(buffer, written, at)
         written = nptest_append(buffer, written, "\") { ret ")
         written = nptest_append(buffer, written, names[at])
         written = nptest_append(buffer, written, "(a) }\n")
         at += 1usize
     }
-    written = nptest_append(buffer, written, "    ret ok\n}\n")
+    // The dispatch chain lives in its own function and main has a single `ret`: an early
+    // return plus the chain plus the watchdog put main past what lowering would take (D246).
+    written = nptest_append(buffer, written, "    ret ok\n}\nfn main(a: *mem.Arena, args: []str) -> err {\n    var nptest_result = ok\n    if args.len >= 2usize {\n        var nptest_guard: NptestGuard = zero\n        let (nptest_watch, nptest_watch_error) = nptest_os.thread_create[NptestGuard](nptest_watchdog, &nptest_guard, 1048576usize)\n        nptest_result = nptest_dispatch(a, args[1usize])\n        nptest_atomic.store(&nptest_guard.done, 1u32, .Release)\n        nptest_os.wake_one_u32(&nptest_guard.done)\n        if nptest_watch_error == ok {\n            let nptest_joined = nptest_os.thread_join(nptest_watch)\n        }\n    }\n    ret nptest_result\n}\n")
     ret (buffer[0usize..written], ok)
 }
 
@@ -1051,6 +1061,18 @@ fn nptest_run(a: *mem.Arena, exe: str, index: str, base: str) -> (i32, str, str,
     ret (status, out_text, err_text, spawn_error)
 }
 
+fn nptest_parse_usize(text: str) -> usize {
+    var value = 0usize
+    var at = 0usize
+    while at < text.len {
+        let digit = text[at]
+        if digit < 48u8 || digit > 57u8 { ret value }
+        value = value * 10usize + usize(digit - 48u8)
+        at += 1usize
+    }
+    ret value
+}
+
 fn nptest_now() -> usize {
     let (ticks, clock_error) = os.clock(.Monotonic)
     if clock_error != ok { ret 0usize }
@@ -1084,7 +1106,11 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if lines_error != ok { ret lines_error }
     let (count, discover_error) = discover_tests(a, text, names, lines)
     if discover_error != ok { ret discover_error }
-    let (runner_source, runner_error) = generate_runner(a, text, names[0usize..count], count)
+    // `test-file ... WORKDIR [TIMEOUT_MS] --json`: the default is a minute (D246).
+    var timeout_ms = 60000usize
+    if args.len == 9usize { timeout_ms = nptest_parse_usize(args[7usize]) }
+    if timeout_ms == 0usize { timeout_ms = 1usize }
+    let (runner_source, runner_error) = generate_runner(a, text, names[0usize..count], count, timeout_ms * 1000000usize)
     if runner_error != ok { ret runner_error }
     let (runner_path, runner_path_error) = nptest_join(a, args[6usize], "nptest-runner.e")
     if runner_path_error != ok { ret runner_path_error }
@@ -1136,6 +1162,8 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
         if status != 0i32 {
             outcome = 2usize
             if child_err.len >= 7usize && same(child_err[0usize..7usize], "error: ") { outcome = 1usize }
+            // The watchdog's own exit code, so a test still running at the deadline.
+            if status == 124i32 { outcome = 3usize }
         }
         outcomes[at] = outcome
         stdouts[at] = child_out
@@ -1145,7 +1173,9 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     let suite_end = nptest_now()
     var suite_ms = 0usize
     if suite_end > suite_start { suite_ms = (suite_end - suite_start) / 1000000usize }
-    try tool.test_json(a, nptest_stem(args[2usize]), "operand", basename(args[2usize]), names[0usize..count], lines[0usize..count], outcomes[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms)
+    var timeout_s = (timeout_ms + 999usize) / 1000usize
+    if timeout_s == 0usize { timeout_s = 1usize }
+    try tool.test_json(a, nptest_stem(args[2usize]), "operand", basename(args[2usize]), names[0usize..count], lines[0usize..count], outcomes[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
     var any = false
     at = 0usize
     while at < count {
@@ -2668,6 +2698,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 4usize && same(args[1usize], "fmt-file") && same(args[3usize], "--json") { ret fmt_command(a, args) }
     if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
     if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
+    if args.len == 9usize && same(args[1usize], "test-file") && same(args[8usize], "--json") { ret test_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner

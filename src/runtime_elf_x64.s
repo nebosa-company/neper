@@ -204,7 +204,11 @@ neper_os_stderr:
 
 .global neper_os_exit
 neper_os_exit:
-    mov eax,0x3c
+    // `exit_group`, not `exit`: section 8's exit ends the program, and syscall 60 would
+    // end only the calling thread -- so a thread that exits while another runs left the
+    // process alive (D246). A thread that merely finishes still leaves by syscall 60, in
+    // the trampoline below. Windows already had this: `ExitProcess` takes the process.
+    mov eax,0xe7
     syscall
     ud2
 

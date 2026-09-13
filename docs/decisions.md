@@ -4515,3 +4515,41 @@ failure that looked like `printf` breaking under `else if` was not the compiler 
 project-root discovery walking up from an operand under `build/` selects it, so `e.str`
 never enters the graph. Compile nothing from under `build/`; the benchmark's tasks live
 under `benchmarks/` for that reason.
+
+## D246 -- A test that outruns its deadline is ended from inside
+
+`test-file PATH ROOT ARCH OS WORKDIR [TIMEOUT_MS] --json` reports the fourth outcome,
+`timeout`. The driver cannot enforce it: the fixed `e.os` surface gives it neither a
+kill nor a wait with a deadline, so a hung child would block `os.wait` forever. The
+deadline is therefore enforced from inside the child. The generated runner carries a
+watchdog thread that blocks on `os.wait_u32(&guard.done, 0u32, TIMEOUT_NS)` -- the
+futex wait is the one primitive in the surface that takes a deadline -- and, when that
+returns `os.Timeout` rather than a wake, calls `os.exit(124)`. Main signals the futex
+the moment the test returns, so the watchdog only fires on a test that is still
+running. The driver maps exit 124 to `timeout`, ahead of the crash case, and reports
+the deadline in `timeout_s`; the default is a minute and `TIMEOUT_MS` overrides it.
+
+Two shapes were forced by the compiler. The runner imports `e.os` and `e.atomic` under
+unique aliases (`nptest_os`, `nptest_atomic`), because a second plain `use e.os` beside
+the operand's own is `graph.DuplicateQualifier` while a distinct qualifier for the same
+module is legal -- so the watchdog needs no knowledge of what the operand imports. And
+the dispatch chain moved into its own function, leaving `main` a single `ret`: an early
+return plus an N-way chain plus the watchdog put `main` past what lowering would take.
+
+The Linux half needed a runtime fix. `os.exit` lowered to syscall 60, `exit`, which
+ends only the calling thread; the watchdog therefore killed itself and left the hung
+test running, which is how a suite run first hung rather than reporting a timeout. It
+is now `exit_group` (231), so section 8's exit ends the program from any thread, as
+`ExitProcess` already did on Windows. A thread that merely finishes still leaves by
+syscall 60 in the clone trampoline, which is a different site. The instruction is the
+same length, so no runtime offset moved.
+
+A note on where the runner may live, which cost real time to find. A project's `lib/`
+shadows the toolchain's `e.*` by design (§2), and `build/lib/e/os.e` is a stale copy
+from an older bootstrap that predates `type Thread`. A runner written under `build/`
+therefore binds `e.os` to a surface with no `Thread`, and the call type checks -- the
+interception fabricates the named type without asking whether the module declares it --
+and only fails in lowering as "cannot lower `main`". WORKDIR must be a directory whose
+project root is the real one; the suites pass their own `build/<host>/tests/selfhost`,
+which carries the current copy. That the checker fabricates a type it never verifies is
+a defect of its own, and is left recorded here rather than fixed in this change.
