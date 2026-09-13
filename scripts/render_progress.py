@@ -20,7 +20,7 @@ compiler = {
   ("Order-independent name resolution", 1, "src/resolve.e"),
   ("Integer arithmetic, bitwise, shifts, division", 1, "link/bitwise, link/shifts, link/division"),
   ("if / while, break / continue, block scopes", 1, "link/control"),
-  ("when over target.arch / target.os", 0.9, "Section 6's conditional compilation (D216): `when` takes a condition over `target.arch` and `target.os` compared with their members, under `!`, `&&`, `||` and parentheses, settled at compile time; both blocks type check and the taken one is emitted; any other condition is a bool the interpreter evaluates (D220), and one it cannot is refused under E-COMPTIME-9999 (link/when_target on both platforms, check/when_condition). Not yet: `target.arch` and `target.os` as values outside a `when` condition"),
+  ("when over target.arch / target.os", 1, "Section 6's conditional compilation (D216): `when` takes a condition over `target.arch` and `target.os` compared with their members, under `!`, `&&`, `||` and parentheses, settled at compile time; both blocks type check and the taken one is emitted; any other condition is a bool the interpreter evaluates (D220), and one it cannot is refused under E-COMPTIME-9999 (link/when_target on both platforms, check/when_condition). `target.arch` and `target.os` are values of `target.Arch` and `target.Os` anywhere (D223): compared, switched over exhaustively, held and passed"),
   ("for over ranges, arrays and slices", 1, "tests/neper0"),
   ("Fixed arrays, zero / undef, .len", 1, "link/storage"),
   ("Slicing and mutability propagation", 1, "link/storage"),

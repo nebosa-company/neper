@@ -788,10 +788,25 @@ fn visit_scope_node(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_ind
     if node.kind == .Attribute { ret validate_attribute(r, g, module_index, node) }
     if node.kind == .NameExpr { ret validate_name(r, g, module_index, node) }
     if node.kind == .NamedType {
+        // `target.Arch` / `target.Os` (D223) name no module.
+        let type_token = r.tokens[node.token_start]
+        if type_token.kind == .Identifier && same(g.modules[module_index].text[type_token.start..type_token.end], "target") && node.token_end >= node.token_start + 3usize {
+            let member_token = r.tokens[node.token_end - 1usize]
+            let member = g.modules[module_index].text[member_token.start..member_token.end]
+            if member_token.kind == .Identifier && (same(member, "Arch") || same(member, "Os")) { ret ok }
+        }
         try validate_named_type(r, g, module_index, node)
         ret visit_children(r, g, tree, module_index, node)
     }
-    if node.kind == .FieldExpr { try validate_field(r, g, tree, module_index, node) }
+    if node.kind == .FieldExpr {
+        // `target.arch` / `target.os` (D223): section 2's namespace, no declaration.
+        let (target_receiver, has_target_receiver) = first_node_child(tree, node)
+        if has_target_receiver && tree.nodes[target_receiver].kind == .NameExpr {
+            let target_token = r.tokens[tree.nodes[target_receiver].token_start]
+            if target_token.kind == .Identifier && same(g.modules[module_index].text[target_token.start..target_token.end], "target") { ret ok }
+        }
+        try validate_field(r, g, tree, module_index, node)
+    }
     if node.kind == .Block { ret visit_block(r, g, tree, module_index, node) }
     // `when`'s condition names section 6's `target` namespace, which is no declaration:
     // the checker evaluates it, and only the blocks are scope (D216).

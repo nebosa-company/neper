@@ -1543,6 +1543,22 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         parameter_type.has_element = true
         ret (parameter_type, ok)
     }
+    // `target.Arch` and `target.Os` (D223): section 2's namespace, seeded into the root.
+    if same(base, "target") && named_type_is_path(c, node) {
+        var member_at = node.token_start + 1usize
+        while member_at < node.token_end {
+            let member_token = c.tokens[member_at]
+            if member_token.kind == .Identifier {
+                let member = g.modules[module_index].text[member_token.start..member_token.end]
+                if same(member, "Arch") { ret (target_enum_type("arch"), ok) }
+                if same(member, "Os") { ret (target_enum_type("os"), ok) }
+                break
+            }
+            member_at += 1usize
+        }
+        record_failure(c, module_index, node, .NotAType, base, "")
+        ret (invalid_type(), InvalidType)
+    }
     var target_module = module_index
     var name = base
     let (qualified_module, has_qualifier) = resolve.qualifier(r, module_index, base)
@@ -2065,7 +2081,58 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
     ret ok
 }
 
+// Section 2's `target` namespace (D223): `target.Arch` and `target.Os`, enums seeded
+// into the root module under names no source can spell, so `target.arch` and
+// `target.os` are values of them and a member literal compares against them.
+fn seed_target_enum(c: *Checker, name: str, members: []const str) -> err {
+    if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + members.len > c.aggregate_fields.len { ret Capacity }
+    let backing = make_type(.Integer, "u8", 0usize)
+    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero }
+    var at = 0usize
+    while at < members.len {
+        c.aggregate_fields[c.aggregate_field_count + at] = AggregateField { name: members[at], ty: backing, enum_value: at, enum_negative: false, has_enum_value: true, token: zero }
+        at += 1usize
+    }
+    c.aggregate_field_count += members.len
+    c.aggregate_count += 1usize
+    ret ok
+}
+
+fn target_enum_type(question: str) -> Type {
+    if same(question, "arch") { ret make_type(.Named, "target.Arch", 0usize) }
+    ret make_type(.Named, "target.Os", 0usize)
+}
+
+// The current target's member of the enum, by the spelling rule `target_is` uses.
+fn target_enum_value(c: *Checker, g: *graph.Graph, question: str) -> (usize, err) {
+    let (aggregate_index, found) = aggregate_for_type(c, target_enum_type(question))
+    if !found { ret (0usize, InvalidType) }
+    let aggregate = c.aggregates[aggregate_index]
+    var current = g.os
+    if same(question, "arch") { current = g.arch }
+    var at = 0usize
+    while at < aggregate.field_count {
+        let member = c.aggregate_fields[aggregate.first_field + at]
+        if target_is(current, member.name) { ret (member.enum_value, ok) }
+        at += 1usize
+    }
+    ret (0usize, InvalidType)
+}
+
 fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
+    var arch_members: [5]str = zero
+    arch_members[0usize] = "X64"
+    arch_members[1usize] = "Aarch64"
+    arch_members[2usize] = "X86"
+    arch_members[3usize] = "Spv"
+    arch_members[4usize] = "Ptx"
+    try seed_target_enum(c, "target.Arch", arch_members[..])
+    var os_members: [4]str = zero
+    os_members[0usize] = "Windows"
+    os_members[1usize] = "Linux"
+    os_members[2usize] = "Macos"
+    os_members[3usize] = "None"
+    try seed_target_enum(c, "target.Os", os_members[..])
     let (memory_module, has_memory) = graph.find_module(g, "e.mem")
     if has_memory {
         if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + 2usize > c.aggregate_fields.len { ret Capacity }
@@ -9047,6 +9114,13 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         ret (expected, ok)
     }
     if node.kind == .FieldExpr {
+        // `target.arch` and `target.os` are values of the seeded enums (D223).
+        let (target_question, is_target) = target_member(c, g, tree, module_index, node_index)
+        if is_target {
+            if !same(target_question, "arch") && !same(target_question, "os") { ret (invalid_type(), InvalidType) }
+            let (target_contextual, target_context_error) = apply_context(c, target_enum_type(target_question), expected)
+            ret (target_contextual, target_context_error)
+        }
         let (bound, bound_member, is_bound) = comptime_binding_base(c, text, tree, node)
         if is_bound {
             let (member_type, has_member) = comptime_binding_member(c, bound, bound_member, module_index)

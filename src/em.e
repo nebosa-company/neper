@@ -920,7 +920,7 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
     var aggregate_at = 0usize
     while aggregate_at < c.aggregate_count {
         let aggregate = c.aggregates[aggregate_at]
-        if aggregate.module_index == module_index && !aggregate.instance {
+        if aggregate.module_index == module_index && !aggregate.instance && !builtin_aggregate(aggregate.name) {
             let (aggregate_name, aggregate_name_error) = intern(table, aggregate.name)
             if aggregate_name_error != ok { ret aggregate_name_error }
             var at = 0usize
@@ -1072,11 +1072,17 @@ fn source_function_count(c: *check.Checker, module_index: usize) -> usize {
     ret count
 }
 
+// Section 2's `target.Arch` and `target.Os` are seeded into the root module (D223)
+// and are the language's, not a declaration of it: no Interface carries them.
+fn builtin_aggregate(name: str) -> bool {
+    ret same(name, "target.Arch") || same(name, "target.Os")
+}
+
 fn module_aggregate_count(c: *check.Checker, module_index: usize) -> usize {
     var count = 0usize
     var at = 0usize
     while at < c.aggregate_count {
-        if c.aggregates[at].module_index == module_index && !c.aggregates[at].instance { count += 1usize }
+        if c.aggregates[at].module_index == module_index && !c.aggregates[at].instance && !builtin_aggregate(c.aggregates[at].name) { count += 1usize }
         at += 1usize
     }
     ret count
@@ -1316,7 +1322,7 @@ fn write_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, mo
     }
     at = 0usize
     while at < c.aggregate_count {
-        if c.aggregates[at].module_index == module_index && !c.aggregates[at].instance { try write_aggregate_interface(c, g, table, at, scratch, output) }
+        if c.aggregates[at].module_index == module_index && !c.aggregates[at].instance && !builtin_aggregate(c.aggregates[at].name) { try write_aggregate_interface(c, g, table, at, scratch, output) }
         at += 1usize
     }
     at = 0usize

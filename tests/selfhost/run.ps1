@@ -1634,12 +1634,14 @@ if ($LASTEXITCODE -ne 0 -or $fillsReleaseWritten -ne 'executable written') { thr
 if ($LASTEXITCODE -ne 0) { throw "the release build filled memory: exit $LASTEXITCODE" }
 # Section 6's `when` (D216): conditions over `target.arch` and `target.os`, settled at
 # compile time, the taken arms adding up to 17 on Windows, four of them through a
-# condition the interpreter evaluates (D220); one over runtime state is refused.
+# condition the interpreter evaluates (D220), and `target.arch`/`target.os` as values
+# -- compared, switched over, passed -- adding 56 (D223); a condition over runtime
+# state is refused.
 $whenPath = Join-Path $testBuild 'when-target-selfhost.exe'
 $whenWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\when_target\src\main.e') $repo 'x64' 'windows' $whenPath
 if ($LASTEXITCODE -ne 0 -or $whenWritten -ne 'executable written') { throw 'when fixture executable emission failed' }
 & $whenPath
-if ($LASTEXITCODE -ne 17) { throw "when did not settle its conditions for windows/x64: exit $LASTEXITCODE" }
+if ($LASTEXITCODE -ne 73) { throw "when and the target namespace did not settle for windows/x64: exit $LASTEXITCODE" }
 Require-Fixture 'check/when_condition'
 $whenOutput = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\when_condition\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($whenOutput -join "`n") -notmatch 'main\.e:5:10: error\[E-COMPTIME-9999\]: a `when` condition cannot be evaluated at compile time: it reached a name that is no local or constant') { throw "a when condition over runtime state was not refused: $($whenOutput -join "`n")" }

@@ -4054,3 +4054,18 @@ off -- back to unevaluated, no report -- and the pass after the signatures settl
 what is left. A type that asks for such a constant before the signatures is refused
 at the length that asked, under E-COMPTIME-9999, saying why. link/comptime_call
 carries three bool constants; check/comptime_call_in_type pins the refusal.
+
+## D223 — `target.arch` and `target.os` as values
+
+D216 knew the target namespace inside a `when` condition alone. Section 2 makes it
+a namespace usable anywhere, with `target.arch` a `target.Arch` and `target.os` a
+`target.Os`. The two enums are seeded into the root module under the names
+`target.Arch` and `target.Os`, which no source can spell as an identifier and which
+print as the section writes them; `target.arch` and `target.os` type as values of
+them in the checker and lower to the current target's member as a constant, the
+qualified type names resolve to them, and the resolver treats `target` as no
+declaration in both positions. So a member literal compares against them, a
+`switch` over `target.os` is exhaustive over the four members, and the value is
+held and passed like any enum. The two are the language's, not declarations of
+the root module, so no artifact Interface carries them. link/when_target does all
+of that on both platforms.

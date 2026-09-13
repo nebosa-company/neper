@@ -3139,6 +3139,15 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         ret (result, result_type, result_error)
     }
     if node.kind == .FieldExpr {
+        // `target.arch` and `target.os` (D223): the current target's member, a constant.
+        let (target_question, is_target) = check.target_member(c, g, tree, module_index, node_index)
+        if is_target {
+            let (target_value, target_value_error) = check.target_enum_value(c, g, target_question)
+            if target_value_error != ok { ret (0usize, zero, target_value_error) }
+            let target_type = check.target_enum_type(target_question)
+            let (target_instruction, target_result, target_emit_error) = nir.emit(builder, .ConstInteger, target_type, true, target_value, c.tokens[node.token_start])
+            ret (target_result, target_type, target_emit_error)
+        }
         // A member of an unrolled `for`'s binding is a constant, and the loop it came
         // from is gone by here.
         let (bound_value, bound_type, bound_handled, bound_error) = lower_binding_member_expr(c, g, tree, module_index, node_index, expected, builder)
