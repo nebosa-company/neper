@@ -4005,3 +4005,14 @@ used in a type or another module-scope declaration is refused with a reason. Wha
 the interpreter does not have is memory: arrays, structs, slices and the arena the
 section describes; nor does it run `[...]` arguments or `when` conditions, and a
 `const` is still an integer.
+
+## D219 — A call in an array length or a `[...]` argument
+
+The length evaluator that array types and comptime arguments go through had one
+call it accepted, `meta.array_len`. Any other call now goes to D218's interpreter
+the way one in a `const` does: the expression is copied into the constant table for
+the evaluation and the table's count restored after, since nothing keeps the index
+and an instance-heavy program evaluates the same length many times.
+`count_primes(20usize)` is a `[...]` argument and `count_primes(30usize)` an array
+length in link/comptime_call; the argument's type has to be the parameter's, as any
+comptime argument's does.

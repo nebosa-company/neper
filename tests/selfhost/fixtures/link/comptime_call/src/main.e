@@ -4,7 +4,8 @@
 // a constant, a bool through a flag, and calls to other functions, here and in a
 // second module. Each constant
 // is checked against the value the same code gives at run time, and one is an array
-// length, which only a value settled at compile time can be. Exit 0 when all agree.
+// length, which only a value settled at compile time can be, and a call stands in a
+// length and a `[...]` argument directly (D219). Exit 0 when all agree.
 use e.os
 use table
 
@@ -74,9 +75,18 @@ fn narrow(x: u32) -> u32 {
     ret halved & 255u32
 }
 
+fn filled[N: usize]() -> usize {
+    var data: [N]u8 = zero
+    ret data.len
+}
+
 fn main() {
     var sized: [PRIMES_BELOW_100]u8 = zero
     if sized.len != 25usize { os.exit(10) }
+    // A call stands in a length and in a `[...]` argument as it does in a `const` (D219).
+    var direct: [count_primes(30usize)]u8 = zero
+    if direct.len != 10usize { os.exit(18) }
+    if filled[count_primes(20usize)]() != 8usize { os.exit(19) }
     if FIB_20 != fib(20) || FIB_20 != 6765i64 { os.exit(11) }
     if POW_3_5 != power(3, 5) || POW_3_5 != 243i64 { os.exit(12) }
     if PRIMES_BELOW_100 != count_primes(100usize) { os.exit(13) }

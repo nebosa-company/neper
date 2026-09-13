@@ -1118,7 +1118,21 @@ fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
     let text = g.modules[module_index].text
     if node.kind == .CallExpr {
         let (subject, is_array_len) = array_len_subject(c, g, tree, module_index, node)
-        if !is_array_len { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        if !is_array_len {
+            // A call in a length or a `[...]` argument goes to the interpreter (D218), as
+            // one in a `const` does; its expression is copied for the evaluation and
+            // dropped after, since nothing keeps the index.
+            if !c.signatures_ready { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+            let expressions_before = c.constant_expr_count
+            let (copied, copy_error) = copy_constant_expr(c, g, tree, module_index, node_index)
+            if copy_error != ok {
+                c.constant_expr_count = expressions_before
+                ret (normalized_integer(0usize, false), invalid_type(), copy_error)
+            }
+            let (called, called_type, call_error) = evaluate_constant_expr(c, copied, expected)
+            c.constant_expr_count = expressions_before
+            ret (called, called_type, call_error)
+        }
         let (length, length_error) = length_of_subject(c, subject)
         if length_error != ok { ret (normalized_integer(0usize, false), invalid_type(), length_error) }
         let (contextual_type, context_error) = apply_context(c, make_type(.Integer, "usize", module_index), expected)
