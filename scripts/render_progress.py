@@ -15,7 +15,7 @@ import json, re, subprocess, datetime
 compiler = {
  "Front end and language": [
   ("Lexer over the closed token registry", 1, "src/lex.e"),
-  ("Parser and syntax tree", 1, "src/parse.e"),
+  ("Parser and syntax tree", 1, "src/parse.e; a grouped return value may carry a binary operator (D247) -- after `ret` the tuple `ret (a, b)` and an ordinary `(expr)` are told apart by a scanner-copy lookahead for a comma at depth one, pinned by link/ret_group"),
   ("Module graph and import resolution", 1, "src/graph.e"),
   ("Order-independent name resolution", 1, "src/resolve.e"),
   ("Integer arithmetic, bitwise, shifts, division", 1, "link/bitwise, link/shifts, link/division"),

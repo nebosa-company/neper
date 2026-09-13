@@ -2128,9 +2128,9 @@ $elseIfExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 
 if ($LASTEXITCODE -ne 0 -or $elseIfExecutableWritten -ne 'executable written') { throw 'else-if PE executable emission failed' }
 & $elseIfExecutablePath
 if ($LASTEXITCODE -ne 0) { throw "else-if chains failed check $LASTEXITCODE in the self-hosted PE executable" }
-# `ret (expr) op y` (D246): a grouped return value that carries a binary operator.
+# `ret (expr) op y` (D247): a grouped return value that carries a binary operator.
 $retGroupExecutablePath = Join-Path $testBuild 'ret-group-selfhost.exe'
-$retGroupExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\linket_group\src\main.e') $repo 'x64' 'windows' $retGroupExecutablePath
+$retGroupExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/ret_group/src/main.e') $repo 'x64' 'windows' $retGroupExecutablePath
 if ($LASTEXITCODE -ne 0 -or $retGroupExecutableWritten -ne 'executable written') { throw 'ret-group PE executable emission failed' }
 & $retGroupExecutablePath
 if ($LASTEXITCODE -ne 0) { throw "grouped return expressions failed check $LASTEXITCODE in the self-hosted PE executable" }

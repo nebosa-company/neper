@@ -915,34 +915,49 @@ fn parse_type_node(p: *Parser, has_node: *bool) -> err {
     ret InvalidSyntax
 }
 
+// After `ret`, a `(` may open the multi-return tuple `ret (a, b)` or simply group an
+// expression, and only a top-level comma before the matching `)` tells them apart. The
+// scanner is a value, so a copy walks ahead without disturbing the parse.
+fn return_tuple_ahead(p: *Parser) -> bool {
+    var probe = p.scanner
+    var token = p.current
+    var depth = 0usize
+    while token.kind != .Eof && token.kind != .Invalid {
+        if token.kind == .PunctLParen || token.kind == .PunctLBracket || token.kind == .PunctLBrace {
+            depth += 1usize
+        } else {
+            if token.kind == .PunctRParen || token.kind == .PunctRBracket || token.kind == .PunctRBrace {
+                if depth <= 1usize { ret false }
+                depth = depth - 1usize
+            } else {
+                if token.kind == .PunctComma && depth == 1usize { ret true }
+            }
+        }
+        token = lex.next(&probe)
+    }
+    ret false
+}
+
 fn parse_return_statement(p: *Parser) -> err {
     let token_start = p.token_index
     let node_start = p.tree.count
     try require(p, .KwRet)
-    if p.current.kind == .PunctLParen {
-        let group_start = p.token_index
-        let group_node_start = p.tree.count
+    if p.current.kind == .PunctLParen && return_tuple_ahead(p) {
         try advance(p)
         enter_soft(p)
         try skip_separators(p)
         if p.current.kind == .PunctRParen { ret InvalidSyntax }
         try parse_expression_node(p)
         try skip_separators(p)
-        if p.current.kind == .PunctComma {
-            while p.current.kind == .PunctComma {
-                try advance(p)
-                try skip_separators(p)
-                if p.current.kind == .PunctRParen { break }
-                try parse_expression_node(p)
-                try skip_separators(p)
-            }
-            try leave_soft(p)
-            try require(p, .PunctRParen)
-        } else {
-            try leave_soft(p)
-            try require(p, .PunctRParen)
-            try add_parent_since(p, .GroupExpr, group_start, p.token_index, group_node_start)
+        while p.current.kind == .PunctComma {
+            try advance(p)
+            try skip_separators(p)
+            if p.current.kind == .PunctRParen { break }
+            try parse_expression_node(p)
+            try skip_separators(p)
         }
+        try leave_soft(p)
+        try require(p, .PunctRParen)
     } else {
         if p.current.kind != .Newline && p.current.kind != .PunctRBrace {
             try parse_expression_node(p)

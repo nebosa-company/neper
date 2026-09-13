@@ -4553,3 +4553,26 @@ and only fails in lowering as "cannot lower `main`". WORKDIR must be a directory
 project root is the real one; the suites pass their own `build/<host>/tests/selfhost`,
 which carries the current copy. That the checker fabricates a type it never verifies is
 a defect of its own, and is left recorded here rather than fixed in this change.
+
+## D247 -- A grouped return value may carry an operator
+
+`ret (x * 7 + 13 + i) % 1009` did not parse. After `ret`, a `(` was always taken to open
+the multi-return tuple `ret (a, b)`: the statement parsed one expression, wrapped it in a
+`GroupExpr`, and then demanded a newline, so any binary operator after the closing paren
+was `unexpected %`. The same expression parsed fine in a `let` or an `if`, and a group on
+the right of an operator -- `x * (y + 2)` -- was fine too, which made the rule hard to
+guess. The grammar has always allowed it: `primary = ... | '(' expression ')'`, so a group
+is a primary and a legal left operand.
+
+`parse_return_statement` now decides which form it is looking at before committing. A copy
+of the scanner walks ahead from the `(` to its matching `)`, counting `(`/`[`/`{` depth; a
+comma at depth one means the tuple, anything else means an ordinary expression, which is
+then parsed by `parse_expression_node` like any other -- the primary rule handles the group
+and any operators that follow. The scanner is a value, so the lookahead disturbs nothing.
+A comma inside a nested call sits at depth two and correctly does not read as a tuple.
+
+Found by the scale benchmark (benchmarks/llm_scale), where it is exactly the shape a model
+writes. The workaround cost a line per function; removing it took 79,200 tokens, 10.3%,
+off that benchmark's 100k-line Neper program. link/ret_group pins both forms together: the
+tuple returns, a grouped operand carrying `%` and `*`, a nested call's comma, a negated
+group, and a doubly-parenthesised one.

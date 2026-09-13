@@ -2353,7 +2353,7 @@ else_if_executable_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$else_if_executable_written" = 'executable written' ]
 chmod +x "$else_if_executable_path"
 "$else_if_executable_path"
-# `ret (expr) op y` (D246): a grouped return value that carries a binary operator.
+# `ret (expr) op y` (D247): a grouped return value that carries a binary operator.
 ret_group_executable_path="$test_build/ret-group-selfhost"
 ret_group_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/ret_group/src/main.e" "$repo" x64 linux "$ret_group_executable_path")
 [ "$ret_group_executable_written" = 'executable written' ]
