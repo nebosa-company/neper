@@ -92,8 +92,15 @@ fn modrm(buffer: *Buffer, reg: usize, rm: usize) -> err {
     ret byte(buffer, value)
 }
 
+// A value under 2^32 is a five-byte `mov r32, imm32`, which zero-extends (D237);
+// anything wider is the ten-byte form.
 fn mov_immediate(buffer: *Buffer, destination: usize, value: usize) -> err {
     try check_register(destination)
+    if value < 4294967296usize {
+        if destination >= 8usize { try byte(buffer, 65usize) }
+        try byte(buffer, 184usize + destination % 8usize)
+        ret little_u32(buffer, value)
+    }
     try byte(buffer, 72usize + destination / 8usize)
     try byte(buffer, 184usize + destination % 8usize)
     ret little_u64(buffer, value)
@@ -738,10 +745,10 @@ fn self_test() -> err {
     try zero_memory(&memory, 9usize, 24usize)
     try multiply_immediate(&memory, 10usize, 11usize, 24usize)
     try bounds_check(&memory, 10usize, 11usize)
-    if memory.count != 80usize { ret InvalidRegister }
+    if memory.count != 76usize { ret InvalidRegister }
     if memory.bytes[0usize] != 76usize || memory.bytes[1usize] != 141usize || memory.bytes[7usize] != 73usize || memory.bytes[14usize] != 77usize || memory.bytes[16usize] != 182usize || memory.bytes[31usize] != 102usize || memory.bytes[40usize] != 26usize { ret InvalidRegister }
-    if memory.bytes[41usize] != 77usize || memory.bytes[44usize] != 73usize || memory.bytes[54usize] != 65usize || memory.bytes[65usize] != 244usize { ret InvalidRegister }
-    if memory.bytes[66usize] != 77usize || memory.bytes[67usize] != 105usize || memory.bytes[73usize] != 77usize || memory.bytes[76usize] != 114usize || memory.bytes[79usize] != 11usize { ret InvalidRegister }
+    if memory.bytes[41usize] != 77usize || memory.bytes[44usize] != 65usize || memory.bytes[45usize] != 187usize || memory.bytes[50usize] != 65usize || memory.bytes[61usize] != 244usize { ret InvalidRegister }
+    if memory.bytes[62usize] != 77usize || memory.bytes[63usize] != 105usize || memory.bytes[69usize] != 77usize || memory.bytes[72usize] != 114usize || memory.bytes[75usize] != 11usize { ret InvalidRegister }
     ret ok
 }
 

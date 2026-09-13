@@ -4259,7 +4259,7 @@ larger cost stays where it was: a `var` is a stack object, every use of it a loa
 a store through its address, so a loop counter is a chain through memory. That is
 the next change, and it is the register allocator's rather than a pass of its own.
 
-## D236 -- `build-manifest --json` and a SHA-256 in the compiler
+## D237 -- `build-manifest --json` and a SHA-256 in the compiler
 
 `build-manifest-file PATH ROOT ARCH OS --json` loads the graph and emits the canonical
 `neper-build-manifest` object of section 7: schema and version, the tool, language and
@@ -4305,3 +4305,24 @@ rcx: the emitter copies with a byte loop, not `rep movs`. Measured on `e.fmt.jso
 over the standard files, best of three interleaved against D235: gsoc-2018 twice as
 fast, citm_catalog 1.45, twitter 1.36, the number-heavy files 1.1 to 1.25; the
 byte-counting loop 2.4 times.
+
+## D237 -- Fused compare-and-branch, fall-through, and short immediates
+
+Three peepholes the promoted locals of D236 made worth having. A comparison whose one
+use is the `BranchIf` immediately after it no longer materialises a bool: the `cmp`
+sets the flags, the branch is a single conditional jump on the condition the compare
+computed, and neither a `set` of a register nor a `test` of it is emitted. Selection
+recognises it from the ranges -- the comparison's value defined at the compare and
+last used one instruction later, by a branch that reads it -- and carries the
+condition to the branch on the context. A branch, conditional or not, to the block
+that is next in code order is dropped, since the fall-through reaches it anyway. And
+`mov` of an integer constant under 2^32 is the five-byte `mov r32, imm32`, which
+zero-extends to the full register, rather than the ten-byte `mov r64, imm64`; a wider
+value still takes the long form. Measured on `e.fmt.json` over the standard files,
+best of three interleaved against D235: gsoc-2018 2.3 times, citm_catalog and canada
+1.6 to 1.8, twitter 1.6, the number-heavy files about 1.5; a byte-counting loop 3.3
+times. The `dis --json` conformance corpus, which pins emitted bytes per host, is
+regenerated for both. The codegen self-test's branch case had never given its own
+function its own live ranges -- it shared the previous function's -- which the
+fusion check exposed; it does now, and the branch pin asserts the fused shape (a
+`cmp`, a signed conditional jump, a trailing `ret`) rather than an exact length.

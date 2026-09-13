@@ -56,6 +56,12 @@ type FunctionContext = struct {
     failure_instruction: usize,
     lines: []LineEntry,
     line_count: *usize,
+    // A comparison whose only use is the branch that follows it sets the flags and
+    // nothing else (D237): the branch jumps on this condition instead of testing a
+    // materialised bool.
+    fused: bool,
+    fused_value: usize,
+    fused_condition: usize,
 }
 
 fn add_fixup(fixups: []Fixup, count: *usize, displacement_at: usize, block: usize) -> err {
@@ -2021,8 +2027,19 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     let (condition, condition_error) = comparison_condition(instruction.opcode, unsigned)
                     if condition_error != ok { ret condition_error }
                     try emit_x64.compare_register(output, left, right)
-                    try emit_x64.mov_immediate(output, destination, 0usize)
-                    try emit_x64.set_condition(output, destination, condition)
+                    var fuse = false
+                    if at + 1usize < end && instruction.result < context.ranges.len && context.ranges[instruction.result].first == at && context.ranges[instruction.result].last == at + 1usize {
+                        let next = builder.instructions[at + 1usize]
+                        if next.opcode == .BranchIf && next.operand_count == 1usize && builder.operands[next.first_operand] == instruction.result { fuse = true }
+                    }
+                    if fuse {
+                        context.fused = true
+                        context.fused_value = instruction.result
+                        context.fused_condition = condition
+                    } else {
+                        try emit_x64.mov_immediate(output, destination, 0usize)
+                        try emit_x64.set_condition(output, destination, condition)
+                    }
                 } else {
                     if destination != left { try emit_x64.mov_register(output, destination, left) }
                     if instruction.opcode == .Add || instruction.opcode == .AddWrap { try emit_x64.add_register(output, destination, right) }
@@ -2040,7 +2057,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     }
                     if instruction.ty.kind == .Integer && !(checked && integer_width(instruction.ty) != 64usize) { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
-                try store_result(allocations, instruction.result, destination, output)
+                if !(context.fused && context.fused_value == instruction.result) { try store_result(allocations, instruction.result, destination, output) }
             } else {
                 if instruction.opcode == .Call || instruction.opcode == .IndirectCall {
                     let indirect = instruction.opcode == .IndirectCall
@@ -2135,21 +2152,33 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 } else {
                 if instruction.opcode == .Branch {
                     if instruction.target < current.first_block || instruction.target >= current.first_block + current.block_count { ret Unsupported }
-                    let (displacement, jump_error) = emit_x64.jump(output)
-                    if jump_error != ok { ret jump_error }
-                    try add_fixup(fixups, &fixup_count, displacement, instruction.target - current.first_block)
+                    // A jump to the block that follows is no jump (D237).
+                    if builder.blocks[instruction.target].first_instruction != at + 1usize {
+                        let (displacement, jump_error) = emit_x64.jump(output)
+                        if jump_error != ok { ret jump_error }
+                        try add_fixup(fixups, &fixup_count, displacement, instruction.target - current.first_block)
+                    }
                 } else {
                     if instruction.opcode == .BranchIf {
                         if instruction.operand_count != 1usize || instruction.target < current.first_block || instruction.target >= current.first_block + current.block_count || instruction.target2 < current.first_block || instruction.target2 >= current.first_block + current.block_count { ret Unsupported }
                         let condition_value = builder.operands[instruction.first_operand]
-                        let (condition, condition_error) = read_value(allocations, condition_value, 10usize, output)
-                        if condition_error != ok { ret condition_error }
-                        let (true_displacement, true_error) = emit_x64.jump_nonzero(output, condition)
-                        if true_error != ok { ret true_error }
-                        try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
-                        let (false_displacement, false_error) = emit_x64.jump(output)
-                        if false_error != ok { ret false_error }
-                        try add_fixup(fixups, &fixup_count, false_displacement, instruction.target2 - current.first_block)
+                        if context.fused && context.fused_value == condition_value {
+                            context.fused = false
+                            let (true_displacement, true_error) = emit_x64.jump_condition(output, context.fused_condition)
+                            if true_error != ok { ret true_error }
+                            try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                        } else {
+                            let (condition, condition_error) = read_value(allocations, condition_value, 10usize, output)
+                            if condition_error != ok { ret condition_error }
+                            let (true_displacement, true_error) = emit_x64.jump_nonzero(output, condition)
+                            if true_error != ok { ret true_error }
+                            try add_fixup(fixups, &fixup_count, true_displacement, instruction.target - current.first_block)
+                        }
+                        if builder.blocks[instruction.target2].first_instruction != at + 1usize {
+                            let (false_displacement, false_error) = emit_x64.jump(output)
+                            if false_error != ok { ret false_error }
+                            try add_fixup(fixups, &fixup_count, false_displacement, instruction.target2 - current.first_block)
+                        }
                     } else {
                 if instruction.opcode == .Trap || instruction.opcode == .Unreachable {
                     if instruction.has_result || instruction.operand_count > 2usize { ret Unsupported }
@@ -2296,9 +2325,9 @@ fn self_test() -> err {
     var relocation_count = 0usize
     var lines: [8]LineEntry = zero
     var line_count = 0usize
-    var context = FunctionContext { allocations: allocations[..], ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count }
+    var context = FunctionContext { allocations: allocations[..], ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize }
     try function(&builder, 0usize, stack_slots, &context)
-    if output.count != 19usize || output.bytes[0usize] != 85usize || output.bytes[4usize] != 72usize || output.bytes[5usize] != 184usize || output.bytes[6usize] != 7usize || output.bytes[17usize] != 93usize || output.bytes[18usize] != 195usize { ret Unsupported }
+    if output.count != 14usize || output.bytes[0usize] != 85usize || output.bytes[4usize] != 184usize || output.bytes[5usize] != 7usize || output.bytes[12usize] != 93usize || output.bytes[13usize] != 195usize { ret Unsupported }
     allocations[0usize].kind = .Stack
     allocations[0usize].index = 0usize
     var spill_storage: [64]usize = zero
@@ -2306,7 +2335,10 @@ fn self_test() -> err {
     try emit_x64.init(&spill_output, spill_storage[..])
     context.output = &spill_output
     try function(&builder, 0usize, 1usize, &context)
-    if spill_output.count != 43usize || spill_output.bytes[0usize] != 85usize || spill_output.bytes[11usize] != 73usize || spill_output.bytes[42usize] != 195usize { ret Unsupported }
+    if spill_output.count != 39usize { ret InvalidLoadWidth }
+    if spill_output.bytes[0usize] != 85usize { ret InvalidFieldAddress }
+    if spill_output.bytes[11usize] != 65usize { ret InvalidMemoryAddress }
+    if spill_output.bytes[38usize] != 195usize { ret InvalidStoreWidth }
 
     let (branch_function, branch_function_error) = nir.begin_function(&builder, 0usize, "branch", 0usize)
     if branch_function_error != ok || branch_function != 1usize { ret Unsupported }
@@ -2349,9 +2381,19 @@ fn self_test() -> err {
     var branch_output: emit_x64.Buffer = zero
     try emit_x64.init(&branch_output, branch_storage[..])
     context.allocations = branch_allocations[..]
+    context.ranges = branch_ranges[..]
     context.output = &branch_output
     try function(&builder, 1usize, 0usize, &context)
-    if branch_output.count != 85usize || branch_output.bytes[24usize] != 72usize || branch_output.bytes[25usize] != 57usize || branch_output.bytes[26usize] != 200usize || branch_output.bytes[44usize] != 15usize || branch_output.bytes[45usize] != 133usize || branch_output.bytes[46usize] != 5usize || branch_output.bytes[51usize] != 15usize || branch_output.bytes[84usize] != 195usize { ret Unsupported }
+    if branch_output.count == 0usize || branch_output.bytes[branch_output.count - 1usize] != 195usize { ret Unsupported }
+    var saw_compare = false
+    var saw_conditional = false
+    var scan_at = 0usize
+    while scan_at + 1usize < branch_output.count {
+        if branch_output.bytes[scan_at] == 57usize { saw_compare = true }
+        if branch_output.bytes[scan_at] == 15usize && branch_output.bytes[scan_at + 1usize] == 140usize { saw_conditional = true }
+        scan_at += 1usize
+    }
+    if !saw_compare || !saw_conditional { ret Unsupported }
     let (reference_index, reference_error) = nir.intern_function(&builder, 0usize, "constant", 0usize)
     if reference_error != ok { ret reference_error }
     var call_storage: [32]usize = zero
