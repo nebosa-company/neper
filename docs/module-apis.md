@@ -3850,3 +3850,239 @@ fn frame_count(d: Decoder) -> usize
 fn decode_into(d: *Decoder, out: *audio.Frames) -> (usize, err)
 fn seek(d: *Decoder, frame: usize) -> err
 ```
+
+### `e.math.fixed`
+
+```neper
+// Q16.16 in i32 and Q32.32 in i64. Every operation is integer, so a result is
+// bit-identical on every target -- the basis for lockstep, rollback and replay.
+type Fx = i32
+type Fx64 = i64
+error Overflow
+error DivideByZero
+
+fn from_int(n: i32) -> Fx
+fn to_int(x: Fx) -> i32
+fn from_ratio(num: i32, den: i32) -> (Fx, err)
+fn mul(a: Fx, b: Fx) -> Fx
+fn div(a: Fx, b: Fx) -> (Fx, err)
+fn floor(x: Fx) -> i32
+fn round(x: Fx) -> i32
+fn abs(x: Fx) -> Fx
+fn clamp(x: Fx, lo: Fx, hi: Fx) -> Fx
+fn lerp(a: Fx, b: Fx, t: Fx) -> Fx
+fn sqrt(x: Fx) -> (Fx, err)
+fn sin(x: Fx) -> Fx
+fn cos(x: Fx) -> Fx
+fn atan2(y: Fx, x: Fx) -> Fx
+fn length(x: Fx, y: Fx) -> Fx
+fn normalize(x: Fx, y: Fx) -> (Fx, Fx)
+```
+
+### `e.net.snapshot`
+
+```neper
+// Bit-packed state under a quantised field schema, written whole or as a delta against
+// the baseline a peer has acknowledged.
+type Field = struct { offset: usize, bits: u8, signed: bool, lo: i32, hi: i32 }
+type Schema = struct { fields: []const Field, state_bytes: usize }
+type Writer = struct { bytes: []u8, bit: usize }
+type Reader = struct { bytes: []const u8, bit: usize }
+error Invalid
+error Full
+
+fn write_full(w: *Writer, s: Schema, state: []const u8) -> err
+fn write_delta(w: *Writer, s: Schema, baseline: []const u8, state: []const u8) -> err
+fn read_full(r: *Reader, s: Schema, out: []u8) -> err
+fn read_delta(r: *Reader, s: Schema, baseline: []const u8, out: []u8) -> err
+fn quantize(value: i32, f: Field) -> u32
+fn dequantize(code: u32, f: Field) -> i32
+```
+
+### `e.game.ecs`
+
+```neper
+type Entity = struct { slot: u32, generation: u32 }
+type Column = struct { id: u16, stride: usize, bytes: []u8, present: []u64 }
+type Store = struct { columns: []Column, generations: []u32, free: []u32, count: usize }
+type Query = struct { store: *Store, ids: []const u16, at: usize }
+error Full
+error Unknown
+
+fn init(s: *Store, columns: []Column, generations: []u32, free: []u32) -> err
+fn spawn(s: *Store) -> (Entity, err)
+fn despawn(s: *Store, e: Entity) -> err
+fn alive(s: Store, e: Entity) -> bool
+fn attach(s: *Store, e: Entity, id: u16, value: []const u8) -> err
+fn detach(s: *Store, e: Entity, id: u16) -> err
+fn get(s: Store, e: Entity, id: u16) -> ([]u8, err)
+fn query(s: *Store, ids: []const u16) -> Query
+fn next(q: *Query) -> (Entity, bool)
+```
+
+### `e.game.loop`
+
+```neper
+// A fixed step with an accumulator: `advance` returns how many whole steps to run and
+// `alpha` the remainder, for interpolating a render between them. The clock is given
+// the elapsed time rather than reading one, so a scripted clock replays exactly.
+type Clock = struct { step: fixed.Fx, accumulator: fixed.Fx, ticks: u64 }
+type Timer = struct { remaining: fixed.Fx, period: fixed.Fx, repeating: bool }
+
+fn init(c: *Clock, step: fixed.Fx) -> err
+fn advance(c: *Clock, elapsed: fixed.Fx, max_steps: usize) -> usize
+fn alpha(c: Clock) -> fixed.Fx
+fn timer(period: fixed.Fx, repeating: bool) -> Timer
+fn tick(t: *Timer, step: fixed.Fx) -> bool
+fn ready(t: Timer) -> bool
+fn reset(t: *Timer) -> err
+```
+
+### `e.game.sprite`
+
+```neper
+// Frames and transitions, not pixels: a clip names a run of atlas regions and how long
+// each is held, and a player walks it one tick at a time.
+type Region = struct { x: u16, y: u16, w: u16, h: u16, pivot_x: i16, pivot_y: i16 }
+type Atlas = struct { regions: []const Region, names: []const str }
+type Clip = struct { first: u16, count: u16, hold: u16, loops: bool, then: u16 }
+type Player = struct { clip: u16, frame: u16, timer: u16, finished: bool }
+error Unknown
+
+fn region(at: Atlas, name: str) -> (Region, err)
+fn play(p: *Player, clip: u16) -> err
+fn advance(p: *Player, clips: []const Clip) -> err
+fn frame(p: Player, clips: []const Clip) -> u16
+```
+
+### `e.game.tilemap`
+
+```neper
+type Layer = struct { tiles: []u16, width: u32, height: u32 }
+type Map = struct { layers: []Layer, tile_w: u32, tile_h: u32, solid: []u64, opaque: []u64 }
+error Bounds
+
+fn init(m: *Map, layers: []Layer, tile_w: u32, tile_h: u32, solid: []u64, opaque: []u64) -> err
+fn at(m: Map, layer: usize, x: i32, y: i32) -> (u16, err)
+fn set(m: *Map, layer: usize, x: i32, y: i32, tile: u16) -> err
+fn is_solid(m: Map, x: i32, y: i32) -> bool
+fn is_opaque(m: Map, x: i32, y: i32) -> bool
+fn in_bounds(m: Map, x: i32, y: i32) -> bool
+fn to_tile(m: Map, wx: fixed.Fx, wy: fixed.Fx) -> (i32, i32)
+fn to_world(m: Map, tx: i32, ty: i32) -> (fixed.Fx, fixed.Fx)
+```
+
+### `e.game.collide2d`
+
+```neper
+type Aabb = struct { x: fixed.Fx, y: fixed.Fx, half_w: fixed.Fx, half_h: fixed.Fx }
+type Hit = struct { hit: bool, time: fixed.Fx, normal_x: i32, normal_y: i32 }
+type Grid = struct { heads: []u32, next: []u32, width: u32, height: u32, cell: fixed.Fx }
+error Bounds
+
+fn overlaps(a: Aabb, b: Aabb) -> bool
+fn sweep(a: Aabb, dx: fixed.Fx, dy: fixed.Fx, b: Aabb) -> Hit
+fn sweep_tiles(a: Aabb, dx: fixed.Fx, dy: fixed.Fx, m: tilemap.Map) -> Hit
+fn ray_tiles(m: tilemap.Map, x: fixed.Fx, y: fixed.Fx, dx: fixed.Fx, dy: fixed.Fx, limit: fixed.Fx) -> Hit
+fn grid_init(g: *Grid, heads: []u32, next: []u32, width: u32, height: u32, cell: fixed.Fx) -> err
+fn grid_clear(g: *Grid) -> err
+fn grid_insert(g: *Grid, id: u32, box: Aabb) -> err
+fn grid_near(g: Grid, box: Aabb, out: []u32) -> (usize, err)
+```
+
+### `e.game.vision`
+
+```neper
+// Recursive shadowcasting over integer slopes -- no float comparison, so who can see
+// what is identical on every machine, which is what lockstep requires.
+type Cell = enum u8 { Unseen, Explored, Visible }
+type Field = struct { width: u32, height: u32, visible: []u64, explored: []u64 }
+error Bounds
+
+fn init(f: *Field, width: u32, height: u32, visible: []u64, explored: []u64) -> err
+fn clear_visible(f: *Field) -> err
+fn cast(f: *Field, m: tilemap.Map, x: i32, y: i32, radius: u32) -> err
+fn cast_cone(f: *Field, m: tilemap.Map, x: i32, y: i32, facing: fixed.Fx, half_angle: fixed.Fx, radius: u32) -> err
+fn line_of_sight(m: tilemap.Map, x0: i32, y0: i32, x1: i32, y1: i32) -> bool
+fn cell(f: Field, x: i32, y: i32) -> Cell
+fn is_visible(f: Field, x: i32, y: i32) -> bool
+fn is_explored(f: Field, x: i32, y: i32) -> bool
+fn merge(dst: *Field, src: Field) -> err
+```
+
+### `e.game.ai`
+
+```neper
+type Agent = struct { x: fixed.Fx, y: fixed.Fx, vx: fixed.Fx, vy: fixed.Fx, max_speed: fixed.Fx }
+type Steer = struct { x: fixed.Fx, y: fixed.Fx }
+type Kind = enum u8 { Sequence, Selector, Invert, Condition, Action }
+type Behavior = struct { kind: Kind, first_child: u16, child_count: u16, id: u16 }
+type Status = enum u8 { Running, Success, Failure }
+type Path = struct { steps: []u32, count: usize }
+error Unreachable
+
+fn seek(a: Agent, tx: fixed.Fx, ty: fixed.Fx) -> Steer
+fn flee(a: Agent, tx: fixed.Fx, ty: fixed.Fx) -> Steer
+fn arrive(a: Agent, tx: fixed.Fx, ty: fixed.Fx, slow_radius: fixed.Fx) -> Steer
+fn wander(a: Agent, state: *rand.State, jitter: fixed.Fx) -> Steer
+fn separate(a: Agent, others: []const Agent, radius: fixed.Fx) -> Steer
+fn combine(parts: []const Steer, weights: []const fixed.Fx) -> Steer
+fn run(tree: []const Behavior, at: u16, context: usize) -> Status
+fn path_grid(a: *mem.Arena, m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32) -> (Path, err)
+```
+
+### `e.game.dialog`
+
+```neper
+type Op = enum u8 { Always, FlagSet, FlagClear, VarEq, VarGe, VarLt }
+type Condition = struct { op: Op, key: u16, value: i32 }
+type Choice = struct { text: str, target: u16, show_if: Condition, set_flag: u16, add_key: u16, delta: i32 }
+type Node = struct { text: str, speaker: u16, first_choice: u16, choice_count: u16, then: u16 }
+type Tree = struct { nodes: []const Node, choices: []const Choice }
+type State = struct { at: u16, flags: []u64, vars: []i32, finished: bool }
+error Invalid
+
+fn start(s: *State, t: Tree, flags: []u64, vars: []i32) -> err
+fn node(s: State, t: Tree) -> (Node, err)
+fn available(s: State, t: Tree, out: []u16) -> (usize, err)
+fn choose(s: *State, t: Tree, choice: u16) -> err
+fn advance(s: *State, t: Tree) -> err
+fn flag(s: State, key: u16) -> bool
+fn value(s: State, key: u16) -> i32
+```
+
+### `e.game.particle`
+
+```neper
+type Particle = struct { x: fixed.Fx, y: fixed.Fx, vx: fixed.Fx, vy: fixed.Fx, life: u16, max_life: u16, kind: u16 }
+type Emitter = struct { x: fixed.Fx, y: fixed.Fx, spread: fixed.Fx, speed: fixed.Fx, life_min: u16, life_max: u16, kind: u16 }
+type Pool = struct { particles: []Particle, count: usize }
+error Full
+
+fn init(p: *Pool, particles: []Particle) -> err
+fn emit(p: *Pool, e: Emitter, state: *rand.State) -> (usize, err)
+fn burst(p: *Pool, e: Emitter, state: *rand.State, count: u16) -> (usize, err)
+fn step(p: *Pool, gravity_x: fixed.Fx, gravity_y: fixed.Fx, damping: fixed.Fx) -> usize
+fn clear(p: *Pool) -> err
+fn alive(p: Pool) -> usize
+```
+
+### `e.game.netsync`
+
+```neper
+// The half of netcode that is not a socket: an input ring, prediction ahead of the
+// server, and reconciliation when an authoritative frame arrives.
+type Input = struct { tick: u64, bits: u32 }
+type Peer = struct { acked: u64, baseline: []u8 }
+type Predictor = struct { inputs: []Input, head: usize, confirmed: u64, predicted: u64, divergences: u32 }
+error Desync
+error Late
+
+fn init(p: *Predictor, inputs: []Input) -> err
+fn record(p: *Predictor, sample: Input) -> err
+fn predict(p: Predictor, tick: u64) -> (Input, err)
+fn confirm(p: *Predictor, tick: u64, authoritative: []const u8, local: []const u8) -> (bool, err)
+fn rollback_from(p: Predictor) -> u64
+fn encode(w: *snapshot.Writer, s: snapshot.Schema, peer: *Peer, state: []const u8) -> err
+fn decode(r: *snapshot.Reader, s: snapshot.Schema, peer: *Peer, out: []u8) -> err
+```

@@ -1208,6 +1208,131 @@
    "blocked_by": []
   },
   {
+   "name": "e.game.ai",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.math.fixed",
+    "e.algo.graph",
+    "e.algo.rand",
+    "e.game.tilemap"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.collide2d",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math.fixed",
+    "e.game.tilemap"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.dialog",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.str"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.ecs",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.data.slot_map"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.loop",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math.fixed"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.netsync",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.bytes",
+    "e.data.ring",
+    "e.net.snapshot"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.particle",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.math.fixed",
+    "e.algo.rand",
+    "e.data.slot_map"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.sprite",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.tilemap",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.math.fixed"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.game.vision",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.algo.bitset",
+    "e.game.tilemap",
+    "e.math.fixed"
+   ],
+   "blocked_by": []
+  },
+  {
    "name": "e.gfx.geometry",
    "layer": 2,
    "surface": "planned",
@@ -1347,6 +1472,15 @@
    "blocked_by": []
   },
   {
+   "name": "e.math.fixed",
+   "layer": 0,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [],
+   "blocked_by": []
+  },
+  {
    "name": "e.mem",
    "layer": 0,
    "surface": "spec",
@@ -1405,6 +1539,18 @@
     "e.net.tls",
     "e.fmt.multipart",
     "e.text.utf8"
+   ],
+   "blocked_by": []
+  },
+  {
+   "name": "e.net.snapshot",
+   "layer": 2,
+   "surface": "planned",
+   "milestone": null,
+   "schedule": "later",
+   "direct_dependencies": [
+    "e.mem",
+    "e.bytes"
    ],
    "blocked_by": []
   },

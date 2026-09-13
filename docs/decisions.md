@@ -4613,3 +4613,44 @@ Windows, ALSA on Linux -- which is a layer 6 module of its own in the shape of
 `e.ui.window`, blocked on a `native-audio-api` capability that is not scheduled. It is
 left unregistered rather than registered and stalled; `e.audio.mixer` writing into a
 buffer is testable today, and a player is that buffer plus the device when it exists.
+
+## D249 -- A game engine core is ten pure modules, and three things it must not add
+
+`e.game.*` holds a headless engine core: `ecs`, `loop`, `sprite`, `tilemap`,
+`collide2d`, `vision`, `ai`, `dialog`, `particle`, `netsync`. Every one is layer 2,
+pure-domain, so the whole core is simulation with no platform beneath it. Two supporting
+modules sit outside the group because they are not about games: `e.math.fixed` at layer
+0, and `e.net.snapshot`, which is the serialization half of replication and is useful to
+anything that replicates state.
+
+Three subsystems were asked for and deliberately add nothing. **UI is already built**:
+`e.ui.widget`, `e.ui.layout` and `e.ui.input` are a widget tree, a layout solve and
+hit-testing, which is exactly what a HUD is; an `e.game.hud` would fork the layout engine
+for no reason. **Combat rules are game design, not library** -- stats tables, damage
+formulas and status effects belong to the game, and what is reusable about them is
+already `e.game.ai` and the timers in `e.game.loop`. **Pathfinding is already
+`e.algo.graph`**, so `e.game.ai` adapts a grid onto it rather than carrying a second
+Dijkstra.
+
+The reuse is the point. `e.data.slot_map` gives entity handles, `e.algo.bitset` the fog
+masks, `e.data.ring` the input history, `e.algo.rand` the deterministic stream. Nothing
+in the core depends on a module that does not yet exist -- checked when they were
+registered -- so the whole engine core is implementable today, with `e.math.fixed` the
+only new foundation it waits on.
+
+`e.math.fixed` is the keystone, and it is at layer 0 with no dependencies on purpose.
+Rollback netcode, lockstep and replay all require that two machines computing the same
+tick get the same bits, and `e.math` is floating point. So the core is integer
+throughout: positions in Q16.16, gains and angles in fixed point, and `e.game.vision`
+casts shadows by comparing integer slopes rather than float ones, because a disagreement
+about who can see whom desynchronises a lockstep session as surely as a disagreement
+about position.
+
+`e.game.loop` takes the elapsed time as a parameter instead of depending on `e.time`.
+That keeps it pure, and it is what lets a scripted clock replay a session exactly --
+which is how any of this gets tested without a machine to render on.
+
+Interest management -- replicating only what a player can see, which is both a bandwidth
+saving and the standard measure against maphacks -- is the natural meeting of
+`e.game.vision` and `e.game.netsync`. They are deliberately not coupled: the game wires
+one to the other, so neither module forces the other on anyone.
