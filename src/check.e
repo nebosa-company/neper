@@ -32,6 +32,9 @@ error InvalidConstant
 // interpreter does not evaluate, or its budget.
 error ComptimeUnsupported
 error ComptimeBudget
+// A constant whose evaluation reached a call before the signatures exist: it is put
+// off, not refused, and evaluated once they do (D222).
+error ComptimeDeferred
 error InvalidFormat
 error InvalidTry
 // The same, for `try`: the defer case now keeps `InvalidTry` to itself.
@@ -71,6 +74,8 @@ type DiagnosticKind = enum u8 {
     WhenCondition,
     // A `const` initialiser's call reached what the interpreter does not evaluate (D218).
     ComptimeEvaluation,
+    // A constant put off for the signatures, asked for by a type before them (D222).
+    ComptimeDeferredUse,
     RecursiveAggregate,
     InitializerType,
     GenericTypeArity,
@@ -1170,6 +1175,7 @@ fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
         let (constant_index, found) = find_constant(c, module_index, name)
         if !found || constant_index >= c.constant_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let item = c.constants[constant_index]
+        if item.state == 0u8 && !c.signatures_ready { ret (normalized_integer(0usize, false), invalid_type(), ComptimeDeferred) }
         if item.state != 2u8 { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let (contextual_type, context_error) = apply_context(c, item.ty, expected)
         if context_error != ok || !integer_representable(item.value, contextual_type) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
@@ -1182,6 +1188,7 @@ fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
         let (constant_index, constant_found) = find_constant(c, target_module, member)
         if !constant_found || constant_index >= c.constant_count { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let item = c.constants[constant_index]
+        if item.state == 0u8 && !c.signatures_ready { ret (normalized_integer(0usize, false), invalid_type(), ComptimeDeferred) }
         if item.state != 2u8 { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
         let (contextual_type, context_error) = apply_context(c, item.ty, expected)
         if context_error != ok || !integer_representable(item.value, contextual_type) { ret (normalized_integer(0usize, false), invalid_type(), TypeMismatch) }
@@ -1263,7 +1270,7 @@ fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
 fn array_length_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, err) {
     let expected = make_type(.Integer, "usize", module_index)
     let (value, value_type, value_error) = evaluate_array_length_expr(c, g, tree, module_index, node_index, expected)
-    if value_error == Unsupported { ret (0usize, Unsupported) }
+    if value_error == Unsupported || value_error == ComptimeDeferred { ret (0usize, value_error) }
     if value_error != ok || value.negative || value_type.kind != .Integer || !same(value_type.name, "usize") { ret (0usize, TypeMismatch) }
     ret (value.magnitude, ok)
 }
@@ -1482,6 +1489,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         } else {
             if c.active_comptime_count == 0usize || c.active_arguments {
                 if length_error == TypeMismatch { record_failure(c, module_index, tree.nodes[length_index], .ArrayLengthType, "", "") }
+                if length_error == ComptimeDeferred { record_failure(c, module_index, tree.nodes[length_index], .ComptimeDeferredUse, "", "") }
                 ret (invalid_type(), length_error)
             }
             let (copied_expression, expression_error) = copy_constant_expr(c, g, tree, module_index, length_index)
@@ -3641,6 +3649,16 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         ret (stored_index, store_error)
     }
     if node.kind == .LiteralExpr {
+        let literal_token = c.tokens[node.token_start]
+        if literal_token.kind == .KwTrue || literal_token.kind == .KwFalse {
+            item.kind = .Literal
+            var truth = 0usize
+            if literal_token.kind == .KwTrue { truth = 1usize }
+            item.value = normalized_integer(truth, false)
+            item.ty = make_type(.Bool, "bool", module_index)
+            let (stored_index, store_error) = store_constant_expr(c, item)
+            ret (stored_index, store_error)
+        }
         let (magnitude, parsed_type, literal_error) = integer_literal_value(c, text, node)
         if literal_error != ok { ret (0usize, literal_error) }
         item.kind = .Literal
@@ -4041,6 +4059,7 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
     if expression.kind == .Unary {
         var operand_expected = expected
         if expression.op == .PunctMinus { operand_expected = invalid_type() }
+        if expression.op == .PunctBang { operand_expected = make_type(.Bool, "bool", expression.module_index) }
         let (operand, operand_type, operand_error) = evaluate_constant_expr(c, expression.left, operand_expected)
         if operand_error != ok { ret (normalized_integer(0usize, false), invalid_type(), operand_error) }
         if expression.op == .PunctMinus {
@@ -4050,6 +4069,12 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
             if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
             if result_type.kind == .Integer && !integer_representable(result, result_type) { ret (normalized_integer(0usize, false), invalid_type(), ConstantOverflow) }
             ret (result, result_type, ok)
+        }
+        if expression.op == .PunctBang {
+            if operand_type.kind != .Bool { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+            var flipped = 0usize
+            if operand.magnitude == 0usize { flipped = 1usize }
+            ret (normalized_integer(flipped, false), operand_type, ok)
         }
         if expression.op == .PunctTilde {
             if operand_type.kind != .Integer { ret (normalized_integer(0usize, false), invalid_type(), MissingContext) }
@@ -4061,6 +4086,37 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
     }
     if expression.kind == .Binary {
         if !expression.has_right { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        // A comparison, and `&&`/`||`, are bools (D222): the operands under no context
+        // for a comparison, and under `bool` for the logical pair.
+        if is_comparison(expression.op) || expression.op == .PunctAndAnd || expression.op == .PunctOrOr {
+            let boolean = make_type(.Bool, "bool", expression.module_index)
+            var operand_expected = invalid_type()
+            if !is_comparison(expression.op) { operand_expected = boolean }
+            let (compared_left, compared_left_type, compared_left_error) = evaluate_constant_expr(c, expression.left, operand_expected)
+            if compared_left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), compared_left_error) }
+            var right_context = compared_left_type
+            if !is_comparison(expression.op) { right_context = boolean }
+            let (compared_right, compared_right_type, compared_right_error) = evaluate_constant_expr(c, expression.right, right_context)
+            if compared_right_error != ok { ret (normalized_integer(0usize, false), invalid_type(), compared_right_error) }
+            var truth = false
+            if is_comparison(expression.op) {
+                if compared_left_type.kind == .Bool || compared_right_type.kind == .Bool {
+                    if compared_left_type.kind != compared_right_type.kind || (expression.op != .PunctEqEq && expression.op != .PunctBangEq) { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+                } else {
+                    let (compared_type, compared_error) = constant_result_type(c, compared_left_type, compared_right_type)
+                    if compared_error != ok { ret (normalized_integer(0usize, false), invalid_type(), compared_error) }
+                }
+                truth = interp_compare(expression.op, compared_left, compared_right)
+            } else {
+                if compared_left_type.kind != .Bool || compared_right_type.kind != .Bool { ret (normalized_integer(0usize, false), invalid_type(), InvalidOperator) }
+                if expression.op == .PunctAndAnd { truth = compared_left.magnitude != 0usize && compared_right.magnitude != 0usize } else { truth = compared_left.magnitude != 0usize || compared_right.magnitude != 0usize }
+            }
+            let (boolean_type, boolean_context_error) = apply_context(c, boolean, expected)
+            if boolean_context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), boolean_context_error) }
+            var bits = 0usize
+            if truth { bits = 1usize }
+            ret (normalized_integer(bits, false), boolean_type, ok)
+        }
         let (left, left_type, left_error) = evaluate_constant_expr(c, expression.left, expected)
         if left_error != ok { ret (normalized_integer(0usize, false), invalid_type(), left_error) }
         var right_expected = left_type
@@ -4573,7 +4629,7 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
 // body run. `site` and `site_module` are where the call is written, for the report.
 fn interp_call(c: *Checker, g: *graph.Graph, module_index: usize, name: str, arguments: []const IntegerValue, argument_types: []const Type, site: syntax.Node, site_module: usize) -> (IntegerValue, Type, err) {
     let none = normalized_integer(0usize, false)
-    if !c.signatures_ready { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call before the program's signatures are collected -- a constant used in a type or another module-scope declaration")) }
+    if !c.signatures_ready { ret (none, invalid_type(), ComptimeDeferred) }
     // ponytail: the section allows a thousand; a frame is stack, and the stack is the host's.
     if c.interp_depth >= 64usize {
         record_failure(c, site_module, site, .ComptimeEvaluation, c.interp_constant, "a call depth past sixty-four")
@@ -4985,17 +5041,22 @@ fn evaluate_constant(c: *Checker, constant_index: usize) -> err {
     c.interp_constant = c.constants[constant_index].name
     let (value, actual_type, value_error) = evaluate_constant_expr(c, c.constants[constant_index].expression, c.constants[constant_index].ty)
     c.interp_constant = outer_constant
+    // Put off rather than failed (D222): back to unevaluated, and whoever asked before
+    // the signatures exist -- a type, another declaration -- reports it.
+    if value_error == ComptimeDeferred { c.constants[constant_index].state = 0u8 }
     if value_error != ok { ret value_error }
     var final_type = c.constants[constant_index].ty
     if final_type.kind == .Invalid {
         if actual_type.kind == .UntypedInteger { ret MissingContext }
-        if actual_type.kind != .Integer { ret InvalidConstant }
+        // A bool constant (D222): `true`, a comparison, a call, or `&&`/`||`/`!` of those.
+        if actual_type.kind != .Integer && actual_type.kind != .Bool { ret InvalidConstant }
         final_type = actual_type
     } else {
-        if final_type.kind != .Integer { ret Unsupported }
+        if final_type.kind != .Integer && final_type.kind != .Bool { ret Unsupported }
         if actual_type.kind != .UntypedInteger && !type_equal(c, actual_type, final_type) { ret TypeMismatch }
+        if actual_type.kind == .UntypedInteger && final_type.kind == .Bool { ret TypeMismatch }
     }
-    if !integer_representable(value, final_type) { ret ConstantOverflow }
+    if final_type.kind == .Integer && !integer_representable(value, final_type) { ret ConstantOverflow }
     c.constants[constant_index].ty = final_type
     c.constants[constant_index].value = value
     c.constants[constant_index].state = 2u8
@@ -5065,18 +5126,14 @@ fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err 
     }
     var constant_index = 0usize
     while constant_index < c.constant_count {
-        // A constant that calls waits for the signatures (D218); its first use evaluates it.
-        if !constant_calls(c, constant_index) { try evaluate_constant(c, constant_index) }
+        // A constant that reaches a call, directly or through another constant, waits
+        // for the signatures (D218, D222); the rest are settled now.
+        let early_error = evaluate_constant(c, constant_index)
+        if early_error != ok && early_error != ComptimeDeferred { ret early_error }
         constant_index += 1usize
     }
     c.constants_ready = true
     ret ok
-}
-
-fn constant_calls(c: *Checker, constant_index: usize) -> bool {
-    let expression_index = c.constants[constant_index].expression
-    if expression_index >= c.constant_expr_count { ret false }
-    ret c.constant_exprs[expression_index].kind == .Call
 }
 
 fn find_local(c: *Checker, name: str) -> (usize, bool) {
@@ -11076,7 +11133,7 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     // the declaration whether or not anything uses it.
     var constant_index = 0usize
     while constant_index < c.constant_count {
-        if constant_calls(c, constant_index) { try evaluate_constant(c, constant_index) }
+        if c.constants[constant_index].state != 2u8 { try evaluate_constant(c, constant_index) }
         constant_index += 1usize
     }
     ret check_bodies(c, r, g)
@@ -11097,7 +11154,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .DuplicateEnumValue { ret "E-NAME-0001" }
     if kind == .IteratorMissing || kind == .ProtocolMissing { ret "E-NAME-9999" }
     if kind == .GenericInference { ret "E-TYPE-0001" }
-    if kind == .WhenCondition || kind == .ComptimeEvaluation { ret "E-COMPTIME-9999" }
+    if kind == .WhenCondition || kind == .ComptimeEvaluation || kind == .ComptimeDeferredUse { ret "E-COMPTIME-9999" }
     ret "E-TYPE-9999"
 }
 

@@ -4040,3 +4040,17 @@ binding of `zero` now also takes. An array does not cross a call: it is the fram
 and a slice of it would be the interpreter memory the section describes. A sieve in
 link/comptime_call counts the primes below sixty-four at compile time and at run
 time and finds them equal.
+
+## D222 — Bool constants, and a calling constant put off rather than refused
+
+A `const` was an integer. It may be a bool now: `true` and `false`, a comparison of
+two constants, `&&`, `||` and `!`, and a call the interpreter runs -- the folder
+evaluates the comparison and the logical pair as bools, and lowering emits the bit.
+And D218's rule that a constant which calls waits for the signatures reached only
+the constant whose initialiser was the call; one that reached a call through another
+constant was evaluated early and refused. The early pass now evaluates every
+constant and treats reaching a call before the signatures as putting the constant
+off -- back to unevaluated, no report -- and the pass after the signatures settles
+what is left. A type that asks for such a constant before the signatures is refused
+at the length that asked, under E-COMPTIME-9999, saying why. link/comptime_call
+carries three bool constants; check/comptime_call_in_type pins the refusal.

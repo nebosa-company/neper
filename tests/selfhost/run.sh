@@ -1746,6 +1746,7 @@ chmod +x "$comptime_call_path"
 "$comptime_call_path"
 check_protocol_diagnostic comptime_call_runtime 'main.e:8:19: error[E-COMPTIME-9999]: constant `CODE` cannot be evaluated at compile time: its call reached a statement it does not evaluate'
 check_protocol_diagnostic comptime_call_budget 'main.e:6:11: error[E-COMPTIME-9999]: constant `FOREVER` cannot be evaluated at compile time: its call reached ten million steps'
+check_protocol_diagnostic comptime_call_in_type 'main.e:5:28: error[E-COMPTIME-9999]: a constant that calls a function is used in a type'
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

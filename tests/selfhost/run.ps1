@@ -1617,6 +1617,9 @@ if ($LASTEXITCODE -ne 1 -or ($comptimeRuntime -join "`n") -notmatch 'main\.e:8:1
 Require-Fixture 'check/comptime_call_budget'
 $comptimeBudget = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_budget\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimeBudget -join "`n") -notmatch 'main\.e:6:11: error\[E-COMPTIME-9999\]: constant `FOREVER` cannot be evaluated at compile time: its call reached ten million steps') { throw "a constant past the budget was not refused: $($comptimeBudget -join "`n")" }
+Require-Fixture 'check/comptime_call_in_type'
+$comptimeInType = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_in_type\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($comptimeInType -join "`n") -notmatch 'main\.e:5:28: error\[E-COMPTIME-9999\]: a constant that calls a function is used in a type') { throw "a calling constant in a type was not refused with its reason: $($comptimeInType -join "`n")" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'

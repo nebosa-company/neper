@@ -601,7 +601,13 @@ fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into
 }
 
 fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, token: lex.Token, builder: *nir.Builder) -> (usize, err) {
-    if constant_index >= c.constant_count || c.constants[constant_index].state != 2u8 || ty.kind != .Integer { ret (0usize, check.InvalidConstant) }
+    if constant_index >= c.constant_count || c.constants[constant_index].state != 2u8 { ret (0usize, check.InvalidConstant) }
+    // A bool constant (D222) is its bit.
+    if ty.kind == .Bool {
+        let (bool_instruction, bool_result, bool_error) = nir.emit(builder, .ConstBool, ty, true, c.constants[constant_index].value.magnitude, token)
+        ret (bool_result, bool_error)
+    }
+    if ty.kind != .Integer { ret (0usize, check.InvalidConstant) }
     let width = check.integer_width(ty)
     if width == 0usize { ret (0usize, check.InvalidType) }
     let immediate = check.integer_bits(c.constants[constant_index].value, width)

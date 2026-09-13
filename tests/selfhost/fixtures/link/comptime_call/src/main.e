@@ -6,7 +6,7 @@
 // is checked against the value the same code gives at run time, and one is an array
 // length, which only a value settled at compile time can be, and a call stands in a
 // length and a `[...]` argument directly (D219), and one runs a sieve over an array
-// local with a `for` (D221). Exit 0 when all agree.
+// local with a `for` (D221), and three are bools (D222). Exit 0 when all agree.
 use e.os
 use table
 
@@ -16,6 +16,10 @@ const PRIMES_BELOW_100 = count_primes(100usize)
 const SIGNED_FLOOR = floor_div(-7, 2)
 const TABLE_SUM = table.checksum(16u32)
 const LEAP_2024 = leap_flag(2024)
+// Bool constants (D222): a call, a comparison of constants, and the logical operators.
+const IS_LEAP = leap(2024)
+const BIG_TABLE: bool = TABLE_SUM > 1000u32 && !IS_LEAP == false
+const EITHER = FIB_20 < 10i64 || IS_LEAP
 const SHIFTED: u8 = u8(narrow(300u32))
 const SIEVED = sieve_count(64usize)
 
@@ -112,6 +116,9 @@ fn main() {
     if SIGNED_FLOOR != floor_div(-7, 2) || SIGNED_FLOOR != -4i64 { os.exit(14) }
     if TABLE_SUM != table.checksum(16u32) || TABLE_SUM != 1224u32 { os.exit(15) }
     if LEAP_2024 != 1i64 || LEAP_2024 != leap_flag(2024) || leap_flag(1900) != 0i64 { os.exit(16) }
+    if !IS_LEAP || IS_LEAP != leap(2024) || !BIG_TABLE || !EITHER { os.exit(21) }
+    var flag = IS_LEAP
+    if flag != true { os.exit(22) }
     if SHIFTED != 150u8 { os.exit(17) }
     if SIEVED != 18usize || SIEVED != sieve_count(64usize) { os.exit(20) }
     os.exit(0)

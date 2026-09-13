@@ -1363,6 +1363,9 @@ fn write_check_message(file: os.File, checker: *check.Checker, check_error: err)
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "` does not cross the C ABI (spec section 5's table), so it cannot be a parameter or return of one")
     }
+    if check_error == check.ComptimeDeferred {
+        ret write_all(file, "a constant that calls a function is used in a type or another module-scope declaration, which is settled before the program's functions are known")
+    }
     if checker.failure_kind == .ComptimeEvaluation {
         if checker.failure_detail.len == 0usize {
             try write_all(file, "a `when` condition cannot be evaluated at compile time: it reached ")
