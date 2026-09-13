@@ -694,6 +694,14 @@ fn write_instruction_immediate_canonical(g: *graph.Graph, builder: *nir.Builder,
         try binary.byte(output, 2usize)
         ret canonical_text(output, builder.strings[instruction.immediate].spelling)
     }
+    // `unreachable("why")`: the message by its text, as a string constant is, and a
+    // bare `unreachable()` as none -- the index is program-wide (D194).
+    if instruction.opcode == .Trap {
+        if instruction.immediate > builder.string_count { ret InvalidArtifact }
+        try binary.byte(output, 4usize)
+        if instruction.immediate == 0usize { ret canonical_text(output, "") }
+        ret canonical_text(output, builder.strings[instruction.immediate - 1usize].spelling)
+    }
     if instruction.opcode == .GlobalAddress {
         // By name: the index is program-wide and would change with every module added.
         if instruction.immediate >= builder.global_count { ret InvalidArtifact }

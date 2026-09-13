@@ -1278,6 +1278,27 @@ case "$trap_slice" in
     *) printf '%s\n' "a slice past the end did not trap as section 11 says: $trap_slice" >&2; exit 1 ;;
 esac
 "$trap_path" none
+# `unreachable()`: the literal form and the bare form each trap with kind `unreachable`,
+# and a function may end in one instead of a `ret`.
+unreachable_path="$test_build/trap-unreachable-selfhost"
+unreachable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_unreachable/src/main.e" "$repo" x64 linux "$unreachable_path")
+[ "$unreachable_written" = 'executable written' ]
+chmod +x "$unreachable_path"
+unreachable_status=0
+unreachable_message=$("$unreachable_path" message 2>&1) || unreachable_status=$?
+[ "$unreachable_status" -eq 134 ]
+case "$unreachable_message" in
+    *'main.e:11:5: trap[unreachable]: n past the table'*) ;;
+    *) printf '%s\n' "unreachable(...) did not trap as section 11 says: $unreachable_message" >&2; exit 1 ;;
+esac
+unreachable_status=0
+unreachable_bare=$("$unreachable_path" bare 2>&1) || unreachable_status=$?
+[ "$unreachable_status" -eq 134 ]
+case "$unreachable_bare" in
+    *'main.e:21:9: trap[unreachable]: unreachable() reached'*) ;;
+    *) printf '%s\n' "unreachable() did not trap as section 11 says: $unreachable_bare" >&2; exit 1 ;;
+esac
+"$unreachable_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.
@@ -1977,6 +1998,7 @@ expect_check_error extern_multi_return InvalidType
 expect_check_error extern_slice_parameter InvalidType
 expect_check_error extern_slice_return InvalidType
 expect_check_error variadic_narrow_argument TypeMismatch
+expect_check_error unreachable_argument TypeMismatch
 expect_check_error intrinsic_generic_unsupported ArgumentCount
 expect_check_error alloc_argument_type TypeMismatch
 expect_check_error alloc_arena_type TypeMismatch

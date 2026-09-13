@@ -4724,6 +4724,9 @@ type CallInfo = struct {
     function: Function,
     cast: Type,
     is_cast: bool,
+    // `unreachable()` / `unreachable("why")`: section 11's one always-on builtin. It is
+    // a trap of kind `unreachable` with the literal as its values, and nothing follows it.
+    is_unreachable: bool,
     alloc_return: Type,
     alloc_arena: Type,
     mem_alloc: bool,
@@ -6512,6 +6515,11 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             let child_index = tree.children[at].index
             if child_position == 0usize {
                 let receiver = tree.nodes[child_index]
+                if receiver.kind == .NameExpr && c.tokens[receiver.token_start].kind == .KwUnreachable {
+                    info.is_unreachable = true
+                    info.function.module_index = module_index
+                    has_function = true
+                } else {
                 if receiver.kind == .NameExpr {
                     let token = c.tokens[receiver.token_start]
                     let name = text[token.start..token.end]
@@ -6750,7 +6758,18 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         }
                     }
                 }
+                }
             } else {
+                if info.is_unreachable {
+                    // At most one argument, and it is a `str` literal: the message is the
+                    // record's values, so it has to be text the back end can lay out.
+                    if child_position != 1usize { ret (info, ArgumentCount) }
+                    let argument = tree.nodes[child_index]
+                    if argument.kind != .LiteralExpr || c.tokens[argument.token_start].kind != .String { ret (info, TypeMismatch) }
+                    child_position += 1usize
+                    at += 1usize
+                    continue
+                }
                 if info.is_cast {
                     if child_position != 1usize { ret (info, ArgumentCount) }
                     let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
@@ -6934,6 +6953,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         if child_position != 2usize { ret (info, ArgumentCount) }
         ret (info, ok)
     }
+    if info.is_unreachable { ret (info, ok) }
     if info.thread_create {
         if child_position != 4usize { ret (info, ArgumentCount) }
         let (signature, has_signature) = function_signature_of(c, info.thread_entry)
@@ -9617,6 +9637,15 @@ fn contains_loop_break(tree: *parse.Tree, node: syntax.Node) -> bool {
 
 fn statement_returns(c: *Checker, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> bool {
     if node.kind == .ReturnStmt { ret true }
+    // `unreachable()` diverges: section 11 says the point after it is dead.
+    if node.kind == .CallStmt {
+        let (call_index, has_call) = first_node_child(tree, node)
+        if !has_call { ret false }
+        let (receiver_index, has_receiver) = first_node_child(tree, tree.nodes[call_index])
+        if !has_receiver { ret false }
+        let receiver = tree.nodes[receiver_index]
+        ret receiver.kind == .NameExpr && c.tokens[receiver.token_start].kind == .KwUnreachable
+    }
     if node.kind == .SwitchStmt { ret checked_switch_returns(c, module_index, node.token_start) }
     if node.kind == .Block {
         let end = node.first_child + node.child_count

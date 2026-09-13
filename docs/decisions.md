@@ -3544,3 +3544,18 @@ no default falling through, the exit of a `while true`). `link/trap_bounds` pins
 record and the exit code for the index and the slice on both platforms. The
 backtrace, the test root's framed control record, the arithmetic rows and the
 release-mode elision are still open.
+
+## D195 — `unreachable()` is the one always-on builtin
+
+Section 11 names one builtin every build mode keeps: `unreachable()`, with an optional
+`str` literal, a trap of kind `unreachable` whose values are that literal, after which
+control is dead. The checker recognises the call by its keyword receiver, accepts at
+most one argument and only a string literal (the message is laid out beside the site,
+so it has to be text the back end can place), types the call as void and counts the
+statement as returning, so a function whose last statement is `unreachable("why")`
+needs no `ret` after it. Lowering emits the NIR `.Trap` that D194 left unused, its
+immediate the message's string constant plus one -- zero for the bare form -- and the
+`.em` body hash names the message by its text rather than that program-wide index, as
+it does for a string constant. The back end prints `unreachable() reached` for the
+bare form. `link/trap_unreachable` pins both forms on both platforms, and
+`check/unreachable_argument` pins a value argument refused.

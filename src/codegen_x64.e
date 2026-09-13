@@ -1539,7 +1539,22 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     } else {
                 if instruction.opcode == .Trap || instruction.opcode == .Unreachable {
                     if instruction.has_result || instruction.operand_count != 0usize { ret Unsupported }
-                    try emit_trap(builder, current, instruction.token, "unreachable", "control reached a point the compiler took as unreachable", "", "", 0usize, 0usize, 0usize, context)
+                    // `.Trap` is `unreachable()`, its immediate the message's string
+                    // constant plus one; `.Unreachable` is a point the compiler inferred.
+                    var message = "control reached a point the compiler took as unreachable"
+                    if instruction.opcode == .Trap {
+                        message = "unreachable() reached"
+                        if instruction.immediate != 0usize {
+                            if instruction.immediate > builder.string_count { ret Unsupported }
+                            let spelling = builder.strings[instruction.immediate - 1usize].spelling
+                            var text_start = 0usize
+                            var text_end = 0usize
+                            var raw = false
+                            try string_contents(spelling, &text_start, &text_end, &raw)
+                            message = spelling[text_start..text_end]
+                        }
+                    }
+                    try emit_trap(builder, current, instruction.token, "unreachable", message, "", "", 0usize, 0usize, 0usize, context)
                 } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {

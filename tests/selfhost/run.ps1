@@ -1367,6 +1367,17 @@ $trapSlice = & $trapPath slice 2>&1
 if ($LASTEXITCODE -ne 134 -or ($trapSlice -join "`n") -notmatch 'main\.e:13:16: trap\[bounds\]: slice end 7 out of bounds for len 5') { throw "a slice past the end did not trap as section 11 says: exit $LASTEXITCODE, $($trapSlice -join "`n")" }
 & $trapPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the trap fixture tripped a check it should not have' }
+# `unreachable()`: the literal form and the bare form each trap with kind `unreachable`,
+# and a function may end in one instead of a `ret`.
+$unreachablePath = Join-Path $testBuild 'trap-unreachable-selfhost.exe'
+$unreachableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_unreachable\src\main.e') $repo 'x64' 'windows' $unreachablePath
+if ($LASTEXITCODE -ne 0 -or $unreachableWritten -ne 'executable written') { throw 'unreachable fixture executable emission failed' }
+$unreachableMessage = & $unreachablePath message 2>&1
+if ($LASTEXITCODE -ne 134 -or ($unreachableMessage -join "`n") -notmatch 'main\.e:11:5: trap\[unreachable\]: n past the table') { throw "unreachable(...) did not trap as section 11 says: exit $LASTEXITCODE, $($unreachableMessage -join "`n")" }
+$unreachableBare = & $unreachablePath bare 2>&1
+if ($LASTEXITCODE -ne 134 -or ($unreachableBare -join "`n") -notmatch 'main\.e:21:9: trap\[unreachable\]: unreachable\(\) reached') { throw "unreachable() did not trap as section 11 says: exit $LASTEXITCODE, $($unreachableBare -join "`n")" }
+& $unreachablePath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the unreachable fixture trapped on its ordinary path' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at
@@ -1964,6 +1975,7 @@ $checkFailures = @(
     @('extern_slice_parameter', 'InvalidType'),
     @('extern_slice_return', 'InvalidType'),
     @('variadic_narrow_argument', 'TypeMismatch'),
+    @('unreachable_argument', 'TypeMismatch'),
     @('intrinsic_generic_unsupported', 'ArgumentCount'),
     @('alloc_argument_type', 'TypeMismatch'),
     @('alloc_arena_type', 'TypeMismatch'),

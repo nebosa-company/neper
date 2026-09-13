@@ -1869,8 +1869,13 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
 fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, captured: bool, call_out: *check.CallInfo, callee_out: *usize, arguments: []usize, argument_count: *usize) -> err {
     let (call, call_error) = check.check_call(c, g, tree, module_index, node)
     if call_error != ok { ret call_error }
-    if call.is_cast || call.function.generic { ret check.Unsupported }
     *call_out = call
+    if call.is_unreachable {
+        *callee_out = 0usize
+        *argument_count = 0usize
+        ret ok
+    }
+    if call.is_cast || call.function.generic { ret check.Unsupported }
     *callee_out = 0usize
     *argument_count = 0usize
     let end = node.first_child + node.child_count
@@ -1933,6 +1938,32 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     var callee = 0usize
     let arguments_error = lower_call_arguments(c, g, tree, module_index, node, builder, bindings, binding_count, false, &call, &callee, arguments[..], &argument_count)
     if arguments_error != ok { ret arguments_error }
+    if call.is_unreachable {
+        // A `.Trap` whose immediate is the message's string constant plus one, or zero
+        // for none; the back end builds the record from it (D194). It terminates the
+        // block, so what follows in the statement list is dead and not lowered.
+        var message = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        var child_position = 0usize
+        while at < end {
+            if tree.children[at].node {
+                if child_position == 1usize {
+                    let message_node = tree.nodes[tree.children[at].index]
+                    let literal_token = c.tokens[message_node.token_start]
+                    let (interned, intern_error) = nir.intern_string(builder, g.modules[module_index].text[literal_token.start..literal_token.end])
+                    if intern_error != ok { ret intern_error }
+                    message = interned + 1usize
+                }
+                child_position += 1usize
+            }
+            at += 1usize
+        }
+        let (trap_instruction, ignored, trap_error) = nir.emit(builder, .Trap, zero, false, message, c.tokens[node.token_start])
+        if trap_error != ok { ret trap_error }
+        results.count = 0usize
+        ret ok
+    }
     ret emit_call_results(c, call, callee, arguments[..], argument_count, builder, c.tokens[node.token_start], results)
 }
 
