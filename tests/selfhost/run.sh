@@ -1355,6 +1355,48 @@ case "$enum_trap_output" in
     *) printf '%s\n' "the level case did not trap as section 11 says: $enum_trap_output" >&2; exit 1 ;;
 esac
 "$enum_trap_path" none
+# The `narrow` row: a checked integer cast whose value does not fit, by width, by sign
+# and by both, and the meant truncation `T.trunc(x)` that never checks.
+narrow_path="$test_build/trap-narrow-selfhost"
+narrow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_narrow/src/main.e" "$repo" x64 linux "$narrow_path")
+[ "$narrow_written" = 'executable written' ]
+chmod +x "$narrow_path"
+narrow_status=0
+narrow_output=$("$narrow_path" wide 2>&1) || narrow_status=$?
+[ "$narrow_status" -eq 134 ]
+case "$narrow_output" in
+    *'main.e:15:17: trap[narrow]: 300 does not fit u8'*) ;;
+    *) printf '%s\n' "the wide case did not trap as section 11 says: $narrow_output" >&2; exit 1 ;;
+esac
+narrow_status=0
+narrow_output=$("$narrow_path" negative 2>&1) || narrow_status=$?
+[ "$narrow_status" -eq 134 ]
+case "$narrow_output" in
+    *'main.e:20:17: trap[narrow]: -300 does not fit u16'*) ;;
+    *) printf '%s\n' "the negative case did not trap as section 11 says: $narrow_output" >&2; exit 1 ;;
+esac
+narrow_status=0
+narrow_output=$("$narrow_path" sign 2>&1) || narrow_status=$?
+[ "$narrow_status" -eq 134 ]
+case "$narrow_output" in
+    *'main.e:24:17: trap[narrow]: 200 does not fit i8'*) ;;
+    *) printf '%s\n' "the sign case did not trap as section 11 says: $narrow_output" >&2; exit 1 ;;
+esac
+narrow_status=0
+narrow_output=$("$narrow_path" unsigned 2>&1) || narrow_status=$?
+[ "$narrow_status" -eq 134 ]
+case "$narrow_output" in
+    *'main.e:28:17: trap[narrow]: -298 does not fit usize'*) ;;
+    *) printf '%s\n' "the unsigned case did not trap as section 11 says: $narrow_output" >&2; exit 1 ;;
+esac
+narrow_status=0
+narrow_output=$("$narrow_path" same 2>&1) || narrow_status=$?
+[ "$narrow_status" -eq 134 ]
+case "$narrow_output" in
+    *'main.e:32:17: trap[narrow]: 4294967000 does not fit i32'*) ;;
+    *) printf '%s\n' "the same case did not trap as section 11 says: $narrow_output" >&2; exit 1 ;;
+esac
+"$narrow_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.
@@ -2056,6 +2098,7 @@ expect_check_error extern_slice_return InvalidType
 expect_check_error variadic_narrow_argument TypeMismatch
 expect_check_error unreachable_argument TypeMismatch
 expect_check_error enum_cast_width TypeMismatch
+expect_check_error trunc_float_argument TypeMismatch
 expect_check_error intrinsic_generic_unsupported ArgumentCount
 expect_check_error alloc_argument_type TypeMismatch
 expect_check_error alloc_arena_type TypeMismatch

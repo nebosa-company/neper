@@ -43,7 +43,7 @@ fn int_from_i64(a: *mem.Arena, v: i64) -> (Int, err) {
     var sign: Sign = .Positive
     if v < 0i64 {
         sign = .Negative
-        magnitude = 0u64 -% u64(v)
+        magnitude = 0u64 -% u64.trunc(v)
     } else {
         magnitude = u64(v)
     }

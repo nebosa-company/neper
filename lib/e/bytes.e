@@ -85,8 +85,11 @@ fn load[T: type](src: []const u8, off: usize, endian: Endian) -> (T, err) {
             ret (mem.bitcast[T](u32(bits)), ok)
         }
         ret (mem.bitcast[T](bits), ok)
+    } else {
+        // The bytes are the two's complement bits of the value, so a signed `T` takes
+        // them as they are: a meant truncation, not a checked cast (section 4).
+        ret (T.trunc(bits), ok)
     }
-    ret (T(bits), ok)
 }
 
 fn store[T: type](dst: []u8, off: usize, v: T, endian: Endian) -> err {
@@ -100,13 +103,13 @@ fn store[T: type](dst: []u8, off: usize, v: T, endian: Endian) -> err {
             bits = mem.bitcast[u64](v)
         }
     } else {
-        bits = u64(v)
+        bits = u64.trunc(v)
     }
     var at = 0usize
     while at < size {
         var index = at
         if endian == .Big { index = size - 1usize - at }
-        dst[off + index] = u8(bits >> u32(at * 8usize))
+        dst[off + index] = u8((bits >> u32(at * 8usize)) & 255u64)
         at += 1usize
     }
     ret ok
@@ -303,11 +306,11 @@ fn base64_decode(dst: []u8, src: str, alphabet: Base64Alphabet) -> ([]u8, err) {
             out += 1usize
         }
         if have >= 3usize {
-            dst[out] = u8(group >> 8u32)
+            dst[out] = u8((group >> 8u32) & 255u32)
             out += 1usize
         }
         if have >= 4usize {
-            dst[out] = u8(group)
+            dst[out] = u8(group & 255u32)
             out += 1usize
         }
         at += 4usize
@@ -406,7 +409,7 @@ fn base32_decode(dst: []u8, src: str, alphabet: Base32Alphabet) -> ([]u8, err) {
         let bytes = have * 5usize / 8usize
         var index = 0usize
         while index < bytes {
-            dst[out] = u8(group >> u32(32usize - index * 8usize))
+            dst[out] = u8((group >> u32(32usize - index * 8usize)) & 255u64)
             out += 1usize
             index += 1usize
         }
@@ -537,7 +540,7 @@ fn base85_decode(dst: []u8, src: str, alphabet: Base85Alphabet) -> ([]u8, err) {
         if group > 4294967295u64 { ret (zero, Invalid) }
         var index = 0usize
         while index < have - 1usize {
-            dst[out] = u8(group >> u32(24usize - index * 8usize))
+            dst[out] = u8((group >> u32(24usize - index * 8usize)) & 255u64)
             out += 1usize
             index += 1usize
         }

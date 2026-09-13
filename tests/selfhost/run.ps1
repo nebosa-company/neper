@@ -1404,6 +1404,23 @@ $enumTrapOutput = & $enumTrapPath level 2>&1
 if ($LASTEXITCODE -ne 134 -or ($enumTrapOutput -join "`n") -notmatch 'main\.e:20:17: trap\[enum\]: no member of Level has value -6') { throw "the level case did not trap as section 11 says: exit $LASTEXITCODE, $($enumTrapOutput -join "`n")" }
 & $enumTrapPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'an enum cast naming a member trapped' }
+# The `narrow` row: a checked integer cast whose value does not fit, by width, by sign
+# and by both, and the meant truncation `T.trunc(x)` that never checks.
+$narrowPath = Join-Path $testBuild 'trap-narrow-selfhost.exe'
+$narrowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_narrow\src\main.e') $repo 'x64' 'windows' $narrowPath
+if ($LASTEXITCODE -ne 0 -or $narrowWritten -ne 'executable written') { throw 'narrow trap fixture executable emission failed' }
+$narrowOutput = & $narrowPath wide 2>&1
+if ($LASTEXITCODE -ne 134 -or ($narrowOutput -join "`n") -notmatch 'main\.e:15:17: trap\[narrow\]: 300 does not fit u8') { throw "the wide case did not trap as section 11 says: exit $LASTEXITCODE, $($narrowOutput -join "`n")" }
+$narrowOutput = & $narrowPath negative 2>&1
+if ($LASTEXITCODE -ne 134 -or ($narrowOutput -join "`n") -notmatch 'main\.e:20:17: trap\[narrow\]: -300 does not fit u16') { throw "the negative case did not trap as section 11 says: exit $LASTEXITCODE, $($narrowOutput -join "`n")" }
+$narrowOutput = & $narrowPath sign 2>&1
+if ($LASTEXITCODE -ne 134 -or ($narrowOutput -join "`n") -notmatch 'main\.e:24:17: trap\[narrow\]: 200 does not fit i8') { throw "the sign case did not trap as section 11 says: exit $LASTEXITCODE, $($narrowOutput -join "`n")" }
+$narrowOutput = & $narrowPath unsigned 2>&1
+if ($LASTEXITCODE -ne 134 -or ($narrowOutput -join "`n") -notmatch 'main\.e:28:17: trap\[narrow\]: -298 does not fit usize') { throw "the unsigned case did not trap as section 11 says: exit $LASTEXITCODE, $($narrowOutput -join "`n")" }
+$narrowOutput = & $narrowPath same 2>&1
+if ($LASTEXITCODE -ne 134 -or ($narrowOutput -join "`n") -notmatch 'main\.e:32:17: trap\[narrow\]: 4294967000 does not fit i32') { throw "the same case did not trap as section 11 says: exit $LASTEXITCODE, $($narrowOutput -join "`n")" }
+& $narrowPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'a cast that fits, or a meant truncation, trapped' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at
@@ -2003,6 +2020,7 @@ $checkFailures = @(
     @('variadic_narrow_argument', 'TypeMismatch'),
     @('unreachable_argument', 'TypeMismatch'),
     @('enum_cast_width', 'TypeMismatch'),
+    @('trunc_float_argument', 'TypeMismatch'),
     @('intrinsic_generic_unsupported', 'ArgumentCount'),
     @('alloc_argument_type', 'TypeMismatch'),
     @('alloc_arena_type', 'TypeMismatch'),

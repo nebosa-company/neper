@@ -2325,7 +2325,7 @@ fn socket_handle(s: Socket) -> Handle {
 
 fn to_filetime(value: i64) -> FileTime {
     var stamp: FileTime = zero
-    let ticks = u64(value) / 100u64 + FILETIME_UNIX_EPOCH
+    let ticks = u64.trunc(value) / 100u64 + FILETIME_UNIX_EPOCH
     stamp.low = u32(ticks % 4294967296u64)
     stamp.high = u32(ticks / 4294967296u64)
     ret stamp

@@ -64,7 +64,7 @@ fn read_bytes(a: *mem.Arena, s: *State, count: usize) -> ([]u8, err) {
 
 fn sign_extend(value: u64, width: usize) -> i64 {
     let shift = u32(64usize - width * 8usize)
-    ret i64(value << shift) >> shift
+    ret i64.trunc(value << shift) >> shift
 }
 
 fn read_value(a: *mem.Arena, r: *Reader) -> (Value, err) {
@@ -177,7 +177,7 @@ fn read_ext(a: *mem.Arena, s: *State, count: usize) -> (Ext, err) {
     let (data, data_error) = read_bytes(a, s, count)
     if data_error != ok { ret (zero, data_error) }
     var e: Ext = zero
-    e.kind = i8(kind)
+    e.kind = i8.trunc(kind)
     e.data = data[0..]
     ret (e, ok)
 }
@@ -251,18 +251,18 @@ fn write_i64(writer: *io.Writer, value: i64) -> err {
     if value >= -32i64 { ret write_byte(writer, u8(i64(256i64) + value)) }
     if value >= -128i64 {
         try write_byte(writer, 208u8)
-        ret write_be(writer, u64(value) & 255u64, 1usize)
+        ret write_be(writer, u64.trunc(value) & 255u64, 1usize)
     }
     if value >= -32768i64 {
         try write_byte(writer, 209u8)
-        ret write_be(writer, u64(value) & 65535u64, 2usize)
+        ret write_be(writer, u64.trunc(value) & 65535u64, 2usize)
     }
     if value >= -2147483648i64 {
         try write_byte(writer, 210u8)
-        ret write_be(writer, u64(value) & 4294967295u64, 4usize)
+        ret write_be(writer, u64.trunc(value) & 4294967295u64, 4usize)
     }
     try write_byte(writer, 211u8)
-    ret write_be(writer, u64(value), 8usize)
+    ret write_be(writer, u64.trunc(value), 8usize)
 }
 
 fn write_u64(writer: *io.Writer, value: u64) -> err {
@@ -363,7 +363,7 @@ fn write(writer: *io.Writer, value: *const Value) -> err {
         } else {
             try write_length(writer, 199u8, n)
         }
-        try write_byte(writer, u8(ext.kind))
+        try write_byte(writer, u8.trunc(ext.kind))
         ret io.write_all(writer, ext.data)
     }
 }

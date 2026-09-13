@@ -4727,6 +4727,9 @@ type CallInfo = struct {
     // `unreachable()` / `unreachable("why")`: section 11's one always-on builtin. It is
     // a trap of kind `unreachable` with the literal as its values, and nothing follows it.
     is_unreachable: bool,
+    // `u8.trunc(x)`: section 4's meant truncation, a cast that keeps the low bits in
+    // every build mode and is never a `narrow` check.
+    truncating: bool,
     alloc_return: Type,
     alloc_arena: Type,
     mem_alloc: bool,
@@ -6695,6 +6698,12 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         // has its own (D139). `comptime_binding_base` only says yes to an actual
                         // binding, so an ordinary `module.function(x)` is untouched.
                         let (bound, bound_member, is_bound) = comptime_binding_base(c, text, tree, receiver)
+                        let (truncation, is_truncation) = truncation_cast(c, text, tree, module_index, receiver)
+                        if is_truncation {
+                            info.cast = truncation
+                            info.is_cast = true
+                            info.truncating = true
+                        } else {
                         if is_bound && bound.kind == .Field && same(bound_member, "ty") && (bound.ty.kind == .Integer || bound.ty.kind == .Float) {
                             info.cast = bound.ty
                             info.is_cast = true
@@ -6767,6 +6776,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         }
                         }
                         }
+                        }
                     }
                 }
                 }
@@ -6786,6 +6796,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                     if argument_error != ok { ret (info, argument_error) }
                     if is_untyped(argument_type) { ret (info, MissingContext) }
+                    if info.truncating && argument_type.kind != .Integer && !(c.generic_declaration && type_shape_unknown(argument_type)) { ret (info, TypeMismatch) }
                     if info.cast.kind == .Named {
                         let (backing, has_backing) = enum_backing_type(c, info.cast)
                         if !has_backing || argument_type.kind != .Integer || integer_width(argument_type) != integer_width(backing) { ret (info, TypeMismatch) }
@@ -8868,6 +8879,40 @@ fn comptime_binding_member(c: *Checker, argument: GenericArgument, member: str, 
 }
 
 // The base of `f.name` where `f` is bound by an unrolled `for`.
+// `u8.trunc(x)`, or `T.trunc(x)` with `T` a type parameter: the receiver names an integer
+// type and the member is `trunc`. In the template pass `T` is not yet bound and the cast
+// stands as one to a type not yet known, the way `T(x)` does (D136).
+fn truncation_cast(c: *Checker, text: str, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, bool) {
+    let (base_index, has_base) = first_node_child(tree, node)
+    if !has_base { ret (invalid_type(), false) }
+    let base_node = tree.nodes[base_index]
+    if base_node.kind != .NameExpr { ret (invalid_type(), false) }
+    let base_token = c.tokens[base_node.token_start]
+    if base_token.kind != .Identifier { ret (invalid_type(), false) }
+    var member = ""
+    var at = base_node.token_end
+    while at < node.token_end && at < c.token_count {
+        let token = c.tokens[at]
+        if token.kind == .Identifier { member = text[token.start..token.end] }
+        at += 1usize
+    }
+    if !same(member, "trunc") { ret (invalid_type(), false) }
+    let name = text[base_token.start..base_token.end]
+    let scalar = scalar_type(name, module_index)
+    if scalar.kind == .Integer { ret (scalar, true) }
+    let (parameter_index, is_parameter) = active_comptime_parameter(c, name)
+    if !is_parameter || c.comptime_parameters[parameter_index].kind != .Type { ret (invalid_type(), false) }
+    let (argument, argument_found) = active_argument(c, parameter_index)
+    if argument_found {
+        if argument.ty.kind != .Integer { ret (invalid_type(), false) }
+        ret (argument.ty, true)
+    }
+    var parameter_cast = make_type(.TypeParameter, name, module_index)
+    parameter_cast.element = parameter_index
+    parameter_cast.has_element = true
+    ret (parameter_cast, true)
+}
+
 fn comptime_binding_base(c: *Checker, text: str, tree: *parse.Tree, node: syntax.Node) -> (GenericArgument, str, bool) {
     var empty: GenericArgument = zero
     let (base_index, has_base) = first_node_child(tree, node)

@@ -28,7 +28,7 @@ fn magnitude_of(c: Coefficient) -> (Magnitude, bool) {
     if c.high < 0i64 {
         // Two's complement negation of the pair.
         m.low = 0u64 -% c.low
-        m.high = 0u64 -% u64(c.high)
+        m.high = 0u64 -% u64.trunc(c.high)
         if c.low != 0u64 { m.high -= 1u64 }
         ret (m, true)
     }
@@ -44,14 +44,14 @@ fn coefficient_of(m: Magnitude, negative: bool) -> (Coefficient, err) {
     if !negative {
         if m.high > 9223372036854775807u64 { ret (zero, Overflow) }
         c.low = m.low
-        c.high = i64(m.high)
+        c.high = i64.trunc(m.high)
         ret (c, ok)
     }
     if m.high > 9223372036854775808u64 || (m.high == 9223372036854775808u64 && m.low != 0u64) { ret (zero, Overflow) }
     c.low = 0u64 -% m.low
     var high = 0u64 -% m.high
     if m.low != 0u64 { high -= 1u64 }
-    c.high = i64(high)
+    c.high = i64.trunc(high)
     ret (c, ok)
 }
 
@@ -557,14 +557,14 @@ fn to_i64(value: Decimal, rounding: Rounding) -> (i64, err) {
     if quantize_error != ok { ret (0i64, quantize_error) }
     let c = whole.coefficient
     if c.high == 0i64 && c.low <= 9223372036854775807u64 { ret (i64(c.low), ok) }
-    if c.high == -1i64 && c.low >= 9223372036854775808u64 { ret (i64(c.low), ok) }
+    if c.high == -1i64 && c.low >= 9223372036854775808u64 { ret (i64.trunc(c.low), ok) }
     ret (0i64, Overflow)
 }
 
 fn from_i64(value: i64, scale: u8) -> (Decimal, err) {
     if scale > MAX_SCALE { ret (zero, Invalid) }
     var c: Coefficient = zero
-    c.low = u64(value)
+    c.low = u64.trunc(value)
     c.high = 0i64
     if value < 0i64 { c.high = -1i64 }
     var out: Decimal = zero

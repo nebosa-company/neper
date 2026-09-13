@@ -1058,7 +1058,7 @@ fn emit_decimal(output: *emit_x64.Buffer, value: usize) -> err {
     ret emit_x64.byte(output, 48usize + value % 10usize)
 }
 
-fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, context: *FunctionContext) -> err {
+fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, tail: str, context: *FunctionContext) -> err {
     let output = context.output
     var first_register = 8usize
     var second_register = 9usize
@@ -1095,6 +1095,7 @@ fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kin
         try emit_x64.byte(output, separator)
         try emit_text(output, third)
     }
+    try emit_text(output, tail)
     let text_end = output.count
     try emit_x64.patch_relative32(output, skip, text_end)
     let (text_displacement, address_error) = emit_x64.relative_address(output, text_register)
@@ -1113,7 +1114,7 @@ fn emit_checked(builder: *nir.Builder, current: nir.Function, token: lex.Token, 
     try emit_x64.compare_register(context.output, a, b)
     let (over, over_error) = emit_x64.jump_condition(context.output, condition)
     if over_error != ok { ret over_error }
-    try emit_trap(builder, current, token, kind, first, second, third, 2usize, false, a, b, context)
+    try emit_trap(builder, current, token, kind, first, second, third, 2usize, false, a, b, "", context)
     ret emit_x64.patch_relative32(context.output, over, context.output.count)
 }
 
@@ -1127,7 +1128,7 @@ fn emit_divide_checks(builder: *nir.Builder, current: nir.Function, token: lex.T
     try emit_x64.test_register(output, 11usize)
     let (nonzero, nonzero_error) = emit_x64.jump_condition(output, 5usize)
     if nonzero_error != ok { ret nonzero_error }
-    try emit_trap(builder, current, token, "divide", "", operator, " divides by zero", 2usize, signed, 0usize, 11usize, context)
+    try emit_trap(builder, current, token, "divide", "", operator, " divides by zero", 2usize, signed, 0usize, 11usize, "", context)
     try emit_x64.patch_relative32(output, nonzero, output.count)
     if !signed { ret ok }
     let all_ones = 0usize -% 1usize
@@ -1141,7 +1142,7 @@ fn emit_divide_checks(builder: *nir.Builder, current: nir.Function, token: lex.T
     try emit_x64.compare_register(output, 0usize, 10usize)
     let (not_minimum, minimum_error) = emit_x64.jump_condition(output, 5usize)
     if minimum_error != ok { ret minimum_error }
-    try emit_trap(builder, current, token, "divide", "", operator, " overflows", 2usize, true, 0usize, 11usize, context)
+    try emit_trap(builder, current, token, "divide", "", operator, " overflows", 2usize, true, 0usize, 11usize, "", context)
     try emit_x64.patch_relative32(output, not_minus_one, output.count)
     ret emit_x64.patch_relative32(output, not_minimum, output.count)
 }
@@ -1374,7 +1375,35 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if instruction.opcode == .Cast {
                     var normalize_type = instruction.ty
                     if source_type.kind == .Integer && integer_width(normalize_type) == 64usize { normalize_type = source_type }
+                    // Section 11's `narrow` row: a cast to a narrower width has to give the
+                    // value back when widened again, or the value did not fit. The source
+                    // is kept in whichever scratch register the result is not in, since
+                    // the result may land in the source's own register.
+                    // A cast whose immediate is 1 is `T.trunc(x)`, meant and unchecked. At a
+                    // 64-bit target the normalisation is a no-op, so a sign that would
+                    // change is what is tested instead.
+                    let sign_differs = signed_integer(source_type) != signed_integer(instruction.ty)
+                    let narrowing = source_type.kind == .Integer && instruction.immediate == 0usize && (integer_width(instruction.ty) < integer_width(source_type) || sign_differs)
+                    var kept = 10usize
+                    if destination == 10usize { kept = 11usize }
+                    if narrowing && source != kept { try emit_x64.mov_register(output, kept, source) }
                     try emit_x64.normalize_integer(output, destination, source, integer_width(normalize_type), signed_integer(normalize_type))
+                    if narrowing {
+                        var fits = 0usize
+                        if integer_width(instruction.ty) == 64usize {
+                            try emit_x64.test_register(output, kept)
+                            let (not_negative, sign_error) = emit_x64.jump_condition(output, 9usize)
+                            if sign_error != ok { ret sign_error }
+                            fits = not_negative
+                        } else {
+                            try emit_x64.compare_register(output, destination, kept)
+                            let (equal, equal_error) = emit_x64.jump_condition(output, 4usize)
+                            if equal_error != ok { ret equal_error }
+                            fits = equal
+                        }
+                        try emit_trap(builder, current, instruction.token, "narrow", "", " does not fit ", "", 1usize, signed_integer(source_type), kept, 0usize, instruction.ty.name, context)
+                        try emit_x64.patch_relative32(output, fits, output.count)
+                    }
                 } else {
                     if destination != source { try emit_x64.mov_register(output, destination, source) }
                     if instruction.opcode == .Negate { try emit_x64.negate_register(output, destination) }
@@ -1614,7 +1643,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         if operand_source != 10usize + operand_at { try emit_x64.mov_register(output, 10usize + operand_at, operand_source) }
                         operand_at += 1usize
                     }
-                    try emit_trap(builder, current, instruction.token, kind, message, "", "", instruction.operand_count, signed, 10usize, 11usize, context)
+                    try emit_trap(builder, current, instruction.token, kind, message, "", "", instruction.operand_count, signed, 10usize, 11usize, "", context)
                 } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {

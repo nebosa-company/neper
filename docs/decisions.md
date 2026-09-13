@@ -3597,3 +3597,26 @@ built by lowering and interned raw, which the back end tells from a literal by t
 absence of a quote. `link/trap_enum` pins an `enum u8` and an `enum i8` on both
 platforms and that a cast naming a member, a negative one included, is untouched.
 A qualified enum name, `lex.Kind(x)`, is not yet a cast.
+
+## D198 — Integer casts are checked, and `T.trunc(x)` is the meant truncation
+
+Section 4 says a cast between integer types is checked -- the value must be
+representable in the target, `u32(x)` with a negative `x` and `u8(n)` with `n = 300`
+alike -- and that a truncation that is meant is spelled `T.trunc(x)`; section 11 makes
+the failure the `narrow` row. Both were missing: every cast cut to the width and the
+spelling did not parse. The back end now keeps the source of a cast that narrows the
+width or changes the sign, normalises as before, and traps unless widening the result
+again gives the source back -- at a 64-bit target, where normalising is a no-op, the
+test is the sign that would change. The record prints the source in its own
+signedness and the type it did not fit: `-298 does not fit usize`. `u8.trunc(x)`, and
+`T.trunc(x)` for a type parameter bound to an integer, is a cast whose NIR immediate
+is 1, which the back end never checks; it takes only an integer argument
+(`check/trunc_float_argument`). The row found ten library sites that meant the bits:
+`e.bytes`' `load`/`store` of a signed `T`, the two's complement negations in
+`e.algo.bignum` and `e.algo.decimal`, `e.fmt.msgpack`'s signed integer and ext-kind
+bytes, and `os.windows`' `to_filetime`, all now `trunc`; `e.bytes`' base codecs mask
+before cutting to a byte; `e.math`'s `pow` masks the high word it extracts; and the
+`scalar` fixture, which asserted the C result, now narrows a value that fits. A record
+inside a generic instance named the caller's file with the template's line: the
+function's path is now the template's. `link/trap_narrow` pins five refusals and the
+meant forms on both platforms. Float-to-integer narrowing is still unchecked.

@@ -2798,14 +2798,15 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             if call_info.cast.kind == .Named {
                 // An enum value lives in a register as its backing bits zero-extended --
                 // what a load and a member constant both give -- so a signed integer is
-                // first cast to the unsigned type of its width.
+                // first truncated to the unsigned type of its width (a meant one: the
+                // member check that follows is the check).
                 var unsigned_name = "u64"
                 let source_width = check.integer_width(lowered_argument_type)
                 if source_width == 8usize { unsigned_name = "u8" }
                 if source_width == 16usize { unsigned_name = "u16" }
                 if source_width == 32usize { unsigned_name = "u32" }
                 let unsigned_type = check.make_type(.Integer, unsigned_name, call_info.cast.module_index)
-                let (bits_instruction, bits, bits_error) = nir.emit(builder, .Cast, unsigned_type, true, 0usize, c.tokens[node.token_start])
+                let (bits_instruction, bits, bits_error) = nir.emit(builder, .Cast, unsigned_type, true, 1usize, c.tokens[node.token_start])
                 if bits_error != ok { ret (0usize, call_info.cast, bits_error) }
                 let bits_operand_error = nir.add_operand(builder, bits_instruction, argument)
                 if bits_operand_error != ok { ret (0usize, call_info.cast, bits_operand_error) }
@@ -2813,7 +2814,11 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                 if enum_check_error != ok { ret (0usize, call_info.cast, enum_check_error) }
                 ret (bits, call_info.cast, ok)
             }
-            let (instruction, result, emit_error) = nir.emit(builder, .Cast, call_info.cast, true, 0usize, c.tokens[node.token_start])
+            // A `.Cast` whose immediate is 1 is a meant truncation, `T.trunc(x)`, which the
+            // back end never checks (D198).
+            var truncating = 0usize
+            if call_info.truncating { truncating = 1usize }
+            let (instruction, result, emit_error) = nir.emit(builder, .Cast, call_info.cast, true, truncating, c.tokens[node.token_start])
             if emit_error != ok { ret (0usize, call_info.cast, emit_error) }
             let add_error = nir.add_operand(builder, instruction, argument)
             if add_error != ok { ret (0usize, call_info.cast, add_error) }
@@ -4321,7 +4326,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if function.generic { ret check.Unsupported }
     let (nir_function, begin_error) = nir.begin_function(builder, function.owner_module_index, name, function.instance_id)
     if begin_error != ok { ret begin_error }
-    builder.functions[nir_function].path = g.modules[function.owner_module_index].path
+    builder.functions[nir_function].path = g.modules[function.module_index].path
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_parameter_at = 0usize
     while signature_parameter_at < function.parameter_count {
@@ -5063,7 +5068,8 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
     let arena_form = instance.return_count == 2usize
     let (nir_function, begin_error) = nir.begin_function(builder, instance.owner_module_index, instance.name, instance.instance_id)
     if begin_error != ok { ret begin_error }
-    builder.functions[nir_function].path = g.modules[instance.owner_module_index].path
+    // An instance's tokens are the template's, so the record names the template's file.
+    builder.functions[nir_function].path = g.modules[instance.module_index].path
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_at = 0usize
     while signature_at < instance.parameter_count {
