@@ -3795,3 +3795,19 @@ oracle fits the default arena. `link/incremental` now pins both edge kinds: a bo
 edit behind a signature edge keeps the dependent and one behind a body edge rebuilds
 it, and `link/trap_backtrace`'s inlined frame is gone from its walk. The cap is
 applied within a module as well, where the section has none.
+
+## D208 — The bootstrap's archive is recorded
+
+D95 named the archive -- a tag, the stage hashes per platform, the commands that
+reproduce them -- and left it to be made. `docs/bootstrap-archive.md` now records,
+at revision `448256c`, the SHA-256 of stage one (the bootstrap built by MSVC 14.51 and
+GCC 13.3, toolchain-specific and said so), stage two (the compiler built by the
+bootstrap's driver), stage three (the compiler built by itself, the stable stage)
+and stage four (identical to three) on Windows and Linux, with the commands that
+reproduce them from a clean checkout; the tag `bootstrap-archive-1` marks the
+revision that carries the file, which differs from the measured one only by that
+file and the readiness page. Stages two and three depend on the sources alone, which
+is what a recovery must reproduce; stage one is whatever the C compiler at hand
+makes of `bootstrap/neper.c`, and needs only to build stage two. Deleting the
+bootstrap, the M2 exit item after this one, is still open: both suites build their
+compiler from it on every run.

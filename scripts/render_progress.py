@@ -72,7 +72,7 @@ compiler = {
  "Self-hosting": [
   ("Self-hosted compiler emits its own source", 1, "run.ps1:623, run.sh:760"),
   ("Stage 2 == stage 3, byte-identical, both platforms", 1, "SHA-256 compare / cmp"),
-  ("Bootstrap recovery path archived", 0, "no freeze tag; stage hashes unrecorded (D95)"),
+  ("Bootstrap recovery path archived", 1, "docs/bootstrap-archive.md (D208): the SHA-256 of stages one to four on both platforms at the archived revision, stage three the stable one, and the commands that reproduce them from a clean checkout of the tag `bootstrap-archive-1` with no neper binary present"),
   ("Bootstrap frozen and deleted", 0, "bootstrap/neper.c still builds stage 0"),
  ],
 }
