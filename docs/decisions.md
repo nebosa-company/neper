@@ -4325,3 +4325,40 @@ corpus holds one expected object per host over a no-import fixture. Gaps: the de
 interface/body split, libraries, assets, the built artifact's own hash, non-empty
 options, and writing the manifest to `.neper/<mode>/build-manifest.json` on every build
 rather than only through this query.
+
+## D239 -- `@reorder`, an opt-in that packs a struct by alignment (planned, low priority)
+
+The struct default is unchanged and stays as §4 fixes it: fields are laid out in
+declaration order with natural alignment, which is C's layout. That default is
+load-bearing and must not be flipped -- FFI is annotation-free precisely because a
+neper struct already *is* its C counterpart (§4, "§4's struct layout is C's"), the
+bootstrap runtime writes multi-field results at fixed offsets matching declaration
+order (`neper_os_clock` puts the value at 0 and the err at 8, `bootstrap/runtime.c`),
+and host/device structs share a defined layout for `@gpu` (SPIR-V scalarBlockLayout).
+An opt-out that reordered by default would turn every one of those into a silent ABI
+break whenever the author forgot the annotation.
+
+So the safe polarity is opt-in. `@reorder` is a new declaration attribute, legal only
+on a `type ... = struct` or `type ... = union`, that lets the compiler sort the fields
+to minimise padding. The sort key is **alignment**, descending, not size -- the two
+differ for nested aggregates, `f80`/`long double`-shaped types and vectors -- with
+declaration order breaking ties, so the chosen layout is a single deterministic
+function of the type. Determinism is required, not incidental: neper promises
+reproducible builds and a frozen `.em`/ABI, so the reordering is specified and stable,
+never the "unspecified, may change between versions" freedom Rust's default layout
+takes.
+
+Boundaries are a compile error, not a footgun. `@reorder` is illegal on any struct
+that crosses an FFI boundary -- used in an `extern`/`@import`/`@cc` signature -- or is
+shared with a `@gpu` kernel or device buffer; the checker rejects it at the crossing
+site, the same way §4 already makes `@packed`/`@align(N)` require an explicitly
+matching C declaration to cross. `@reorder` is mutually exclusive with `@packed`
+(packed already gives every field alignment one, so there is no padding to remove) and
+composes with `@align(N)` (reorder first, then raise the aggregate alignment and tail
+padding). Reflection still iterates fields in declaration order but reports each
+field's true reordered offset, so `e.meta` continues to expose the actual layout.
+
+Not started; this sits at the end of the backlog. When built: a `@reorder` attribute
+node on the aggregate, an alignment-sort in the layout pass that assigns offsets, the
+boundary-crossing rejection in the checker, and a fixture proving `size_of` shrinks
+for a reordered internal struct while an FFI/`@gpu` use is refused.
