@@ -1788,6 +1788,11 @@ for conformance_case in 'accept scalar 0' 'reject enum_values 1' 'reject lexical
     cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
 ' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
 done
+# `info --json` (D229): the capability record for this host, byte for byte.
+info_actual="$test_build/conformance-tools-info.jsonl"
+$test_build/neper-self info --json > "$info_actual"
+cmp -s "$info_actual" "$conformance_root/tools/info.x64-linux.expected.jsonl" || { printf '%s
+' "info --json differs from the conformance corpus" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

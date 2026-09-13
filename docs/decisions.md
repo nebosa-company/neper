@@ -4148,3 +4148,18 @@ reject/ with five streams both suites compare byte for byte; the target named on
 the command line does not appear in them, so one expectation serves both
 platforms. Notes and fixes, project roots and the project-level `check` are not
 here.
+
+## D229 — `info --json` is the capability query, pinned per host
+
+`neper-self info --json` emits the section 1 header, one `info` record and a
+successful result: the tool version, one language profile (`0.1`, grammar revision
+1, stream version 1, not experimental), the commands whose streams exist (`check`,
+`info`, `parse`, `tokens`), the host target, the two build targets, and the CPU
+levels the emitter honours -- `x64-v1` alone, since nothing above SSE2 is selected
+and SIMD lowers as lane loops -- every collection sorted by bytes as the section
+requires; `features` is empty until a feature exists to name. The host is probed
+from the standard-handle value (a Linux fd is 2, a Windows HANDLE never is) until the
+runtime has a host intrinsic. Because the host differs, tests/conformance/tools/
+holds one expected stream per host, `info.x64-linux` and `info.x64-windows`, and
+each suite compares its own byte for byte. `--language-version` and the other CPU
+levels of the spec's table are not here.

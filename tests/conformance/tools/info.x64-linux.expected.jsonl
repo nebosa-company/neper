@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"info","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"record":"info","tool_version":"0.1.0","language_profiles":[{"language_version":"0.1","grammar_revision":1,"stream_version":1,"experimental":false}],"commands":["check","info","parse","tokens"],"host_target":"x64-linux","build_targets":["x64-linux","x64-windows"],"cpu_levels":["x64-v1"],"features":[]}
+{"record":"result","ok":true,"exit_code":0,"data":{}}

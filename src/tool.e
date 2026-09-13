@@ -155,6 +155,23 @@ fn result(out: *Out, succeeded: bool, exit_code: usize, tokens: usize, diagnosti
     ret flush(out)
 }
 
+// `info --json` (D229): the header, one `info` record of what this build answers
+// to -- every collection sorted by bytes, as section 1 requires -- and a result.
+fn info_json(a: *mem.Arena, host: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, 4096usize)
+    if storage_error != ok { ret storage_error }
+    var out = Out { bytes: storage, count: 0usize }
+    try header(&out, "info")
+    try text(&out, "{\"record\":\"info\",\"tool_version\":\"0.1.0\",\"language_profiles\":[{\"language_version\":\"0.1\",\"grammar_revision\":1,\"stream_version\":1,\"experimental\":false}],\"commands\":[\"check\",\"info\",\"parse\",\"tokens\"],\"host_target\":")
+    try quoted(&out, host)
+    // ponytail: the emitter selects nothing above SSE2 and SIMD lowers as lane loops (D148),
+    // so x64-v1 is the one level this build honours; list the others when `--cpu` exists.
+    try text(&out, ",\"build_targets\":[\"x64-linux\",\"x64-windows\"],\"cpu_levels\":[\"x64-v1\"],\"features\":[]}")
+    try flush(&out)
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{}}")
+    ret flush(&out)
+}
+
 // The public name of a token kind, the registry of docs/grammar.ebnf.
 fn kind_name(kind: lex.Kind) -> str {
     if kind == .Invalid { ret "INVALID" }

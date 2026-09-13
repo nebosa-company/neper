@@ -827,9 +827,17 @@ fn basename(path: str) -> str {
 }
 
 fn tool_usage() -> err {
-    try stderr_text("error[E-CLI-9999]: usage: neper-self tokens [--json] [--path VIRTUAL.e] FILE\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self tokens|parse [--json] [--path VIRTUAL.e] FILE, or info --json\n")
     os.exit(1i32)
     ret ok
+}
+
+// The target this compiler runs on, for `info` (D229).
+// ponytail: probed from the standard-handle value -- a Linux fd is 2, a Windows HANDLE
+// never is -- until the runtime has a host intrinsic.
+fn host_target() -> str {
+    if os.stderr().raw == 2usize { ret "x64-linux" }
+    ret "x64-windows"
 }
 
 // docs/tooling.md section 4: `tokens|parse [--json] [--path VIRTUAL.e] FILE` (D227),
@@ -2145,6 +2153,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("parse ok\n")
         ret ok
     }
+    if args.len == 3usize && same(args[1usize], "info") && same(args[2usize], "--json") { ret tool.info_json(a, host_target()) }
     if args.len >= 3usize && args.len <= 6usize && (same(args[1usize], "tokens") || same(args[1usize], "parse")) && !(args.len == 3usize && same(args[1usize], "parse")) { ret tool_command(a, args) }
     if args.len == 3usize && same(args[1usize], "scan-file") {
         let (text, load_error) = source.load(a, args[2usize])
