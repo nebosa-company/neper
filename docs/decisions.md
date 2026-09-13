@@ -3765,3 +3765,33 @@ are now sized by the instruction count, two per trap site having overrun the old
 constant. `link/trap_backtrace` pins a bounds trap two calls deep printing
 `helper.pick`, `main.deeper` and `main.main` in that order on both platforms. The
 file and line of each frame, which need a line table, are still open.
+
+## D207 — Cross-module inlining through an oracle lowered ahead of the program
+
+Section 12 caps cross-module inlining at callees of forty NIR instructions and makes
+every inlined callee a body edge. Inlining at a call site needs the callee's NIR, and
+the two link paths lower modules in different orders, so the callee is not reliably
+there when the call is; a pass after lowering would need a second copy of the whole
+program's tables, which the default arena has no room for. So the small functions are
+lowered first: every non-generic function of every module whose declaration is a
+hundred tokens or fewer goes into the oracle, a builder of its own a tenth the size
+of the program's, in module order on both paths, and the ones that came out at the
+cap or under, without a hidden return slot and with at most one non-aggregate result
+are entered. The program's own lowering then copies a body in at each call to an
+entered function: `Parameter` becomes the argument, `Return` a branch to the
+continuation block -- through a stack slot when the callee returns from more than one
+place -- and function, string and global references are re-interned; the callee's
+own body is not inlined into further, so a copy is one level deep. Each instruction
+now carries the path of the file it came from, which a trap record inside an inlined
+body names. The oracle's lowering is a second lowering of those functions, and the
+instances it creates are the ones the program's lowering would create at the same
+calls. Every inlined callee of another module is recorded on the builder: the artifact
+writes a body edge for it with the hash its own artifact's Interface carries, the
+pruner keeps the callee's definition in an artifact for that hash while an executable
+still drops it, and a module reached only by inlining is still lowered. The
+compiler's image grows by a fifth in debug; the machine buffer's multiplier drops
+from 96 to 56 bytes per instruction, twice what the checks brought it to, so the
+oracle fits the default arena. `link/incremental` now pins both edge kinds: a body
+edit behind a signature edge keeps the dependent and one behind a body edge rebuilds
+it, and `link/trap_backtrace`'s inlined frame is gone from its walk. The cap is
+applied within a module as well, where the section has none.

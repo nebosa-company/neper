@@ -943,6 +943,18 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
         }
         symbol_at += 1usize
     }
+    // An inlined callee (D207) is named by a body edge with no instruction of its own.
+    var inlined_at = 0usize
+    while inlined_at < builder.inlined_count {
+        let entry = builder.inlined[inlined_at]
+        if entry.caller_module == module_index && entry.callee_module != module_index && entry.callee_module < g.count {
+            let (callee_module, callee_module_error) = intern(table, g.modules[entry.callee_module].name)
+            if callee_module_error != ok { ret callee_module_error }
+            let (callee_name, callee_name_error) = intern(table, entry.name)
+            if callee_name_error != ok { ret callee_name_error }
+        }
+        inlined_at += 1usize
+    }
     // A trap site (D194) names the runtime's `neper_trap` from a relocation alone -- no
     // instruction carries it -- so its strings are collected from the references.
     var reference_at = 0usize
@@ -1412,6 +1424,19 @@ fn dependency_count(builder: *nir.Builder, module_index: usize) -> usize {
         if records_dependency { count += 1usize }
         at += 1usize
     }
+    ret count + inlined_dependency_count(builder, module_index)
+}
+
+// Section 12's body edges: a callee of another module whose NIR was copied into this
+// one (D207). The edge carries the body hash the callee's own artifact writes for it.
+fn inlined_dependency_count(builder: *nir.Builder, module_index: usize) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < builder.inlined_count {
+        let entry = builder.inlined[at]
+        if entry.caller_module == module_index && entry.callee_module != module_index { count += 1usize }
+        at += 1usize
+    }
     ret count
 }
 
@@ -1446,6 +1471,28 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
             let (target_name, target_name_error) = string_index(table, dependency_name)
             if target_name_error != ok { ret target_name_error }
             try binary.byte(output, dependency_signature_kind())
+            try binary.zeroes(output, 3usize)
+            try binary.little_u32(output, target_module)
+            try binary.little_u32(output, target_name)
+            try binary.little_u64(output, hash)
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < builder.inlined_count {
+        let entry = builder.inlined[at]
+        if entry.caller_module == module_index && entry.callee_module != module_index {
+            if entry.callee_module >= g.count { ret InvalidArtifact }
+            let (checked_function, found_checked) = find_checked_function(c, entry.callee_module, entry.name)
+            if !found_checked { ret InvalidArtifact }
+            let (nir_function, found_nir) = find_nir_function(builder, entry.callee_module, entry.name, entry.instance)
+            let (hash, hash_error) = body_hash(c, g, builder, checked_function, nir_function, found_nir, scratch)
+            if hash_error != ok { ret hash_error }
+            let (target_module, target_module_error) = string_index(table, g.modules[entry.callee_module].name)
+            if target_module_error != ok { ret target_module_error }
+            let (target_name, target_name_error) = string_index(table, entry.name)
+            if target_name_error != ok { ret target_name_error }
+            try binary.byte(output, dependency_body_kind())
             try binary.zeroes(output, 3usize)
             try binary.little_u32(output, target_module)
             try binary.little_u32(output, target_name)

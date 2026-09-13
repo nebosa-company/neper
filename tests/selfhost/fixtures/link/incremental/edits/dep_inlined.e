@@ -30,4 +30,4 @@ fn answer(x: i32) -> i32 {
     ret y + 5i32
 }
 
-fn tiny(x: i32) -> i32 { ret x + 0i32 }
+fn tiny(x: i32) -> i32 { ret x + 1i32 }

@@ -1898,6 +1898,249 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
     ret ok
 }
 
+// Section 12's cross-module inlining cap: a callee of at most this many NIR instructions
+// is copied into its caller rather than called.
+fn inline_cap() -> usize { ret 40usize }
+
+fn find_inline_entry(builder: *nir.Builder, module_index: usize, name: str, instance: usize) -> (usize, bool) {
+    var at = 0usize
+    while at < builder.inline_entry_count {
+        let entry = builder.inline_entries[at]
+        if entry.module_index == module_index && entry.instance == instance && check.same(entry.name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The oracle: every non-generic function of every module whose source is short is
+// lowered into a builder of its own before the program is, and the ones that came out
+// at the cap or under, took no hidden return slot and return at most one value are
+// entered. Lowering a function twice is what this costs; the checker's state after it
+// is the same, since instances it creates are the ones the program's own lowering
+// would create at the same call. The order is the module order, on both link paths.
+fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, entries: []nir.InlineEntry, entry_count: *usize) -> err {
+    try declare_globals(c, oracle)
+    *entry_count = 0usize
+    var module_index = 0usize
+    while module_index < g.count {
+        var tree: parse.Tree = zero
+        try parse.init_tree(&tree, g.nodes, g.children)
+        try parse.parse(&tree, g.modules[module_index].text)
+        try check.tokenize(c, g.modules[module_index].text)
+        var node_index = 1usize
+        while node_index < tree.count {
+            let node = tree.nodes[node_index]
+            if node.top_level && node.kind == .FnDecl && node.token_end - node.token_start <= 100usize {
+                let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
+                if name_error != ok { ret name_error }
+                let (function_index, found) = check.find_function(c, module_index, name)
+                if found {
+                    let function = c.functions[function_index]
+                    if !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
+                        let before = oracle.function_count
+                        let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings)
+                        if lower_error != ok { ret lower_error }
+                        let lowered = oracle.functions[before]
+                        var hidden = false
+                        if function.return_count == 1usize {
+                            var function_call: check.CallInfo = zero
+                            function_call.function = function
+                            var return_layout: ReturnLayout = zero
+                            try call_return_layout(c, function_call, &return_layout)
+                            hidden = return_layout.via_slot
+                        }
+                        // A body that calls a generic instance stays out: an instance is the
+                        // instantiating module's own copy, not the target of anyone's edge,
+                        // and a copy of the call in another module would name it anyway.
+                        var calls_instance = false
+                        var scan_at = lowered.first_instruction
+                        while scan_at < lowered.first_instruction + lowered.instruction_count {
+                            let scanned = oracle.instructions[scan_at]
+                            if (scanned.opcode == .Call || scanned.opcode == .FunctionAddress) && scanned.immediate < oracle.function_ref_count && oracle.function_refs[scanned.immediate].instance != 0usize { calls_instance = true }
+                            scan_at += 1usize
+                        }
+                        if lowered.instruction_count <= inline_cap() && !hidden && !calls_instance {
+                            let entry_at = *entry_count
+                            if entry_at == entries.len { ret check.Capacity }
+                            var entry: nir.InlineEntry = zero
+                            entry.module_index = function.owner_module_index
+                            entry.name = name
+                            entry.instance = function.instance_id
+                            entry.function_index = before
+                            entries[entry_at] = entry
+                            *entry_count = entry_at + 1usize
+                        }
+                    }
+                }
+            }
+            node_index += 1usize
+        }
+        module_index += 1usize
+    }
+    ret ok
+}
+
+// The oracle's function copied in at a call site: the current block branches to a copy
+// of the callee's blocks, `Parameter` becomes the argument, `Return` becomes a branch
+// to the continuation block, and the result is the returned value when the callee
+// returns once, or a stack slot every return stores to when it returns from several
+// places. References into the oracle's tables -- functions, strings, globals -- are
+// re-interned here. The body edge the artifact needs is recorded on the builder.
+fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
+    let oracle = builder.oracle
+    let entry = builder.inline_entries[entry_index]
+    let callee = oracle.functions[entry.function_index]
+    if builder.inlined_count == builder.inlined.len { ret check.Capacity }
+    var recorded = false
+    var recorded_at = 0usize
+    while recorded_at < builder.inlined_count {
+        let prior = builder.inlined[recorded_at]
+        if prior.caller_module == builder.functions[builder.current_function].module_index && prior.callee_module == entry.module_index && prior.instance == entry.instance && check.same(prior.name, entry.name) { recorded = true }
+        recorded_at += 1usize
+    }
+    if !recorded {
+        var record: nir.InlinedRef = zero
+        record.caller_module = builder.functions[builder.current_function].module_index
+        record.callee_module = entry.module_index
+        record.name = entry.name
+        record.instance = entry.instance
+        builder.inlined[builder.inlined_count] = record
+        builder.inlined_count += 1usize
+    }
+    var value_map: [128]usize = zero
+    var block_map: [64]usize = zero
+    if callee.value_count > value_map.len || callee.block_count > block_map.len { ret check.Capacity }
+    var return_sites = 0usize
+    var instruction_at = callee.first_instruction
+    while instruction_at < callee.first_instruction + callee.instruction_count {
+        if oracle.instructions[instruction_at].opcode == .Return { return_sites += 1usize }
+        instruction_at += 1usize
+    }
+    var result_type: check.Type = zero
+    var slot = 0usize
+    var slot_size = 0usize
+    if results.count == 1usize {
+        let (returned, returned_error) = check.call_return(c, call, 0usize)
+        if returned_error != ok { ret returned_error }
+        result_type = returned
+        if return_sites != 1usize {
+            let (info, info_error) = layout.type_info(c, result_type)
+            if info_error != ok { ret info_error }
+            slot_size = info.size
+            var slots = (info.size + 7usize) / 8usize
+            if slots == 0usize { slots = 1usize }
+            let (slot_instruction, slot_value, slot_error) = nir.emit(builder, .Stack, result_type, true, slots, token)
+            if slot_error != ok { ret slot_error }
+            slot = slot_value
+        }
+    }
+    let caller_path = builder.current_path
+    builder.current_path = callee.path
+    let first_block = builder.block_count
+    var block_at = 0usize
+    while block_at < callee.block_count {
+        block_map[block_at] = first_block + block_at
+        block_at += 1usize
+    }
+    let continuation = first_block + callee.block_count
+    let (entry_branch, entry_branch_error) = emit_branch(builder, token)
+    if entry_branch_error != ok { ret entry_branch_error }
+    try nir.set_branch_targets(builder, entry_branch, first_block, 0usize)
+    var single_result = 0usize
+    block_at = 0usize
+    while block_at < callee.block_count {
+        let block = oracle.blocks[callee.first_block + block_at]
+        let (block_index, block_error) = nir.begin_block(builder)
+        if block_error != ok || block_index != block_map[block_at] { ret nir.InvalidControlFlow }
+        instruction_at = block.first_instruction
+        while instruction_at < block.first_instruction + block.instruction_count {
+            let instruction = oracle.instructions[instruction_at]
+            if instruction.opcode == .Parameter {
+                if instruction.immediate >= argument_count { ret check.ArgumentCount }
+                value_map[instruction.result] = arguments[instruction.immediate]
+            } else {
+                if instruction.opcode == .Return {
+                    if instruction.operand_count == 1usize {
+                        let returned = value_map[oracle.operands[instruction.first_operand]]
+                        if return_sites == 1usize {
+                            single_result = returned
+                        } else {
+                            let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, slot_size, instruction.token)
+                            if store_error != ok { ret store_error }
+                            try nir.add_operand(builder, store_instruction, slot)
+                            try nir.add_operand(builder, store_instruction, returned)
+                        }
+                    }
+                    let (leave, leave_error) = emit_branch(builder, instruction.token)
+                    if leave_error != ok { ret leave_error }
+                    try nir.set_branch_targets(builder, leave, continuation, 0usize)
+                } else {
+                    var immediate = instruction.immediate
+                    if instruction.opcode == .Call || instruction.opcode == .FunctionAddress {
+                        let reference = oracle.function_refs[instruction.immediate]
+                        var interned = 0usize
+                        if reference.library.len != 0usize {
+                            let (imported, import_error) = nir.intern_import(builder, reference.module_index, reference.name, reference.library, reference.symbol)
+                            if import_error != ok { ret import_error }
+                            interned = imported
+                        } else {
+                            let (plain, intern_error) = nir.intern_function(builder, reference.module_index, reference.name, reference.instance)
+                            if intern_error != ok { ret intern_error }
+                            interned = plain
+                        }
+                        immediate = interned
+                    }
+                    if instruction.opcode == .ConstString {
+                        let (text_index, text_error) = nir.intern_string(builder, oracle.strings[instruction.immediate].spelling)
+                        if text_error != ok { ret text_error }
+                        immediate = text_index
+                    }
+                    if instruction.opcode == .Trap && instruction.immediate != 0usize {
+                        let (text_index, text_error) = nir.intern_string(builder, oracle.strings[instruction.immediate - 1usize].spelling)
+                        if text_error != ok { ret text_error }
+                        immediate = text_index + 1usize
+                    }
+                    if instruction.opcode == .GlobalAddress {
+                        if instruction.immediate >= builder.global_count || !check.same(builder.globals[instruction.immediate].name, oracle.globals[instruction.immediate].name) { ret check.Unsupported }
+                    }
+                    let was_nocheck = builder.nocheck
+                    builder.nocheck = was_nocheck || instruction.nocheck
+                    let (copied, result, copy_error) = nir.emit(builder, instruction.opcode, instruction.ty, instruction.has_result, immediate, instruction.token)
+                    builder.nocheck = was_nocheck
+                    if copy_error != ok { ret copy_error }
+                    var operand_at = 0usize
+                    while operand_at < instruction.operand_count {
+                        try nir.add_operand(builder, copied, value_map[oracle.operands[instruction.first_operand + operand_at]])
+                        operand_at += 1usize
+                    }
+                    if instruction.opcode == .Branch || instruction.opcode == .BranchIf || instruction.opcode == .Switch {
+                        var target2 = 0usize
+                        if instruction.opcode == .BranchIf { target2 = block_map[instruction.target2 - callee.first_block] }
+                        try nir.set_branch_targets(builder, copied, block_map[instruction.target - callee.first_block], target2)
+                    }
+                    if instruction.has_result { value_map[instruction.result] = result }
+                }
+            }
+            instruction_at += 1usize
+        }
+        block_at += 1usize
+    }
+    builder.current_path = caller_path
+    let (continuation_index, continuation_error) = nir.begin_block(builder)
+    if continuation_error != ok || continuation_index != continuation { ret nir.InvalidControlFlow }
+    if results.count == 1usize {
+        if return_sites == 1usize {
+            results.values[0usize] = single_result
+        } else {
+            let (load_instruction, loaded, load_error) = nir.emit(builder, .Load, result_type, true, slot_size, token)
+            if load_error != ok { ret load_error }
+            try nir.add_operand(builder, load_instruction, slot)
+            results.values[0usize] = loaded
+        }
+    }
+    ret ok
+}
+
 fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     if call.atomic_op != .None { ret emit_atomic(c, call, arguments, argument_count, builder, token, results) }
     if call.meta_access { ret emit_meta_access(c, call, arguments, argument_count, builder, token, results) }
@@ -1913,6 +2156,20 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
     var return_layout: ReturnLayout = zero
     let return_layout_error = call_return_layout(c, call, &return_layout)
     if return_layout_error != ok { ret return_layout_error }
+    // Section 12's inlining: a callee the oracle holds -- forty NIR instructions or
+    // fewer, one register result at most -- is copied in here instead of called (D207).
+    if builder.has_oracle && !call.indirect && !call.mem_alloc && !call.function.intrinsic && !call.function.external && !call.function.generic && !return_layout.via_slot && results.count <= 1usize {
+        var scalar_result = true
+        if results.count == 1usize {
+            let (returned, returned_error) = check.call_return(c, call, 0usize)
+            if returned_error != ok { ret returned_error }
+            scalar_result = !aggregate_value(c, returned)
+        }
+        if scalar_result {
+            let (entry_index, inlinable) = find_inline_entry(builder, call.function.owner_module_index, call.function.name, call.function.instance_id)
+            if inlinable { ret emit_inlined_call(c, call, entry_index, arguments, argument_count, builder, token, results) }
+        }
+    }
     var symbol = call.function.name
     var symbol_instance = call.function.instance_id
     if call.mem_alloc {
@@ -2979,17 +3236,19 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     try nir.add_operand(builder, compare_instruction, call_result)
     try nir.add_operand(builder, compare_instruction, ok_value)
     let error_block = builder.block_count
-    let continue_block = builder.block_count + 1usize
     let (branch_instruction, ignored, branch_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, c.tokens[node.token_start])
     if branch_error != ok { ret branch_error }
     try nir.add_operand(builder, branch_instruction, failed)
-    try nir.set_branch_targets(builder, branch_instruction, error_block, continue_block)
     let (error_block_index, error_block_error) = nir.begin_block(builder)
     if error_block_error != ok || error_block_index != error_block { ret nir.InvalidControlFlow }
     try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, caller_error_type, false, 0usize, c.tokens[node.token_start])
     if return_error != ok { ret return_error }
     try nir.add_operand(builder, return_instruction, call_result)
+    // The deferred calls may have been inlined, and with them blocks, so the
+    // continuation's index is read only now (D207).
+    let continue_block = builder.block_count
+    try nir.set_branch_targets(builder, branch_instruction, error_block, continue_block)
     let (continue_block_index, continue_block_error) = nir.begin_block(builder)
     if continue_block_error != ok || continue_block_index != continue_block { ret nir.InvalidControlFlow }
     ret ok
@@ -4492,6 +4751,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if begin_error != ok { ret begin_error }
     builder.functions[nir_function].path = g.modules[function.module_index].path
     builder.functions[nir_function].module_name = g.modules[function.owner_module_index].name
+    builder.current_path = g.modules[function.module_index].path
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_parameter_at = 0usize
     while signature_parameter_at < function.parameter_count {
@@ -4672,11 +4932,9 @@ fn emit_formatter_guard(c: *check.Checker, module_index: usize, instance: check.
     try nir.add_operand(builder, compare_instruction, failure)
     try nir.add_operand(builder, compare_instruction, ok_value)
     let failure_block = builder.block_count
-    let continue_block = builder.block_count + 1usize
     let (branch_instruction, branch_ignored, branch_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
     if branch_error != ok { ret branch_error }
     try nir.add_operand(builder, branch_instruction, failed)
-    try nir.set_branch_targets(builder, branch_instruction, failure_block, continue_block)
     let (failure_index, failure_block_error) = nir.begin_block(builder)
     if failure_block_error != ok || failure_index != failure_block { ret nir.InvalidControlFlow }
     var text = 0usize
@@ -4689,6 +4947,8 @@ fn emit_formatter_guard(c: *check.Checker, module_index: usize, instance: check.
         text = empty_value
     }
     try emit_formatter_return(c, module_index, instance, return_slot, text, failure, arena_form, builder, token)
+    let continue_block = builder.block_count
+    try nir.set_branch_targets(builder, branch_instruction, failure_block, continue_block)
     let (continue_index, continue_block_error) = nir.begin_block(builder)
     if continue_block_error != ok || continue_index != continue_block { ret nir.InvalidControlFlow }
     ret ok
@@ -5236,6 +5496,7 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
     // An instance's tokens are the template's, so the record names the template's file.
     builder.functions[nir_function].path = g.modules[instance.module_index].path
     builder.functions[nir_function].module_name = g.modules[instance.owner_module_index].name
+    builder.current_path = g.modules[instance.module_index].path
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_at = 0usize
     while signature_at < instance.parameter_count {
@@ -5402,6 +5663,7 @@ fn synthesize_failure_report(c: *check.Checker, g: *graph.Graph, builder: *nir.B
     if begin_error != ok { ret begin_error }
     builder.functions[nir_function].path = g.modules[module_index].path
     builder.functions[nir_function].module_name = g.modules[module_index].name
+    builder.current_path = g.modules[module_index].path
     try nir.begin_signature(builder, nir_function, signatures)
     try nir.add_parameter_type(builder, nir_function, signatures, error_type)
     let (entry, entry_error) = nir.begin_block(builder)
@@ -5494,15 +5756,34 @@ fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, 
     }
     try module(c, g, 0usize, builder, signatures, bindings)
     lowered[0usize] = true
-    var reference_at = 0usize
-    while reference_at < builder.function_ref_count {
-        let target_module = builder.function_refs[reference_at].module_index
-        if target_module >= g.count { ret FunctionNotFound }
-        if !lowered[target_module] {
-            try module(c, g, target_module, builder, signatures, bindings)
-            lowered[target_module] = true
+    // A module reached only by inlining (D207) has no reference to discover it by, and
+    // its artifact still needs the callee's own definition; both lists are walked to
+    // a fixed point, since either kind of lowering adds to both.
+    var progress = true
+    while progress {
+        progress = false
+        var reference_at = 0usize
+        while reference_at < builder.function_ref_count {
+            let target_module = builder.function_refs[reference_at].module_index
+            if target_module >= g.count { ret FunctionNotFound }
+            if !lowered[target_module] {
+                try module(c, g, target_module, builder, signatures, bindings)
+                lowered[target_module] = true
+                progress = true
+            }
+            reference_at += 1usize
         }
-        reference_at += 1usize
+        var inlined_at = 0usize
+        while inlined_at < builder.inlined_count {
+            let target_module = builder.inlined[inlined_at].callee_module
+            if target_module >= g.count { ret FunctionNotFound }
+            if !lowered[target_module] {
+                try module(c, g, target_module, builder, signatures, bindings)
+                lowered[target_module] = true
+                progress = true
+            }
+            inlined_at += 1usize
+        }
     }
     ret ok
 }

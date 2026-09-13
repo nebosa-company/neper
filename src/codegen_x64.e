@@ -686,7 +686,7 @@ fn emit_float_saturation(destination: usize, into: check.Type, wide: bool, outpu
     ret (past, ok)
 }
 
-fn emit_float_range_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, into: check.Type, wide: bool, context: *FunctionContext) -> err {
+fn emit_float_range_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, token_path: str, into: check.Type, wide: bool, context: *FunctionContext) -> err {
     let output = context.output
     let width = integer_width(into)
     let signed = signed_integer(into)
@@ -695,7 +695,7 @@ fn emit_float_range_check(builder: *nir.Builder, current: nir.Function, token: l
     try emit_x64.float_compare(output, 0usize, 1usize, wide)
     let (below_high, high_error) = emit_x64.jump_condition(output, 2usize)
     if high_error != ok { ret high_error }
-    try emit_trap(builder, current, token, "narrow", "a float outside ", "", "", 0usize, false, 0usize, 0usize, into.name, context)
+    try emit_trap(builder, current, token, token_path, "narrow", "a float outside ", "", "", 0usize, false, 0usize, 0usize, into.name, context)
     try emit_x64.patch_relative32(output, below_high, output.count)
     try emit_x64.mov_immediate(output, 11usize, float_bound_bits(width, signed, false, wide))
     try emit_x64.move_to_float(output, 1usize, 11usize, wide)
@@ -706,7 +706,7 @@ fn emit_float_range_check(builder: *nir.Builder, current: nir.Function, token: l
     if signed && (width == 64usize || !wide) { condition = 3usize }
     let (above_low, low_error) = emit_x64.jump_condition(output, condition)
     if low_error != ok { ret low_error }
-    try emit_trap(builder, current, token, "narrow", "a float outside ", "", "", 0usize, false, 0usize, 0usize, into.name, context)
+    try emit_trap(builder, current, token, token_path, "narrow", "a float outside ", "", "", 0usize, false, 0usize, 0usize, into.name, context)
     ret emit_x64.patch_relative32(output, above_low, output.count)
 }
 
@@ -768,7 +768,7 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
     try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
     var saturated = 0usize
     if instruction.immediate == 0usize && !instruction.nocheck {
-        try emit_float_range_check(builder, current, instruction.token, instruction.ty, source_width == 64usize, context)
+        try emit_float_range_check(builder, current, instruction.token, instruction.path, instruction.ty, source_width == 64usize, context)
     } else {
         // Section 4's release result: the target's extreme for a value past its range,
         // zero for NaN, on every target; the compare sequence branches past the
@@ -1281,7 +1281,7 @@ fn emit_decimal(output: *emit_x64.Buffer, value: usize) -> err {
     ret emit_x64.byte(output, 48usize + value % 10usize)
 }
 
-fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, tail: str, context: *FunctionContext) -> err {
+fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, token_path: str, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, tail: str, context: *FunctionContext) -> err {
     let output = context.output
     var first_register = 8usize
     var second_register = 9usize
@@ -1298,7 +1298,9 @@ fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kin
     let (skip, skip_error) = emit_x64.jump(output)
     if skip_error != ok { ret skip_error }
     let text_start = output.count
-    try emit_text(output, current.path)
+    var site_path = token_path
+    if site_path.len == 0usize { site_path = current.path }
+    try emit_text(output, site_path)
     try emit_x64.byte(output, 58usize)
     try emit_decimal(output, token.line)
     try emit_x64.byte(output, 58usize)
@@ -1345,7 +1347,7 @@ fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kin
 // normalised result differing from it; at 64 bits the flags say: OF for a signed
 // operation, CF for an unsigned one. `destination` holds the exact result and r11 is
 // free, the right operand being consumed. The record names the type and operator.
-fn emit_overflow_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, ty: check.Type, operator: str, destination: usize, context: *FunctionContext) -> err {
+fn emit_overflow_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, token_path: str, ty: check.Type, operator: str, destination: usize, context: *FunctionContext) -> err {
     let output = context.output
     let width = integer_width(ty)
     let signed = signed_integer(ty)
@@ -1364,30 +1366,30 @@ fn emit_overflow_check(builder: *nir.Builder, current: nir.Function, token: lex.
         if same_error != ok { ret same_error }
         over = same
     }
-    try emit_trap(builder, current, token, "overflow", ty.name, "", "", 0usize, false, 0usize, 0usize, operator, context)
+    try emit_trap(builder, current, token, token_path, "overflow", ty.name, "", "", 0usize, false, 0usize, 0usize, operator, context)
     ret emit_x64.patch_relative32(output, over, output.count)
 }
 
 // `cmp a, b; jcc over; <trap>; over:` -- the check passes when `condition` holds.
-fn emit_checked(builder: *nir.Builder, current: nir.Function, token: lex.Token, condition: usize, kind: str, first: str, second: str, third: str, a: usize, b: usize, context: *FunctionContext) -> err {
+fn emit_checked(builder: *nir.Builder, current: nir.Function, token: lex.Token, token_path: str, condition: usize, kind: str, first: str, second: str, third: str, a: usize, b: usize, context: *FunctionContext) -> err {
     try emit_x64.compare_register(context.output, a, b)
     let (over, over_error) = emit_x64.jump_condition(context.output, condition)
     if over_error != ok { ret over_error }
-    try emit_trap(builder, current, token, kind, first, second, third, 2usize, false, a, b, "", context)
+    try emit_trap(builder, current, token, token_path, kind, first, second, third, 2usize, false, a, b, "", context)
     ret emit_x64.patch_relative32(context.output, over, context.output.count)
 }
 
 // Section 11's `divide` rows, which trap in every mode: the divisor is zero, or the
 // division is the one two's complement cannot represent. The dividend is in rax and the
 // divisor in r11, as the instruction wants them; r10 is free for the constants.
-fn emit_divide_checks(builder: *nir.Builder, current: nir.Function, token: lex.Token, remainder: bool, width: usize, signed: bool, context: *FunctionContext) -> err {
+fn emit_divide_checks(builder: *nir.Builder, current: nir.Function, token: lex.Token, token_path: str, remainder: bool, width: usize, signed: bool, context: *FunctionContext) -> err {
     let output = context.output
     var operator = " / "
     if remainder { operator = " % " }
     try emit_x64.test_register(output, 11usize)
     let (nonzero, nonzero_error) = emit_x64.jump_condition(output, 5usize)
     if nonzero_error != ok { ret nonzero_error }
-    try emit_trap(builder, current, token, "divide", "", operator, " divides by zero", 2usize, signed, 0usize, 11usize, "", context)
+    try emit_trap(builder, current, token, token_path, "divide", "", operator, " divides by zero", 2usize, signed, 0usize, 11usize, "", context)
     try emit_x64.patch_relative32(output, nonzero, output.count)
     if !signed { ret ok }
     let all_ones = 0usize -% 1usize
@@ -1401,16 +1403,16 @@ fn emit_divide_checks(builder: *nir.Builder, current: nir.Function, token: lex.T
     try emit_x64.compare_register(output, 0usize, 10usize)
     let (not_minimum, minimum_error) = emit_x64.jump_condition(output, 5usize)
     if minimum_error != ok { ret minimum_error }
-    try emit_trap(builder, current, token, "divide", "", operator, " overflows", 2usize, true, 0usize, 11usize, "", context)
+    try emit_trap(builder, current, token, token_path, "divide", "", operator, " overflows", 2usize, true, 0usize, 11usize, "", context)
     try emit_x64.patch_relative32(output, not_minus_one, output.count)
     ret emit_x64.patch_relative32(output, not_minimum, output.count)
 }
 
 // Section 11's `shift` row: a count at or past the width. The count is in rcx and the
 // value in r10; r11 is free for the width.
-fn emit_shift_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, width: usize, context: *FunctionContext) -> err {
+fn emit_shift_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, token_path: str, width: usize, context: *FunctionContext) -> err {
     try emit_x64.mov_immediate(context.output, 11usize, width)
-    ret emit_checked(builder, current, token, 2usize, "shift", "shift by ", " on a width of ", "", 1usize, 11usize, context)
+    ret emit_checked(builder, current, token, token_path, 2usize, "shift", "shift by ", " on a width of ", "", 1usize, 11usize, context)
 }
 
 fn select_index_address(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, context: *FunctionContext) -> err {
@@ -1429,7 +1431,7 @@ fn select_index_address(builder: *nir.Builder, current: nir.Function, instructio
     let (length, length_error) = read_value(allocations, length_value, 0usize, output)
     if length_error != ok { ret length_error }
     if length != 0usize { try emit_x64.mov_register(output, 0usize, length) }
-    if !instruction.nocheck { try emit_checked(builder, current, instruction.token, 2usize, "bounds", "index ", " out of bounds for len ", "", 11usize, 0usize, context) }
+    if !instruction.nocheck { try emit_checked(builder, current, instruction.token, instruction.path, 2usize, "bounds", "index ", " out of bounds for len ", "", 11usize, 0usize, context) }
     if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 11usize, 11usize, instruction.immediate) }
     try emit_x64.add_register(output, 11usize, 10usize)
     try restore_allocated_registers(output, preserve_base, preserve_count)
@@ -1464,8 +1466,8 @@ fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.I
     if upper_error != ok { ret upper_error }
     if upper_source != 1usize { try emit_x64.mov_register(output, 1usize, upper_source) }
     if !instruction.nocheck {
-        try emit_checked(builder, current, instruction.token, 6usize, "bounds", "slice start ", " after end ", "", 0usize, 1usize, context)
-        try emit_checked(builder, current, instruction.token, 6usize, "bounds", "slice end ", " out of bounds for len ", "", 1usize, 11usize, context)
+        try emit_checked(builder, current, instruction.token, instruction.path, 6usize, "bounds", "slice start ", " after end ", "", 0usize, 1usize, context)
+        try emit_checked(builder, current, instruction.token, instruction.path, 6usize, "bounds", "slice end ", " out of bounds for len ", "", 1usize, 11usize, context)
     }
     try emit_x64.subtract_register(output, 1usize, 0usize)
     if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 0usize, 0usize, instruction.immediate) }
@@ -1662,7 +1664,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                             if equal_error != ok { ret equal_error }
                             fits = equal
                         }
-                        try emit_trap(builder, current, instruction.token, "narrow", "", " does not fit ", "", 1usize, signed_integer(source_type), kept, 0usize, instruction.ty.name, context)
+                        try emit_trap(builder, current, instruction.token, instruction.path, "narrow", "", " does not fit ", "", 1usize, signed_integer(source_type), kept, 0usize, instruction.ty.name, context)
                         try emit_x64.patch_relative32(output, fits, output.count)
                     }
                 } else {
@@ -1670,7 +1672,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     if instruction.opcode == .Negate { try emit_x64.negate_register(output, destination) }
                     if instruction.opcode == .BitNot { try emit_x64.bit_not_register(output, destination) }
                     let negated = instruction.opcode == .Negate && signed_integer(instruction.ty) && !instruction.nocheck
-                    if negated { try emit_overflow_check(builder, current, instruction.token, instruction.ty, " unary - overflows", destination, context) }
+                    if negated { try emit_overflow_check(builder, current, instruction.token, instruction.path, instruction.ty, " unary - overflows", destination, context) }
                     if !(negated && integer_width(instruction.ty) != 64usize) { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
                 try store_result(allocations, instruction.result, destination, output)
@@ -1694,7 +1696,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if right_error != ok { ret right_error }
                 if left != 10usize { try emit_x64.mov_register(output, 10usize, left) }
                 if right != 1usize { try emit_x64.mov_register(output, 1usize, right) }
-                if !instruction.nocheck { try emit_shift_check(builder, current, instruction.token, integer_width(left_type), context) }
+                if !instruction.nocheck { try emit_shift_check(builder, current, instruction.token, instruction.path, integer_width(left_type), context) }
                 try emit_x64.and_immediate8(output, 1usize, integer_width(left_type) - 1usize)
                 try emit_x64.shift_register(output, 10usize, instruction.opcode == .ShiftLeft, signed_integer(left_type))
                 try restore_allocated_registers(output, preserve_base, preserve_count)
@@ -1724,13 +1726,13 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         try emit_x64.test_register(output, 2usize)
                         let (fits, fits_error) = emit_x64.jump_condition(output, 4usize)
                         if fits_error != ok { ret fits_error }
-                        try emit_trap(builder, current, instruction.token, "overflow", instruction.ty.name, "", "", 0usize, false, 0usize, 0usize, " * overflows", context)
+                        try emit_trap(builder, current, instruction.token, instruction.path, "overflow", instruction.ty.name, "", "", 0usize, false, 0usize, 0usize, " * overflows", context)
                         try emit_x64.patch_relative32(output, fits, output.count)
                     }
                     try emit_x64.mov_register(output, 10usize, 0usize)
                 } else {
                 let signed = signed_integer(left_type)
-                try emit_divide_checks(builder, current, instruction.token, instruction.opcode == .Remainder, integer_width(left_type), signed, context)
+                try emit_divide_checks(builder, current, instruction.token, instruction.path, instruction.opcode == .Remainder, integer_width(left_type), signed, context)
                 if signed { try emit_x64.extend_dividend_signed(output) } else { try emit_x64.extend_dividend_unsigned(output) }
                 try emit_x64.divide_register(output, 11usize, signed)
                 if instruction.opcode == .Divide {
@@ -1777,7 +1779,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         var operator = " + overflows"
                         if instruction.opcode == .Subtract { operator = " - overflows" }
                         if instruction.opcode == .Multiply { operator = " * overflows" }
-                        try emit_overflow_check(builder, current, instruction.token, instruction.ty, operator, destination, context)
+                        try emit_overflow_check(builder, current, instruction.token, instruction.path, instruction.ty, operator, destination, context)
                     }
                     if instruction.ty.kind == .Integer && !(checked && integer_width(instruction.ty) != 64usize) { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
@@ -1927,7 +1929,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         if operand_source != 10usize + operand_at { try emit_x64.mov_register(output, 10usize + operand_at, operand_source) }
                         operand_at += 1usize
                     }
-                    try emit_trap(builder, current, instruction.token, kind, message, "", "", instruction.operand_count, signed, 10usize, 11usize, "", context)
+                    try emit_trap(builder, current, instruction.token, instruction.path, kind, message, "", "", instruction.operand_count, signed, 10usize, 11usize, "", context)
                 } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {

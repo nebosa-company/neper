@@ -117,6 +117,9 @@ type Instruction = struct {
     token: lex.Token,
     // Emitted inside `@nocheck { ... }`: the debug-only checks are left out of it (D203).
     nocheck: bool,
+    // The source file the instruction came from: its function's, unless it was inlined
+    // from another module's function (D207), which a trap record has to name.
+    path: str,
 }
 
 type Block = struct {
@@ -184,6 +187,24 @@ type Signatures = struct {
     count: usize,
 }
 
+// One function small enough to inline (section 12's cap of forty NIR instructions),
+// lowered ahead of the program into the oracle builder, keyed the way a call names it.
+type InlineEntry = struct {
+    module_index: usize,
+    name: str,
+    instance: usize,
+    function_index: usize,
+}
+
+// A callee inlined into a module: what section 12 calls a body edge, recorded so the
+// artifact carries it and the pruner keeps the callee's own definition.
+type InlinedRef = struct {
+    caller_module: usize,
+    callee_module: usize,
+    name: str,
+    instance: usize,
+}
+
 type Builder = struct {
     functions: []Function,
     blocks: []Block,
@@ -199,6 +220,18 @@ type Builder = struct {
     runtime_prefix: usize,
     // Set while lowering a `@nocheck` block; every instruction emitted carries it.
     nocheck: bool,
+    // The path every instruction emitted is stamped with: the function's, or the
+    // callee's while its body is being copied in.
+    current_path: str,
+    // The inlining oracle (D207): small functions lowered ahead of the program into
+    // their own builder, and the sites that took a body from it.
+    oracle: *Builder,
+    oracle_signatures: *Signatures,
+    has_oracle: bool,
+    inline_entries: []InlineEntry,
+    inline_entry_count: usize,
+    inlined: []InlinedRef,
+    inlined_count: usize,
     function_count: usize,
     block_count: usize,
     instruction_count: usize,
@@ -282,11 +315,24 @@ fn function_for_reference(builder: *Builder, reference: FunctionRef) -> (usize, 
 // A function whose body was lowered still contributes its own references, so a walk has to start
 // at `main` and follow edges -- asking "is this referenced anywhere" would answer yes for
 // everything, since dead code refers to things too.
-fn prune_unreachable(builder: *Builder, keep: []bool) -> err {
+// An inlined callee's own definition stays in an artifact: its Interface hashes the NIR,
+// which the body edge a dependent recorded is compared against (D207). An executable
+// drops it like any other unreached function, on both link paths alike.
+fn inlined_function(builder: *Builder, function: Function) -> bool {
+    var at = 0usize
+    while at < builder.inlined_count {
+        let entry = builder.inlined[at]
+        if entry.callee_module == function.module_index && entry.instance == function.instance && check.same(entry.name, function.name) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn prune_unreachable(builder: *Builder, keep: []bool, keep_inlined: bool) -> err {
     if builder.function_count > keep.len { ret Capacity }
     var at = 0usize
     while at < builder.function_count {
-        keep[at] = false
+        keep[at] = keep_inlined && inlined_function(builder, builder.functions[at])
         at += 1usize
     }
     var root = 0usize
@@ -682,6 +728,7 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         target2: 0usize,
         token: token,
         nocheck: builder.nocheck,
+        path: builder.current_path,
     }
     builder.instruction_count += 1usize
     builder.blocks[builder.current_block].instruction_count += 1usize

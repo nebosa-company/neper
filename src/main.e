@@ -847,6 +847,34 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     ret check.init_control(checker, checked_switches, function_signatures)
 }
 
+// The inlining oracle's builder (D207): the short functions of every module, which the
+// source filter keeps to a few instructions each, so a tenth of the program's tables.
+fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize) -> err {
+    let (functions, functions_error) = mem.alloc[nir.Function](a, 4096usize)
+    if functions_error != ok { ret functions_error }
+    let (blocks, blocks_error) = mem.alloc[nir.Block](a, 32768usize)
+    if blocks_error != ok { ret blocks_error }
+    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, 131072usize)
+    if instructions_error != ok { ret instructions_error }
+    let (operands, operands_error) = mem.alloc[usize](a, 524288usize)
+    if operands_error != ok { ret operands_error }
+    let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, 8192usize)
+    if function_refs_error != ok { ret function_refs_error }
+    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 8192usize)
+    if strings_error != ok { ret strings_error }
+    try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
+    let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, 256usize)
+    if global_data_error != ok { ret global_data_error }
+    try nir.init_globals(builder, global_data)
+    let (signature_entries, signature_entries_error) = mem.alloc[nir.Signature](a, 4096usize)
+    if signature_entries_error != ok { ret signature_entries_error }
+    var type_capacity = signature_type_capacity
+    if type_capacity == 0usize { type_capacity = 1usize }
+    let (signature_types, signature_types_error) = mem.alloc[check.Type](a, type_capacity)
+    if signature_types_error != ok { ret signature_types_error }
+    ret nir.init_signatures(signatures, signature_entries, signature_types)
+}
+
 fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, compiler_scale: bool) -> err {
     // Every module carries its own copy of the generic instances it uses, so the
     // NIR function count scales with instantiation sites, not with declarations.
@@ -1942,11 +1970,36 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, 65536usize)
         if kept_functions_error != ok { ret kept_functions_error }
         builder.nocheck = release_build
+        // Section 12's inlining (D207): the small functions are lowered first into the
+        // oracle, in module order on every path, and the program's own lowering copies
+        // them in at their calls.
+        var oracle: nir.Builder = zero
+        var oracle_signatures: nir.Signatures = zero
+        try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize)
+        oracle.nocheck = release_build
+        let (inline_entries, inline_entries_error) = mem.alloc[nir.InlineEntry](a, 4096usize)
+        if inline_entries_error != ok { ret inline_entries_error }
+        let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, 8192usize)
+        if inlined_error != ok { ret inlined_error }
+        var inline_entry_count = 0usize
+        let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
+        if oracle_error != ok {
+            try print_lower_diagnostic(&loaded, &checker, oracle_error)
+            os.exit(1i32)
+            ret ok
+        }
+        builder.oracle = &oracle
+        builder.oracle_signatures = &oracle_signatures
+        builder.has_oracle = true
+        builder.inline_entries = inline_entries
+        builder.inline_entry_count = inline_entry_count
+        builder.inlined = inlined
+        builder.inlined_count = 0usize
         let lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
         if lower_error == ok {
             // Everything was lowered so that the order is the one the artifacts also use; what
             // nothing reaches is dropped now, which both link paths do identically.
-            let prune_error = nir.prune_unreachable(&builder, kept_functions)
+            let prune_error = nir.prune_unreachable(&builder, kept_functions, writes_em || writes_all_em)
             if prune_error != ok {
                 try print_lower_diagnostic(&loaded, &checker, prune_error)
                 os.exit(1i32)
@@ -1968,12 +2021,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // code it will hold and it dominates the arena. Selecting the compiler
             // itself needs between 16 and 32 bytes per NIR instruction, measured by
             // bisecting the multiplier until emission reports `emit_x64.Capacity`;
-            // 96 keeps three to six times that and takes the allocation from about
-            // 512 MiB to about 192 MiB. Overrunning it is a clean `Capacity` error,
+            // 96 kept three to six times that, and 56 -- twice the 28 the checks of
+            // D194-D202 brought it to -- is what leaves room for the inlining oracle
+            // (D207) in the default arena. Overrunning it is a clean `Capacity` error,
             // never a wrong instruction.
             // ... plus the symbol table appended after the code (D206), a header and a
             // name per function.
-            machine_capacity = builder.instruction_count * 96usize + builder.function_count * 64usize + 65536usize
+            machine_capacity = builder.instruction_count * 56usize + builder.function_count * 64usize + 65536usize
         }
         let (machine_storage, machine_storage_error) = mem.alloc[usize](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }

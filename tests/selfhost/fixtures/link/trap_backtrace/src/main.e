@@ -2,7 +2,9 @@
 // module.function` line per frame from the trapping function up to `main`, walked
 // over the rbp chain and named from the symbol table the driver appends after the
 // code. The index past the end is computed from the argument count so nothing folds,
-// and the call goes through a second module so a frame of each is named.
+// and the call goes through a second module so a frame of each is named. `deeper` is
+// small enough to be inlined into `main` (D207), so it is no frame of its own: the
+// walk names `helper.pick`, then `main.main`.
 use e.mem
 use helper
 

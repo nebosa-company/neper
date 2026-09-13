@@ -1545,6 +1545,13 @@ $incrementalClean = Join-Path $testBuild 'incremental-clean.exe'
 $incrementalCleanWritten = & $compiler emit-executable $incrementalMain $repo 'x64' 'windows' $incrementalClean
 if ($LASTEXITCODE -ne 0 -or $incrementalCleanWritten -ne 'executable written') { throw 'the clean build of the edited fixture failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $incrementalLinked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $incrementalClean).Hash) { throw 'incremental does not equal clean' }
+Copy-Item (Join-Path $incrementalFixture 'edits\dep_inlined.e') (Join-Path $incrementalSource 'dep.e')
+$incrementalInlined = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $incrementalInlined -notmatch 'rebuilt main' -or $incrementalInlined -notmatch 'rebuilt dep') { throw "a body edit behind a body edge did not rebuild the dependent: $incrementalInlined" }
+$incrementalInlinedWritten = & $compiler link-em $incrementalLinked @incrementalArtifactList
+if ($LASTEXITCODE -ne 0 -or $incrementalInlinedWritten -ne 'artifact executable written') { throw 'the artifacts after the inlined edit did not link' }
+& $incrementalLinked
+if ($LASTEXITCODE -ne 9) { throw "the rebuilt dependent did not carry the new inlined body: exit $LASTEXITCODE" }
 Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $incrementalSource 'dep.e')
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
 $incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
@@ -1555,7 +1562,7 @@ $backtracePath = Join-Path $testBuild 'trap-backtrace-selfhost.exe'
 $backtraceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_backtrace\src\main.e') $repo 'x64' 'windows' $backtracePath
 if ($LASTEXITCODE -ne 0 -or $backtraceWritten -ne 'executable written') { throw 'backtrace fixture executable emission failed' }
 $backtraceOutput = (& $backtracePath 2>&1) -join "`n"
-if ($LASTEXITCODE -ne 134 -or $backtraceOutput -notmatch 'helper\.e:1:50: trap\[bounds\]: index 7 out of bounds for len 5\n  at helper\.pick\n  at main\.deeper\n  at main\.main') { throw "the trap did not print its backtrace: exit $LASTEXITCODE, $backtraceOutput" }
+if ($LASTEXITCODE -ne 134 -or $backtraceOutput -notmatch 'helper\.e:1:50: trap\[bounds\]: index 7 out of bounds for len 5\n  at helper\.pick\n  at main\.main') { throw "the trap did not print its backtrace: exit $LASTEXITCODE, $backtraceOutput" }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at

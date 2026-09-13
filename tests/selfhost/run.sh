@@ -1651,6 +1651,15 @@ incremental_clean="$test_build/incremental-clean"
 incremental_clean_written=$($test_build/neper-self emit-executable "$incremental_main" "$repo" x64 linux "$incremental_clean")
 [ "$incremental_clean_written" = 'executable written' ]
 cmp "$incremental_linked" "$incremental_clean"
+cp "$incremental_fixture/edits/dep_inlined.e" "$incremental_source/dep.e"
+incremental_inlined=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --incremental)
+case "$incremental_inlined" in *'rebuilt main'*) ;; *) printf %s "a body edit behind a body edge did not rebuild the dependent: $incremental_inlined" >&2; echo >&2; exit 1 ;; esac
+case "$incremental_inlined" in *'rebuilt dep'*) ;; *) printf %s "a body edit behind a body edge did not rebuild its module: $incremental_inlined" >&2; echo >&2; exit 1 ;; esac
+incremental_inlined_written=$($test_build/neper-self link-em "$incremental_linked" "$incremental_artifacts/main.x64-linux.em" "$incremental_artifacts/dep.x64-linux.em" "$incremental_artifacts/e.os.x64-linux.em" "$incremental_artifacts/e.mem.x64-linux.em")
+[ "$incremental_inlined_written" = 'artifact executable written' ]
+incremental_status=0
+"$incremental_linked" || incremental_status=$?
+[ "$incremental_status" -eq 9 ]
 cp "$incremental_fixture/edits/dep_signature.e" "$incremental_source/dep.e"
 cp "$incremental_fixture/edits/main_signature.e" "$incremental_main"
 incremental_signature=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --incremental)
@@ -1666,7 +1675,7 @@ chmod +x "$backtrace_path"
 backtrace_status=0
 backtrace_output=$("$backtrace_path" 2>&1) || backtrace_status=$?
 [ "$backtrace_status" -eq 134 ]
-backtrace_expected=$'helper.e:1:50: trap[bounds]: index 7 out of bounds for len 5\n  at helper.pick\n  at main.deeper\n  at main.main'
+backtrace_expected=$'helper.e:1:50: trap[bounds]: index 7 out of bounds for len 5\n  at helper.pick\n  at main.main'
 case "$backtrace_output" in *"$backtrace_expected"*) ;; *) printf %s "the trap did not print its backtrace: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
