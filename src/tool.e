@@ -642,7 +642,7 @@ fn test_outcome_name(outcome: usize) -> str {
 // `test --json` (D240): the header, one buffered `test` record per @test function in source
 // order, a `test_summary`, and the result. duration_ms is 0 and no test times out yet -- real
 // timing and the structured trap payload are the gap; stderr still carries a crash's raw text.
-fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []const str, lines: []const usize, outcomes: []const usize, stdouts: []const str, stderrs: []const str, count: usize) -> err {
+fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []const str, lines: []const usize, outcomes: []const usize, durations: []const usize, stdouts: []const str, stderrs: []const str, count: usize, summary_duration: usize) -> err {
     var capacity = 8192usize
     var at = 0usize
     while at < count {
@@ -661,7 +661,7 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []con
         if outcomes[at] == 0usize { passed += 1usize } else {
             if outcomes[at] == 1usize { failed += 1usize } else { crashed += 1usize }
         }
-        try test_record(&out, module_name, root, path, names[at], lines[at], outcomes[at], stdouts[at], stderrs[at])
+        try test_record(&out, module_name, root, path, names[at], lines[at], outcomes[at], durations[at], stdouts[at], stderrs[at])
         at += 1usize
     }
     try text(&out, "{\"record\":\"test_summary\",\"passed\":")
@@ -672,7 +672,9 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []con
     try decimal(&out, crashed)
     try text(&out, ",\"timeout\":0,\"total\":")
     try decimal(&out, count)
-    try text(&out, ",\"duration_ms\":0}")
+    try text(&out, ",\"duration_ms\":")
+    try decimal(&out, summary_duration)
+    try byte(&out, 125u8)
     try flush(&out)
     var succeeded = failed == 0usize && crashed == 0usize
     if succeeded { try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"tests\":") } else { try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"tests\":") }
@@ -681,7 +683,7 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []con
     ret flush(&out)
 }
 
-fn test_record(out: *Out, module_name: str, root: str, path: str, name: str, line: usize, outcome: usize, stdout_bytes: str, stderr_bytes: str) -> err {
+fn test_record(out: *Out, module_name: str, root: str, path: str, name: str, line: usize, outcome: usize, duration_ms: usize, stdout_bytes: str, stderr_bytes: str) -> err {
     try text(out, "{\"record\":\"test\",\"name\":")
     try quoted(out, name)
     try text(out, ",\"module\":")
@@ -694,7 +696,9 @@ fn test_record(out: *Out, module_name: str, root: str, path: str, name: str, lin
     try decimal(out, line)
     try text(out, ",\"outcome\":")
     try quoted(out, test_outcome_name(outcome))
-    try text(out, ",\"error\":null,\"message\":null,\"duration_ms\":0,\"timeout_s\":60,\"stdout\":")
+    try text(out, ",\"error\":null,\"message\":null,\"duration_ms\":")
+    try decimal(out, duration_ms)
+    try text(out, ",\"timeout_s\":60,\"stdout\":")
     try captured(out, stdout_bytes)
     try text(out, ",\"stderr\":")
     try captured(out, stderr_bytes)

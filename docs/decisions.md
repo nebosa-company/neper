@@ -4454,6 +4454,16 @@ must survive a DST jump is a gap, not a guarantee); `@reboot`; the Quartz `L` / 
 already supplies civil-time conversion and the epoch weekday -- so it is blocked only
 on being wanted, and sits at the end of the module backlog.
 
+## D242 -- A test carries its real wall time
+
+Each `test` record and the `test_summary` now report a real `duration_ms` instead of 0:
+the driver reads `os.clock(.Monotonic)` around each child run and around the whole loop,
+in nanoseconds, and divides to milliseconds. Timing makes the stream non-deterministic,
+so the conformance golden keeps `duration_ms` at 0 and both suites normalise the field
+to 0 before the byte-exact compare -- the standard way to golden test-runner output. The
+`timeout_s` outcome (killing a test that runs too long) still needs a timer against a
+blocking `os.wait` and is not here; `duration_ms` is the wall time actually observed.
+
 ## D243 -- `e.grep`, a dependency-free code scanner (planned)
 
 Registered as a planned experimental module against my own earlier advice: for

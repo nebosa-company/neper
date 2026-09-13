@@ -1051,6 +1051,13 @@ fn nptest_run(a: *mem.Arena, exe: str, index: str, base: str) -> (i32, str, str,
     ret (status, out_text, err_text, spawn_error)
 }
 
+fn nptest_now() -> usize {
+    let (ticks, clock_error) = os.clock(.Monotonic)
+    if clock_error != ok { ret 0usize }
+    if ticks < 0i64 { ret 0usize }
+    ret usize(ticks)
+}
+
 fn nptest_stem(path: str) -> str {
     var start = 0usize
     var at = 0usize
@@ -1108,6 +1115,9 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if stdouts_error != ok { ret stdouts_error }
     let (stderrs, stderrs_error) = mem.alloc[str](a, 256usize)
     if stderrs_error != ok { ret stderrs_error }
+    let (durations, durations_error) = mem.alloc[usize](a, 256usize)
+    if durations_error != ok { ret durations_error }
+    let suite_start = nptest_now()
     var index_storage: [8]u8 = zero
     var at = 0usize
     while at < count {
@@ -1115,8 +1125,13 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
         let index_str = index_storage[0usize..index_len]
         let (child_base, child_base_error) = nptest_join(a, args[6usize], "nptest-child")
         if child_base_error != ok { ret child_base_error }
+        let test_start = nptest_now()
         let (status, child_out, child_err, run_error) = nptest_run(a, runner_exe, index_str, child_base)
         if run_error != ok { ret run_error }
+        let test_end = nptest_now()
+        var elapsed_ms = 0usize
+        if test_end > test_start { elapsed_ms = (test_end - test_start) / 1000000usize }
+        durations[at] = elapsed_ms
         var outcome = 0usize
         if status != 0i32 {
             outcome = 2usize
@@ -1127,7 +1142,10 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
         stderrs[at] = child_err
         at += 1usize
     }
-    try tool.test_json(a, nptest_stem(args[2usize]), "operand", basename(args[2usize]), names[0usize..count], lines[0usize..count], outcomes[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count)
+    let suite_end = nptest_now()
+    var suite_ms = 0usize
+    if suite_end > suite_start { suite_ms = (suite_end - suite_start) / 1000000usize }
+    try tool.test_json(a, nptest_stem(args[2usize]), "operand", basename(args[2usize]), names[0usize..count], lines[0usize..count], outcomes[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms)
     var any = false
     at = 0usize
     while at < count {

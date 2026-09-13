@@ -1838,6 +1838,8 @@ test_actual="$test_build/conformance-tools-test.jsonl"
 test_status=0
 $test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 linux "$test_build" --json > "$test_actual" || test_status=$?
 [ "$test_status" -eq 1 ]
+# duration_ms is real wall time (D241): normalise it out before the byte-exact compare.
+sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_actual"
 cmp -s "$test_actual" "$conformance_root/tools/test.expected.jsonl" || { printf '%s
 ' "test --json differs from the conformance corpus" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
