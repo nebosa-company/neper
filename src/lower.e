@@ -369,6 +369,63 @@ fn emit_enum_check(c: *check.Checker, converted: usize, source: usize, ty: check
     ret ok
 }
 
+// Section 11's `tag` row: `n.Lit` reads or writes the payload of a tagged union, and the
+// tag has to name that member. One compare against the tag at offset 0, and a `.Trap`
+// of kind `tag` carrying the tag found. A base behind a pointer is the same value.
+fn emit_tag_check(c: *check.Checker, base: usize, base_type: check.Type, field_name: str, builder: *nir.Builder, token: lex.Token) -> err {
+    var subject = base_type
+    while subject.kind == .Pointer {
+        if !subject.has_element || subject.element >= c.type_count { ret ok }
+        subject = c.types[subject.element]
+    }
+    let (aggregate_index, has_aggregate) = layout.aggregate_index(c, subject)
+    if !has_aggregate { ret ok }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .TaggedUnion || aggregate.backing_type.kind != .Integer { ret ok }
+    let (field_index, found_field) = check.aggregate_field_for_name(c, aggregate, field_name)
+    if !found_field { ret ok }
+    let field = c.aggregate_fields[field_index]
+    let (tag_bits, tag_bits_error) = check.enum_member_bits(aggregate.backing_type, field.enum_value, field.enum_negative)
+    if tag_bits_error != ok { ret tag_bits_error }
+    let (tag_info, tag_info_error) = layout.type_info(c, aggregate.backing_type)
+    if tag_info_error != ok { ret tag_info_error }
+    let (address_instruction, tag_address, address_error) = nir.emit(builder, .FieldAddress, aggregate.backing_type, true, 0usize, token)
+    if address_error != ok { ret address_error }
+    try nir.add_operand(builder, address_instruction, base)
+    let (load_instruction, tag, load_error) = nir.emit(builder, .Load, aggregate.backing_type, true, tag_info.size, token)
+    if load_error != ok { ret load_error }
+    try nir.add_operand(builder, load_instruction, tag_address)
+    let (constant_instruction, expected, constant_error) = nir.emit(builder, .ConstInteger, aggregate.backing_type, true, tag_bits, token)
+    if constant_error != ok { ret constant_error }
+    let boolean = check.make_type(.Bool, "bool", subject.module_index)
+    let (matches, matches_error) = emit_supplied_compare(builder, .Equal, boolean, tag, expected, token)
+    if matches_error != ok { ret matches_error }
+    let trap_block = builder.block_count
+    let after_block = builder.block_count + 1usize
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, matches)
+    try nir.set_branch_targets(builder, decision, after_block, trap_block)
+    let (trap_index, trap_block_error) = nir.begin_block(builder)
+    if trap_block_error != ok || trap_index != trap_block { ret nir.InvalidControlFlow }
+    let middle = " read while the tag is "
+    let (storage, storage_error) = mem.alloc[u8](c.arena, aggregate.name.len + 1usize + field_name.len + middle.len)
+    if storage_error != ok { ret storage_error }
+    var write_at = 0usize
+    try append_text(storage[..], &write_at, aggregate.name)
+    try append_text(storage[..], &write_at, ".")
+    try append_text(storage[..], &write_at, field_name)
+    try append_text(storage[..], &write_at, middle)
+    let (message, message_error) = nir.intern_string(builder, storage[..])
+    if message_error != ok { ret message_error }
+    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "tag", subject.module_index), false, message + 1usize, token)
+    if trap_error != ok { ret trap_error }
+    try nir.add_operand(builder, trap_instruction, tag)
+    let (after_index, after_error) = nir.begin_block(builder)
+    if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
+    ret ok
+}
+
 fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (source_info, source_info_error) = layout.type_info(c, source_type)
     if source_info_error != ok { ret (0usize, source_info_error) }
@@ -2304,6 +2361,8 @@ fn lower_place(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         if field_error != ok { ret (0usize, zero, field_error) }
         let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, base_index, base_type, builder, bindings, binding_count)
         if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+        let tag_error = emit_tag_check(c, base, base_type, field_name, builder, c.tokens[node.token_start])
+        if tag_error != ok { ret (0usize, field.ty, tag_error) }
         let (instruction, address, emit_error) = nir.emit(builder, .FieldAddress, field.ty, true, field.offset, c.tokens[node.token_start])
         if emit_error != ok { ret (0usize, field.ty, emit_error) }
         let operand_error = nir.add_operand(builder, instruction, base)
@@ -2726,6 +2785,8 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if field_error != ok { ret (0usize, zero, check.Unsupported) }
         let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, base_index, base_type, builder, bindings, binding_count)
         if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+        let tag_error = emit_tag_check(c, base, base_type, field_name, builder, c.tokens[node.token_start])
+        if tag_error != ok { ret (0usize, field.ty, tag_error) }
         let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, field.ty, true, field.offset, c.tokens[node.token_start])
         if address_error != ok { ret (0usize, field.ty, address_error) }
         let address_operand_error = nir.add_operand(builder, address_instruction, base)

@@ -3638,3 +3638,23 @@ The function has no declaration, so the `.em` hashes it by its NIR alone and the
 signature table reserves the one parameter type it needs. `link/failure_line` pins the
 module's own error and one of `e.os`'s on both platforms, and that `ok` writes nothing.
 `neper test` and the trap protocol's use of the table are still open.
+
+## D200 — The `tag` row, and the float side of `narrow`
+
+`n.Lit` reads or writes a tagged union's payload, and section 4 says it is one compare
+against the tag in a debug build, with a mismatch a `tag` trap (section 11). Both
+paths through lowering that reach a field of a tagged union -- the address taken for
+a write and the load for a read, through a pointer or not -- now load the tag at
+offset 0, compare it with the member's, and reach a `.Trap` of kind `tag` whose
+message names the union and member and whose operand is the tag found: `Node.Pair
+read while the tag is 1`. Reading `n.tag` itself is not a payload and is untouched.
+Section 4's float-to-integer cast is the other `narrow` case: a value outside the
+target's range, or NaN, traps -- the release-mode saturation waits on build modes.
+The back end compares the double or single in `xmm0` against the two bounds as bit
+patterns before `cvttsd2si`: strictly below the power of two past the range above,
+and above the bound below -- `-2^(width-1) - 1` exact for a double into a narrower
+target, `-2^63` inclusive at 64 bits or from a single, `-1` for an unsigned target --
+with NaN refused by the unordered compare. `link/trap_tag` pins a read and a write
+under the wrong tag and four float refusals on both platforms, and that the live
+payload and casts at both edges of their ranges pass. `T.trunc(f)` is not a float
+conversion (D198), so the checked cast is the only one from a float.

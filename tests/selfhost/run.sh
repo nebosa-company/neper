@@ -1413,6 +1413,55 @@ failure_os=$("$failure_path" os 2>&1) || failure_status=$?
 [ "$failure_os" = 'error: e.os.NotFound' ]
 failure_none=$("$failure_path" none 2>&1)
 [ "$failure_none" = '' ]
+# The `tag` row -- a payload read or written under another member's tag -- and the
+# float side of `narrow`: NaN and values past the target's range refused.
+tag_path="$test_build/trap-tag-selfhost"
+tag_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_tag/src/main.e" "$repo" x64 linux "$tag_path")
+[ "$tag_written" = 'executable written' ]
+chmod +x "$tag_path"
+tag_status=0
+tag_output=$("$tag_path" tag 2>&1) || tag_status=$?
+[ "$tag_status" -eq 134 ]
+case "$tag_output" in
+    *'main.e:17:17: trap[tag]: Node.Pair read while the tag is 1'*) ;;
+    *) printf '%s\n' "the tag case did not trap as section 11 says: $tag_output" >&2; exit 1 ;;
+esac
+tag_status=0
+tag_output=$("$tag_path" write 2>&1) || tag_status=$?
+[ "$tag_status" -eq 134 ]
+case "$tag_output" in
+    *'main.e:22:9: trap[tag]: Node.Lit read while the tag is 0'*) ;;
+    *) printf '%s\n' "the write case did not trap as section 11 says: $tag_output" >&2; exit 1 ;;
+esac
+tag_status=0
+tag_output=$("$tag_path" nan 2>&1) || tag_status=$?
+[ "$tag_status" -eq 134 ]
+case "$tag_output" in
+    *'main.e:26:17: trap[narrow]: a float outside i32'*) ;;
+    *) printf '%s\n' "the nan case did not trap as section 11 says: $tag_output" >&2; exit 1 ;;
+esac
+tag_status=0
+tag_output=$("$tag_path" big 2>&1) || tag_status=$?
+[ "$tag_status" -eq 134 ]
+case "$tag_output" in
+    *'main.e:31:17: trap[narrow]: a float outside i32'*) ;;
+    *) printf '%s\n' "the big case did not trap as section 11 says: $tag_output" >&2; exit 1 ;;
+esac
+tag_status=0
+tag_output=$("$tag_path" negative 2>&1) || tag_status=$?
+[ "$tag_status" -eq 134 ]
+case "$tag_output" in
+    *'main.e:36:17: trap[narrow]: a float outside u16'*) ;;
+    *) printf '%s\n' "the negative case did not trap as section 11 says: $tag_output" >&2; exit 1 ;;
+esac
+tag_status=0
+tag_output=$("$tag_path" wide 2>&1) || tag_status=$?
+[ "$tag_status" -eq 134 ]
+case "$tag_output" in
+    *'main.e:41:17: trap[narrow]: a float outside i64'*) ;;
+    *) printf '%s\n' "the wide case did not trap as section 11 says: $tag_output" >&2; exit 1 ;;
+esac
+"$tag_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

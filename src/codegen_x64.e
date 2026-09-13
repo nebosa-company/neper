@@ -585,6 +585,65 @@ fn float_from_integer(source: usize, unsigned: bool, wide: bool, output: *emit_x
     ret emit_x64.patch_relative32(output, done_at, output.count)
 }
 
+// Section 11's `narrow` row for a float source: a value outside the target's range,
+// or NaN, traps before the conversion. The float is in xmm0; the bounds are the
+// powers of two just past the range, as bit patterns, compared with `ucomis`. Above,
+// the value must be below 2^(width-1) or 2^width; below, a signed target admits down
+// to its minimum -- for a double source that is `<= -2^(width-1) - 1` refused, exact
+// below 64 bits, and `< -2^63` at 64 -- and an unsigned one anything above -1. NaN
+// compares unordered, which the low check refuses as well.
+fn float_bound_bits(width: usize, signed: bool, upper: bool, wide: bool) -> usize {
+    if upper {
+        var power = width
+        if signed { power = width - 1usize }
+        var exponent = 127usize + power
+        var mantissa_bits = 23usize
+        if wide {
+            exponent = 1023usize + power
+            mantissa_bits = 52usize
+        }
+        ret exponent << mantissa_bits
+    }
+    if !signed {
+        if wide { ret 13830554455654793216usize }
+        ret 3212836864usize
+    }
+    if wide {
+        if width == 8usize { ret 13862114837418475520usize }
+        if width == 16usize { ret 13898108587504304128usize }
+        if width == 32usize { ret 13970166044105375744usize }
+        ret 14114281232179134464usize
+    }
+    if width == 8usize { ret 3271557120usize }
+    if width == 16usize { ret 3338665984usize }
+    if width == 32usize { ret 3472883712usize }
+    ret 3741319168usize
+}
+
+fn emit_float_range_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, into: check.Type, wide: bool, context: *FunctionContext) -> err {
+    let output = context.output
+    let width = integer_width(into)
+    let signed = signed_integer(into)
+    try emit_x64.mov_immediate(output, 11usize, float_bound_bits(width, signed, true, wide))
+    try emit_x64.move_to_float(output, 1usize, 11usize, wide)
+    try emit_x64.float_compare(output, 0usize, 1usize, wide)
+    let (below_high, high_error) = emit_x64.jump_condition(output, 2usize)
+    if high_error != ok { ret high_error }
+    try emit_trap(builder, current, token, "narrow", "a float outside ", "", "", 0usize, false, 0usize, 0usize, into.name, context)
+    try emit_x64.patch_relative32(output, below_high, output.count)
+    try emit_x64.mov_immediate(output, 11usize, float_bound_bits(width, signed, false, wide))
+    try emit_x64.move_to_float(output, 1usize, 11usize, wide)
+    try emit_x64.float_compare(output, 0usize, 1usize, wide)
+    // Strictly above the bound passes when the bound itself is outside the range;
+    // at or above passes when the bound is the minimum.
+    var condition = 7usize
+    if signed && (width == 64usize || !wide) { condition = 3usize }
+    let (above_low, low_error) = emit_x64.jump_condition(output, condition)
+    if low_error != ok { ret low_error }
+    try emit_trap(builder, current, token, "narrow", "a float outside ", "", "", 0usize, false, 0usize, 0usize, into.name, context)
+    ret emit_x64.patch_relative32(output, above_low, output.count)
+}
+
 // The mirror: above 2**63 `cvttsd2si` has no answer, so the value comes down by that
 // much before the conversion and the bit goes back on afterwards. A value out of
 // range for the target, and a NaN, get whatever the instruction gives -- section 11's
@@ -608,7 +667,7 @@ fn integer_from_float(destination: usize, unsigned: bool, wide: bool, output: *e
     ret ok
 }
 
-fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer, context: *FunctionContext) -> err {
     if instruction.operand_count != 1usize || !instruction.has_result { ret Unsupported }
     let source_value = builder.operands[instruction.first_operand]
     let (source_type, source_type_error) = value_type(builder, current, source_value)
@@ -641,13 +700,14 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
     }
     if source_width == 0usize || instruction.ty.kind != .Integer { ret Unsupported }
     try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
+    if instruction.immediate == 0usize { try emit_float_range_check(builder, current, instruction.token, instruction.ty, source_width == 64usize, context) }
     try integer_from_float(destination, unsigned_wide(instruction.ty), source_width == 64usize, output)
     try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty))
     ret store_result(allocations, instruction.result, destination, output)
 }
 
-fn select_float(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
-    if instruction.opcode == .Cast { ret select_float_cast(builder, current, instruction, allocations, output) }
+fn select_float(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer, context: *FunctionContext) -> err {
+    if instruction.opcode == .Cast { ret select_float_cast(builder, current, instruction, allocations, output, context) }
     if instruction.opcode == .Negate { ret select_float_negate(builder, instruction, allocations, output) }
     if instruction.opcode == .Sqrt { ret select_float_sqrt(builder, instruction, allocations, output) }
     if comparison(instruction.opcode) { ret select_float_comparison(builder, current, instruction, allocations, output) }
@@ -1263,7 +1323,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             try select_bitcast(builder, instruction, allocations, output)
         } else {
         if float_operation(builder, current, instruction) {
-            try select_float(builder, current, instruction, allocations, output)
+            try select_float(builder, current, instruction, allocations, output, context)
         } else {
         if instruction.opcode == .Parameter {
             if instruction.immediate >= parameters { ret Unsupported }

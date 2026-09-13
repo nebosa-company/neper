@@ -1432,6 +1432,25 @@ $failureOs = & $failurePath os 2>&1
 if ($LASTEXITCODE -ne 1 -or ($failureOs -join "`n") -ne 'error: e.os.NotFound') { throw "main returning e.os's error did not write the failure line: exit $LASTEXITCODE, $($failureOs -join "`n")" }
 $failureNone = & $failurePath none 2>&1
 if ($LASTEXITCODE -ne 0 -or ($failureNone -join "`n") -ne '') { throw 'main returning ok wrote a failure line' }
+# The `tag` row -- a payload read or written under another member's tag -- and the
+# float side of `narrow`: NaN and values past the target's range refused.
+$tagPath = Join-Path $testBuild 'trap-tag-selfhost.exe'
+$tagWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_tag\src\main.e') $repo 'x64' 'windows' $tagPath
+if ($LASTEXITCODE -ne 0 -or $tagWritten -ne 'executable written') { throw 'tag trap fixture executable emission failed' }
+$tagOutput = & $tagPath tag 2>&1
+if ($LASTEXITCODE -ne 134 -or ($tagOutput -join "`n") -notmatch 'main\.e:17:17: trap\[tag\]: Node\.Pair read while the tag is 1') { throw "the tag case did not trap as section 11 says: exit $LASTEXITCODE, $($tagOutput -join "`n")" }
+$tagOutput = & $tagPath write 2>&1
+if ($LASTEXITCODE -ne 134 -or ($tagOutput -join "`n") -notmatch 'main\.e:22:9: trap\[tag\]: Node\.Lit read while the tag is 0') { throw "the write case did not trap as section 11 says: exit $LASTEXITCODE, $($tagOutput -join "`n")" }
+$tagOutput = & $tagPath nan 2>&1
+if ($LASTEXITCODE -ne 134 -or ($tagOutput -join "`n") -notmatch 'main\.e:26:17: trap\[narrow\]: a float outside i32') { throw "the nan case did not trap as section 11 says: exit $LASTEXITCODE, $($tagOutput -join "`n")" }
+$tagOutput = & $tagPath big 2>&1
+if ($LASTEXITCODE -ne 134 -or ($tagOutput -join "`n") -notmatch 'main\.e:31:17: trap\[narrow\]: a float outside i32') { throw "the big case did not trap as section 11 says: exit $LASTEXITCODE, $($tagOutput -join "`n")" }
+$tagOutput = & $tagPath negative 2>&1
+if ($LASTEXITCODE -ne 134 -or ($tagOutput -join "`n") -notmatch 'main\.e:36:17: trap\[narrow\]: a float outside u16') { throw "the negative case did not trap as section 11 says: exit $LASTEXITCODE, $($tagOutput -join "`n")" }
+$tagOutput = & $tagPath wide 2>&1
+if ($LASTEXITCODE -ne 134 -or ($tagOutput -join "`n") -notmatch 'main\.e:41:17: trap\[narrow\]: a float outside i64') { throw "the wide case did not trap as section 11 says: exit $LASTEXITCODE, $($tagOutput -join "`n")" }
+& $tagPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'a live payload read, or a float cast that fits, trapped' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at
