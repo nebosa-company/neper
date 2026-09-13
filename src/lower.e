@@ -2886,11 +2886,14 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
 fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: usize, defers: *DeferState) -> err {
     var values: [16]usize = zero
     var count = 0usize
+    var literal_ok = false
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
         if tree.children[at].node {
             if count == values.len || count >= function.return_count { ret check.InvalidReturn }
+            let returned = tree.nodes[tree.children[at].index]
+            if count == 0usize && returned.kind == .LiteralExpr && c.tokens[returned.token_start].kind == .KwOk { literal_ok = true }
             let (expected, type_error) = check.function_return(c, function, count)
             if type_error != ok { ret type_error }
             let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder, bindings, binding_count)
@@ -2936,6 +2939,36 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
     var return_type: check.Type = zero
     if function.return_count == 1usize { return_type = c.return_types[function.first_return] }
+    // Section 13: `main` returning anything but `ok` writes `error: <qualified name>`
+    // to stderr before the exit. The line is written by a function synthesized after
+    // the module, `neper_report_failure`, reached only on the failing path.
+    if module_index == 0usize && count == 1usize && return_type.kind == .Err && !literal_ok && check.same(function.name, "main") {
+        let token = c.tokens[node.token_start]
+        let (ok_instruction, ok_value, ok_error) = nir.emit(builder, .ConstError, return_type, true, 0usize, token)
+        if ok_error != ok { ret ok_error }
+        let boolean = check.make_type(.Bool, "bool", module_index)
+        let (failed, failed_error) = emit_supplied_compare(builder, .NotEqual, boolean, values[0usize], ok_value, token)
+        if failed_error != ok { ret failed_error }
+        let report_block = builder.block_count
+        let return_block = builder.block_count + 1usize
+        let (branch_instruction, branch_ignored, branch_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+        if branch_error != ok { ret branch_error }
+        try nir.add_operand(builder, branch_instruction, failed)
+        try nir.set_branch_targets(builder, branch_instruction, report_block, return_block)
+        let (report_index, report_block_error) = nir.begin_block(builder)
+        if report_block_error != ok || report_index != report_block { ret nir.InvalidControlFlow }
+        let (report_ref, report_ref_error) = nir.intern_function(builder, module_index, "neper_report_failure", 0usize)
+        if report_ref_error != ok { ret report_ref_error }
+        let (report_call, report_ignored, report_call_error) = nir.emit(builder, .Call, zero, false, report_ref, token)
+        if report_call_error != ok { ret report_call_error }
+        try nir.add_operand(builder, report_call, values[0usize])
+        let (to_return, to_return_error) = emit_branch(builder, token)
+        if to_return_error != ok { ret to_return_error }
+        try nir.set_branch_targets(builder, to_return, return_block, 0usize)
+        let (return_index, return_block_error) = nir.begin_block(builder)
+        if return_block_error != ok || return_index != return_block { ret nir.InvalidControlFlow }
+        c.main_reports_failure = true
+    }
     let (instruction, ignored, emit_error) = nir.emit(builder, .Return, return_type, false, 0usize, c.tokens[node.token_start])
     if emit_error != ok { ret emit_error }
     at = 0usize
@@ -5202,7 +5235,109 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
         if node.top_level && node.kind == .FnDecl { try lower_declaration(c, g, &tree, module_index, node, builder, signatures, bindings) }
         node_index += 1usize
     }
+    if module_index == 0usize && c.main_reports_failure {
+        c.main_reports_failure = false
+        try synthesize_failure_report(c, g, builder, signatures)
+    }
     ret lower_owned_instances(c, g, module_index, builder, signatures, bindings)
+}
+
+// `error: <qualified name>` on stderr, for the value `main` returned (section 13). The
+// program-wide error table is the resolver's error symbols, so the function is one
+// compare per declared error and a write of its name; a value none of them has --
+// reachable only through `undef` -- prints as `err(?)`. It writes through the runtime's
+// own `neper_os_stderr` and `neper_os_write`, which every image carries, so nothing
+// here depends on `e.os` being in the graph.
+fn emit_report_write(builder: *nir.Builder, module_index: usize, write_ref: usize, file_slot: usize, spelling: str, token: lex.Token) -> err {
+    let string_type = check.make_type(.String, "str", module_index)
+    let (text_index, text_error) = nir.intern_string(builder, spelling)
+    if text_error != ok { ret text_error }
+    let (text_instruction, text, text_emit_error) = nir.emit(builder, .ConstString, string_type, true, text_index, token)
+    if text_emit_error != ok { ret text_emit_error }
+    let (write_call, write_ignored, write_error) = nir.emit(builder, .Call, zero, false, write_ref, token)
+    if write_error != ok { ret write_error }
+    try nir.add_operand(builder, write_call, file_slot)
+    ret nir.add_operand(builder, write_call, text)
+}
+
+fn synthesize_failure_report(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures) -> err {
+    let module_index = 0usize
+    var token: lex.Token = zero
+    let error_type = check.make_type(.Err, "err", module_index)
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (nir_function, begin_error) = nir.begin_function(builder, module_index, "neper_report_failure", 0usize)
+    if begin_error != ok { ret begin_error }
+    builder.functions[nir_function].path = g.modules[module_index].path
+    try nir.begin_signature(builder, nir_function, signatures)
+    try nir.add_parameter_type(builder, nir_function, signatures, error_type)
+    let (entry, entry_error) = nir.begin_block(builder)
+    if entry_error != ok { ret entry_error }
+    let (value_instruction, value, value_error) = nir.emit(builder, .Parameter, error_type, true, 0usize, token)
+    if value_error != ok { ret value_error }
+    let (slot_instruction, file_slot, slot_error) = nir.emit(builder, .Stack, check.make_type(.Other, "file-slot", module_index), true, 1usize, token)
+    if slot_error != ok { ret slot_error }
+    let (stderr_ref, stderr_ref_error) = nir.intern_function(builder, module_index, "neper_os_stderr", 0usize)
+    if stderr_ref_error != ok { ret stderr_ref_error }
+    let (stderr_call, stderr_ignored, stderr_call_error) = nir.emit(builder, .Call, zero, false, stderr_ref, token)
+    if stderr_call_error != ok { ret stderr_call_error }
+    try nir.add_operand(builder, stderr_call, file_slot)
+    let (write_ref, write_ref_error) = nir.intern_function(builder, module_index, "neper_os_write", 0usize)
+    if write_ref_error != ok { ret write_ref_error }
+    try emit_report_write(builder, module_index, write_ref, file_slot, quoted_text(c, "error: "), token)
+    var decisions: [1024]usize = zero
+    var count = 0usize
+    var symbol_index = 0usize
+    while symbol_index < c.resolver.count {
+        let symbol = c.resolver.symbols[symbol_index]
+        if symbol.kind == .Error && symbol.module_index < g.count {
+            if count == decisions.len { ret check.Capacity }
+            let module_name = g.modules[symbol.module_index].name
+            let (qualified, qualified_error) = artifact_hash.qualified_error_value(module_name, symbol.name)
+            if qualified_error != ok { ret qualified_error }
+            let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstError, error_type, true, qualified, token)
+            if constant_error != ok { ret constant_error }
+            let (matches, matches_error) = emit_supplied_compare(builder, .Equal, boolean, value, constant, token)
+            if matches_error != ok { ret matches_error }
+            let hit_block = builder.block_count
+            let next_block = builder.block_count + 1usize
+            let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+            if decision_error != ok { ret decision_error }
+            try nir.add_operand(builder, decision, matches)
+            try nir.set_branch_targets(builder, decision, hit_block, next_block)
+            let (hit_index, hit_error) = nir.begin_block(builder)
+            if hit_error != ok || hit_index != hit_block { ret nir.InvalidControlFlow }
+            let (storage, storage_error) = mem.alloc[u8](c.arena, module_name.len + 1usize + symbol.name.len)
+            if storage_error != ok { ret storage_error }
+            var write_at = 0usize
+            try append_text(storage[..], &write_at, module_name)
+            try append_text(storage[..], &write_at, ".")
+            try append_text(storage[..], &write_at, symbol.name)
+            try emit_report_write(builder, module_index, write_ref, file_slot, quoted_text(c, storage[..]), token)
+            let (to_tail, to_tail_error) = emit_branch(builder, token)
+            if to_tail_error != ok { ret to_tail_error }
+            decisions[count] = to_tail
+            count += 1usize
+            let (next_index, next_error) = nir.begin_block(builder)
+            if next_error != ok || next_index != next_block { ret nir.InvalidControlFlow }
+        }
+        symbol_index += 1usize
+    }
+    try emit_report_write(builder, module_index, write_ref, file_slot, quoted_text(c, "err(?)"), token)
+    let (to_tail_last, to_tail_last_error) = emit_branch(builder, token)
+    if to_tail_last_error != ok { ret to_tail_last_error }
+    let tail_block = builder.block_count
+    let (tail_index, tail_error) = nir.begin_block(builder)
+    if tail_error != ok || tail_index != tail_block { ret nir.InvalidControlFlow }
+    try nir.set_branch_targets(builder, to_tail_last, tail_block, 0usize)
+    var fix_at = 0usize
+    while fix_at < count {
+        try nir.set_branch_targets(builder, decisions[fix_at], tail_block, 0usize)
+        fix_at += 1usize
+    }
+    try emit_report_write(builder, module_index, write_ref, file_slot, quoted_text(c, "\n"), token)
+    let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, zero, false, 0usize, token)
+    if return_error != ok { ret return_error }
+    ret nir.end_function(builder)
 }
 
 fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {

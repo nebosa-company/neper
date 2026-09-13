@@ -3620,3 +3620,21 @@ before cutting to a byte; `e.math`'s `pow` masks the high word it extracts; and 
 inside a generic instance named the caller's file with the template's line: the
 function's path is now the template's. `link/trap_narrow` pins five refusals and the
 meant forms on both platforms. Float-to-integer narrowing is still unchecked.
+
+## D199 — `main`'s failure line is written from a synthesized error table
+
+Section 13 says a `main` that returns anything but `ok` writes `error: <qualified
+name>` to stderr from the merged error table and exits 1; the C bootstrap did so and
+the self-hosted compiler exited 1 in silence. The table now reaches the binary as
+code: when the root module's `main` returns an `err` from any `ret` that is not the
+literal `ok`, lowering branches on the value and, on the failing path, calls
+`neper_report_failure`, a function synthesized once the module is lowered -- one
+`Equal` and a branch per error symbol the resolver holds, program-wide, each arm
+writing `<module>.<name>`, and `err(?)` for a value none of them has, which only
+`undef` can produce. It writes through the runtime's own `neper_os_stderr` and
+`neper_os_write`, which every image carries, so nothing depends on `e.os` being in
+the graph, and a `main` that only ever returns the literal `ok` carries none of it.
+The function has no declaration, so the `.em` hashes it by its NIR alone and the
+signature table reserves the one parameter type it needs. `link/failure_line` pins the
+module's own error and one of `e.os`'s on both platforms, and that `ok` writes nothing.
+`neper test` and the trap protocol's use of the table are still open.

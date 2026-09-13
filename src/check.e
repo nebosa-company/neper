@@ -397,6 +397,9 @@ type Checker = struct {
     // Section 4's `Vec` and `Mask` are seeded into `e.simd` when that module is in the
     // graph; layout and `e.meta` recognise an instance by this module and the name.
     simd_module: usize,
+    // Whether the root module's `main` returned an `err` somewhere: then section 13's
+    // failure line needs its reporting function synthesized once the module is lowered.
+    main_reports_failure: bool,
     has_simd: bool,
     checked_switch_count: usize,
     function_signature_count: usize,

@@ -1421,6 +1421,17 @@ $narrowOutput = & $narrowPath same 2>&1
 if ($LASTEXITCODE -ne 134 -or ($narrowOutput -join "`n") -notmatch 'main\.e:32:17: trap\[narrow\]: 4294967000 does not fit i32') { throw "the same case did not trap as section 11 says: exit $LASTEXITCODE, $($narrowOutput -join "`n")" }
 & $narrowPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'a cast that fits, or a meant truncation, trapped' }
+# Section 13's failure line: `main` returning an error writes `error: <qualified name>`
+# to stderr, for this module's error and for one of `e.os`'s, and exits 1.
+$failurePath = Join-Path $testBuild 'failure-line-selfhost.exe'
+$failureWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\failure_line\src\main.e') $repo 'x64' 'windows' $failurePath
+if ($LASTEXITCODE -ne 0 -or $failureWritten -ne 'executable written') { throw 'failure line fixture executable emission failed' }
+$failureOwn = & $failurePath own 2>&1
+if ($LASTEXITCODE -ne 1 -or ($failureOwn -join "`n") -ne 'error: main.Boom') { throw "main returning its own error did not write the failure line: exit $LASTEXITCODE, $($failureOwn -join "`n")" }
+$failureOs = & $failurePath os 2>&1
+if ($LASTEXITCODE -ne 1 -or ($failureOs -join "`n") -ne 'error: e.os.NotFound') { throw "main returning e.os's error did not write the failure line: exit $LASTEXITCODE, $($failureOs -join "`n")" }
+$failureNone = & $failurePath none 2>&1
+if ($LASTEXITCODE -ne 0 -or ($failureNone -join "`n") -ne '') { throw 'main returning ok wrote a failure line' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at
@@ -1531,7 +1542,9 @@ if ($LASTEXITCODE -ne 0 -or $genericInstancesEdge -ne 'dependency current') { th
 $genericInstancesRootRecords = Get-EmCodeRecords $genericInstancesRootPath
 $genericInstancesDepRecords = Get-EmCodeRecords $genericInstancesDepPath
 if ($genericInstancesDepRecords.Count -ne 0) { throw 'the module declaring a generic template still owns its instances' }
-if ($genericInstancesRootRecords.Count -ne 7) { throw 'the instantiating module did not receive every instance it uses' }
+# Seven instances plus `neper_report_failure`, the failure line's function (D199), which
+# is code of the root module too.
+if ($genericInstancesRootRecords.Count -ne 8) { throw 'the instantiating module did not receive every instance it uses' }
 $genericInstancesArtifactExecutable = Join-Path $testBuild 'generic-instances-from-artifacts.exe'
 $genericInstancesArtifactWritten = & $compiler link-em $genericInstancesArtifactExecutable $genericInstancesRootPath $genericInstancesDepPath
 if ($LASTEXITCODE -ne 0 -or $genericInstancesArtifactWritten -ne 'artifact executable written') { throw 'multi-instance generic compiled modules did not link' }

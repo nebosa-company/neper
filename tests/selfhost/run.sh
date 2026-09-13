@@ -1397,6 +1397,22 @@ case "$narrow_output" in
     *) printf '%s\n' "the same case did not trap as section 11 says: $narrow_output" >&2; exit 1 ;;
 esac
 "$narrow_path" none
+# Section 13's failure line: `main` returning an error writes `error: <qualified name>`
+# to stderr, for this module's error and for one of `e.os`'s, and exits 1.
+failure_path="$test_build/failure-line-selfhost"
+failure_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/failure_line/src/main.e" "$repo" x64 linux "$failure_path")
+[ "$failure_written" = 'executable written' ]
+chmod +x "$failure_path"
+failure_status=0
+failure_own=$("$failure_path" own 2>&1) || failure_status=$?
+[ "$failure_status" -eq 1 ]
+[ "$failure_own" = 'error: main.Boom' ]
+failure_status=0
+failure_os=$("$failure_path" os 2>&1) || failure_status=$?
+[ "$failure_status" -eq 1 ]
+[ "$failure_os" = 'error: e.os.NotFound' ]
+failure_none=$("$failure_path" none 2>&1)
+[ "$failure_none" = '' ]
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.
@@ -1533,7 +1549,9 @@ em_code_field() {
     fi
 }
 [ "$(em_code_count "$generic_instances_dep_path")" = '0' ]
-[ "$(em_code_count "$generic_instances_root_path")" = '7' ]
+# Seven instances plus `neper_report_failure`, the failure line's function (D199), which
+# is code of the root module too.
+[ "$(em_code_count "$generic_instances_root_path")" = '8' ]
 folding_fixture="$repo/tests/selfhost/fixtures/link/generic_folding/src/main.e"
 folding_direct="$test_build/generic-folding-selfhost"
 folding_direct_written=$($test_build/neper-self emit-executable "$folding_fixture" "$repo" x64 linux "$folding_direct")

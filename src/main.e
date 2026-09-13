@@ -1836,7 +1836,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         checker.arena = a
         var builder: nir.Builder = zero
         var signatures: nir.Signatures = zero
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count, checker.function_count > 256usize)
+        // One more parameter type than the declarations need: `neper_report_failure`,
+        // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, checker.function_count > 256usize)
         let (bindings, bindings_error) = mem.alloc[lower.Binding](a, 16384usize)
         if bindings_error != ok { ret bindings_error }
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, 128usize)

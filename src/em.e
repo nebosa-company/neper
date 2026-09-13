@@ -630,6 +630,7 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_mem_alloc") { ret ("", false) }
     if same(name, "neper_hash_bytes") { ret ("", false) }
     if same(name, "neper_trap") { ret ("", false) }
+    if same(name, "neper_report_failure") { ret ("", false) }
     if same(name, "neper_mem_mark") { ret ("mark", true) }
     if same(name, "neper_mem_reset") { ret ("reset", true) }
     if same(name, "neper_mem_stats") { ret ("stats", true) }
@@ -1499,9 +1500,21 @@ fn write_nir(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_i
         let function = builder.functions[at]
         if function.module_index == module_index {
             let (checked_function, found_function) = checked_function_for_nir(c, builder, at)
-            if !found_function { ret InvalidArtifact }
-            let (hash, hash_error) = body_hash(c, g, builder, checked_function, at, true, scratch)
-            if hash_error != ok { ret hash_error }
+            var hash = 0usize
+            if found_function {
+                let (declared_hash, hash_error) = body_hash(c, g, builder, checked_function, at, true, scratch)
+                if hash_error != ok { ret hash_error }
+                hash = declared_hash
+            } else {
+                // A function lowering synthesized -- `neper_report_failure` for `main`'s
+                // failure line (D199) -- has no declaration, so its hash is its NIR alone.
+                if !same(function.name, "neper_report_failure") { ret InvalidArtifact }
+                scratch.count = 0usize
+                try write_nir_canonical(c, g, builder, at, scratch)
+                let (own_hash, own_hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+                if own_hash_error != ok { ret own_hash_error }
+                hash = own_hash
+            }
             scratch.count = 0usize
             try write_nir_canonical(c, g, builder, at, scratch)
             let (name_index, name_error) = string_index(table, function.name)
