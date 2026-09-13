@@ -1816,6 +1816,11 @@ index_actual="$test_build/conformance-tools-index.jsonl"
 $test_build/neper-self index-file "$conformance_root/tools/index.e" "$repo" x64 linux --json > "$index_actual"
 cmp -s "$index_actual" "$conformance_root/tools/index.expected.jsonl" || { printf '%s
 ' "index --json differs from the conformance corpus" >&2; exit 1; }
+# `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
+dis_actual="$test_build/conformance-tools-dis.jsonl"
+$test_build/neper-self dis-file "$conformance_root/tools/dis.e" "$repo" x64 linux --json > "$dis_actual"
+cmp -s "$dis_actual" "$conformance_root/tools/dis.x64-linux.expected.jsonl" || { printf '%s
+' "dis --json differs from the conformance corpus" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

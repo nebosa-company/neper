@@ -1,0 +1,4 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"dis","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"record":"disassembly","symbol":"dis.add","target":"x64-linux","text":"55 48 89 e5 48 81 ec 10 00 00 00 48 89 bd f8 ff ff ff 48 89 b5 f0 ff ff ff 48 8b 85 f8 ff ff ff 48 8b 8d f0 ff ff ff 48 89 c2 48 01 ca 48 63 d2 48 89 d0 48 89 ec 5d c3"}
+{"record":"disassembly","symbol":"dis.main","target":"x64-linux","text":"55 48 89 e5 48 81 ec 40 00 00 00 48 b8 02 00 00 00 00 00 00 00 48 b9 03 00 00 00 00 00 00 00 48 89 85 f8 ff ff ff 48 89 8d f0 ff ff ff 48 8b bd f8 ff ff ff 48 8b b5 f0 ff ff ff e8 88 ff ff ff 49 89 c2 4d 63 d2 4c 89 d2 48 89 95 f8 ff ff ff 48 8b bd f8 ff ff ff e8 00 00 00 00 48 b8 00 00 00 00 00 00 00 00 48 89 ec 5d c3"}
+{"record":"result","ok":true,"exit_code":0,"data":{"functions":2}}

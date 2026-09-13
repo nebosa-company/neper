@@ -8,6 +8,7 @@ use lex
 use parse
 use syntax
 use resolve
+use nir
 
 error Capacity
 
@@ -295,6 +296,54 @@ fn index_result(out: *Out, symbols: usize) -> err {
     try decimal(out, symbols)
     try text(out, ",\"references\":0}}")
     ret flush(out)
+}
+
+// `dis --json` (D233): one `disassembly` record per function. The `text` is the
+// function's machine bytes as space-separated lowercase hex -- a faithful listing of
+// what code selection produced. Mnemonic (AT&T/Intel) disassembly is the gap.
+fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const usize, machine_count: usize) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, machine_count * 3usize + 8192usize)
+    if storage_error != ok { ret storage_error }
+    var out = Out { bytes: storage, count: 0usize }
+    try header(&out, "dis")
+    var at = 0usize
+    while at < builder.function_count {
+        let start = offsets[at]
+        var stop = machine_count
+        if at + 1usize < builder.function_count { stop = offsets[at + 1usize] }
+        try text(&out, "{\"record\":\"disassembly\",\"symbol\":")
+        let function = builder.functions[at]
+        // module.function, the name a backtrace and the symbol table use (D206).
+        if function.module_name.len != 0usize {
+            try byte(&out, 34u8)
+            try text(&out, function.module_name)
+            try byte(&out, 46u8)
+            try text(&out, function.name)
+            try byte(&out, 34u8)
+        } else {
+            try quoted(&out, function.name)
+        }
+        try text(&out, ",\"target\":\"")
+        try text(&out, arch)
+        try byte(&out, 45u8)
+        try text(&out, os_name)
+        try text(&out, "\",\"text\":\"")
+        var byte_at = start
+        while byte_at < stop {
+            if byte_at != start { try byte(&out, 32u8) }
+            let value = machine[byte_at] & 255usize
+            try byte(&out, hex_digit(value / 16usize))
+            try byte(&out, hex_digit(value % 16usize))
+            byte_at += 1usize
+        }
+        try text(&out, "\"}")
+        try flush(&out)
+        at += 1usize
+    }
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"functions\":")
+    try decimal(&out, builder.function_count)
+    try text(&out, "}}")
+    ret flush(&out)
 }
 
 // The public name of a token kind, the registry of docs/grammar.ebnf.

@@ -2393,9 +2393,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // artifacts already in the directory are kept and which are replaced (D205).
     let incremental_build = trailing_flags && same(args[1usize], "emit-em-all") && has_flag(args, "--incremental")
     let writes_all_em = (args.len == 7usize || trailing_flags) && same(args[1usize], "emit-em-all")
-    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em || writes_all_em {
+    // `dis-file PATH ROOT ARCH OS --json` (D233): the codegen pipeline, then per-function bytes.
+    let disassemble = args.len == 7usize && same(args[1usize], "dis-file") && same(args[6usize], "--json")
+    if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em || writes_all_em || disassemble {
         let emit_object = same(args[1usize], "object-file") || writes_object
-        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em
+        let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em || disassemble
         // `emit-executable ... --json` (D230): section 7's build stream, diagnostics as
         // records and the result naming the executable.
         if writes_executable && has_flag(args, "--json") {
@@ -2784,6 +2786,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 ret ok
             }
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
+            if disassemble {
+                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, function_offsets, machine.bytes, machine.count)
+                ret ok
+            }
             if writes_executable {
                 let executable_capacity = machine.count + 1048576usize
                 let (executable_storage, executable_storage_error) = mem.alloc[usize](a, executable_capacity)

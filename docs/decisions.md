@@ -4206,3 +4206,15 @@ signature/documentation; the stream ends with the symbol count and zero referenc
 The resolver carries neither locals, parameters, fields, enum/union members and
 intrinsics, nor any reference with its role and concrete target, so those are the
 gap. The golden names no target, so one expected stream serves both hosts.
+
+## D233 -- `dis --json` lists each function's bytes
+
+`dis-file` runs the same codegen pipeline as `emit-executable` and, after call
+resolution, emits one `disassembly` record per emitted function: its
+`module.function` symbol, the target triple, and `text` -- the function's machine
+bytes as space-separated lowercase hex, a faithful listing of what code selection
+produced. The stream ends with the function count. Only functions the program
+reaches are emitted, since dead-function elimination has already run. The bytes and
+target depend on the ABI, so the corpus holds one expected stream per host, generated
+by cross-targeting from one build. Mnemonic (AT&T or Intel) disassembly rather than a
+hex byte listing is the gap.

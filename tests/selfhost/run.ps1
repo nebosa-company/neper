@@ -1680,10 +1680,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runActual).Hash -ne (Get-FileH
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index.expected.jsonl')).Hash) { throw "index --json differs from the conformance corpus" }
-# `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
-$indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
-cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index.expected.jsonl')).Hash) { throw "index --json differs from the conformance corpus" }
+# `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
+$disActual = Join-Path $testBuild 'conformance-tools-dis.jsonl'
+cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json > `"$disActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis.x64-windows.expected.jsonl')).Hash) { throw "dis --json differs from the conformance corpus" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'
