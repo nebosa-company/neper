@@ -22,6 +22,14 @@ type Fixup = struct {
     block: usize,
 }
 
+// One row of section 13's line table (D209): from this offset in the machine code on,
+// the instructions came from `line` of `path`, until the next row.
+type LineEntry = struct {
+    offset: usize,
+    line: usize,
+    path: str,
+}
+
 type Relocation = struct {
     displacement_at: usize,
     function_ref: usize,
@@ -42,6 +50,8 @@ type FunctionContext = struct {
     output: *emit_x64.Buffer,
     failure_token: lex.Token,
     failure_instruction: usize,
+    lines: []LineEntry,
+    line_count: *usize,
 }
 
 fn add_fixup(fixups: []Fixup, count: *usize, displacement_at: usize, block: usize) -> err {
@@ -973,7 +983,7 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
 // reference to `neper_symbols` -- one per trap site -- is resolved here, so the
 // linkers see only a longer code blob. The functions the fold dropped are skipped:
 // their offsets are the survivor's, which is the name the walk should print.
-fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []Relocation, relocation_count: usize) -> err {
+fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []Relocation, relocation_count: usize, lines: []LineEntry, line_count: usize) -> err {
     let table_start = machine.count
     var emitted = 0usize
     var at = 0usize
@@ -982,7 +992,36 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
         at += 1usize
     }
     try emit_x64.little_u32(machine, emitted)
-    var names_at = 4usize + emitted * 16usize
+    // Names first, then the paths the line rows share, then the rows themselves;
+    // every offset below is from the table's start.
+    var names_at = 4usize + emitted * 24usize
+    var names_total = 0usize
+    at = 0usize
+    while at < builder.function_count {
+        if function_is_placed(builder, function_offsets, at) {
+            names_total += builder.functions[at].module_name.len + 1usize + builder.functions[at].name.len
+        }
+        at += 1usize
+    }
+    // The distinct paths, at most one per module, laid out after the names.
+    var paths: [512]str = zero
+    var path_offsets: [512]usize = zero
+    var path_count = 0usize
+    var paths_total = 0usize
+    var row = 0usize
+    while row < line_count {
+        let (path_index, found) = path_position(paths[..path_count], lines[row].path)
+        if !found {
+            if path_count == paths.len { ret Unsupported }
+            paths[path_count] = lines[row].path
+            path_offsets[path_count] = names_at + names_total + paths_total
+            paths_total += lines[row].path.len
+            path_count += 1usize
+        }
+        row += 1usize
+    }
+    let rows_at = names_at + names_total + paths_total
+    var rows_written = 0usize
     at = 0usize
     while at < builder.function_count {
         if function_is_placed(builder, function_offsets, at) {
@@ -999,6 +1038,10 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
             let name_length = placed.module_name.len + 1usize + placed.name.len
             try emit_x64.little_u32(machine, name_length)
             names_at += name_length
+            let (first_row, row_total) = line_rows_of(lines, line_count, start, end)
+            try emit_x64.little_u32(machine, rows_at + rows_written * 16usize)
+            try emit_x64.little_u32(machine, row_total)
+            rows_written += row_total
         }
         at += 1usize
     }
@@ -1012,6 +1055,32 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
         }
         at += 1usize
     }
+    var path_at = 0usize
+    while path_at < path_count {
+        try emit_text(machine, paths[path_at])
+        path_at += 1usize
+    }
+    at = 0usize
+    while at < builder.function_count {
+        if function_is_placed(builder, function_offsets, at) {
+            let start = function_offsets[at]
+            let (end, end_error) = function_placed_end(builder, function_offsets, at, table_start)
+            if end_error != ok { ret end_error }
+            let (first_row, row_total) = line_rows_of(lines, line_count, start, end)
+            var row_at = first_row
+            while row_at < first_row + row_total {
+                let entry = lines[row_at]
+                let (path_index, found) = path_position(paths[..path_count], entry.path)
+                if !found { ret Unsupported }
+                try emit_x64.little_u32(machine, entry.offset - start)
+                try emit_x64.little_u32(machine, entry.line)
+                try emit_x64.little_u32(machine, path_offsets[path_index])
+                try emit_x64.little_u32(machine, entry.path.len)
+                row_at += 1usize
+            }
+        }
+        at += 1usize
+    }
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         let relocation = relocations[relocation_at]
@@ -1022,6 +1091,35 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
         relocation_at += 1usize
     }
     ret ok
+}
+
+fn path_position(paths: []const str, path: str) -> (usize, bool) {
+    var at = 0usize
+    while at < paths.len {
+        if check.same(paths[at], path) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The line rows within one function's code, which are contiguous since the rows are
+// appended as the code is.
+fn line_rows_of(lines: []LineEntry, line_count: usize, start: usize, end: usize) -> (usize, usize) {
+    var first = 0usize
+    var found_first = false
+    var total = 0usize
+    var at = 0usize
+    while at < line_count {
+        if lines[at].offset >= start && lines[at].offset < end {
+            if !found_first {
+                first = at
+                found_first = true
+            }
+            total += 1usize
+        }
+        at += 1usize
+    }
+    ret (first, total)
 }
 
 // Whether a function has its own code: a folded duplicate shares an offset with an
@@ -1489,6 +1587,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     if function_index >= builder.function_count { ret Unsupported }
     let current = builder.functions[function_index]
     if current.block_count > block_offsets.len { ret Unsupported }
+    let function_code_start = output.count
     let (parameters, parameters_error) = parameter_count(builder, current)
     if parameters_error != ok { ret parameters_error }
     let local_count = stack_object_count(builder, current)
@@ -1522,6 +1621,22 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         let instruction = builder.instructions[at]
         context.failure_token = instruction.token
         context.failure_instruction = at
+        // The line table: a row wherever the line or the file changes (D209).
+        if instruction.token.line != 0usize {
+            var line_path = instruction.path
+            if line_path.len == 0usize { line_path = current.path }
+            let line_count = *context.line_count
+            var changed = true
+            if line_count != 0usize {
+                let last = context.lines[line_count - 1usize]
+                if last.line == instruction.token.line && check.same(last.path, line_path) && last.offset >= function_code_start { changed = false }
+            }
+            if changed {
+                if line_count == context.lines.len { ret Unsupported }
+                context.lines[line_count] = LineEntry { offset: output.count, line: instruction.token.line, path: line_path }
+                *context.line_count = line_count + 1usize
+            }
+        }
         if instruction.opcode == .Bitcast {
             try select_bitcast(builder, instruction, allocations, output)
         } else {
@@ -2036,7 +2151,9 @@ fn self_test() -> err {
     var fixups: [4]Fixup = zero
     var relocations: [4]Relocation = zero
     var relocation_count = 0usize
-    var context = FunctionContext { allocations: allocations[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize }
+    var lines: [8]LineEntry = zero
+    var line_count = 0usize
+    var context = FunctionContext { allocations: allocations[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 11usize || output.bytes[0usize] != 72usize || output.bytes[1usize] != 184usize || output.bytes[2usize] != 7usize || output.bytes[10usize] != 195usize { ret Unsupported }
     allocations[0usize].kind = .Stack

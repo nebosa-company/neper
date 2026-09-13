@@ -23,6 +23,9 @@ type Program = struct {
     function_offsets: []usize,
     relocations: []codegen_x64.Relocation,
     relocation_count: usize,
+    // Section 13's line table, re-based to the assembled code (D209).
+    lines: []codegen_x64.LineEntry,
+    line_count: usize,
 }
 
 fn capacity(value: usize) -> usize {
@@ -281,10 +284,24 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     var relocation_count = 0usize
     var code_size = 0usize
     var table_at = 0usize
+    // The symbol table's name for each function, `module.function` (D206).
+    let (module_name_lengths, lengths_error) = mem.alloc[usize](a, capacity(artifacts.len))
+    if lengths_error != ok { ret lengths_error }
+    var length_at = 0usize
+    while length_at < artifacts.len {
+        let (name_index, name_index_error) = em.interface_module_index(artifacts[length_at].bytes)
+        if name_index_error != ok { ret name_index_error }
+        let (name_start, name_length, bounds_error) = em.string_bounds(artifacts[length_at].bytes, name_index)
+        if bounds_error != ok { ret bounds_error }
+        module_name_lengths[length_at] = name_length
+        length_at += 1usize
+    }
+    var names_total = 0usize
     while table_at < table.count {
         let function = table.funcs[table_at]
         code_size += function.code_length
         relocation_count += function.relocation_count
+        names_total += table.names[table_at].len + 1usize + module_name_lengths[table.owner[table_at]]
         table_at += 1usize
     }
     // A function's hash input is its code, its relocations and their names, all of which live in
@@ -340,9 +357,17 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
         }
         artifact_at += 1usize
     }
-    // The code, and room after it for the symbol table the driver appends (D206): a
-    // header and a name per function, which sixty-four bytes each covers.
-    let (machine_storage, machine_error) = mem.alloc[usize](a, capacity(code_size + function_count * 64usize + 64usize))
+    // The code, and room after it for the symbol table the driver appends (D206, D209):
+    // a header and a name per function, and sixteen bytes per line row.
+    var line_total = 0usize
+    var line_artifact = 0usize
+    while line_artifact < artifacts.len {
+        let (rows, rows_error) = em.artifact_line_row_total(artifacts[line_artifact].bytes)
+        if rows_error != ok { ret rows_error }
+        line_total += rows
+        line_artifact += 1usize
+    }
+    let (machine_storage, machine_error) = mem.alloc[usize](a, capacity(code_size + function_count * 24usize + names_total + line_total * 16usize + 65536usize))
     if machine_error != ok { ret machine_error }
     try emit_x64.init(&program.machine, machine_storage)
     let (function_offsets, offsets_error) = mem.alloc[usize](a, function_count)
@@ -352,6 +377,12 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     if relocations_error != ok { ret relocations_error }
     program.relocations = relocations
     program.relocation_count = 0usize
+    let (lines, lines_error) = mem.alloc[codegen_x64.LineEntry](a, capacity(line_total))
+    if lines_error != ok { ret lines_error }
+    program.lines = lines
+    program.line_count = 0usize
+    let (row_scratch, row_scratch_error) = mem.alloc[em.LineRow](a, 16384usize)
+    if row_scratch_error != ok { ret row_scratch_error }
     // Every module owns its own copy of the generic instances it uses, so the same concrete
     // function arrives from several artifacts, and two distinct functions can compile alike.
     // Either way one copy is shared, keyed by the content hash the artifact carries. The
@@ -423,6 +454,21 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             while code_at < function.code_length {
                 try emit_x64.byte(&program.machine, artifacts[owner_at].bytes[function.code_start + code_at])
                 code_at += 1usize
+            }
+            let (row_count, rows_error) = em.read_code_lines(artifacts[owner_at].bytes, position - table.base[owner_at], row_scratch)
+            if rows_error != ok { ret rows_error }
+            var row_at = 0usize
+            while row_at < row_count {
+                if program.line_count == program.lines.len { ret InvalidInput }
+                let (row_path, row_path_error) = copy_string(a, artifacts[owner_at].bytes, row_scratch[row_at].path_index)
+                if row_path_error != ok { ret row_path_error }
+                var entry: codegen_x64.LineEntry = zero
+                entry.offset = program.function_offsets[global_function] + row_scratch[row_at].offset
+                entry.line = row_scratch[row_at].line
+                entry.path = row_path
+                program.lines[program.line_count] = entry
+                program.line_count += 1usize
+                row_at += 1usize
             }
             var relocation_at = 0usize
             while relocation_at < function.relocation_count {

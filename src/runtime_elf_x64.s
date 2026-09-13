@@ -191,6 +191,28 @@ neper_os_write:
 # and exit 134. The generated code
 # jumps here with rdi = text, rsi = its length, rdx and rcx = the operands; nothing
 # returns, so the stack is simply realigned and the callee-saved registers are not kept.
+# rax in decimal to stderr; a subroutine of neper_trap alone.
+np_trap_number:
+    sub rsp,32
+    lea r9,[rsp+32]
+    mov ecx,10
+.Lnp_number_digit:
+    xor edx,edx
+    div rcx
+    add dl,48
+    dec r9
+    mov BYTE PTR [r9],dl
+    test rax,rax
+    jnz .Lnp_number_digit
+    mov rsi,r9
+    lea rdx,[rsp+32]
+    sub rdx,r9
+    mov edi,2
+    mov eax,1
+    syscall
+    add rsp,32
+    ret
+
 .global neper_trap
 neper_trap:
     mov r11,QWORD PTR [rsp]
@@ -295,9 +317,14 @@ neper_trap:
     cmp r12,rax
     jb .Ltrap_found
 .Ltrap_next_entry:
-    add rbx,16
+    add rbx,24
     jmp .Ltrap_lookup
 .Ltrap_found:
+# The offset the return address points behind, within the function, for the line
+# rows: the row with the greatest offset at or below it is the frame's line.
+    mov r15,r12
+    sub r15,rax
+    dec r15
     mov BYTE PTR [rsp],32
     mov BYTE PTR [rsp+1],32
     mov BYTE PTR [rsp+2],97
@@ -314,6 +341,56 @@ neper_trap:
     mov edi,2
     mov eax,1
     syscall
+    mov ebp,DWORD PTR [rbx+16]
+    add rbp,QWORD PTR [rsp+40]
+    mov r12d,DWORD PTR [rbx+20]
+    xor r9d,r9d
+.Ltrap_row:
+    test r12d,r12d
+    jz .Ltrap_rows_done
+    dec r12d
+    mov eax,DWORD PTR [rbp]
+    cmp rax,r15
+    ja .Ltrap_row_next
+    mov r9,rbp
+.Ltrap_row_next:
+    add rbp,16
+    jmp .Ltrap_row
+.Ltrap_rows_done:
+    test r9,r9
+    jz .Ltrap_line_done
+    mov BYTE PTR [rsp],32
+    mov BYTE PTR [rsp+1],40
+    mov rsi,rsp
+    mov edx,2
+    mov edi,2
+    mov eax,1
+    syscall
+    mov esi,DWORD PTR [r9+8]
+    add rsi,QWORD PTR [rsp+40]
+    mov edx,DWORD PTR [r9+12]
+    mov edi,2
+    mov eax,1
+    syscall
+    mov BYTE PTR [rsp],58
+    mov rsi,rsp
+    mov edx,1
+    mov edi,2
+    mov eax,1
+    syscall
+    mov eax,DWORD PTR [r9+4]
+    push r9
+    push r9
+    call np_trap_number
+    pop r9
+    pop r9
+    mov BYTE PTR [rsp],41
+    mov rsi,rsp
+    mov edx,1
+    mov edi,2
+    mov eax,1
+    syscall
+.Ltrap_line_done:
     mov BYTE PTR [rsp],10
     mov rsi,rsp
     mov edx,1

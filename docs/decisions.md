@@ -3811,3 +3811,22 @@ is what a recovery must reproduce; stage one is whatever the C compiler at hand
 makes of `bootstrap/neper.c`, and needs only to build stage two. Deleting the
 bootstrap, the M2 exit item after this one, is still open: both suites build their
 compiler from it on every run.
+
+## D209 — The line table: every frame of a backtrace has its file and line
+
+Section 13 promises a line-and-symbol section in every build mode, and section 11's
+backtrace names the file and line of every frame. The back end now records a line
+row wherever the line or the file changes as it selects a function -- the offset in
+the machine code, the line, and the instruction's own file, which an inlined body
+brought with it (D207) -- and the symbol table after the code (D206) carries, per
+function, its rows and the distinct paths they share. Both runtimes look a frame's
+return address up in its function's rows, the greatest offset at or below the
+address less one, and print ` (path:line)` after the name. Artifacts carry each code
+function's rows in a Lines section, the file as a string index, and the artifact
+linker re-bases them to the assembled code, so an executable linked from artifacts
+keeps the table byte for byte the same as one built from source; the fold rewinds
+the rows with the code it drops. The section is new, so the `.em` format version is
+4, as section 12 says a change to the serialization is. `link/trap_backtrace` pins `helper.pick
+(...helper.e:1)` and `main.main (...main.e:17)` on both platforms. The compiler's
+image grows by a tenth for its rows. A named `.nepersym` section, DWARF and CodeView
+are still open.

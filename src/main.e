@@ -1720,15 +1720,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (is_linux, linux_error) = em.string_matches(artifacts[0usize].bytes, target_index, "x64-linux")
         if linux_error != ok { ret linux_error }
         if !is_windows && !is_linux { ret em_link.TargetMismatch }
-        let (executable_storage, executable_storage_error) = mem.alloc[usize](a, program.machine.count + 8192usize)
+        // The symbol and line table goes after the code before the image is sized (D206, D209).
+        try codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines, program.line_count)
+        let (executable_storage, executable_storage_error) = mem.alloc[usize](a, program.machine.count + 65536usize)
         if executable_storage_error != ok { ret executable_storage_error }
         var executable: emit_x64.Buffer = zero
         try emit_x64.init(&executable, executable_storage)
         if is_windows {
-            try codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count)
             try link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, &executable)
         } else {
-            try codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count)
             try link_elf.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, &executable)
         }
         let (packed, packed_error) = mem.alloc[u8](a, executable.count)
@@ -2021,13 +2021,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // code it will hold and it dominates the arena. Selecting the compiler
             // itself needs between 16 and 32 bytes per NIR instruction, measured by
             // bisecting the multiplier until emission reports `emit_x64.Capacity`;
-            // 96 kept three to six times that, and 56 -- twice the 28 the checks of
+            // 96 kept three to six times that; 56 -- twice the 28 the checks of
             // D194-D202 brought it to -- is what leaves room for the inlining oracle
-            // (D207) in the default arena. Overrunning it is a clean `Capacity` error,
-            // never a wrong instruction.
+            // (D207) in the default arena, and the line rows (D209), at most one per
+            // instruction and sixteen bytes each, are the eight on top. Overrunning it
+            // is a clean `Capacity` error, never a wrong instruction.
             // ... plus the symbol table appended after the code (D206), a header and a
             // name per function.
-            machine_capacity = builder.instruction_count * 56usize + builder.function_count * 64usize + 65536usize
+            var names_total = 0usize
+            var named_at = 0usize
+            while named_at < builder.function_count {
+                names_total += builder.functions[named_at].module_name.len + 1usize + builder.functions[named_at].name.len
+                named_at += 1usize
+            }
+            machine_capacity = builder.instruction_count * 64usize + builder.function_count * 24usize + names_total + 65536usize
         }
         let (machine_storage, machine_storage_error) = mem.alloc[usize](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }
@@ -2079,6 +2086,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         codegen_context.relocations = relocations
         codegen_context.relocation_count = &relocation_count
         codegen_context.output = &machine
+        // Section 13's line table (D209): a row per line change, so at most one per instruction.
+        let (line_entries, line_entries_error) = mem.alloc[codegen_x64.LineEntry](a, builder.instruction_count + 16usize)
+        if line_entries_error != ok { ret line_entries_error }
+        var line_count = 0usize
+        codegen_context.lines = line_entries
+        codegen_context.line_count = &line_count
         while function_at < builder.function_count {
             let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 5usize, ranges, allocations)
             if allocation_error != ok { ret allocation_error }
@@ -2086,6 +2099,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let function_start = machine.count
                 function_offsets[function_at] = function_start
                 let relocation_start = relocation_count
+                let line_start = line_count
                 let codegen_error = codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
                 if codegen_error != ok {
                     try print_codegen_diagnostic(&loaded, builder.functions[function_at], &codegen_context)
@@ -2105,6 +2119,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                                 if fold_hashes[fold_at] == content {
                                     machine.count = function_start
                                     relocation_count = relocation_start
+                                    line_count = line_start
                                     function_offsets[function_at] = fold_offsets[fold_at]
                                     duplicate = true
                                     break
@@ -2137,14 +2152,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 try binary.init(&scratch, scratch_storage)
                 let (string_values, string_values_error) = mem.alloc[str](a, 32768usize)
                 if string_values_error != ok { ret string_values_error }
-                let (sections, sections_error) = mem.alloc[em.Section](a, 7usize)
+                let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
                 if triple_error != ok { ret triple_error }
                 let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
                 if packed_error != ok { ret packed_error }
                 if writes_em {
-                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, .Debug, &machine, function_offsets, relocations, relocation_count, string_values, sections, &scratch, &artifact)
+                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, .Debug, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, string_values, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
                     try save_bytes(a, args[6usize], packed[..artifact.count])
                     try io.print("compiled module written\n")
@@ -2157,7 +2172,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 var module_at = 0usize
                 while module_at < loaded.count {
                     artifact.count = 0usize
-                    try em.write_module(&checker, &loaded, &builder, module_at, triple, .Debug, &machine, function_offsets, relocations, relocation_count, string_values, sections, &scratch, &artifact)
+                    try em.write_module(&checker, &loaded, &builder, module_at, triple, .Debug, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, string_values, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
                     if incremental_build {
                         let (copy, copy_error) = mem.alloc[u8](a, artifact.count)
@@ -2187,10 +2202,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
                 if machine_abi == .Windows {
-                    try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count)
+                    try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
                     try link_pe.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
                 } else {
-                    try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count)
+                    try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
                     try link_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
                 }
                 let (packed, packed_error) = mem.alloc[u8](a, executable.count)

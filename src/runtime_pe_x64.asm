@@ -535,6 +535,27 @@ np_trap_write PROC
     ret
 np_trap_write ENDP
 
+; rax in decimal, through np_trap_write.
+np_trap_number PROC
+    sub rsp, 56
+    lea r9, [rsp+56]
+    mov ecx, 10
+np_number_digit:
+    xor edx, edx
+    div rcx
+    add dl, 48
+    dec r9
+    mov [r9], dl
+    test rax, rax
+    jnz np_number_digit
+    mov rdx, r9
+    lea r8, [rsp+56]
+    sub r8, r9
+    call np_trap_write
+    add rsp, 56
+    ret
+np_trap_number ENDP
+
 neper_trap PROC
     mov r11, [rsp]
     and rsp, -16
@@ -633,9 +654,14 @@ trap_lookup:
     cmp r12, rax
     jb trap_found
 trap_next_entry:
-    add rbx, 16
+    add rbx, 24
     jmp trap_lookup
 trap_found:
+    ; The offset the return address points behind, within the function, for the line
+    ; rows: the row with the greatest offset at or below it is the frame's line.
+    mov r15, r12
+    sub r15, rax
+    dec r15
     mov byte ptr [rsp+32], 32
     mov byte ptr [rsp+33], 32
     mov byte ptr [rsp+34], 97
@@ -648,6 +674,44 @@ trap_found:
     add rdx, [rsp+72]
     mov r8d, [rbx+12]
     call np_trap_write
+    mov esi, [rbx+16]
+    add rsi, [rsp+72]
+    mov ebp, [rbx+20]
+    xor r12d, r12d
+trap_row:
+    test ebp, ebp
+    jz trap_rows_done
+    dec ebp
+    mov eax, [rsi]
+    cmp rax, r15
+    ja trap_row_next
+    mov r12, rsi
+trap_row_next:
+    add rsi, 16
+    jmp trap_row
+trap_rows_done:
+    test r12, r12
+    jz trap_line_done
+    mov byte ptr [rsp+32], 32
+    mov byte ptr [rsp+33], 40
+    lea rdx, [rsp+32]
+    mov r8d, 2
+    call np_trap_write
+    mov edx, [r12+8]
+    add rdx, [rsp+72]
+    mov r8d, [r12+12]
+    call np_trap_write
+    mov byte ptr [rsp+32], 58
+    lea rdx, [rsp+32]
+    mov r8d, 1
+    call np_trap_write
+    mov eax, [r12+4]
+    call np_trap_number
+    mov byte ptr [rsp+32], 41
+    lea rdx, [rsp+32]
+    mov r8d, 1
+    call np_trap_write
+trap_line_done:
     mov byte ptr [rsp+32], 10
     lea rdx, [rsp+32]
     mov r8d, 1

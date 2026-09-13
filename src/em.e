@@ -96,7 +96,7 @@ type CodeRelocation = struct {
     instance: usize,
 }
 
-fn format_version() -> usize { ret 3usize }
+fn format_version() -> usize { ret 4usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -107,6 +107,9 @@ fn nir_kind() -> usize { ret 4usize }
 fn code_kind() -> usize { ret 5usize }
 fn debug_kind() -> usize { ret 6usize }
 fn globals_kind() -> usize { ret 7usize }
+// Section 13's line table per code function (D209): rows of a code offset within the
+// function, a line, and the path as a string index.
+fn lines_kind() -> usize { ret 8usize }
 
 fn declaration_function_kind() -> usize { ret 1usize }
 fn declaration_aggregate_kind() -> usize { ret 2usize }
@@ -124,7 +127,14 @@ fn mode_id(mode: BuildMode) -> usize {
 }
 
 fn known_kind(kind: usize) -> bool {
-    ret kind >= strings_kind() && kind <= globals_kind()
+    ret kind >= strings_kind() && kind <= lines_kind()
+}
+
+// One row of a code function's line table as an artifact carries it.
+type LineRow = struct {
+    offset: usize,
+    line: usize,
+    path_index: usize,
 }
 
 fn canonical_text(output: *binary.Buffer, value: str) -> err {
@@ -1705,6 +1715,120 @@ fn write_code(g: *graph.Graph, builder: *nir.Builder, module_index: usize, table
 
 // The module's own `var`s, in declaration order: name, size, alignment, whether an initial
 // value was written, and its bits. The linker lays them out from this and nothing else.
+// The paths the module's line rows name, interned ahead of the Strings section.
+fn collect_line_paths(builder: *nir.Builder, module_index: usize, machine: *emit_x64.Buffer, function_offsets: []usize, lines: []codegen_x64.LineEntry, line_count: usize, table: *StringTable) -> err {
+    var function_at = 0usize
+    while function_at < builder.function_count {
+        if builder.functions[function_at].module_index == module_index {
+            if function_at >= function_offsets.len { ret InvalidArtifact }
+            let start = function_offsets[function_at]
+            let (end, end_error) = function_code_end(builder, machine, function_offsets, function_at)
+            if end_error != ok { ret end_error }
+            let (first_row, row_total) = codegen_x64.line_rows_of(lines, line_count, start, end)
+            var row_at = first_row
+            while row_at < first_row + row_total {
+                let (path_index, path_error) = intern(table, lines[row_at].path)
+                if path_error != ok { ret path_error }
+                row_at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    ret ok
+}
+
+// The Lines section: per code function, in the Code section's order, a count and then
+// the rows -- the offset within the function's code, the line, the path's string index.
+fn write_lines(builder: *nir.Builder, module_index: usize, table: *StringTable, machine: *emit_x64.Buffer, function_offsets: []usize, lines: []codegen_x64.LineEntry, line_count: usize, output: *binary.Buffer) -> err {
+    try binary.little_u32(output, module_nir_function_count(builder, module_index))
+    var function_at = 0usize
+    while function_at < builder.function_count {
+        if builder.functions[function_at].module_index == module_index {
+            if function_at >= function_offsets.len { ret InvalidArtifact }
+            let start = function_offsets[function_at]
+            let (end, end_error) = function_code_end(builder, machine, function_offsets, function_at)
+            if end_error != ok { ret end_error }
+            let (first_row, row_total) = codegen_x64.line_rows_of(lines, line_count, start, end)
+            try binary.little_u32(output, row_total)
+            var row_at = first_row
+            while row_at < first_row + row_total {
+                let entry = lines[row_at]
+                let (path_index, path_error) = string_index(table, entry.path)
+                if path_error != ok { ret path_error }
+                try binary.little_u32(output, entry.offset - start)
+                try binary.little_u32(output, entry.line)
+                try binary.little_u32(output, path_index)
+                row_at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    ret ok
+}
+
+// The rows of one code function, by its position in the Code section; an artifact with
+// no Lines section, or fewer functions in it, has none.
+fn read_code_lines(bytes: []const usize, function_index: usize, out: []LineRow) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (section, found, section_error) = find_section_unchecked(bytes, lines_kind())
+    if section_error != ok { ret (0usize, section_error) }
+    if !found || section.length < 4usize { ret (0usize, ok) }
+    let (function_count, count_error) = binary.read_u32(bytes, section.offset)
+    if count_error != ok { ret (0usize, InvalidArtifact) }
+    if function_index >= function_count { ret (0usize, ok) }
+    let end = section.offset + section.length
+    var cursor = section.offset + 4usize
+    var at = 0usize
+    while at <= function_index {
+        if cursor > end || 4usize > end - cursor { ret (0usize, InvalidArtifact) }
+        let (row_count, row_count_error) = binary.read_u32(bytes, cursor)
+        if row_count_error != ok { ret (0usize, InvalidArtifact) }
+        cursor += 4usize
+        if row_count > (end - cursor) / 12usize { ret (0usize, InvalidArtifact) }
+        if at == function_index {
+            if row_count > out.len { ret (0usize, Capacity) }
+            var row_at = 0usize
+            while row_at < row_count {
+                let (offset, offset_error) = binary.read_u32(bytes, cursor + row_at * 12usize)
+                let (line, line_error) = binary.read_u32(bytes, cursor + row_at * 12usize + 4usize)
+                let (path_index, path_error) = binary.read_u32(bytes, cursor + row_at * 12usize + 8usize)
+                if offset_error != ok || line_error != ok || path_error != ok { ret (0usize, InvalidArtifact) }
+                out[row_at] = LineRow { offset: offset, line: line, path_index: path_index }
+                row_at += 1usize
+            }
+            ret (row_count, ok)
+        }
+        cursor += row_count * 12usize
+        at += 1usize
+    }
+    ret (0usize, ok)
+}
+
+// How many rows the artifact holds in all, to size the assembled program's table.
+fn artifact_line_row_total(bytes: []const usize) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (section, found, section_error) = find_section_unchecked(bytes, lines_kind())
+    if section_error != ok { ret (0usize, section_error) }
+    if !found || section.length < 4usize { ret (0usize, ok) }
+    let (function_count, count_error) = binary.read_u32(bytes, section.offset)
+    if count_error != ok { ret (0usize, InvalidArtifact) }
+    let end = section.offset + section.length
+    var cursor = section.offset + 4usize
+    var total = 0usize
+    var at = 0usize
+    while at < function_count {
+        if cursor > end || 4usize > end - cursor { ret (0usize, InvalidArtifact) }
+        let (row_count, row_count_error) = binary.read_u32(bytes, cursor)
+        if row_count_error != ok { ret (0usize, InvalidArtifact) }
+        cursor += 4usize + row_count * 12usize
+        total += row_count
+        at += 1usize
+    }
+    ret (total, ok)
+}
+
 fn write_globals(builder: *nir.Builder, module_index: usize, table: *StringTable, output: *binary.Buffer) -> err {
     var count = 0usize
     var at = 0usize
@@ -1746,13 +1870,14 @@ fn write_debug(g: *graph.Graph, module_index: usize, table: *StringTable, scratc
     ret binary.little_u32(output, 0usize)
 }
 
-fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, string_values: []str, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
-    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 7usize || output.count != 0usize { ret InvalidArtifact }
+fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, line_count: usize, string_values: []str, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 8usize || output.count != 0usize { ret InvalidArtifact }
     var strings: StringTable = zero
     try init_strings(&strings, string_values)
     let (target_index, target_error) = intern(&strings, target_triple)
     if target_error != ok { ret target_error }
     try collect_module_strings(c, g, builder, module_index, &strings)
+    try collect_line_paths(builder, module_index, machine, function_offsets, lines, line_count, &strings)
     var writer: Writer = zero
     try begin(&writer, output, section_values, target_index, 0usize, mode)
     try begin_section(&writer, strings_kind(), required_flag())
@@ -1778,6 +1903,9 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     try end_section(&writer)
     try begin_section(&writer, globals_kind(), required_flag())
     try write_globals(builder, module_index, &strings, output)
+    try end_section(&writer)
+    try begin_section(&writer, lines_kind(), required_flag())
+    try write_lines(builder, module_index, &strings, machine, function_offsets, lines, line_count, output)
     try end_section(&writer)
     try finish(&writer)
     let validation_error = validate(output.bytes[0usize..output.count])
