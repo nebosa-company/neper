@@ -1356,6 +1356,17 @@ $variadicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $variadicWritten -ne 'executable written') { throw 'variadic extern executable emission failed' }
 & $variadicPath
 if ($LASTEXITCODE -ne 0) { throw 'a variadic extern call printed the wrong text' }
+# Section 11's trap protocol: a failed bounds check writes `file:line:col: trap[bounds]:
+# <values>` to stderr and exits 134; the same program with no check tripped exits 0.
+$trapPath = Join-Path $testBuild 'trap-bounds-selfhost.exe'
+$trapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_bounds\src\main.e') $repo 'x64' 'windows' $trapPath
+if ($LASTEXITCODE -ne 0 -or $trapWritten -ne 'executable written') { throw 'trap fixture executable emission failed' }
+$trapIndex = & $trapPath index 2>&1
+if ($LASTEXITCODE -ne 134 -or ($trapIndex -join "`n") -notmatch 'main\.e:10:50: trap\[bounds\]: index 7 out of bounds for len 5') { throw "an index past the end did not trap as section 11 says: exit $LASTEXITCODE, $($trapIndex -join "`n")" }
+$trapSlice = & $trapPath slice 2>&1
+if ($LASTEXITCODE -ne 134 -or ($trapSlice -join "`n") -notmatch 'main\.e:13:16: trap\[bounds\]: slice end 7 out of bounds for len 5') { throw "a slice past the end did not trap as section 11 says: exit $LASTEXITCODE, $($trapSlice -join "`n")" }
+& $trapPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the trap fixture tripped a check it should not have' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at

@@ -127,6 +127,8 @@ type Function = struct {
     name: str,
     module_index: usize,
     instance: usize,
+    // The source file, as a trap record names it (section 11); set by lowering.
+    path: str,
     first_block: usize,
     block_count: usize,
     first_instruction: usize,
@@ -599,6 +601,7 @@ fn begin_function(builder: *Builder, module_index: usize, name: str, instance: u
         name: name,
         module_index: module_index,
         instance: instance,
+        path: "",
         first_block: builder.block_count,
         block_count: 0usize,
         first_instruction: builder.instruction_count,

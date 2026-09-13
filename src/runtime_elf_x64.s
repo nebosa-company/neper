@@ -185,6 +185,72 @@ neper_os_write:
     pop rbx
     ret
 
+# A failed check (spec section 11): the record text, then the two operands wherever the
+# text holds a NUL, then a newline, all to stderr, and exit 134. The generated code
+# jumps here with rdi = text, rsi = its length, rdx and rcx = the operands; nothing
+# returns, so the stack is simply realigned and the callee-saved registers are not kept.
+.global neper_trap
+neper_trap:
+    and rsp,-16
+    sub rsp,32
+    mov rbx,rdi
+    lea r13,[rdi+rsi]
+    mov r12,rdx
+    mov r14,rcx
+    xor r15d,r15d
+.Ltrap_segment:
+    mov rsi,rbx
+.Ltrap_scan:
+    cmp rbx,r13
+    jae .Ltrap_scanned
+    cmp BYTE PTR [rbx],0
+    je .Ltrap_scanned
+    inc rbx
+    jmp .Ltrap_scan
+.Ltrap_scanned:
+    mov rdx,rbx
+    sub rdx,rsi
+    mov edi,2
+    mov eax,1
+    syscall
+    cmp rbx,r13
+    jae .Ltrap_end
+    inc rbx
+    mov rax,r12
+    test r15d,r15d
+    jz .Ltrap_digits
+    mov rax,r14
+.Ltrap_digits:
+    inc r15d
+    lea r9,[rsp+24]
+    mov ecx,10
+.Ltrap_digit:
+    xor edx,edx
+    div rcx
+    add dl,48
+    dec r9
+    mov BYTE PTR [r9],dl
+    test rax,rax
+    jnz .Ltrap_digit
+    mov rsi,r9
+    lea rdx,[rsp+24]
+    sub rdx,r9
+    mov edi,2
+    mov eax,1
+    syscall
+    jmp .Ltrap_segment
+.Ltrap_end:
+    mov BYTE PTR [rsp],10
+    mov rsi,rsp
+    mov edx,1
+    mov edi,2
+    mov eax,1
+    syscall
+    mov edi,134
+    mov eax,231
+    syscall
+    ud2
+
 .global neper_os_read
 neper_os_read:
     push rbx

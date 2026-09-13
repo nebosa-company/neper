@@ -519,6 +519,78 @@ write_done:
     ret
 neper_os_write ENDP
 
+; A failed check (spec section 11): the record text, then the two operands wherever the
+; text holds a NUL, then a newline, all to stderr, and exit 134. The generated code
+; jumps here with rcx = text, rdx = its length, r8 and r9 = the operands; nothing
+; returns, so the stack is simply realigned and the callee-saved registers are not kept.
+np_trap_write PROC
+    sub rsp, 56
+    mov rcx, rdi
+    lea r9, [rsp+40]
+    mov qword ptr [rsp+32], 0
+    call qword ptr [__imp_WriteFile]
+    add rsp, 56
+    ret
+np_trap_write ENDP
+
+neper_trap PROC
+    and rsp, -16
+    sub rsp, 64
+    mov rbx, rcx
+    lea rsi, [rcx+rdx]
+    mov r12, r8
+    mov r13, r9
+    xor r14d, r14d
+    mov ecx, -12
+    call qword ptr [__imp_GetStdHandle]
+    mov rdi, rax
+trap_segment:
+    mov rdx, rbx
+trap_scan:
+    cmp rbx, rsi
+    jae trap_scanned
+    cmp byte ptr [rbx], 0
+    je trap_scanned
+    inc rbx
+    jmp trap_scan
+trap_scanned:
+    mov r8, rbx
+    sub r8, rdx
+    call np_trap_write
+    cmp rbx, rsi
+    jae trap_end
+    inc rbx
+    mov rax, r12
+    test r14d, r14d
+    jz trap_digits
+    mov rax, r13
+trap_digits:
+    inc r14d
+    lea r9, [rsp+56]
+    mov ecx, 10
+trap_digit:
+    xor edx, edx
+    div rcx
+    add dl, 48
+    dec r9
+    mov [r9], dl
+    test rax, rax
+    jnz trap_digit
+    mov rdx, r9
+    lea r8, [rsp+56]
+    sub r8, r9
+    call np_trap_write
+    jmp trap_segment
+trap_end:
+    mov byte ptr [rsp+32], 10
+    lea rdx, [rsp+32]
+    mov r8d, 1
+    call np_trap_write
+    mov ecx, 134
+    call qword ptr [__imp_ExitProcess]
+    int 3
+neper_trap ENDP
+
 neper_os_read PROC
     push rbx
     sub rsp, 48

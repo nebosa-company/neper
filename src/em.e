@@ -629,6 +629,7 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     // lower.intrinsic_symbol. mem.alloc is compiler-owned and has no declaration.
     if same(name, "neper_mem_alloc") { ret ("", false) }
     if same(name, "neper_hash_bytes") { ret ("", false) }
+    if same(name, "neper_trap") { ret ("", false) }
     if same(name, "neper_mem_mark") { ret ("mark", true) }
     if same(name, "neper_mem_reset") { ret ("reset", true) }
     if same(name, "neper_mem_stats") { ret ("stats", true) }
@@ -928,6 +929,19 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
             if error_name_error != ok { ret error_name_error }
         }
         symbol_at += 1usize
+    }
+    // A trap site (D194) names the runtime's `neper_trap` from a relocation alone -- no
+    // instruction carries it -- so its strings are collected from the references.
+    var reference_at = 0usize
+    while reference_at < builder.function_ref_count {
+        let reference = builder.function_refs[reference_at]
+        if same(reference.name, "neper_trap") && reference.module_index == module_index {
+            let (trap_module, trap_module_error) = intern(table, g.modules[module_index].name)
+            if trap_module_error != ok { ret trap_module_error }
+            let (trap_name, trap_name_error) = intern(table, reference.name)
+            if trap_name_error != ok { ret trap_name_error }
+        }
+        reference_at += 1usize
     }
     function_at = 0usize
     while function_at < builder.function_count {

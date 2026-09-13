@@ -1257,6 +1257,27 @@ variadic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/
 [ "$variadic_written" = 'executable written' ]
 chmod +x "$variadic_path"
 "$variadic_path"
+# Section 11's trap protocol: a failed bounds check writes `file:line:col: trap[bounds]:
+# <values>` to stderr and exits 134; the same program with no check tripped exits 0.
+trap_path="$test_build/trap-bounds-selfhost"
+trap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_bounds/src/main.e" "$repo" x64 linux "$trap_path")
+[ "$trap_written" = 'executable written' ]
+chmod +x "$trap_path"
+trap_status=0
+trap_index=$("$trap_path" index 2>&1) || trap_status=$?
+[ "$trap_status" -eq 134 ]
+case "$trap_index" in
+    *'main.e:10:50: trap[bounds]: index 7 out of bounds for len 5'*) ;;
+    *) printf '%s\n' "an index past the end did not trap as section 11 says: $trap_index" >&2; exit 1 ;;
+esac
+trap_status=0
+trap_slice=$("$trap_path" slice 2>&1) || trap_status=$?
+[ "$trap_status" -eq 134 ]
+case "$trap_slice" in
+    *'main.e:13:16: trap[bounds]: slice end 7 out of bounds for len 5'*) ;;
+    *) printf '%s\n' "a slice past the end did not trap as section 11 says: $trap_slice" >&2; exit 1 ;;
+esac
+"$trap_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

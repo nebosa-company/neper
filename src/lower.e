@@ -4193,6 +4193,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if function.generic { ret check.Unsupported }
     let (nir_function, begin_error) = nir.begin_function(builder, function.owner_module_index, name, function.instance_id)
     if begin_error != ok { ret begin_error }
+    builder.functions[nir_function].path = g.modules[function.owner_module_index].path
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_parameter_at = 0usize
     while signature_parameter_at < function.parameter_count {
@@ -4934,6 +4935,7 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
     let arena_form = instance.return_count == 2usize
     let (nir_function, begin_error) = nir.begin_function(builder, instance.owner_module_index, instance.name, instance.instance_id)
     if begin_error != ok { ret begin_error }
+    builder.functions[nir_function].path = g.modules[instance.owner_module_index].path
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_at = 0usize
     while signature_at < instance.parameter_count {

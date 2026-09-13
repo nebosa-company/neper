@@ -3525,3 +3525,22 @@ ignores both, so the cost is one move per float and one `mov eax` per foreign ca
 `link/extern_variadic` prints `%d %lld %.2f %s %d` through `snprintf` with eight
 arguments, so the stack overflow area and the float are both exercised on each
 convention; `check/variadic_narrow_argument` pins an `i16` refused.
+
+## D194 — A failed check follows section 11's trap protocol
+
+A bounds check that failed executed `ud2`: an illegal-instruction crash, a
+platform-specific exit status and no word about where or why. Both embedded runtimes
+now carry `neper_trap`, which writes one record to stderr -- `file:line:col:
+trap[kind]: <values>`, the shape of a compiler diagnostic -- and exits 134, as the
+section says. The record's text is laid out inline in the code beside the check, the
+way a string constant is, with a NUL where each of the two operands goes, and the
+generated code jumps over it; the runtime prints the segments and the operands in
+decimal between them. Nothing about a trap is in NIR: the checks are selected in the
+back end, so that is where the record is built, and the function's source path
+travels on `nir.Function` for it. The rows that fire this way are `bounds` -- an
+index against its length, a slice's start against its end and its end against the
+length -- and the points the compiler itself takes as unreachable (a `switch` with
+no default falling through, the exit of a `while true`). `link/trap_bounds` pins the
+record and the exit code for the index and the slice on both platforms. The
+backtrace, the test root's framed control record, the arithmetic rows and the
+release-mode elision are still open.

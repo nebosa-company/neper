@@ -1039,7 +1039,83 @@ fn select_zero(builder: *nir.Builder, instruction: nir.Instruction, allocations:
     ret emit_x64.zero_memory(output, address_register, instruction.immediate)
 }
 
-fn select_index_address(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, output: *emit_x64.Buffer) -> err {
+// Section 11's trap protocol. A check that fails reaches the runtime's `neper_trap` with
+// the record -- `file:line:col: trap[kind]: ` and the values' text, a NUL where each of
+// the two operands goes -- and the operands themselves, and never returns. The text is
+// laid out inline and jumped over, the way a string constant is. The operands move
+// first, since the text's register is one they may sit in.
+fn emit_text(output: *emit_x64.Buffer, text: str) -> err {
+    var at = 0usize
+    while at < text.len {
+        try emit_x64.byte(output, usize(text[at]))
+        at += 1usize
+    }
+    ret ok
+}
+
+fn emit_decimal(output: *emit_x64.Buffer, value: usize) -> err {
+    if value >= 10usize { try emit_decimal(output, value / 10usize) }
+    ret emit_x64.byte(output, 48usize + value % 10usize)
+}
+
+fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kind: str, first: str, second: str, third: str, values: usize, a: usize, b: usize, context: *FunctionContext) -> err {
+    let output = context.output
+    var first_register = 8usize
+    var second_register = 9usize
+    var text_register = 1usize
+    var length_register = 2usize
+    if context.abi != .Windows {
+        first_register = 2usize
+        second_register = 1usize
+        text_register = 7usize
+        length_register = 6usize
+    }
+    if values >= 1usize && a != first_register { try emit_x64.mov_register(output, first_register, a) }
+    if values >= 2usize && b != second_register { try emit_x64.mov_register(output, second_register, b) }
+    let (skip, skip_error) = emit_x64.jump(output)
+    if skip_error != ok { ret skip_error }
+    let text_start = output.count
+    try emit_text(output, current.path)
+    try emit_x64.byte(output, 58usize)
+    try emit_decimal(output, token.line)
+    try emit_x64.byte(output, 58usize)
+    try emit_decimal(output, token.column)
+    try emit_text(output, ": trap[")
+    try emit_text(output, kind)
+    try emit_text(output, "]: ")
+    try emit_text(output, first)
+    if values >= 1usize {
+        try emit_x64.byte(output, 0usize)
+        try emit_text(output, second)
+    }
+    if values >= 2usize {
+        try emit_x64.byte(output, 0usize)
+        try emit_text(output, third)
+    }
+    let text_end = output.count
+    try emit_x64.patch_relative32(output, skip, text_end)
+    let (text_displacement, address_error) = emit_x64.relative_address(output, text_register)
+    if address_error != ok { ret address_error }
+    try emit_x64.patch_relative32(output, text_displacement, text_start)
+    try emit_x64.mov_immediate(output, length_register, text_end - text_start)
+    let (function_ref, reference_error) = nir.intern_function(builder, current.module_index, "neper_trap", 0usize)
+    if reference_error != ok { ret reference_error }
+    let (call_displacement, call_error) = emit_x64.call(output)
+    if call_error != ok { ret call_error }
+    ret add_relocation(context.relocations, context.relocation_count, call_displacement, function_ref)
+}
+
+// `cmp a, b; jcc over; <trap>; over:` -- the check passes when `condition` holds.
+fn emit_checked(builder: *nir.Builder, current: nir.Function, token: lex.Token, condition: usize, kind: str, first: str, second: str, third: str, a: usize, b: usize, context: *FunctionContext) -> err {
+    try emit_x64.compare_register(context.output, a, b)
+    let (over, over_error) = emit_x64.jump_condition(context.output, condition)
+    if over_error != ok { ret over_error }
+    try emit_trap(builder, current, token, kind, first, second, third, 2usize, a, b, context)
+    ret emit_x64.patch_relative32(context.output, over, context.output.count)
+}
+
+fn select_index_address(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, context: *FunctionContext) -> err {
+    let output = context.output
     if !instruction.has_result || instruction.operand_count != 3usize || instruction.immediate == 0usize { ret Unsupported }
     try save_allocated_registers(output, preserve_base, preserve_count)
     let base_value = builder.operands[instruction.first_operand]
@@ -1054,7 +1130,7 @@ fn select_index_address(builder: *nir.Builder, instruction: nir.Instruction, all
     let (length, length_error) = read_value(allocations, length_value, 0usize, output)
     if length_error != ok { ret length_error }
     if length != 0usize { try emit_x64.mov_register(output, 0usize, length) }
-    try emit_x64.bounds_check(output, 11usize, 0usize)
+    try emit_checked(builder, current, instruction.token, 2usize, "bounds", "index ", " out of bounds for len ", "", 11usize, 0usize, context)
     if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 11usize, 11usize, instruction.immediate) }
     try emit_x64.add_register(output, 11usize, 10usize)
     try restore_allocated_registers(output, preserve_base, preserve_count)
@@ -1064,7 +1140,8 @@ fn select_index_address(builder: *nir.Builder, instruction: nir.Instruction, all
     ret store_result(allocations, instruction.result, destination, output)
 }
 
-fn select_slice(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, output: *emit_x64.Buffer) -> err {
+fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, context: *FunctionContext) -> err {
+    let output = context.output
     if instruction.has_result || instruction.operand_count != 5usize || instruction.immediate == 0usize { ret Unsupported }
     try save_allocated_registers(output, preserve_base, preserve_count)
     let destination_value = builder.operands[instruction.first_operand]
@@ -1087,7 +1164,8 @@ fn select_slice(builder: *nir.Builder, instruction: nir.Instruction, allocations
     let (upper_source, upper_error) = read_preserved_value(allocations, upper_value, 1usize, preserve_base, output)
     if upper_error != ok { ret upper_error }
     if upper_source != 1usize { try emit_x64.mov_register(output, 1usize, upper_source) }
-    try emit_x64.slice_bounds_check(output, 0usize, 1usize, 11usize)
+    try emit_checked(builder, current, instruction.token, 6usize, "bounds", "slice start ", " after end ", "", 0usize, 1usize, context)
+    try emit_checked(builder, current, instruction.token, 6usize, "bounds", "slice end ", " out of bounds for len ", "", 1usize, 11usize, context)
     try emit_x64.subtract_register(output, 1usize, 0usize)
     if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 0usize, 0usize, instruction.immediate) }
     try emit_x64.add_register(output, 10usize, 0usize)
@@ -1235,10 +1313,10 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 try select_zero(builder, instruction, allocations, output)
             } else {
             if instruction.opcode == .IndexAddress {
-                try select_index_address(builder, instruction, allocations, preserve_base, preserve_count, output)
+                try select_index_address(builder, current, instruction, allocations, preserve_base, preserve_count, context)
             } else {
             if instruction.opcode == .Slice {
-                try select_slice(builder, instruction, allocations, preserve_base, preserve_count, output)
+                try select_slice(builder, current, instruction, allocations, preserve_base, preserve_count, context)
             } else {
             if instruction.opcode == .Cast || instruction.opcode == .Negate || instruction.opcode == .BitNot {
                 if instruction.operand_count != 1usize || instruction.ty.kind != .Integer { ret Unsupported }
@@ -1461,8 +1539,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     } else {
                 if instruction.opcode == .Trap || instruction.opcode == .Unreachable {
                     if instruction.has_result || instruction.operand_count != 0usize { ret Unsupported }
-                    try emit_x64.byte(output, 15usize)
-                    try emit_x64.byte(output, 11usize)
+                    try emit_trap(builder, current, instruction.token, "unreachable", "control reached a point the compiler took as unreachable", "", "", 0usize, 0usize, 0usize, context)
                 } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {
