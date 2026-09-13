@@ -2288,6 +2288,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if same(args[5usize], "windows") { machine_abi = .Windows }
         var codegen_context: codegen_x64.FunctionContext = zero
         codegen_context.allocations = allocations
+        codegen_context.ranges = ranges
         codegen_context.abi = machine_abi
         codegen_context.block_offsets = block_offsets
         codegen_context.fixups = fixups

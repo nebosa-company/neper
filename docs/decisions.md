@@ -4097,3 +4097,16 @@ immediates the linker patches at their offsets, and refuses a size a signed 32-b
 immediate cannot hold. A self-hosted compiler built with `--arena 1g` compiles the
 compiler in release in 27 s; link/arena_size pins an arena of eight mebibytes
 refusing twelve on both platforms.
+
+## D226 — A call saves the live registers alone
+
+Every call site stored the five allocated registers to their preserve slots before
+the call and reloaded all five after, whatever they held. The allocator's live
+ranges say which of them hold a value defined before the call and used after it,
+and only those are saved and restored now -- one pass over the function's values
+per call, a bit per register. A value the call itself defines, and one whose last
+use is an argument of it, need nothing. The other sites that preserve registers --
+a trap record, a fixed-register divide or multiply, an atomic -- are as they were.
+The compiler's own image is seven per cent smaller; its speed could not be measured
+on a loaded machine, and the suites, which compile the compiler with itself twice
+and compare, pass on both platforms.

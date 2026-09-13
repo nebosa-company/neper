@@ -42,6 +42,10 @@ type Relocation = struct {
 
 type FunctionContext = struct {
     allocations: []regalloc.Allocation,
+    // The live ranges the allocations came from (D226): a call saves and restores
+    // only the registers whose values are live across it. Shorter than the values,
+    // and every register is saved, as before.
+    ranges: []regalloc.LiveRange,
     abi: Abi,
     block_offsets: []usize,
     fixups: []Fixup,
@@ -1334,6 +1338,54 @@ fn save_allocated_registers(output: *emit_x64.Buffer, base: usize, count: usize)
     ret ok
 }
 
+// The allocated registers holding a value that is live across `instruction_index` --
+// defined before it and used after -- as a bit per register, in one pass over the
+// values. A value the instruction itself defines, or one whose last use is an operand
+// of it, needs no saving. Without the ranges every register is live.
+fn live_register_mask(context: *FunctionContext, value_count: usize, instruction_index: usize, count: usize) -> usize {
+    if context.ranges.len < value_count {
+        let every = 1usize << count
+        ret every - 1usize
+    }
+    var mask = 0usize
+    var value = 0usize
+    while value < value_count {
+        let allocation = context.allocations[value]
+        if allocation.kind == .Register && allocation.index < count {
+            let range = context.ranges[value]
+            if range.defined && range.first < instruction_index && range.last > instruction_index { mask = mask | (1usize << allocation.index) }
+        }
+        value += 1usize
+    }
+    ret mask
+}
+
+fn save_live_registers(output: *emit_x64.Buffer, mask: usize, base: usize, count: usize) -> err {
+    var at = 0usize
+    while at < count {
+        if (mask >> at) & 1usize == 1usize {
+            let (physical, physical_error) = hardware_register(at)
+            if physical_error != ok { ret physical_error }
+            try emit_x64.store_stack(output, base + at, physical)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn restore_live_registers(output: *emit_x64.Buffer, mask: usize, base: usize, count: usize) -> err {
+    var at = 0usize
+    while at < count {
+        if (mask >> at) & 1usize == 1usize {
+            let (physical, physical_error) = hardware_register(at)
+            if physical_error != ok { ret physical_error }
+            try emit_x64.load_stack(output, physical, base + at)
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn restore_allocated_registers(output: *emit_x64.Buffer, base: usize, count: usize) -> err {
     var at = 0usize
     while at < count {
@@ -1910,7 +1962,8 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     var first_argument = 0usize
                     if indirect { first_argument = 1usize }
                     let argument_total = instruction.operand_count - first_argument
-                    try save_allocated_registers(output, preserve_base, preserve_count)
+                    let live_mask = live_register_mask(context, current.value_count, at, preserve_count)
+                    try save_live_registers(output, live_mask, preserve_base, preserve_count)
                     if indirect {
                         let callee_value = builder.operands[instruction.first_operand]
                         let (callee_source, callee_error) = read_value(allocations, callee_value, 10usize, output)
@@ -1967,7 +2020,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         }
                         if multiple_results { try emit_x64.mov_register(output, 11usize, 2usize) }
                     }
-                    try restore_allocated_registers(output, preserve_base, preserve_count)
+                    try restore_live_registers(output, live_mask, preserve_base, preserve_count)
                     if instruction.has_result && !multiple_results {
                         let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                         if destination_error != ok { ret destination_error }
@@ -2152,7 +2205,7 @@ fn self_test() -> err {
     var relocation_count = 0usize
     var lines: [8]LineEntry = zero
     var line_count = 0usize
-    var context = FunctionContext { allocations: allocations[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count }
+    var context = FunctionContext { allocations: allocations[..], ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 19usize || output.bytes[0usize] != 85usize || output.bytes[4usize] != 72usize || output.bytes[5usize] != 184usize || output.bytes[6usize] != 7usize || output.bytes[17usize] != 93usize || output.bytes[18usize] != 195usize { ret Unsupported }
     allocations[0usize].kind = .Stack
