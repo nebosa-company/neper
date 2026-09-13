@@ -750,6 +750,25 @@ fn self_test() -> err {
     ret ok
 }
 
+// The flags after an emit command's five positional arguments.
+fn has_flag(args: []str, name: str) -> bool {
+    var at = 7usize
+    while at < args.len {
+        if same(args[at], name) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn flags_known(args: []str) -> bool {
+    var at = 7usize
+    while at < args.len {
+        if !same(args[at], "--release") && !same(args[at], "--incremental") { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn same(a: str, b: str) -> bool {
     if a.len != b.len { ret false }
     var i = 0usize
@@ -984,7 +1003,9 @@ fn settle_incremental(a: *mem.Arena, g: *graph.Graph, directory: str, triple: st
             if new_error != ok { ret new_error }
             let (old_hash, old_hash_error) = em.artifact_source_hash(old)
             let (new_hash, new_hash_error) = em.artifact_source_hash(new_bytes)
-            if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash {
+            let (old_mode, old_mode_error) = em.artifact_mode(old)
+            let (new_mode, new_mode_error) = em.artifact_mode(new_bytes)
+            if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && new_mode_error == ok && old_mode == new_mode {
                 keep[module_at] = true
                 let (edge_count, count_error) = em.artifact_dependency_count(old)
                 if count_error != ok { ret count_error }
@@ -1897,14 +1918,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
-    // check left out and the release results in their place (D204).
-    let release_build = args.len == 8usize && same(args[1usize], "emit-executable") && same(args[7usize], "--release")
-    let writes_executable = (args.len == 7usize || release_build) && same(args[1usize], "emit-executable")
+    // check left out and the release results in their place (D204), and the inliner
+    // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
+    let trailing_flags = args.len >= 8usize && args.len <= 9usize && flags_known(args)
+    let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all")) && has_flag(args, "--release")
+    let writes_executable = (args.len == 7usize || (args.len == 8usize && release_build)) && same(args[1usize], "emit-executable")
     let writes_em = args.len == 7usize && same(args[1usize], "emit-em")
     // `emit-em-all ... --incremental`: section 12's edge rule decides which of the
     // artifacts already in the directory are kept and which are replaced (D205).
-    let incremental_build = args.len == 8usize && same(args[1usize], "emit-em-all") && same(args[7usize], "--incremental")
-    let writes_all_em = (args.len == 7usize || incremental_build) && same(args[1usize], "emit-em-all")
+    let incremental_build = trailing_flags && same(args[1usize], "emit-em-all") && has_flag(args, "--incremental")
+    let writes_all_em = (args.len == 7usize || trailing_flags) && same(args[1usize], "emit-em-all")
     if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em || writes_all_em {
         let emit_object = same(args[1usize], "object-file") || writes_object
         let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em
@@ -1972,29 +1995,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
         builder.nocheck = release_build
         // Section 12's inlining (D207): the small functions are lowered first into the
         // oracle, in module order on every path, and the program's own lowering copies
-        // them in at their calls.
+        // them in at their calls. A debug build does not inline (D211): every frame
+        // in its backtrace is a real call, so the oracle is not even built.
         var oracle: nir.Builder = zero
         var oracle_signatures: nir.Signatures = zero
-        try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize)
-        oracle.nocheck = release_build
-        let (inline_entries, inline_entries_error) = mem.alloc[nir.InlineEntry](a, 4096usize)
-        if inline_entries_error != ok { ret inline_entries_error }
         let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, 8192usize)
         if inlined_error != ok { ret inlined_error }
-        var inline_entry_count = 0usize
-        let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
-        if oracle_error != ok {
-            try print_lower_diagnostic(&loaded, &checker, oracle_error)
-            os.exit(1i32)
-            ret ok
-        }
-        builder.oracle = &oracle
-        builder.oracle_signatures = &oracle_signatures
-        builder.has_oracle = true
-        builder.inline_entries = inline_entries
-        builder.inline_entry_count = inline_entry_count
         builder.inlined = inlined
         builder.inlined_count = 0usize
+        builder.has_oracle = false
+        if release_build {
+            try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize)
+            oracle.nocheck = true
+            let (inline_entries, inline_entries_error) = mem.alloc[nir.InlineEntry](a, 4096usize)
+            if inline_entries_error != ok { ret inline_entries_error }
+            var inline_entry_count = 0usize
+            let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
+            if oracle_error != ok {
+                try print_lower_diagnostic(&loaded, &checker, oracle_error)
+                os.exit(1i32)
+                ret ok
+            }
+            builder.oracle = &oracle
+            builder.oracle_signatures = &oracle_signatures
+            builder.has_oracle = true
+            builder.inline_entries = inline_entries
+            builder.inline_entry_count = inline_entry_count
+        }
+        var artifact_mode: em.BuildMode = .Debug
+        if release_build { artifact_mode = .Release }
         let lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
         if lower_error == ok {
             // Everything was lowered so that the order is the one the artifacts also use; what
@@ -2159,7 +2188,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
                 if packed_error != ok { ret packed_error }
                 if writes_em {
-                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, .Debug, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, string_values, sections, &scratch, &artifact)
+                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, string_values, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
                     try save_bytes(a, args[6usize], packed[..artifact.count])
                     try io.print("compiled module written\n")
@@ -2172,7 +2201,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 var module_at = 0usize
                 while module_at < loaded.count {
                     artifact.count = 0usize
-                    try em.write_module(&checker, &loaded, &builder, module_at, triple, .Debug, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, string_values, sections, &scratch, &artifact)
+                    try em.write_module(&checker, &loaded, &builder, module_at, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, string_values, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
                     if incremental_build {
                         let (copy, copy_error) = mem.alloc[u8](a, artifact.count)

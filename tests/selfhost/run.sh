@@ -1653,14 +1653,14 @@ rm -rf "$incremental_scratch" "$incremental_artifacts"
 mkdir -p "$incremental_source" "$incremental_artifacts"
 cp "$incremental_fixture"/src/*.e "$incremental_source/"
 incremental_main="$incremental_source/main.e"
-incremental_first=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts")
+incremental_first=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --release)
 [ "$incremental_first" = 'compiled modules written' ]
-incremental_same=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --incremental)
+incremental_same=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --release --incremental)
 case "$incremental_same" in *'kept main'*) ;; *) printf %s "unchanged main was not kept: $incremental_same" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_same" in *'kept dep'*) ;; *) printf %s "unchanged dep was not kept: $incremental_same" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_same" in *'rebuilt'*) printf %s "unchanged sources were rebuilt: $incremental_same" >&2; echo >&2; exit 1 ;; esac
 cp "$incremental_fixture/edits/dep_body.e" "$incremental_source/dep.e"
-incremental_body=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --incremental)
+incremental_body=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --release --incremental)
 case "$incremental_body" in *'kept main'*) ;; *) printf %s "a body edit rebuilt the dependent: $incremental_body" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_body" in *'rebuilt dep'*) ;; *) printf %s "a body edit did not rebuild its module: $incremental_body" >&2; echo >&2; exit 1 ;; esac
 incremental_linked="$test_build/incremental-linked"
@@ -1671,11 +1671,11 @@ incremental_status=0
 "$incremental_linked" || incremental_status=$?
 [ "$incremental_status" -eq 8 ]
 incremental_clean="$test_build/incremental-clean"
-incremental_clean_written=$($test_build/neper-self emit-executable "$incremental_main" "$repo" x64 linux "$incremental_clean")
+incremental_clean_written=$($test_build/neper-self emit-executable "$incremental_main" "$repo" x64 linux "$incremental_clean" --release)
 [ "$incremental_clean_written" = 'executable written' ]
 cmp "$incremental_linked" "$incremental_clean"
 cp "$incremental_fixture/edits/dep_inlined.e" "$incremental_source/dep.e"
-incremental_inlined=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --incremental)
+incremental_inlined=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --release --incremental)
 case "$incremental_inlined" in *'rebuilt main'*) ;; *) printf %s "a body edit behind a body edge did not rebuild the dependent: $incremental_inlined" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_inlined" in *'rebuilt dep'*) ;; *) printf %s "a body edit behind a body edge did not rebuild its module: $incremental_inlined" >&2; echo >&2; exit 1 ;; esac
 incremental_inlined_written=$($test_build/neper-self link-em "$incremental_linked" "$incremental_artifacts/main.x64-linux.em" "$incremental_artifacts/dep.x64-linux.em" "$incremental_artifacts/e.os.x64-linux.em" "$incremental_artifacts/e.mem.x64-linux.em")
@@ -1685,7 +1685,7 @@ incremental_status=0
 [ "$incremental_status" -eq 9 ]
 cp "$incremental_fixture/edits/dep_signature.e" "$incremental_source/dep.e"
 cp "$incremental_fixture/edits/main_signature.e" "$incremental_main"
-incremental_signature=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --incremental)
+incremental_signature=$($test_build/neper-self emit-em-all "$incremental_main" "$repo" x64 linux "$incremental_artifacts" --release --incremental)
 case "$incremental_signature" in *'rebuilt main'*) ;; *) printf %s "a signature edit did not rebuild the dependent: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'rebuilt dep'*) ;; *) printf %s "a signature edit did not rebuild its module: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'kept e.os'*) ;; *) printf %s "an untouched module was rebuilt: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
@@ -1701,7 +1701,8 @@ backtrace_output=$("$backtrace_path" 2>&1) || backtrace_status=$?
 backtrace_expected=$'helper.e:1:50: trap[bounds]: index 7 out of bounds for len 5\n  at helper.pick ('
 case "$backtrace_output" in *"$backtrace_expected"*) ;; *) printf %s "the trap did not print its backtrace: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
 case "$backtrace_output" in *'helper.e:1)'*) ;; *) printf %s "the first frame has no line: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
-case "$backtrace_output" in *'  at main.main ('*'main.e:18)'*) ;; *) printf %s "the second frame has no line: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
+case "$backtrace_output" in *'  at main.deeper ('*'main.e:12)'*) ;; *) printf %s "the debug build inlined deeper, or its frame has no line: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
+case "$backtrace_output" in *'  at main.main ('*'main.e:18)'*) ;; *) printf %s "the third frame has no line: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

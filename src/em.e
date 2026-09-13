@@ -2544,6 +2544,14 @@ fn dependency_at(bytes: []const usize, index: usize) -> (Dependency, err) {
 }
 
 // The source hash the Debug section carries: the incremental driver's first test (D205).
+// The header's build mode: 0 debug, 1 release (D211).
+fn artifact_mode(bytes: []const usize) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    if bytes.len < 17usize { ret (0usize, InvalidArtifact) }
+    ret (bytes[16usize], ok)
+}
+
 fn artifact_source_hash(bytes: []const usize) -> (usize, err) {
     let validation_error = validate(bytes)
     if validation_error != ok { ret (0usize, validation_error) }

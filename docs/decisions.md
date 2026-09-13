@@ -3848,3 +3848,20 @@ an aligned lane in the first place: arithmetic on the old value would not select
 `link/simd_lanes` loaded eight float lanes at an offset of four, sixteen bytes into a
 stack array, which was never aligned to thirty-two; it starts its lanes at the first
 sixty-four-byte boundary inside a larger array now and loads at eight.
+
+## D211 — Debug builds do not inline; `emit-em-all` takes `--release`
+
+Section 13's rule for debug builds is that the inliner is off in every module and
+across every `.em` boundary, so every frame in a backtrace is a real call and a
+breakpoint on a function is hit whenever it runs. D207 inlined in both modes, and
+`link/trap_backtrace` had lost its `deeper` frame to it. Now the oracle is built and
+consulted only for a release build: `emit-executable --release`, and `emit-em-all
+--release`, which is new -- the flags after the five positional arguments are read in
+any order, so `--release --incremental` is the incremental release build. A release
+artifact says so in its header's mode byte, which was always written and is now read
+(`em.artifact_mode`); the edge rule keeps an artifact only when its mode agrees as
+well as its source hash, so switching modes over a directory rebuilds everything
+rather than linking debug code into a release program. `link/incremental` runs its
+whole sequence in release, since the body edge it pins exists only where inlining
+does, and `link/trap_backtrace` names `main.deeper` again. A debug build of the
+compiler no longer pays for the oracle at all.

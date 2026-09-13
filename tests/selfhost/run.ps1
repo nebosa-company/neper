@@ -1539,12 +1539,12 @@ if (Test-Path -LiteralPath $incrementalArtifacts) { Remove-Item -LiteralPath $in
 New-Item -ItemType Directory -Force -Path $incrementalSource, $incrementalArtifacts | Out-Null
 Copy-Item (Join-Path $incrementalFixture 'src\*.e') $incrementalSource
 $incrementalMain = Join-Path $incrementalSource 'main.e'
-$incrementalFirst = & $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts
+$incrementalFirst = & $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release
 if ($LASTEXITCODE -ne 0 -or $incrementalFirst -ne 'compiled modules written') { throw 'the incremental fixture did not compile to artifacts' }
-$incrementalSame = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
+$incrementalSame = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSame -notmatch 'kept main' -or $incrementalSame -notmatch 'kept dep' -or $incrementalSame -match 'rebuilt') { throw "unchanged sources were rebuilt: $incrementalSame" }
 Copy-Item (Join-Path $incrementalFixture 'edits\dep_body.e') (Join-Path $incrementalSource 'dep.e')
-$incrementalBody = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
+$incrementalBody = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalBody -notmatch 'kept main' -or $incrementalBody -notmatch 'rebuilt dep') { throw "a body edit behind a signature edge did not rebuild only its module: $incrementalBody" }
 $incrementalLinked = Join-Path $testBuild 'incremental-linked.exe'
 $incrementalArtifactList = @('main', 'dep', 'e.os', 'e.mem') | ForEach-Object { Join-Path $incrementalArtifacts "$_.x64-windows.em" }
@@ -1553,11 +1553,11 @@ if ($LASTEXITCODE -ne 0 -or $incrementalLinkWritten -ne 'artifact executable wri
 & $incrementalLinked
 if ($LASTEXITCODE -ne 8) { throw "the incrementally rebuilt program did not run the new body: exit $LASTEXITCODE" }
 $incrementalClean = Join-Path $testBuild 'incremental-clean.exe'
-$incrementalCleanWritten = & $compiler emit-executable $incrementalMain $repo 'x64' 'windows' $incrementalClean
+$incrementalCleanWritten = & $compiler emit-executable $incrementalMain $repo 'x64' 'windows' $incrementalClean --release
 if ($LASTEXITCODE -ne 0 -or $incrementalCleanWritten -ne 'executable written') { throw 'the clean build of the edited fixture failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $incrementalLinked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $incrementalClean).Hash) { throw 'incremental does not equal clean' }
 Copy-Item (Join-Path $incrementalFixture 'edits\dep_inlined.e') (Join-Path $incrementalSource 'dep.e')
-$incrementalInlined = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
+$incrementalInlined = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalInlined -notmatch 'rebuilt main' -or $incrementalInlined -notmatch 'rebuilt dep') { throw "a body edit behind a body edge did not rebuild the dependent: $incrementalInlined" }
 $incrementalInlinedWritten = & $compiler link-em $incrementalLinked @incrementalArtifactList
 if ($LASTEXITCODE -ne 0 -or $incrementalInlinedWritten -ne 'artifact executable written') { throw 'the artifacts after the inlined edit did not link' }
@@ -1565,15 +1565,16 @@ if ($LASTEXITCODE -ne 0 -or $incrementalInlinedWritten -ne 'artifact executable 
 if ($LASTEXITCODE -ne 9) { throw "the rebuilt dependent did not carry the new inlined body: exit $LASTEXITCODE" }
 Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $incrementalSource 'dep.e')
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
-$incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
+$incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
 # The trap protocol's backtrace: one `  at module.function` line per frame, from the
-# trapping function up to main, after the record.
+# trapping function up to main, after the record; a debug build does not inline, so
+# `deeper` is a frame (D211).
 $backtracePath = Join-Path $testBuild 'trap-backtrace-selfhost.exe'
 $backtraceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_backtrace\src\main.e') $repo 'x64' 'windows' $backtracePath
 if ($LASTEXITCODE -ne 0 -or $backtraceWritten -ne 'executable written') { throw 'backtrace fixture executable emission failed' }
 $backtraceOutput = (& $backtracePath 2>&1) -join "`n"
-if ($LASTEXITCODE -ne 134 -or $backtraceOutput -notmatch 'helper\.e:1:50: trap\[bounds\]: index 7 out of bounds for len 5\n  at helper\.pick \(.*helper\.e:1\)\n  at main\.main \(.*main\.e:18\)') { throw "the trap did not print its backtrace: exit $LASTEXITCODE, $backtraceOutput" }
+if ($LASTEXITCODE -ne 134 -or $backtraceOutput -notmatch 'helper\.e:1:50: trap\[bounds\]: index 7 out of bounds for len 5\n  at helper\.pick \(.*helper\.e:1\)\n  at main\.deeper \(.*main\.e:12\)\n  at main\.main \(.*main\.e:18\)') { throw "the trap did not print its backtrace: exit $LASTEXITCODE, $backtraceOutput" }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at
