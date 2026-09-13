@@ -923,6 +923,94 @@ fn save_bytes(a: *mem.Arena, path: str, bytes: []u8) -> err {
     ret close_error
 }
 
+// The artifact readers take one `usize` per byte, so a fresh artifact held as bytes is
+// widened for the duration of a question and released with the arena mark around it.
+fn widen_artifact(a: *mem.Arena, packed: []const u8) -> ([]usize, err) {
+    let (bytes, bytes_error) = mem.alloc[usize](a, packed.len)
+    if bytes_error != ok { ret (bytes, bytes_error) }
+    var at = 0usize
+    while at < packed.len {
+        bytes[at] = usize(packed[at])
+        at += 1usize
+    }
+    ret (bytes, ok)
+}
+
+// Section 12's edge rule over a directory of artifacts: a module's old artifact stays
+// when its source hash is unchanged and every edge it recorded still matches the
+// declaration it names in the target's fresh artifact; otherwise the fresh one is
+// written over it. Each module's decision is printed, `kept` or `rebuilt`, in module
+// order, and the decisions are all taken before any file is touched.
+fn settle_incremental(a: *mem.Arena, g: *graph.Graph, directory: str, triple: str, fresh: [][]u8) -> err {
+    let (keep, keep_error) = mem.alloc[bool](a, g.count)
+    if keep_error != ok { ret keep_error }
+    var module_at = 0usize
+    while module_at < g.count {
+        let checkpoint = mem.mark(a)
+        keep[module_at] = false
+        let (artifact_path, path_error) = compiled_module_path(a, directory, g.modules[module_at].name, triple)
+        if path_error != ok { ret path_error }
+        let (old, old_error) = load_artifact(a, artifact_path)
+        if old_error == ok {
+            let (new_bytes, new_error) = widen_artifact(a, fresh[module_at])
+            if new_error != ok { ret new_error }
+            let (old_hash, old_hash_error) = em.artifact_source_hash(old)
+            let (new_hash, new_hash_error) = em.artifact_source_hash(new_bytes)
+            if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash {
+                keep[module_at] = true
+                let (edge_count, count_error) = em.artifact_dependency_count(old)
+                if count_error != ok { ret count_error }
+                var edge_at = 0usize
+                while edge_at < edge_count && keep[module_at] {
+                    let edge_checkpoint = mem.mark(a)
+                    let (dependency, dependency_error) = em.dependency_at(old, edge_at)
+                    if dependency_error != ok { ret dependency_error }
+                    let (target_name, target_name_error) = artifact_string(a, old, dependency.module_index)
+                    if target_name_error != ok { ret target_name_error }
+                    var target_at = 0usize
+                    var found_target = false
+                    while target_at < g.count {
+                        if same(g.modules[target_at].name, target_name) {
+                            found_target = true
+                            break
+                        }
+                        target_at += 1usize
+                    }
+                    if !found_target {
+                        keep[module_at] = false
+                    } else {
+                        let (target_bytes, target_error) = widen_artifact(a, fresh[target_at])
+                        if target_error != ok { ret target_error }
+                        let (matches, match_error) = em.dependency_matches(old, edge_at, target_bytes)
+                        if match_error != ok { ret match_error }
+                        if !matches { keep[module_at] = false }
+                    }
+                    mem.reset(a, edge_checkpoint)
+                    edge_at += 1usize
+                }
+            }
+        }
+        mem.reset(a, checkpoint)
+        module_at += 1usize
+    }
+    module_at = 0usize
+    while module_at < g.count {
+        let module_name = g.modules[module_at].name
+        if keep[module_at] {
+            try io.print("kept ")
+        } else {
+            let (artifact_path, path_error) = compiled_module_path(a, directory, module_name, triple)
+            if path_error != ok { ret path_error }
+            try save_bytes(a, artifact_path, fresh[module_at])
+            try io.print("rebuilt ")
+        }
+        try io.print(module_name)
+        try io.print("\n")
+        module_at += 1usize
+    }
+    ret ok
+}
+
 fn load_artifact(a: *mem.Arena, path: str) -> ([]usize, err) {
     let (packed, load_error) = source.load(a, path)
     if load_error != ok {
@@ -1783,7 +1871,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let release_build = args.len == 8usize && same(args[1usize], "emit-executable") && same(args[7usize], "--release")
     let writes_executable = (args.len == 7usize || release_build) && same(args[1usize], "emit-executable")
     let writes_em = args.len == 7usize && same(args[1usize], "emit-em")
-    let writes_all_em = args.len == 7usize && same(args[1usize], "emit-em-all")
+    // `emit-em-all ... --incremental`: section 12's edge rule decides which of the
+    // artifacts already in the directory are kept and which are replaced (D205).
+    let incremental_build = args.len == 8usize && same(args[1usize], "emit-em-all") && same(args[7usize], "--incremental")
+    let writes_all_em = (args.len == 7usize || incremental_build) && same(args[1usize], "emit-em-all")
     if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em || writes_all_em {
         let emit_object = same(args[1usize], "object-file") || writes_object
         let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em
@@ -1999,16 +2090,32 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     try io.print("compiled module written\n")
                     ret ok
                 }
+                // Incrementally, every fresh artifact is kept in memory first; the edge
+                // rule then decides which of them replace the files already there.
+                let (fresh, fresh_error) = mem.alloc[[]u8](a, loaded.count)
+                if fresh_error != ok { ret fresh_error }
                 var module_at = 0usize
                 while module_at < loaded.count {
                     artifact.count = 0usize
                     try em.write_module(&checker, &loaded, &builder, module_at, triple, .Debug, &machine, function_offsets, relocations, relocation_count, string_values, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
-                    let (artifact_path, artifact_path_error) = compiled_module_path(a, args[6usize], loaded.modules[module_at].name, triple)
-                    if artifact_path_error != ok { ret artifact_path_error }
-                    try save_bytes(a, artifact_path, packed[..artifact.count])
+                    if incremental_build {
+                        let (copy, copy_error) = mem.alloc[u8](a, artifact.count)
+                        if copy_error != ok { ret copy_error }
+                        var byte_at = 0usize
+                        while byte_at < artifact.count {
+                            copy[byte_at] = packed[byte_at]
+                            byte_at += 1usize
+                        }
+                        fresh[module_at] = copy
+                    } else {
+                        let (artifact_path, artifact_path_error) = compiled_module_path(a, args[6usize], loaded.modules[module_at].name, triple)
+                        if artifact_path_error != ok { ret artifact_path_error }
+                        try save_bytes(a, artifact_path, packed[..artifact.count])
+                    }
                     module_at += 1usize
                 }
+                if incremental_build { try settle_incremental(a, &loaded, args[6usize], triple, fresh) }
                 try io.print("compiled modules written\n")
                 ret ok
             }

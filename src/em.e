@@ -2367,6 +2367,17 @@ fn dependency_at(bytes: []const usize, index: usize) -> (Dependency, err) {
     ret (Dependency { kind: kind, module_index: module_index, name_index: name_index, hash: hash }, ok)
 }
 
+// The source hash the Debug section carries: the incremental driver's first test (D205).
+fn artifact_source_hash(bytes: []const usize) -> (usize, err) {
+    let validation_error = validate(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (debug, found_debug, section_error) = find_section_unchecked(bytes, debug_kind())
+    if section_error != ok || !found_debug || debug.length < 20usize { ret (0usize, InvalidArtifact) }
+    let (hash, hash_error) = binary.read_u64(bytes, debug.offset + 4usize)
+    if hash_error != ok { ret (0usize, InvalidArtifact) }
+    ret (hash, ok)
+}
+
 fn artifact_dependency_count(bytes: []const usize) -> (usize, err) {
     let validation_error = validate(bytes)
     if validation_error != ok { ret (0usize, validation_error) }

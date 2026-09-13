@@ -1516,6 +1516,39 @@ if ($LASTEXITCODE -ne 0 -or $releaseWritten -ne 'executable written') { throw 'r
 $releaseOutput = & $releasePath 2>&1
 if ($LASTEXITCODE -ne 0 -or ($releaseOutput -join "`n") -ne '') { throw "the release build did not give section 4's release results: exit $LASTEXITCODE, $($releaseOutput -join "`n")" }
 if ((Get-Item -LiteralPath $releasePath).Length -ge (Get-Item -LiteralPath $releaseDebugPath).Length) { throw 'the release build is not smaller than the debug build' }
+# Section 12's incremental rebuild: unchanged sources keep every artifact, a body edit
+# behind a signature edge rebuilds only its module and links equal to a clean build,
+# and a signature edit rebuilds the dependent too.
+$incrementalFixture = Join-Path $PSScriptRoot 'fixtures\link\incremental'
+$incrementalScratch = Join-Path $testBuild 'incremental-scratch'
+$incrementalSource = Join-Path $incrementalScratch 'src'
+$incrementalArtifacts = Join-Path $testBuild 'incremental-artifacts'
+if (Test-Path -LiteralPath $incrementalScratch) { Remove-Item -LiteralPath $incrementalScratch -Recurse -Force }
+if (Test-Path -LiteralPath $incrementalArtifacts) { Remove-Item -LiteralPath $incrementalArtifacts -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $incrementalSource, $incrementalArtifacts | Out-Null
+Copy-Item (Join-Path $incrementalFixture 'src\*.e') $incrementalSource
+$incrementalMain = Join-Path $incrementalSource 'main.e'
+$incrementalFirst = & $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts
+if ($LASTEXITCODE -ne 0 -or $incrementalFirst -ne 'compiled modules written') { throw 'the incremental fixture did not compile to artifacts' }
+$incrementalSame = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $incrementalSame -notmatch 'kept main' -or $incrementalSame -notmatch 'kept dep' -or $incrementalSame -match 'rebuilt') { throw "unchanged sources were rebuilt: $incrementalSame" }
+Copy-Item (Join-Path $incrementalFixture 'edits\dep_body.e') (Join-Path $incrementalSource 'dep.e')
+$incrementalBody = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $incrementalBody -notmatch 'kept main' -or $incrementalBody -notmatch 'rebuilt dep') { throw "a body edit behind a signature edge did not rebuild only its module: $incrementalBody" }
+$incrementalLinked = Join-Path $testBuild 'incremental-linked.exe'
+$incrementalArtifactList = @('main', 'dep', 'e.os', 'e.mem') | ForEach-Object { Join-Path $incrementalArtifacts "$_.x64-windows.em" }
+$incrementalLinkWritten = & $compiler link-em $incrementalLinked @incrementalArtifactList
+if ($LASTEXITCODE -ne 0 -or $incrementalLinkWritten -ne 'artifact executable written') { throw 'the incrementally rebuilt artifacts did not link' }
+& $incrementalLinked
+if ($LASTEXITCODE -ne 8) { throw "the incrementally rebuilt program did not run the new body: exit $LASTEXITCODE" }
+$incrementalClean = Join-Path $testBuild 'incremental-clean.exe'
+$incrementalCleanWritten = & $compiler emit-executable $incrementalMain $repo 'x64' 'windows' $incrementalClean
+if ($LASTEXITCODE -ne 0 -or $incrementalCleanWritten -ne 'executable written') { throw 'the clean build of the edited fixture failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $incrementalLinked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $incrementalClean).Hash) { throw 'incremental does not equal clean' }
+Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $incrementalSource 'dep.e')
+Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
+$incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at

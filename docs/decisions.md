@@ -3726,3 +3726,22 @@ section 11's promise that the modes agree until a check fires. `link/release_bui
 is built in both modes by the runners: the debug build traps on its first `+`, the
 release build passes every release result and is smaller. The debug fills are still
 absent from both modes.
+
+## D205 — `emit-em-all --incremental` applies the edge rule
+
+Section 12 recompiles a module when its source hash changes or a recorded edge no
+longer matches the current hash of its target, and nothing else. `emit-em-all` now
+takes a trailing `--incremental`: the program is compiled as before, every fresh
+artifact is held in memory, and then each module's artifact already in the directory
+is judged -- kept when the Debug section's source hash is unchanged and every edge in
+its Deps still matches the declaration it names in the target's fresh artifact, by the
+same `dependency_matches` that `check-em-edge` uses, replaced otherwise -- with every
+decision taken before any file is touched, since a target may come earlier in module
+order than its dependent. `kept <module>` or `rebuilt <module>` is printed per module.
+`link/incremental` is driven by the runners through a scratch copy: unchanged sources
+keep everything, a body edit behind a signature edge rebuilds only `dep` and links
+byte-identical to a clean build of the edited tree (section 12's "incremental equals
+clean"), and a signature edit rebuilds `main` as well. The saving the section
+describes -- not compiling the kept modules at all -- is not here: checking a module
+against its dependencies' Interfaces alone, without their sources, is not a path the
+checker has, so this is the rule and the writes, not yet the time.
