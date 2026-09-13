@@ -3507,3 +3507,21 @@ when the type has no name. Intrinsics are exempt, as they are not calls at all.
 Before this, `extern fn puts(text: []const u8)` compiled and passed a two-word
 slice where C expects one pointer; the fixtures `check/extern_slice_parameter`
 and `check/extern_slice_return` pin the two sides. Variadics remain the open row.
+
+## D193 — A trailing `...` on an `extern fn` is a C variadic
+
+Section 5 allows one runtime-variadic form: a trailing `...` on an `extern`, each
+extra argument crossing as its own type and with no default promotion. The checker
+now records the `...` on the declaration (`Function.variadic`; anywhere but an
+`extern` it stays refused), lets a call carry any number of arguments past the
+declared parameters, types each of those with no context, and refuses one that is
+untyped, does not cross the table, is an `f32`, or is an integer narrower than 32
+bits -- the promotions C would apply silently are the caller's to write as `i32(x)`
+or `f64(x)`. Lowering passes the extra arguments as ordinary operands. The back end
+has no per-call flag, so every imported call is made the way a variadic one has to
+be: on Win64 a float argument is also copied into the integer register of its slot,
+and on System V `al` carries the count of xmm registers used. A fixed-arity callee
+ignores both, so the cost is one move per float and one `mov eax` per foreign call.
+`link/extern_variadic` prints `%d %lld %.2f %s %d` through `snprintf` with eight
+arguments, so the stack overflow area and the float are both exercised on each
+convention; `check/variadic_narrow_argument` pins an `i16` refused.

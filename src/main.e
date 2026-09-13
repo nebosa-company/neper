@@ -1217,6 +1217,13 @@ fn write_check_message(file: os.File, checker: *check.Checker, check_error: err)
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "` does not cross the C ABI (spec section 5's table), so it cannot be a parameter or return of one")
     }
+    if checker.failure_kind == .VariadicArgument {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` is a C variadic and `")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "` cannot stand in its `...` position: only the C ABI table crosses, and there are no default promotions -- write `i32(x)` or `f64(x)`")
+    }
     if checker.failure_kind == .MetaFieldOwner {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)

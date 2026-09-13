@@ -788,7 +788,12 @@ fn store_incoming_parameters(builder: *nir.Builder, current: nir.Function, abi: 
 
 // The arguments are already parked in the outgoing slots as raw bits; this moves each
 // into the place the convention names for it.
-fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, abi: Abi, first_argument: usize, argument_total: usize, outgoing_base: usize, output: *emit_x64.Buffer) -> err {
+// A foreign callee may be a C variadic, and nothing at this level says whether it is,
+// so every imported call is made the way a variadic one has to be: Win64 wants a float
+// argument in its integer register as well as its xmm, and System V wants `al` to
+// carry the count of xmm registers used. Both are harmless to a fixed-arity callee --
+// the registers are caller-saved and unused in those positions.
+fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, abi: Abi, foreign: bool, first_argument: usize, argument_total: usize, outgoing_base: usize, output: *emit_x64.Buffer) -> err {
     var integer_used = 0usize
     var float_used = 0usize
     var stack_used = 0usize
@@ -809,6 +814,11 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
             } else {
                 try emit_x64.load_stack(output, 10usize, outgoing_base + at)
                 try emit_x64.move_to_float(output, register, 10usize, width == 64usize)
+                if foreign && abi == .Windows {
+                    let (shadow_register, shadow_error) = parameter_register(abi, at)
+                    if shadow_error != ok { ret shadow_error }
+                    try emit_x64.mov_register(output, shadow_register, 10usize)
+                }
             }
         } else {
             try emit_x64.load_stack(output, 10usize, outgoing_base + at)
@@ -816,6 +826,7 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
         }
         at += 1usize
     }
+    if foreign && abi != .Windows { try emit_x64.mov_immediate(output, 0usize, float_used) }
     ret ok
 }
 
@@ -1362,7 +1373,8 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         try emit_x64.store_stack(output, outgoing_base + argument_at, source)
                         argument_at += 1usize
                     }
-                    try load_call_arguments(builder, current, instruction, abi, first_argument, argument_total, outgoing_base, output)
+                    let foreign = !indirect && builder.function_refs[instruction.immediate].library.len != 0usize
+                    try load_call_arguments(builder, current, instruction, abi, foreign, first_argument, argument_total, outgoing_base, output)
                     if indirect {
                         try emit_x64.load_stack(output, 11usize, outgoing_base + argument_total)
                         try emit_x64.call_register(output, 11usize)

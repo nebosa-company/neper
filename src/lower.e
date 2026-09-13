@@ -1884,9 +1884,18 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                 *callee_out = callee_value
             }
             if child_position > 0usize {
-                if *argument_count == arguments.len || *argument_count >= call.function.parameter_count { ret check.ArgumentCount }
-                let (parameter_type, parameter_type_error) = call_parameter_type(c, call, *argument_count)
-                if parameter_type_error != ok { ret parameter_type_error }
+                if *argument_count == arguments.len { ret check.ArgumentCount }
+                var parameter_type = check.invalid_type()
+                if *argument_count >= call.function.parameter_count {
+                    // Past the declared parameters of a C variadic the argument's own
+                    // type is the type it crosses as; the checker has already refused
+                    // one that does not.
+                    if !call.function.variadic { ret check.ArgumentCount }
+                } else {
+                    let (declared_type, parameter_type_error) = call_parameter_type(c, call, *argument_count)
+                    if parameter_type_error != ok { ret parameter_type_error }
+                    parameter_type = declared_type
+                }
                 let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, parameter_type, builder, bindings, binding_count)
                 if value_error != ok { ret value_error }
                 var argument = value
@@ -1910,7 +1919,8 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
         }
         at += 1usize
     }
-    if *argument_count != call.function.parameter_count { ret check.ArgumentCount }
+    if *argument_count < call.function.parameter_count { ret check.ArgumentCount }
+    if !call.function.variadic && *argument_count != call.function.parameter_count { ret check.ArgumentCount }
     ret ok
 }
 

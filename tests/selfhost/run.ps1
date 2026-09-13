@@ -1349,6 +1349,13 @@ $externWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\
 if ($LASTEXITCODE -ne 0 -or $externWritten -ne 'executable written') { throw 'imported extern executable emission failed' }
 & $externPath
 if ($LASTEXITCODE -ne 0) { throw 'an imported extern call reached the wrong symbol' }
+# A C variadic through the same import table: `_snprintf` with an `f64` in a `...`
+# position, which Win64 wants in the integer register of its slot as well.
+$variadicPath = Join-Path $testBuild 'extern-variadic-selfhost.exe'
+$variadicWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\extern_variadic\src\main.e') $repo 'x64' 'windows' $variadicPath
+if ($LASTEXITCODE -ne 0 -or $variadicWritten -ne 'executable written') { throw 'variadic extern executable emission failed' }
+& $variadicPath
+if ($LASTEXITCODE -ne 0) { throw 'a variadic extern call printed the wrong text' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at
@@ -1945,6 +1952,7 @@ $checkFailures = @(
     @('extern_multi_return', 'InvalidType'),
     @('extern_slice_parameter', 'InvalidType'),
     @('extern_slice_return', 'InvalidType'),
+    @('variadic_narrow_argument', 'TypeMismatch'),
     @('intrinsic_generic_unsupported', 'ArgumentCount'),
     @('alloc_argument_type', 'TypeMismatch'),
     @('alloc_arena_type', 'TypeMismatch'),

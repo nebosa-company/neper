@@ -1250,6 +1250,13 @@ extern_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$extern_written" = 'executable written' ]
 chmod +x "$extern_path"
 "$extern_path"
+# A C variadic through the same dynamic slots: `snprintf` with an `f64` in a `...`
+# position, which System V wants counted in `al`.
+variadic_path="$test_build/extern-variadic-selfhost"
+variadic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/extern_variadic/src/main.e" "$repo" x64 linux "$variadic_path")
+[ "$variadic_written" = 'executable written' ]
+chmod +x "$variadic_path"
+"$variadic_path"
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.
@@ -1948,6 +1955,7 @@ expect_check_error extern_error_return InvalidType
 expect_check_error extern_multi_return InvalidType
 expect_check_error extern_slice_parameter InvalidType
 expect_check_error extern_slice_return InvalidType
+expect_check_error variadic_narrow_argument TypeMismatch
 expect_check_error intrinsic_generic_unsupported ArgumentCount
 expect_check_error alloc_argument_type TypeMismatch
 expect_check_error alloc_arena_type TypeMismatch

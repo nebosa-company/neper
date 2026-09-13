@@ -84,6 +84,7 @@ type DiagnosticKind = enum u8 {
     MetaFieldOwner,
     ExternWithoutImport,
     ExternType,
+    VariadicArgument,
 }
 
 type Kind = enum u8 {
@@ -192,6 +193,9 @@ type Function = struct {
     import_library: str,
     import_symbol: str,
     intrinsic: bool,
+    // A trailing `...` on an `extern fn`: section 5's C variadic. The declared
+    // parameters are the ones counted; every argument past them crosses as its own type.
+    variadic: bool,
 }
 
 type FunctionGeneric = struct {
@@ -2965,8 +2969,15 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         if tree.children[at].node {
             let child = tree.nodes[tree.children[at].index]
             if child.kind == .Parameter {
-                try collect_parameter(c, r, g, tree, module_index, child)
-                item.parameter_count += 1usize
+                if child.token_start < child.token_end && c.tokens[child.token_start].kind == .PunctEllipsis {
+                    // Legal on an `extern` alone; anywhere else `...` is still refused.
+                    if !item.external { ret Unsupported }
+                    item.variadic = true
+                } else {
+                    if item.variadic { ret parse.InvalidSyntax }
+                    try collect_parameter(c, r, g, tree, module_index, child)
+                    item.parameter_count += 1usize
+                }
             }
             if child.kind == .ReturnSpec {
                 let return_end = child.first_child + child.child_count
@@ -6758,7 +6769,22 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         continue
                     }
                     let function = info.function
-                    if child_position > function.parameter_count { ret (info, ArgumentCount) }
+                    if child_position > function.parameter_count {
+                        if !function.variadic { ret (info, ArgumentCount) }
+                        // A C variadic argument crosses as its own type, with no default
+                        // promotion: what C would widen is refused, and the caller writes
+                        // the conversion (section 5).
+                        let (variadic_type, variadic_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
+                        if variadic_error != ok { ret (info, variadic_error) }
+                        if is_untyped(variadic_type) { ret (info, MissingContext) }
+                        if !type_crosses(c, variadic_type, 0usize) || (variadic_type.kind == .Float && !same(variadic_type.name, "f64")) || (variadic_type.kind == .Integer && integer_width(variadic_type) < 32usize) {
+                            record_failure(c, module_index, node, .VariadicArgument, function.name, crossing_spelling(variadic_type))
+                            ret (info, TypeMismatch)
+                        }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     var parameter_type = invalid_type()
                     if info.indirect {
                         let (signature, has_signature) = function_signature_of(c, info.indirect_type)
@@ -6921,7 +6947,8 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     if !has_function { ret (info, UnknownCallable) }
     if info.protocol_pending { ret (info, ok) }
     let function = info.function
-    if child_position == 0usize || child_position - 1usize != function.parameter_count { ret (info, ArgumentCount) }
+    if child_position == 0usize || child_position - 1usize < function.parameter_count { ret (info, ArgumentCount) }
+    if !function.variadic && child_position - 1usize != function.parameter_count { ret (info, ArgumentCount) }
     if function.intrinsic && same(function.name, "push_err") && function.module_index < g.count && same(g.modules[function.module_index].name, "e.str") {
         let (instance_index, instance_error) = error_push_instance(c, module_index, function.module_index)
         if instance_error != ok { ret (info, instance_error) }
