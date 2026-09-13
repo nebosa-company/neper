@@ -3559,3 +3559,22 @@ immediate the message's string constant plus one -- zero for the bare form -- an
 it does for a string constant. The back end prints `unreachable() reached` for the
 bare form. `link/trap_unreachable` pins both forms on both platforms, and
 `check/unreachable_argument` pins a value argument refused.
+
+## D196 — The `divide` and `shift` rows trap with a record
+
+Section 11's `divide` rows trap in every build mode, and until now they did: x64
+raises `#DE` for a zero divisor and for the minimum divided by -1, which is a crash
+with a platform status and no record. The back end now tests the divisor before the
+instruction and, for a signed division, the pair the quotient cannot represent, and
+reaches `neper_trap` with `<dividend> / <divisor> divides by zero` or `... overflows`
+(`%` for a remainder). The `shift` row, whose count the instruction was silently
+masking to `width - 1`, traps on a count at or past the width with `shift by <count>
+on a width of <width>`; the release-mode masking the section describes waits on
+build modes, which nothing selects yet. A signed operand prints signed: the record's
+separator byte says how the runtime renders the operand that follows, 0 unsigned and
+1 signed, which is the only change to the runtime. `link/trap_arithmetic` pins the
+four records on both platforms and that the same operators in range are untouched.
+The row found two library sites that leaned on the masking: every rotate in
+`e.crypto.hash`, `e.crypto.random`, `e.fmt.zstd` and the compiler's `artifact_hash`
+shifted by the full width for a rotation of 0, and zstd's Huffman rank table shifted
+by -1 for its top rank; both now avoid the count the section forbids.

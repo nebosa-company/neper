@@ -1058,7 +1058,7 @@ fn emit_decimal(output: *emit_x64.Buffer, value: usize) -> err {
     ret emit_x64.byte(output, 48usize + value % 10usize)
 }
 
-fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kind: str, first: str, second: str, third: str, values: usize, a: usize, b: usize, context: *FunctionContext) -> err {
+fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kind: str, first: str, second: str, third: str, values: usize, signed: bool, a: usize, b: usize, context: *FunctionContext) -> err {
     let output = context.output
     var first_register = 8usize
     var second_register = 9usize
@@ -1084,12 +1084,15 @@ fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kin
     try emit_text(output, kind)
     try emit_text(output, "]: ")
     try emit_text(output, first)
+    // The separator byte says how the runtime prints the operand: 0 unsigned, 1 signed.
+    var separator = 0usize
+    if signed { separator = 1usize }
     if values >= 1usize {
-        try emit_x64.byte(output, 0usize)
+        try emit_x64.byte(output, separator)
         try emit_text(output, second)
     }
     if values >= 2usize {
-        try emit_x64.byte(output, 0usize)
+        try emit_x64.byte(output, separator)
         try emit_text(output, third)
     }
     let text_end = output.count
@@ -1110,8 +1113,44 @@ fn emit_checked(builder: *nir.Builder, current: nir.Function, token: lex.Token, 
     try emit_x64.compare_register(context.output, a, b)
     let (over, over_error) = emit_x64.jump_condition(context.output, condition)
     if over_error != ok { ret over_error }
-    try emit_trap(builder, current, token, kind, first, second, third, 2usize, a, b, context)
+    try emit_trap(builder, current, token, kind, first, second, third, 2usize, false, a, b, context)
     ret emit_x64.patch_relative32(context.output, over, context.output.count)
+}
+
+// Section 11's `divide` rows, which trap in every mode: the divisor is zero, or the
+// division is the one two's complement cannot represent. The dividend is in rax and the
+// divisor in r11, as the instruction wants them; r10 is free for the constants.
+fn emit_divide_checks(builder: *nir.Builder, current: nir.Function, token: lex.Token, remainder: bool, width: usize, signed: bool, context: *FunctionContext) -> err {
+    let output = context.output
+    var operator = " / "
+    if remainder { operator = " % " }
+    try emit_x64.test_register(output, 11usize)
+    let (nonzero, nonzero_error) = emit_x64.jump_condition(output, 5usize)
+    if nonzero_error != ok { ret nonzero_error }
+    try emit_trap(builder, current, token, "divide", "", operator, " divides by zero", 2usize, signed, 0usize, 11usize, context)
+    try emit_x64.patch_relative32(output, nonzero, output.count)
+    if !signed { ret ok }
+    let all_ones = 0usize -% 1usize
+    try emit_x64.mov_immediate(output, 10usize, all_ones)
+    try emit_x64.compare_register(output, 11usize, 10usize)
+    let (not_minus_one, minus_one_error) = emit_x64.jump_condition(output, 5usize)
+    if minus_one_error != ok { ret minus_one_error }
+    // The minimum of the width, sign-extended to the register the operands sit in.
+    let minimum = all_ones - (all_ones >> (65usize - width))
+    try emit_x64.mov_immediate(output, 10usize, minimum)
+    try emit_x64.compare_register(output, 0usize, 10usize)
+    let (not_minimum, minimum_error) = emit_x64.jump_condition(output, 5usize)
+    if minimum_error != ok { ret minimum_error }
+    try emit_trap(builder, current, token, "divide", "", operator, " overflows", 2usize, true, 0usize, 11usize, context)
+    try emit_x64.patch_relative32(output, not_minus_one, output.count)
+    ret emit_x64.patch_relative32(output, not_minimum, output.count)
+}
+
+// Section 11's `shift` row: a count at or past the width. The count is in rcx and the
+// value in r10; r11 is free for the width.
+fn emit_shift_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, width: usize, context: *FunctionContext) -> err {
+    try emit_x64.mov_immediate(context.output, 11usize, width)
+    ret emit_checked(builder, current, token, 2usize, "shift", "shift by ", " on a width of ", "", 1usize, 11usize, context)
 }
 
 fn select_index_address(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, context: *FunctionContext) -> err {
@@ -1363,6 +1402,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if right_error != ok { ret right_error }
                 if left != 10usize { try emit_x64.mov_register(output, 10usize, left) }
                 if right != 1usize { try emit_x64.mov_register(output, 1usize, right) }
+                try emit_shift_check(builder, current, instruction.token, integer_width(left_type), context)
                 try emit_x64.and_immediate8(output, 1usize, integer_width(left_type) - 1usize)
                 try emit_x64.shift_register(output, 10usize, instruction.opcode == .ShiftLeft, signed_integer(left_type))
                 try restore_allocated_registers(output, preserve_base, preserve_count)
@@ -1385,6 +1425,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if right != 11usize { try emit_x64.mov_register(output, 11usize, right) }
                 if left != 0usize { try emit_x64.mov_register(output, 0usize, left) }
                 let signed = signed_integer(left_type)
+                try emit_divide_checks(builder, current, instruction.token, instruction.opcode == .Remainder, integer_width(left_type), signed, context)
                 if signed { try emit_x64.extend_dividend_signed(output) } else { try emit_x64.extend_dividend_unsigned(output) }
                 try emit_x64.divide_register(output, 11usize, signed)
                 if instruction.opcode == .Divide {
@@ -1554,7 +1595,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                             message = spelling[text_start..text_end]
                         }
                     }
-                    try emit_trap(builder, current, instruction.token, "unreachable", message, "", "", 0usize, 0usize, 0usize, context)
+                    try emit_trap(builder, current, instruction.token, "unreachable", message, "", "", 0usize, false, 0usize, 0usize, context)
                 } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {

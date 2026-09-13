@@ -1299,6 +1299,41 @@ case "$unreachable_bare" in
     *) printf '%s\n' "unreachable() did not trap as section 11 says: $unreachable_bare" >&2; exit 1 ;;
 esac
 "$unreachable_path" none
+# The arithmetic rows that trap in every mode: division by zero, the remainder by zero,
+# the minimum divided by -1, and a shift count past the width, each with its record.
+arithmetic_path="$test_build/trap-arithmetic-selfhost"
+arithmetic_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_arithmetic/src/main.e" "$repo" x64 linux "$arithmetic_path")
+[ "$arithmetic_written" = 'executable written' ]
+chmod +x "$arithmetic_path"
+arithmetic_status=0
+arithmetic_output=$("$arithmetic_path" zero 2>&1) || arithmetic_status=$?
+[ "$arithmetic_status" -eq 134 ]
+case "$arithmetic_output" in
+    *'main.e:14:17: trap[divide]: 7 / 0 divides by zero'*) ;;
+    *) printf '%s\n' "the zero case did not trap as section 11 says: $arithmetic_output" >&2; exit 1 ;;
+esac
+arithmetic_status=0
+arithmetic_output=$("$arithmetic_path" rem 2>&1) || arithmetic_status=$?
+[ "$arithmetic_status" -eq 134 ]
+case "$arithmetic_output" in
+    *'main.e:18:17: trap[divide]: 7 % 0 divides by zero'*) ;;
+    *) printf '%s\n' "the rem case did not trap as section 11 says: $arithmetic_output" >&2; exit 1 ;;
+esac
+arithmetic_status=0
+arithmetic_output=$("$arithmetic_path" min 2>&1) || arithmetic_status=$?
+[ "$arithmetic_status" -eq 134 ]
+case "$arithmetic_output" in
+    *'main.e:23:17: trap[divide]: -2147483648 / -1 overflows'*) ;;
+    *) printf '%s\n' "the min case did not trap as section 11 says: $arithmetic_output" >&2; exit 1 ;;
+esac
+arithmetic_status=0
+arithmetic_output=$("$arithmetic_path" shift 2>&1) || arithmetic_status=$?
+[ "$arithmetic_status" -eq 134 ]
+case "$arithmetic_output" in
+    *'main.e:27:17: trap[shift]: shift by 40 on a width of 32'*) ;;
+    *) printf '%s\n' "the shift case did not trap as section 11 says: $arithmetic_output" >&2; exit 1 ;;
+esac
+"$arithmetic_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

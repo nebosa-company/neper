@@ -36,7 +36,7 @@ type Xxh64 = struct { v1: u64, v2: u64, v3: u64, v4: u64, total: u64, buffer: [3
 
 fn rotl64(x: u64, n: u32) -> u64 {
     let left = x << n
-    ret left | (x >> (64u32 - n))
+    ret left | (x >> ((64u32 - n) & 63u32))
 }
 
 fn xxh_round(acc: u64, lane: u64) -> u64 {
@@ -386,7 +386,10 @@ fn huff_build(h: *Huff, weights: []const u8, count: usize) -> err {
     var rank_start: [14]u32 = zero
     var b = usize(max_bits)
     while b >= 1usize {
-        rank_start[b] = rank_start[b + 1usize] + rank_count[b + 1usize] * (1u32 << u32(usize(max_bits) - b - 1usize))
+        // The top rank has nothing above it: its shift would be by -1 (D196).
+        var above = 0u32
+        if b < usize(max_bits) { above = rank_count[b + 1usize] * (1u32 << u32(usize(max_bits) - b - 1usize)) }
+        rank_start[b] = rank_start[b + 1usize] + above
         b -= 1usize
     }
     i = 0usize

@@ -10,24 +10,26 @@ type Sha512 = struct { h: [8]u64, block: [128]u8, block_len: u8, total_hi: u64, 
 type Sha3_256 = struct { lanes: [25]u64, block: [136]u8, block_len: u8 }
 type Sha3_512 = struct { lanes: [25]u64, block: [72]u8, block_len: u8 }
 
+// A rotate by 0 would shift by the whole width, which section 11 traps (D196): the
+// complementary count is masked, and the masked shift by 0 gives the value back.
 fn rotr32(x: u32, n: u32) -> u32 {
     let low = x >> n
-    ret low | (x << (32u32 - n))
+    ret low | (x << ((32u32 - n) & 31u32))
 }
 
 fn rotr64(x: u64, n: u32) -> u64 {
     let low = x >> n
-    ret low | (x << (64u32 - n))
+    ret low | (x << ((64u32 - n) & 63u32))
 }
 
 fn rotl64(x: u64, n: u32) -> u64 {
     let high = x << n
-    ret high | (x >> (64u32 - n))
+    ret high | (x >> ((64u32 - n) & 63u32))
 }
 
 fn rotl32(x: u32, n: u32) -> u32 {
     let high = x << n
-    ret high | (x >> (32u32 - n))
+    ret high | (x >> ((32u32 - n) & 31u32))
 }
 
 fn load_be32(block: []const u8, at: usize) -> u32 {

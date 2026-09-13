@@ -520,7 +520,8 @@ write_done:
 neper_os_write ENDP
 
 ; A failed check (spec section 11): the record text, then the two operands wherever the
-; text holds a NUL, then a newline, all to stderr, and exit 134. The generated code
+; text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
+; newline, all to stderr, and exit 134. The generated code
 ; jumps here with rcx = text, rdx = its length, r8 and r9 = the operands; nothing
 ; returns, so the stack is simply realigned and the callee-saved registers are not kept.
 np_trap_write PROC
@@ -549,8 +550,8 @@ trap_segment:
 trap_scan:
     cmp rbx, rsi
     jae trap_scanned
-    cmp byte ptr [rbx], 0
-    je trap_scanned
+    cmp byte ptr [rbx], 2
+    jb trap_scanned
     inc rbx
     jmp trap_scan
 trap_scanned:
@@ -559,6 +560,7 @@ trap_scanned:
     call np_trap_write
     cmp rbx, rsi
     jae trap_end
+    movzx r15d, byte ptr [rbx]
     inc rbx
     mov rax, r12
     test r14d, r14d
@@ -566,6 +568,18 @@ trap_scanned:
     mov rax, r13
 trap_digits:
     inc r14d
+    test r15d, r15d
+    jz trap_unsigned
+    test rax, rax
+    jns trap_unsigned
+    neg rax
+    mov r15, rax
+    mov byte ptr [rsp+32], 45
+    lea rdx, [rsp+32]
+    mov r8d, 1
+    call np_trap_write
+    mov rax, r15
+trap_unsigned:
     lea r9, [rsp+56]
     mov ecx, 10
 trap_digit:

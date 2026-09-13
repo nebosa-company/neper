@@ -10,7 +10,7 @@ fn prime5() -> usize { ret 2870177450012600261usize }
 
 fn rotate_left(value: usize, count: usize) -> usize {
     let high = value << count
-    let low = value >> (64usize - count)
+    let low = value >> ((64usize - count) & 63usize)
     ret high + low
 }
 

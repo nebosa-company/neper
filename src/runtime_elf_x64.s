@@ -186,7 +186,8 @@ neper_os_write:
     ret
 
 # A failed check (spec section 11): the record text, then the two operands wherever the
-# text holds a NUL, then a newline, all to stderr, and exit 134. The generated code
+# text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
+# newline, all to stderr, and exit 134. The generated code
 # jumps here with rdi = text, rsi = its length, rdx and rcx = the operands; nothing
 # returns, so the stack is simply realigned and the callee-saved registers are not kept.
 .global neper_trap
@@ -203,8 +204,8 @@ neper_trap:
 .Ltrap_scan:
     cmp rbx,r13
     jae .Ltrap_scanned
-    cmp BYTE PTR [rbx],0
-    je .Ltrap_scanned
+    cmp BYTE PTR [rbx],2
+    jb .Ltrap_scanned
     inc rbx
     jmp .Ltrap_scan
 .Ltrap_scanned:
@@ -215,6 +216,7 @@ neper_trap:
     syscall
     cmp rbx,r13
     jae .Ltrap_end
+    movzx ebp,BYTE PTR [rbx]
     inc rbx
     mov rax,r12
     test r15d,r15d
@@ -222,6 +224,20 @@ neper_trap:
     mov rax,r14
 .Ltrap_digits:
     inc r15d
+    test ebp,ebp
+    jz .Ltrap_unsigned
+    test rax,rax
+    jns .Ltrap_unsigned
+    neg rax
+    mov rbp,rax
+    mov BYTE PTR [rsp],45
+    mov rsi,rsp
+    mov edx,1
+    mov edi,2
+    mov eax,1
+    syscall
+    mov rax,rbp
+.Ltrap_unsigned:
     lea r9,[rsp+24]
     mov ecx,10
 .Ltrap_digit:

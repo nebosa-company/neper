@@ -23,7 +23,7 @@ fn load_le32(bytes: []const u8, at: usize) -> u32 {
 
 fn rotl(x: u32, n: u32) -> u32 {
     let high = x << n
-    ret high | (x >> (32u32 - n))
+    ret high | (x >> ((32u32 - n) & 31u32))
 }
 
 fn quarter(state: []u32, a: usize, b: usize, c: usize, d: usize) {
