@@ -181,7 +181,7 @@ if cycle_graph=$($test_build/neper-self graph-file "$graph_root/cycle/src/a.e" "
     exit 1
 fi
 case "$cycle_graph" in
-    *'error: graph.ImportCycle'*) ;;
+    *'b.e:1:1: error[E-MODULE-0002]: `use a` closes an import cycle'*) ;;
     *) printf '%s\n' 'module import cycle returned the wrong error' >&2; exit 1 ;;
 esac
 if duplicate_graph=$($test_build/neper-self graph-file "$graph_root/duplicate/src/main.e" "$repo" x64 linux '' 2>&1); then
@@ -189,7 +189,7 @@ if duplicate_graph=$($test_build/neper-self graph-file "$graph_root/duplicate/sr
     exit 1
 fi
 case "$duplicate_graph" in
-    *'error: graph.DuplicateModule'*) ;;
+    *'main.e:1:1: error[E-MODULE-0001]: `use thing` is defined by both source roots'*) ;;
     *) printf '%s\n' 'duplicate source-root module returned the wrong error' >&2; exit 1 ;;
 esac
 if alias_graph=$($test_build/neper-self graph-file "$graph_root/alias/src/main.e" "$repo" x64 linux '' 2>&1); then
@@ -205,7 +205,7 @@ if missing_graph=$($test_build/neper-self graph-file "$graph_root/missing/src/ma
     exit 1
 fi
 case "$missing_graph" in
-    *'error: project.ModuleNotFound'*) ;;
+    *'main.e:1:1: error[E-MODULE-0001]: `use absent` names no module'*) ;;
     *) printf '%s\n' 'missing graph module returned the wrong error' >&2; exit 1 ;;
 esac
 if invalid_graph=$($test_build/neper-self graph-file "$graph_root/invalid/src/main.e" "$repo" x64 linux '' 2>&1); then
@@ -1806,10 +1806,22 @@ chmod +x "$futex_path"
 # Section 8's atomics. The ordering rules are settled while checking, so each is pinned
 # to its message; the operations themselves are run, because `and`, `or`, `xor`, `min`
 # and `max` are compare-and-swap loops whose widening and signedness a check cannot see.
-check_protocol_diagnostic atomic_load_release 'main.e:8:34: error[E-TYPE-9999]: `atomic.load` may not take the ordering `.Release`'
-check_protocol_diagnostic atomic_store_acquire 'main.e:8:33: error[E-TYPE-9999]: `atomic.store` may not take the ordering `.Acquire`'
-check_protocol_diagnostic atomic_cas_failure 'main.e:9:65: error[E-TYPE-9999]: `atomic.cas` may not take the ordering `.SeqCst`'
-check_protocol_diagnostic atomic_element 'main.e:5:14: error[E-TYPE-9999]: `Atomic[f64]` is not a type: an atomic holds an integer or a pointer'
+# docs/diagnostics.md's codes for the module graph, the scanner and the command line
+# (D215): each at the module that wrote the `use`, the token the scanner refused, or
+# the usage line, under its registered code.
+check_protocol_diagnostic module_missing 'main.e:1:1: error[E-MODULE-0001]: `use nowhere` names no module under the source root or the toolchain'
+check_protocol_diagnostic module_cycle 'b.e:1:1: error[E-MODULE-0002]: `use main` closes an import cycle'
+check_protocol_diagnostic lex_literal 'main.e:3:13: error[E-LEX-0003]: invalid token'
+check_protocol_diagnostic lex_tab 'main.e:3:1: error[E-LEX-0002]: invalid token'
+check_protocol_diagnostic lex_utf8 'main.e:2:21: error[E-LEX-0001]: invalid token'
+cli_status=0
+cli_output=$($test_build/neper-self 2>&1) || cli_status=$?
+[ "$cli_status" -eq 1 ]
+case "$cli_output" in *'error[E-CLI-9999]: usage: '*) ;; *) printf '%s\n' "an empty command line was not refused under E-CLI-9999: $cli_output" >&2; exit 1 ;; esac
+check_protocol_diagnostic atomic_load_release 'main.e:8:34: error[E-MEM-9999]: `atomic.load` may not take the ordering `.Release`'
+check_protocol_diagnostic atomic_store_acquire 'main.e:8:33: error[E-MEM-9999]: `atomic.store` may not take the ordering `.Acquire`'
+check_protocol_diagnostic atomic_cas_failure 'main.e:9:65: error[E-MEM-9999]: `atomic.cas` may not take the ordering `.SeqCst`'
+check_protocol_diagnostic atomic_element 'main.e:5:14: error[E-MEM-9999]: `Atomic[f64]` is not a type: an atomic holds an integer or a pointer'
 atomic_ops_path="$test_build/atomic-ops-selfhost"
 atomic_ops_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/atomic_ops/src/main.e" "$repo" x64 linux "$atomic_ops_path")
 [ "$atomic_ops_written" = 'executable written' ]

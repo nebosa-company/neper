@@ -133,6 +133,17 @@ type Token = struct {
     end_column_utf16: usize,
 }
 
+// Which of docs/diagnostics.md's lexical codes an `Invalid` token is: by the byte it
+// starts at, since the scanner rejects at the first byte it cannot take (D215).
+fn invalid_code(source: str, invalid: Token) -> str {
+    if invalid.start >= source.len { ret "E-LEX-9999" }
+    let first = source[invalid.start]
+    if first >= 128u8 { ret "E-LEX-0001" }
+    if first < 32u8 || first == 127u8 { ret "E-LEX-0002" }
+    if first == 34u8 || first == 39u8 || first == 114u8 || (first >= 48u8 && first <= 57u8) || first == 46u8 { ret "E-LEX-0003" }
+    ret "E-LEX-9999"
+}
+
 type Scanner = struct {
     source: str,
     off: usize,

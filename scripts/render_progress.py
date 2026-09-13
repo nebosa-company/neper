@@ -89,7 +89,7 @@ tooling = [
  ("dis", 0, "not started"),
  ("info", 0, "not started"),
  ("v1 schema validation of emitted records", 0, "schema written, nothing emits records"),
- ("Stable diagnostic codes from diagnostics.md", 0.35, "7 of 30 registered codes; 6 catch-all -9999"),
+ ("Stable diagnostic codes from diagnostics.md", 0.6, "18 of 30 registered codes are emitted (D215): E-CLI-9999 for the usage line, E-LEX-0001/0002/0003/9999 for the token the scanner refused by the byte it starts at, E-MODULE-0001 for a `use` naming no module or one defined by both roots and E-MODULE-0002 for one closing a cycle, each at the module that wrote it, E-COMPTIME-9999 for a reflection shape and E-MEM-9999 for an atomic's element or ordering, beside the E-NAME, E-TYPE, E-ERROR and E-LINK codes already there; check/module_missing, module_cycle, lex_literal, lex_tab, lex_utf8 pin them. Not yet: E-SYNTAX-0012, E-GPU, E-SAFETY, E-TEST, E-FORMAT and E-TOOL, whose subjects do not exist to diagnose"),
  ("Build manifest with versions and SHA-256", 0.25, "artifact_hash.e covers .em only"),
  ("Generated source maps", 0, "not started"),
  ("Conformance corpus accept/reject/format/tokens/parse/tools", 0, "tests/conformance absent"),

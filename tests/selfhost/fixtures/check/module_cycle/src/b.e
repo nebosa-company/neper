@@ -1,0 +1,3 @@
+use main
+
+fn f() {}

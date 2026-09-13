@@ -42,6 +42,10 @@ type Graph = struct {
     failure_token: lex.Token,
     failure_reserved_name: bool,
     has_failure: bool,
+    // A `use` that names no module, or one that closes a cycle: the importing module
+    // and the name, for the E-MODULE diagnostics (D215).
+    failure_import: str,
+    has_import_failure: bool,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -229,7 +233,12 @@ fn visit(g: *Graph, module_index: usize) -> err {
     var i = g.modules[module_index].first_import
     while i < end {
         let target_module = g.imports[i].target
-        if g.modules[target_module].visit_state == 1u8 { ret ImportCycle }
+        if g.modules[target_module].visit_state == 1u8 {
+            g.failure_module = module_index
+            g.failure_import = g.imports[i].name
+            g.has_import_failure = true
+            ret ImportCycle
+        }
         if g.modules[target_module].visit_state == 0u8 {
             let visit_error = visit(g, target_module)
             if visit_error != ok { ret visit_error }
@@ -265,7 +274,12 @@ fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str
                 g.imports[import_index].target = existing
             } else {
                 let (path, resolve_error) = resolve_source(a, g, g.imports[import_index].name)
-                if resolve_error != ok { ret resolve_error }
+                if resolve_error != ok {
+                    g.failure_module = module_index
+                    g.failure_import = g.imports[import_index].name
+                    g.has_import_failure = true
+                    ret resolve_error
+                }
                 let (added_module, add_error) = add_module(a, g, g.imports[import_index].name, path)
                 if add_error != ok { ret add_error }
                 g.imports[import_index].target = added_module

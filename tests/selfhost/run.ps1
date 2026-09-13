@@ -146,11 +146,11 @@ if ($LASTEXITCODE -ne 0 -or $toolchainGraph -ne 'module graph ok') { throw 'tool
 $variantGraph = & $compiler graph-file (Join-Path $variantRoot 'src\root.e') $repo 'x64' 'windows' 'root' 'system'
 if ($LASTEXITCODE -ne 0 -or $variantGraph -ne 'module graph ok') { throw 'target-variant module graph loading failed' }
 $cycleGraph = & $compiler graph-file (Join-Path $graphRoot 'cycle\src\a.e') $repo 'x64' 'windows' '' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($cycleGraph -join "`n") -notmatch 'error: graph\.ImportCycle') {
+if ($LASTEXITCODE -ne 1 -or ($cycleGraph -join "`n") -notmatch 'b\.e:1:1: error\[E-MODULE-0002\]: `use a` closes an import cycle') {
     throw 'module import cycle was not rejected'
 }
 $duplicateGraph = & $compiler graph-file (Join-Path $graphRoot 'duplicate\src\main.e') $repo 'x64' 'windows' '' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($duplicateGraph -join "`n") -notmatch 'error: graph\.DuplicateModule') {
+if ($LASTEXITCODE -ne 1 -or ($duplicateGraph -join "`n") -notmatch 'main\.e:1:1: error\[E-MODULE-0001\]: `use thing` is defined by both source roots') {
     throw 'duplicate source-root module was not rejected'
 }
 $aliasGraph = & $compiler graph-file (Join-Path $graphRoot 'alias\src\main.e') $repo 'x64' 'windows' '' 2>&1
@@ -158,7 +158,7 @@ if ($LASTEXITCODE -ne 1 -or ($aliasGraph -join "`n") -notmatch 'error: graph\.Du
     throw 'duplicate import qualifier was not rejected'
 }
 $missingGraph = & $compiler graph-file (Join-Path $graphRoot 'missing\src\main.e') $repo 'x64' 'windows' '' 2>&1
-if ($LASTEXITCODE -ne 1 -or ($missingGraph -join "`n") -notmatch 'error: project\.ModuleNotFound') {
+if ($LASTEXITCODE -ne 1 -or ($missingGraph -join "`n") -notmatch 'main\.e:1:1: error\[E-MODULE-0001\]: `use absent` names no module') {
     throw 'missing graph module returned the wrong error'
 }
 $invalidGraph = & $compiler graph-file (Join-Path $graphRoot 'invalid\src\main.e') $repo 'x64' 'windows' '' 2>&1
@@ -1660,11 +1660,30 @@ if ($LASTEXITCODE -ne 0) { throw 'os.wait_u32 or a wake is wrong' }
 # to its message; the operations themselves are run, because `and`, `or`, `xor`, `min`
 # and `max` are compare-and-swap loops whose widening and signedness a check cannot see.
 $atomicDiagnostics = @(
-    @('atomic_load_release', 'main\.e:8:34: error\[E-TYPE-9999\]: `atomic\.load` may not take the ordering `\.Release`'),
-    @('atomic_store_acquire', 'main\.e:8:33: error\[E-TYPE-9999\]: `atomic\.store` may not take the ordering `\.Acquire`'),
-    @('atomic_cas_failure', 'main\.e:9:65: error\[E-TYPE-9999\]: `atomic\.cas` may not take the ordering `\.SeqCst`'),
-    @('atomic_element', 'main\.e:5:14: error\[E-TYPE-9999\]: `Atomic\[f64\]` is not a type: an atomic holds an integer or a pointer')
+    @('atomic_load_release', 'main\.e:8:34: error\[E-MEM-9999\]: `atomic\.load` may not take the ordering `\.Release`'),
+    @('atomic_store_acquire', 'main\.e:8:33: error\[E-MEM-9999\]: `atomic\.store` may not take the ordering `\.Acquire`'),
+    @('atomic_cas_failure', 'main\.e:9:65: error\[E-MEM-9999\]: `atomic\.cas` may not take the ordering `\.SeqCst`'),
+    @('atomic_element', 'main\.e:5:14: error\[E-MEM-9999\]: `Atomic\[f64\]` is not a type: an atomic holds an integer or a pointer')
 )
+# docs/diagnostics.md's codes for the module graph, the scanner and the command line
+# (D215): each at the module that wrote the `use`, the token the scanner refused, or
+# the usage line, under its registered code.
+$codeDiagnostics = @(
+    @('module_missing', 'main\.e:1:1: error\[E-MODULE-0001\]: `use nowhere` names no module under the source root or the toolchain'),
+    @('module_cycle', 'b\.e:1:1: error\[E-MODULE-0002\]: `use main` closes an import cycle'),
+    @('lex_literal', 'main\.e:3:13: error\[E-LEX-0003\]: invalid token'),
+    @('lex_tab', 'main\.e:3:1: error\[E-LEX-0002\]: invalid token'),
+    @('lex_utf8', 'main\.e:2:21: error\[E-LEX-0001\]: invalid token')
+)
+foreach ($case in $codeDiagnostics) {
+    Require-Fixture ("check/" + $case[0])
+    $codeOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($codeOutput -join "`n") -notmatch $case[1]) {
+        throw "diagnostic code for $($case[0]) is wrong: $($codeOutput -join "`n")"
+    }
+}
+$cliOutput = & $compiler 2>&1
+if ($LASTEXITCODE -ne 1 -or ($cliOutput -join "`n") -notmatch 'error\[E-CLI-9999\]: usage: ') { throw "an empty command line was not refused under E-CLI-9999: $($cliOutput -join "`n")" }
 foreach ($case in $atomicDiagnostics) {
     Require-Fixture ("check/" + $case[0])
     $atomicOutput = & $compiler check-file (Join-Path $repo "tests\selfhost\fixtures\check\$($case[0])\src\main.e") $repo 'x64' 'windows' 2>&1

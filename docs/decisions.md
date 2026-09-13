@@ -3933,3 +3933,22 @@ of either is byte-equal to a clean build. D213's finding that the compiler's own
 was not byte-equal to the source build was the artifacts' order on the command line:
 `link-em` lays functions out in the order the artifacts are given, and the graph's
 order reproduces the source build exactly.
+
+## D215 — Registered diagnostic codes for the graph, the scanner and the command line
+
+docs/diagnostics.md registers thirty codes and the compiler emitted seven of them,
+with a missing module surfacing as `error: project.ModuleNotFound` from `main`'s own
+failure line and a byte the scanner refused as `unexpected` under E-SYNTAX-9999. Now
+the graph records the importing module and the name when a `use` resolves to nothing,
+to two roots, or closes a cycle, and the driver reports E-MODULE-0001 or 0002 at that
+module; an `Invalid` token is a lexical error under E-LEX-0001, 0002 or 0003 by the
+byte it starts at -- past 127, a control character or tab, or a quote, digit or `r`
+prefix the scanner could not finish -- since the scanner stops at the first byte it
+cannot take; an empty or unknown command line is E-CLI-9999 on stderr with exit 1
+rather than the usage on stdout with exit 0; and the checker's kinds for a
+reflection shape are E-COMPTIME-9999 and the atomic ones E-MEM-9999, the registry's
+own categories for sections 9 and 8 -- a constant cycle stays E-TYPE-9999, since the
+bootstrap says so and tests/neper0 holds the two compilers to the same words, and a
+`use` that resolves to more than one variant is E-MODULE-9999. Eighteen of the thirty are emitted;
+the rest name subjects -- the formatter, tests, the GPU profile, the tooling
+protocol -- that do not exist yet to diagnose.

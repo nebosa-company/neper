@@ -1492,6 +1492,12 @@ fn print_parse_failure(path: str, text: str, token: lex.Token, reserved_name: bo
         try write_all(failure, text[token.start..token.end])
         ret write_all(failure, "` is a keyword and cannot name a local or parameter\n")
     }
+    // A token the scanner refused is a lexical error under its own code (D215).
+    if token.kind == .Invalid {
+        try write_all(failure, ": error[")
+        try write_all(failure, lex.invalid_code(text, token))
+        ret write_all(failure, "]: invalid token\n")
+    }
     try write_all(failure, ": error[E-SYNTAX-9999]: unexpected ")
     if token.kind == .Eof { ret write_all(failure, "end of file\n") }
     if token.kind == .Newline { ret write_all(failure, "end of line\n") }
@@ -1507,6 +1513,38 @@ fn load_graph(a: *mem.Arena, loaded: *graph.Graph, path: str, root: str, arch: s
     if load_error != ok && loaded.has_failure && loaded.failure_module < loaded.count {
         let module = loaded.modules[loaded.failure_module]
         try print_parse_failure(module.path, module.text, loaded.failure_token, loaded.failure_reserved_name)
+        os.exit(1i32)
+    }
+    // A `use` naming no module, or closing a cycle, is reported at the module that
+    // wrote it under docs/diagnostics.md's E-MODULE codes (D215).
+    if load_error != ok && loaded.has_import_failure && loaded.failure_module < loaded.count {
+        let failure = os.stderr()
+        try write_all(failure, loaded.modules[loaded.failure_module].path)
+        if load_error == graph.ImportCycle {
+            try write_all(failure, ":1:1: error[E-MODULE-0002]: `use ")
+            try write_all(failure, loaded.failure_import)
+            try write_all(failure, "` closes an import cycle\n")
+        } else {
+            if load_error == project.ModuleNotFound || load_error == graph.DuplicateModule {
+                try write_all(failure, ":1:1: error[E-MODULE-0001]: `use ")
+            } else {
+                try write_all(failure, ":1:1: error[E-MODULE-9999]: `use ")
+            }
+            try write_all(failure, loaded.failure_import)
+            if load_error == graph.DuplicateModule {
+                try write_all(failure, "` is defined by both source roots\n")
+            } else {
+                if load_error == project.ModuleNotFound {
+                    try write_all(failure, "` names no module under the source root or the toolchain\n")
+                } else {
+                    if load_error == project.AmbiguousVariant {
+                        try write_all(failure, "` has more than one source variant for the target\n")
+                    } else {
+                        try write_all(failure, "` cannot be resolved\n")
+                    }
+                }
+            }
+        }
         os.exit(1i32)
     }
     ret load_error
@@ -2343,6 +2381,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try io.print("usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT\n")
+    try write_all(os.stderr(), "error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental]\n")
+    os.exit(1i32)
     ret ok
 }

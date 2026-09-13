@@ -9912,6 +9912,11 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 
 fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .TryInsideDefer || kind == .TryCast || kind == .TryNotFallible || kind == .TryNoPropagate { ret "E-ERROR-9999" }
+    // docs/diagnostics.md: section 9's reflection and section 8's atomics under their
+    // own categories (D215). A constant cycle stays E-TYPE-9999: the bootstrap says so
+    // and tests/neper0 holds the two to the same words.
+    if kind == .MetaShape || kind == .MetaFieldOwner { ret "E-COMPTIME-9999" }
+    if kind == .AtomicElement || kind == .AtomicOrdering { ret "E-MEM-9999" }
     if kind == .ReturnCount || kind == .ReturnValuesUnexpected { ret "E-TYPE-0003" }
     if kind == .ReturnType { ret "E-TYPE-0002" }
     if kind == .ArrayLengthType || kind == .InitializerType { ret "E-TYPE-0002" }
