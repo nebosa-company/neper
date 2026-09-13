@@ -4258,22 +4258,6 @@ loop fifteen; the compiler's image is three per cent larger for the saves. The
 larger cost stays where it was: a `var` is a stack object, every use of it a load or
 a store through its address, so a loop counter is a chain through memory. That is
 the next change, and it is the register allocator's rather than a pass of its own.
-
-## D237 -- `build-manifest --json` and a SHA-256 in the compiler
-
-`build-manifest-file PATH ROOT ARCH OS --json` loads the graph and emits the canonical
-`neper-build-manifest` object of section 7: schema and version, the tool, language and
-grammar versions, the target triple, the mode, the root module, and one `inputs` entry
-per source module with its source identifier and the SHA-256 of its bytes. SHA-256 is
-ported into artifact_hash.e alongside xxhash/CRC, over the same one-byte-per-`usize`
-representation, all arithmetic on `usize` masked to 32 bits so the bootstrap needs no
-`u32` type or wrapping operator; its digest of the fixture matches python's hashlib and
-the RFC 6234 `abc` vector. The `target` field makes the manifest host-specific, so the
-corpus holds one expected object per host over a no-import fixture. Gaps: the dependency
-interface/body split, libraries, assets, the built artifact's own hash, non-empty
-options, and writing the manifest to `.neper/<mode>/build-manifest.json` on every build
-rather than only through this query.
-
 ## D236 -- A scalar local is a value, and a loop's temporaries are its own
 
 Lowering makes every `var` a stack object, read and written through its address at
@@ -4326,3 +4310,18 @@ regenerated for both. The codegen self-test's branch case had never given its ow
 function its own live ranges -- it shared the previous function's -- which the
 fusion check exposed; it does now, and the branch pin asserts the fused shape (a
 `cmp`, a signed conditional jump, a trailing `ret`) rather than an exact length.
+
+## D238 -- `build-manifest --json` and a SHA-256 in the compiler
+
+`build-manifest-file PATH ROOT ARCH OS --json` loads the graph and emits the canonical
+`neper-build-manifest` object of section 7: schema and version, the tool, language and
+grammar versions, the target triple, the mode, the root module, and one `inputs` entry
+per source module with its source identifier and the SHA-256 of its bytes. SHA-256 is
+ported into artifact_hash.e alongside xxhash/CRC, over the same one-byte-per-`usize`
+representation, all arithmetic on `usize` masked to 32 bits so the bootstrap needs no
+`u32` type or wrapping operator; its digest of the fixture matches python's hashlib and
+the RFC 6234 `abc` vector. The `target` field makes the manifest host-specific, so the
+corpus holds one expected object per host over a no-import fixture. Gaps: the dependency
+interface/body split, libraries, assets, the built artifact's own hash, non-empty
+options, and writing the manifest to `.neper/<mode>/build-manifest.json` on every build
+rather than only through this query.

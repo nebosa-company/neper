@@ -914,6 +914,17 @@ fn run_program(a: *mem.Arena, path: str) -> (i32, str, str, err) {
 
 // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
 // Its own function because the bootstrap caps a function's locals (main is at the cap).
+fn manifest_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
+    var loaded: graph.Graph = zero
+    try init_cli_graph(a, &loaded)
+    try load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+    let (exit, manifest_error) = tool.manifest_json(a, args[4usize], args[5usize], &loaded)
+    if manifest_error != ok { ret manifest_error }
+    if exit != 0usize { os.exit(i32(exit)) }
+    ret ok
+}
+
 fn fmt_command(a: *mem.Arena, args: []str) -> err {
     let (text, load_error) = source.load(a, args[2usize])
     if load_error != ok { ret load_error }
@@ -2389,6 +2400,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 7usize && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
     // `fmt-file PATH --json` (D234): the operand's canonical layout as one `formatted` record.
     if args.len == 4usize && same(args[1usize], "fmt-file") && same(args[3usize], "--json") { ret fmt_command(a, args) }
+    if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner

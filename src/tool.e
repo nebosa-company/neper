@@ -9,6 +9,8 @@ use parse
 use syntax
 use resolve
 use nir
+use graph
+use artifact_hash
 
 error Capacity
 error InvalidSource
@@ -562,6 +564,71 @@ fn fmt_record(out: *Out, formatted: str) -> err {
 
 fn fmt_result(out: *Out) -> err {
     try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{}}")
+    ret flush(out)
+}
+
+// The last path segment, the basename a source identifier uses for a file operand.
+fn manifest_basename(path: str) -> str {
+    var start = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 47u8 || path[at] == 92u8 { start = at + 1usize }
+        at += 1usize
+    }
+    ret path[start..path.len]
+}
+
+// The SHA-256 of a module's source bytes, widened one byte per slot for the hasher.
+fn manifest_sha256(a: *mem.Arena, content: str) -> (str, err) {
+    let (widened, widen_error) = mem.alloc[usize](a, content.len + 1usize)
+    if widen_error != ok { ret ("", widen_error) }
+    var at = 0usize
+    while at < content.len {
+        widened[at] = usize(content[at])
+        at += 1usize
+    }
+    let (digest, digest_error) = artifact_hash.sha256_hex(a, widened[0usize..content.len])
+    ret (digest, digest_error)
+}
+
+// `build-manifest --json` (D236): the canonical `neper-build-manifest` object of section 7 --
+// versions, target, mode, root module and one input per source module with its SHA-256.
+// Not yet: the dependency interface/body split, libraries, assets, the built artifact's hash,
+// and non-empty options; those wait on the parts of a build this command does not run.
+fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (usize, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, 65536usize)
+    if storage_error != ok { ret (2usize, storage_error) }
+    var out = Out { bytes: storage, count: 0usize }
+    let build_error = manifest_write(a, &out, arch, os_name, g)
+    if build_error != ok { ret (2usize, build_error) }
+    ret (0usize, ok)
+}
+
+fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph) -> err {
+    try text(out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1,\"target\":\"")
+    try text(out, arch)
+    try byte(out, 45u8)
+    try text(out, os_name)
+    try text(out, "\",\"mode\":\"debug\",\"root_module\":")
+    if g.count == 0usize {
+        try text(out, "null")
+    } else {
+        try quoted(out, g.modules[0usize].name)
+    }
+    try text(out, ",\"inputs\":[")
+    var at = 0usize
+    while at < g.count {
+        if at != 0usize { try byte(out, 44u8) }
+        try text(out, "{\"source\":{\"root\":\"operand\",\"path\":")
+        try quoted(out, manifest_basename(g.modules[at].path))
+        try text(out, "},\"sha256\":")
+        let (digest, digest_error) = manifest_sha256(a, g.modules[at].text)
+        if digest_error != ok { ret digest_error }
+        try quoted(out, digest)
+        try byte(out, 125u8)
+        at += 1usize
+    }
+    try text(out, "],\"dependencies\":[],\"libraries\":[],\"assets\":[],\"artifacts\":[],\"options\":{}}")
     ret flush(out)
 }
 

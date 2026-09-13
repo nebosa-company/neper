@@ -1689,6 +1689,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disActual).Hash -ne (Get-FileH
 $fmtActual = Join-Path $testBuild 'conformance-tools-fmt.jsonl'
 cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt.e')`" --json > `"$fmtActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/fmt.expected.jsonl')).Hash) { throw "fmt --json differs from the conformance corpus" }
+# `build-manifest --json` (D236): the canonical manifest with each input's SHA-256, byte for byte.
+$manifestActual = Join-Path $testBuild 'conformance-tools-manifest.jsonl'
+cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/manifest.e')`" `"$repo`" x64 windows --json > `"$manifestActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest.x64-windows.expected.jsonl')).Hash) { throw "build-manifest --json differs from the conformance corpus" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'
