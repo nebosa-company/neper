@@ -26,16 +26,21 @@ fn layout() {
 }
 
 fn moves() {
-    var data: [12]f32 = zero
+    // The aligned forms check the address against the vector's width (D210), so the
+    // sixteen lanes start at the first 64-byte boundary inside a larger array.
+    var raw: [32]f32 = zero
+    let base = mem.address_of(&raw[0])
+    let skew = (64usize - base % 64usize) % 64usize / 4usize
+    var data = raw[skew..skew + 16usize]
     var i = 0usize
-    while i < 12usize {
+    while i < 16usize {
         data[i] = f32(i) * 0.5
         i += 1usize
     }
     let a = simd.load[Vec[f32, 4]](data[0..], 2usize)
     if a.lanes[0] != 1.0 || a.lanes[3] != 2.5 { os.exit(20) }
-    let b = simd.load_aligned[Vec[f32, 8]](data[0..], 4usize)
-    if b.lanes[0] != 2.0 || b.lanes[7] != 5.5 { os.exit(21) }
+    let b = simd.load_aligned[Vec[f32, 8]](data[0..], 8usize)
+    if b.lanes[0] != 4.0 || b.lanes[7] != 7.5 { os.exit(21) }
     let s = simd.splat[Vec[f32, 4]](-1.0)
     simd.store[Vec[f32, 4]](data[0..], 8usize, s)
     if data[7] != 3.5 || data[8] != -1.0 || data[11] != -1.0 { os.exit(22) }

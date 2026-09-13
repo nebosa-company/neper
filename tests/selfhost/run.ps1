@@ -1466,6 +1466,17 @@ $nullOutput = & $nullPath store 2>&1
 if ($LASTEXITCODE -ne 134 -or ($nullOutput -join "`n") -notmatch 'main\.e:34:9: trap\[null\]: nil dereferenced as \*i32') { throw "the store case did not trap as section 11 says: exit $LASTEXITCODE, $($nullOutput -join "`n")" }
 & $nullPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'a dereference of a live pointer trapped' }
+# The `align` row: `simd.load_aligned` and `store_aligned` at an address that is not a
+# multiple of the vector's width, each refused with the width named; aligned untouched.
+$alignPath = Join-Path $testBuild 'trap-align-selfhost.exe'
+$alignWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_align\src\main.e') $repo 'x64' 'windows' $alignPath
+if ($LASTEXITCODE -ne 0 -or $alignWritten -ne 'executable written') { throw 'align trap fixture executable emission failed' }
+$alignOutput = & $alignPath load 2>&1
+if ($LASTEXITCODE -ne 134 -or ($alignOutput -join "`n") -notmatch 'main\.e:28:13: trap\[align\]: address not a multiple of 16: \d+') { throw "the load case did not trap as section 11 says: exit $LASTEXITCODE, $($alignOutput -join "`n")" }
+$alignOutput = & $alignPath store 2>&1
+if ($LASTEXITCODE -ne 134 -or ($alignOutput -join "`n") -notmatch 'main\.e:31:5: trap\[align\]: address not a multiple of 16: \d+') { throw "the store case did not trap as section 11 says: exit $LASTEXITCODE, $($alignOutput -join "`n")" }
+& $alignPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'an aligned vector access trapped' }
 # The `overflow` row: `+ - *` and unary `-` on every width, signed and unsigned, refused
 # when the result does not fit; the same in range, and `+%` past the edge, untouched.
 $overflowPath = Join-Path $testBuild 'trap-overflow-selfhost.exe'

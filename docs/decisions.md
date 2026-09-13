@@ -3830,3 +3830,21 @@ the rows with the code it drops. The section is new, so the `.em` format version
 (...helper.e:1)` and `main.main (...main.e:17)` on both platforms. The compiler's
 image grows by a tenth for its rows. A named `.nepersym` section, DWARF and CodeView
 are still open.
+
+## D210 — The `align` row is checked at the aligned intrinsics' call sites
+
+Section 11's `align` row belongs to `simd.load_aligned` and `store_aligned`, which
+are ordinary generics in `e.simd` that call `load` and `store`: the library has no
+way to name a check kind, and a builtin for one would be a language addition the
+section does not make. So lowering places the check where a call to either is
+lowered, with the slice, the offset and the vector type in hand: the element address
+is the slice's data plus the offset times the element size, wrapping, and its low
+bits against the vector's width have to be zero, or a `.Trap` of kind `align` fires
+with the address as its value -- `address not a multiple of 16: 20970884`. The row is
+debug-only, so `@nocheck` and `--release` leave it out, and the record's site is the
+call. `mem.address_of` now bitcasts its pointer to `usize` rather than passing the
+value through under the old type, which is what let a fixture compute the skew to
+an aligned lane in the first place: arithmetic on the old value would not select.
+`link/simd_lanes` loaded eight float lanes at an offset of four, sixteen bytes into a
+stack array, which was never aligned to thirty-two; it starts its lanes at the first
+sixty-four-byte boundary inside a larger array now and loads at eight.

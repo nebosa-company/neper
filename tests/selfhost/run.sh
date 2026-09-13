@@ -1501,6 +1501,29 @@ case "$null_output" in
 ' "the store case did not trap as section 11 says: $null_output" >&2; exit 1 ;;
 esac
 "$null_path" none
+# The `align` row: `simd.load_aligned` and `store_aligned` at an address that is not a
+# multiple of the vector's width, each refused with the width named; aligned untouched.
+align_path="$test_build/trap-align-selfhost"
+align_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_align/src/main.e" "$repo" x64 linux "$align_path")
+[ "$align_written" = 'executable written' ]
+chmod +x "$align_path"
+align_status=0
+align_output=$("$align_path" load 2>&1) || align_status=$?
+[ "$align_status" -eq 134 ]
+case "$align_output" in
+    *'main.e:28:13: trap[align]: address not a multiple of 16: '*) ;;
+    *) printf '%s
+' "the load case did not trap as section 11 says: $align_output" >&2; exit 1 ;;
+esac
+align_status=0
+align_output=$("$align_path" store 2>&1) || align_status=$?
+[ "$align_status" -eq 134 ]
+case "$align_output" in
+    *'main.e:31:5: trap[align]: address not a multiple of 16: '*) ;;
+    *) printf '%s
+' "the store case did not trap as section 11 says: $align_output" >&2; exit 1 ;;
+esac
+"$align_path" none
 # The `overflow` row: `+ - *` and unary `-` on every width, signed and unsigned, refused
 # when the result does not fit; the same in range, and `+%` past the edge, untouched.
 overflow_path="$test_build/trap-overflow-selfhost"

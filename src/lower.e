@@ -427,6 +427,96 @@ fn emit_tag_check(c: *check.Checker, base: usize, base_type: check.Type, field_n
     ret ok
 }
 
+// Section 11's `align` row, debug only: `simd.load_aligned`/`store_aligned` at an
+// address that is not a multiple of the vector's width. The library's two are ordinary
+// generics that call `load`/`store`, so the check is placed at their call sites, where
+// the slice, the offset and the vector type are all in hand: the element address is
+// `data + off * size`, wrapping, and its low bits against the width have to be zero.
+fn append_decimal(storage: []u8, write_at: *usize, value: usize) -> err {
+    if value >= 10usize { try append_decimal(storage, write_at, value / 10usize) }
+    if *write_at >= storage.len { ret check.Capacity }
+    storage[*write_at] = u8(48usize + value % 10usize)
+    *write_at += 1usize
+    ret ok
+}
+
+fn emit_align_check(c: *check.Checker, g: *graph.Graph, call: check.CallInfo, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token) -> err {
+    if builder.nocheck || call.function.module_index >= g.count || argument_count < 2usize { ret ok }
+    if !check.same(g.modules[call.function.module_index].name, "e.simd") { ret ok }
+    let loading = check.same(call.function.name, "load_aligned")
+    if !loading && !check.same(call.function.name, "store_aligned") { ret ok }
+    if call.function.parameter_count < 2usize || call.function.first_parameter + 2usize > c.parameter_count { ret ok }
+    let slice_type = c.parameters[call.function.first_parameter].ty
+    var vector_type = check.invalid_type()
+    if loading {
+        if call.function.return_count != 1usize { ret ok }
+        vector_type = c.return_types[call.function.first_return]
+    } else {
+        if call.function.parameter_count != 3usize { ret ok }
+        vector_type = c.parameters[call.function.first_parameter + 2usize].ty
+    }
+    let (element_type, element_error) = check.index_element_type(c, slice_type, call.function.module_index)
+    if element_error != ok { ret element_error }
+    let (element_info, element_info_error) = layout.type_info(c, element_type)
+    if element_info_error != ok { ret element_info_error }
+    let (vector_info, vector_info_error) = layout.type_info(c, vector_type)
+    if vector_info_error != ok { ret vector_info_error }
+    if vector_info.size < 2usize { ret ok }
+    let module_index = call.function.module_index
+    let usize_type = check.make_type(.Integer, "usize", module_index)
+    let pointer_type = check.make_type(.Pointer, "", module_index)
+    let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, token)
+    if data_address_error != ok { ret data_address_error }
+    try nir.add_operand(builder, data_address_instruction, arguments[0usize])
+    let (data_load, data, data_load_error) = nir.emit(builder, .Load, usize_type, true, 8usize, token)
+    if data_load_error != ok { ret data_load_error }
+    try nir.add_operand(builder, data_load, data_address)
+    let (size_instruction, size, size_error) = nir.emit(builder, .ConstInteger, usize_type, true, element_info.size, token)
+    if size_error != ok { ret size_error }
+    let (scaled_instruction, scaled, scaled_error) = nir.emit(builder, .MultiplyWrap, usize_type, true, 0usize, token)
+    if scaled_error != ok { ret scaled_error }
+    try nir.add_operand(builder, scaled_instruction, arguments[1usize])
+    try nir.add_operand(builder, scaled_instruction, size)
+    let (address_instruction, address, address_error) = nir.emit(builder, .AddWrap, usize_type, true, 0usize, token)
+    if address_error != ok { ret address_error }
+    try nir.add_operand(builder, address_instruction, data)
+    try nir.add_operand(builder, address_instruction, scaled)
+    let (mask_instruction, mask, mask_error) = nir.emit(builder, .ConstInteger, usize_type, true, vector_info.size - 1usize, token)
+    if mask_error != ok { ret mask_error }
+    let (low_instruction, low, low_error) = nir.emit(builder, .BitAnd, usize_type, true, 0usize, token)
+    if low_error != ok { ret low_error }
+    try nir.add_operand(builder, low_instruction, address)
+    try nir.add_operand(builder, low_instruction, mask)
+    let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+    if zero_error != ok { ret zero_error }
+    let boolean = check.make_type(.Bool, "bool", module_index)
+    let (aligned, aligned_error) = emit_supplied_compare(builder, .Equal, boolean, low, zero_value, token)
+    if aligned_error != ok { ret aligned_error }
+    let trap_block = builder.block_count
+    let after_block = builder.block_count + 1usize
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, aligned)
+    try nir.set_branch_targets(builder, decision, after_block, trap_block)
+    let (trap_index, trap_block_error) = nir.begin_block(builder)
+    if trap_block_error != ok || trap_index != trap_block { ret nir.InvalidControlFlow }
+    let prefix = "address not a multiple of "
+    let (storage, storage_error) = mem.alloc[u8](c.arena, prefix.len + 22usize)
+    if storage_error != ok { ret storage_error }
+    var write_at = 0usize
+    try append_text(storage[..], &write_at, prefix)
+    try append_decimal(storage[..], &write_at, vector_info.size)
+    try append_text(storage[..], &write_at, ": ")
+    let (message, message_error) = nir.intern_string(builder, storage[..write_at])
+    if message_error != ok { ret message_error }
+    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "align", module_index), false, message + 1usize, token)
+    if trap_error != ok { ret trap_error }
+    try nir.add_operand(builder, trap_instruction, address)
+    let (after_index, after_error) = nir.begin_block(builder)
+    if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
+    ret ok
+}
+
 // Section 11's `null` row: a dereference of `nil` traps. Every path that reads or
 // writes through a pointer value -- `*p`, `p.field` through the auto-dereference --
 // compares the pointer with zero first; a value that is already an address of a stack
@@ -2398,6 +2488,8 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         results.count = 0usize
         ret ok
     }
+    let align_error = emit_align_check(c, g, call, arguments[..], argument_count, builder, c.tokens[node.token_start])
+    if align_error != ok { ret align_error }
     ret emit_call_results(c, call, callee, arguments[..], argument_count, builder, c.tokens[node.token_start], results)
 }
 
@@ -3147,11 +3239,10 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             // `mem.cast` only retypes: the pointer handed in is the pointer handed
             // back, so the operand passes through with no instruction of its own.
             if call_info.mem_cast { ret (argument, call_info.cast, ok) }
-            // The address is the pointer, so `address_of` retypes and emits nothing
-            // either -- the `usize` it gives back is the same bits under a name that
-            // cannot be dereferenced.
-            if call_info.mem_address { ret (argument, call_info.cast, ok) }
-            if call_info.mem_bitcast {
+            // The address is the pointer: `address_of` is a bitcast to `usize`, the
+            // same bits under a name that cannot be dereferenced, and the value has to
+            // carry that name so arithmetic on it selects (D210).
+            if call_info.mem_bitcast || call_info.mem_address {
                 let (punned, punned_error) = lower_bitcast(c, argument, lowered_argument_type, call_info.cast, builder, c.tokens[node.token_start])
                 ret (punned, call_info.cast, punned_error)
             }
