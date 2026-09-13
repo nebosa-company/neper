@@ -4453,3 +4453,22 @@ must survive a DST jump is a gap, not a guarantee); `@reboot`; the Quartz `L` / 
 `#` / `?` extensions and its seventh year field. It builds on nothing new -- `e.time`
 already supplies civil-time conversion and the epoch weekday -- so it is blocked only
 on being wanted, and sits at the end of the module backlog.
+
+## D243 -- `e.grep`, a dependency-free code scanner (planned)
+
+Registered as a planned experimental module against my own earlier advice: for
+interactive use `rg`/`tgrep` are faster and already indexed, and the compiler's
+own `index-file`/`parse`/`graph` JSON commands already answer structured
+"where is this symbol" questions that plain text search cannot. `e.grep` earns
+its place only in the one spot those do not cover -- a self-hosted neper tool
+that must scan a tree for a literal or simple pattern with no external binary on
+the path, e.g. an LLM-facing code-scan built entirely in neper.
+
+Surface (see module-apis.md): a `Match` of path/line/column/text, an `Index`, and
+`build_index`, `search`, `search_index`. `search` walks the tree under `root`
+(via `e.fs`/`e.path`) and returns matches; `search_index` answers from a prebuilt
+trigram `Index` the way tgrep does, trading build time for query speed on repeat
+scans. First cut is literal and simple character-class patterns; full regex waits
+on `e.text.regex`, and .gitignore semantics, mmap and ranked output are out of
+scope. It sits in the experimental tier at the end of the backlog, blocked only
+on being wanted.
