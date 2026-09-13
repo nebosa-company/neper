@@ -4482,3 +4482,15 @@ scans. First cut is literal and simple character-class patterns; full regex wait
 on `e.text.regex`, and .gitignore semantics, mmap and ranked output are out of
 scope. It sits in the experimental tier at the end of the backlog, blocked only
 on being wanted.
+
+## D244 -- `fmt --check` reports E-FORMAT-0001
+
+`fmt-file PATH --check --json` formats the source and compares it to the original: when
+they match it emits the header and a passing result and exits 0, and when they differ it
+emits an `E-FORMAT-0001` diagnostic -- "source is not in canonical layout" -- whose span
+is the first byte that differs, with its one-based line and column from a scan of the
+original, then a failing result and exit 1. This is tooling §6's `--check` and the first
+emission of the registered `E-FORMAT-0001` code. The corpus pins a non-canonical fixture
+(the diagnostic and exit 1) and runs the check over the canonical `fmt.e` (exit 0); both
+are target-independent. Writing the formatted source to stdout with `-` and the `fmt`
+row's other gaps are unchanged.

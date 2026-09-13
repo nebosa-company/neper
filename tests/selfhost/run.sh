@@ -1827,6 +1827,13 @@ fmt_actual="$test_build/conformance-tools-fmt.jsonl"
 $test_build/neper-self fmt-file "$conformance_root/tools/fmt.e" --json > "$fmt_actual"
 cmp -s "$fmt_actual" "$conformance_root/tools/fmt.expected.jsonl" || { printf '%s
 ' "fmt --json differs from the conformance corpus" >&2; exit 1; }
+# `fmt --check --json` (D244): a canonical source passes, a non-canonical one reports E-FORMAT-0001.
+"$test_build/neper-self" fmt-file "$conformance_root/tools/fmt.e" --check --json > /dev/null
+fmt_check_status=0
+$test_build/neper-self fmt-file "$conformance_root/tools/fmt_check.e" --check --json > "$test_build/conformance-tools-fmt-check.jsonl" || fmt_check_status=$?
+[ "$fmt_check_status" -eq 1 ]
+cmp -s "$test_build/conformance-tools-fmt-check.jsonl" "$conformance_root/tools/fmt_check.expected.jsonl" || { printf '%s
+' "fmt --check --json differs from the conformance corpus" >&2; exit 1; }
 # `build-manifest --json` (D236): the canonical manifest with each input's SHA-256, byte for byte.
 manifest_actual="$test_build/conformance-tools-manifest.jsonl"
 $test_build/neper-self build-manifest-file "$conformance_root/tools/manifest.e" "$repo" x64 linux --json > "$manifest_actual"

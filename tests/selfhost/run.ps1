@@ -1689,6 +1689,13 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disActual).Hash -ne (Get-FileH
 $fmtActual = Join-Path $testBuild 'conformance-tools-fmt.jsonl'
 cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt.e')`" --json > `"$fmtActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/fmt.expected.jsonl')).Hash) { throw "fmt --json differs from the conformance corpus" }
+# `fmt --check --json` (D244): a canonical source passes, a non-canonical one reports E-FORMAT-0001.
+cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt.e')`" --check --json > `"$(Join-Path $testBuild 'fmt-check-ok.jsonl')`""
+if ($LASTEXITCODE -ne 0) { throw "fmt --check on a canonical source did not exit 0" }
+$fmtCheckActual = Join-Path $testBuild 'conformance-tools-fmt-check.jsonl'
+cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt_check.e')`" --check --json > `"$fmtCheckActual`""
+if ($LASTEXITCODE -ne 1) { throw "fmt --check on a non-canonical source exited $LASTEXITCODE, expected 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtCheckActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/fmt_check.expected.jsonl')).Hash) { throw "fmt --check --json differs from the conformance corpus" }
 # `build-manifest --json` (D236): the canonical manifest with each input's SHA-256, byte for byte.
 $manifestActual = Join-Path $testBuild 'conformance-tools-manifest.jsonl'
 cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/manifest.e')`" `"$repo`" x64 windows --json > `"$manifestActual`""

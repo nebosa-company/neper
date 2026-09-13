@@ -539,6 +539,84 @@ fn format_into(raw: *Out, source: str) -> err {
     ret ok
 }
 
+// `fmt --check --json` (D242+): the canonical-layout check. Emits E-FORMAT-0001 pointing at
+// the first byte that differs from canonical and exits 1 when the source is not already
+// canonical, and just the header and a passing result when it is.
+fn fmt_check_json(a: *mem.Arena, source: str, path: str) -> (usize, err) {
+    let (formatted, format_error) = format_source(a, source)
+    if format_error != ok { ret (1usize, format_error) }
+    let (storage, storage_error) = mem.alloc[u8](a, source.len + formatted.len + 4096usize)
+    if storage_error != ok { ret (2usize, storage_error) }
+    var out = Out { bytes: storage, count: 0usize }
+    let header_error = header(&out, "fmt")
+    if header_error != ok { ret (2usize, header_error) }
+    var canonical = formatted.len == source.len
+    var diff_at = 0usize
+    if canonical {
+        while diff_at < source.len {
+            if source[diff_at] != formatted[diff_at] {
+                canonical = false
+                diff_at = source.len
+            } else {
+                diff_at += 1usize
+            }
+        }
+    }
+    if canonical {
+        let result_error = fmt_check_result(&out, true)
+        if result_error != ok { ret (2usize, result_error) }
+        ret (0usize, ok)
+    }
+    // The first differing byte, and its one-based line and column by a scan of the original.
+    var first = 0usize
+    while first < source.len && first < formatted.len && source[first] == formatted[first] { first += 1usize }
+    var line = 1usize
+    var column = 1usize
+    var scan = 0usize
+    while scan < first {
+        if source[scan] == 10u8 {
+            line += 1usize
+            column = 1usize
+        } else {
+            column += 1usize
+        }
+        scan += 1usize
+    }
+    let diag_error = fmt_check_diagnostic(&out, path, first, line, column)
+    if diag_error != ok { ret (2usize, diag_error) }
+    let result_error = fmt_check_result(&out, false)
+    if result_error != ok { ret (2usize, result_error) }
+    ret (1usize, ok)
+}
+
+fn fmt_check_diagnostic(out: *Out, path: str, byte_at: usize, line: usize, column: usize) -> err {
+    try text(out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-FORMAT-0001\",\"message\":\"source is not in canonical layout\",\"span\":{\"source\":{\"root\":\"operand\",\"path\":")
+    try quoted(out, path)
+    try text(out, "},\"byte_start\":")
+    try decimal(out, byte_at)
+    try text(out, ",\"byte_end\":")
+    try decimal(out, byte_at)
+    try text(out, ",\"line\":")
+    try decimal(out, line)
+    try text(out, ",\"column\":")
+    try decimal(out, column)
+    try text(out, ",\"end_line\":")
+    try decimal(out, line)
+    try text(out, ",\"end_column\":")
+    try decimal(out, column)
+    try text(out, ",\"column_utf16\":")
+    try decimal(out, column)
+    try text(out, ",\"end_column_utf16\":")
+    try decimal(out, column)
+    try text(out, "},\"parent\":null,\"related\":[],\"fixes\":[]}")
+    ret flush(out)
+}
+
+fn fmt_check_result(out: *Out, canonical: bool) -> err {
+    if canonical { try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"diagnostics\":0}}") } else { try text(out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"diagnostics\":1}}") }
+    ret flush(out)
+}
+
 // `fmt --json` (D234): one `formatted` record whose `text` is the canonical layout.
 fn fmt_json(a: *mem.Arena, source: str) -> (usize, err) {
     let (formatted, format_error) = format_source(a, source)
