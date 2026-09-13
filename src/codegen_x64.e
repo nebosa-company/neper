@@ -2130,6 +2130,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                             try emit_x64.mov_register(output, 2usize, 11usize)
                         } else {
                             if instruction.operand_count != 0usize { ret Unsupported }
+                            // The entry's void return is the exit status the startup reads
+                            // from eax (D230): zero, not whatever the body left there.
+                            if current.module_index == 0usize && check.same(current.name, "main") { try emit_x64.mov_immediate(output, 0usize, 0usize) }
                         }
                     }
                     try emit_x64.function_epilogue(output)

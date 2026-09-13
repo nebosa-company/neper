@@ -1,0 +1,2 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"build","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-build.out","diagnostics":0}}

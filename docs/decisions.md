@@ -4163,3 +4163,19 @@ runtime has a host intrinsic. Because the host differs, tests/conformance/tools/
 holds one expected stream per host, `info.x64-linux` and `info.x64-windows`, and
 each suite compares its own byte for byte. `--language-version` and the other CPU
 levels of the spec's table are not here.
+
+## D230 — `emit-executable --json` is the build stream
+
+With `--json` as a trailing flag, `emit-executable` writes the section 1 header
+with command `build` to stdout, every diagnostic of the build as a `diagnostic`
+record -- the lowering, code-selection and error-table printers, which still wrote
+bare lines, now go through the one emitter of D228 so no stream ever carries one --
+and a result last: on success `data.executable` is the output path exactly as it
+was given, on any failure the diagnostic count with exit 1, and an operand that is
+not a module is `E-CLI-9999` with exit 2, as `check-file` has it. The conformance
+corpus pins both a program that builds and one that is rejected, run from the suite's
+build directory so the executable's name is the same on both hosts. The build
+manifest, the `--target`/`-o` spellings and a project root as operand are not here.
+The corpus's empty program found a startup bug: both hosts exit with `eax != 0`
+after `main` returns, so a void `main` exited with whatever its body left in eax --
+0 from one shell, 1 from another. The entry's empty return now zeroes eax.

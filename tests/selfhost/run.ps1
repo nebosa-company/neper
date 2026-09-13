@@ -1660,6 +1660,17 @@ $infoActual = Join-Path $testBuild 'conformance-tools-info.jsonl'
 cmd /c "`"$compiler`" info --json > `"$infoActual`""
 if ($LASTEXITCODE -ne 0) { throw "info --json exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $infoActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\info.x64-windows.expected.jsonl')).Hash) { throw "info --json differs from the conformance corpus" }
+# `emit-executable --json` (D230): the build stream, the executable named as given,
+# a rejected program's diagnostics as records; both byte for byte from testBuild.
+foreach ($case in @(@('tools\build.e', 'build', 0), @('reject\scope.e', 'build_reject', 1))) {
+    $buildActual = Join-Path $testBuild "conformance-tools-$($case[1]).jsonl"
+    cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot $case[0])`" `"$repo`" x64 windows conformance-tools-$($case[1]).out --json > `"$buildActual`""
+    if ($LASTEXITCODE -ne $case[2]) { throw "emit-executable --json on $($case[0]) exited $LASTEXITCODE" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $buildActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools\$($case[1]).expected.jsonl")).Hash) { throw "emit-executable --json on $($case[0]) differs from the conformance corpus" }
+}
+Copy-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out') -Destination (Join-Path $testBuild 'conformance-tools-build.exe') -Force
+& (Join-Path $testBuild 'conformance-tools-build.exe')
+if ($LASTEXITCODE -ne 0) { throw "the executable of build --json exited $LASTEXITCODE" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'

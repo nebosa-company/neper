@@ -80,8 +80,8 @@ compiler = {
  ],
 }
 tooling = [
- ("JSONL v1 stream envelope and version header", 0.75, "The header, diagnostic, token, syntax and result records of section 1 (D227, D228), each a line, the result last with the exit status; emitted by `tokens`, `parse`, `check-file` and `info` (D229). Not yet: `build`, `run`, `test`, `fmt`, `index`, `dis`"),
- ("build", 0, "emit-executable only, human output"),
+ ("JSONL v1 stream envelope and version header", 0.8, "The header, diagnostic, token, syntax and result records of section 1 (D227, D228), each a line, the result last with the exit status; emitted by `tokens`, `parse`, `check-file`, `info` (D229) and `emit-executable` (D230). Not yet: `run`, `test`, `fmt`, `index`, `dis`"),
+ ("build", 0.5, "`emit-executable PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D230): the section 1 header with command `build`, every front-end, lowering, code-selection and error-table diagnostic as a record, and the result naming the executable as it was given; tests/conformance/tools pins a program that builds and one that is rejected. Not yet: the build manifest, `--target` and `-o` spellings, a project root as operand, warnings"),
  ("check", 0.7, "`check-file PATH ROOT ARCH OS --json` (D228): the header, a `diagnostic` record for every error the front end reports -- lexical, syntax, module, resolution and checking, each with its registered code, message and span -- an unreadable operand as a location-free E-CLI-9999 with exit 2, the `result` with the exit status, and nothing on stderr; every diagnostic printer goes through one emitter that writes the human line or the record. tests/conformance/accept and reject pin five streams byte for byte on both platforms. Not yet: notes, fixes, project roots and `neper check` over a project"),
  ("run", 0, "not started"),
  ("test and @test discovery", 0, "not started"),
@@ -95,7 +95,7 @@ tooling = [
  ("Stable diagnostic codes from diagnostics.md", 0.65, "18 of 30 registered codes are emitted (D215), and every one reaches the JSON stream as a `diagnostic` record with its span (D228): E-CLI-9999 for the usage line, E-LEX-0001/0002/0003/9999 for the token the scanner refused by the byte it starts at, E-MODULE-0001 for a `use` naming no module or one defined by both roots and E-MODULE-0002 for one closing a cycle, each at the module that wrote it, E-COMPTIME-9999 for a reflection shape and E-MEM-9999 for an atomic's element or ordering, beside the E-NAME, E-TYPE, E-ERROR and E-LINK codes already there; check/module_missing, module_cycle, lex_literal, lex_tab, lex_utf8 pin them. Not yet: E-SYNTAX-0012, E-GPU, E-SAFETY, E-TEST, E-FORMAT and E-TOOL, whose subjects do not exist to diagnose"),
  ("Build manifest with versions and SHA-256", 0.25, "artifact_hash.e covers .em only"),
  ("Generated source maps", 0, "not started"),
- ("Conformance corpus accept/reject/format/tokens/parse/tools", 0.6, "tests/conformance/tokens, parse, accept, reject and tools exist with byte-exact expected streams the suites compare on both platforms (D227, D228, D229: tools/ holds one `info` stream per host); format does not"),
+ ("Conformance corpus accept/reject/format/tokens/parse/tools", 0.6, "tests/conformance/tokens, parse, accept, reject and tools exist with byte-exact expected streams the suites compare on both platforms (D227, D228, D229: tools/ holds one `info` stream per host, D230: a build and a rejected build); format does not"),
  ("Module-plan validation in CI", 1, "check_module_plan.py 128 modules; check_module_surfaces.py 9 sources"),
  ("Reproducible-build check", 0.5, "compiler fixed point in both suites"),
  ("Generated-code benchmark corpus", 0.5, "benchmarks/llm_edit"),

@@ -1793,6 +1793,18 @@ info_actual="$test_build/conformance-tools-info.jsonl"
 $test_build/neper-self info --json > "$info_actual"
 cmp -s "$info_actual" "$conformance_root/tools/info.x64-linux.expected.jsonl" || { printf '%s
 ' "info --json differs from the conformance corpus" >&2; exit 1; }
+# `emit-executable --json` (D230): the build stream, the executable named as given,
+# a rejected program's diagnostics as records; both byte for byte from test_build.
+for build_case in 'tools/build.e build 0' 'reject/scope.e build_reject 1'; do
+    set -- $build_case
+    build_status=0
+    (cd "$test_build" && ./neper-self emit-executable "$conformance_root/$1" "$repo" x64 linux "conformance-tools-$2.out" --json > "conformance-tools-$2.jsonl") || build_status=$?
+    [ "$build_status" -eq "$3" ]
+    cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { printf '%s
+' "emit-executable --json on $1 differs from the conformance corpus" >&2; exit 1; }
+done
+chmod +x "$test_build/conformance-tools-build.out"
+"$test_build/conformance-tools-build.out"
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"
