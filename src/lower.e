@@ -3721,6 +3721,13 @@ fn lower_when(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     ret ok
 }
 
+// An `else if` is an IfStmt standing where the else block would (grammar if_stmt): lower it
+// as the nested `if` it is, so the chain needs no extra block or merge of its own.
+fn lower_branch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
+    if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
+    ret lower_block(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers)
+}
+
 fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
     var condition_index = 0usize
     var found_condition = false
@@ -3736,7 +3743,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
                 condition_index = child_index
                 found_condition = true
             } else {
-                if child.kind != .Block || branch_count == branches.len { ret check.Unsupported }
+                if (child.kind != .Block && child.kind != .IfStmt) || branch_count == branches.len { ret check.Unsupported }
                 branches[branch_count] = child_index
                 branch_count += 1usize
             }
@@ -3751,7 +3758,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let (taken, settled) = check.comptime_condition(c, g, tree, module_index, condition_index)
     if settled {
         if taken { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers) }
-        if branch_count == 2usize { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
+        if branch_count == 2usize { ret lower_branch(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
         ret ok
     }
     let boolean = check.make_type(.Bool, "bool", module_index)
@@ -3776,7 +3783,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let false_block = builder.block_count
     let (false_index, false_error) = nir.begin_block(builder)
     if false_error != ok || false_index != false_block { ret nir.InvalidControlFlow }
-    if branch_count == 2usize { try lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
+    if branch_count == 2usize { try lower_branch(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
     var false_exit = 0usize
     let false_falls_through = !builder.blocks[builder.current_block].terminated
     if false_falls_through {

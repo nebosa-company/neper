@@ -2338,6 +2338,12 @@ control_executable_written=$($test_build/neper-self emit-executable "$repo/tests
 [ "$control_executable_written" = 'executable written' ]
 chmod +x "$control_executable_path"
 "$control_executable_path"
+# `else if` (D245): the grammar's chained form, lowered as the nested if it is.
+else_if_executable_path="$test_build/else-if-selfhost"
+else_if_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/else_if/src/main.e" "$repo" x64 linux "$else_if_executable_path")
+[ "$else_if_executable_written" = 'executable written' ]
+chmod +x "$else_if_executable_path"
+"$else_if_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]

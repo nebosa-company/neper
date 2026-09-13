@@ -4494,3 +4494,24 @@ emission of the registered `E-FORMAT-0001` code. The corpus pins a non-canonical
 (the diagnostic and exit 1) and runs the check over the canonical `fmt.e` (exit 0); both
 are target-independent. Writing the formatted source to stdout with `-` and the `fmt`
 row's other gaps are unchanged.
+
+## D245 -- `else if` lowers as the nested `if` it is
+
+The grammar has always had the chained form -- `if_stmt = if expression block (else (if
+expression block | block))?` -- and the parser and checker accepted it, but lowering only
+took a `Block` as an else branch and refused an `IfStmt` there with "construct is not
+implemented in self-hosted lowering". `lower_if` now accepts an `IfStmt` as the else
+branch and lowers it by recursing into itself, so a chain is the nested `if` it already
+was to the checker: no extra block or merge of its own, and `break`/`continue`/`ret`
+inside any arm behave as they do in a plain nested `if`. link/else_if pins chains that
+return from every arm, fall through to a shared merge inside a loop with `break` and
+`continue`, and an open-ended chain with no final `else`.
+
+Two findings from the generation benchmark that prompted this. `else if` is not a token
+saving -- the nested form and the chain tokenize identically -- but it removes a real
+trap: a model writing the natural `} else if` got a baffling lowering error. And the
+failure that looked like `printf` breaking under `else if` was not the compiler at all:
+`build/lib/e/` holds a stale partial copy of the library (`io.e`, `os.e`, no `str.e`), and
+project-root discovery walking up from an operand under `build/` selects it, so `e.str`
+never enters the graph. Compile nothing from under `build/`; the benchmark's tasks live
+under `benchmarks/` for that reason.

@@ -2115,6 +2115,12 @@ $controlExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot
 if ($LASTEXITCODE -ne 0 -or $controlExecutableWritten -ne 'executable written') { throw 'control-flow PE executable emission failed' }
 & $controlExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'branches, loops, short-circuit logic, or direct calls failed in the self-hosted PE executable' }
+# `else if` (D245): the grammar's chained form, lowered as the nested if it is.
+$elseIfExecutablePath = Join-Path $testBuild 'else-if-selfhost.exe'
+$elseIfExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\else_if\src\main.e') $repo 'x64' 'windows' $elseIfExecutablePath
+if ($LASTEXITCODE -ne 0 -or $elseIfExecutableWritten -ne 'executable written') { throw 'else-if PE executable emission failed' }
+& $elseIfExecutablePath
+if ($LASTEXITCODE -ne 0) { throw "else-if chains failed check $LASTEXITCODE in the self-hosted PE executable" }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }
