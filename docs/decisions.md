@@ -4026,3 +4026,17 @@ come back a bool: `when LEVEL > 2i64 && enabled(LEVEL)` is settled by the consta
 and the call. One it cannot evaluate -- a local, which is runtime state -- is
 refused under E-COMPTIME-9999 saying what it reached, in place of D216's report of
 the shape allowed.
+
+## D221 — Array locals and `for` over a range in the interpreter
+
+D218's frame held scalars. It now holds cells as well: `var t: [N]u8 = zero` binds
+an array local whose element type is an integer or bool and whose length the
+length evaluator settles, over a run of zeroed cells in the frame; `t[i]` reads and
+writes a cell with the bounds check section 11 would apply at run time, `t.len` is
+the length, the compound assignments work on a cell, and the cells go with their
+scope as the locals do. `for i in a..b` binds the counter and steps it. `zero` turned
+out to be a token of the binding statement rather than a node, which a scalar
+binding of `zero` now also takes. An array does not cross a call: it is the frame's,
+and a slice of it would be the interpreter memory the section describes. A sieve in
+link/comptime_call counts the primes below sixty-four at compile time and at run
+time and finds them equal.

@@ -4115,6 +4115,13 @@ type InterpFrame = struct {
     names: [48]str,
     values: [48]IntegerValue,
     types: [48]Type,
+    // An array local (D221): `is_array` set, `types` its element type, `bases` and
+    // `lengths` its run of cells. Arrays live in their frame and do not cross a call.
+    is_array: [48]bool,
+    bases: [48]usize,
+    lengths: [48]usize,
+    cells: [512]IntegerValue,
+    cell_count: usize,
     count: usize,
     marks: [16]usize,
     mark_count: usize,
@@ -4246,8 +4253,60 @@ fn interp_bind(frame: *InterpFrame, name: str, value: IntegerValue, ty: Type) ->
     frame.names[frame.count] = name
     frame.values[frame.count] = value
     frame.types[frame.count] = ty
+    frame.is_array[frame.count] = false
     frame.count += 1usize
     ret ok
+}
+
+// An array local of `length` zeroed cells of `element`; the cells are given back
+// with the scope, as the locals are.
+fn interp_bind_array(c: *Checker, module_index: usize, node: syntax.Node, frame: *InterpFrame, name: str, element: Type, length: usize) -> err {
+    if frame.count == frame.names.len { ret Capacity }
+    if length > frame.cells.len - frame.cell_count { ret interp_fail(c, module_index, node, "an array past the cells a frame holds") }
+    frame.names[frame.count] = name
+    frame.values[frame.count] = normalized_integer(0usize, false)
+    frame.types[frame.count] = element
+    frame.is_array[frame.count] = true
+    frame.bases[frame.count] = frame.cell_count
+    frame.lengths[frame.count] = length
+    var at = 0usize
+    while at < length {
+        frame.cells[frame.cell_count + at] = normalized_integer(0usize, false)
+        at += 1usize
+    }
+    frame.cell_count += length
+    frame.count += 1usize
+    ret ok
+}
+
+// `t[i]` on an array local: the cell, bounds checked as section 11 would at run time.
+fn interp_cell(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, node: syntax.Node) -> (usize, usize, err) {
+    let module_index = frame.module_index
+    let text = g.modules[module_index].text
+    var base_index = 0usize
+    var index_index = 0usize
+    var count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if count == 0usize { base_index = tree.children[at].index }
+            if count == 1usize { index_index = tree.children[at].index }
+            count += 1usize
+        }
+        at += 1usize
+    }
+    if count != 2usize { ret (0usize, 0usize, interp_fail(c, module_index, node, "an index of a shape it does not evaluate")) }
+    let base = tree.nodes[base_index]
+    if base.kind != .NameExpr { ret (0usize, 0usize, interp_fail(c, module_index, node, "an index into something that is not an array local")) }
+    let base_token = c.tokens[base.token_start]
+    let (slot, found) = interp_lookup(frame, text[base_token.start..base_token.end])
+    if !found || !frame.is_array[slot] { ret (0usize, 0usize, interp_fail(c, module_index, node, "an index into something that is not an array local")) }
+    let (index, index_type, index_error) = interp_expr(c, g, tree, frame, index_index, make_type(.Integer, "usize", module_index))
+    if index_error != ok { ret (0usize, 0usize, index_error) }
+    if index_type.kind != .Integer || index.negative { ret (0usize, 0usize, interp_fail(c, module_index, node, "an index that is not a usize")) }
+    if index.magnitude >= frame.lengths[slot] { ret (0usize, 0usize, interp_fail(c, module_index, node, "an index out of bounds")) }
+    ret (slot, frame.bases[slot] + index.magnitude, ok)
 }
 
 fn interp_bool_type(module_index: usize) -> Type { ret make_type(.Bool, "bool", module_index) }
@@ -4317,7 +4376,28 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         if dependency_error != ok { ret (none, invalid_type(), dependency_error) }
         ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
     }
+    if node.kind == .BracketPostfix {
+        let (slot, cell, cell_error) = interp_cell(c, g, tree, frame, node)
+        if cell_error != ok { ret (none, invalid_type(), cell_error) }
+        ret (frame.cells[cell], frame.types[slot], ok)
+    }
     if node.kind == .FieldExpr {
+        // `t.len` of an array local, before a qualified constant is tried.
+        let (receiver_index, has_receiver) = first_node_child(tree, node)
+        if has_receiver && tree.nodes[receiver_index].kind == .NameExpr {
+            let receiver_token = c.tokens[tree.nodes[receiver_index].token_start]
+            let (slot, found_local) = interp_lookup(frame, text[receiver_token.start..receiver_token.end])
+            if found_local {
+                if !frame.is_array[slot] { ret (none, invalid_type(), interp_fail(c, module_index, node, "a field, which no value here has")) }
+                var member_at = node.token_end
+                while member_at > tree.nodes[receiver_index].token_end {
+                    member_at = member_at - 1usize
+                    if c.tokens[member_at].kind == .Identifier { break }
+                }
+                if !same(text[c.tokens[member_at].start..c.tokens[member_at].end], "len") { ret (none, invalid_type(), interp_fail(c, module_index, node, "a field of an array other than `len`")) }
+                ret (normalized_integer(frame.lengths[slot], false), make_type(.Integer, "usize", module_index), ok)
+            }
+        }
         let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
         if !found_member { ret (none, invalid_type(), interp_fail(c, module_index, node, "a field, which no value here has")) }
         let (constant_index, found_constant) = find_constant(c, target_module, member)
@@ -4598,6 +4678,14 @@ fn interp_block(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpF
     }
     frame.mark_count = frame.mark_count - 1usize
     frame.count = frame.marks[frame.mark_count]
+    // The cells of the arrays that went out of scope go with them.
+    var cells = 0usize
+    var live = 0usize
+    while live < frame.count {
+        if frame.is_array[live] && frame.bases[live] + frame.lengths[live] > cells { cells = frame.bases[live] + frame.lengths[live] }
+        live += 1usize
+    }
+    frame.cell_count = cells
     ret (control, ok)
 }
 
@@ -4617,6 +4705,8 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         var declared_type = invalid_type()
         var initializer_index = 0usize
         var has_initializer = false
+        var array_type_index = 0usize
+        var has_array_type = false
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
@@ -4632,18 +4722,59 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
                         declared_type = primitive_type(text[type_token.start..type_token.end], module_index)
                         if declared_type.kind != .Integer && declared_type.kind != .Bool { ret (0usize, interp_fail(c, module_index, node, "a binding of a type that is not an integer or bool")) }
                     } else {
-                        if is_type_node(child.kind) { ret (0usize, interp_fail(c, module_index, node, "a binding of a type that is not an integer or bool")) }
-                        initializer_index = child_index
-                        has_initializer = true
+                        if child.kind == .ArrayType {
+                            array_type_index = child_index
+                            has_array_type = true
+                        } else {
+                            if is_type_node(child.kind) { ret (0usize, interp_fail(c, module_index, node, "a binding of a type that is not an integer, bool or array")) }
+                            initializer_index = child_index
+                            has_initializer = true
+                        }
                     }
                 }
             }
             at += 1usize
         }
-        if !has_binding || !has_initializer { ret (0usize, interp_fail(c, module_index, node, "a binding without a value")) }
+        // `zero` is a token of the statement, not a node of its own.
+        let zeroed = contains_token(c, node.token_start, node.token_end, .KwZero)
+        if !has_binding || (!has_initializer && !zeroed) { ret (0usize, interp_fail(c, module_index, node, "a binding without a value")) }
         let binding = tree.nodes[binding_index]
         let binding_token = c.tokens[binding.token_start]
         if binding_token.kind != .Identifier { ret (0usize, interp_fail(c, module_index, node, "a binding that is not one name")) }
+        if !has_array_type && !has_initializer {
+            if declared_type.kind == .Invalid { ret (0usize, interp_fail(c, module_index, node, "`zero` with no type")) }
+            let zero_bind_error = interp_bind(frame, text[binding_token.start..binding_token.end], normalized_integer(0usize, false), declared_type)
+            if zero_bind_error != ok { ret (0usize, zero_bind_error) }
+            ret (interp_control_next(), ok)
+        }
+        if has_array_type {
+            // `var t: [N]u8 = zero` (D221): a length the length evaluator settles, an
+            // element type that is an integer or bool, and `zero` as the value.
+            let array_node = tree.nodes[array_type_index]
+            var length_index = 0usize
+            var element_index = 0usize
+            var array_children = 0usize
+            let array_end = array_node.first_child + array_node.child_count
+            var array_at = array_node.first_child
+            while array_at < array_end {
+                if tree.children[array_at].node {
+                    if array_children == 0usize { length_index = tree.children[array_at].index }
+                    if array_children == 1usize { element_index = tree.children[array_at].index }
+                    array_children += 1usize
+                }
+                array_at += 1usize
+            }
+            if array_children != 2usize || tree.nodes[element_index].kind != .NamedType { ret (0usize, interp_fail(c, module_index, node, "an array of a shape it does not evaluate")) }
+            let (length, length_error) = array_length_value(c, g, tree, module_index, length_index)
+            if length_error != ok { ret (0usize, interp_fail(c, module_index, node, "an array length it cannot settle")) }
+            let element_token = c.tokens[tree.nodes[element_index].token_start]
+            let element = primitive_type(text[element_token.start..element_token.end], module_index)
+            if element.kind != .Integer && element.kind != .Bool { ret (0usize, interp_fail(c, module_index, node, "an array of elements that are not integers or bools")) }
+            if has_initializer || !zeroed { ret (0usize, interp_fail(c, module_index, node, "an array with a value other than `zero`")) }
+            let array_bind_error = interp_bind_array(c, module_index, node, frame, text[binding_token.start..binding_token.end], element, length)
+            if array_bind_error != ok { ret (0usize, array_bind_error) }
+            ret (interp_control_next(), ok)
+        }
         let (value, value_type, value_error) = interp_expr(c, g, tree, frame, initializer_index, declared_type)
         if value_error != ok { ret (0usize, value_error) }
         let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, value, value_type, declared_type)
@@ -4669,18 +4800,32 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         }
         if count != 2usize { ret (0usize, interp_fail(c, module_index, node, "an assignment that is not `name op= value`")) }
         let place = tree.nodes[place_index]
-        if place.kind != .NameExpr { ret (0usize, interp_fail(c, module_index, node, "an assignment to a place that is not a local")) }
-        let place_token = c.tokens[place.token_start]
-        let (slot, found) = interp_lookup(frame, text[place_token.start..place_token.end])
-        if !found { ret (0usize, interp_fail(c, module_index, node, "an assignment to a name that is no local")) }
+        var slot = 0usize
+        var cell = 0usize
+        var into_cell = false
+        if place.kind == .BracketPostfix {
+            let (array_slot, found_cell, cell_error) = interp_cell(c, g, tree, frame, place)
+            if cell_error != ok { ret (0usize, cell_error) }
+            slot = array_slot
+            cell = found_cell
+            into_cell = true
+        } else {
+            if place.kind != .NameExpr { ret (0usize, interp_fail(c, module_index, node, "an assignment to a place that is not a local")) }
+            let place_token = c.tokens[place.token_start]
+            let (found_slot, found) = interp_lookup(frame, text[place_token.start..place_token.end])
+            if !found || frame.is_array[found_slot] { ret (0usize, interp_fail(c, module_index, node, "an assignment to a name that is no scalar local")) }
+            slot = found_slot
+        }
         let op = assignment_operator(c, place.token_end, tree.nodes[value_index].token_start)
         let slot_type = frame.types[slot]
+        var current = frame.values[slot]
+        if into_cell { current = frame.cells[cell] }
         let (value, value_type, value_error) = interp_expr(c, g, tree, frame, value_index, slot_type)
         if value_error != ok { ret (0usize, value_error) }
         if op == .PunctAssign {
             let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, value, value_type, slot_type)
             if convert_error != ok { ret (0usize, convert_error) }
-            frame.values[slot] = converted
+            if into_cell { frame.cells[cell] = converted } else { frame.values[slot] = converted }
             ret (interp_control_next(), ok)
         }
         let binary = compound_base_operator(op)
@@ -4695,10 +4840,10 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
             right_type = converted_type
         }
         if (binary == .PunctSlash || binary == .PunctPercent) && value.magnitude == 0usize { ret (0usize, interp_fail(c, module_index, node, "a division by zero")) }
-        let (result, result_error) = evaluate_integer_binary(binary, frame.values[slot], value, slot_type, right_type)
+        let (result, result_error) = evaluate_integer_binary(binary, current, value, slot_type, right_type)
         if result_error != ok { ret (0usize, interp_fail(c, module_index, node, "a compound assignment it does not evaluate")) }
         if binary != .PunctAddWrap && binary != .PunctSubWrap && binary != .PunctMulWrap && !integer_representable(result, slot_type) { ret (0usize, interp_fail(c, module_index, node, "a result the type cannot hold")) }
-        frame.values[slot] = result
+        if into_cell { frame.cells[cell] = result } else { frame.values[slot] = result }
         ret (interp_control_next(), ok)
     }
     if node.kind == .ReturnStmt {
@@ -4714,6 +4859,55 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
     }
     if node.kind == .BreakStmt { ret (interp_control_break(), ok) }
     if node.kind == .ContinueStmt { ret (interp_control_continue(), ok) }
+    if node.kind == .ForStmt {
+        // `for i in a..b { }` (D221): the name after `for`, the two bounds, the body.
+        var parts: [3]usize = zero
+        var part_count = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if part_count == parts.len { ret (0usize, interp_fail(c, module_index, node, "a `for` of a shape it does not evaluate")) }
+                parts[part_count] = tree.children[at].index
+                part_count += 1usize
+            }
+            at += 1usize
+        }
+        if part_count != 3usize { ret (0usize, interp_fail(c, module_index, node, "a `for` that is not over a range")) }
+        let name_token = c.tokens[node.token_start + 1usize]
+        if name_token.kind != .Identifier { ret (0usize, interp_fail(c, module_index, node, "a `for` of a shape it does not evaluate")) }
+        let (low, low_type, low_error) = interp_expr(c, g, tree, frame, parts[0usize], invalid_type())
+        if low_error != ok { ret (0usize, low_error) }
+        let (high, raw_high_type, high_error) = interp_expr(c, g, tree, frame, parts[1usize], low_type)
+        if high_error != ok { ret (0usize, high_error) }
+        let (range_type, range_error) = constant_result_type(c, low_type, raw_high_type)
+        if range_error != ok { ret (0usize, interp_fail(c, module_index, node, "a range over two integer types")) }
+        var counter_type = range_type
+        if counter_type.kind == .UntypedInteger { counter_type = make_type(.Integer, "usize", module_index) }
+        if frame.mark_count == frame.marks.len { ret (0usize, Capacity) }
+        frame.marks[frame.mark_count] = frame.count
+        frame.mark_count += 1usize
+        let bind_error = interp_bind(frame, text[name_token.start..name_token.end], low, counter_type)
+        if bind_error != ok { ret (0usize, bind_error) }
+        let counter = frame.count - 1usize
+        var control = interp_control_next()
+        while interp_compare(.PunctLt, frame.values[counter], high) {
+            let (body_control, body_error) = interp_statement(c, g, tree, frame, parts[2usize])
+            if body_error != ok { ret (0usize, body_error) }
+            if body_control == interp_control_return() {
+                control = body_control
+                break
+            }
+            if body_control == interp_control_break() { break }
+            let one = normalized_integer(1usize, false)
+            let (next, next_error) = evaluate_integer_binary(.PunctPlus, frame.values[counter], one, counter_type, counter_type)
+            if next_error != ok { ret (0usize, interp_fail(c, module_index, node, "a range it cannot step")) }
+            frame.values[counter] = next
+        }
+        frame.mark_count = frame.mark_count - 1usize
+        frame.count = frame.marks[frame.mark_count]
+        ret (control, ok)
+    }
     if node.kind == .IfStmt || node.kind == .WhileStmt {
         var condition_index = 0usize
         var found_condition = false

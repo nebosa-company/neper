@@ -5,7 +5,8 @@
 // second module. Each constant
 // is checked against the value the same code gives at run time, and one is an array
 // length, which only a value settled at compile time can be, and a call stands in a
-// length and a `[...]` argument directly (D219). Exit 0 when all agree.
+// length and a `[...]` argument directly (D219), and one runs a sieve over an array
+// local with a `for` (D221). Exit 0 when all agree.
 use e.os
 use table
 
@@ -16,6 +17,7 @@ const SIGNED_FLOOR = floor_div(-7, 2)
 const TABLE_SUM = table.checksum(16u32)
 const LEAP_2024 = leap_flag(2024)
 const SHIFTED: u8 = u8(narrow(300u32))
+const SIEVED = sieve_count(64usize)
 
 fn fib(n: i64) -> i64 {
     var a = 0i64
@@ -70,6 +72,23 @@ fn leap_flag(year: i64) -> i64 {
     ret 0i64
 }
 
+// A sieve (D221): an array local of bools, indexed reads and writes, `.len`, and a
+// `for` over a range, all in the interpreter's frame.
+fn sieve_count(limit: usize) -> usize {
+    var composite: [64]bool = zero
+    var count = 0usize
+    for n in 2usize..limit {
+        if composite[n] { continue }
+        count += 1usize
+        var multiple = n * n
+        while multiple < composite.len {
+            composite[multiple] = true
+            multiple += n
+        }
+    }
+    ret count
+}
+
 fn narrow(x: u32) -> u32 {
     let halved = x >> 1u32
     ret halved & 255u32
@@ -94,5 +113,6 @@ fn main() {
     if TABLE_SUM != table.checksum(16u32) || TABLE_SUM != 1224u32 { os.exit(15) }
     if LEAP_2024 != 1i64 || LEAP_2024 != leap_flag(2024) || leap_flag(1900) != 0i64 { os.exit(16) }
     if SHIFTED != 150u8 { os.exit(17) }
+    if SIEVED != 18usize || SIEVED != sieve_count(64usize) { os.exit(20) }
     os.exit(0)
 }
