@@ -109,13 +109,60 @@ fn resolve_calls(builder: *nir.Builder, function_offsets: []usize, relocations: 
     ret ok
 }
 
+// The allocator's registers: five the calls clobber -- rax, rcx, rdx, r8, r9 -- and
+// then five the callee keeps -- rbx, r12, r13, r14, r15 (D235). A value in one of the
+// second five survives every call untouched, and the function saves the register at
+// its entry and restores it at its returns, in a slot of its own.
 fn hardware_register(index: usize) -> (usize, err) {
     if index == 0usize { ret (0usize, ok) }
     if index == 1usize { ret (1usize, ok) }
     if index == 2usize { ret (2usize, ok) }
     if index == 3usize { ret (8usize, ok) }
     if index == 4usize { ret (9usize, ok) }
+    if index == 5usize { ret (3usize, ok) }
+    if index == 6usize { ret (12usize, ok) }
+    if index == 7usize { ret (13usize, ok) }
+    if index == 8usize { ret (14usize, ok) }
+    if index == 9usize { ret (15usize, ok) }
     ret (0usize, Unsupported)
+}
+
+fn caller_saved_count() -> usize { ret 5usize }
+fn register_pool_count() -> usize { ret 10usize }
+
+// How many of the callee-saved registers the function's values are allocated to,
+// counted from the first: the slots at its entry are one per register in use.
+fn callee_saved_count(allocations: []regalloc.Allocation, value_count: usize) -> usize {
+    var highest = 0usize
+    var value = 0usize
+    while value < value_count && value < allocations.len {
+        let allocation = allocations[value]
+        if allocation.kind == .Register && allocation.index >= caller_saved_count() && allocation.index + 1usize - caller_saved_count() > highest { highest = allocation.index + 1usize - caller_saved_count() }
+        value += 1usize
+    }
+    ret highest
+}
+
+fn save_callee_registers(output: *emit_x64.Buffer, base: usize, count: usize) -> err {
+    var at = 0usize
+    while at < count {
+        let (physical, physical_error) = hardware_register(caller_saved_count() + at)
+        if physical_error != ok { ret physical_error }
+        try emit_x64.store_stack(output, base + at, physical)
+        at += 1usize
+    }
+    ret ok
+}
+
+fn restore_callee_registers(output: *emit_x64.Buffer, base: usize, count: usize) -> err {
+    var at = 0usize
+    while at < count {
+        let (physical, physical_error) = hardware_register(caller_saved_count() + at)
+        if physical_error != ok { ret physical_error }
+        try emit_x64.load_stack(output, physical, base + at)
+        at += 1usize
+    }
+    ret ok
 }
 
 fn value_register(allocations: []regalloc.Allocation, value: usize) -> (usize, err) {
@@ -140,6 +187,10 @@ fn read_preserved_value(allocations: []regalloc.Allocation, value: usize, scratc
     if value >= allocations.len { ret (0usize, Unsupported) }
     let allocation = allocations[value]
     if allocation.kind == .Register {
+        if allocation.index >= caller_saved_count() {
+            let (physical, physical_error) = hardware_register(allocation.index)
+            ret (physical, physical_error)
+        }
         let load_error = emit_x64.load_stack(output, scratch, preserve_base + allocation.index)
         ret (scratch, load_error)
     }
@@ -1657,11 +1708,16 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         if abi == .Windows { call_area_count = 4usize }
         if outgoing > register_count { call_area_count += outgoing - register_count }
     }
-    let frame_slots = preserve_base + preserve_count + call_area_count
+    // The callee-saved registers in use are kept in slots of their own, between the
+    // preserve area and the call area, which has to stay at the bottom (D235).
+    let saved_base = preserve_base + preserve_count
+    let saved_count = callee_saved_count(allocations, current.value_count)
+    let frame_slots = saved_base + saved_count + call_area_count
     // Every function has a frame, even one with no slots: the backtrace walks the rbp
     // chain, and a frameless function that calls -- or traps -- would be no frame in
     // it, and its caller would be skipped (D212).
     try emit_x64.function_prologue(output, frame_slots)
+    try save_callee_registers(output, saved_base, saved_count)
     try store_incoming_parameters(builder, current, abi, stack_slots, parameters, output)
     let end = current.first_instruction + current.instruction_count
     var fixup_count = 0usize
@@ -2135,6 +2191,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                             if current.module_index == 0usize && check.same(current.name, "main") { try emit_x64.mov_immediate(output, 0usize, 0usize) }
                         }
                     }
+                    try restore_callee_registers(output, saved_base, saved_count)
                     try emit_x64.function_epilogue(output)
                 } else {
                     ret Unsupported

@@ -4235,3 +4235,26 @@ form, so the golden -- one `formatted` record -- also pins idempotence, and name
 target so one stream serves both hosts. Gaps: wrapping a list past 100 columns,
 joining an empty block to `{}` or `}`..`else`, sorting `use` and attributes,
 minimizing raw-string delimiters, and the `--check` and stdin spellings.
+
+## D235 -- The allocator's pool is ten registers, five of them callee-saved
+
+The allocator had five registers, rax, rcx, rdx, r8 and r9, all of which a call
+clobbers, so a value live across a call was saved and reloaded at every call and a
+function with more than five values live at once spilled the rest. The pool is ten
+now: rbx, r12, r13, r14 and r15 follow the first five, and the first free index wins,
+so a function that fits in five is as it was. The callee-saved five cost one store
+at the entry and one load before each return, in slots of their own between the
+preserve area and the call area -- the call area has to stay at the bottom of the
+frame -- and only for the registers the function's values actually reached; the live
+mask that D226 saves around a call considers the first five alone, since a callee
+keeps the others, and a fixed-register sequence reads a value in one of them where it
+is rather than from the preserve area. The emitter had refused rsp, rbp, r12 and r13
+as a base with no displacement, which the mod 00 row cannot spell; the first pair is
+a SIB byte naming itself, the second a zero eight-bit displacement. The runtime's
+routines were checked for the five: only `neper_trap` writes them, and it does not
+return. Measured on `e.fmt.json` over the standard files, best of four interleaved
+against the previous compiler: one to nine per cent faster, and a byte-counting
+loop fifteen; the compiler's image is three per cent larger for the saves. The
+larger cost stays where it was: a `var` is a stack object, every use of it a load or
+a store through its address, so a loop counter is a chain through memory. That is
+the next change, and it is the register allocator's rather than a pass of its own.

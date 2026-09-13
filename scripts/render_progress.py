@@ -55,7 +55,7 @@ compiler = {
  ],
  "Back end": [
   ("NIR, typed SSA-lite", 1, "src/nir.e"),
-  ("Linear-scan register allocator", 1, "src/regalloc.e; a call saves and restores only the registers whose values are live across it, from the allocator's ranges (D226): the compiler's own image is seven per cent smaller"),
+  ("Linear-scan register allocator", 1, "src/regalloc.e; a call saves and restores only the registers whose values are live across it, from the allocator's ranges (D226): the compiler's own image is seven per cent smaller. The pool is ten registers (D235): five the calls clobber and five the callee keeps, saved once at entry and restored at the returns, so a value in one of the second five costs nothing at a call. What is still not in a register is a `var`: a mutable local is a stack object read and written through its address at every use, and a loop counter is a store-to-load chain, which is where a byte loop's thirteen cycles a byte go"),
   ("x64 emitter, System V and Win64", 1, "src/codegen_x64.e"),
   ("ELF object writer", 1, "src/object_elf.e"),
   ("COFF object writer", 1, "src/object_coff.e"),

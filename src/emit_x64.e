@@ -450,10 +450,20 @@ fn stack_address(buffer: *Buffer, destination: usize, slot: usize) -> err {
     ret little_u32(buffer, stack_displacement(slot))
 }
 
+// `[address]` with no displacement. Two bases have no plain encoding: rsp and r12 want
+// a SIB byte that names them, rbp and r13 a zero eight-bit displacement, since their
+// slot in the mod 00 row means rip-relative (D235).
 fn memory_modrm(buffer: *Buffer, reg: usize, address: usize) -> err {
     try check_register(reg)
     try check_register(address)
-    if address % 8usize == 4usize || address % 8usize == 5usize { ret InvalidRegister }
+    if address % 8usize == 4usize {
+        try byte(buffer, reg % 8usize * 8usize + 4usize)
+        ret byte(buffer, 36usize)
+    }
+    if address % 8usize == 5usize {
+        try byte(buffer, 64usize + reg % 8usize * 8usize + 5usize)
+        ret byte(buffer, 0usize)
+    }
     ret byte(buffer, reg % 8usize * 8usize + address % 8usize)
 }
 
