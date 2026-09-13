@@ -1602,6 +1602,18 @@ $nestedLinkWritten = & $compiler link-em $nestedLinked @nestedArtifactList
 if ($LASTEXITCODE -ne 0 -or $nestedLinkWritten -ne 'artifact executable written') { throw 'the nested artifacts did not link' }
 & $nestedLinked
 if ($LASTEXITCODE -ne 6) { throw "the relinked program did not carry the leaf's new body through both copies: exit $LASTEXITCODE" }
+# Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
+# 0xDD in the debug build, and neither in release.
+$fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'
+$fillsWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\debug_fills\src\main.e') $repo 'x64' 'windows' $fillsPath
+if ($LASTEXITCODE -ne 0 -or $fillsWritten -ne 'executable written') { throw 'debug fills fixture executable emission failed' }
+& $fillsPath debug
+if ($LASTEXITCODE -ne 0) { throw "the debug build did not fill allocations and resets: exit $LASTEXITCODE" }
+$fillsReleasePath = Join-Path $testBuild 'debug-fills-release-selfhost.exe'
+$fillsReleaseWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\debug_fills\src\main.e') $repo 'x64' 'windows' $fillsReleasePath --release
+if ($LASTEXITCODE -ne 0 -or $fillsReleaseWritten -ne 'executable written') { throw 'debug fills release emission failed' }
+& $fillsReleasePath release
+if ($LASTEXITCODE -ne 0) { throw "the release build filled memory: exit $LASTEXITCODE" }
 # Section 6's `when` (D216): conditions over `target.arch` and `target.os`, settled at
 # compile time, the taken arms adding up to 13 on Windows; a condition that is not a
 # question about the target is refused under E-COMPTIME-9999.

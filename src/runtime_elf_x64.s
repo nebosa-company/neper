@@ -99,6 +99,7 @@ np_alloc:
 
 .global neper_mem_alloc
 neper_mem_alloc:
+np_mem_alloc:
     push r12
     push r13
     push r14
@@ -129,6 +130,31 @@ neper_mem_alloc:
     pop r12
     ret
 
+# Section 11's debug fill (D217): the allocation, then every byte of it 0xCD, so a
+# read before a write is recognisable. A debug build calls this; release the one above.
+.global neper_mem_alloc_fill
+neper_mem_alloc_fill:
+    push rbx
+    push r12
+    sub rsp,8
+    mov rbx,rdi
+    mov rax,rdx
+    imul rax,rcx
+# A local name: a call to the global would be a relocation the embedding does not apply.
+    mov r12,rax
+    call np_mem_alloc
+    cmp DWORD PTR [rbx+0x10],0x0
+    jne .Lalloc_fill_done
+    mov rdi,QWORD PTR [rbx]
+    mov rcx,r12
+    mov al,0xCD
+    rep stosb
+.Lalloc_fill_done:
+    add rsp,8
+    pop r12
+    pop rbx
+    ret
+
 .global neper_mem_mark
 neper_mem_mark:
     mov rax,QWORD PTR [rdi+0x10]
@@ -136,6 +162,25 @@ neper_mem_mark:
 
 .global neper_mem_reset
 neper_mem_reset:
+    mov QWORD PTR [rdi+0x10],rsi
+    ret
+
+# The other debug fill (D217): what the reset gives back is 0xDD before the offset
+# moves, so a slice that outlived its reset reads as such.
+.global neper_mem_reset_fill
+neper_mem_reset_fill:
+    mov rdx,QWORD PTR [rdi+0x10]
+    cmp rsi,rdx
+    jae .Lreset_fill_store
+    mov r8,rdi
+    mov rdi,QWORD PTR [r8]
+    add rdi,rsi
+    mov rcx,rdx
+    sub rcx,rsi
+    mov al,0xDD
+    rep stosb
+    mov rdi,r8
+.Lreset_fill_store:
     mov QWORD PTR [rdi+0x10],rsi
     ret
 

@@ -1735,6 +1735,18 @@ chmod +x "$nested_linked"
 nested_status=0
 "$nested_linked" || nested_status=$?
 [ "$nested_status" -eq 6 ]
+# Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
+# 0xDD in the debug build, and neither in release.
+fills_path="$test_build/debug-fills-selfhost"
+fills_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/debug_fills/src/main.e" "$repo" x64 linux "$fills_path")
+[ "$fills_written" = 'executable written' ]
+chmod +x "$fills_path"
+"$fills_path" debug
+fills_release_path="$test_build/debug-fills-release-selfhost"
+fills_release_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/debug_fills/src/main.e" "$repo" x64 linux "$fills_release_path" --release)
+[ "$fills_release_written" = 'executable written' ]
+chmod +x "$fills_release_path"
+"$fills_release_path" release
 # Section 6's `when` (D216): conditions over `target.arch` and `target.os`, settled at
 # compile time, the taken arms adding up to 23 on Linux; a condition that is not a
 # question about the target is refused under E-COMPTIME-9999.

@@ -223,6 +223,9 @@ type Builder = struct {
     runtime_prefix: usize,
     // Set while lowering a `@nocheck` block; every instruction emitted carries it.
     nocheck: bool,
+    // The release build (D217): `nocheck` is that too, but `@nocheck` sets it for a
+    // block, and section 11's debug fills do not come off with the checks.
+    release: bool,
     // The path every instruction emitted is stamped with: the function's, or the
     // callee's while its body is being copied in.
     current_path: str,

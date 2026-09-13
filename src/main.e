@@ -2043,6 +2043,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, 65536usize)
         if kept_functions_error != ok { ret kept_functions_error }
         builder.nocheck = release_build
+        builder.release = release_build
         // Section 12's inlining (D207): the small functions are lowered first into the
         // oracle, in module order on every path, and the program's own lowering copies
         // them in at their calls. A debug build does not inline (D211): every frame
@@ -2063,6 +2064,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // function, the callees it copied, for the body edges.
             try init_oracle_nir(a, &first_oracle, &first_signatures, checker.parameter_count + checker.return_type_count + 1usize)
             first_oracle.nocheck = true
+            first_oracle.release = true
             let (first_entries, first_entries_error) = mem.alloc[nir.InlineEntry](a, 4096usize)
             if first_entries_error != ok { ret first_entries_error }
             let (first_inlined, first_inlined_error) = mem.alloc[nir.InlinedRef](a, 8192usize)
@@ -2077,6 +2079,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize)
             oracle.nocheck = true
+            oracle.release = true
             oracle.oracle = &first_oracle
             oracle.oracle_signatures = &first_signatures
             oracle.has_oracle = true

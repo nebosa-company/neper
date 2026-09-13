@@ -440,6 +440,34 @@ mem_done:
     ret
 neper_mem_alloc ENDP
 
+; Section 11's debug fill (D217): the allocation, then every byte of it 0CDh, so a
+; read before a write is recognisable. A debug build calls this; release the one above.
+neper_mem_alloc_fill PROC
+    mov r10, [rsp+40]
+    push rbx
+    push rdi
+    push rsi
+    sub rsp, 48
+    mov rbx, rcx
+    mov [rsp+32], r10
+    mov rax, r8
+    imul rax, r9
+    mov rsi, rax
+    call neper_mem_alloc
+    cmp dword ptr [rbx+16], 0
+    jne alloc_fill_done
+    mov rdi, [rbx]
+    mov rcx, rsi
+    mov al, 0CDh
+    rep stosb
+alloc_fill_done:
+    add rsp, 48
+    pop rsi
+    pop rdi
+    pop rbx
+    ret
+neper_mem_alloc_fill ENDP
+
 neper_mem_mark PROC
     mov rax, [rcx+16]
     ret
@@ -449,6 +477,27 @@ neper_mem_reset PROC
     mov [rcx+16], rdx
     ret
 neper_mem_reset ENDP
+
+; The other debug fill (D217): what the reset gives back is 0DDh before the offset
+; moves, so a slice that outlived its reset reads as such.
+neper_mem_reset_fill PROC
+    mov r8, [rcx+16]
+    cmp rdx, r8
+    jae reset_fill_store
+    push rdi
+    mov rdi, [rcx]
+    add rdi, rdx
+    mov r9, rcx
+    mov rcx, r8
+    sub rcx, rdx
+    mov al, 0DDh
+    rep stosb
+    pop rdi
+    mov rcx, r9
+reset_fill_store:
+    mov [rcx+16], rdx
+    ret
+neper_mem_reset_fill ENDP
 
 neper_mem_stats PROC
     mov rax, [rdx+16]

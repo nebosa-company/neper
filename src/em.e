@@ -669,13 +669,13 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     // Lowering uses linker symbols for host intrinsics, while dependency hashes
     // identify their source declarations. Keep this table aligned with
     // lower.intrinsic_symbol. mem.alloc is compiler-owned and has no declaration.
-    if same(name, "neper_mem_alloc") { ret ("", false) }
+    if same(name, "neper_mem_alloc") || same(name, "neper_mem_alloc_fill") { ret ("", false) }
     if same(name, "neper_hash_bytes") { ret ("", false) }
     if same(name, "neper_trap") { ret ("", false) }
     if same(name, "neper_report_failure") { ret ("", false) }
     if same(name, "neper_symbols") { ret ("", false) }
     if same(name, "neper_mem_mark") { ret ("mark", true) }
-    if same(name, "neper_mem_reset") { ret ("reset", true) }
+    if same(name, "neper_mem_reset") || same(name, "neper_mem_reset_fill") { ret ("reset", true) }
     if same(name, "neper_mem_stats") { ret ("stats", true) }
     if same(name, "neper_os_open") { ret ("open", true) }
     if same(name, "neper_os_seek") { ret ("seek", true) }

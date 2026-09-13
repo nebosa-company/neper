@@ -3967,3 +3967,18 @@ the settled `if` of D138 does. A condition of any other shape is refused under
 E-COMPTIME-9999, naming the shape that is allowed. `target.arch` and `target.os` as
 values outside a `when` condition -- section 2's namespace in full -- would want an
 enum value the checker can type, and every use so far is a `when`, so they wait.
+
+## D217 — The debug fills
+
+Section 11's two fills existed in neither mode. Now the runtime has a second entry
+point for each: `neper_mem_alloc_fill` allocates and then writes 0xCD over every
+byte it hands out, and `neper_mem_reset_fill` writes 0xDD over what a reset gives
+back before it moves the offset; a debug build's lowering names those, a release
+build's the plain ones, and since the fills are not checks `@nocheck` does not touch
+them -- which is why the builder carries a `release` flag beside `nocheck`, which a
+`@nocheck` block sets for its own extent. The fill entry points sit after the plain
+ones in the runtime source, so a release image that reaches only the plain ones is
+cut before them, and both call the plain one under a local name: on ELF a call to a
+global symbol is a relocation the embedding does not apply, and the first attempt
+called the next instruction. link/debug_fills reads a fresh allocation, a reset's
+memory and the allocation that reuses it in both builds.

@@ -2276,13 +2276,17 @@ fn emit_call_results(c: *check.Checker, call: check.CallInfo, callee: usize, arg
     var symbol = call.function.name
     var symbol_instance = call.function.instance_id
     if call.mem_alloc {
+        // Section 11's debug fills (D217): the debug build's entry points fill what
+        // they hand out with 0xCD and what a reset gives back with 0xDD.
         symbol = "neper_mem_alloc"
+        if !builder.release { symbol = "neper_mem_alloc_fill" }
         symbol_instance = 0usize
     } else {
         if call.function.intrinsic {
             let (mapped_symbol, mapped_error) = intrinsic_symbol(symbol)
             if mapped_error != ok { ret mapped_error }
             symbol = mapped_symbol
+            if !builder.release && check.same(symbol, "neper_mem_reset") { symbol = "neper_mem_reset_fill" }
             symbol_instance = 0usize
         }
     }
