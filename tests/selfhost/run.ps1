@@ -1632,6 +1632,17 @@ $arenaSmallWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtu
 if ($LASTEXITCODE -ne 0 -or $arenaSmallWritten -ne 'executable written') { throw 'arena size fixture emission with --arena failed' }
 $arenaSmallOutput = & $arenaSmallPath 2>&1
 if ($LASTEXITCODE -ne 1 -or ($arenaSmallOutput -join "`n") -notmatch 'error: e\.mem\.Exhausted') { throw "an arena of eight mebibytes held twelve: exit $LASTEXITCODE, $($arenaSmallOutput -join "`n")" }
+# docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
+# conformance corpus, byte for byte, with the exit status the result record carries.
+$conformanceRoot = Join-Path $repo 'tests\conformance'
+foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('parse', 'every_kind', 0), @('parse', 'recovery', 1))) {
+    $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
+    $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
+    $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
+    cmd /c "`"$compiler`" $($case[0]) --json --path $($case[1]).e `"$conformanceFixture`" > `"$conformanceActual`""
+    if ($LASTEXITCODE -ne $case[2]) { throw "$($case[0]) --json on $($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "$($case[0]) --json on $($case[1]).e differs from the conformance corpus" }
+}
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'

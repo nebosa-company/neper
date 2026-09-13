@@ -1763,6 +1763,18 @@ arena_small_output=$("$arena_small_path" 2>&1) || arena_small_status=$?
 [ "$arena_small_status" -eq 1 ]
 case "$arena_small_output" in *'error: e.mem.Exhausted'*) ;; *) printf '%s
 ' "an arena of eight mebibytes held twelve: $arena_small_output" >&2; exit 1 ;; esac
+# docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
+# conformance corpus, byte for byte, with the exit status the result record carries.
+conformance_root="$repo/tests/conformance"
+for conformance_case in 'tokens every_kind 0' 'tokens hostile 1' 'parse every_kind 0' 'parse recovery 1'; do
+    set -- $conformance_case
+    conformance_actual="$test_build/conformance-$1-$2.jsonl"
+    conformance_status=0
+    $test_build/neper-self "$1" --json --path "$2.e" "$conformance_root/$1/$2.e" > "$conformance_actual" || conformance_status=$?
+    [ "$conformance_status" -eq "$3" ]
+    cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
+' "$1 --json on $2.e differs from the conformance corpus" >&2; exit 1; }
+done
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

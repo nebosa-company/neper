@@ -4110,3 +4110,24 @@ a trap record, a fixed-register divide or multiply, an atomic -- are as they wer
 The compiler's own image is seven per cent smaller; its speed could not be measured
 on a loaded machine, and the suites, which compile the compiler with itself twice
 and compare, pass on both platforms.
+
+## D227 — `tokens --json` and `parse --json`, and the first of the conformance corpus
+
+docs/tooling.md's machine protocol had nothing behind it. `src/tool.e` now writes
+the version 1 stream for the two syntactic commands: the header line, one `token`
+record per token -- the registry kind, the lexeme, the span with both column forms,
+and the leading trivia as `space`, `comment` and `bom` items with their own spans --
+a `diagnostic` before each `INVALID` token, whose lexeme is the base64 object since
+its bytes are not UTF-8, and for `parse` one `syntax` record whose root lists the
+top-level nodes with kind, span, token range and ordered `{node}`/`{token}` children,
+then the `result` with the exit status. The lexer already knew everything the
+records need -- the trivia scanner, the UTF-16 columns, the maximal subparts of
+invalid input -- so the module is serialisation, with each record built in one
+buffer and written whole. Every record validates against the schema, the trivia
+and lexemes concatenate back to every byte of the compiler's own sources, and
+tests/conformance holds the first fixtures with byte-exact expected streams --
+every token kind but `INVALID` in one file, a hostile one with a BOM, CRLF, a tab,
+unterminated literals and invalid UTF-8 inside a comment, and a parse that stops --
+which both suites compare. The corpus is marked binary in .gitattributes, since its
+bytes are the point. Stdin, recovery past the first syntax error and the other
+commands are not there.

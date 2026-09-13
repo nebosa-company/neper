@@ -24,6 +24,7 @@ use regalloc
 use resolve
 use source
 use syntax
+use tool
 
 error DiagnosticWrite
 
@@ -812,6 +813,91 @@ fn arena_flag(args: []str) -> usize {
         at += 1usize
     }
     ret 0usize
+}
+
+// The file's name without its directories, for an operand's source identity.
+fn basename(path: str) -> str {
+    var start = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 47u8 || path[at] == 92u8 { start = at + 1usize }
+        at += 1usize
+    }
+    ret path[start..path.len]
+}
+
+fn tool_usage() -> err {
+    try write_all(os.stderr(), "error[E-CLI-9999]: usage: neper-self tokens [--json] [--path VIRTUAL.e] FILE\n")
+    os.exit(1i32)
+    ret ok
+}
+
+// docs/tooling.md section 4: `tokens|parse [--json] [--path VIRTUAL.e] FILE` (D227),
+// its own function since the bootstrap caps a function's locals.
+fn tool_command(a: *mem.Arena, args: []str) -> err {
+    let parsing = same(args[1usize], "parse")
+    var json = false
+    var virtual_path = ""
+    var has_virtual = false
+    var file = ""
+    var has_file = false
+    var at = 2usize
+    while at < args.len {
+        if same(args[at], "--json") {
+            json = true
+        } else {
+            if same(args[at], "--path") && at + 1usize < args.len {
+                virtual_path = args[at + 1usize]
+                has_virtual = true
+                at += 1usize
+            } else {
+                if has_file {
+                    has_file = false
+                    break
+                }
+                file = args[at]
+                has_file = true
+            }
+        }
+        at += 1usize
+    }
+    if !has_file || same(file, "-") { ret tool_usage() }
+    let (text, load_error) = source.load(a, file)
+    if load_error != ok { ret load_error }
+    var path = virtual_path
+    if !has_virtual { path = basename(file) }
+    if json {
+        var exit_code = 0usize
+        if parsing {
+            let (parse_exit, parse_error) = tool.parse_json(a, "operand", path, text)
+            if parse_error != ok { ret parse_error }
+            exit_code = parse_exit
+        } else {
+            let (tokens_exit, tokens_error) = tool.tokens_json(a, "operand", path, text)
+            if tokens_error != ok { ret tokens_error }
+            exit_code = tokens_exit
+        }
+        if exit_code != 0usize { os.exit(i32(exit_code)) }
+        ret ok
+    }
+    if parsing {
+        let parse_error = validate_cli_parse(a, file, text)
+        if parse_error != ok { ret parse_error }
+        try io.print("parse file ok\n")
+        ret ok
+    }
+    var scanner = lex.init(text)
+    while true {
+        let token = lex.next(&scanner)
+        try io.print(tool.kind_name(token.kind))
+        if token.kind != .Newline && token.kind != .Eof {
+            try io.print(" ")
+            try io.print(text[token.start..token.end])
+        }
+        try io.print("\n")
+        if token.kind == .Eof { break }
+    }
+    ret ok
 }
 
 fn same(a: str, b: str) -> bool {
@@ -1930,6 +2016,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("parse ok\n")
         ret ok
     }
+    if args.len >= 3usize && args.len <= 6usize && (same(args[1usize], "tokens") || same(args[1usize], "parse")) && !(args.len == 3usize && same(args[1usize], "parse")) { ret tool_command(a, args) }
     if args.len == 3usize && same(args[1usize], "scan-file") {
         let (text, load_error) = source.load(a, args[2usize])
         if load_error != ok { ret load_error }
