@@ -3907,3 +3907,29 @@ index; and the artifact and scratch buffers grew to eight and four mebibytes, si
 compiler in 6 s -- the linked compiler passes its self-test, though it is not yet
 byte-equal to the source-linked one, which the fixtures are: a function order
 difference to find under the determinism row.
+
+## D214 — The edge rule is settled before lowering, and a kept module is not compiled
+
+D205's `--incremental` compiled every module and skipped only the writes, because the
+edge rule compared old edges against fresh artifacts, and a fresh artifact needed the
+module lowered and selected. Two changes make the decision independent of lowering.
+A declaration's body hash is over its tokens whenever it has a source range -- what
+generic templates already used -- rather than over its NIR, so it is the same whether
+or not the function was lowered; NIR remains the hash of a function with no source of
+its own. And the Interface a module's artifact would carry is written from the checker
+alone, as an artifact of its Strings and Interface sections, which the same
+`dependency_matches` reads. So after checking, every module's fresh Interface is
+written, each old artifact on disk is loaded once and its edges walked against them,
+and the modules that pass are marked kept before anything is lowered; the rest are
+lowered, selected and written, the kept ones not at all. For that to be sound the
+artifacts had to stop depending on what else was in the build: `emit-em-all` now
+lowers every module of the graph in graph order and an artifact holds the whole
+module, where before both `.em` paths pruned to what `main` reached -- the linker
+that consumes the artifacts prunes, as `emit-executable` still does, and a program
+linked from whole artifacts is byte-identical to one compiled from source. Over the
+compiler's 31 modules a build with nothing changed takes 10 s against 34 s for a full
+one, a body edit in `decimal` rebuilds `decimal` alone in 13 s, and the linked result
+of either is byte-equal to a clean build. D213's finding that the compiler's own link
+was not byte-equal to the source build was the artifacts' order on the command line:
+`link-em` lays functions out in the order the artifacts are given, and the graph's
+order reproduces the source build exactly.

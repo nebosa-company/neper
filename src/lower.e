@@ -5840,11 +5840,16 @@ fn synthesize_failure_report(c: *check.Checker, g: *graph.Graph, builder: *nir.B
     ret nir.end_function(builder)
 }
 
-fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+// Every module of the graph in graph order, for the artifacts (D214): a `.em` is the
+// module compiled, whichever functions of it this program reaches, and one the edge
+// rule keeps is not lowered at all -- `skip` marks those, and they count as done.
+fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, lowered: []bool, skip: []bool) -> err {
+    if g.count == 0usize || g.count > lowered.len || g.count > skip.len { ret FunctionNotFound }
     try declare_globals(c, builder)
     var module_index = 0usize
     while module_index < g.count {
-        try module(c, g, module_index, builder, signatures, bindings)
+        if !skip[module_index] { try module(c, g, module_index, builder, signatures, bindings) }
+        lowered[module_index] = true
         module_index += 1usize
     }
     ret ok

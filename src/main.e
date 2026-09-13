@@ -988,34 +988,49 @@ fn widen_artifact(a: *mem.Arena, packed: []const u8) -> ([]usize, err) {
 // declaration it names in the target's fresh artifact; otherwise the fresh one is
 // written over it. Each module's decision is printed, `kept` or `rebuilt`, in module
 // order, and the decisions are all taken before any file is touched.
-fn settle_incremental(a: *mem.Arena, g: *graph.Graph, directory: str, triple: str, fresh: [][]u8) -> err {
-    let (keep, keep_error) = mem.alloc[bool](a, g.count)
-    if keep_error != ok { ret keep_error }
-    // A fresh artifact widened once per dependent module, not once per edge (D213).
-    let (wide, wide_error) = mem.alloc[[]usize](a, g.count)
-    if wide_error != ok { ret wide_error }
-    let (widened, widened_error) = mem.alloc[bool](a, g.count)
-    if widened_error != ok { ret widened_error }
+// Section 12's edge rule, settled before anything is lowered (D214): a module's artifact
+// on disk is kept when its source and build mode are unchanged and every edge it
+// recorded still matches the declaration it names in the target's fresh Interface --
+// which the checker alone can write. A kept module is then not lowered, selected or
+// written at all; that is the saving.
+fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: str, triple: str, mode: em.BuildMode, strings: *em.StringTable, scratch: *binary.Buffer, keep: []bool) -> err {
+    let (fresh, fresh_error) = mem.alloc[[]usize](a, g.count)
+    if fresh_error != ok { ret fresh_error }
+    let (sections, sections_error) = mem.alloc[em.Section](a, 2usize)
+    if sections_error != ok { ret sections_error }
+    let (interface_storage, interface_storage_error) = mem.alloc[usize](a, 1048576usize)
+    if interface_storage_error != ok { ret interface_storage_error }
+    var interface_buffer: binary.Buffer = zero
+    try binary.init(&interface_buffer, interface_storage)
+    var mode_id = 0usize
+    if mode == .Release { mode_id = 1usize }
+    // Every module's fresh Interface first: small, and held for the whole walk.
     var module_at = 0usize
     while module_at < g.count {
-        let checkpoint = mem.mark(a)
         keep[module_at] = false
-        var clear_at = 0usize
-        while clear_at < g.count {
-            widened[clear_at] = false
-            clear_at += 1usize
+        interface_buffer.count = 0usize
+        try em.write_interface_artifact(c, g, module_at, triple, mode, strings, sections, scratch, &interface_buffer)
+        let (held, held_error) = mem.alloc[usize](a, interface_buffer.count)
+        if held_error != ok { ret held_error }
+        var copy_at = 0usize
+        while copy_at < interface_buffer.count {
+            held[copy_at] = interface_buffer.bytes[copy_at]
+            copy_at += 1usize
         }
+        fresh[module_at] = held
+        module_at += 1usize
+    }
+    module_at = 0usize
+    while module_at < g.count {
+        let checkpoint = mem.mark(a)
         let (artifact_path, path_error) = compiled_module_path(a, directory, g.modules[module_at].name, triple)
         if path_error != ok { ret path_error }
         let (old, old_error) = load_artifact(a, artifact_path)
         if old_error == ok {
-            let (new_bytes, new_error) = widen_artifact(a, fresh[module_at])
-            if new_error != ok { ret new_error }
             let (old_hash, old_hash_error) = em.artifact_source_hash(old)
-            let (new_hash, new_hash_error) = em.artifact_source_hash(new_bytes)
+            let (new_hash, new_hash_error) = em.source_text_hash(g.modules[module_at].text, scratch)
             let (old_mode, old_mode_error) = em.artifact_mode(old)
-            let (new_mode, new_mode_error) = em.artifact_mode(new_bytes)
-            if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && new_mode_error == ok && old_mode == new_mode {
+            if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
                 keep[module_at] = true
                 let (edge_count, count_error) = em.artifact_dependency_count(old)
                 if count_error != ok { ret count_error }
@@ -1037,13 +1052,7 @@ fn settle_incremental(a: *mem.Arena, g: *graph.Graph, directory: str, triple: st
                     if !found_target {
                         keep[module_at] = false
                     } else {
-                        if !widened[target_at] {
-                            let (target_bytes, target_error) = widen_artifact(a, fresh[target_at])
-                            if target_error != ok { ret target_error }
-                            wide[target_at] = target_bytes
-                            widened[target_at] = true
-                        }
-                        let (matches, match_error) = em.dependency_matches(old, edge_at, wide[target_at])
+                        let (matches, match_error) = em.dependency_matches(old, edge_at, fresh[target_at])
                         if match_error != ok { ret match_error }
                         if !matches { keep[module_at] = false }
                     }
@@ -1052,21 +1061,6 @@ fn settle_incremental(a: *mem.Arena, g: *graph.Graph, directory: str, triple: st
             }
         }
         mem.reset(a, checkpoint)
-        module_at += 1usize
-    }
-    module_at = 0usize
-    while module_at < g.count {
-        let module_name = g.modules[module_at].name
-        if keep[module_at] {
-            try io.print("kept ")
-        } else {
-            let (artifact_path, path_error) = compiled_module_path(a, directory, module_name, triple)
-            if path_error != ok { ret path_error }
-            try save_bytes(a, artifact_path, fresh[module_at])
-            try io.print("rebuilt ")
-        }
-        try io.print(module_name)
-        try io.print("\n")
         module_at += 1usize
     }
     ret ok
@@ -2067,15 +2061,48 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var artifact_mode: em.BuildMode = .Debug
         if release_build { artifact_mode = .Release }
-        let lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
+        let (keep, keep_error) = mem.alloc[bool](a, loaded.count)
+        if keep_error != ok { ret keep_error }
+        var keep_at = 0usize
+        while keep_at < loaded.count {
+            keep[keep_at] = false
+            keep_at += 1usize
+        }
+        var lower_error = ok
+        if writes_all_em {
+            if incremental_build {
+                let (settle_strings, settle_strings_error) = mem.alloc[str](a, 32768usize)
+                if settle_strings_error != ok { ret settle_strings_error }
+                let (settle_slots, settle_slots_error) = mem.alloc[usize](a, 131072usize)
+                if settle_slots_error != ok { ret settle_slots_error }
+                var settle_table: em.StringTable = zero
+                try em.init_strings(&settle_table, settle_strings, settle_slots)
+                let (settle_scratch_storage, settle_scratch_error) = mem.alloc[usize](a, 4194304usize)
+                if settle_scratch_error != ok { ret settle_scratch_error }
+                var settle_scratch: binary.Buffer = zero
+                try binary.init(&settle_scratch, settle_scratch_storage)
+                let (settle_triple, settle_triple_error) = target_triple(a, args[4usize], args[5usize])
+                if settle_triple_error != ok { ret settle_triple_error }
+                var settle_mode: em.BuildMode = .Debug
+                if release_build { settle_mode = .Release }
+                try settle_early(a, &checker, &loaded, args[6usize], settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
+            }
+            lower_error = lower.all_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules, keep)
+        } else {
+            lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
+        }
         if lower_error == ok {
             // Everything was lowered so that the order is the one the artifacts also use; what
             // nothing reaches is dropped now, which both link paths do identically.
-            let prune_error = nir.prune_unreachable(&builder, kept_functions, writes_em || writes_all_em)
-            if prune_error != ok {
-                try print_lower_diagnostic(&loaded, &checker, prune_error)
-                os.exit(1i32)
-                ret ok
+            // An artifact holds the whole module (D214): the linker that consumes it
+            // prunes, as the executable path does here.
+            if !(writes_em || writes_all_em) {
+                let prune_error = nir.prune_unreachable(&builder, kept_functions, false)
+                if prune_error != ok {
+                    try print_lower_diagnostic(&loaded, &checker, prune_error)
+                    os.exit(1i32)
+                    ret ok
+                }
             }
         }
         if lower_error != ok {
@@ -2241,32 +2268,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     try io.print("compiled module written\n")
                     ret ok
                 }
-                // Incrementally, every fresh artifact is kept in memory first; the edge
-                // rule then decides which of them replace the files already there.
-                let (fresh, fresh_error) = mem.alloc[[]u8](a, loaded.count)
-                if fresh_error != ok { ret fresh_error }
+                // The edge rule was settled before lowering (D214): a kept module was not
+                // lowered and its artifact on disk stands; the rest are written.
                 var module_at = 0usize
                 while module_at < loaded.count {
-                    artifact.count = 0usize
-                    try em.write_module(&checker, &loaded, &builder, module_at, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, &strings, sections, &scratch, &artifact)
-                    try binary.pack(&artifact, packed)
-                    if incremental_build {
-                        let (copy, copy_error) = mem.alloc[u8](a, artifact.count)
-                        if copy_error != ok { ret copy_error }
-                        var byte_at = 0usize
-                        while byte_at < artifact.count {
-                            copy[byte_at] = packed[byte_at]
-                            byte_at += 1usize
-                        }
-                        fresh[module_at] = copy
-                    } else {
+                    if !keep[module_at] {
+                        artifact.count = 0usize
+                        try em.write_module(&checker, &loaded, &builder, module_at, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, &strings, sections, &scratch, &artifact)
+                        try binary.pack(&artifact, packed)
                         let (artifact_path, artifact_path_error) = compiled_module_path(a, args[6usize], loaded.modules[module_at].name, triple)
                         if artifact_path_error != ok { ret artifact_path_error }
                         try save_bytes(a, artifact_path, packed[..artifact.count])
                     }
+                    if incremental_build {
+                        if keep[module_at] { try io.print("kept ") } else { try io.print("rebuilt ") }
+                        try io.print(loaded.modules[module_at].name)
+                        try io.print("\n")
+                    }
                     module_at += 1usize
                 }
-                if incremental_build { try settle_incremental(a, &loaded, args[6usize], triple, fresh) }
                 try io.print("compiled modules written\n")
                 ret ok
             }

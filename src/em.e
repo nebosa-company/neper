@@ -839,19 +839,22 @@ fn body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_
     scratch.count = 0usize
     let signature_write_error = binary.little_u64(scratch, signature)
     if signature_write_error != ok { ret (0usize, signature_write_error) }
-    if has_nir {
-        let marker_error = binary.byte(scratch, 1usize)
+    if checked_function >= c.function_count { ret (0usize, InvalidArtifact) }
+    let function = c.functions[checked_function]
+    // The declaration's tokens whenever it has them (D214): the same hash whether or
+    // not the function was lowered, which is what lets a module be kept unlowered;
+    // NIR only for a function with no source of its own.
+    if function.source_end > function.source_start && function.module_index < g.count {
+        let marker_error = binary.byte(scratch, 2usize)
         if marker_error != ok { ret (0usize, marker_error) }
-        let nir_error = write_nir_canonical(c, g, builder, nir_function, scratch)
-        if nir_error != ok { ret (0usize, nir_error) }
+        let tokens_error = write_declaration_tokens_canonical(g.modules[function.module_index].text, function.source_start, function.source_end, scratch)
+        if tokens_error != ok { ret (0usize, tokens_error) }
     } else {
-        if checked_function >= c.function_count { ret (0usize, InvalidArtifact) }
-        let function = c.functions[checked_function]
-        if function.generic && function.source_end > function.source_start && function.module_index < g.count {
-            let marker_error = binary.byte(scratch, 2usize)
+        if has_nir {
+            let marker_error = binary.byte(scratch, 1usize)
             if marker_error != ok { ret (0usize, marker_error) }
-            let tokens_error = write_declaration_tokens_canonical(g.modules[function.module_index].text, function.source_start, function.source_end, scratch)
-            if tokens_error != ok { ret (0usize, tokens_error) }
+            let nir_error = write_nir_canonical(c, g, builder, nir_function, scratch)
+            if nir_error != ok { ret (0usize, nir_error) }
         } else {
             let marker_error = binary.byte(scratch, 0usize)
             if marker_error != ok { ret (0usize, marker_error) }
@@ -1127,16 +1130,9 @@ fn write_function_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Bu
     let function = c.functions[function_index]
     let (name_index, name_error) = string_index(table, function.name)
     if name_error != ok { ret name_error }
-    var nir_function = 0usize
-    var has_nir = false
-    if !function.generic {
-        let (found_nir, found) = find_nir_function(builder, function.module_index, function.name, function.instance_id)
-        nir_function = found_nir
-        has_nir = found
-    }
     let (signature, signature_error) = signature_hash(c, g, function_index, scratch)
     if signature_error != ok { ret signature_error }
-    let (body, body_error) = body_hash(c, g, builder, function_index, nir_function, has_nir, scratch)
+    let (body, body_error) = body_hash(c, g, builder, function_index, 0usize, false, scratch)
     if body_error != ok { ret body_error }
     try binary.byte(output, declaration_function_kind())
     try binary.byte(output, function_flags(function))
@@ -1901,11 +1897,17 @@ fn write_globals(builder: *nir.Builder, module_index: usize, table: *StringTable
     ret ok
 }
 
+fn source_text_hash(text: str, scratch: *binary.Buffer) -> (usize, err) {
+    scratch.count = 0usize
+    let text_error = binary.text(scratch, text)
+    if text_error != ok { ret (0usize, text_error) }
+    let (source_hash, source_hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (source_hash, source_hash_error)
+}
+
 fn write_debug(g: *graph.Graph, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     if module_index >= g.count { ret InvalidArtifact }
-    scratch.count = 0usize
-    try binary.text(scratch, g.modules[module_index].text)
-    let (source_hash, source_hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    let (source_hash, source_hash_error) = source_text_hash(g.modules[module_index].text, scratch)
     if source_hash_error != ok { ret source_hash_error }
     let (path_index, path_error) = string_index(table, g.modules[module_index].path)
     if path_error != ok { ret path_error }
@@ -1913,6 +1915,29 @@ fn write_debug(g: *graph.Graph, module_index: usize, table: *StringTable, scratc
     try binary.little_u64(output, source_hash)
     try binary.little_u32(output, 0usize)
     ret binary.little_u32(output, 0usize)
+}
+
+// The Interface a module's artifact would carry, as an artifact of its Strings and
+// Interface sections alone (D214): every hash in it comes from the checker, so the
+// edge rule can be settled against it before anything is lowered.
+fn write_interface_artifact(c: *check.Checker, g: *graph.Graph, module_index: usize, target_triple: str, mode: BuildMode, strings: *StringTable, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 2usize || output.count != 0usize { ret InvalidArtifact }
+    var no_builder: nir.Builder = zero
+    try reset_strings(strings)
+    let (target_index, target_error) = intern(strings, target_triple)
+    if target_error != ok { ret target_error }
+    try collect_module_strings(c, g, &no_builder, module_index, strings)
+    var writer: Writer = zero
+    try begin(&writer, output, section_values, target_index, 0usize, mode)
+    try begin_section(&writer, strings_kind(), required_flag())
+    try write_strings(strings, output)
+    try end_section(&writer)
+    try begin_section(&writer, interface_kind(), required_flag())
+    let interface_error = write_interface(c, g, &no_builder, module_index, strings, scratch, output)
+    if interface_error != ok { ret interface_error }
+    try end_section(&writer)
+    try finish(&writer)
+    ret check_layout(output.bytes[0usize..output.count])
 }
 
 fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, line_count: usize, strings: *StringTable, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
