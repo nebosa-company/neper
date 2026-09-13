@@ -7,6 +7,7 @@ use e.os
 use lex
 use parse
 use syntax
+use resolve
 
 error Capacity
 
@@ -202,6 +203,98 @@ fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str) 
     try captured(&out, stderr_bytes)
     try text(&out, ",\"trap\":null}")
     ret flush(&out)
+}
+
+// docs/tooling.md section 5's `kind` for a module-scope declaration; the resolver's
+// own kinds map onto the closed set one to one (D232).
+fn index_kind_name(kind: resolve.Kind) -> str {
+    if kind == .Type { ret "type" }
+    if kind == .Const { ret "const" }
+    if kind == .Var { ret "module_var" }
+    if kind == .Error { ret "error" }
+    if kind == .Function { ret "fn" }
+    if kind == .Extern { ret "extern" }
+    ret "intrinsic"
+}
+
+// A JSON string of `module.name`; both halves are identifiers or a dotted module path,
+// so no escape is ever needed.
+fn index_qualified(out: *Out, module_name: str, name: str) -> err {
+    try byte(out, 34u8)
+    try text(out, module_name)
+    try byte(out, 46u8)
+    try text(out, name)
+    ret byte(out, 34u8)
+}
+
+// `index --json` (D232): a `symbol` record for the module and each of its module-scope
+// declarations. Locals, parameters, fields, members, documentation, signatures and every
+// reference are the gap -- the resolver does not carry them, so this names only what it does.
+fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize) -> (usize, err) {
+    let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
+    if scan_error != ok { ret (2usize, scan_error) }
+    let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 8192usize)
+    if storage_error != ok { ret (2usize, storage_error) }
+    var out = Out { bytes: storage, count: 0usize }
+    let header_error = header(&out, "index")
+    if header_error != ok { ret (2usize, header_error) }
+    // The module itself is the first symbol, so every declaration's container is id 0.
+    let module_error = index_module_record(&out, module_name)
+    if module_error != ok { ret (2usize, module_error) }
+    var emitted = 1usize
+    var at = 0usize
+    while at < count {
+        let symbol = symbols[at]
+        if symbol.module_index == module_index && symbol.kind != .Qualifier && symbol.kind != .Intrinsic {
+            var name_index = symbol.token_start + 1usize
+            if symbol.kind == .Extern { name_index += 1usize }
+            if symbol.token_end == 0usize || symbol.token_end > token_count || name_index >= token_count { ret (2usize, parse.InvalidSyntax) }
+            let record_error = index_symbol_record(&out, root, path, module_name, emitted, symbol, tokens[symbol.token_start], tokens[symbol.token_end - 1usize], tokens[name_index])
+            if record_error != ok { ret (2usize, record_error) }
+            emitted += 1usize
+        }
+        at += 1usize
+    }
+    let result_error = index_result(&out, emitted)
+    if result_error != ok { ret (2usize, result_error) }
+    ret (0usize, ok)
+}
+
+fn index_module_record(out: *Out, module_name: str) -> err {
+    try text(out, "{\"record\":\"symbol\",\"id\":0,\"kind\":\"module\",\"name\":")
+    try quoted(out, module_name)
+    try text(out, ",\"qualified_name\":")
+    try quoted(out, module_name)
+    try text(out, ",\"module\":")
+    try quoted(out, module_name)
+    try text(out, ",\"signature\":null,\"span\":null,\"selection_span\":null,\"container_id\":null,\"attributes\":[],\"documentation\":null}")
+    ret flush(out)
+}
+
+fn index_symbol_record(out: *Out, root: str, path: str, module_name: str, id: usize, symbol: resolve.Symbol, opener: lex.Token, closer: lex.Token, name_token: lex.Token) -> err {
+    try text(out, "{\"record\":\"symbol\",\"id\":")
+    try decimal(out, id)
+    try text(out, ",\"kind\":")
+    try quoted(out, index_kind_name(symbol.kind))
+    try text(out, ",\"name\":")
+    try quoted(out, symbol.name)
+    try text(out, ",\"qualified_name\":")
+    try index_qualified(out, module_name, symbol.name)
+    try text(out, ",\"module\":")
+    try quoted(out, module_name)
+    try text(out, ",\"signature\":null,\"span\":")
+    try span(out, root, path, opener.start, closer.end, opener.line, opener.column, closer.end_line, closer.end_column, opener.column_utf16, closer.end_column_utf16)
+    try text(out, ",\"selection_span\":")
+    try span(out, root, path, name_token.start, name_token.end, name_token.line, name_token.column, name_token.end_line, name_token.end_column, name_token.column_utf16, name_token.end_column_utf16)
+    try text(out, ",\"container_id\":0,\"attributes\":[],\"documentation\":null}")
+    ret flush(out)
+}
+
+fn index_result(out: *Out, symbols: usize) -> err {
+    try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"symbols\":")
+    try decimal(out, symbols)
+    try text(out, ",\"references\":0}}")
+    ret flush(out)
 }
 
 // The public name of a token kind, the registry of docs/grammar.ebnf.

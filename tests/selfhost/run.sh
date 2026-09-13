@@ -1811,6 +1811,11 @@ run_actual="$test_build/conformance-tools-run.jsonl"
 (cd "$test_build" && ./neper-self run "$conformance_root/tools/run.e" "$repo" x64 linux conformance-tools-run.out --json > "conformance-tools-run.jsonl")
 cmp -s "$run_actual" "$conformance_root/tools/run.expected.jsonl" || { printf '%s
 ' "run --json differs from the conformance corpus" >&2; exit 1; }
+# `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
+index_actual="$test_build/conformance-tools-index.jsonl"
+$test_build/neper-self index-file "$conformance_root/tools/index.e" "$repo" x64 linux --json > "$index_actual"
+cmp -s "$index_actual" "$conformance_root/tools/index.expected.jsonl" || { printf '%s
+' "index --json differs from the conformance corpus" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

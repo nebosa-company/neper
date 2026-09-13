@@ -4193,3 +4193,16 @@ fixed os surface creates files 0666 and has no chmod, so on Linux the child goes
 through `sh -c 'chmod +x -- "$0" && exec "$0"'`; drop that when emit-executable can
 write an executable bit. Streaming, the structured trap payload of a crash, `-- ARGS`
 and a project root are not here.
+
+## D232 -- `index --json` names the module and its declarations
+
+`index-file` builds the graph and runs the resolver, then emits a `symbol` record
+for the operand module and, in source order, each of its module-scope declarations,
+which the resolver already holds: `fn`, `extern`, `type`, `const`, `module_var` and
+`error`, mapped one-to-one onto section 5's closed `kind`. Each carries its id (the
+module is id 0, so every declaration's `container_id` is 0), qualified name, the full
+declaration span and the name's selection span, empty attributes and null
+signature/documentation; the stream ends with the symbol count and zero references.
+The resolver carries neither locals, parameters, fields, enum/union members and
+intrinsics, nor any reference with its role and concrete target, so those are the
+gap. The golden names no target, so one expected stream serves both hosts.

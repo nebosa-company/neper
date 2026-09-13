@@ -912,6 +912,38 @@ fn run_program(a: *mem.Arena, path: str) -> (i32, str, str, err) {
     ret (status, stdout_captured, stderr_captured, ok)
 }
 
+// `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
+// Its own function because the bootstrap caps a function's locals (main is at the cap).
+fn index_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
+    report.json = true
+    report.file = os.stdout()
+    var loaded: graph.Graph = zero
+    try init_cli_graph(a, &loaded)
+    let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+    if load_error != ok {
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"symbols\":0,\"references\":0}}\n")
+        os.exit(2i32)
+        ret ok
+    }
+    var resolver: resolve.Resolver = zero
+    try init_cli_resolver(a, &resolver)
+    let resolve_error = resolve.collect(&resolver, &loaded)
+    if resolve_error != ok {
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+        try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"symbols\":0,\"references\":0}}\n")
+        os.exit(1i32)
+        ret ok
+    }
+    let (index_exit, index_error) = tool.index_json(a, "operand", basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count)
+    if index_error != ok { ret index_error }
+    if index_exit != 0usize { os.exit(i32(index_exit)) }
+    ret ok
+}
+
 // docs/tooling.md section 4: `tokens|parse [--json] [--path VIRTUAL.e] FILE` (D227),
 // its own function since the bootstrap caps a function's locals.
 fn tool_command(a: *mem.Arena, args: []str) -> err {
@@ -2344,6 +2376,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module check ok\n")
         ret ok
     }
+    // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
+    if args.len == 7usize && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner

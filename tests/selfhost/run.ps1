@@ -1676,6 +1676,14 @@ if ($LASTEXITCODE -ne 0) { throw "the executable of build --json exited $LASTEXI
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run `"$(Join-Path $conformanceRoot 'tools/run.e')`" `"$repo`" x64 windows conformance-tools-run.out --json > `"$runActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run.expected.jsonl')).Hash) { throw "run --json differs from the conformance corpus" }
+# `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
+$indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
+cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index.expected.jsonl')).Hash) { throw "index --json differs from the conformance corpus" }
+# `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
+$indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
+cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index.expected.jsonl')).Hash) { throw "index --json differs from the conformance corpus" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'
