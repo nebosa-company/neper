@@ -3759,3 +3759,26 @@ every public declaration using the same format as this catalogue. `x.neper.*` is
 a legal package namespace: Neper-owned facilities live in `e.*`, `e.algo.*`, `e.text.*`,
 `e.crypto.*`, `e.fmt.*`, `e.gfx.*` or `e.ui.*`. A remaining vendor reservation without a package specification
 promises zero functions and structures.
+
+### `e.time.cron`
+
+```neper
+type Schedule = struct { seconds: u64, minutes: u64, hours: u32, doms: u32, months: u16, dows: u8, dom_restricted: bool, dow_restricted: bool, offset_minutes: i32 }
+error Invalid
+
+fn parse(a: *mem.Arena, expr: str, offset_minutes: i32) -> (Schedule, err)
+fn matches(s: Schedule, t: time.Timestamp) -> bool
+fn next(s: Schedule, after: time.Timestamp) -> (time.Timestamp, err)
+```
+
+### `e.grep`
+
+```neper
+type Match = struct { path: str, line: u32, column: u32, text: str }
+type Index = struct { root: str, trigrams: u32 }
+error Invalid
+
+fn build_index(a: *mem.Arena, root: str) -> (Index, err)
+fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err)
+fn search_index(a: *mem.Arena, ix: Index, pattern: str) -> ([]Match, err)
+```
