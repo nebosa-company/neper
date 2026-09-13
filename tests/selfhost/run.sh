@@ -1462,6 +1462,45 @@ case "$tag_output" in
     *) printf '%s\n' "the wide case did not trap as section 11 says: $tag_output" >&2; exit 1 ;;
 esac
 "$tag_path" none
+# The `null` row: a field read or written through a nil pointer, and `*p` read or
+# written, each refused; the same through live pointers untouched.
+null_path="$test_build/trap-null-selfhost"
+null_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_null/src/main.e" "$repo" x64 linux "$null_path")
+[ "$null_written" = 'executable written' ]
+chmod +x "$null_path"
+null_status=0
+null_output=$("$null_path" field 2>&1) || null_status=$?
+[ "$null_status" -eq 134 ]
+case "$null_output" in
+    *'main.e:11:35: trap[null]: nil dereferenced as *Point'*) ;;
+    *) printf '%s
+' "the field case did not trap as section 11 says: $null_output" >&2; exit 1 ;;
+esac
+null_status=0
+null_output=$("$null_path" write 2>&1) || null_status=$?
+[ "$null_status" -eq 134 ]
+case "$null_output" in
+    *'main.e:12:33: trap[null]: nil dereferenced as *Point'*) ;;
+    *) printf '%s
+' "the write case did not trap as section 11 says: $null_output" >&2; exit 1 ;;
+esac
+null_status=0
+null_output=$("$null_path" deref 2>&1) || null_status=$?
+[ "$null_status" -eq 134 ]
+case "$null_output" in
+    *'main.e:13:31: trap[null]: nil dereferenced as *i32'*) ;;
+    *) printf '%s
+' "the deref case did not trap as section 11 says: $null_output" >&2; exit 1 ;;
+esac
+null_status=0
+null_output=$("$null_path" store 2>&1) || null_status=$?
+[ "$null_status" -eq 134 ]
+case "$null_output" in
+    *'main.e:34:9: trap[null]: nil dereferenced as *i32'*) ;;
+    *) printf '%s
+' "the store case did not trap as section 11 says: $null_output" >&2; exit 1 ;;
+esac
+"$null_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

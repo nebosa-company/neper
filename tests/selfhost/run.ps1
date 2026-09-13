@@ -1451,6 +1451,21 @@ $tagOutput = & $tagPath wide 2>&1
 if ($LASTEXITCODE -ne 134 -or ($tagOutput -join "`n") -notmatch 'main\.e:41:17: trap\[narrow\]: a float outside i64') { throw "the wide case did not trap as section 11 says: exit $LASTEXITCODE, $($tagOutput -join "`n")" }
 & $tagPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'a live payload read, or a float cast that fits, trapped' }
+# The `null` row: a field read or written through a nil pointer, and `*p` read or
+# written, each refused; the same through live pointers untouched.
+$nullPath = Join-Path $testBuild 'trap-null-selfhost.exe'
+$nullWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_null\src\main.e') $repo 'x64' 'windows' $nullPath
+if ($LASTEXITCODE -ne 0 -or $nullWritten -ne 'executable written') { throw 'null trap fixture executable emission failed' }
+$nullOutput = & $nullPath field 2>&1
+if ($LASTEXITCODE -ne 134 -or ($nullOutput -join "`n") -notmatch 'main\.e:11:35: trap\[null\]: nil dereferenced as \*Point') { throw "the field case did not trap as section 11 says: exit $LASTEXITCODE, $($nullOutput -join "`n")" }
+$nullOutput = & $nullPath write 2>&1
+if ($LASTEXITCODE -ne 134 -or ($nullOutput -join "`n") -notmatch 'main\.e:12:33: trap\[null\]: nil dereferenced as \*Point') { throw "the write case did not trap as section 11 says: exit $LASTEXITCODE, $($nullOutput -join "`n")" }
+$nullOutput = & $nullPath deref 2>&1
+if ($LASTEXITCODE -ne 134 -or ($nullOutput -join "`n") -notmatch 'main\.e:13:31: trap\[null\]: nil dereferenced as \*i32') { throw "the deref case did not trap as section 11 says: exit $LASTEXITCODE, $($nullOutput -join "`n")" }
+$nullOutput = & $nullPath store 2>&1
+if ($LASTEXITCODE -ne 134 -or ($nullOutput -join "`n") -notmatch 'main\.e:34:9: trap\[null\]: nil dereferenced as \*i32') { throw "the store case did not trap as section 11 says: exit $LASTEXITCODE, $($nullOutput -join "`n")" }
+& $nullPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'a dereference of a live pointer trapped' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at

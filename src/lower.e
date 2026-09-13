@@ -426,6 +426,48 @@ fn emit_tag_check(c: *check.Checker, base: usize, base_type: check.Type, field_n
     ret ok
 }
 
+// Section 11's `null` row: a dereference of `nil` traps. Every path that reads or
+// writes through a pointer value -- `*p`, `p.field` through the auto-dereference --
+// compares the pointer with zero first; a value that is already an address of a stack
+// object or an aggregate by address is never nil and never comes here.
+fn emit_null_check(c: *check.Checker, pointer: usize, pointer_type: check.Type, builder: *nir.Builder, token: lex.Token) -> err {
+    if pointer_type.kind != .Pointer { ret ok }
+    let usize_type = check.make_type(.Integer, "usize", pointer_type.module_index)
+    let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
+    if zero_error != ok { ret zero_error }
+    let boolean = check.make_type(.Bool, "bool", pointer_type.module_index)
+    let (nonzero, nonzero_error) = emit_supplied_compare(builder, .NotEqual, boolean, pointer, zero_value, token)
+    if nonzero_error != ok { ret nonzero_error }
+    let trap_block = builder.block_count
+    let after_block = builder.block_count + 1usize
+    let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+    if decision_error != ok { ret decision_error }
+    try nir.add_operand(builder, decision, nonzero)
+    try nir.set_branch_targets(builder, decision, after_block, trap_block)
+    let (trap_index, trap_block_error) = nir.begin_block(builder)
+    if trap_block_error != ok || trap_index != trap_block { ret nir.InvalidControlFlow }
+    var pointee = ""
+    if pointer_type.has_element && pointer_type.element < c.type_count { pointee = c.types[pointer_type.element].name }
+    let prefix = "nil dereferenced"
+    var storage_len = prefix.len
+    if pointee.len != 0usize { storage_len += 5usize + pointee.len }
+    let (storage, storage_error) = mem.alloc[u8](c.arena, storage_len)
+    if storage_error != ok { ret storage_error }
+    var write_at = 0usize
+    try append_text(storage[..], &write_at, prefix)
+    if pointee.len != 0usize {
+        try append_text(storage[..], &write_at, " as *")
+        try append_text(storage[..], &write_at, pointee)
+    }
+    let (message, message_error) = nir.intern_string(builder, storage[..write_at])
+    if message_error != ok { ret message_error }
+    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "null", pointer_type.module_index), false, message + 1usize, token)
+    if trap_error != ok { ret trap_error }
+    let (after_index, after_error) = nir.begin_block(builder)
+    if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
+    ret ok
+}
+
 fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (source_info, source_info_error) = layout.type_info(c, source_type)
     if source_info_error != ok { ret (0usize, source_info_error) }
@@ -2361,6 +2403,8 @@ fn lower_place(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         if field_error != ok { ret (0usize, zero, field_error) }
         let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, base_index, base_type, builder, bindings, binding_count)
         if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+        let null_error = emit_null_check(c, base, base_type, builder, c.tokens[node.token_start])
+        if null_error != ok { ret (0usize, field.ty, null_error) }
         let tag_error = emit_tag_check(c, base, base_type, field_name, builder, c.tokens[node.token_start])
         if tag_error != ok { ret (0usize, field.ty, tag_error) }
         let (instruction, address, emit_error) = nir.emit(builder, .FieldAddress, field.ty, true, field.offset, c.tokens[node.token_start])
@@ -2376,6 +2420,8 @@ fn lower_place(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         if pointer_type_error != ok || pointer_type.kind != .Pointer || !pointer_type.has_element || pointer_type.element >= c.type_count { ret (0usize, pointer_type, check.InvalidType) }
         let (pointer, lowered_pointer_type, pointer_error) = lower_expression(c, g, tree, module_index, child_index, pointer_type, builder, bindings, binding_count)
         if pointer_error != ok { ret (0usize, lowered_pointer_type, pointer_error) }
+        let null_error = emit_null_check(c, pointer, pointer_type, builder, c.tokens[node.token_start])
+        if null_error != ok { ret (0usize, lowered_pointer_type, null_error) }
         ret (pointer, c.types[pointer_type.element], ok)
     }
     ret (0usize, zero, check.Unsupported)
@@ -2449,6 +2495,8 @@ fn lower_unary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let (operand, operand_type, operand_error) = lower_expression(c, g, tree, module_index, child_index, operand_expected, builder, bindings, binding_count)
     if operand_error != ok { ret (0usize, operand_type, operand_error) }
     if operator == .PunctStar {
+        let null_error = emit_null_check(c, operand, operand_type, builder, c.tokens[node.token_start])
+        if null_error != ok { ret (0usize, result_type, null_error) }
         if aggregate_value(c, result_type) { ret (operand, result_type, ok) }
         let (info, info_error) = layout.type_info(c, result_type)
         if info_error != ok { ret (0usize, result_type, info_error) }
@@ -2785,6 +2833,8 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         if field_error != ok { ret (0usize, zero, check.Unsupported) }
         let (base, lowered_base_type, base_error) = lower_expression(c, g, tree, module_index, base_index, base_type, builder, bindings, binding_count)
         if base_error != ok { ret (0usize, lowered_base_type, base_error) }
+        let null_error = emit_null_check(c, base, base_type, builder, c.tokens[node.token_start])
+        if null_error != ok { ret (0usize, field.ty, null_error) }
         let tag_error = emit_tag_check(c, base, base_type, field_name, builder, c.tokens[node.token_start])
         if tag_error != ok { ret (0usize, field.ty, tag_error) }
         let (address_instruction, address, address_error) = nir.emit(builder, .FieldAddress, field.ty, true, field.offset, c.tokens[node.token_start])

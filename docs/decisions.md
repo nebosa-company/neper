@@ -3658,3 +3658,16 @@ with NaN refused by the unordered compare. `link/trap_tag` pins a read and a wri
 under the wrong tag and four float refusals on both platforms, and that the live
 payload and casts at both edges of their ranges pass. `T.trunc(f)` is not a float
 conversion (D198), so the checked cast is the only one from a float.
+
+## D201 — The `null` row: a dereference of `nil` traps
+
+Section 4 says every dereference is null-checked in a debug build, and section 11
+makes the failure the `null` row. Lowering now compares the pointer with zero on
+every path that reads or writes through a pointer value -- `*p` as an operand and as
+an assignment target, and `p.field` through the auto-dereference, read or written --
+and reaches a `.Trap` of kind `null` whose message names the pointer's type: `nil
+dereferenced as *Point`. A value that is already the address of a stack object or of
+an aggregate passed by address never comes through those paths and is never nil, so
+the check is only where a pointer the program holds is followed. The compiler's own
+image grows by a seventh; no build mode elides the check yet. `link/trap_null` pins
+the four refusals on both platforms and that live pointers pass.
