@@ -631,6 +631,7 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_hash_bytes") { ret ("", false) }
     if same(name, "neper_trap") { ret ("", false) }
     if same(name, "neper_report_failure") { ret ("", false) }
+    if same(name, "neper_symbols") { ret ("", false) }
     if same(name, "neper_mem_mark") { ret ("mark", true) }
     if same(name, "neper_mem_reset") { ret ("reset", true) }
     if same(name, "neper_mem_stats") { ret ("stats", true) }
@@ -947,7 +948,7 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
     var reference_at = 0usize
     while reference_at < builder.function_ref_count {
         let reference = builder.function_refs[reference_at]
-        if same(reference.name, "neper_trap") && reference.module_index == module_index {
+        if (same(reference.name, "neper_trap") || same(reference.name, "neper_symbols")) && reference.module_index == module_index {
             let (trap_module, trap_module_error) = intern(table, g.modules[module_index].name)
             if trap_module_error != ok { ret trap_module_error }
             let (trap_name, trap_name_error) = intern(table, reference.name)

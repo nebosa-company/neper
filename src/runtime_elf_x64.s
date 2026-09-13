@@ -187,13 +187,18 @@ neper_os_write:
 
 # A failed check (spec section 11): the record text, then the two operands wherever the
 # text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
-# newline, all to stderr, and exit 134. The generated code
+# newline, then the symbolised backtrace from the table r10 points at, all to stderr,
+# and exit 134. The generated code
 # jumps here with rdi = text, rsi = its length, rdx and rcx = the operands; nothing
 # returns, so the stack is simply realigned and the callee-saved registers are not kept.
 .global neper_trap
 neper_trap:
+    mov r11,QWORD PTR [rsp]
     and rsp,-16
-    sub rsp,32
+    sub rsp,64
+    mov QWORD PTR [rsp+32],rbp
+    mov QWORD PTR [rsp+40],r10
+    mov QWORD PTR [rsp+48],r11
     mov rbx,rdi
     lea r13,[rdi+rsi]
     mov r12,rdx
@@ -262,6 +267,65 @@ neper_trap:
     mov edi,2
     mov eax,1
     syscall
+# The backtrace: every frame is rbp-chained, so from the trapping function's frame and
+# the return address into it the walk is [rbp+8] and [rbp], each address looked up in
+# the symbol table the linker appended after the code -- entries of a start relative
+# to the table, a length, and a name -- until one is not in it, which is the runtime's
+# own entry, or thirty-two frames have been printed.
+    mov r14d,32
+    mov r12,QWORD PTR [rsp+48]
+    mov r13,QWORD PTR [rsp+32]
+.Ltrap_frame:
+    test r14d,r14d
+    jz .Ltrap_exit
+    dec r14d
+    mov rbx,QWORD PTR [rsp+40]
+    mov r15d,DWORD PTR [rbx]
+    add rbx,4
+.Ltrap_lookup:
+    test r15d,r15d
+    jz .Ltrap_exit
+    dec r15d
+    movsxd rax,DWORD PTR [rbx]
+    add rax,QWORD PTR [rsp+40]
+    cmp r12,rax
+    jb .Ltrap_next_entry
+    mov ecx,DWORD PTR [rbx+4]
+    add rax,rcx
+    cmp r12,rax
+    jb .Ltrap_found
+.Ltrap_next_entry:
+    add rbx,16
+    jmp .Ltrap_lookup
+.Ltrap_found:
+    mov BYTE PTR [rsp],32
+    mov BYTE PTR [rsp+1],32
+    mov BYTE PTR [rsp+2],97
+    mov BYTE PTR [rsp+3],116
+    mov BYTE PTR [rsp+4],32
+    mov rsi,rsp
+    mov edx,5
+    mov edi,2
+    mov eax,1
+    syscall
+    mov esi,DWORD PTR [rbx+8]
+    add rsi,QWORD PTR [rsp+40]
+    mov edx,DWORD PTR [rbx+12]
+    mov edi,2
+    mov eax,1
+    syscall
+    mov BYTE PTR [rsp],10
+    mov rsi,rsp
+    mov edx,1
+    mov edi,2
+    mov eax,1
+    syscall
+    test r13,r13
+    jz .Ltrap_exit
+    mov r12,QWORD PTR [r13+8]
+    mov r13,QWORD PTR [r13]
+    jmp .Ltrap_frame
+.Ltrap_exit:
     mov edi,134
     mov eax,231
     syscall

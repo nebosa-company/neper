@@ -340,7 +340,9 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
         }
         artifact_at += 1usize
     }
-    let (machine_storage, machine_error) = mem.alloc[usize](a, capacity(code_size))
+    // The code, and room after it for the symbol table the driver appends (D206): a
+    // header and a name per function, which sixty-four bytes each covers.
+    let (machine_storage, machine_error) = mem.alloc[usize](a, capacity(code_size + function_count * 64usize + 64usize))
     if machine_error != ok { ret machine_error }
     try emit_x64.init(&program.machine, machine_storage)
     let (function_offsets, offsets_error) = mem.alloc[usize](a, function_count)
@@ -389,6 +391,13 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             assembled_function.name = name
             assembled_function.module_index = owner_at
             assembled_function.instance = function.instance
+            // The backtrace names a frame `module.function` (D206), and the source path
+            // spells the module the same way, which the byte-equality of the two needs.
+            let (owner_module_index, owner_module_error) = em.interface_module_index(artifacts[owner_at].bytes)
+            if owner_module_error != ok { ret owner_module_error }
+            let (owner_name, owner_name_error) = copy_string(a, artifacts[owner_at].bytes, owner_module_index)
+            if owner_name_error != ok { ret owner_name_error }
+            assembled_function.module_name = owner_name
             functions[global_function] = assembled_function
             program.builder.function_count += 1usize
             var folded = false

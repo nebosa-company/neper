@@ -131,6 +131,8 @@ type Function = struct {
     instance: usize,
     // The source file, as a trap record names it (section 11); set by lowering.
     path: str,
+    // The module's name, as a backtrace frame names it, `module.function` (D206).
+    module_name: str,
     first_block: usize,
     block_count: usize,
     first_instruction: usize,
@@ -606,6 +608,7 @@ fn begin_function(builder: *Builder, module_index: usize, name: str, instance: u
         module_index: module_index,
         instance: instance,
         path: "",
+        module_name: "",
         first_block: builder.block_count,
         block_count: 0usize,
         first_instruction: builder.instruction_count,

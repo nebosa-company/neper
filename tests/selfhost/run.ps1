@@ -1549,6 +1549,13 @@ Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $in
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
 $incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
+# The trap protocol's backtrace: one `  at module.function` line per frame, from the
+# trapping function up to main, after the record.
+$backtracePath = Join-Path $testBuild 'trap-backtrace-selfhost.exe'
+$backtraceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_backtrace\src\main.e') $repo 'x64' 'windows' $backtracePath
+if ($LASTEXITCODE -ne 0 -or $backtraceWritten -ne 'executable written') { throw 'backtrace fixture executable emission failed' }
+$backtraceOutput = (& $backtracePath 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 134 -or $backtraceOutput -notmatch 'helper\.e:1:50: trap\[bounds\]: index 7 out of bounds for len 5\n  at helper\.pick\n  at main\.deeper\n  at main\.main') { throw "the trap did not print its backtrace: exit $LASTEXITCODE, $backtraceOutput" }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at

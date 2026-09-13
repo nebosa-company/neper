@@ -967,6 +967,90 @@ fn load_call_arguments(builder: *nir.Builder, current: nir.Function, instruction
     ret ok
 }
 
+// Section 11's symbol table, appended after the last function once the code is final:
+// a count, then per emitted function its start relative to the table (negative, the
+// code precedes it), its length and its `module.function` name, then the names. Every
+// reference to `neper_symbols` -- one per trap site -- is resolved here, so the
+// linkers see only a longer code blob. The functions the fold dropped are skipped:
+// their offsets are the survivor's, which is the name the walk should print.
+fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []Relocation, relocation_count: usize) -> err {
+    let table_start = machine.count
+    var emitted = 0usize
+    var at = 0usize
+    while at < builder.function_count {
+        if function_is_placed(builder, function_offsets, at) { emitted += 1usize }
+        at += 1usize
+    }
+    try emit_x64.little_u32(machine, emitted)
+    var names_at = 4usize + emitted * 16usize
+    at = 0usize
+    while at < builder.function_count {
+        if function_is_placed(builder, function_offsets, at) {
+            let placed = builder.functions[at]
+            let start = function_offsets[at]
+            let (end, end_error) = function_placed_end(builder, function_offsets, at, table_start)
+            if end_error != ok { ret end_error }
+            var relative = 0usize
+            if start <= table_start { relative = 4294967296usize - (table_start - start) }
+            if start > table_start { ret Unsupported }
+            try emit_x64.little_u32(machine, relative % 4294967296usize)
+            try emit_x64.little_u32(machine, end - start)
+            try emit_x64.little_u32(machine, names_at)
+            let name_length = placed.module_name.len + 1usize + placed.name.len
+            try emit_x64.little_u32(machine, name_length)
+            names_at += name_length
+        }
+        at += 1usize
+    }
+    at = 0usize
+    while at < builder.function_count {
+        if function_is_placed(builder, function_offsets, at) {
+            let placed = builder.functions[at]
+            try emit_text(machine, placed.module_name)
+            try emit_x64.byte(machine, 46usize)
+            try emit_text(machine, placed.name)
+        }
+        at += 1usize
+    }
+    var relocation_at = 0usize
+    while relocation_at < relocation_count {
+        let relocation = relocations[relocation_at]
+        if !relocation.global && !relocation.resolved && relocation.function_ref < builder.function_ref_count && check.same(builder.function_refs[relocation.function_ref].name, "neper_symbols") {
+            try emit_x64.patch_relative32(machine, relocation.displacement_at, table_start)
+            relocations[relocation_at].resolved = true
+        }
+        relocation_at += 1usize
+    }
+    ret ok
+}
+
+// Whether a function has its own code: a folded duplicate shares an offset with an
+// earlier function, and only the earlier one is listed. Placement is read from the
+// offsets alone, so the artifact path, whose functions carry no NIR, agrees.
+fn function_is_placed(builder: *nir.Builder, function_offsets: []usize, index: usize) -> bool {
+    if index >= function_offsets.len || index >= builder.function_count { ret false }
+    var earlier = 0usize
+    while earlier < index {
+        if function_offsets[earlier] == function_offsets[index] { ret false }
+        earlier += 1usize
+    }
+    ret true
+}
+
+// The end of a placed function's code: the smallest offset above its own, or the
+// table's start for the last one.
+fn function_placed_end(builder: *nir.Builder, function_offsets: []usize, index: usize, code_end: usize) -> (usize, err) {
+    let start = function_offsets[index]
+    var end = code_end
+    var at = 0usize
+    while at < builder.function_count {
+        if at != index && at < function_offsets.len && function_offsets[at] > start && function_offsets[at] < end { end = function_offsets[at] }
+        at += 1usize
+    }
+    if end < start { ret (0usize, Unsupported) }
+    ret (end, ok)
+}
+
 fn max_call_arguments(builder: *nir.Builder, current: nir.Function) -> usize {
     var maximum = 0usize
     let end = current.first_instruction + current.instruction_count
@@ -1241,6 +1325,13 @@ fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kin
     if address_error != ok { ret address_error }
     try emit_x64.patch_relative32(output, text_displacement, text_start)
     try emit_x64.mov_immediate(output, length_register, text_end - text_start)
+    // r10 carries the symbol table the driver appends after the code (D206); the
+    // reference is resolved there, not by a linker.
+    let (symbols_ref, symbols_error) = nir.intern_function(builder, current.module_index, "neper_symbols", 0usize)
+    if symbols_error != ok { ret symbols_error }
+    let (symbols_displacement, symbols_address_error) = emit_x64.relative_address(output, 10usize)
+    if symbols_address_error != ok { ret symbols_address_error }
+    try add_relocation(context.relocations, context.relocation_count, symbols_displacement, symbols_ref)
     let (function_ref, reference_error) = nir.intern_function(builder, current.module_index, "neper_trap", 0usize)
     if reference_error != ok { ret reference_error }
     let (call_displacement, call_error) = emit_x64.call(output)

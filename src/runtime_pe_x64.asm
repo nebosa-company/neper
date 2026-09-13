@@ -521,7 +521,8 @@ neper_os_write ENDP
 
 ; A failed check (spec section 11): the record text, then the two operands wherever the
 ; text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
-; newline, all to stderr, and exit 134. The generated code
+; newline, then the symbolised backtrace from the table r10 points at, all to stderr,
+; and exit 134. The generated code
 ; jumps here with rcx = text, rdx = its length, r8 and r9 = the operands; nothing
 ; returns, so the stack is simply realigned and the callee-saved registers are not kept.
 np_trap_write PROC
@@ -535,8 +536,12 @@ np_trap_write PROC
 np_trap_write ENDP
 
 neper_trap PROC
+    mov r11, [rsp]
     and rsp, -16
-    sub rsp, 64
+    sub rsp, 96
+    mov [rsp+64], rbp
+    mov [rsp+72], r10
+    mov [rsp+80], r11
     mov rbx, rcx
     lea rsi, [rcx+rdx]
     mov r12, r8
@@ -600,6 +605,59 @@ trap_end:
     lea rdx, [rsp+32]
     mov r8d, 1
     call np_trap_write
+    ; The backtrace: every frame is rbp-chained, so from the trapping function's frame
+    ; and the return address into it the walk is [rbp+8] and [rbp], each address looked
+    ; up in the symbol table the linker appended after the code -- entries of a start
+    ; relative to the table, a length, and a name -- until one is not in it, which is
+    ; the runtime's own entry, or thirty-two frames have been printed.
+    mov r14d, 32
+    mov r12, [rsp+80]
+    mov r13, [rsp+64]
+trap_frame:
+    test r14d, r14d
+    jz trap_exit
+    dec r14d
+    mov rbx, [rsp+72]
+    mov r15d, [rbx]
+    add rbx, 4
+trap_lookup:
+    test r15d, r15d
+    jz trap_exit
+    dec r15d
+    movsxd rax, dword ptr [rbx]
+    add rax, [rsp+72]
+    cmp r12, rax
+    jb trap_next_entry
+    mov ecx, [rbx+4]
+    add rax, rcx
+    cmp r12, rax
+    jb trap_found
+trap_next_entry:
+    add rbx, 16
+    jmp trap_lookup
+trap_found:
+    mov byte ptr [rsp+32], 32
+    mov byte ptr [rsp+33], 32
+    mov byte ptr [rsp+34], 97
+    mov byte ptr [rsp+35], 116
+    mov byte ptr [rsp+36], 32
+    lea rdx, [rsp+32]
+    mov r8d, 5
+    call np_trap_write
+    mov edx, [rbx+8]
+    add rdx, [rsp+72]
+    mov r8d, [rbx+12]
+    call np_trap_write
+    mov byte ptr [rsp+32], 10
+    lea rdx, [rsp+32]
+    mov r8d, 1
+    call np_trap_write
+    test r13, r13
+    jz trap_exit
+    mov r12, [r13+8]
+    mov r13, [r13]
+    jmp trap_frame
+trap_exit:
     mov ecx, 134
     call qword ptr [__imp_ExitProcess]
     int 3

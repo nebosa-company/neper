@@ -1697,8 +1697,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var executable: emit_x64.Buffer = zero
         try emit_x64.init(&executable, executable_storage)
         if is_windows {
+            try codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count)
             try link_pe.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, &executable)
         } else {
+            try codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count)
             try link_elf.write(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, &executable)
         }
         let (packed, packed_error) = mem.alloc[u8](a, executable.count)
@@ -1969,7 +1971,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // 96 keeps three to six times that and takes the allocation from about
             // 512 MiB to about 192 MiB. Overrunning it is a clean `Capacity` error,
             // never a wrong instruction.
-            machine_capacity = builder.instruction_count * 96usize + 65536usize
+            // ... plus the symbol table appended after the code (D206), a header and a
+            // name per function.
+            machine_capacity = builder.instruction_count * 96usize + builder.function_count * 64usize + 65536usize
         }
         let (machine_storage, machine_storage_error) = mem.alloc[usize](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }
@@ -1979,7 +1983,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if block_offsets_error != ok { ret block_offsets_error }
         let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, 32768usize)
         if fixups_error != ok { ret fixups_error }
-        let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, 32768usize)
+        // Two per trap site -- the call and the symbol table (D206) -- and one per call,
+        // so the count follows the instructions rather than a constant.
+        let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, builder.instruction_count + 4096usize)
         if relocations_error != ok { ret relocations_error }
         // Indexed by NIR function index, like the signature table above: sized to the
         // function count and not to a constant of its own.
@@ -2127,8 +2133,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
                 if machine_abi == .Windows {
+                    try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count)
                     try link_pe.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
                 } else {
+                    try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count)
                     try link_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
                 }
                 let (packed, packed_error) = mem.alloc[u8](a, executable.count)

@@ -3745,3 +3745,23 @@ clean"), and a signature edit rebuilds `main` as well. The saving the section
 describes -- not compiling the kept modules at all -- is not here: checking a module
 against its dependencies' Interfaces alone, without their sources, is not a path the
 checker has, so this is the rule and the writes, not yet the time.
+
+## D206 — A trap ends with its backtrace, from a symbol table after the code
+
+Section 11's trap protocol writes the record and then a symbolised backtrace. Every
+function keeps a frame pointer, so the walk is `[rbp+8]` and `[rbp]` from the
+trapping function's frame and the return address into it, until an address no
+function claims -- the runtime's own entry -- or thirty-two frames. The names come
+from a symbol table the driver appends to the machine code once it is final and
+before either linker sees it: a count, then per placed function its start relative
+to the table, its length and its `module.function` name, then the names. Each trap
+site loads the table's address into `r10` through a reference to `neper_symbols`,
+which the driver resolves against the table it just wrote, so neither linker learns
+a new relocation kind and the artifact path -- whose functions carry the module name
+from their artifact's Interface -- links byte for byte the same as the source path,
+which the suite already pins. A folded duplicate is listed once, under the survivor's
+name. The compiler's own image grows by three percent for the table, and relocations
+are now sized by the instruction count, two per trap site having overrun the old
+constant. `link/trap_backtrace` pins a bounds trap two calls deep printing
+`helper.pick`, `main.deeper` and `main.main` in that order on both platforms. The
+file and line of each frame, which need a line table, are still open.
