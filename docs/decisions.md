@@ -3578,3 +3578,22 @@ The row found two library sites that leaned on the masking: every rotate in
 `e.crypto.hash`, `e.crypto.random`, `e.fmt.zstd` and the compiler's `artifact_hash`
 shifted by the full width for a rotation of 0, and zstd's Huffman rank table shifted
 by -1 for its top rank; both now avoid the count the section forbids.
+
+## D197 — `Kind(x)` is a cast, and the `enum` row traps
+
+Section 4 names an integer-to-enum cast, `Kind(x)`, from an integer of the backing
+width alone, and section 11 says a value naming no member traps in every build mode.
+Neither existed: `Color(x)` was an unknown callable. The checker now recognises a
+same-module enum's name in call position as a cast, accepts only an integer of the
+backing width (`check/enum_cast_width` pins a `u32` into an `enum u8` refused, as
+the section says to go through `u8` first), and lowering casts the integer to the
+unsigned type of its width -- an enum lives in a register as its backing bits
+zero-extended, which is what a load and a member constant both give -- then tests
+it against every member, one `Equal` and a branch per member, and reaches a `.Trap`
+of kind `enum` where none matched. That `.Trap` carries its kind as the name of an
+`Other` type and the integer as its operand, so the record reads `no member of Level
+has value -6` with the source integer printed in its own signedness; the message is
+built by lowering and interned raw, which the back end tells from a literal by the
+absence of a quote. `link/trap_enum` pins an `enum u8` and an `enum i8` on both
+platforms and that a cast naming a member, a negative one included, is untouched.
+A qualified enum name, `lex.Kind(x)`, is not yet a cast.

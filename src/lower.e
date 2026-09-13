@@ -292,6 +292,83 @@ fn quoted_text(c: *check.Checker, text: str) -> str {
     ret storage[..]
 }
 
+// Section 11's `enum` row, which traps in every mode: an integer cast to an enum has to
+// name a member. One test block per member -- `Equal` against its bits, taken to the
+// block after the check -- and a `.Trap` of kind `enum` carrying the integer where
+// none matched. Its message is built here, so it is interned raw rather than quoted.
+fn append_text(storage: []u8, write_at: *usize, text: str) -> err {
+    var at = 0usize
+    while at < text.len {
+        if *write_at >= storage.len { ret check.Capacity }
+        storage[*write_at] = text[at]
+        *write_at += 1usize
+        at += 1usize
+    }
+    ret ok
+}
+
+fn emit_enum_check(c: *check.Checker, converted: usize, source: usize, ty: check.Type, builder: *nir.Builder, token: lex.Token) -> err {
+    let (aggregate_index, found) = check.aggregate_for_type(c, ty)
+    if !found { ret check.InvalidType }
+    let aggregate = c.aggregates[aggregate_index]
+    let boolean = check.make_type(.Bool, "bool", ty.module_index)
+    var decisions: [512]usize = zero
+    var falses: [512]usize = zero
+    var count = 0usize
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index >= c.aggregate_field_count { ret check.InvalidType }
+        if count == decisions.len { ret check.Capacity }
+        let member = c.aggregate_fields[field_index]
+        let (member_bits, member_bits_error) = check.enum_member_bits(aggregate.backing_type, member.enum_value, member.enum_negative)
+        if member_bits_error != ok { ret member_bits_error }
+        if count != 0usize {
+            let test_block = builder.block_count
+            let (test_index, test_error) = nir.begin_block(builder)
+            if test_error != ok || test_index != test_block { ret nir.InvalidControlFlow }
+            falses[count - 1usize] = test_block
+        }
+        let (member_instruction, member_constant, member_error) = nir.emit(builder, .ConstInteger, ty, true, member_bits, token)
+        if member_error != ok { ret member_error }
+        let (matches, matches_error) = emit_supplied_compare(builder, .Equal, boolean, converted, member_constant, token)
+        if matches_error != ok { ret matches_error }
+        let (decision, decision_ignored, decision_error) = nir.emit(builder, .BranchIf, zero, false, 0usize, token)
+        if decision_error != ok { ret decision_error }
+        try nir.add_operand(builder, decision, matches)
+        decisions[count] = decision
+        count += 1usize
+        at += 1usize
+    }
+    if count == 0usize { ret ok }
+    let trap_block = builder.block_count
+    let (trap_index, trap_block_error) = nir.begin_block(builder)
+    if trap_block_error != ok || trap_index != trap_block { ret nir.InvalidControlFlow }
+    let prefix = "no member of "
+    let suffix = " has value "
+    let (storage, storage_error) = mem.alloc[u8](c.arena, prefix.len + ty.name.len + suffix.len)
+    if storage_error != ok { ret storage_error }
+    var write_at = 0usize
+    try append_text(storage[..], &write_at, prefix)
+    try append_text(storage[..], &write_at, ty.name)
+    try append_text(storage[..], &write_at, suffix)
+    let (message, message_error) = nir.intern_string(builder, storage[..])
+    if message_error != ok { ret message_error }
+    let (trap_instruction, trap_ignored, trap_error) = nir.emit(builder, .Trap, check.make_type(.Other, "enum", ty.module_index), false, message + 1usize, token)
+    if trap_error != ok { ret trap_error }
+    try nir.add_operand(builder, trap_instruction, source)
+    let after_block = builder.block_count
+    let (after_index, after_error) = nir.begin_block(builder)
+    if after_error != ok || after_index != after_block { ret nir.InvalidControlFlow }
+    falses[count - 1usize] = trap_block
+    var fix_at = 0usize
+    while fix_at < count {
+        try nir.set_branch_targets(builder, decisions[fix_at], after_block, falses[fix_at])
+        fix_at += 1usize
+    }
+    ret ok
+}
+
 fn lower_bitcast(c: *check.Checker, source: usize, source_type: check.Type, into: check.Type, builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     let (source_info, source_info_error) = layout.type_info(c, source_type)
     if source_info_error != ok { ret (0usize, source_info_error) }
@@ -2715,6 +2792,26 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
                 let root_operand_error = nir.add_operand(builder, root_instruction, argument)
                 if root_operand_error != ok { ret (0usize, call_info.cast, root_operand_error) }
                 ret (root, call_info.cast, ok)
+            }
+            // `Kind(x)`: the integer already has the backing width, so the value passes
+            // through retyped once the members have been checked (D197).
+            if call_info.cast.kind == .Named {
+                // An enum value lives in a register as its backing bits zero-extended --
+                // what a load and a member constant both give -- so a signed integer is
+                // first cast to the unsigned type of its width.
+                var unsigned_name = "u64"
+                let source_width = check.integer_width(lowered_argument_type)
+                if source_width == 8usize { unsigned_name = "u8" }
+                if source_width == 16usize { unsigned_name = "u16" }
+                if source_width == 32usize { unsigned_name = "u32" }
+                let unsigned_type = check.make_type(.Integer, unsigned_name, call_info.cast.module_index)
+                let (bits_instruction, bits, bits_error) = nir.emit(builder, .Cast, unsigned_type, true, 0usize, c.tokens[node.token_start])
+                if bits_error != ok { ret (0usize, call_info.cast, bits_error) }
+                let bits_operand_error = nir.add_operand(builder, bits_instruction, argument)
+                if bits_operand_error != ok { ret (0usize, call_info.cast, bits_operand_error) }
+                let enum_check_error = emit_enum_check(c, bits, argument, call_info.cast, builder, c.tokens[node.token_start])
+                if enum_check_error != ok { ret (0usize, call_info.cast, enum_check_error) }
+                ret (bits, call_info.cast, ok)
             }
             let (instruction, result, emit_error) = nir.emit(builder, .Cast, call_info.cast, true, 0usize, c.tokens[node.token_start])
             if emit_error != ok { ret (0usize, call_info.cast, emit_error) }

@@ -1393,6 +1393,17 @@ $arithmeticOutput = & $arithmeticPath shift 2>&1
 if ($LASTEXITCODE -ne 134 -or ($arithmeticOutput -join "`n") -notmatch 'main\.e:27:17: trap\[shift\]: shift by 40 on a width of 32') { throw "the shift case did not trap as section 11 says: exit $LASTEXITCODE, $($arithmeticOutput -join "`n")" }
 & $arithmeticPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the arithmetic trap fixture trapped on its in-range path' }
+# The `enum` row, which traps in every mode: `Kind(x)` naming no member, unsigned and
+# signed, and the same casts naming members untouched.
+$enumTrapPath = Join-Path $testBuild 'trap-enum-selfhost.exe'
+$enumTrapWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_enum\src\main.e') $repo 'x64' 'windows' $enumTrapPath
+if ($LASTEXITCODE -ne 0 -or $enumTrapWritten -ne 'executable written') { throw 'enum trap fixture executable emission failed' }
+$enumTrapOutput = & $enumTrapPath color 2>&1
+if ($LASTEXITCODE -ne 134 -or ($enumTrapOutput -join "`n") -notmatch 'main\.e:16:17: trap\[enum\]: no member of Color has value 7') { throw "the color case did not trap as section 11 says: exit $LASTEXITCODE, $($enumTrapOutput -join "`n")" }
+$enumTrapOutput = & $enumTrapPath level 2>&1
+if ($LASTEXITCODE -ne 134 -or ($enumTrapOutput -join "`n") -notmatch 'main\.e:20:17: trap\[enum\]: no member of Level has value -6') { throw "the level case did not trap as section 11 says: exit $LASTEXITCODE, $($enumTrapOutput -join "`n")" }
+& $enumTrapPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'an enum cast naming a member trapped' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at
@@ -1991,6 +2002,7 @@ $checkFailures = @(
     @('extern_slice_return', 'InvalidType'),
     @('variadic_narrow_argument', 'TypeMismatch'),
     @('unreachable_argument', 'TypeMismatch'),
+    @('enum_cast_width', 'TypeMismatch'),
     @('intrinsic_generic_unsupported', 'ArgumentCount'),
     @('alloc_argument_type', 'TypeMismatch'),
     @('alloc_arena_type', 'TypeMismatch'),

@@ -1334,6 +1334,27 @@ case "$arithmetic_output" in
     *) printf '%s\n' "the shift case did not trap as section 11 says: $arithmetic_output" >&2; exit 1 ;;
 esac
 "$arithmetic_path" none
+# The `enum` row, which traps in every mode: `Kind(x)` naming no member, unsigned and
+# signed, and the same casts naming members untouched.
+enum_trap_path="$test_build/trap-enum-selfhost"
+enum_trap_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_enum/src/main.e" "$repo" x64 linux "$enum_trap_path")
+[ "$enum_trap_written" = 'executable written' ]
+chmod +x "$enum_trap_path"
+enum_trap_status=0
+enum_trap_output=$("$enum_trap_path" color 2>&1) || enum_trap_status=$?
+[ "$enum_trap_status" -eq 134 ]
+case "$enum_trap_output" in
+    *'main.e:16:17: trap[enum]: no member of Color has value 7'*) ;;
+    *) printf '%s\n' "the color case did not trap as section 11 says: $enum_trap_output" >&2; exit 1 ;;
+esac
+enum_trap_status=0
+enum_trap_output=$("$enum_trap_path" level 2>&1) || enum_trap_status=$?
+[ "$enum_trap_status" -eq 134 ]
+case "$enum_trap_output" in
+    *'main.e:20:17: trap[enum]: no member of Level has value -6'*) ;;
+    *) printf '%s\n' "the level case did not trap as section 11 says: $enum_trap_output" >&2; exit 1 ;;
+esac
+"$enum_trap_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.
@@ -2034,6 +2055,7 @@ expect_check_error extern_slice_parameter InvalidType
 expect_check_error extern_slice_return InvalidType
 expect_check_error variadic_narrow_argument TypeMismatch
 expect_check_error unreachable_argument TypeMismatch
+expect_check_error enum_cast_width TypeMismatch
 expect_check_error intrinsic_generic_unsupported ArgumentCount
 expect_check_error alloc_argument_type TypeMismatch
 expect_check_error alloc_arena_type TypeMismatch

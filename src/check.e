@@ -6556,8 +6556,18 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                         info.cast = parameter_cast
                         info.is_cast = true
                     } else {
+                    let (enum_index, is_enum_name) = find_aggregate(c, module_index, name)
                     if cast.kind == .Integer || cast.kind == .Float {
                         info.cast = cast
+                        info.is_cast = true
+                    } else {
+                    // `Kind(x)`: section 4's integer-to-enum cast, from an integer of the
+                    // backing width alone; the value is checked against the members at
+                    // run time (section 11's `enum` row, D197).
+                    if is_enum_name && c.aggregates[enum_index].kind == .Enum {
+                        info.cast = make_type(.Named, name, module_index)
+                        info.cast.element = enum_index
+                        info.cast.has_element = true
                         info.is_cast = true
                     } else {
                         let (found_index, found) = find_function(c, module_index, name)
@@ -6570,6 +6580,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                             info.function = c.functions[found_index]
                         }
                         has_function = true
+                    }
                     }
                     }
                     }
@@ -6775,6 +6786,13 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     let (argument_type, argument_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                     if argument_error != ok { ret (info, argument_error) }
                     if is_untyped(argument_type) { ret (info, MissingContext) }
+                    if info.cast.kind == .Named {
+                        let (backing, has_backing) = enum_backing_type(c, info.cast)
+                        if !has_backing || argument_type.kind != .Integer || integer_width(argument_type) != integer_width(backing) { ret (info, TypeMismatch) }
+                        child_position += 1usize
+                        at += 1usize
+                        continue
+                    }
                     // A value of a type parameter's type in a template body: whether it is
                     // numeric is the instance's question (D136).
                     if !is_numeric(argument_type) && !(c.generic_declaration && type_shape_unknown(argument_type)) { ret (info, TypeMismatch) }

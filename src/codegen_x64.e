@@ -1579,23 +1579,42 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                         try add_fixup(fixups, &fixup_count, false_displacement, instruction.target2 - current.first_block)
                     } else {
                 if instruction.opcode == .Trap || instruction.opcode == .Unreachable {
-                    if instruction.has_result || instruction.operand_count != 0usize { ret Unsupported }
+                    if instruction.has_result || instruction.operand_count > 2usize { ret Unsupported }
                     // `.Trap` is `unreachable()`, its immediate the message's string
-                    // constant plus one; `.Unreachable` is a point the compiler inferred.
+                    // constant plus one, or a check lowering emitted: then its type
+                    // names the kind and its operands are the values, printed after
+                    // the message. `.Unreachable` is a point the compiler inferred.
                     var message = "control reached a point the compiler took as unreachable"
+                    var kind = "unreachable"
+                    var signed = false
                     if instruction.opcode == .Trap {
                         message = "unreachable() reached"
+                        if instruction.ty.kind == .Other { kind = instruction.ty.name }
                         if instruction.immediate != 0usize {
                             if instruction.immediate > builder.string_count { ret Unsupported }
                             let spelling = builder.strings[instruction.immediate - 1usize].spelling
-                            var text_start = 0usize
-                            var text_end = 0usize
-                            var raw = false
-                            try string_contents(spelling, &text_start, &text_end, &raw)
-                            message = spelling[text_start..text_end]
+                            message = spelling
+                            if spelling.len != 0usize && (spelling[0usize] == 34u8 || spelling[0usize] == 114u8) {
+                                var text_start = 0usize
+                                var text_end = 0usize
+                                var raw = false
+                                try string_contents(spelling, &text_start, &text_end, &raw)
+                                message = spelling[text_start..text_end]
+                            }
                         }
                     }
-                    try emit_trap(builder, current, instruction.token, "unreachable", message, "", "", 0usize, false, 0usize, 0usize, context)
+                    var operand_at = 0usize
+                    while operand_at < instruction.operand_count {
+                        let operand_value = builder.operands[instruction.first_operand + operand_at]
+                        let (operand_type, operand_type_error) = value_type(builder, current, operand_value)
+                        if operand_type_error != ok { ret operand_type_error }
+                        if operand_at == 0usize { signed = signed_integer(operand_type) }
+                        let (operand_source, operand_error) = read_value(allocations, operand_value, 10usize + operand_at, output)
+                        if operand_error != ok { ret operand_error }
+                        if operand_source != 10usize + operand_at { try emit_x64.mov_register(output, 10usize + operand_at, operand_source) }
+                        operand_at += 1usize
+                    }
+                    try emit_trap(builder, current, instruction.token, kind, message, "", "", instruction.operand_count, signed, 10usize, 11usize, context)
                 } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {
