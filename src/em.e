@@ -1444,10 +1444,23 @@ fn inlined_dependency_count(builder: *nir.Builder, module_index: usize) -> usize
     var at = 0usize
     while at < builder.inlined_count {
         let entry = builder.inlined[at]
-        if entry.caller_module == module_index && entry.callee_module != module_index { count += 1usize }
+        if entry.caller_module == module_index && entry.callee_module != module_index && first_inlined(builder, at) { count += 1usize }
         at += 1usize
     }
     ret count
+}
+
+// The refs are recorded per copying function (D212); the edge is per module, so an
+// entry stands for its edge only when no earlier entry of the module names the callee.
+fn first_inlined(builder: *nir.Builder, index: usize) -> bool {
+    let entry = builder.inlined[index]
+    var at = 0usize
+    while at < index {
+        let prior = builder.inlined[at]
+        if prior.caller_module == entry.caller_module && prior.callee_module == entry.callee_module && prior.instance == entry.instance && same(prior.name, entry.name) { ret false }
+        at += 1usize
+    }
+    ret true
 }
 
 fn value_dependency_count(c: *check.Checker, module_index: usize) -> (usize, err) {
@@ -1491,7 +1504,7 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
     at = 0usize
     while at < builder.inlined_count {
         let entry = builder.inlined[at]
-        if entry.caller_module == module_index && entry.callee_module != module_index {
+        if entry.caller_module == module_index && entry.callee_module != module_index && first_inlined(builder, at) {
             if entry.callee_module >= g.count { ret InvalidArtifact }
             let (checked_function, found_checked) = find_checked_function(c, entry.callee_module, entry.name)
             if !found_checked { ret InvalidArtifact }

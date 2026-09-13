@@ -294,8 +294,11 @@ neper_trap:
 # the symbol table the linker appended after the code -- entries of a start relative
 # to the table, a length, and a name -- until one is not in it, which is the runtime's
 # own entry, or thirty-two frames have been printed.
+# Each return address is looked up one byte back, at its call: a trap that ends a
+# function returns to the function's end, which no range holds (D212).
     mov r14d,32
     mov r12,QWORD PTR [rsp+48]
+    dec r12
     mov r13,QWORD PTR [rsp+32]
 .Ltrap_frame:
     test r14d,r14d
@@ -320,11 +323,11 @@ neper_trap:
     add rbx,24
     jmp .Ltrap_lookup
 .Ltrap_found:
-# The offset the return address points behind, within the function, for the line
-# rows: the row with the greatest offset at or below it is the frame's line.
+# The call's offset within the function, for the line rows: the row with the greatest
+# offset at or below it is the frame's line. rax is the end, rcx the length.
     mov r15,r12
     sub r15,rax
-    dec r15
+    add r15,rcx
     mov BYTE PTR [rsp],32
     mov BYTE PTR [rsp+1],32
     mov BYTE PTR [rsp+2],97
@@ -400,6 +403,7 @@ neper_trap:
     test r13,r13
     jz .Ltrap_exit
     mov r12,QWORD PTR [r13+8]
+    dec r12
     mov r13,QWORD PTR [r13]
     jmp .Ltrap_frame
 .Ltrap_exit:

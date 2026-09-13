@@ -203,6 +203,9 @@ type InlinedRef = struct {
     callee_module: usize,
     name: str,
     instance: usize,
+    // The function whose body holds the copy, so a nested copy (D212) can carry the
+    // refs of the body it copies along to its own caller.
+    caller_function: usize,
 }
 
 type Builder = struct {

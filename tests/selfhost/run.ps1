@@ -1567,6 +1567,41 @@ Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $in
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
 $incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
+# Nested inlining (D212): a release build copies `leaf.add` into `mid.twice` and that
+# into `main`, the trap record names leaf.e through both copies with one frame in
+# release and three in debug, and an edit to the leaf's body rebuilds all three.
+$nestedFixture = Join-Path $PSScriptRoot 'fixtures\link\inline_nested'
+$nestedRelease = Join-Path $testBuild 'inline-nested-release.exe'
+$nestedReleaseWritten = & $compiler emit-executable (Join-Path $nestedFixture 'src\main.e') $repo 'x64' 'windows' $nestedRelease --release
+if ($LASTEXITCODE -ne 0 -or $nestedReleaseWritten -ne 'executable written') { throw 'nested inlining release emission failed' }
+& $nestedRelease
+if ($LASTEXITCODE -ne 5) { throw "the nested release build did not compute through both copies: exit $LASTEXITCODE" }
+$nestedOutput = (& $nestedRelease trap 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 134 -or $nestedOutput -notmatch 'leaf\.e:3:13: trap\[unreachable\]: leaf gave up\n  at main\.main \(' -or $nestedOutput -match 'at mid\.') { throw "the nested release trap did not name leaf.e with one frame: exit $LASTEXITCODE, $nestedOutput" }
+$nestedDebug = Join-Path $testBuild 'inline-nested-debug.exe'
+$nestedDebugWritten = & $compiler emit-executable (Join-Path $nestedFixture 'src\main.e') $repo 'x64' 'windows' $nestedDebug
+if ($LASTEXITCODE -ne 0 -or $nestedDebugWritten -ne 'executable written') { throw 'nested inlining debug emission failed' }
+$nestedOutput = (& $nestedDebug trap 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 134 -or $nestedOutput -notmatch 'at leaf\.boom \(.*leaf\.e:3\)\n  at mid\.fail \(.*mid\.e:5\)\n  at main\.main \(.*main\.e:15\)') { throw "the nested debug trap did not walk three frames: exit $LASTEXITCODE, $nestedOutput" }
+$nestedScratch = Join-Path $testBuild 'inline-nested-scratch'
+$nestedSource = Join-Path $nestedScratch 'src'
+$nestedArtifacts = Join-Path $testBuild 'inline-nested-artifacts'
+if (Test-Path -LiteralPath $nestedScratch) { Remove-Item -LiteralPath $nestedScratch -Recurse -Force }
+if (Test-Path -LiteralPath $nestedArtifacts) { Remove-Item -LiteralPath $nestedArtifacts -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $nestedSource, $nestedArtifacts | Out-Null
+Copy-Item (Join-Path $nestedFixture 'src\*.e') $nestedSource
+$nestedMain = Join-Path $nestedSource 'main.e'
+$nestedFirst = & $compiler emit-em-all $nestedMain $repo 'x64' 'windows' $nestedArtifacts --release
+if ($LASTEXITCODE -ne 0 -or $nestedFirst -ne 'compiled modules written') { throw 'the nested fixture did not compile to artifacts' }
+Copy-Item (Join-Path $nestedFixture 'edits\leaf_body.e') (Join-Path $nestedSource 'leaf.e')
+$nestedEdited = (& $compiler emit-em-all $nestedMain $repo 'x64' 'windows' $nestedArtifacts --release --incremental) -join "`n"
+if ($LASTEXITCODE -ne 0 -or $nestedEdited -notmatch 'rebuilt main' -or $nestedEdited -notmatch 'rebuilt mid' -or $nestedEdited -notmatch 'rebuilt leaf' -or $nestedEdited -notmatch 'kept e.os') { throw "a leaf body edit did not rebuild through the nested copy: $nestedEdited" }
+$nestedLinked = Join-Path $testBuild 'inline-nested-linked.exe'
+$nestedArtifactList = @('main', 'mid', 'leaf', 'e.os', 'e.mem', 'e.str') | ForEach-Object { Join-Path $nestedArtifacts "$_.x64-windows.em" }
+$nestedLinkWritten = & $compiler link-em $nestedLinked @nestedArtifactList
+if ($LASTEXITCODE -ne 0 -or $nestedLinkWritten -ne 'artifact executable written') { throw 'the nested artifacts did not link' }
+& $nestedLinked
+if ($LASTEXITCODE -ne 6) { throw "the relinked program did not carry the leaf's new body through both copies: exit $LASTEXITCODE" }
 # The trap protocol's backtrace: one `  at module.function` line per frame, from the
 # trapping function up to main, after the record; a debug build does not inline, so
 # `deeper` is a frame (D211).
@@ -1574,7 +1609,7 @@ $backtracePath = Join-Path $testBuild 'trap-backtrace-selfhost.exe'
 $backtraceWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_backtrace\src\main.e') $repo 'x64' 'windows' $backtracePath
 if ($LASTEXITCODE -ne 0 -or $backtraceWritten -ne 'executable written') { throw 'backtrace fixture executable emission failed' }
 $backtraceOutput = (& $backtracePath 2>&1) -join "`n"
-if ($LASTEXITCODE -ne 134 -or $backtraceOutput -notmatch 'helper\.e:1:50: trap\[bounds\]: index 7 out of bounds for len 5\n  at helper\.pick \(.*helper\.e:1\)\n  at main\.deeper \(.*main\.e:12\)\n  at main\.main \(.*main\.e:18\)') { throw "the trap did not print its backtrace: exit $LASTEXITCODE, $backtraceOutput" }
+if ($LASTEXITCODE -ne 134 -or $backtraceOutput -notmatch 'helper\.e:1:50: trap\[bounds\]: index 7 out of bounds for len 5\n  at helper\.pick \(.*helper\.e:1\)\n  at main\.deeper \(.*main\.e:12\)\n  at main\.main \(.*main\.e:16\)') { throw "the trap did not print its backtrace: exit $LASTEXITCODE, $backtraceOutput" }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at

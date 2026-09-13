@@ -1689,6 +1689,52 @@ incremental_signature=$($test_build/neper-self emit-em-all "$incremental_main" "
 case "$incremental_signature" in *'rebuilt main'*) ;; *) printf %s "a signature edit did not rebuild the dependent: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'rebuilt dep'*) ;; *) printf %s "a signature edit did not rebuild its module: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'kept e.os'*) ;; *) printf %s "an untouched module was rebuilt: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
+# Nested inlining (D212): a release build copies `leaf.add` into `mid.twice` and that
+# into `main`, the trap record names leaf.e through both copies with one frame in
+# release and three in debug, and an edit to the leaf's body rebuilds all three.
+nested_fixture="$repo/tests/selfhost/fixtures/link/inline_nested"
+nested_release="$test_build/inline-nested-release"
+nested_release_written=$($test_build/neper-self emit-executable "$nested_fixture/src/main.e" "$repo" x64 linux "$nested_release" --release)
+[ "$nested_release_written" = 'executable written' ]
+chmod +x "$nested_release"
+nested_status=0
+"$nested_release" || nested_status=$?
+[ "$nested_status" -eq 5 ]
+nested_status=0
+nested_output=$("$nested_release" trap 2>&1) || nested_status=$?
+[ "$nested_status" -eq 134 ]
+case "$nested_output" in *'leaf.e:3:13: trap[unreachable]: leaf gave up'*'  at main.main ('*) ;; *) printf %s "the nested release trap did not name leaf.e: $nested_output" >&2; echo >&2; exit 1 ;; esac
+case "$nested_output" in *'at mid.'*) printf %s "the nested release build kept a frame it inlined: $nested_output" >&2; echo >&2; exit 1 ;; *) ;; esac
+nested_debug="$test_build/inline-nested-debug"
+nested_debug_written=$($test_build/neper-self emit-executable "$nested_fixture/src/main.e" "$repo" x64 linux "$nested_debug")
+[ "$nested_debug_written" = 'executable written' ]
+chmod +x "$nested_debug"
+nested_status=0
+nested_output=$("$nested_debug" trap 2>&1) || nested_status=$?
+[ "$nested_status" -eq 134 ]
+case "$nested_output" in *'  at leaf.boom ('*'leaf.e:3)'*'  at mid.fail ('*'mid.e:5)'*'  at main.main ('*'main.e:15)'*) ;; *) printf %s "the nested debug trap did not walk three frames: $nested_output" >&2; echo >&2; exit 1 ;; esac
+nested_scratch="$test_build/inline-nested-scratch"
+nested_source="$nested_scratch/src"
+nested_artifacts="$test_build/inline-nested-artifacts"
+rm -rf "$nested_scratch" "$nested_artifacts"
+mkdir -p "$nested_source" "$nested_artifacts"
+cp "$nested_fixture"/src/*.e "$nested_source/"
+nested_main="$nested_source/main.e"
+nested_first=$($test_build/neper-self emit-em-all "$nested_main" "$repo" x64 linux "$nested_artifacts" --release)
+[ "$nested_first" = 'compiled modules written' ]
+cp "$nested_fixture/edits/leaf_body.e" "$nested_source/leaf.e"
+nested_edited=$($test_build/neper-self emit-em-all "$nested_main" "$repo" x64 linux "$nested_artifacts" --release --incremental)
+case "$nested_edited" in *'rebuilt main'*) ;; *) printf %s "a leaf body edit did not rebuild main through the nested copy: $nested_edited" >&2; echo >&2; exit 1 ;; esac
+case "$nested_edited" in *'rebuilt mid'*) ;; *) printf %s "a leaf body edit did not rebuild mid: $nested_edited" >&2; echo >&2; exit 1 ;; esac
+case "$nested_edited" in *'rebuilt leaf'*) ;; *) printf %s "a leaf body edit did not rebuild leaf: $nested_edited" >&2; echo >&2; exit 1 ;; esac
+case "$nested_edited" in *'kept e.os'*) ;; *) printf %s "an untouched module was rebuilt: $nested_edited" >&2; echo >&2; exit 1 ;; esac
+nested_linked="$test_build/inline-nested-linked"
+nested_link_written=$($test_build/neper-self link-em "$nested_linked" "$nested_artifacts/main.x64-linux.em" "$nested_artifacts/mid.x64-linux.em" "$nested_artifacts/leaf.x64-linux.em" "$nested_artifacts/e.os.x64-linux.em" "$nested_artifacts/e.mem.x64-linux.em" "$nested_artifacts/e.str.x64-linux.em")
+[ "$nested_link_written" = 'artifact executable written' ]
+chmod +x "$nested_linked"
+nested_status=0
+"$nested_linked" || nested_status=$?
+[ "$nested_status" -eq 6 ]
 # The trap protocol's backtrace: one `  at module.function` line per frame, from the
 # trapping function up to main, after the record.
 backtrace_path="$test_build/trap-backtrace-selfhost"
@@ -1702,7 +1748,7 @@ backtrace_expected=$'helper.e:1:50: trap[bounds]: index 7 out of bounds for len 
 case "$backtrace_output" in *"$backtrace_expected"*) ;; *) printf %s "the trap did not print its backtrace: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
 case "$backtrace_output" in *'helper.e:1)'*) ;; *) printf %s "the first frame has no line: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
 case "$backtrace_output" in *'  at main.deeper ('*'main.e:12)'*) ;; *) printf %s "the debug build inlined deeper, or its frame has no line: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
-case "$backtrace_output" in *'  at main.main ('*'main.e:18)'*) ;; *) printf %s "the third frame has no line: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
+case "$backtrace_output" in *'  at main.main ('*'main.e:16)'*) ;; *) printf %s "the third frame has no line: $backtrace_output" >&2; echo >&2; exit 1 ;; esac
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

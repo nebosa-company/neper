@@ -2076,26 +2076,38 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
 // returns once, or a stack slot every return stores to when it returns from several
 // places. References into the oracle's tables -- functions, strings, globals -- are
 // re-interned here. The body edge the artifact needs is recorded on the builder.
+fn record_inlined(builder: *nir.Builder, callee_module: usize, name: str, instance: usize) -> err {
+    let caller_module = builder.functions[builder.current_function].module_index
+    var recorded_at = 0usize
+    while recorded_at < builder.inlined_count {
+        let prior = builder.inlined[recorded_at]
+        if prior.caller_module == caller_module && prior.caller_function == builder.current_function && prior.callee_module == callee_module && prior.instance == instance && check.same(prior.name, name) { ret ok }
+        recorded_at += 1usize
+    }
+    if builder.inlined_count == builder.inlined.len { ret check.Capacity }
+    var record: nir.InlinedRef = zero
+    record.caller_module = caller_module
+    record.caller_function = builder.current_function
+    record.callee_module = callee_module
+    record.name = name
+    record.instance = instance
+    builder.inlined[builder.inlined_count] = record
+    builder.inlined_count += 1usize
+    ret ok
+}
+
 fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
     let oracle = builder.oracle
     let entry = builder.inline_entries[entry_index]
     let callee = oracle.functions[entry.function_index]
-    if builder.inlined_count == builder.inlined.len { ret check.Capacity }
-    var recorded = false
-    var recorded_at = 0usize
-    while recorded_at < builder.inlined_count {
-        let prior = builder.inlined[recorded_at]
-        if prior.caller_module == builder.functions[builder.current_function].module_index && prior.callee_module == entry.module_index && prior.instance == entry.instance && check.same(prior.name, entry.name) { recorded = true }
-        recorded_at += 1usize
-    }
-    if !recorded {
-        var record: nir.InlinedRef = zero
-        record.caller_module = builder.functions[builder.current_function].module_index
-        record.callee_module = entry.module_index
-        record.name = entry.name
-        record.instance = entry.instance
-        builder.inlined[builder.inlined_count] = record
-        builder.inlined_count += 1usize
+    try record_inlined(builder, entry.module_index, entry.name, entry.instance)
+    // The callee's body may itself hold copies (D212): every callee of those is a
+    // body edge of this module too, or an edit to it would leave this copy stale.
+    var nested_at = 0usize
+    while nested_at < oracle.inlined_count {
+        let nested = oracle.inlined[nested_at]
+        if nested.caller_function == entry.function_index { try record_inlined(builder, nested.callee_module, nested.name, nested.instance) }
+        nested_at += 1usize
     }
     var value_map: [128]usize = zero
     var block_map: [64]usize = zero
@@ -2198,6 +2210,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                     let (copied, result, copy_error) = nir.emit(builder, instruction.opcode, instruction.ty, instruction.has_result, immediate, instruction.token)
                     builder.nocheck = was_nocheck
                     if copy_error != ok { ret copy_error }
+                    if instruction.path.len != 0usize { builder.instructions[copied].path = instruction.path }
                     var operand_at = 0usize
                     while operand_at < instruction.operand_count {
                         try nir.add_operand(builder, copied, value_map[oracle.operands[instruction.first_operand + operand_at]])

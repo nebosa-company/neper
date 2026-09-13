@@ -1606,7 +1606,10 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
         if outgoing > register_count { call_area_count += outgoing - register_count }
     }
     let frame_slots = preserve_base + preserve_count + call_area_count
-    if frame_slots != 0usize { try emit_x64.function_prologue(output, frame_slots) }
+    // Every function has a frame, even one with no slots: the backtrace walks the rbp
+    // chain, and a frameless function that calls -- or traps -- would be no frame in
+    // it, and its caller would be skipped (D212).
+    try emit_x64.function_prologue(output, frame_slots)
     try store_incoming_parameters(builder, current, abi, stack_slots, parameters, output)
     let end = current.first_instruction + current.instruction_count
     var fixup_count = 0usize
@@ -2076,11 +2079,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                             if instruction.operand_count != 0usize { ret Unsupported }
                         }
                     }
-                    if frame_slots == 0usize {
-                        try emit_x64.return_instruction(output)
-                    } else {
-                        try emit_x64.function_epilogue(output)
-                    }
+                    try emit_x64.function_epilogue(output)
                 } else {
                     ret Unsupported
                 }
@@ -2155,7 +2154,7 @@ fn self_test() -> err {
     var line_count = 0usize
     var context = FunctionContext { allocations: allocations[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count }
     try function(&builder, 0usize, stack_slots, &context)
-    if output.count != 11usize || output.bytes[0usize] != 72usize || output.bytes[1usize] != 184usize || output.bytes[2usize] != 7usize || output.bytes[10usize] != 195usize { ret Unsupported }
+    if output.count != 19usize || output.bytes[0usize] != 85usize || output.bytes[4usize] != 72usize || output.bytes[5usize] != 184usize || output.bytes[6usize] != 7usize || output.bytes[17usize] != 93usize || output.bytes[18usize] != 195usize { ret Unsupported }
     allocations[0usize].kind = .Stack
     allocations[0usize].index = 0usize
     var spill_storage: [64]usize = zero
@@ -2208,7 +2207,7 @@ fn self_test() -> err {
     context.allocations = branch_allocations[..]
     context.output = &branch_output
     try function(&builder, 1usize, 0usize, &context)
-    if branch_output.count != 73usize || branch_output.bytes[20usize] != 72usize || branch_output.bytes[21usize] != 57usize || branch_output.bytes[22usize] != 200usize || branch_output.bytes[40usize] != 15usize || branch_output.bytes[41usize] != 133usize || branch_output.bytes[42usize] != 5usize || branch_output.bytes[47usize] != 11usize || branch_output.bytes[72usize] != 195usize { ret Unsupported }
+    if branch_output.count != 85usize || branch_output.bytes[24usize] != 72usize || branch_output.bytes[25usize] != 57usize || branch_output.bytes[26usize] != 200usize || branch_output.bytes[44usize] != 15usize || branch_output.bytes[45usize] != 133usize || branch_output.bytes[46usize] != 5usize || branch_output.bytes[51usize] != 15usize || branch_output.bytes[84usize] != 195usize { ret Unsupported }
     let (reference_index, reference_error) = nir.intern_function(&builder, 0usize, "constant", 0usize)
     if reference_error != ok { ret reference_error }
     var call_storage: [32]usize = zero

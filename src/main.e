@@ -2004,9 +2004,37 @@ fn main(a: *mem.Arena, args: []str) -> err {
         builder.inlined = inlined
         builder.inlined_count = 0usize
         builder.has_oracle = false
+        var first_oracle: nir.Builder = zero
+        var first_signatures: nir.Signatures = zero
         if release_build {
+            // Twice (D212): the first oracle's bodies hold no copies; the second is
+            // lowered against it, so its bodies hold one level of copies, and a call
+            // the program inlines from it is two levels deep. Each pass records, per
+            // function, the callees it copied, for the body edges.
+            try init_oracle_nir(a, &first_oracle, &first_signatures, checker.parameter_count + checker.return_type_count + 1usize)
+            first_oracle.nocheck = true
+            let (first_entries, first_entries_error) = mem.alloc[nir.InlineEntry](a, 4096usize)
+            if first_entries_error != ok { ret first_entries_error }
+            let (first_inlined, first_inlined_error) = mem.alloc[nir.InlinedRef](a, 8192usize)
+            if first_inlined_error != ok { ret first_inlined_error }
+            first_oracle.inlined = first_inlined
+            var first_entry_count = 0usize
+            let first_error = lower.build_inline_oracle(&checker, &loaded, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count)
+            if first_error != ok {
+                try print_lower_diagnostic(&loaded, &checker, first_error)
+                os.exit(1i32)
+                ret ok
+            }
             try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize)
             oracle.nocheck = true
+            oracle.oracle = &first_oracle
+            oracle.oracle_signatures = &first_signatures
+            oracle.has_oracle = true
+            oracle.inline_entries = first_entries
+            oracle.inline_entry_count = first_entry_count
+            let (oracle_inlined, oracle_inlined_error) = mem.alloc[nir.InlinedRef](a, 8192usize)
+            if oracle_inlined_error != ok { ret oracle_inlined_error }
+            oracle.inlined = oracle_inlined
             let (inline_entries, inline_entries_error) = mem.alloc[nir.InlineEntry](a, 4096usize)
             if inline_entries_error != ok { ret inline_entries_error }
             var inline_entry_count = 0usize

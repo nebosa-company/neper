@@ -3865,3 +3865,26 @@ rather than linking debug code into a release program. `link/incremental` runs i
 whole sequence in release, since the body edge it pins exists only where inlining
 does, and `link/trap_backtrace` names `main.deeper` again. A debug build of the
 compiler no longer pays for the oracle at all.
+
+## D212 — Nested inlining through a second oracle, and every function has a frame
+
+A copy under D207 was one level deep: the oracle's bodies were lowered without an
+oracle, so a callee inlined into a callee was called from the copy. Now the oracle
+is built twice. The first pass is as before; the second is lowered against the
+first, so its bodies hold one level of copies, and what the program copies from it
+is two levels deep -- `leaf.add` inside `mid.twice` inside `main`. Each pass records,
+per copying function, the callees it copied, and a copy carries the refs of the body
+it copies along to its caller, so the artifact of the module two copies up has a
+body edge to the leaf and an edit to the leaf's body rebuilds it; the edge stays one
+per module and callee, the writer folding what the per-function records repeat. A
+copied instruction keeps the path it was stamped with, so a trap inside the inner
+copy names the leaf's file. Two more things the fixture found. The backtrace looked a
+return address up as it stood, and a trap that ends a function returns to the
+function's end, which no half-open range holds, so `unreachable()` as the last
+statement had no backtrace at all; the walk now looks up the byte before, the call
+itself, and the line rows are searched from the call's offset -- the frame's line was
+the function's last row before, which `link/trap_backtrace` had pinned as line 18
+where the call is on 16. And a function with no stack slots had no frame, so when it
+called it was no frame in the chain and its caller was skipped: every function has
+one now, a push, a move and a leave, which also puts the stack where the ABI wants
+it at the calls such a function makes.
