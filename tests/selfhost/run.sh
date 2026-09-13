@@ -1572,6 +1572,31 @@ case "$overflow_output" in
 ' "the neg case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
 esac
 "$overflow_path" none
+# `@nocheck { ... }`: the debug-only rows elided inside, a release-mode row still
+# trapping inside, and the same operation trapping outside.
+nocheck_path="$test_build/nocheck-selfhost"
+nocheck_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/nocheck/src/main.e" "$repo" x64 linux "$nocheck_path")
+[ "$nocheck_written" = 'executable written' ]
+chmod +x "$nocheck_path"
+nocheck_quiet=$("$nocheck_path" quiet 2>&1)
+[ "$nocheck_quiet" = '' ]
+nocheck_status=0
+nocheck_output=$("$nocheck_path" divide 2>&1) || nocheck_status=$?
+[ "$nocheck_status" -eq 134 ]
+case "$nocheck_output" in
+    *'main.e:36:21: trap[divide]: 7 / 0 divides by zero'*) ;;
+    *) printf '%s
+' "the divide case of the nocheck fixture went wrong: $nocheck_output" >&2; exit 1 ;;
+esac
+nocheck_status=0
+nocheck_output=$("$nocheck_path" loud 2>&1) || nocheck_status=$?
+[ "$nocheck_status" -eq 134 ]
+case "$nocheck_output" in
+    *'main.e:41:23: trap[overflow]: u8 + overflows'*) ;;
+    *) printf '%s
+' "the loud case of the nocheck fixture went wrong: $nocheck_output" >&2; exit 1 ;;
+esac
+"$nocheck_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

@@ -736,7 +736,10 @@ fn write_nir_canonical(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
         if opcode == 0usize { ret InvalidArtifact }
         try binary.byte(output, opcode)
         if instruction.has_result { try binary.byte(output, 1usize) } else { try binary.byte(output, 0usize) }
-        try binary.little_u16(output, 0usize)
+        // The `@nocheck` mark is semantics, so it is in the hash (D203).
+        var flags = 0usize
+        if instruction.nocheck { flags = 1usize }
+        try binary.little_u16(output, flags)
         var instruction_type = instruction.ty
         if instruction_type.kind == .Invalid {
             if instruction.has_result { ret InvalidArtifact }

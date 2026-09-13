@@ -373,6 +373,7 @@ fn emit_enum_check(c: *check.Checker, converted: usize, source: usize, ty: check
 // tag has to name that member. One compare against the tag at offset 0, and a `.Trap`
 // of kind `tag` carrying the tag found. A base behind a pointer is the same value.
 fn emit_tag_check(c: *check.Checker, base: usize, base_type: check.Type, field_name: str, builder: *nir.Builder, token: lex.Token) -> err {
+    if builder.nocheck { ret ok }
     var subject = base_type
     while subject.kind == .Pointer {
         if !subject.has_element || subject.element >= c.type_count { ret ok }
@@ -431,7 +432,7 @@ fn emit_tag_check(c: *check.Checker, base: usize, base_type: check.Type, field_n
 // compares the pointer with zero first; a value that is already an address of a stack
 // object or an aggregate by address is never nil and never comes here.
 fn emit_null_check(c: *check.Checker, pointer: usize, pointer_type: check.Type, builder: *nir.Builder, token: lex.Token) -> err {
-    if pointer_type.kind != .Pointer { ret ok }
+    if pointer_type.kind != .Pointer || builder.nocheck { ret ok }
     let usize_type = check.make_type(.Integer, "usize", pointer_type.module_index)
     let (zero_instruction, zero_value, zero_error) = nir.emit(builder, .ConstInteger, usize_type, true, 0usize, token)
     if zero_error != ok { ret zero_error }
@@ -4419,6 +4420,25 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     if node.kind == .ForStmt { ret lower_for(c, g, tree, module_index, function, node, builder, bindings, binding_count, defers) }
     if node.kind == .SwitchStmt { ret lower_switch(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
     if node.kind == .DeferStmt { ret lower_defer(c, g, tree, module_index, node, builder, bindings, *binding_count, defers) }
+    // `@nocheck { ... }` (section 11): the block's instructions carry the mark, and the
+    // debug-only rows -- bounds, null, tag, overflow, narrow, shift -- are left out of
+    // them. The rows that trap in release too are not touched by it.
+    if node.kind == .NocheckStmt {
+        let was_nocheck = builder.nocheck
+        builder.nocheck = true
+        var block_error: err = ok
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                let child = tree.nodes[tree.children[at].index]
+                if child.kind == .Block { block_error = lower_block(c, g, tree, module_index, function, child, builder, bindings, binding_count, control, defers) }
+            }
+            at += 1usize
+        }
+        builder.nocheck = was_nocheck
+        ret block_error
+    }
     if node.kind == .BreakStmt {
         if !control.active || control.break_count == control.breaks.len { ret check.Unsupported }
         try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, *binding_count, defers, control.break_defer_base)

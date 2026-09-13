@@ -115,6 +115,8 @@ type Instruction = struct {
     target: usize,
     target2: usize,
     token: lex.Token,
+    // Emitted inside `@nocheck { ... }`: the debug-only checks are left out of it (D203).
+    nocheck: bool,
 }
 
 type Block = struct {
@@ -193,6 +195,8 @@ type Builder = struct {
     // runtime's imports the image declares. Set by `link_pe.write` and read by its layout
     // helpers, which reach everything else through this builder too.
     runtime_prefix: usize,
+    // Set while lowering a `@nocheck` block; every instruction emitted carries it.
+    nocheck: bool,
     function_count: usize,
     block_count: usize,
     instruction_count: usize,
@@ -674,6 +678,7 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         target: 0usize,
         target2: 0usize,
         token: token,
+        nocheck: builder.nocheck,
     }
     builder.instruction_count += 1usize
     builder.blocks[builder.current_block].instruction_count += 1usize

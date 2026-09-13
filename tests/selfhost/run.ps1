@@ -1489,6 +1489,19 @@ $overflowOutput = & $overflowPath neg 2>&1
 if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:43:17: trap\[overflow\]: i16 unary - overflows') { throw "the neg case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
 & $overflowPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'arithmetic in range, or a wrapping operator, trapped' }
+# `@nocheck { ... }`: the debug-only rows elided inside, a release-mode row still
+# trapping inside, and the same operation trapping outside.
+$nocheckPath = Join-Path $testBuild 'nocheck-selfhost.exe'
+$nocheckWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\nocheck\src\main.e') $repo 'x64' 'windows' $nocheckPath
+if ($LASTEXITCODE -ne 0 -or $nocheckWritten -ne 'executable written') { throw 'nocheck fixture executable emission failed' }
+$nocheckQuiet = & $nocheckPath quiet 2>&1
+if ($LASTEXITCODE -ne 0 -or ($nocheckQuiet -join "`n") -ne '') { throw "a check fired inside @nocheck: exit $LASTEXITCODE, $($nocheckQuiet -join "`n")" }
+$nocheckDivide = & $nocheckPath divide 2>&1
+if ($LASTEXITCODE -ne 134 -or ($nocheckDivide -join "`n") -notmatch 'main\.e:36:21: trap\[divide\]: 7 / 0 divides by zero') { throw "@nocheck disabled a row that traps in release: exit $LASTEXITCODE, $($nocheckDivide -join "`n")" }
+$nocheckLoud = & $nocheckPath loud 2>&1
+if ($LASTEXITCODE -ne 134 -or ($nocheckLoud -join "`n") -notmatch 'main\.e:41:23: trap\[overflow\]: u8 \+ overflows') { throw "the check outside @nocheck did not fire: exit $LASTEXITCODE, $($nocheckLoud -join "`n")" }
+& $nocheckPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the nocheck fixture trapped on its ordinary path' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at

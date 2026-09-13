@@ -3691,3 +3691,19 @@ multiplicative hash, `e.algo.uuid`'s shift countdown, and the carry idioms of
 hands to `kill`, all now `+% -% *%`. The compiler's own image grows by four percent. `link/trap_overflow` pins eight refusals across the
 widths, both signednesses and the four operators on both platforms, and that the same
 arithmetic in range, and `+%` past the edge, pass.
+
+## D203 — `@nocheck { ... }` leaves the debug-only rows out of a block
+
+Section 11 gives `@nocheck` for the rare hot loop: it disables the debug-only rows
+inside the block and cannot disable the rows that trap in release. The statement
+parsed and was refused by lowering; it now lowers its block with the builder marked,
+and every NIR instruction emitted while the mark is up carries it. The back end
+leaves out `bounds`, `overflow`, `narrow` (integer and float) and `shift` for a marked
+instruction, and lowering leaves out `null` and `tag`; `divide`, `enum` and
+`unreachable` are not consulted. An unsigned 64-bit `*` still goes through `mul`
+inside the block, only its high half is not looked at. The mark is semantics -- the
+same source with and without it is two programs -- so the `.em` body hash carries it
+in the instruction's reserved half-word. `link/nocheck` pins a block running an
+overflowing sum, a narrowing cast, an over-wide shift and a payload read under the
+wrong tag to exit 0, a division by zero inside a block still trapping, and the same
+sum outside a block trapping, on both platforms.
