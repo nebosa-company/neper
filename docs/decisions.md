@@ -4218,3 +4218,20 @@ reaches are emitted, since dead-function elimination has already run. The bytes 
 target depend on the ABI, so the corpus holds one expected stream per host, generated
 by cross-targeting from one build. Mnemonic (AT&T or Intel) disassembly rather than a
 hex byte listing is the gap.
+
+## D234 -- `fmt --json` emits the canonical layout
+
+`fmt-file` tokenizes the source and re-emits it in canonical layout: four-space
+indent by brace depth, one space around binary and assignment operators and after
+comma and colon, no space inside delimiters or around `.` and `..` or before a call
+or index list, slice and array element types and prefix operators glued to their
+neighbour, comments preserved (a trailing comment one space past the code, a
+standalone comment at the line's indent), runs of blank lines collapsed to one with
+none surviving at a block edge, and a single final newline. It is a reindent-and-
+respace pass over the token and trivia stream, which is enough because neper is
+one-statement-per-line; prefix versus binary `-`/`*`/`&` is told apart by whether the
+previous token ends a value. tests/conformance/tools/fmt.e is already in canonical
+form, so the golden -- one `formatted` record -- also pins idempotence, and names no
+target so one stream serves both hosts. Gaps: wrapping a list past 100 columns,
+joining an empty block to `{}` or `}`..`else`, sorting `use` and attributes,
+minimizing raw-string delimiters, and the `--check` and stdin spellings.

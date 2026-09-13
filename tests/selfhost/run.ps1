@@ -1684,6 +1684,11 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-Fil
 $disActual = Join-Path $testBuild 'conformance-tools-dis.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json > `"$disActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/dis.x64-windows.expected.jsonl')).Hash) { throw "dis --json differs from the conformance corpus" }
+# `fmt --json` (D234): the operand's canonical layout, byte for byte (target-independent);
+# the fixture is already canonical, so this also pins idempotence.
+$fmtActual = Join-Path $testBuild 'conformance-tools-fmt.jsonl'
+cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt.e')`" --json > `"$fmtActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/fmt.expected.jsonl')).Hash) { throw "fmt --json differs from the conformance corpus" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'

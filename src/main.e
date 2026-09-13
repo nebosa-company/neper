@@ -914,6 +914,15 @@ fn run_program(a: *mem.Arena, path: str) -> (i32, str, str, err) {
 
 // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
 // Its own function because the bootstrap caps a function's locals (main is at the cap).
+fn fmt_command(a: *mem.Arena, args: []str) -> err {
+    let (text, load_error) = source.load(a, args[2usize])
+    if load_error != ok { ret load_error }
+    let (fmt_exit, fmt_error) = tool.fmt_json(a, text)
+    if fmt_error != ok { ret fmt_error }
+    if fmt_exit != 0usize { os.exit(i32(fmt_exit)) }
+    ret ok
+}
+
 fn index_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     report.json = true
@@ -2378,6 +2387,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
     if args.len == 7usize && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
+    // `fmt-file PATH --json` (D234): the operand's canonical layout as one `formatted` record.
+    if args.len == 4usize && same(args[1usize], "fmt-file") && same(args[3usize], "--json") { ret fmt_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner
@@ -2685,7 +2696,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         codegen_context.lines = line_entries
         codegen_context.line_count = &line_count
         while function_at < builder.function_count {
-            let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, 5usize, ranges, allocations)
+            let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, codegen_x64.register_pool_count(), ranges, allocations)
             if allocation_error != ok { ret allocation_error }
             if emit_machine_code {
                 let function_start = machine.count

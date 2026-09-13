@@ -11,6 +11,7 @@ use resolve
 use nir
 
 error Capacity
+error InvalidSource
 
 // One record at a time: built here, printed whole, so a line is never split.
 type Out = struct {
@@ -344,6 +345,224 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
     try decimal(&out, builder.function_count)
     try text(&out, "}}")
     ret flush(&out)
+}
+
+// docs/tooling.md section 6's canonical layout, the deterministic local rules (D234):
+// four-space indent by brace depth, one space around binary and assignment operators and
+// after comma and colon, no space inside delimiters or around `.` and `..` or before a
+// call/index list, prefix operators glued to their operand, comments preserved, blank
+// runs collapsed to one and none at a block edge, a single final newline. Not yet:
+// >100-column list wrapping, sorting `use` and attributes, and raw-string minimization.
+
+fn fmt_is_open(kind: lex.Kind) -> bool {
+    ret kind == .PunctLParen || kind == .PunctLBracket || kind == .PunctLBrace
+}
+
+fn fmt_is_close(kind: lex.Kind) -> bool {
+    ret kind == .PunctRParen || kind == .PunctRBracket || kind == .PunctRBrace
+}
+
+// A token that ends a value, so a following `(`/`[` is a call or index and a following
+// `-`/`*`/`&` is a binary operator rather than a prefix.
+fn fmt_value_end(kind: lex.Kind) -> bool {
+    if kind == .Identifier || kind == .Integer || kind == .Float || kind == .String { ret true }
+    if kind == .RawString || kind == .Character || kind == .PunctUnderscore { ret true }
+    if kind == .KwTrue || kind == .KwFalse || kind == .KwNil || kind == .KwOk { ret true }
+    if kind == .KwZero || kind == .KwUndef { ret true }
+    if kind == .PunctRParen || kind == .PunctRBracket { ret true }
+    ret false
+}
+
+fn fmt_prefixable(kind: lex.Kind) -> bool {
+    ret kind == .PunctMinus || kind == .PunctPlus || kind == .PunctAmp || kind == .PunctStar || kind == .PunctBang || kind == .PunctTilde
+}
+
+// Whether one space separates the previous token from this one, on the same line.
+// `prev_unary` is set when the previous token was a prefix operator, so this one glues.
+fn fmt_space_before(prev: lex.Kind, prev_unary: bool, cur: lex.Kind) -> bool {
+    if prev_unary { ret false }
+    if fmt_is_open(prev) { ret false }
+    if fmt_is_close(cur) { ret false }
+    if cur == .PunctComma { ret false }
+    if cur == .PunctColon { ret false }
+    if cur == .PunctDot || prev == .PunctDot { ret false }
+    if cur == .PunctRange || prev == .PunctRange { ret false }
+    if prev == .PunctAt { ret false }
+    if cur == .PunctLParen || cur == .PunctLBracket {
+        if fmt_value_end(prev) { ret false }
+        ret true
+    }
+    // A slice or array type glues its element to the `]`: `[]str`, `[]const u8`, `[4]u8`.
+    if prev == .PunctRBracket && (cur == .Identifier || cur == .KwConst) { ret false }
+    ret true
+}
+
+// A prefix (unary) use of `-`/`+`/`&`/`*`/`!`/`~`: the previous token does not end a value.
+fn fmt_is_unary(prev: lex.Kind, cur: lex.Kind) -> bool {
+    if !fmt_prefixable(cur) { ret false }
+    ret !fmt_value_end(prev)
+}
+
+// A run of one or more blank lines collapses to one, and none survives right after a line
+// that ends in `{` or right before a line that is `}`; the file ends in exactly one newline.
+// A single pass over the raw bytes, into the same order in a second buffer.
+fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
+    var written = 0usize
+    var at = 0usize
+    // Skip leading blank lines.
+    while at < raw.len && raw[at] == 10u8 { at += 1usize }
+    while at < raw.len {
+        // Copy one line including its trailing newline (if any).
+        let line_start = at
+        while at < raw.len && raw[at] != 10u8 { at += 1usize }
+        var line_end = at
+        if at < raw.len { at += 1usize }
+        // A blank line is empty between newlines.
+        if line_end == line_start {
+            // Look ahead past a run of blanks to the next non-blank line's first byte.
+            var probe = at
+            while probe < raw.len && raw[probe] == 10u8 { probe += 1usize }
+            // Drop the blank(s) at end of file or before a `}` line, and after a `{` line.
+            let after_open = written >= 2usize && out[written - 2usize] == 123u8 && out[written - 1usize] == 10u8
+            var before_close = false
+            if probe < raw.len {
+                var scan = probe
+                while scan < raw.len && raw[scan] == 32u8 { scan += 1usize }
+                if scan < raw.len && raw[scan] == 125u8 { before_close = true }
+            }
+            if probe >= raw.len || before_close || after_open {
+                at = probe
+            } else {
+                out[written] = 10u8
+                written += 1usize
+                at = probe
+            }
+        } else {
+            var copy = line_start
+            while copy < line_end {
+                out[written] = raw[copy]
+                written += 1usize
+                copy += 1usize
+            }
+            out[written] = 10u8
+            written += 1usize
+        }
+    }
+    ret written
+}
+
+// The canonical layout of a source, or an error if it does not tokenize.
+fn format_source(a: *mem.Arena, source: str) -> (str, err) {
+    if lex.validate(source) != ok { ret ("", InvalidSource) }
+    let (raw_storage, raw_error) = mem.alloc[u8](a, source.len * 2usize + 4096usize)
+    if raw_error != ok { ret ("", raw_error) }
+    var raw = Out { bytes: raw_storage, count: 0usize }
+    let build_error = format_into(&raw, source)
+    if build_error != ok { ret ("", build_error) }
+    let (clean_storage, clean_error) = mem.alloc[u8](a, raw.count + 16usize)
+    if clean_error != ok { ret ("", clean_error) }
+    let clean_count = fmt_collapse(raw.bytes[0usize..raw.count], clean_storage)
+    ret (clean_storage[0usize..clean_count], ok)
+}
+
+// The layout pass, in an err-returning function so `try` may propagate a buffer overflow.
+fn format_into(raw: *Out, source: str) -> err {
+    var depth = 0usize
+    var line_has_content = false
+    var prev: lex.Kind = .Newline
+    var prev_unary = false
+    var scanner = lex.init(source)
+    while true {
+        let token = lex.next(&scanner)
+        if token.kind == .Eof { break }
+        if token.kind == .Newline {
+            // A comment in this newline's leading trivia is a trailing comment when the line
+            // already has content, otherwise a standalone comment line at the current indent.
+            var trivia = lex.trivia_init(source, token)
+            var comment_start = 0usize
+            var comment_end = 0usize
+            var has_comment = false
+            while true {
+                let item = lex.next_trivia(&trivia)
+                if item.kind == .End { break }
+                if item.kind == .Comment {
+                    comment_start = item.start
+                    comment_end = item.end
+                    has_comment = true
+                }
+            }
+            if line_has_content {
+                if has_comment {
+                    try byte(raw, 32u8)
+                    try text(raw, source[comment_start..comment_end])
+                }
+                try byte(raw, 10u8)
+                line_has_content = false
+                prev = .Newline
+                prev_unary = false
+            } else {
+                if has_comment {
+                    var indent = 0usize
+                    while indent < depth * 4usize {
+                try byte(raw, 32u8)
+                indent += 1usize
+            }
+                    try text(raw, source[comment_start..comment_end])
+                    try byte(raw, 10u8)
+                } else {
+                    try byte(raw, 10u8)
+                }
+            }
+        } else {
+            let at_line_start = !line_has_content
+            if token.kind == .PunctRBrace && depth > 0usize && at_line_start { depth = depth - 1usize }
+            if at_line_start {
+                var indent = 0usize
+                while indent < depth * 4usize {
+                try byte(raw, 32u8)
+                indent += 1usize
+            }
+                line_has_content = true
+            } else {
+                if fmt_space_before(prev, prev_unary, token.kind) { try byte(raw, 32u8) }
+            }
+            try text(raw, source[token.start..token.end])
+            if token.kind == .PunctLBrace { depth += 1usize }
+            // A close brace mid-line (e.g. `{}` or `} else {`) still lowers the depth.
+            if token.kind == .PunctRBrace && !at_line_start && depth > 0usize { depth = depth - 1usize }
+            prev_unary = fmt_is_unary(prev, token.kind)
+            prev = token.kind
+        }
+    }
+    ret ok
+}
+
+// `fmt --json` (D234): one `formatted` record whose `text` is the canonical layout.
+fn fmt_json(a: *mem.Arena, source: str) -> (usize, err) {
+    let (formatted, format_error) = format_source(a, source)
+    if format_error != ok { ret (1usize, format_error) }
+    let (storage, storage_error) = mem.alloc[u8](a, formatted.len * 2usize + 4096usize)
+    if storage_error != ok { ret (2usize, storage_error) }
+    var out = Out { bytes: storage, count: 0usize }
+    let header_error = header(&out, "fmt")
+    if header_error != ok { ret (2usize, header_error) }
+    let record_error = fmt_record(&out, formatted)
+    if record_error != ok { ret (2usize, record_error) }
+    let result_error = fmt_result(&out)
+    if result_error != ok { ret (2usize, result_error) }
+    ret (0usize, ok)
+}
+
+fn fmt_record(out: *Out, formatted: str) -> err {
+    try text(out, "{\"record\":\"formatted\",\"text\":")
+    try quoted(out, formatted)
+    try text(out, "}")
+    ret flush(out)
+}
+
+fn fmt_result(out: *Out) -> err {
+    try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{}}")
+    ret flush(out)
 }
 
 // The public name of a token kind, the registry of docs/grammar.ebnf.

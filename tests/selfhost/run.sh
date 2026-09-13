@@ -1821,6 +1821,12 @@ dis_actual="$test_build/conformance-tools-dis.jsonl"
 $test_build/neper-self dis-file "$conformance_root/tools/dis.e" "$repo" x64 linux --json > "$dis_actual"
 cmp -s "$dis_actual" "$conformance_root/tools/dis.x64-linux.expected.jsonl" || { printf '%s
 ' "dis --json differs from the conformance corpus" >&2; exit 1; }
+# `fmt --json` (D234): the operand's canonical layout, byte for byte (target-independent);
+# the fixture is already canonical, so this also pins idempotence.
+fmt_actual="$test_build/conformance-tools-fmt.jsonl"
+$test_build/neper-self fmt-file "$conformance_root/tools/fmt.e" --json > "$fmt_actual"
+cmp -s "$fmt_actual" "$conformance_root/tools/fmt.expected.jsonl" || { printf '%s
+' "fmt --json differs from the conformance corpus" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"
