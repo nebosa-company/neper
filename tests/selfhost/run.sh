@@ -1832,6 +1832,14 @@ manifest_actual="$test_build/conformance-tools-manifest.jsonl"
 $test_build/neper-self build-manifest-file "$conformance_root/tools/manifest.e" "$repo" x64 linux --json > "$manifest_actual"
 cmp -s "$manifest_actual" "$conformance_root/tools/manifest.x64-linux.expected.jsonl" || { printf '%s
 ' "build-manifest --json differs from the conformance corpus" >&2; exit 1; }
+# `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
+# fixture has a passing and a failing test so the command exits 1. Target-independent golden.
+test_actual="$test_build/conformance-tools-test.jsonl"
+test_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 linux "$test_build" --json > "$test_actual" || test_status=$?
+[ "$test_status" -eq 1 ]
+cmp -s "$test_actual" "$conformance_root/tools/test.expected.jsonl" || { printf '%s
+' "test --json differs from the conformance corpus" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

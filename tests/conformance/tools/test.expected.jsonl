@@ -1,0 +1,5 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"test","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"record":"test","name":"arithmetic_holds","module":"test","file":{"root":"operand","path":"test.e"},"line":7,"outcome":"passed","error":null,"message":null,"duration_ms":0,"timeout_s":60,"stdout":"","stderr":"","trap":null}
+{"record":"test","name":"reports_a_failure","module":"test","file":{"root":"operand","path":"test.e"},"line":13,"outcome":"failed","error":null,"message":null,"duration_ms":0,"timeout_s":60,"stdout":"","stderr":"error: nptest-runner.Mismatch\n","trap":null}
+{"record":"test_summary","passed":1,"failed":1,"crashed":0,"timeout":0,"total":2,"duration_ms":0}
+{"record":"result","ok":false,"exit_code":1,"data":{"tests":2}}

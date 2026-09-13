@@ -4362,3 +4362,20 @@ Not started; this sits at the end of the backlog. When built: a `@reorder` attri
 node on the aggregate, an alignment-sort in the layout pass that assigns offsets, the
 boundary-crossing rejection in the checker, and a fixture proving `size_of` shrinks
 for a reordered internal struct while an FFI/`@gpu` use is refused.
+
+## D240 -- `test --json` runs each @test in its own process
+
+`test-file PATH ROOT ARCH OS WORKDIR --json` discovers the operand's `@test` functions
+-- an `@test` attribute node followed by a top-level `fn` -- in source order, generates a
+runner that is the operand verbatim plus a `main` dispatching to the test named by its
+argv index, and compiles that runner by spawning the compiler again (`args[0]`), so no
+lowering pipeline is duplicated. Each test then runs in its **own process**, because a
+neper trap aborts: a process that exits 0 is `passed`, one whose stderr begins `error: `
+(the runtime's print for a returned err) is `failed`, and anything else -- a trap -- is
+`crashed`. The stream is section 7's: the header, one buffered `test` record per function
+in source order, a `test_summary`, and a result that exits 1 if any test is not passed.
+The target never appears in the stream, so one golden serves both hosts; the runner and
+its per-test output land in WORKDIR, out of the source tree. `duration_ms` is 0 and no
+test times out yet -- real timing, the `timeout_s` outcome, the structured `trap` payload
+(stderr still carries a crash's raw text), an operand that defines its own `main`, and
+project-wide discovery are the gaps.

@@ -632,6 +632,76 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
     ret flush(out)
 }
 
+// The section 7 name of a test outcome: 0 passed, 1 failed, 2 crashed.
+fn test_outcome_name(outcome: usize) -> str {
+    if outcome == 0usize { ret "passed" }
+    if outcome == 1usize { ret "failed" }
+    ret "crashed"
+}
+
+// `test --json` (D240): the header, one buffered `test` record per @test function in source
+// order, a `test_summary`, and the result. duration_ms is 0 and no test times out yet -- real
+// timing and the structured trap payload are the gap; stderr still carries a crash's raw text.
+fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []const str, lines: []const usize, outcomes: []const usize, stdouts: []const str, stderrs: []const str, count: usize) -> err {
+    var capacity = 8192usize
+    var at = 0usize
+    while at < count {
+        capacity += names[at].len + stdouts[at].len * 6usize + stderrs[at].len * 6usize + 512usize
+        at += 1usize
+    }
+    let (storage, storage_error) = mem.alloc[u8](a, capacity)
+    if storage_error != ok { ret storage_error }
+    var out = Out { bytes: storage, count: 0usize }
+    try header(&out, "test")
+    var passed = 0usize
+    var failed = 0usize
+    var crashed = 0usize
+    at = 0usize
+    while at < count {
+        if outcomes[at] == 0usize { passed += 1usize } else {
+            if outcomes[at] == 1usize { failed += 1usize } else { crashed += 1usize }
+        }
+        try test_record(&out, module_name, root, path, names[at], lines[at], outcomes[at], stdouts[at], stderrs[at])
+        at += 1usize
+    }
+    try text(&out, "{\"record\":\"test_summary\",\"passed\":")
+    try decimal(&out, passed)
+    try text(&out, ",\"failed\":")
+    try decimal(&out, failed)
+    try text(&out, ",\"crashed\":")
+    try decimal(&out, crashed)
+    try text(&out, ",\"timeout\":0,\"total\":")
+    try decimal(&out, count)
+    try text(&out, ",\"duration_ms\":0}")
+    try flush(&out)
+    var succeeded = failed == 0usize && crashed == 0usize
+    if succeeded { try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"tests\":") } else { try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"tests\":") }
+    try decimal(&out, count)
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
+fn test_record(out: *Out, module_name: str, root: str, path: str, name: str, line: usize, outcome: usize, stdout_bytes: str, stderr_bytes: str) -> err {
+    try text(out, "{\"record\":\"test\",\"name\":")
+    try quoted(out, name)
+    try text(out, ",\"module\":")
+    try quoted(out, module_name)
+    try text(out, ",\"file\":{\"root\":")
+    try quoted(out, root)
+    try text(out, ",\"path\":")
+    try quoted(out, path)
+    try text(out, "},\"line\":")
+    try decimal(out, line)
+    try text(out, ",\"outcome\":")
+    try quoted(out, test_outcome_name(outcome))
+    try text(out, ",\"error\":null,\"message\":null,\"duration_ms\":0,\"timeout_s\":60,\"stdout\":")
+    try captured(out, stdout_bytes)
+    try text(out, ",\"stderr\":")
+    try captured(out, stderr_bytes)
+    try text(out, ",\"trap\":null}")
+    ret flush(out)
+}
+
 // The public name of a token kind, the registry of docs/grammar.ebnf.
 fn kind_name(kind: lex.Kind) -> str {
     if kind == .Invalid { ret "INVALID" }

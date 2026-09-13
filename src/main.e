@@ -914,6 +914,244 @@ fn run_program(a: *mem.Arena, path: str) -> (i32, str, str, err) {
 
 // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
 // Its own function because the bootstrap caps a function's locals (main is at the cap).
+// Append a string to a byte buffer at `at`, returning the new length.
+fn nptest_append(dst: []u8, at: usize, src: str) -> usize {
+    var i = 0usize
+    while i < src.len {
+        dst[at + i] = src[i]
+        i += 1usize
+    }
+    ret at + src.len
+}
+
+// Append the decimal spelling of a small value.
+fn nptest_append_decimal(dst: []u8, at: usize, value: usize) -> usize {
+    if value >= 10usize {
+        let next = nptest_append_decimal(dst, at, value / 10usize)
+        dst[next] = u8(48usize + value % 10usize)
+        ret next + 1usize
+    }
+    dst[at] = u8(48usize + value)
+    ret at + 1usize
+}
+
+// The @test functions of the operand, in source order: an `@test` attribute followed by an
+// `fn` at the top level (D240). Names into `names`, one-based lines into `lines`.
+fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize) -> (usize, err) {
+    let (tokens, token_count, invalid, scan_error) = tool.scan_all(a, text)
+    if scan_error != ok { ret (0usize, scan_error) }
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, text.len + 1024usize)
+    if nodes_error != ok { ret (0usize, nodes_error) }
+    let (children, children_error) = mem.alloc[syntax.Child](a, text.len + 1024usize)
+    if children_error != ok { ret (0usize, children_error) }
+    var tree: parse.Tree = zero
+    let init_error = parse.init_tree(&tree, nodes, children)
+    if init_error != ok { ret (0usize, init_error) }
+    let parse_error = parse.parse(&tree, text)
+    if parse_error != ok { ret (0usize, parse_error) }
+    var count = 0usize
+    var pending = false
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level {
+            if node.kind == .Attribute {
+                let name_token = tokens[node.token_start + 1usize]
+                pending = same(text[name_token.start..name_token.end], "test")
+            } else {
+                if node.kind == .FnDecl && pending {
+                    if count == names.len { ret (0usize, parse.InvalidSyntax) }
+                    let fn_name = tokens[node.token_start + 1usize]
+                    names[count] = text[fn_name.start..fn_name.end]
+                    lines[count] = tokens[node.token_start].line
+                    count += 1usize
+                    pending = false
+                } else {
+                    pending = false
+                }
+            }
+        }
+        node_index += 1usize
+    }
+    ret (count, ok)
+}
+
+// The runner source: the operand verbatim, a string-equality helper, and a `main` that
+// dispatches to the @test named by its index in argv, returning that test's `err` -- so the
+// runtime prints `error: ...` and exits 1 for a failure, and a trap aborts for a crash.
+fn generate_runner(a: *mem.Arena, text: str, names: []const str, count: usize) -> ([]u8, err) {
+    var size = text.len + 4096usize
+    var at = 0usize
+    while at < count {
+        size += names[at].len + 128usize
+        at += 1usize
+    }
+    let (buffer, buffer_error) = mem.alloc[u8](a, size)
+    if buffer_error != ok { ret (buffer, buffer_error) }
+    var written = nptest_append(buffer, 0usize, text)
+    written = nptest_append(buffer, written, "\nfn nptest_eq(x: str, y: str) -> bool {\n    if x.len != y.len { ret false }\n    var i = 0usize\n    while i < x.len {\n        if x[i] != y[i] { ret false }\n        i += 1usize\n    }\n    ret true\n}\nfn main(a: *mem.Arena, args: []str) -> err {\n    if args.len < 2usize { ret ok }\n")
+    at = 0usize
+    while at < count {
+        written = nptest_append(buffer, written, "    if nptest_eq(args[1usize], \"")
+        written = nptest_append_decimal(buffer, written, at)
+        written = nptest_append(buffer, written, "\") { ret ")
+        written = nptest_append(buffer, written, names[at])
+        written = nptest_append(buffer, written, "(a) }\n")
+        at += 1usize
+    }
+    written = nptest_append(buffer, written, "    ret ok\n}\n")
+    ret (buffer[0usize..written], ok)
+}
+
+// Spawn a command, its stdout and stderr captured to files beside `base`, and read them back.
+fn nptest_spawn(a: *mem.Arena, argv: []str, base: str) -> (i32, str, str, err) {
+    let (out_path, out_path_error) = with_suffix(a, base, ".out")
+    if out_path_error != ok { ret (0i32, "", "", out_path_error) }
+    let (err_path, err_path_error) = with_suffix(a, base, ".err")
+    if err_path_error != ok { ret (0i32, "", "", err_path_error) }
+    let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
+    let (out_file, out_open_error) = os.open(a, out_path, flags)
+    if out_open_error != ok { ret (0i32, "", "", out_open_error) }
+    let (err_file, err_open_error) = os.open(a, err_path, flags)
+    if err_open_error != ok { ret (0i32, "", "", err_open_error) }
+    var streams: os.Stdio = zero
+    streams.stdout = out_file
+    streams.stderr = err_file
+    let (child, spawn_error) = os.spawn(a, argv, streams)
+    let out_close = os.close(out_file)
+    let err_close = os.close(err_file)
+    if spawn_error != ok { ret (0i32, "", "", spawn_error) }
+    if out_close != ok { ret (0i32, "", "", out_close) }
+    if err_close != ok { ret (0i32, "", "", err_close) }
+    let (status, wait_error) = os.wait(child)
+    if wait_error != ok { ret (0i32, "", "", wait_error) }
+    let (out_text, out_load) = source.load(a, out_path)
+    if out_load != ok { ret (0i32, "", "", out_load) }
+    let (err_text, err_load) = source.load(a, err_path)
+    if err_load != ok { ret (0i32, "", "", err_load) }
+    ret (status, out_text, err_text, ok)
+}
+
+// Run one test by index; the fixed os surface has no chmod, so on Linux the child goes
+// through `sh -c` which marks the runner executable and forwards the index as $1.
+fn nptest_run(a: *mem.Arena, exe: str, index: str, base: str) -> (i32, str, str, err) {
+    var argv: [5]str = zero
+    var argc = 2usize
+    argv[0usize] = exe
+    argv[1usize] = index
+    if same(host_target(), "x64-linux") {
+        argv[0usize] = "/bin/sh"
+        argv[1usize] = "-c"
+        argv[2usize] = "chmod +x -- \"$0\" && exec \"$0\" \"$1\""
+        argv[3usize] = exe
+        argv[4usize] = index
+        argc = 5usize
+    }
+    let (status, out_text, err_text, spawn_error) = nptest_spawn(a, argv[0usize..argc], base)
+    ret (status, out_text, err_text, spawn_error)
+}
+
+fn nptest_stem(path: str) -> str {
+    var start = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 47u8 || path[at] == 92u8 { start = at + 1usize }
+        at += 1usize
+    }
+    var stop = path.len
+    if stop >= 2usize && path[stop - 2usize] == 46u8 && path[stop - 1usize] == 101u8 { stop = stop - 2usize }
+    ret path[start..stop]
+}
+
+// `test-file PATH ROOT ARCH OS WORKDIR --json` (D240): compile a runner that carries the
+// operand's @test functions, run each in its own process, and report section 7's stream.
+fn test_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
+    report.json = true
+    report.file = os.stdout()
+    let (text, load_error) = source.load(a, args[2usize])
+    if load_error != ok { ret load_error }
+    let (names, names_error) = mem.alloc[str](a, 256usize)
+    if names_error != ok { ret names_error }
+    let (lines, lines_error) = mem.alloc[usize](a, 256usize)
+    if lines_error != ok { ret lines_error }
+    let (count, discover_error) = discover_tests(a, text, names, lines)
+    if discover_error != ok { ret discover_error }
+    let (runner_source, runner_error) = generate_runner(a, text, names[0usize..count], count)
+    if runner_error != ok { ret runner_error }
+    let (runner_path, runner_path_error) = nptest_join(a, args[6usize], "nptest-runner.e")
+    if runner_path_error != ok { ret runner_path_error }
+    let (runner_exe, runner_exe_error) = nptest_join(a, args[6usize], "nptest-runner.exe")
+    if runner_exe_error != ok { ret runner_exe_error }
+    try save_bytes(a, runner_path, runner_source)
+    // Compile the runner by spawning this compiler again; args[0] is its own path.
+    var build_argv: [7]str = zero
+    build_argv[0usize] = args[0usize]
+    build_argv[1usize] = "emit-executable"
+    build_argv[2usize] = runner_path
+    build_argv[3usize] = args[3usize]
+    build_argv[4usize] = args[4usize]
+    build_argv[5usize] = args[5usize]
+    build_argv[6usize] = runner_exe
+    let (build_status, build_out, build_err, build_spawn_error) = nptest_spawn(a, build_argv[..], runner_exe)
+    if build_spawn_error != ok { ret build_spawn_error }
+    if build_status != 0i32 {
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the tests could not be compiled")
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"tests\":0}}\n")
+        os.exit(2i32)
+        ret ok
+    }
+    let (outcomes, outcomes_error) = mem.alloc[usize](a, 256usize)
+    if outcomes_error != ok { ret outcomes_error }
+    let (stdouts, stdouts_error) = mem.alloc[str](a, 256usize)
+    if stdouts_error != ok { ret stdouts_error }
+    let (stderrs, stderrs_error) = mem.alloc[str](a, 256usize)
+    if stderrs_error != ok { ret stderrs_error }
+    var index_storage: [8]u8 = zero
+    var at = 0usize
+    while at < count {
+        let index_len = nptest_append_decimal(index_storage[..], 0usize, at)
+        let index_str = index_storage[0usize..index_len]
+        let (child_base, child_base_error) = nptest_join(a, args[6usize], "nptest-child")
+        if child_base_error != ok { ret child_base_error }
+        let (status, child_out, child_err, run_error) = nptest_run(a, runner_exe, index_str, child_base)
+        if run_error != ok { ret run_error }
+        var outcome = 0usize
+        if status != 0i32 {
+            outcome = 2usize
+            if child_err.len >= 7usize && same(child_err[0usize..7usize], "error: ") { outcome = 1usize }
+        }
+        outcomes[at] = outcome
+        stdouts[at] = child_out
+        stderrs[at] = child_err
+        at += 1usize
+    }
+    try tool.test_json(a, nptest_stem(args[2usize]), "operand", basename(args[2usize]), names[0usize..count], lines[0usize..count], outcomes[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count)
+    var any = false
+    at = 0usize
+    while at < count {
+        if outcomes[at] != 0usize { any = true }
+        at += 1usize
+    }
+    if any { os.exit(1i32) }
+    ret ok
+}
+
+fn nptest_join(a: *mem.Arena, dir: str, name: str) -> (str, err) {
+    var separator = 1usize
+    if dir.len != 0usize && (dir[dir.len - 1usize] == 47u8 || dir[dir.len - 1usize] == 92u8) { separator = 0usize }
+    let (buffer, buffer_error) = mem.alloc[u8](a, dir.len + separator + name.len)
+    if buffer_error != ok { ret ("", buffer_error) }
+    var at = nptest_append(buffer, 0usize, dir)
+    if separator == 1usize {
+        buffer[at] = 47u8
+        at += 1usize
+    }
+    at = nptest_append(buffer, at, name)
+    ret (buffer[0usize..at], ok)
+}
+
 fn manifest_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     var loaded: graph.Graph = zero
@@ -2401,6 +2639,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // `fmt-file PATH --json` (D234): the operand's canonical layout as one `formatted` record.
     if args.len == 4usize && same(args[1usize], "fmt-file") && same(args[3usize], "--json") { ret fmt_command(a, args) }
     if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
+    if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner
