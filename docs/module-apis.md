@@ -3782,3 +3782,71 @@ fn build_index(a: *mem.Arena, root: str) -> (Index, err)
 fn search(a: *mem.Arena, root: str, pattern: str) -> ([]Match, err)
 fn search_index(a: *mem.Arena, ix: Index, pattern: str) -> ([]Match, err)
 ```
+
+### `e.audio`
+
+```neper
+type SampleFormat = enum u8 { I16, I32, F32 }
+type Format = struct { rate: u32, channels: u8, sample: SampleFormat }
+// Interleaved. `count` is frames, never samples: one frame is `channels` samples.
+type Frames = struct { bytes: []u8, format: Format, count: usize }
+error Unsupported
+error Truncated
+
+fn sample_bytes(s: SampleFormat) -> usize
+fn frame_bytes(f: Format) -> usize
+fn frames_in(f: Format, bytes: usize) -> usize
+fn view(bytes: []u8, f: Format) -> (Frames, err)
+fn sample_i32(fr: Frames, frame: usize, channel: u8) -> (i32, err)
+fn set_sample_i32(fr: *Frames, frame: usize, channel: u8, value: i32) -> err
+fn convert(a: *mem.Arena, src: Frames, to: SampleFormat) -> (Frames, err)
+fn silence(fr: *Frames) -> err
+```
+
+### `e.audio.mixer`
+
+```neper
+// Gain is Q16, so 65536 is unity. Mixing accumulates in i32 and clips, which keeps a
+// mix bit-identical on every target rather than depending on float rounding.
+type Voice = struct { source: audio.Frames, position: usize, gain: i32, loops: bool, playing: bool }
+type Mixer = struct { format: audio.Format, voices: []Voice, count: usize, master: i32 }
+error Full
+error Unsupported
+
+fn init(m: *Mixer, f: audio.Format, voices: []Voice) -> err
+fn play(m: *Mixer, source: audio.Frames, gain: i32, loops: bool) -> (usize, err)
+fn stop(m: *Mixer, voice: usize) -> err
+fn set_gain(m: *Mixer, voice: usize, gain: i32) -> err
+fn active(m: Mixer) -> usize
+fn mix_into(m: *Mixer, out: *audio.Frames) -> (usize, err)
+fn resample(a: *mem.Arena, src: audio.Frames, rate: u32) -> (audio.Frames, err)
+```
+
+### `e.fmt.wav`
+
+```neper
+type Decoder = struct { bytes: []const u8, data_start: usize, at: usize, format: audio.Format, frames: usize }
+error Invalid
+error Unsupported
+
+fn open(a: *mem.Arena, bytes: []const u8) -> (Decoder, err)
+fn format(d: Decoder) -> audio.Format
+fn frame_count(d: Decoder) -> usize
+fn decode_into(d: *Decoder, out: *audio.Frames) -> (usize, err)
+fn seek(d: *Decoder, frame: usize) -> err
+fn encode(a: *mem.Arena, src: audio.Frames) -> ([]u8, err)
+```
+
+### `e.fmt.mp3`
+
+```neper
+type Decoder = struct { bytes: []const u8, at: usize, format: audio.Format, frames: usize, granule: usize }
+error Invalid
+error Unsupported
+
+fn open(a: *mem.Arena, bytes: []const u8) -> (Decoder, err)
+fn format(d: Decoder) -> audio.Format
+fn frame_count(d: Decoder) -> usize
+fn decode_into(d: *Decoder, out: *audio.Frames) -> (usize, err)
+fn seek(d: *Decoder, frame: usize) -> err
+```

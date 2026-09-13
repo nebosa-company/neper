@@ -4576,3 +4576,40 @@ writes. The workaround cost a line per function; removing it took 79,200 tokens,
 off that benchmark's 100k-line Neper program. link/ret_group pins both forms together: the
 tuple returns, a grouped operand carrying `%` and `*`, a nested call's comma, a negated
 group, and a doubly-parenthesised one.
+
+## D248 -- Audio arrives as a vocabulary, two decoders and a mixer
+
+`e.audio` is the vocabulary and nothing else: `SampleFormat`, a `Format` of rate,
+channels and sample type, and `Frames`, an interleaved buffer whose `count` is frames
+rather than samples. It is layer 2 and depends only on `e.mem`, exactly as `e.gfx.image`
+does for the image codecs -- a decoder must not drag a device in behind it, and this is
+the shape the repository already uses for that.
+
+The vocabulary is registered before the codecs on purpose. The existing `e.fmt` codecs
+each answer in a width of their own, and that is the mistake to avoid here: if `wav` and
+`mp3` each invented an output type the mixer would face two incompatible APIs. Both
+decoders therefore expose the same four calls -- `open`, `format`, `decode_into`, `seek`
+-- and `decode_into` fills a caller's buffer and returns the frames written, so a decode
+streams. Whole-file decoding is not offered: five minutes of stereo 44.1k is about 50 MB
+of PCM, and `e.fmt.csv` already established that the buffer limits are the memory model.
+
+`e.fmt.wav` is small -- RIFF chunks and PCM -- and also encodes, which makes it the way
+to write a mix out and the cheapest end-to-end proof of the contract. `e.fmt.mp3` is
+large: frame headers, side info, scalefactors, Huffman, requantisation, stereo modes,
+alias reduction, IMDCT and the polyphase synthesis filterbank. Its patents expired in
+2017, so nothing licenses it away. Both are unblocked -- `e.bytes` gives the bit reader
+and `e.math` the transforms, and both are complete.
+
+`e.audio.mixer` is layer 2 and portable: voices over a shared `Frames`, Q16 gain,
+accumulation in `i32` with clipping, and a resampler. Integer gain rather than float is
+deliberate, so a mix is bit-identical on every target and can be pinned by a fixture.
+
+Ogg and Vorbis are not registered. They are the largest of the three by a wide margin --
+an Ogg container plus codebooks, floor, residue, MDCT and overlap-add -- and nothing here
+needs them.
+
+What this does not give is playback. A speaker needs a platform device -- WASAPI on
+Windows, ALSA on Linux -- which is a layer 6 module of its own in the shape of
+`e.ui.window`, blocked on a `native-audio-api` capability that is not scheduled. It is
+left unregistered rather than registered and stalled; `e.audio.mixer` writing into a
+buffer is testable today, and a player is that buffer plus the device when it exists.
