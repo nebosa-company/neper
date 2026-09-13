@@ -4258,3 +4258,50 @@ loop fifteen; the compiler's image is three per cent larger for the saves. The
 larger cost stays where it was: a `var` is a stack object, every use of it a load or
 a store through its address, so a loop counter is a chain through memory. That is
 the next change, and it is the register allocator's rather than a pass of its own.
+
+## D236 -- `build-manifest --json` and a SHA-256 in the compiler
+
+`build-manifest-file PATH ROOT ARCH OS --json` loads the graph and emits the canonical
+`neper-build-manifest` object of section 7: schema and version, the tool, language and
+grammar versions, the target triple, the mode, the root module, and one `inputs` entry
+per source module with its source identifier and the SHA-256 of its bytes. SHA-256 is
+ported into artifact_hash.e alongside xxhash/CRC, over the same one-byte-per-`usize`
+representation, all arithmetic on `usize` masked to 32 bits so the bootstrap needs no
+`u32` type or wrapping operator; its digest of the fixture matches python's hashlib and
+the RFC 6234 `abc` vector. The `target` field makes the manifest host-specific, so the
+corpus holds one expected object per host over a no-import fixture. Gaps: the dependency
+interface/body split, libraries, assets, the built artifact's own hash, non-empty
+options, and writing the manifest to `.neper/<mode>/build-manifest.json` on every build
+rather than only through this query.
+
+## D236 -- A scalar local is a value, and a loop's temporaries are its own
+
+Lowering makes every `var` a stack object, read and written through its address at
+every use, so a loop counter was a chain through memory -- a store, then the next
+iteration's load waiting on it -- and a byte loop cost thirteen cycles a byte. The
+allocator promotes them now, before it builds its ranges: a `Stack` of a scalar kind
+whose address reaches nothing but `Load`, `Store` and `Zero` of that slot, all at
+one width, is one value numbered as the local -- the `Stack` becomes a zero value,
+each `Store` a `Bitcast` that defines the number again, a `Zero` the zero value, and
+each `Load` a `Bitcast` that copies it. A value defined more than once is what the
+ranges allow since: one range from the first definition to the last use, which is
+what a variable in a register has always been. A use of what a load read, in the
+load's own block and before the next definition, reads the local itself, and a load
+whose uses were all redirected is a bitcast nothing reads, which selection leaves
+out; a use in another block keeps the copy, since a store may lie on a path to it.
+The order matters: the accesses are rewritten first, while the address still tells a
+store to the local from a store through a pointer the local holds -- redirecting the
+loads first made the two the same and a release build of `link/trap_null` wrote
+through the wrong one. Two more things the pass exposed. The back-edge rule extended
+every value defined inside a loop and used inside it to the loop's end, so a loop's
+temporaries all shared one live range and the tenth of them spilled the rest; a value
+is live across the edge only when it was defined before the loop's head. And every
+fixed-register sequence -- an index address, a slice, a copy, a shift, a divide, an
+atomic -- saved and restored all five caller-saved registers around itself; each now
+saves only the ones it clobbers that hold a value live across it (a slice adds the
+ones its operands sit in, which it reads back from the preserve area), and an index
+address without its check clobbers nothing. The copy's clobbers were rax and r9, not
+rcx: the emitter copies with a byte loop, not `rep movs`. Measured on `e.fmt.json`
+over the standard files, best of three interleaved against D235: gsoc-2018 twice as
+fast, citm_catalog 1.45, twitter 1.36, the number-heavy files 1.1 to 1.25; the
+byte-counting loop 2.4 times.

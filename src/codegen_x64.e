@@ -257,8 +257,11 @@ fn bitcast_width(ty: check.Type) -> usize {
     ret 0usize
 }
 
-fn select_bitcast(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, output: *emit_x64.Buffer) -> err {
+fn select_bitcast(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, context: *FunctionContext) -> err {
+    let output = context.output
     if instruction.operand_count != 1usize || !instruction.has_result { ret Unsupported }
+    // A bitcast nothing reads is a promoted local's former load (D236): no code.
+    if instruction.result < context.ranges.len && context.ranges[instruction.result].defined && !context.ranges[instruction.result].used { ret ok }
     let (source, source_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
     if source_error != ok { ret source_error }
     let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
@@ -316,7 +319,9 @@ fn emit_atomic_loop(output: *emit_x64.Buffer, kind: usize, width: usize, signed:
 // Section 8's five instructions. Every ordering but sequential consistency is free on
 // this target's store-ordered memory model, so only a `SeqCst` store and fence emit
 // anything for it; the rest of the ordering rules were settled while checking.
-fn select_atomic(builder: *nir.Builder, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, output: *emit_x64.Buffer) -> err {
+fn select_atomic(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, context: *FunctionContext) -> err {
+    let output = context.output
+    let mask = preserve_mask(builder, current, instruction, 3usize, false, context)
     if instruction.opcode == .AtomicFence {
         if instruction.immediate == 4usize { ret emit_x64.memory_fence(output) }
         ret ok
@@ -351,7 +356,7 @@ fn select_atomic(builder: *nir.Builder, instruction: nir.Instruction, allocation
     if !instruction.has_result { ret Unsupported }
     if instruction.opcode == .AtomicCas {
         if instruction.operand_count != 3usize { ret Unsupported }
-        try save_allocated_registers(output, preserve_base, preserve_count)
+        try save_live_registers(output, mask, preserve_base, preserve_count)
         let (address, address_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
         if address_error != ok { ret InvalidMemoryAddress }
         if address != 10usize { try emit_x64.mov_register(output, 10usize, address) }
@@ -365,7 +370,7 @@ fn select_atomic(builder: *nir.Builder, instruction: nir.Instruction, allocation
         if expected != 0usize { try emit_x64.mov_register(output, 0usize, expected) }
         try emit_x64.atomic_compare_exchange(output, 10usize, 11usize, width)
         try emit_x64.mov_register(output, 10usize, 0usize)
-        try restore_allocated_registers(output, preserve_base, preserve_count)
+        try restore_live_registers(output, mask, preserve_base, preserve_count)
         let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
         if destination_error != ok { ret destination_error }
         try emit_x64.normalize_integer(output, destination, 10usize, width, signed)
@@ -373,7 +378,7 @@ fn select_atomic(builder: *nir.Builder, instruction: nir.Instruction, allocation
     }
     if instruction.opcode != .AtomicRmw || instruction.operand_count != 2usize { ret Unsupported }
     let kind = instruction.immediate / 8usize
-    try save_allocated_registers(output, preserve_base, preserve_count)
+    try save_live_registers(output, mask, preserve_base, preserve_count)
     let (address, address_error) = read_value(allocations, builder.operands[instruction.first_operand], 10usize, output)
     if address_error != ok { ret InvalidMemoryAddress }
     if address != 10usize { try emit_x64.mov_register(output, 10usize, address) }
@@ -398,7 +403,7 @@ fn select_atomic(builder: *nir.Builder, instruction: nir.Instruction, allocation
         }
     }
     try emit_x64.mov_register(output, 10usize, 11usize)
-    try restore_allocated_registers(output, preserve_base, preserve_count)
+    try restore_live_registers(output, mask, preserve_base, preserve_count)
     let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
     if destination_error != ok { ret destination_error }
     try emit_x64.normalize_integer(output, destination, 10usize, width, signed)
@@ -1411,6 +1416,23 @@ fn live_register_mask(context: *FunctionContext, value_count: usize, instruction
     ret mask
 }
 
+// The registers a fixed-register sequence saves (D236): of the ones it clobbers,
+// those holding a value live across it -- and, when it reads its operands back from
+// the preserve area, the ones the operands sit in. `context.failure_instruction` is
+// the instruction being selected.
+fn preserve_mask(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, clobbered: usize, operands_too: bool, context: *FunctionContext) -> usize {
+    var mask = live_register_mask(context, current.value_count, context.failure_instruction, caller_saved_count()) & clobbered
+    if operands_too {
+        var operand_at = 0usize
+        while operand_at < instruction.operand_count {
+            let value = builder.operands[instruction.first_operand + operand_at]
+            if value < context.allocations.len && context.allocations[value].kind == .Register && context.allocations[value].index < caller_saved_count() { mask = mask | (1usize << context.allocations[value].index) }
+            operand_at += 1usize
+        }
+    }
+    ret mask
+}
+
 fn save_live_registers(output: *emit_x64.Buffer, mask: usize, base: usize, count: usize) -> err {
     var at = 0usize
     while at < count {
@@ -1619,7 +1641,10 @@ fn emit_shift_check(builder: *nir.Builder, current: nir.Function, token: lex.Tok
 fn select_index_address(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, context: *FunctionContext) -> err {
     let output = context.output
     if !instruction.has_result || instruction.operand_count != 3usize || instruction.immediate == 0usize { ret Unsupported }
-    try save_allocated_registers(output, preserve_base, preserve_count)
+    // Only the check needs the length, in rax; without it nothing is clobbered.
+    var mask = 0usize
+    if !instruction.nocheck { mask = preserve_mask(builder, current, instruction, 1usize, false, context) }
+    try save_live_registers(output, mask, preserve_base, preserve_count)
     let base_value = builder.operands[instruction.first_operand]
     let index_value = builder.operands[instruction.first_operand + 1usize]
     let length_value = builder.operands[instruction.first_operand + 2usize]
@@ -1629,13 +1654,15 @@ fn select_index_address(builder: *nir.Builder, current: nir.Function, instructio
     let (index, index_error) = read_value(allocations, index_value, 11usize, output)
     if index_error != ok { ret index_error }
     if index != 11usize { try emit_x64.mov_register(output, 11usize, index) }
-    let (length, length_error) = read_value(allocations, length_value, 0usize, output)
-    if length_error != ok { ret length_error }
-    if length != 0usize { try emit_x64.mov_register(output, 0usize, length) }
-    if !instruction.nocheck { try emit_checked(builder, current, instruction.token, instruction.path, 2usize, "bounds", "index ", " out of bounds for len ", "", 11usize, 0usize, context) }
+    if !instruction.nocheck {
+        let (length, length_error) = read_value(allocations, length_value, 0usize, output)
+        if length_error != ok { ret length_error }
+        if length != 0usize { try emit_x64.mov_register(output, 0usize, length) }
+        try emit_checked(builder, current, instruction.token, instruction.path, 2usize, "bounds", "index ", " out of bounds for len ", "", 11usize, 0usize, context)
+    }
     if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 11usize, 11usize, instruction.immediate) }
     try emit_x64.add_register(output, 11usize, 10usize)
-    try restore_allocated_registers(output, preserve_base, preserve_count)
+    try restore_live_registers(output, mask, preserve_base, preserve_count)
     let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
     if destination_error != ok { ret destination_error }
     if destination != 11usize { try emit_x64.mov_register(output, destination, 11usize) }
@@ -1645,7 +1672,8 @@ fn select_index_address(builder: *nir.Builder, current: nir.Function, instructio
 fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, preserve_base: usize, preserve_count: usize, context: *FunctionContext) -> err {
     let output = context.output
     if instruction.has_result || instruction.operand_count != 5usize || instruction.immediate == 0usize { ret Unsupported }
-    try save_allocated_registers(output, preserve_base, preserve_count)
+    let mask = preserve_mask(builder, current, instruction, 19usize, true, context)
+    try save_live_registers(output, mask, preserve_base, preserve_count)
     let destination_value = builder.operands[instruction.first_operand]
     let data_value = builder.operands[instruction.first_operand + 1usize]
     let length_value = builder.operands[instruction.first_operand + 2usize]
@@ -1676,7 +1704,7 @@ fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.I
     try emit_x64.store_memory(output, 9usize, 10usize, 64usize)
     try emit_x64.add_immediate(output, 9usize, 8usize)
     try emit_x64.store_memory(output, 9usize, 1usize, 64usize)
-    ret restore_allocated_registers(output, preserve_base, preserve_count)
+    ret restore_live_registers(output, mask, preserve_base, preserve_count)
 }
 
 fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
@@ -1749,7 +1777,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             }
         }
         if instruction.opcode == .Bitcast {
-            try select_bitcast(builder, instruction, allocations, output)
+            try select_bitcast(builder, instruction, allocations, context)
         } else {
         if float_operation(builder, current, instruction) {
             try select_float(builder, current, instruction, allocations, output, context)
@@ -1800,7 +1828,8 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
             } else {
             if instruction.opcode == .Copy {
                 if instruction.has_result || instruction.operand_count != 2usize { ret Unsupported }
-                try save_allocated_registers(output, preserve_base, preserve_count)
+                let copy_mask = preserve_mask(builder, current, instruction, 17usize, false, context)
+                try save_live_registers(output, copy_mask, preserve_base, preserve_count)
                 let destination_value = builder.operands[instruction.first_operand]
                 let source_value = builder.operands[instruction.first_operand + 1usize]
                 let (destination_source, destination_error) = read_value(allocations, destination_value, 10usize, output)
@@ -1810,7 +1839,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if source_error != ok { ret source_error }
                 if source != 11usize { try emit_x64.mov_register(output, 11usize, source) }
                 try emit_x64.copy_memory(output, 10usize, 11usize, instruction.immediate)
-                try restore_allocated_registers(output, preserve_base, preserve_count)
+                try restore_live_registers(output, copy_mask, preserve_base, preserve_count)
             } else {
             if instruction.opcode == .Load {
                 if !instruction.has_result || instruction.operand_count != 1usize { ret Unsupported }
@@ -1836,7 +1865,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 try store_result(allocations, instruction.result, destination, output)
             } else {
             if instruction.opcode == .AtomicLoad || instruction.opcode == .AtomicStore || instruction.opcode == .AtomicRmw || instruction.opcode == .AtomicCas || instruction.opcode == .AtomicFence {
-                try select_atomic(builder, instruction, allocations, preserve_base, preserve_count, output)
+                try select_atomic(builder, current, instruction, allocations, preserve_base, preserve_count, context)
             } else {
             if instruction.opcode == .Zero {
                 try select_zero(builder, instruction, allocations, output)
@@ -1915,7 +1944,8 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 let right_value = builder.operands[instruction.first_operand + 1usize]
                 let (left_type, left_type_error) = value_type(builder, current, left_value)
                 if left_type_error != ok || left_type.kind != .Integer { ret Unsupported }
-                try save_allocated_registers(output, preserve_base, preserve_count)
+                let shift_mask = preserve_mask(builder, current, instruction, 2usize, false, context)
+                try save_live_registers(output, shift_mask, preserve_base, preserve_count)
                 let (left, left_error) = read_value(allocations, left_value, 10usize, output)
                 if left_error != ok { ret left_error }
                 let (right, right_error) = read_value(allocations, right_value, 11usize, output)
@@ -1925,7 +1955,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if !instruction.nocheck { try emit_shift_check(builder, current, instruction.token, instruction.path, integer_width(left_type), context) }
                 try emit_x64.and_immediate8(output, 1usize, integer_width(left_type) - 1usize)
                 try emit_x64.shift_register(output, 10usize, instruction.opcode == .ShiftLeft, signed_integer(left_type))
-                try restore_allocated_registers(output, preserve_base, preserve_count)
+                try restore_live_registers(output, shift_mask, preserve_base, preserve_count)
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                 if destination_error != ok { ret destination_error }
                 try emit_x64.normalize_integer(output, destination, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
@@ -1937,7 +1967,8 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 let right_value = builder.operands[instruction.first_operand + 1usize]
                 let (left_type, left_type_error) = value_type(builder, current, left_value)
                 if left_type_error != ok || left_type.kind != .Integer { ret Unsupported }
-                try save_allocated_registers(output, preserve_base, preserve_count)
+                let divide_mask = preserve_mask(builder, current, instruction, 5usize, false, context)
+                try save_live_registers(output, divide_mask, preserve_base, preserve_count)
                 let (left, left_error) = read_value(allocations, left_value, 10usize, output)
                 if left_error != ok { ret left_error }
                 let (right, right_error) = read_value(allocations, right_value, 11usize, output)
@@ -1967,7 +1998,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     try emit_x64.mov_register(output, 10usize, 2usize)
                 }
                 }
-                try restore_allocated_registers(output, preserve_base, preserve_count)
+                try restore_live_registers(output, divide_mask, preserve_base, preserve_count)
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
                 if destination_error != ok { ret destination_error }
                 try emit_x64.normalize_integer(output, destination, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
