@@ -2009,7 +2009,35 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var checker: check.Checker = zero
         try init_cli_checker(a, &checker)
         checker.arena = a
-        let check_error = check.run(&checker, &resolver, &loaded)
+        // The declarations first; then, incrementally, the edge rule decides the kept
+        // modules from the Interfaces they give, and only the other bodies are checked
+        // (D224). `keep` is what lowering skips below.
+        let (keep, keep_error) = mem.alloc[bool](a, loaded.count)
+        if keep_error != ok { ret keep_error }
+        var keep_at = 0usize
+        while keep_at < loaded.count {
+            keep[keep_at] = false
+            keep_at += 1usize
+        }
+        var check_error = check.run_declarations(&checker, &resolver, &loaded)
+        if check_error == ok && writes_all_em && incremental_build {
+            let (settle_strings, settle_strings_error) = mem.alloc[str](a, 32768usize)
+            if settle_strings_error != ok { ret settle_strings_error }
+            let (settle_slots, settle_slots_error) = mem.alloc[usize](a, 131072usize)
+            if settle_slots_error != ok { ret settle_slots_error }
+            var settle_table: em.StringTable = zero
+            try em.init_strings(&settle_table, settle_strings, settle_slots)
+            let (settle_scratch_storage, settle_scratch_error) = mem.alloc[usize](a, 4194304usize)
+            if settle_scratch_error != ok { ret settle_scratch_error }
+            var settle_scratch: binary.Buffer = zero
+            try binary.init(&settle_scratch, settle_scratch_storage)
+            let (settle_triple, settle_triple_error) = target_triple(a, args[4usize], args[5usize])
+            if settle_triple_error != ok { ret settle_triple_error }
+            var settle_mode: em.BuildMode = .Debug
+            if release_build { settle_mode = .Release }
+            try settle_early(a, &checker, &loaded, args[6usize], settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
+        }
+        if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
                 try print_check_diagnostic(&loaded, &checker, check_error)
@@ -2120,32 +2148,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var artifact_mode: em.BuildMode = .Debug
         if release_build { artifact_mode = .Release }
-        let (keep, keep_error) = mem.alloc[bool](a, loaded.count)
-        if keep_error != ok { ret keep_error }
-        var keep_at = 0usize
-        while keep_at < loaded.count {
-            keep[keep_at] = false
-            keep_at += 1usize
-        }
         var lower_error = ok
         if writes_all_em {
-            if incremental_build {
-                let (settle_strings, settle_strings_error) = mem.alloc[str](a, 32768usize)
-                if settle_strings_error != ok { ret settle_strings_error }
-                let (settle_slots, settle_slots_error) = mem.alloc[usize](a, 131072usize)
-                if settle_slots_error != ok { ret settle_slots_error }
-                var settle_table: em.StringTable = zero
-                try em.init_strings(&settle_table, settle_strings, settle_slots)
-                let (settle_scratch_storage, settle_scratch_error) = mem.alloc[usize](a, 4194304usize)
-                if settle_scratch_error != ok { ret settle_scratch_error }
-                var settle_scratch: binary.Buffer = zero
-                try binary.init(&settle_scratch, settle_scratch_storage)
-                let (settle_triple, settle_triple_error) = target_triple(a, args[4usize], args[5usize])
-                if settle_triple_error != ok { ret settle_triple_error }
-                var settle_mode: em.BuildMode = .Debug
-                if release_build { settle_mode = .Release }
-                try settle_early(a, &checker, &loaded, args[6usize], settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
-            }
             lower_error = lower.all_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules, keep)
         } else {
             lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)

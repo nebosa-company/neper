@@ -4069,3 +4069,15 @@ declaration in both positions. So a member literal compares against them, a
 held and passed like any enum. The two are the language's, not declarations of
 the root module, so no artifact Interface carries them. link/when_target does all
 of that on both platforms.
+
+## D224 — The kept modules' bodies are not checked, and the checksum is table-driven
+
+D214 decided the kept modules before lowering, after the whole program was checked.
+The checker now runs in two halves -- the declarations, which are all the edge rule
+needs, and the bodies -- and the incremental build settles the rule between them, so
+a kept module's bodies are not checked: they were when its artifact was written, and
+the instances of its templates that other modules use are checked as instances
+regardless. The checksum over every artifact loaded was a bit loop, eight steps a
+byte; it is a table now, built per call. A build of the compiler with nothing
+changed takes 4 s against the 10 s of D214, and what remains is reading and widening
+every artifact to decide, and the declarations of every module.

@@ -118,26 +118,35 @@ fn xxhash64(bytes: []const usize) -> (usize, err) {
     ret (hash, ok)
 }
 
+// Table-driven (D224): the table is built per call, two thousand steps, against a
+// byte loop that ran eight per byte over every artifact loaded.
 fn crc32c(bytes: []const usize, zero_at: usize, zero_count: usize) -> (usize, err) {
+    var table: [256]usize = zero
+    var entry = 0usize
+    while entry < 256usize {
+        var crc = entry
+        var bit = 0usize
+        while bit < 8usize {
+            if crc % 2usize == 1usize {
+                crc = (crc >> 1usize) ^ 2197175160usize
+            } else {
+                crc = crc >> 1usize
+            }
+            bit += 1usize
+        }
+        table[entry] = crc
+        entry += 1usize
+    }
     var crc = 4294967295usize
     var at = 0usize
     while at < bytes.len {
         var value = bytes[at]
         if at >= zero_at && at - zero_at < zero_count { value = 0usize }
         if value > 255usize { ret (0usize, InvalidByte) }
-        crc = xor(crc, value)
-        var bit = 0usize
-        while bit < 8usize {
-            if crc % 2usize == 1usize {
-                crc = xor(crc >> 1usize, 2197175160usize)
-            } else {
-                crc = crc >> 1usize
-            }
-            bit += 1usize
-        }
+        crc = table[(crc ^ value) & 255usize] ^ (crc >> 8usize)
         at += 1usize
     }
-    ret (xor(crc, 4294967295usize), ok)
+    ret (crc ^ 4294967295usize, ok)
 }
 
 fn fnv1a32_step(hash: usize, value: usize) -> (usize, err) {

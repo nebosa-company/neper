@@ -11162,9 +11162,16 @@ fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_i
     ret result
 }
 
-fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+// The bodies of the modules `skip` does not mark (D224): a module the edge rule keeps
+// was checked when its artifact was written, and its instances used elsewhere are
+// checked below as instances. An empty `skip` skips nothing.
+fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, skip: []const bool) -> err {
     var module_index = 0usize
     while module_index < g.count {
+        if module_index < skip.len && skip[module_index] {
+            module_index += 1usize
+            continue
+        }
         var tree: parse.Tree = zero
         try parse.init_tree(&tree, g.nodes, g.children)
         try parse.parse(&tree, g.modules[module_index].text)
@@ -11189,6 +11196,14 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 }
 
 fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    try run_declarations(c, r, g)
+    var no_skip: [1]bool = zero
+    ret check_bodies(c, r, g, no_skip[0usize..0usize])
+}
+
+// Everything but the bodies (D224): what the edge rule needs to decide which
+// modules are kept, so their bodies need not be checked at all.
+fn run_declarations(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     if c.function_generics.len < c.functions.len || c.comptime_parameters.len == 0usize || c.generic_arguments.len == 0usize || c.aggregates.len == 0usize || c.aggregate_fields.len == 0usize { ret Capacity }
     c.resolver = r
     c.graph = g
@@ -11210,7 +11225,7 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
         if c.constants[constant_index].state != 2u8 { try evaluate_constant(c, constant_index) }
         constant_index += 1usize
     }
-    ret check_bodies(c, r, g)
+    ret ok
 }
 
 fn diagnostic_code(kind: DiagnosticKind) -> str {
