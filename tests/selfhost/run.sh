@@ -1735,6 +1735,17 @@ chmod +x "$nested_linked"
 nested_status=0
 "$nested_linked" || nested_status=$?
 [ "$nested_status" -eq 6 ]
+# Section 6's `when` (D216): conditions over `target.arch` and `target.os`, settled at
+# compile time, the taken arms adding up to 23 on Linux; a condition that is not a
+# question about the target is refused under E-COMPTIME-9999.
+when_path="$test_build/when-target-selfhost"
+when_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/when_target/src/main.e" "$repo" x64 linux "$when_path")
+[ "$when_written" = 'executable written' ]
+chmod +x "$when_path"
+when_status=0
+"$when_path" || when_status=$?
+[ "$when_status" -eq 23 ]
+check_protocol_diagnostic when_condition 'main.e:4:10: error[E-COMPTIME-9999]: a `when` condition asks about the target alone'
 # The trap protocol's backtrace: one `  at module.function` line per frame, from the
 # trapping function up to main, after the record.
 backtrace_path="$test_build/trap-backtrace-selfhost"

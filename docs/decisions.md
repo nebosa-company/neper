@@ -3952,3 +3952,18 @@ bootstrap says so and tests/neper0 holds the two compilers to the same words, an
 `use` that resolves to more than one variant is E-MODULE-9999. Eighteen of the thirty are emitted;
 the rest name subjects -- the formatter, tests, the GPU profile, the tooling
 protocol -- that do not exist yet to diagnose.
+
+## D216 — `when` over the target namespace
+
+Section 6's conditional compilation parsed and went no further: the checker and
+lowering had no case for a `WhenStmt`, and `target` resolved to nothing. Now a
+`when` condition is a question about the target -- `target.arch` or `target.os`
+compared with a member of `target.Arch` or `target.Os` with `==` or `!=`, on either
+side, under `!`, `&&`, `||` and parentheses -- which the checker settles from the
+graph's target; the resolver does not descend into the condition, since `target` is
+no declaration; both blocks type check, as the section says, so a dead configuration
+cannot rot; and lowering asks the same question and emits the taken block alone, as
+the settled `if` of D138 does. A condition of any other shape is refused under
+E-COMPTIME-9999, naming the shape that is allowed. `target.arch` and `target.os` as
+values outside a `when` condition -- section 2's namespace in full -- would want an
+enum value the checker can type, and every use so far is a `when`, so they wait.

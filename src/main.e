@@ -1363,6 +1363,9 @@ fn write_check_message(file: os.File, checker: *check.Checker, check_error: err)
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "` does not cross the C ABI (spec section 5's table), so it cannot be a parameter or return of one")
     }
+    if checker.failure_kind == .WhenCondition {
+        ret write_all(file, "a `when` condition asks about the target alone: `target.arch` or `target.os` compared with a member, under `!`, `&&`, `||` and parentheses")
+    }
     if checker.failure_kind == .VariadicArgument {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)

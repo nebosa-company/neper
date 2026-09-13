@@ -793,6 +793,9 @@ fn visit_scope_node(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_ind
     }
     if node.kind == .FieldExpr { try validate_field(r, g, tree, module_index, node) }
     if node.kind == .Block { ret visit_block(r, g, tree, module_index, node) }
+    // `when`'s condition names section 6's `target` namespace, which is no declaration:
+    // the checker evaluates it, and only the blocks are scope (D216).
+    if node.kind == .WhenStmt { ret visit_when(r, g, tree, module_index, node) }
     if node.kind == .BindingStmt { ret visit_binding(r, g, tree, module_index, node) }
     if node.kind == .ForStmt { ret visit_for(r, g, tree, module_index, node) }
     if node.kind == .SwitchArm { ret visit_switch_arm(r, g, tree, module_index, node) }
@@ -903,6 +906,20 @@ fn collect(r: *Resolver, g: *graph.Graph) -> err {
     while module_index < g.count {
         try validate_module(r, g, module_index)
         module_index += 1usize
+    }
+    ret ok
+}
+
+fn visit_when(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let end = node.first_child + node.child_count
+    var first = true
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if !first { try visit_scope_node(r, g, tree, module_index, tree.children[at].index) }
+            first = false
+        }
+        at += 1usize
     }
     ret ok
 }

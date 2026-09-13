@@ -3671,6 +3671,37 @@ fn emit_branch(builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     ret (instruction, emit_error)
 }
 
+// Section 6's `when`: the checker settled the condition and checked both blocks; the
+// taken one is the only code here (D216).
+fn lower_when(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
+    var condition_index = 0usize
+    var found_condition = false
+    var branches: [2]usize = zero
+    var branch_count = 0usize
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if !found_condition {
+                condition_index = child_index
+                found_condition = true
+            } else {
+                if branch_count == branches.len { ret check.Unsupported }
+                branches[branch_count] = child_index
+                branch_count += 1usize
+            }
+        }
+        at += 1usize
+    }
+    if !found_condition || branch_count == 0usize { ret parse.InvalidSyntax }
+    let (taken, condition_error) = check.when_condition(c, g, tree, module_index, condition_index)
+    if condition_error != ok { ret condition_error }
+    if taken { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers) }
+    if branch_count == 2usize { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
+    ret ok
+}
+
 fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
     var condition_index = 0usize
     var found_condition = false
@@ -4779,6 +4810,7 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     if node.kind == .AssignmentStmt { ret lower_assignment(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .CallStmt { ret lower_call_statement(c, g, tree, module_index, node, builder, bindings, *binding_count) }
     if node.kind == .IfStmt { ret lower_if(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
+    if node.kind == .WhenStmt { ret lower_when(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }
     if node.kind == .WhileStmt { ret lower_while(c, g, tree, module_index, function, node, builder, bindings, binding_count, defers) }
     if node.kind == .ForStmt { ret lower_for(c, g, tree, module_index, function, node, builder, bindings, binding_count, defers) }
     if node.kind == .SwitchStmt { ret lower_switch(c, g, tree, module_index, function, node, builder, bindings, binding_count, control, defers) }

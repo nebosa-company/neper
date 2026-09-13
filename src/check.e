@@ -63,6 +63,8 @@ type DiagnosticKind = enum u8 {
     IteratorImmutable,
     IteratorMissing,
     IteratorSignature,
+    // A `when` condition that is not a question about `target` (D216).
+    WhenCondition,
     RecursiveAggregate,
     InitializerType,
     GenericTypeArity,
@@ -9654,6 +9656,7 @@ fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
     if node.kind == .BindingStmt { ret check_binding(c, r, g, tree, module_index, node, function) }
     if node.kind == .ReturnStmt { ret check_return(c, g, tree, module_index, node, function) }
     if node.kind == .IfStmt || node.kind == .WhileStmt { ret check_condition_statement(c, r, g, tree, module_index, node, function) }
+    if node.kind == .WhenStmt { ret check_when_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .ForStmt { ret check_for_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .SwitchStmt { ret check_switch_statement(c, r, g, tree, module_index, node, function) }
     if node.kind == .BreakStmt {
@@ -9738,7 +9741,7 @@ fn statement_returns(c: *Checker, tree: *parse.Tree, module_index: usize, node: 
         }
         ret false
     }
-    if node.kind == .IfStmt {
+    if node.kind == .IfStmt || node.kind == .WhenStmt {
         let end = node.first_child + node.child_count
         var branch_count = 0usize
         var returning_count = 0usize
@@ -9758,6 +9761,144 @@ fn statement_returns(c: *Checker, tree: *parse.Tree, module_index: usize, node: 
         ret branch_count == 2usize && returning_count == 2usize
     }
     ret false
+}
+
+// Section 6's `when`: the condition is a question about the `target` namespace --
+// `target.arch` or `target.os` compared with a member, under `!`, `&&`, `||` and
+// parentheses -- settled here, and both blocks type check so a dead configuration
+// cannot rot; lowering emits the taken one (D216).
+//
+// ponytail: `target` exists in a `when` condition alone. Section 2 makes it a namespace
+// usable anywhere; that wants an enum value the checker can type, and every use so far
+// is a `when`.
+fn check_when_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
+    let end = node.first_child + node.child_count
+    var first = true
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if first {
+                let (taken, condition_error) = when_condition(c, g, tree, module_index, child_index)
+                if condition_error != ok { ret condition_error }
+                first = false
+            } else {
+                try check_block(c, r, g, tree, module_index, tree.nodes[child_index], function)
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn target_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .FieldExpr { ret ("", false) }
+    let (receiver_index, has_receiver) = first_node_child(tree, node)
+    if !has_receiver || tree.nodes[receiver_index].kind != .NameExpr { ret ("", false) }
+    let receiver = tree.nodes[receiver_index]
+    let base = c.tokens[receiver.token_start]
+    if base.kind != .Identifier || !same(g.modules[module_index].text[base.start..base.end], "target") { ret ("", false) }
+    var at = node.token_end
+    while at > receiver.token_end {
+        at = at - 1usize
+        if c.tokens[at].kind == .Identifier { ret (g.modules[module_index].text[c.tokens[at].start..c.tokens[at].end], true) }
+    }
+    ret ("", false)
+}
+
+fn member_spelling(c: *Checker, g: *graph.Graph, tree: *parse.Tree, node_index: usize, module_index: usize) -> (str, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .MemberExpr { ret ("", false) }
+    var at = node.token_start
+    while at < node.token_end {
+        if c.tokens[at].kind == .Identifier { ret (g.modules[module_index].text[c.tokens[at].start..c.tokens[at].end], true) }
+        at += 1usize
+    }
+    ret ("", false)
+}
+
+// The target's own spelling of a member: `x64` is `.X64`, `windows` is `.Windows`.
+fn target_is(current: str, member: str) -> bool {
+    if current.len != member.len { ret false }
+    var at = 0usize
+    while at < current.len {
+        var byte = current[at]
+        if at == 0usize && byte >= 97u8 && byte <= 122u8 { byte = byte - 32u8 }
+        if byte != member[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn known_target_member(question: str, member: str) -> bool {
+    if same(question, "arch") { ret same(member, "X64") || same(member, "Aarch64") || same(member, "X86") || same(member, "Spv") || same(member, "Ptx") }
+    ret same(member, "Windows") || same(member, "Linux") || same(member, "Macos") || same(member, "None")
+}
+
+fn when_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
+    let node = tree.nodes[node_index]
+    if node.kind == .GroupExpr {
+        let (inner, found) = first_node_child(tree, node)
+        if !found { ret (false, parse.InvalidSyntax) }
+        let (grouped, grouped_error) = when_condition(c, g, tree, module_index, inner)
+        ret (grouped, grouped_error)
+    }
+    if node.kind == .UnaryExpr && c.tokens[node.token_start].kind == .PunctBang {
+        let (inner, found) = first_node_child(tree, node)
+        if !found { ret (false, parse.InvalidSyntax) }
+        let (value, inner_error) = when_condition(c, g, tree, module_index, inner)
+        ret (!value, inner_error)
+    }
+    if node.kind == .BinaryExpr {
+        let op = binary_operator(c, tree, node)
+        var children: [2]usize = zero
+        var count = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if count == children.len { ret (false, parse.InvalidSyntax) }
+                children[count] = tree.children[at].index
+                count += 1usize
+            }
+            at += 1usize
+        }
+        if count != 2usize { ret (false, parse.InvalidSyntax) }
+        if op == .PunctAndAnd || op == .PunctOrOr {
+            let (left, left_error) = when_condition(c, g, tree, module_index, children[0usize])
+            if left_error != ok { ret (false, left_error) }
+            let (right, right_error) = when_condition(c, g, tree, module_index, children[1usize])
+            if right_error != ok { ret (false, right_error) }
+            if op == .PunctAndAnd { ret (left && right, ok) }
+            ret (left || right, ok)
+        }
+        if op == .PunctEqEq || op == .PunctBangEq {
+            let (left_question, left_has_question) = target_member(c, g, tree, module_index, children[0usize])
+            let (right_member, right_has_member) = member_spelling(c, g, tree, children[1usize], module_index)
+            let (right_question, right_has_question) = target_member(c, g, tree, module_index, children[1usize])
+            let (left_member, left_has_member) = member_spelling(c, g, tree, children[0usize], module_index)
+            var question = left_question
+            var has_question = left_has_question
+            var member = right_member
+            var has_member = right_has_member
+            if !left_has_question {
+                question = right_question
+                has_question = right_has_question
+                member = left_member
+                has_member = left_has_member
+            }
+            if has_question && has_member && (same(question, "arch") || same(question, "os")) && known_target_member(question, member) {
+                var current = g.os
+                if same(question, "arch") { current = g.arch }
+                let equal = target_is(current, member)
+                if op == .PunctEqEq { ret (equal, ok) }
+                ret (!equal, ok)
+            }
+        }
+    }
+    record_failure(c, module_index, node, .WhenCondition, "", "")
+    ret (false, InvalidCondition)
 }
 
 fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function: Function) -> err {
@@ -9925,6 +10066,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .DuplicateEnumValue { ret "E-NAME-0001" }
     if kind == .IteratorMissing || kind == .ProtocolMissing { ret "E-NAME-9999" }
     if kind == .GenericInference { ret "E-TYPE-0001" }
+    if kind == .WhenCondition { ret "E-COMPTIME-9999" }
     ret "E-TYPE-9999"
 }
 
