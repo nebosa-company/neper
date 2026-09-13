@@ -20,17 +20,20 @@ different claim in spec §14 (search/edit reliability).
 
 | | tokens (10 tasks) | correct | median compile | median run | median executable |
 |---|---:|:-:|---:|---:|---:|
-| Neper (`neper-try`, C bootstrap) | **941** | 10/10 | 465 ms | 10.6 ms | **24 KB** |
-| Rust (`rustc` 1.98) | **431** | 10/10 | 409 ms | 15.0 ms | 4.97 MB |
+| Neper (`neper-try`, C bootstrap) | **876** | 10/10 | 495 ms | 9.6 ms | **24 KB** |
+| Rust (`rustc` 1.98) | **431** | 10/10 | 399 ms | 11.8 ms | 4.97 MB |
 
-**The "fewer tokens" hypothesis does not hold here: Neper costs ~2.2x the source tokens of
-Rust for the same programs.** The tax is concrete and mostly fixed-cost, so it dominates tiny
-programs and would shrink on larger ones:
+**The "fewer tokens" hypothesis does not hold here: Neper costs about twice the source tokens of
+Rust for the same programs (~2.0x).** The tax is concrete and mostly fixed-cost, so it dominates
+tiny programs and would shrink on larger ones:
 
 - Mandatory `main` boilerplate -- `use e.mem`, `use e.io`, `fn main(a: *mem.Arena, args: []str)
   -> err`, `ret ok` -- is ~30 tokens per program against Rust's `fn main() {`. `hello` is 38 vs 10.
-- Every integer literal carries its type: `1i32`, `0usize`, `101i32` (2-3 tokens each) where Rust
-  infers `1`.
+- Literal suffixes are **not** the tax they look like. Spec §3 (D27) infers an unsuffixed literal
+  from its immediate context -- `fib(n - 1)`, `c == 97`, `for i in 0..s.len`, `values[0]` -- and
+  requires a suffix only where nothing supplies a type (an unannotated `var x = 0i32`, a range
+  with two untyped bounds). The first cut of these programs was over-suffixed; writing them
+  idiomatically saved 65 tokens (941 -> 876), about 7%.
 - No `else if` (nested `} else { if`), and no iterator combinators, so `(1..=100).sum()` or
   `.chars().filter(..).count()` become explicit loops. This partly measures library richness,
   not syntax.
@@ -46,5 +49,7 @@ the array literal (`[_]i32{ 3i32, 9i32 }`, not `[3, 9]`), the shape a Rust-train
 reaches for. Rust is in every model's training data; Neper is in none, which is the confound
 the full evaluation exists to control.
 
-The cheapest token wins are language decisions, not benchmark work: literal-suffix inference
-where the type is already fixed, and `else if`. Neither is taken here.
+The cheapest remaining token win is a language decision, not benchmark work: `else if`.
+Literal inference already exists and deliberately stops short of a default type and of
+non-local inference (D27), so that where an expression wraps under §11 is legible from its
+own line -- that is a safety choice, not a gap.
