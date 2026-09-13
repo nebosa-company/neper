@@ -4430,8 +4430,8 @@ fn formatter_push_name(c: *check.Checker, ty: check.Type, verb: check.FormatVerb
         if check.same(canonical.name, "f64") { ret ("push_f64", ok) }
         ret ("", check.InvalidFormat)
     }
-    // Slices, arrays and enums go through `emit_formatter_value`'s own emitters; a
-    // struct with a `format` of its own is what the expansion has not reached.
+    // Slices, arrays, enums and a type's own `format` go through
+    // `emit_formatter_value`'s own emitters; what reaches here has no push at all.
     ret ("", check.Unsupported)
 }
 
@@ -4520,6 +4520,20 @@ fn emit_formatter_value(c: *check.Checker, g: *graph.Graph, module_index: usize,
     let (aggregate_index, is_aggregate) = layout.aggregate_index(c, canonical)
     if is_aggregate && c.aggregates[aggregate_index].kind == .Enum && verb != .Hex && verb != .Binary {
         ret emit_formatter_enum(c, g, module_index, instance, return_slot, handle, value, canonical, aggregate_index, arena_form, builder, token)
+    }
+    // A type's own `format`: one call with the builder, the way `emit_declared_cmp`
+    // calls a declared `cmp`, its `err` guarded like a push's.
+    let (format_index, has_format) = check.element_format_function(c, canonical)
+    if has_format && verb == .Default {
+        let function = c.functions[format_index]
+        let (function_ref, reference_error) = nir.intern_function(builder, function.owner_module_index, function.name, function.instance_id)
+        if reference_error != ok { ret reference_error }
+        let err_type = check.make_type(.Err, "err", module_index)
+        let (call_instruction, call_result, call_error) = nir.emit(builder, .Call, err_type, true, function_ref, token)
+        if call_error != ok { ret call_error }
+        try nir.add_operand(builder, call_instruction, value)
+        try nir.add_operand(builder, call_instruction, handle)
+        ret emit_formatter_guard(c, module_index, instance, return_slot, call_result, arena_form, builder, token)
     }
     var arguments: [4]usize = zero
     var results: CallResults = zero

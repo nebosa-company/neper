@@ -10,6 +10,15 @@ error Failed
 
 type Color = enum u8 { Red, Green = 5, Blue }
 type Wide = enum i16 { Low = -3, High }
+type Point = struct { x: i64, y: i64 }
+
+fn point_format(v: Point, b: *str.Builder) -> err {
+    try str.push(b, "(")
+    try str.push_i64(b, v.x)
+    try str.push(b, ", ")
+    try str.push_i64(b, v.y)
+    ret str.push(b, ")")
+}
 
 fn main(a: *mem.Arena) -> err {
     // No verbs at all: the expansion is text and nothing else.
@@ -126,5 +135,16 @@ fn main(a: *mem.Arena) -> err {
     let (low_text, low_error) = str.format["{}"](a, low)
     if low_error != ok { ret low_error }
     if !str.eq(low_text, "Low") { ret Failed }
+
+    // Rule 4's declared format: a type whose module declares `<t>_format` is written
+    // by one call to it with the builder, alone and inside a slice (D191).
+    let p = Point { x: 1i64, y: -2i64 }
+    let (point_text, point_error) = str.format["p={} q={}"](a, p, Point { x: 3i64, y: 4i64 })
+    if point_error != ok { ret point_error }
+    if !str.eq(point_text, "p=(1, -2) q=(3, 4)") { ret Failed }
+    var points: [2]Point = [2]Point{ Point { x: 5i64, y: 6i64 }, Point { x: 7i64, y: 8i64 } }
+    let (points_text, points_error) = str.format["{}"](a, points[0..])
+    if points_error != ok { ret points_error }
+    if !str.eq(points_text, "[(5, 6), (7, 8)]") { ret Failed }
     ret ok
 }

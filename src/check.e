@@ -5419,8 +5419,31 @@ fn formattable_type(c: *Checker, ty: Type, kind: FormatVerb) -> bool {
     if canonical.kind == .Integer || canonical.kind == .Float { ret true }
     if canonical.kind == .Bool || canonical.kind == .Err || canonical.kind == .String { ret true }
     if canonical.kind == .Pointer || canonical.kind == .Slice || canonical.kind == .Array { ret true }
-    if canonical.kind == .Named || canonical.kind == .Tag { ret is_enum_type(c, canonical) }
+    if canonical.kind == .Named || canonical.kind == .Tag {
+        if is_enum_type(c, canonical) { ret true }
+        let (function_index, has_format) = element_format_function(c, canonical)
+        ret has_format
+    }
     ret false
+}
+
+// A type's own `format` under section 4: `fn <t>_format(v: T, b: *str.Builder) -> err`
+// in the type's module, which the expansion calls with the builder it is pushing
+// into. Nothing re-checks the call, so the shape is matched here exactly: the
+// receiver by value, a pointer second, one `err` back.
+fn element_format_function(c: *Checker, ty: Type) -> (usize, bool) {
+    let (canonical, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok || canonical.kind != .Named { ret (0usize, false) }
+    let (function_index, found, lookup_error) = protocol_function(c, ty, "format")
+    if lookup_error != ok || !found { ret (0usize, false) }
+    let function = c.functions[function_index]
+    if function.generic || function.parameter_count != 2usize || function.return_count != 1usize { ret (0usize, false) }
+    if function.first_parameter + 2usize > c.parameter_count { ret (0usize, false) }
+    if !type_equal(c, c.parameters[function.first_parameter].ty, canonical) { ret (0usize, false) }
+    if c.parameters[function.first_parameter + 1usize].ty.kind != .Pointer { ret (0usize, false) }
+    let (return_type, return_error) = function_return(c, function, 0usize)
+    if return_error != ok || return_type.kind != .Err { ret (0usize, false) }
+    ret (function_index, true)
 }
 
 // Spec section 8: a pointer type -- `*void` included -- is only reached through

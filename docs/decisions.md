@@ -3479,3 +3479,16 @@ and negative backing values go through `enum_member_bits` the way a `switch` arm
 does, and a slice of enums reaches this through D189's sequence path. The hex and
 binary verbs still take the integer -- an enum under `{:x}` is refused by the
 checker as it was. A struct with a `format` of its own is what rule 4 still leaves.
+
+## D191 — `str.format` calls a type's own `format`
+
+A `Named` argument whose module declares `fn <t>_format(v: T, b: *str.Builder) -> err`
+is formattable, as section 4 says, and the expansion writes it as one call to that
+function with the builder it is already pushing into, the `err` guarded like a
+push's -- the shape `emit_declared_cmp` gave `cmp`. The checker matches the
+declaration exactly, receiver by value, a pointer second, one `err` back, because
+nothing re-checks the call the expansion synthesizes; the lookup is the same
+`protocol_function` walk the other rule 4 protocols use. A struct without one is
+still refused at the call, which is what the negative fixture pins now. With this,
+rule 4's `format` reaches every shape the section lists but pointers and
+`union enum` payloads.

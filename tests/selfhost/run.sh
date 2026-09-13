@@ -566,9 +566,9 @@ format_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fi
 [ "$format_written" = 'executable written' ]
 chmod +x "$test_build/str-format-selfhost"
 "$test_build/str-format-selfhost"
-# A struct with its own format is formattable under section 4 but needs that format
-# called, which the expansion does not do yet (slices, arrays and enums are expanded
-# since D189 and D190), so the build stops rather than quietly formatting nothing.
+# A struct whose module declares no format has nothing rule 4 supplies and nothing to
+# call, so the build stops rather than quietly formatting nothing (D189-D191 cover
+# what is formattable).
 require_fixture "check/format_compound_argument"
 if $test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/check/format_compound_argument/src/main.e" "$repo" x64 linux "$test_build/format-compound-argument" >/dev/null 2>&1; then
     printf '%s\n' 'a format verb with no push was lowered' >&2
