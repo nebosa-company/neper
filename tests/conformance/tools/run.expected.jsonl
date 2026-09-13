@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"run","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"record":"run","process_exit_code":3,"stdout":"hello from run\n","stderr":{"encoding":"base64","data":"d2FybiD/Cg=="},"trap":null}
+{"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-run.out","process_exit_code":3,"diagnostics":0}}

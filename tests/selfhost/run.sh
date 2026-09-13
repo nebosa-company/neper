@@ -1805,6 +1805,12 @@ for build_case in 'tools/build.e build 0' 'reject/scope.e build_reject 1'; do
 done
 chmod +x "$test_build/conformance-tools-build.out"
 "$test_build/conformance-tools-build.out"
+# `run --json` (D231): the build stream plus one `run` record of the program's whole
+# stdout, stderr and exit status, byte for byte.
+run_actual="$test_build/conformance-tools-run.jsonl"
+(cd "$test_build" && ./neper-self run "$conformance_root/tools/run.e" "$repo" x64 linux conformance-tools-run.out --json > "conformance-tools-run.jsonl")
+cmp -s "$run_actual" "$conformance_root/tools/run.expected.jsonl" || { printf '%s
+' "run --json differs from the conformance corpus" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

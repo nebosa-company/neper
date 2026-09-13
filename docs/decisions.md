@@ -4179,3 +4179,17 @@ manifest, the `--target`/`-o` spellings and a project root as operand are not he
 The corpus's empty program found a startup bug: both hosts exit with `eax != 0`
 after `main` returns, so a void `main` exited with whatever its body left in eax --
 0 from one shell, 1 from another. The entry's empty return now zeroes eax.
+
+## D231 — `run --json` builds then launches, capturing the whole output
+
+`run` takes `emit-executable`'s build path and, once the executable is written,
+launches it with its stdout and stderr redirected to two files beside it, waits, and
+reads them back whole into one `run` record -- `process_exit_code`, `stdout`,
+`stderr` and a null `trap` -- before the result. Captured bytes follow section 2: a
+JSON string when valid UTF-8, `{encoding:base64,data:...}` otherwise, which
+tests/conformance/tools/run.e exercises by writing a non-UTF-8 byte to stderr and
+exiting 3. A bare output name is launched as `./name`, not searched on PATH. The
+fixed os surface creates files 0666 and has no chmod, so on Linux the child goes
+through `sh -c 'chmod +x -- "$0" && exec "$0"'`; drop that when emit-executable can
+write an executable bit. Streaming, the structured trap payload of a crash, `-- ARGS`
+and a project root are not here.

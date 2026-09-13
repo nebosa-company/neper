@@ -840,6 +840,78 @@ fn host_target() -> str {
     ret "x64-windows"
 }
 
+fn with_suffix(a: *mem.Arena, path: str, suffix: str) -> (str, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, path.len + suffix.len)
+    if storage_error != ok { ret ("", storage_error) }
+    var at = 0usize
+    while at < path.len {
+        storage[at] = path[at]
+        at += 1usize
+    }
+    at = 0usize
+    while at < suffix.len {
+        storage[path.len + at] = suffix[at]
+        at += 1usize
+    }
+    ret (storage[..], ok)
+}
+
+// `run` (D231): the executable just written, its stdout and stderr into files beside it,
+// read back whole once it has exited.
+// ponytail: the fixed os surface creates files 0666 and has no chmod, so on Linux the
+// program goes through `sh -c` which marks it executable first; drop that when
+// emit-executable can write an executable file.
+fn run_program(a: *mem.Arena, path: str) -> (i32, str, str, err) {
+    let (stdout_path, stdout_path_error) = with_suffix(a, path, ".stdout")
+    if stdout_path_error != ok { ret (0i32, "", "", stdout_path_error) }
+    let (stderr_path, stderr_path_error) = with_suffix(a, path, ".stderr")
+    if stderr_path_error != ok { ret (0i32, "", "", stderr_path_error) }
+    let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
+    let (stdout_file, stdout_open_error) = os.open(a, stdout_path, flags)
+    if stdout_open_error != ok { ret (0i32, "", "", stdout_open_error) }
+    let (stderr_file, stderr_open_error) = os.open(a, stderr_path, flags)
+    if stderr_open_error != ok { ret (0i32, "", "", stderr_open_error) }
+    var streams: os.Stdio = zero
+    streams.stdout = stdout_file
+    streams.stderr = stderr_file
+    // A bare name is the file beside the current directory, not a search of PATH.
+    var launched = path
+    var bare = true
+    var scan = 0usize
+    while scan < path.len {
+        if path[scan] == 47u8 || path[scan] == 92u8 { bare = false }
+        scan += 1usize
+    }
+    if bare {
+        let (prefixed, prefix_error) = with_suffix(a, "./", path)
+        if prefix_error != ok { ret (0i32, "", "", prefix_error) }
+        launched = prefixed
+    }
+    var argv: [4]str = zero
+    var argc = 1usize
+    argv[0usize] = launched
+    if same(host_target(), "x64-linux") {
+        argv[0usize] = "/bin/sh"
+        argv[1usize] = "-c"
+        argv[2usize] = "chmod +x -- \"$0\" && exec \"$0\""
+        argv[3usize] = launched
+        argc = 4usize
+    }
+    let (child, spawn_error) = os.spawn(a, argv[..argc], streams)
+    let stdout_close_error = os.close(stdout_file)
+    let stderr_close_error = os.close(stderr_file)
+    if spawn_error != ok { ret (0i32, "", "", spawn_error) }
+    if stdout_close_error != ok { ret (0i32, "", "", stdout_close_error) }
+    if stderr_close_error != ok { ret (0i32, "", "", stderr_close_error) }
+    let (status, wait_error) = os.wait(child)
+    if wait_error != ok { ret (0i32, "", "", wait_error) }
+    let (stdout_captured, stdout_load_error) = source.load(a, stdout_path)
+    if stdout_load_error != ok { ret (0i32, "", "", stdout_load_error) }
+    let (stderr_captured, stderr_load_error) = source.load(a, stderr_path)
+    if stderr_load_error != ok { ret (0i32, "", "", stderr_load_error) }
+    ret (status, stdout_captured, stderr_captured, ok)
+}
+
 // docs/tooling.md section 4: `tokens|parse [--json] [--path VIRTUAL.e] FILE` (D227),
 // its own function since the bootstrap caps a function's locals.
 fn tool_command(a: *mem.Arena, args: []str) -> err {
@@ -2278,7 +2350,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
     let trailing_flags = args.len >= 8usize && args.len <= 12usize && flags_known(args)
     let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all")) && has_flag(args, "--release")
-    let writes_executable = (args.len == 7usize || (trailing_flags && !has_flag(args, "--incremental"))) && same(args[1usize], "emit-executable")
+    // `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then
+    // the program's whole output as one `run` record before the result.
+    let running = trailing_flags && same(args[1usize], "run") && has_flag(args, "--json") && !has_flag(args, "--incremental")
+    let writes_executable = ((args.len == 7usize || (trailing_flags && !has_flag(args, "--incremental"))) && same(args[1usize], "emit-executable")) || running
     let writes_em = args.len == 7usize && same(args[1usize], "emit-em")
     // `emit-em-all ... --incremental`: section 12's edge rule decides which of the
     // artifacts already in the directory are kept and which are replaced (D205).
@@ -2292,7 +2367,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if writes_executable && has_flag(args, "--json") {
             report.json = true
             report.file = os.stdout()
-            try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"build\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+            if running {
+                try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"run\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+            } else {
+                try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"build\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+            }
         }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
@@ -2687,7 +2766,34 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let (packed, packed_error) = mem.alloc[u8](a, executable.count)
                 if packed_error != ok { ret packed_error }
                 try emit_x64.pack(&executable, packed)
-                try save_bytes(a, args[6usize], packed)
+                let save_error = save_bytes(a, args[6usize], packed)
+                if save_error != ok {
+                    if !report.json { ret save_error }
+                    try emit_command_diagnostic(&report, "E-CLI-9999", "the executable could not be written")
+                    try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
+                    os.exit(2i32)
+                    ret ok
+                }
+                if running {
+                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, args[6usize])
+                    if run_error != ok {
+                        try emit_command_diagnostic(&report, "E-CLI-9999", "the executable could not be run")
+                        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
+                        os.exit(2i32)
+                        ret ok
+                    }
+                    try tool.run_record(a, status, stdout_captured, stderr_captured)
+                    try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
+                    try write_json_string(&report, args[6usize])
+                    try write_all(&report, ",\"process_exit_code\":")
+                    if status < 0i32 {
+                        try write_all(&report, "-")
+                        try write_usize(&report, usize(0i32 - status))
+                    } else {
+                        try write_usize(&report, usize(status))
+                    }
+                    ret write_all(&report, ",\"diagnostics\":0}}\n")
+                }
                 if report.json {
                     try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
                     try write_json_string(&report, args[6usize])
@@ -2728,7 +2834,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [--json]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [--json] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json\n")
     os.exit(1i32)
     ret ok
 }

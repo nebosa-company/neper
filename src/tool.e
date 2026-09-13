@@ -172,6 +172,38 @@ fn info_json(a: *mem.Arena, host: str) -> err {
     ret flush(&out)
 }
 
+// Section 2's captured bytes: a JSON string when they are valid UTF-8, base64 otherwise.
+fn captured(out: *Out, value: str) -> err {
+    var at = 0usize
+    while at < value.len {
+        let width = lex.utf8_width(value, at)
+        if width == 0usize { ret base64_object(out, value) }
+        at += width
+    }
+    ret quoted(out, value)
+}
+
+// `run --json` (D231): the program's exit status and its whole stdout and stderr as one
+// record; a trap is not yet read out of the stderr text.
+fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, (stdout_bytes.len + stderr_bytes.len) * 6usize + 256usize)
+    if storage_error != ok { ret storage_error }
+    var out = Out { bytes: storage, count: 0usize }
+    try text(&out, "{\"record\":\"run\",\"process_exit_code\":")
+    if status < 0i32 {
+        try byte(&out, 45u8)
+        try decimal(&out, usize(0i32 - status))
+    } else {
+        try decimal(&out, usize(status))
+    }
+    try text(&out, ",\"stdout\":")
+    try captured(&out, stdout_bytes)
+    try text(&out, ",\"stderr\":")
+    try captured(&out, stderr_bytes)
+    try text(&out, ",\"trap\":null}")
+    ret flush(&out)
+}
+
 // The public name of a token kind, the registry of docs/grammar.ebnf.
 fn kind_name(kind: lex.Kind) -> str {
     if kind == .Invalid { ret "INVALID" }

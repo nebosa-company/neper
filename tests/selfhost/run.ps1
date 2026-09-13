@@ -1671,6 +1671,11 @@ foreach ($case in @(@('tools\build.e', 'build', 0), @('reject\scope.e', 'build_r
 Copy-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out') -Destination (Join-Path $testBuild 'conformance-tools-build.exe') -Force
 & (Join-Path $testBuild 'conformance-tools-build.exe')
 if ($LASTEXITCODE -ne 0) { throw "the executable of build --json exited $LASTEXITCODE" }
+# `run --json` (D231): the build stream plus one `run` record of the program's whole
+# stdout, stderr and exit status, byte for byte.
+$runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" run `"$(Join-Path $conformanceRoot 'tools/run.e')`" `"$repo`" x64 windows conformance-tools-run.out --json > `"$runActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run.expected.jsonl')).Hash) { throw "run --json differs from the conformance corpus" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'
