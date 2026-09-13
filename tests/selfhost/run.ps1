@@ -1943,6 +1943,8 @@ $checkFailures = @(
     @('error_return_not_last', 'InvalidType'),
     @('extern_error_return', 'InvalidType'),
     @('extern_multi_return', 'InvalidType'),
+    @('extern_slice_parameter', 'InvalidType'),
+    @('extern_slice_return', 'InvalidType'),
     @('intrinsic_generic_unsupported', 'ArgumentCount'),
     @('alloc_argument_type', 'TypeMismatch'),
     @('alloc_arena_type', 'TypeMismatch'),

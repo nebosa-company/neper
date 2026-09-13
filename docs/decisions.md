@@ -3492,3 +3492,18 @@ nothing re-checks the call the expansion synthesizes; the lookup is the same
 still refused at the call, which is what the negative fixture pins now. With this,
 rule 4's `format` reaches every shape the section lists but pointers and
 `union enum` payloads.
+
+## D192 — An `extern` declaration is checked against the C ABI table
+
+Section 5 closes the set of types that cross a foreign call: integers, `bool`,
+`f32`/`f64`, enums, function pointers, pointers to `void` or to a crossing type,
+and non-generic structs and unions whose every field crosses (a fixed array field
+of a crossing element included). Slices, `str`, `err`, arrays by value, generic
+templates, `Vec`/`Mask`/`Atomic` by value and tagged unions do not. The checker
+now walks that table (`type_crosses`) over every parameter and the return of each
+`extern fn` at declaration time and refuses the declaration with `ExternType`,
+naming the function and the type -- by its shape (`a slice`, `an array by value`)
+when the type has no name. Intrinsics are exempt, as they are not calls at all.
+Before this, `extern fn puts(text: []const u8)` compiled and passed a two-word
+slice where C expects one pointer; the fixtures `check/extern_slice_parameter`
+and `check/extern_slice_return` pin the two sides. Variadics remain the open row.

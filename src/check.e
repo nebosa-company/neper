@@ -83,6 +83,7 @@ type DiagnosticKind = enum u8 {
     MetaShape,
     MetaFieldOwner,
     ExternWithoutImport,
+    ExternType,
 }
 
 type Kind = enum u8 {
@@ -2998,6 +2999,23 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
         if return_type.kind == .Err && return_index + 1usize != item.return_count { ret InvalidType }
         return_index += 1usize
     }
+    // Section 5's closed table of what crosses the C ABI: a parameter or return of an
+    // extern naming a type without a C mapping is refused here, at the declaration.
+    if item.external && !item.intrinsic {
+        var index = 0usize
+        while index < item.parameter_count {
+            let parameter_type = c.parameters[item.first_parameter + index].ty
+            if !type_crosses(c, parameter_type, 0usize) {
+                record_failure(c, module_index, node, .ExternType, item.name, crossing_spelling(parameter_type))
+                ret InvalidType
+            }
+            index += 1usize
+        }
+        if item.return_count == 1usize && !type_crosses(c, c.return_types[item.first_return], 0usize) {
+            record_failure(c, module_index, node, .ExternType, item.name, crossing_spelling(c.return_types[item.first_return]))
+            ret InvalidType
+        }
+    }
     c.functions[c.function_count] = item
     c.function_generics[c.function_count] = generic
     c.function_count += 1usize
@@ -3267,6 +3285,68 @@ fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
     }
     c.signature_function_count = c.function_count
     ret ok
+}
+
+// The type as the report names it: its name, or its shape when it has none.
+fn crossing_spelling(ty: Type) -> str {
+    if ty.name.len > 0usize { ret ty.name }
+    if ty.kind == .Slice { ret "a slice" }
+    if ty.kind == .Array { ret "an array by value" }
+    if ty.kind == .Pointer { ret "a pointer to a type that does not cross" }
+    if ty.kind == .String { ret "str" }
+    if ty.kind == .Err { ret "err" }
+    ret "a type without a C mapping"
+}
+
+// Whether a type is one row of section 5's table with "yes" in its Crosses column:
+// the integers, `f32`/`f64`, `bool`, a pointer to something that crosses or to
+// `void`, `Vec`/`Mask` or `Atomic`, a function pointer, an enum by its backing
+// integer, and a non-empty struct or union whose every field crosses or is a
+// non-empty array of a crossing type. Slices, `str`, `err`, arrays by value, tagged
+// unions, `f16`/`bf16` and the two pointee-only builtins by value do not.
+//
+// ponytail: `fn(...)` and `extern fn(...)` are one `Function` kind to the checker,
+// so a neper-convention function pointer passes here; telling them apart is the
+// type's, not this table's.
+fn type_crosses(c: *Checker, ty: Type, depth: usize) -> bool {
+    if depth > 8usize { ret false }
+    let (canonical, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok { ret false }
+    if canonical.kind == .Integer || canonical.kind == .Bool || canonical.kind == .Function { ret true }
+    if canonical.kind == .Float { ret same(canonical.name, "f32") || same(canonical.name, "f64") }
+    if canonical.kind == .Pointer {
+        if !canonical.has_element || canonical.element >= c.type_count { ret false }
+        let pointee = c.types[canonical.element]
+        if pointee.kind == .Void { ret true }
+        let (pointee_canonical, pointee_error) = canonical_type(c, pointee)
+        if pointee_error != ok { ret false }
+        if is_vector_type(c, pointee_canonical) { ret true }
+        if pointee_canonical.kind == .Named && same(pointee_canonical.name, "Atomic") { ret true }
+        ret type_crosses(c, pointee, depth + 1usize)
+    }
+    if canonical.kind != .Named && canonical.kind != .Tag { ret false }
+    if is_enum_type(c, canonical) { ret true }
+    if is_vector_type(c, canonical) || same(canonical.name, "Atomic") { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, canonical)
+    if !found { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind != .Struct && aggregate.kind != .Union { ret false }
+    if aggregate.field_count == 0usize || (aggregate.generic && !aggregate.instance) { ret false }
+    var field_at = aggregate.first_field
+    let field_end = aggregate.first_field + aggregate.field_count
+    while field_at < field_end {
+        let field_type = c.aggregate_fields[field_at].ty
+        let (field_canonical, field_error) = canonical_type(c, field_type)
+        if field_error != ok { ret false }
+        if field_canonical.kind == .Array {
+            if !field_canonical.has_length || field_canonical.array_length == 0usize || !field_canonical.has_element || field_canonical.element >= c.type_count { ret false }
+            if !type_crosses(c, c.types[field_canonical.element], depth + 1usize) { ret false }
+        } else {
+            if !type_crosses(c, field_type, depth + 1usize) { ret false }
+        }
+        field_at += 1usize
+    }
+    ret true
 }
 
 fn find_function(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
