@@ -1597,6 +1597,28 @@ case "$nocheck_output" in
 ' "the loud case of the nocheck fixture went wrong: $nocheck_output" >&2; exit 1 ;;
 esac
 "$nocheck_path" none
+# The release build: the same program traps on its first `+` in debug and, built with
+# `--release`, wraps, truncates, masks and saturates through to exit 0.
+release_source="$repo/tests/selfhost/fixtures/link/release_build/src/main.e"
+release_debug_path="$test_build/release-build-debug-selfhost"
+release_debug_written=$($test_build/neper-self emit-executable "$release_source" "$repo" x64 linux "$release_debug_path")
+[ "$release_debug_written" = 'executable written' ]
+chmod +x "$release_debug_path"
+release_status=0
+release_debug_output=$("$release_debug_path" 2>&1) || release_status=$?
+[ "$release_status" -eq 134 ]
+case "$release_debug_output" in
+    *'main.e:14:19: trap[overflow]: u8 + overflows'*) ;;
+    *) printf '%s
+' "the release fixture did not trap in debug: $release_debug_output" >&2; exit 1 ;;
+esac
+release_path="$test_build/release-build-selfhost"
+release_written=$($test_build/neper-self emit-executable "$release_source" "$repo" x64 linux "$release_path" --release)
+[ "$release_written" = 'executable written' ]
+chmod +x "$release_path"
+release_output=$("$release_path" 2>&1)
+[ "$release_output" = '' ]
+[ "$(stat -c %s "$release_path")" -lt "$(stat -c %s "$release_debug_path")" ]
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

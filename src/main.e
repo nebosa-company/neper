@@ -1778,7 +1778,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
-    let writes_executable = args.len == 7usize && same(args[1usize], "emit-executable")
+    // `emit-executable ... --release`: section 11's release build, every debug-only
+    // check left out and the release results in their place (D204).
+    let release_build = args.len == 8usize && same(args[1usize], "emit-executable") && same(args[7usize], "--release")
+    let writes_executable = (args.len == 7usize || release_build) && same(args[1usize], "emit-executable")
     let writes_em = args.len == 7usize && same(args[1usize], "emit-em")
     let writes_all_em = args.len == 7usize && same(args[1usize], "emit-em-all")
     if (args.len == 6usize && (same(args[1usize], "nir-file") || same(args[1usize], "codegen-file") || same(args[1usize], "object-file"))) || writes_object || writes_executable || writes_em || writes_all_em {
@@ -1845,6 +1848,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if lowered_modules_error != ok { ret lowered_modules_error }
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, 65536usize)
         if kept_functions_error != ok { ret kept_functions_error }
+        builder.nocheck = release_build
         let lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
         if lower_error == ok {
             // Everything was lowered so that the order is the one the artifacts also use; what

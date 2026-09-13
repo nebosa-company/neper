@@ -620,6 +620,72 @@ fn float_bound_bits(width: usize, signed: bool, upper: bool, wide: bool) -> usiz
     ret 3741319168usize
 }
 
+// The release-mode counterpart of the range check: NaN gives 0, a value at or past
+// the upper bound the maximum, one at or past the lower bound the minimum, and the
+// conversion is skipped for all three. Returns the jump to patch to after it.
+fn emit_float_saturation(destination: usize, into: check.Type, wide: bool, output: *emit_x64.Buffer) -> (usize, err) {
+    let width = integer_width(into)
+    let signed = signed_integer(into)
+    let all_ones = 0usize -% 1usize
+    var maximum = all_ones >> (64usize - width)
+    var minimum = 0usize
+    if signed {
+        maximum = all_ones >> (65usize - width)
+        minimum = all_ones - (all_ones >> (65usize - width))
+    }
+    // NaN: unordered after any compare, and the parity flag says so.
+    let bound_error = emit_x64.mov_immediate(output, 11usize, float_bound_bits(width, signed, true, wide))
+    if bound_error != ok { ret (0usize, bound_error) }
+    let move_error = emit_x64.move_to_float(output, 1usize, 11usize, wide)
+    if move_error != ok { ret (0usize, move_error) }
+    let compare_error = emit_x64.float_compare(output, 0usize, 1usize, wide)
+    if compare_error != ok { ret (0usize, compare_error) }
+    let (is_nan, nan_error) = emit_x64.jump_condition(output, 10usize)
+    if nan_error != ok { ret (0usize, nan_error) }
+    let (too_high, high_error) = emit_x64.jump_condition(output, 3usize)
+    if high_error != ok { ret (0usize, high_error) }
+    let low_bound_error = emit_x64.mov_immediate(output, 11usize, float_bound_bits(width, signed, false, wide))
+    if low_bound_error != ok { ret (0usize, low_bound_error) }
+    let low_move_error = emit_x64.move_to_float(output, 1usize, 11usize, wide)
+    if low_move_error != ok { ret (0usize, low_move_error) }
+    let low_compare_error = emit_x64.float_compare(output, 0usize, 1usize, wide)
+    if low_compare_error != ok { ret (0usize, low_compare_error) }
+    var low_condition = 6usize
+    if signed && (width == 64usize || !wide) { low_condition = 2usize }
+    let (too_low, low_error) = emit_x64.jump_condition(output, low_condition)
+    if low_error != ok { ret (0usize, low_error) }
+    let (in_range, range_error) = emit_x64.jump(output)
+    if range_error != ok { ret (0usize, range_error) }
+    let nan_error2 = emit_x64.patch_relative32(output, is_nan, output.count)
+    if nan_error2 != ok { ret (0usize, nan_error2) }
+    let zero_error = emit_x64.mov_immediate(output, destination, 0usize)
+    if zero_error != ok { ret (0usize, zero_error) }
+    let (nan_done, nan_done_error) = emit_x64.jump(output)
+    if nan_done_error != ok { ret (0usize, nan_done_error) }
+    let high_patch_error = emit_x64.patch_relative32(output, too_high, output.count)
+    if high_patch_error != ok { ret (0usize, high_patch_error) }
+    let max_error = emit_x64.mov_immediate(output, destination, maximum)
+    if max_error != ok { ret (0usize, max_error) }
+    let (max_done, max_done_error) = emit_x64.jump(output)
+    if max_done_error != ok { ret (0usize, max_done_error) }
+    let low_patch_error = emit_x64.patch_relative32(output, too_low, output.count)
+    if low_patch_error != ok { ret (0usize, low_patch_error) }
+    let min_error = emit_x64.mov_immediate(output, destination, minimum)
+    if min_error != ok { ret (0usize, min_error) }
+    // The three saturated exits share one jump past the conversion, which the caller
+    // patches; the NaN and maximum exits land on it, the minimum falls into it.
+    let landing = output.count
+    let nan_land_error = emit_x64.patch_relative32(output, nan_done, landing)
+    if nan_land_error != ok { ret (0usize, nan_land_error) }
+    let max_land_error = emit_x64.patch_relative32(output, max_done, landing)
+    if max_land_error != ok { ret (0usize, max_land_error) }
+    let (past, past_error) = emit_x64.jump(output)
+    if past_error != ok { ret (0usize, past_error) }
+    let range_patch_error = emit_x64.patch_relative32(output, in_range, output.count)
+    if range_patch_error != ok { ret (0usize, range_patch_error) }
+    ret (past, ok)
+}
+
 fn emit_float_range_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, into: check.Type, wide: bool, context: *FunctionContext) -> err {
     let output = context.output
     let width = integer_width(into)
@@ -700,8 +766,19 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
     }
     if source_width == 0usize || instruction.ty.kind != .Integer { ret Unsupported }
     try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
-    if instruction.immediate == 0usize && !instruction.nocheck { try emit_float_range_check(builder, current, instruction.token, instruction.ty, source_width == 64usize, context) }
+    var saturated = 0usize
+    if instruction.immediate == 0usize && !instruction.nocheck {
+        try emit_float_range_check(builder, current, instruction.token, instruction.ty, source_width == 64usize, context)
+    } else {
+        // Section 4's release result: the target's extreme for a value past its range,
+        // zero for NaN, on every target; the compare sequence branches past the
+        // conversion with the answer already in the destination (D204).
+        let (done, saturate_error) = emit_float_saturation(destination, instruction.ty, source_width == 64usize, output)
+        if saturate_error != ok { ret saturate_error }
+        saturated = done
+    }
     try integer_from_float(destination, unsigned_wide(instruction.ty), source_width == 64usize, output)
+    if saturated != 0usize { try emit_x64.patch_relative32(output, saturated, output.count) }
     try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty))
     ret store_result(allocations, instruction.result, destination, output)
 }

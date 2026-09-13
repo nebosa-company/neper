@@ -1502,6 +1502,20 @@ $nocheckLoud = & $nocheckPath loud 2>&1
 if ($LASTEXITCODE -ne 134 -or ($nocheckLoud -join "`n") -notmatch 'main\.e:41:23: trap\[overflow\]: u8 \+ overflows') { throw "the check outside @nocheck did not fire: exit $LASTEXITCODE, $($nocheckLoud -join "`n")" }
 & $nocheckPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the nocheck fixture trapped on its ordinary path' }
+# The release build: the same program traps on its first `+` in debug and, built with
+# `--release`, wraps, truncates, masks and saturates through to exit 0.
+$releaseSource = Join-Path $PSScriptRoot 'fixtures\link\release_build\src\main.e'
+$releaseDebugPath = Join-Path $testBuild 'release-build-debug-selfhost.exe'
+$releaseDebugWritten = & $compiler emit-executable $releaseSource $repo 'x64' 'windows' $releaseDebugPath
+if ($LASTEXITCODE -ne 0 -or $releaseDebugWritten -ne 'executable written') { throw 'release fixture debug emission failed' }
+$releaseDebugOutput = & $releaseDebugPath 2>&1
+if ($LASTEXITCODE -ne 134 -or ($releaseDebugOutput -join "`n") -notmatch 'main\.e:14:19: trap\[overflow\]: u8 \+ overflows') { throw "the release fixture did not trap in debug: exit $LASTEXITCODE, $($releaseDebugOutput -join "`n")" }
+$releasePath = Join-Path $testBuild 'release-build-selfhost.exe'
+$releaseWritten = & $compiler emit-executable $releaseSource $repo 'x64' 'windows' $releasePath --release
+if ($LASTEXITCODE -ne 0 -or $releaseWritten -ne 'executable written') { throw 'release fixture release emission failed' }
+$releaseOutput = & $releasePath 2>&1
+if ($LASTEXITCODE -ne 0 -or ($releaseOutput -join "`n") -ne '') { throw "the release build did not give section 4's release results: exit $LASTEXITCODE, $($releaseOutput -join "`n")" }
+if ((Get-Item -LiteralPath $releasePath).Length -ge (Get-Item -LiteralPath $releaseDebugPath).Length) { throw 'the release build is not smaller than the debug build' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at

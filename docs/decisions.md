@@ -3707,3 +3707,22 @@ in the instruction's reserved half-word. `link/nocheck` pins a block running an
 overflowing sum, a narrowing cast, an over-wide shift and a payload read under the
 wrong tag to exit 0, a division by zero inside a block still trapping, and the same
 sum outside a block trapping, on both platforms.
+
+## D204 — `emit-executable --release` is the release build
+
+Section 11 divides its rows by build mode: the debug-only ones are removed in
+release and the arithmetic rows take their defined release result -- wrap, truncate,
+mask, saturate -- while `divide`, `enum` and `unreachable` trap in every mode.
+`emit-executable` now takes a trailing `--release`, which lowers the whole program
+under the same mark `@nocheck` puts on a block (D203), so the debug-only rows are left
+out everywhere and `+ - *` wrap, a narrowing cast truncates and a shift count is
+masked, which is what the instructions do once the checks are gone. The one release
+result the hardware does not give is a float outside its integer target, which
+`cvttsd2si` answers with the indefinite integer: an unchecked float-to-integer cast
+now compares against the same two bounds the check used and lands on the maximum,
+the minimum or zero for NaN, on both platforms. A release build of the compiler is a
+quarter smaller than the debug build and emits byte-identical code from it, which is
+section 11's promise that the modes agree until a check fires. `link/release_build`
+is built in both modes by the runners: the debug build traps on its first `+`, the
+release build passes every release result and is smaller. The debug fills are still
+absent from both modes.
