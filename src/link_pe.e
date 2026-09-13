@@ -391,6 +391,18 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
 
     let runtime_file = output.count
     try runtime_pe_x64.append(output, runtime_size)
+    // `--arena` (D225): the size the entry reserves, a word in the runtime.
+    if builder.arena_bytes != 0usize {
+        let (arena_offset, found_arena) = runtime_pe_x64.symbol_offset("neper_arena_size")
+        if !found_arena || arena_offset + 8usize > runtime_size { ret InvalidExecutable }
+        var arena_remaining = builder.arena_bytes
+        var arena_byte = 0usize
+        while arena_byte < 8usize {
+            output.bytes[runtime_file + arena_offset + arena_byte] = arena_remaining % 256usize
+            arena_remaining = arena_remaining / 256usize
+            arena_byte += 1usize
+        }
+    }
     let machine_file = output.count
     var machine_at = 0usize
     while machine_at < machine.count {
@@ -501,9 +513,11 @@ fn self_test() -> err {
     // The runtime's first import thunk, patched to reach entry 0 of the address table --
     // the first import the entry reaches is the first in the list: `patch_import` writes
     // the displacement from the instruction after it.
-    let first_import = import_address_address - 4136usize
+    // The thunk sits two bytes later since D225: the arena size is read from a word
+    // rather than an immediate.
+    let first_import = import_address_address - 4138usize
     if executable.bytes[512usize] != 83usize { ret InvalidExecutable }
-    if executable.bytes[548usize] != first_import % 256usize || executable.bytes[549usize] != (first_import / 256usize) % 256usize { ret InvalidExecutable }
+    if executable.bytes[550usize] != first_import % 256usize || executable.bytes[551usize] != (first_import / 256usize) % 256usize { ret InvalidExecutable }
     if executable.bytes[code_at] != 195usize { ret InvalidExecutable }
     // The import directory's first name RVA, which points 40 bytes into idata.
     let first_name_rva = import_lookup_address(&builder, idata_address, 0usize)

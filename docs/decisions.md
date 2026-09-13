@@ -4081,3 +4081,19 @@ regardless. The checksum over every artifact loaded was a bit loop, eight steps 
 byte; it is a table now, built per call. A build of the compiler with nothing
 changed takes 4 s against the 10 s of D214, and what remains is reading and widening
 every artifact to decide, and the declarations of every module.
+
+## D225 — `emit-executable --arena SIZE`
+
+Section 5 sizes the root arena by `--arena`, and the bootstrap's `build` took it,
+which is how the bootstrap-built compiler has a gibibyte; a self-hosted executable
+had the runtime's 512 MiB and no way to ask for more, and a release build of the
+compiler needs more -- two oracles and a machine buffer of eight bytes a byte. Now
+`emit-executable` takes `--arena` with k, m or g, from a mebibyte up, in any order
+with `--release`. The PE runtime keeps the size as a word, `neper_arena_size`,
+right after the entry, which the entry, the arena's capacity and the growth check
+all read; the linker patches it by symbol as it does a procedure, and the runtime's
+floor is one procedure longer. The ELF startup stub carries the size as four
+immediates the linker patches at their offsets, and refuses a size a signed 32-bit
+immediate cannot hold. A self-hosted compiler built with `--arena 1g` compiles the
+compiler in release in 27 s; link/arena_size pins an arena of eight mebibytes
+refusing twelve on both platforms.

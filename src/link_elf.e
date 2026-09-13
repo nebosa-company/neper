@@ -28,6 +28,18 @@ fn append_blob(output: *emit_x64.Buffer, bytes: str) -> err {
     ret ok
 }
 
+// `--arena` (D225): the startup stub carries the root arena's size as four 32-bit
+// immediates -- the mapping's length, two bounds and the arena's capacity -- at these
+// offsets from its start; a size past what a signed 32-bit immediate holds is refused.
+fn patch_arena(output: *emit_x64.Buffer, startup: usize, arena_bytes: usize) -> err {
+    if arena_bytes == 0usize { ret ok }
+    if arena_bytes >= 2147483648usize { ret InvalidExecutable }
+    try emit_x64.patch_little_u32(output, startup + 6usize, arena_bytes)
+    try emit_x64.patch_little_u32(output, startup + 64usize, arena_bytes)
+    try emit_x64.patch_little_u32(output, startup + 111usize, arena_bytes)
+    ret emit_x64.patch_little_u32(output, startup + 171usize, arena_bytes)
+}
+
 fn append_startup(output: *emit_x64.Buffer) -> err {
     try append_blob(output, "\x49\x89\xe4\x31\xff\xbe\x00\x00\x00\x20\xba\x03\x00\x00\x00\x41\xba\x22\x00\x00\x00\x49\xc7\xc0\xff\xff\xff\xff\x45\x31\xc9\xb8\x09\x00\x00\x00\x0f\x05\x48\x85\xc0\x0f\x88\xae\x00\x00\x00\x49\x89\xc5\x4d\x8b\x34\x24\x4c\x89\xf3\x48\xc1\xe3\x04\x48\x81\xfb\x00\x00\x00\x20\x0f\x87\x93\x00\x00\x00\x45\x31\xff\x4d\x39\xf7\x73\x4c\x4f\x8b\x44\xfc\x08\x31\xc9\x41\x80\x3c\x08\x00\x74\x05")
     try append_blob(output, "\x48\xff\xc1\xeb\xf4\x48\x89\xd8\x48\x01\xc8\x72\x70\x48\x3d\x00\x00\x00\x20\x77\x68\x4d\x8d\x4c\x1d\x00\x4d\x89\xfa\x49\xc1\xe2\x04\x4f\x89\x4c\x15\x00\x4b\x89\x4c\x15\x08\x48\x89\xca\x4c\x89\xc6\x4c\x89\xcf\xf3\xa4\x48\x01\xd3\x49\xff\xc7\xeb\xaf\x48\x83\xec\x30\x4c\x89\x2c\x24\x48\xc7\x44\x24\x08\x00\x00\x00\x20\x48\x89\x5c\x24\x10\x4c\x89\x6c\x24\x18\x4c\x89\x74\x24\x20\x48\x8d")
@@ -409,6 +421,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
 
     try pad_to(output, code_offset)
     try append_startup(output)
+    try patch_arena(output, code_offset, builder.arena_bytes)
     let machine_start = output.count
     var at = 0usize
     while at < machine.count {
@@ -574,6 +587,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     }
     try pad_to(output, code_offset)
     try append_startup(output)
+    try patch_arena(output, code_offset, builder.arena_bytes)
     let machine_start = output.count
     var at = 0usize
     while at < machine.count {

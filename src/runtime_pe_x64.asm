@@ -54,7 +54,7 @@ neper_entry PROC
     sub rsp, 96
 
     xor ecx, ecx
-    mov edx, NP_ARENA_BYTES
+    mov rdx, qword ptr neper_arena_size
     mov r8d, 2000h
     mov r9d, 4
     call qword ptr [__imp_VirtualAlloc]
@@ -72,7 +72,8 @@ neper_entry PROC
 
     lea r13, [rsp+48]
     mov [r13], r12
-    mov qword ptr [r13+8], NP_ARENA_BYTES
+    mov rax, qword ptr neper_arena_size
+    mov [r13+8], rax
     mov qword ptr [r13+16], 1000h
     lea r14, [rsp+72]
     mov [r14], r12
@@ -217,6 +218,12 @@ entry_fail:
     int 3
 neper_entry ENDP
 
+; The root arena's size (D225): the default, which `emit-executable --arena` patches in
+; the image. A word in the code, so the linker finds it by symbol like a procedure.
+neper_arena_size PROC
+    dq NP_ARENA_BYTES
+neper_arena_size ENDP
+
 np_arena_alloc PROC
     test rcx, rcx
     jz arena_fail
@@ -244,7 +251,8 @@ np_arena_alloc PROC
 ; be kept anywhere -- which matters, since the runtime is embedded as bare text with nowhere
 ; writable to keep one. A reset moves the offset back and the next growth re-commits pages
 ; that are already committed, which Windows allows and answers immediately.
-    cmp qword ptr [rcx+8], NP_ARENA_BYTES
+    mov rax, qword ptr neper_arena_size
+    cmp [rcx+8], rax
     jne arena_store
     mov rax, [rcx+16]
     add rax, NP_ARENA_CHUNK-1

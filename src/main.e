@@ -750,11 +750,13 @@ fn self_test() -> err {
     ret ok
 }
 
-// The flags after an emit command's five positional arguments.
+// The flags after an emit command's five positional arguments; `--arena` takes the
+// size after it (D225).
 fn has_flag(args: []str, name: str) -> bool {
     var at = 7usize
     while at < args.len {
         if same(args[at], name) { ret true }
+        if same(args[at], "--arena") { at += 1usize }
         at += 1usize
     }
     ret false
@@ -763,10 +765,53 @@ fn has_flag(args: []str, name: str) -> bool {
 fn flags_known(args: []str) -> bool {
     var at = 7usize
     while at < args.len {
-        if !same(args[at], "--release") && !same(args[at], "--incremental") { ret false }
+        if same(args[at], "--arena") {
+            if at + 1usize >= args.len { ret false }
+            let (size, size_ok) = arena_size(args[at + 1usize])
+            if !size_ok { ret false }
+            at += 1usize
+        } else {
+            if !same(args[at], "--release") && !same(args[at], "--incremental") { ret false }
+        }
         at += 1usize
     }
     ret true
+}
+
+// `--arena 1g`: a count of bytes with an optional k, m or g, at least a mebibyte.
+fn arena_size(spelling: str) -> (usize, bool) {
+    if spelling.len == 0usize { ret (0usize, false) }
+    var value = 0usize
+    var at = 0usize
+    while at < spelling.len {
+        let byte = spelling[at]
+        if byte >= 48u8 && byte <= 57u8 {
+            if value > 18446744073709551usize { ret (0usize, false) }
+            value = value * 10usize + usize(byte - 48u8)
+        } else {
+            if at == 0usize || at + 1usize != spelling.len { ret (0usize, false) }
+            if byte == 107u8 { value = value * 1024usize } else {
+                if byte == 109u8 { value = value * 1048576usize } else {
+                    if byte == 103u8 { value = value * 1073741824usize } else { ret (0usize, false) }
+                }
+            }
+        }
+        at += 1usize
+    }
+    if value < 1048576usize { ret (0usize, false) }
+    ret (value, true)
+}
+
+fn arena_flag(args: []str) -> usize {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--arena") {
+            let (size, size_ok) = arena_size(args[at + 1usize])
+            if size_ok { ret size }
+        }
+        at += 1usize
+    }
+    ret 0usize
 }
 
 fn same(a: str, b: str) -> bool {
@@ -1984,9 +2029,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner
     // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
-    let trailing_flags = args.len >= 8usize && args.len <= 9usize && flags_known(args)
+    let trailing_flags = args.len >= 8usize && args.len <= 11usize && flags_known(args)
     let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all")) && has_flag(args, "--release")
-    let writes_executable = (args.len == 7usize || (args.len == 8usize && release_build)) && same(args[1usize], "emit-executable")
+    let writes_executable = (args.len == 7usize || (trailing_flags && !has_flag(args, "--incremental"))) && same(args[1usize], "emit-executable")
     let writes_em = args.len == 7usize && same(args[1usize], "emit-em")
     // `emit-em-all ... --incremental`: section 12's edge rule decides which of the
     // artifacts already in the directory are kept and which are replaced (D205).
@@ -2087,6 +2132,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if kept_functions_error != ok { ret kept_functions_error }
         builder.nocheck = release_build
         builder.release = release_build
+        builder.arena_bytes = arena_flag(args)
         // Section 12's inlining (D207): the small functions are lowered first into the
         // oracle, in module order on every path, and the program's own lowering copies
         // them in at their calls. A debug build does not inline (D211): every frame
@@ -2406,7 +2452,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try write_all(os.stderr(), "error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental]\n")
+    try write_all(os.stderr(), "error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE]\n")
     os.exit(1i32)
     ret ok
 }

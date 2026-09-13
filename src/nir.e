@@ -226,6 +226,9 @@ type Builder = struct {
     // The release build (D217): `nocheck` is that too, but `@nocheck` sets it for a
     // block, and section 11's debug fills do not come off with the checks.
     release: bool,
+    // `--arena` (D225): the root arena's size the linker patches into the image, or
+    // zero for the runtime's default.
+    arena_bytes: usize,
     // The path every instruction emitted is stamped with: the function's, or the
     // callee's while its body is being copied in.
     current_path: str,

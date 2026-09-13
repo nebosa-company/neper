@@ -154,9 +154,9 @@ foreach ($line in [IO.File]::ReadAllLines($source)) {
     if ($line -match '^(\w+)\s+PROC') { $procedures += $matches[1] }
 }
 [void]$builder.AppendLine('// Where a procedure ends: the start of the next in source order, or the end of the')
-[void]$builder.AppendLine('// runtime for the last. The entry and its callees are the first three, so their end')
+[void]$builder.AppendLine('// runtime for the last. The entry, its arena size word and its callees are the first four, so their end')
 [void]$builder.AppendLine('// is the least any program carries.')
-[void]$builder.AppendLine(('fn floor() -> usize {{ ret {0}usize }}' -f $textSymbols[$procedures[3]]))
+[void]$builder.AppendLine(("fn floor() -> usize {{ ret {0}usize }}" -f $textSymbols[$procedures[4]]))
 [void]$builder.AppendLine()
 [void]$builder.AppendLine('fn symbol_end(name: str) -> (usize, bool) {')
 for ($index = 0; $index -lt $procedures.Count; $index++) {

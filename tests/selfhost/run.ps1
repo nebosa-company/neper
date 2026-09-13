@@ -1620,6 +1620,18 @@ if ($LASTEXITCODE -ne 1 -or ($comptimeBudget -join "`n") -notmatch 'main\.e:6:11
 Require-Fixture 'check/comptime_call_in_type'
 $comptimeInType = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_in_type\src\main.e') $repo 'x64' 'windows' 2>&1
 if ($LASTEXITCODE -ne 1 -or ($comptimeInType -join "`n") -notmatch 'main\.e:5:28: error\[E-COMPTIME-9999\]: a constant that calls a function is used in a type') { throw "a calling constant in a type was not refused with its reason: $($comptimeInType -join "`n")" }
+# `emit-executable --arena SIZE` (D225): the root arena is the size given. Twelve
+# mebibytes fit the default and not eight.
+$arenaPath = Join-Path $testBuild 'arena-size-selfhost.exe'
+$arenaWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\arena_size\src\main.e') $repo 'x64' 'windows' $arenaPath
+if ($LASTEXITCODE -ne 0 -or $arenaWritten -ne 'executable written') { throw 'arena size fixture executable emission failed' }
+& $arenaPath
+if ($LASTEXITCODE -ne 0) { throw "the default arena did not hold twelve mebibytes: exit $LASTEXITCODE" }
+$arenaSmallPath = Join-Path $testBuild 'arena-size-8m-selfhost.exe'
+$arenaSmallWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\arena_size\src\main.e') $repo 'x64' 'windows' $arenaSmallPath --arena 8m
+if ($LASTEXITCODE -ne 0 -or $arenaSmallWritten -ne 'executable written') { throw 'arena size fixture emission with --arena failed' }
+$arenaSmallOutput = & $arenaSmallPath 2>&1
+if ($LASTEXITCODE -ne 1 -or ($arenaSmallOutput -join "`n") -notmatch 'error: e\.mem\.Exhausted') { throw "an arena of eight mebibytes held twelve: exit $LASTEXITCODE, $($arenaSmallOutput -join "`n")" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'
