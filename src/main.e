@@ -827,7 +827,7 @@ fn basename(path: str) -> str {
 }
 
 fn tool_usage() -> err {
-    try write_all(os.stderr(), "error[E-CLI-9999]: usage: neper-self tokens [--json] [--path VIRTUAL.e] FILE\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self tokens [--json] [--path VIRTUAL.e] FILE\n")
     os.exit(1i32)
     ret ok
 }
@@ -835,6 +835,7 @@ fn tool_usage() -> err {
 // docs/tooling.md section 4: `tokens|parse [--json] [--path VIRTUAL.e] FILE` (D227),
 // its own function since the bootstrap caps a function's locals.
 fn tool_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
     let parsing = same(args[1usize], "parse")
     var json = false
     var virtual_path = ""
@@ -881,7 +882,7 @@ fn tool_command(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if parsing {
-        let parse_error = validate_cli_parse(a, file, text)
+        let parse_error = validate_cli_parse(a, &report, file, text)
         if parse_error != ok { ret parse_error }
         try io.print("parse file ok\n")
         ret ok
@@ -910,7 +911,7 @@ fn same(a: str, b: str) -> bool {
     ret true
 }
 
-fn validate_cli_parse(a: *mem.Arena, path: str, text: str) -> err {
+fn validate_cli_parse(a: *mem.Arena, report: *Sink, path: str, text: str) -> err {
     // The CLI supplies explicit storage; parser lists have no separate caps.
     let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 4096usize)
     if nodes_error != ok { ret nodes_error }
@@ -920,7 +921,7 @@ fn validate_cli_parse(a: *mem.Arena, path: str, text: str) -> err {
     try parse.init_tree(&tree, nodes, children)
     let parse_error = parse.parse(&tree, text)
     if parse_error != ok && tree.has_failure {
-        try print_parse_failure(path, text, tree.failure_token, tree.failure_reserved_name)
+        try print_parse_failure(report, path, text, tree.failure_token, tree.failure_reserved_name)
         os.exit(1i32)
     }
     ret parse_error
@@ -1069,10 +1070,166 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
-fn write_all(file: os.File, text: str) -> err {
+// Where diagnostic text goes (D228): a file, or a buffer when the text is a JSON
+// record's message rather than a line on stderr.
+type Sink = struct {
+    file: os.File,
+    capture: []u8,
+    count: usize,
+    capturing: bool,
+    // `--json` (D228): a diagnostic is a record on stdout, not a line on stderr.
+    json: bool,
+}
+
+// One diagnostic, as the human line `path:line:col: error[CODE]: message` or as the
+// record of docs/tooling.md section 3 -- the span from the token, the source as an
+// operand named by the file's basename.
+fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, code: str, message: str) -> err {
+    if !report.json {
+        try write_all(report, path)
+        try write_all(report, ":")
+        if has_token {
+            try write_usize(report, token.line)
+            try write_all(report, ":")
+            try write_usize(report, token.column)
+        } else {
+            try write_all(report, "1:1")
+        }
+        try write_all(report, ": error[")
+        try write_all(report, code)
+        try write_all(report, "]: ")
+        try write_all(report, message)
+        ret write_all(report, "\n")
+    }
+    var at = token
+    if !has_token {
+        var origin: lex.Token = zero
+        origin.line = 1usize
+        origin.column = 1usize
+        origin.end_line = 1usize
+        origin.end_column = 1usize
+        origin.column_utf16 = 1usize
+        origin.end_column_utf16 = 1usize
+        at = origin
+    }
+    try write_all(report, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":")
+    try write_json_string(report, code)
+    try write_all(report, ",\"message\":")
+    try write_json_string(report, message)
+    try write_all(report, ",\"span\":{\"source\":{\"root\":\"operand\",\"path\":")
+    try write_json_string(report, basename(path))
+    try write_all(report, "},\"byte_start\":")
+    try write_usize(report, at.start)
+    try write_all(report, ",\"byte_end\":")
+    try write_usize(report, at.end)
+    try write_all(report, ",\"line\":")
+    try write_usize(report, at.line)
+    try write_all(report, ",\"column\":")
+    try write_usize(report, at.column)
+    try write_all(report, ",\"end_line\":")
+    try write_usize(report, at.end_line)
+    try write_all(report, ",\"end_column\":")
+    try write_usize(report, at.end_column)
+    try write_all(report, ",\"column_utf16\":")
+    try write_usize(report, at.column_utf16)
+    try write_all(report, ",\"end_column_utf16\":")
+    try write_usize(report, at.end_column_utf16)
+    try write_all(report, "},\"parent\":null,\"related\":[],\"fixes\":[]}")
+    try write_all(report, "\n")
+    report.count += 1usize
+    ret ok
+}
+
+// A diagnostic with no location: a command's own, such as an operand that cannot be
+// read (D228).
+fn emit_command_diagnostic(report: *Sink, code: str, message: str) -> err {
+    if !report.json {
+        try write_all(report, "error[")
+        try write_all(report, code)
+        try write_all(report, "]: ")
+        try write_all(report, message)
+        ret write_all(report, "\n")
+    }
+    try write_all(report, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":")
+    try write_json_string(report, code)
+    try write_all(report, ",\"message\":")
+    try write_json_string(report, message)
+    try write_all(report, ",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}\n")
+    report.count += 1usize
+    ret ok
+}
+
+fn write_json_string(report: *Sink, value: str) -> err {
+    try write_all(report, "\"")
+    var at = 0usize
+    while at < value.len {
+        let c = value[at]
+        if c == 34u8 {
+            try write_all(report, "\\\"")
+        } else {
+            if c == 92u8 {
+                try write_all(report, "\\\\")
+            } else {
+                if c == 10u8 {
+                    try write_all(report, "\\n")
+                } else {
+                    if c < 32u8 {
+                        try write_all(report, "\\u00")
+                        try write_digit(report, usize(c) / 16usize)
+                        try write_digit(report, usize(c) % 16usize)
+                    } else {
+                        try write_all(report, value[at..at + 1usize])
+                    }
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret write_all(report, "\"")
+}
+
+// A JSON report ends with the result record; a human one ends with nothing.
+fn finish_report(report: *Sink) -> err {
+    if !report.json { ret ok }
+    try write_all(report, "{\"record\":\"result\",\"ok\":")
+    if report.count == 0usize { try write_all(report, "true,\"exit_code\":0") } else { try write_all(report, "false,\"exit_code\":1") }
+    try write_all(report, ",\"data\":{\"diagnostics\":")
+    try write_usize(report, report.count)
+    ret write_all(report, "}}\n")
+}
+
+fn stderr_text(text: str) -> err {
+    var sink = stderr_sink()
+    ret write_all(&sink, text)
+}
+
+fn stderr_sink() -> Sink {
+    var sink: Sink = zero
+    sink.file = os.stderr()
+    ret sink
+}
+
+fn capture_sink(capture: []u8) -> Sink {
+    var sink: Sink = zero
+    sink.capture = capture
+    sink.capturing = true
+    ret sink
+}
+
+fn write_all(sink: *Sink, text: str) -> err {
+    if sink.capturing {
+        var copy_at = 0usize
+        while copy_at < text.len {
+            if sink.count == sink.capture.len { ret DiagnosticWrite }
+            sink.capture[sink.count] = text[copy_at]
+            sink.count += 1usize
+            copy_at += 1usize
+        }
+        ret ok
+    }
     var at = 0usize
     while at < text.len {
-        let (written, write_error) = os.write(file, text[at..])
+        let (written, write_error) = os.write(sink.file, text[at..])
         if write_error != ok { ret write_error }
         if written == 0usize { ret DiagnosticWrite }
         at += written
@@ -1239,12 +1396,12 @@ fn print_artifact_error_collision(a: *mem.Arena, left_bytes: []const usize, left
     if right_module_error != ok { ret right_module_error }
     let (right_name, right_name_error) = artifact_string(a, right_bytes, right.name_index)
     if right_name_error != ok { ret right_name_error }
-    let failure = os.stderr()
-    try write_all(failure, "error[E-LINK-9999]: error hash collision: `")
-    try write_qualified_error(failure, left_module, left_name)
-    try write_all(failure, "` and `")
-    try write_qualified_error(failure, right_module, right_name)
-    ret write_all(failure, "` have the same 32-bit FNV-1a value\n")
+    var failure = stderr_sink()
+    try write_all(&failure, "error[E-LINK-9999]: error hash collision: `")
+    try write_qualified_error(&failure, left_module, left_name)
+    try write_all(&failure, "` and `")
+    try write_qualified_error(&failure, right_module, right_name)
+    ret write_all(&failure, "` have the same 32-bit FNV-1a value\n")
 }
 
 fn merge_artifact_error_tables(a: *mem.Arena, artifacts: []em_link.Artifact) -> (bool, err) {
@@ -1359,7 +1516,7 @@ fn compiled_module_path(a: *mem.Arena, directory: str, module_name: str, triple:
     ret (storage[..], ok)
 }
 
-fn write_digit(file: os.File, digit: usize) -> err {
+fn write_digit(file: *Sink, digit: usize) -> err {
     if digit == 0usize { ret write_all(file, "0") }
     if digit == 1usize { ret write_all(file, "1") }
     if digit == 2usize { ret write_all(file, "2") }
@@ -1372,7 +1529,7 @@ fn write_digit(file: os.File, digit: usize) -> err {
     ret write_all(file, "9")
 }
 
-fn write_usize(file: os.File, value: usize) -> err {
+fn write_usize(file: *Sink, value: usize) -> err {
     var divisor = 1usize
     var remaining = value
     while remaining >= 10usize {
@@ -1388,7 +1545,7 @@ fn write_usize(file: os.File, value: usize) -> err {
     ret ok
 }
 
-fn write_lower_byte(file: os.File, byte: u8) -> err {
+fn write_lower_byte(file: *Sink, byte: u8) -> err {
     if byte == 65u8 { ret write_all(file, "a") }
     if byte == 66u8 { ret write_all(file, "b") }
     if byte == 67u8 { ret write_all(file, "c") }
@@ -1417,7 +1574,7 @@ fn write_lower_byte(file: os.File, byte: u8) -> err {
     ret write_all(file, "z")
 }
 
-fn write_snake_name(file: os.File, name: str) -> err {
+fn write_snake_name(file: *Sink, name: str) -> err {
     var at = 0usize
     while at < name.len {
         let byte = name[at]
@@ -1443,7 +1600,7 @@ fn write_snake_name(file: os.File, name: str) -> err {
     ret ok
 }
 
-fn write_check_message(file: os.File, checker: *check.Checker, check_error: err) -> err {
+fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -> err {
     if checker.failure_kind == .MissingZeroValue {
         try write_all(file, "type `")
         try write_all(file, checker.failure_detail)
@@ -1584,114 +1741,96 @@ fn write_check_message(file: os.File, checker: *check.Checker, check_error: err)
     ret write_all(file, check.diagnostic_message(checker.failure_kind))
 }
 
-fn print_check_diagnostic(g: *graph.Graph, checker: *check.Checker, check_error: err) -> err {
-    let failure = os.stderr()
-    if checker.failure_module < g.count {
-        try write_all(failure, g.modules[checker.failure_module].path)
-    } else {
-        try write_all(failure, "<unknown>")
-    }
-    try write_all(failure, ":")
-    if checker.failure_has_token {
-        try write_usize(failure, checker.failure_token.line)
-        try write_all(failure, ":")
-        try write_usize(failure, checker.failure_token.column)
-    } else {
-        try write_all(failure, "1:1")
-    }
-    try write_all(failure, ": error[")
-    try write_all(failure, check.diagnostic_code(checker.failure_kind))
-    try write_all(failure, "]: ")
-    try write_check_message(failure, checker, check_error)
-    ret write_all(failure, "\n")
+fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checker, check_error: err) -> err {
+    var path = "<unknown>"
+    if checker.failure_module < g.count { path = g.modules[checker.failure_module].path }
+    var message_storage: [4096]u8 = zero
+    var message = capture_sink(message_storage[..])
+    try write_check_message(&message, checker, check_error)
+    ret emit_diagnostic(report, path, checker.failure_token, checker.failure_has_token, check.diagnostic_code(checker.failure_kind), message_storage[..message.count])
 }
 
-fn print_token_diagnostic(g: *graph.Graph, module_index: usize, token: lex.Token, code: str, message: str) -> err {
-    let failure = os.stderr()
-    if module_index < g.count {
-        try write_all(failure, g.modules[module_index].path)
-    } else {
-        try write_all(failure, "<unknown>")
-    }
-    try write_all(failure, ":")
-    try write_usize(failure, token.line)
-    try write_all(failure, ":")
-    try write_usize(failure, token.column)
-    try write_all(failure, ": error[")
-    try write_all(failure, code)
-    try write_all(failure, "]: ")
-    try write_all(failure, message)
-    ret write_all(failure, "\n")
+fn print_token_diagnostic(report: *Sink, g: *graph.Graph, module_index: usize, token: lex.Token, code: str, message: str) -> err {
+    var path = "<unknown>"
+    if module_index < g.count { path = g.modules[module_index].path }
+    ret emit_diagnostic(report, path, token, true, code, message)
 }
 
 // A syntax error names its position and, where the parser knows why, its reason.
 // A keyword in a binding position is the one reason worth spelling out: it reads
 // as an ordinary name and the generic "unexpected" wording explains nothing.
-fn print_parse_failure(path: str, text: str, token: lex.Token, reserved_name: bool) -> err {
-    let failure = os.stderr()
-    try write_all(failure, path)
-    try write_all(failure, ":")
-    try write_usize(failure, token.line)
-    try write_all(failure, ":")
-    try write_usize(failure, token.column)
+fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, reserved_name: bool) -> err {
+    var message_storage: [1024]u8 = zero
+    var message = capture_sink(message_storage[..])
+    var code = "E-SYNTAX-9999"
     if reserved_name {
-        try write_all(failure, ": error[E-NAME-0003]: `")
-        try write_all(failure, text[token.start..token.end])
-        ret write_all(failure, "` is a keyword and cannot name a local or parameter\n")
+        code = "E-NAME-0003"
+        try write_all(&message, "`")
+        try write_all(&message, text[token.start..token.end])
+        try write_all(&message, "` is a keyword and cannot name a local or parameter")
+    } else {
+        // A token the scanner refused is a lexical error under its own code (D215).
+        if token.kind == .Invalid {
+            code = lex.invalid_code(text, token)
+            try write_all(&message, "invalid token")
+        } else {
+            try write_all(&message, "unexpected ")
+            if token.kind == .Eof {
+                try write_all(&message, "end of file")
+            } else {
+                if token.kind == .Newline {
+                    try write_all(&message, "end of line")
+                } else {
+                    try write_all(&message, "`")
+                    try write_all(&message, text[token.start..token.end])
+                    try write_all(&message, "`")
+                }
+            }
+        }
     }
-    // A token the scanner refused is a lexical error under its own code (D215).
-    if token.kind == .Invalid {
-        try write_all(failure, ": error[")
-        try write_all(failure, lex.invalid_code(text, token))
-        ret write_all(failure, "]: invalid token\n")
-    }
-    try write_all(failure, ": error[E-SYNTAX-9999]: unexpected ")
-    if token.kind == .Eof { ret write_all(failure, "end of file\n") }
-    if token.kind == .Newline { ret write_all(failure, "end of line\n") }
-    try write_all(failure, "`")
-    try write_all(failure, text[token.start..token.end])
-    ret write_all(failure, "`\n")
+    ret emit_diagnostic(report, path, token, true, code, message_storage[..message.count])
 }
 
 // Every module is parsed while the graph is loaded, so a syntax error anywhere in
 // the program surfaces here with the module that holds it.
-fn load_graph(a: *mem.Arena, loaded: *graph.Graph, path: str, root: str, arch: str, target_os: str) -> err {
+fn load_graph(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, root: str, arch: str, target_os: str) -> err {
     let load_error = graph.load(a, loaded, path, root, arch, target_os)
     if load_error != ok && loaded.has_failure && loaded.failure_module < loaded.count {
         let module = loaded.modules[loaded.failure_module]
-        try print_parse_failure(module.path, module.text, loaded.failure_token, loaded.failure_reserved_name)
+        try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name)
+        try finish_report(report)
         os.exit(1i32)
     }
     // A `use` naming no module, or closing a cycle, is reported at the module that
     // wrote it under docs/diagnostics.md's E-MODULE codes (D215).
     if load_error != ok && loaded.has_import_failure && loaded.failure_module < loaded.count {
-        let failure = os.stderr()
-        try write_all(failure, loaded.modules[loaded.failure_module].path)
+        var message_storage: [1024]u8 = zero
+        var message = capture_sink(message_storage[..])
+        var code = "E-MODULE-0001"
+        try write_all(&message, "`use ")
+        try write_all(&message, loaded.failure_import)
         if load_error == graph.ImportCycle {
-            try write_all(failure, ":1:1: error[E-MODULE-0002]: `use ")
-            try write_all(failure, loaded.failure_import)
-            try write_all(failure, "` closes an import cycle\n")
+            code = "E-MODULE-0002"
+            try write_all(&message, "` closes an import cycle")
         } else {
-            if load_error == project.ModuleNotFound || load_error == graph.DuplicateModule {
-                try write_all(failure, ":1:1: error[E-MODULE-0001]: `use ")
-            } else {
-                try write_all(failure, ":1:1: error[E-MODULE-9999]: `use ")
-            }
-            try write_all(failure, loaded.failure_import)
             if load_error == graph.DuplicateModule {
-                try write_all(failure, "` is defined by both source roots\n")
+                try write_all(&message, "` is defined by both source roots")
             } else {
                 if load_error == project.ModuleNotFound {
-                    try write_all(failure, "` names no module under the source root or the toolchain\n")
+                    try write_all(&message, "` names no module under the source root or the toolchain")
                 } else {
+                    code = "E-MODULE-9999"
                     if load_error == project.AmbiguousVariant {
-                        try write_all(failure, "` has more than one source variant for the target\n")
+                        try write_all(&message, "` has more than one source variant for the target")
                     } else {
-                        try write_all(failure, "` cannot be resolved\n")
+                        try write_all(&message, "` cannot be resolved")
                     }
                 }
             }
         }
+        var no_token: lex.Token = zero
+        try emit_diagnostic(report, loaded.modules[loaded.failure_module].path, no_token, false, code, message_storage[..message.count])
+        try finish_report(report)
         os.exit(1i32)
     }
     ret load_error
@@ -1707,7 +1846,7 @@ fn resolve_name_code(resolve_error: err) -> str {
     ret "E-NAME-0003"
 }
 
-fn write_resolve_name_message(failure: os.File, resolver: *resolve.Resolver, resolve_error: err) -> err {
+fn write_resolve_name_message(failure: *Sink, resolver: *resolve.Resolver, resolve_error: err) -> err {
     if resolve_error == resolve.UnknownConvention { ret write_all(failure, "is not a calling convention; spec section 5 names c, sysv, win64 and stdcall") }
     if resolve_error == resolve.ReservedLocal { ret write_all(failure, "is a reserved name and cannot name a local or parameter") }
     if resolve_error == resolve.ReservedName { ret write_all(failure, "is a reserved name and cannot name a declaration") }
@@ -1725,83 +1864,74 @@ fn write_resolve_name_message(failure: os.File, resolver: *resolve.Resolver, res
     ret write_all(failure, "is already bound in an active scope")
 }
 
-fn print_resolve_name_diagnostic(g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
-    let failure = os.stderr()
-    if resolver.failure_module < g.count {
-        try write_all(failure, g.modules[resolver.failure_module].path)
-    } else {
-        try write_all(failure, "<unknown>")
-    }
-    try write_all(failure, ":")
-    try write_usize(failure, resolver.failure_token.line)
-    try write_all(failure, ":")
-    try write_usize(failure, resolver.failure_token.column)
-    try write_all(failure, ": error[")
-    try write_all(failure, resolve_name_code(resolve_error))
-    try write_all(failure, "]: `")
-    try write_all(failure, resolver.failure_name)
-    try write_all(failure, "` ")
-    try write_resolve_name_message(failure, resolver, resolve_error)
-    ret write_all(failure, "\n")
+fn print_resolve_name_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
+    var path = "<unknown>"
+    if resolver.failure_module < g.count { path = g.modules[resolver.failure_module].path }
+    var message_storage: [4096]u8 = zero
+    var message = capture_sink(message_storage[..])
+    try write_all(&message, "`")
+    try write_all(&message, resolver.failure_name)
+    try write_all(&message, "` ")
+    try write_resolve_name_message(&message, resolver, resolve_error)
+    ret emit_diagnostic(report, path, resolver.failure_token, true, resolve_name_code(resolve_error), message_storage[..message.count])
 }
 
-fn print_resolve_diagnostic(g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
+fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
     if resolve_error == resolve.UnknownName && resolver.failure_has_token {
         if resolver.failure_has_context {
-            try print_token_diagnostic(g, resolver.failure_module, resolver.failure_context_token, "E-TYPE-0002", "initializer type does not match binding")
+            try print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_context_token, "E-TYPE-0002", "initializer type does not match binding")
         }
-        ret print_token_diagnostic(g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
+        ret print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
     }
     // Declaration and scope collisions carry an exact token and the offending
     // name; docs/diagnostics.md reserves E-NAME-0001 through E-NAME-0003 for them.
     if resolver.failure_has_token && named_resolve_failure(resolve_error) {
-        ret print_resolve_name_diagnostic(g, resolver, resolve_error)
+        ret print_resolve_name_diagnostic(report, g, resolver, resolve_error)
     }
     var token: lex.Token = zero
     if resolver.failure_has_token { token = resolver.failure_token }
-    ret print_token_diagnostic(g, resolver.failure_module, token, "E-NAME-9999", "name resolution failed")
+    ret print_token_diagnostic(report, g, resolver.failure_module, token, "E-NAME-9999", "name resolution failed")
 }
 
-fn print_lower_diagnostic(g: *graph.Graph, checker: *check.Checker, lower_error: err) -> err {
-    let failure = os.stderr()
+fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checker, lower_error: err) -> err {
     if checker.failure_module < g.count {
-        try write_all(failure, g.modules[checker.failure_module].path)
+        try write_all(report, g.modules[checker.failure_module].path)
     } else {
-        try write_all(failure, "<unknown>")
+        try write_all(report, "<unknown>")
     }
-    try write_all(failure, ":")
+    try write_all(report, ":")
     if checker.failure_has_token {
-        try write_usize(failure, checker.failure_token.line)
-        try write_all(failure, ":")
-        try write_usize(failure, checker.failure_token.column)
+        try write_usize(report, checker.failure_token.line)
+        try write_all(report, ":")
+        try write_usize(report, checker.failure_token.column)
     } else {
-        try write_all(failure, "1:1")
+        try write_all(report, "1:1")
     }
-    try write_all(failure, ": error[E-TYPE-9999]: cannot lower `")
-    try write_all(failure, checker.failure_name)
-    try write_all(failure, "`: ")
+    try write_all(report, ": error[E-TYPE-9999]: cannot lower `")
+    try write_all(report, checker.failure_name)
+    try write_all(report, "`: ")
     if lower_error == check.Unsupported {
-        try write_all(failure, "construct is not implemented in self-hosted lowering")
+        try write_all(report, "construct is not implemented in self-hosted lowering")
     } else {
         if lower_error == nir.Capacity {
-            try write_all(failure, "lowering failed: NIR capacity exhausted")
+            try write_all(report, "lowering failed: NIR capacity exhausted")
         } else {
             if lower_error == nir.InvalidControlFlow {
-                try write_all(failure, "lowering failed: invalid NIR control flow")
+                try write_all(report, "lowering failed: invalid NIR control flow")
             } else {
                 if lower_error == check.InvalidSwitch {
-                    try write_all(failure, "lowering failed: invalid switch")
+                    try write_all(report, "lowering failed: invalid switch")
                 } else {
                     if lower_error == check.MissingReturn {
-                        try write_all(failure, "lowering failed: missing return")
+                        try write_all(report, "lowering failed: missing return")
                     } else {
                         if lower_error == check.InvalidType {
-                            try write_all(failure, "lowering failed: invalid type")
+                            try write_all(report, "lowering failed: invalid type")
                         } else {
                             if lower_error == nir.InvalidValue {
-                                try write_all(failure, "lowering failed: invalid NIR value")
+                                try write_all(report, "lowering failed: invalid NIR value")
                             } else {
-                                try write_all(failure, "lowering failed")
+                                try write_all(report, "lowering failed")
                             }
                         }
                     }
@@ -1809,39 +1939,37 @@ fn print_lower_diagnostic(g: *graph.Graph, checker: *check.Checker, lower_error:
             }
         }
     }
-    ret write_all(failure, "\n")
+    ret write_all(report, "\n")
 }
 
-fn print_codegen_diagnostic(g: *graph.Graph, function: nir.Function, context: *codegen_x64.FunctionContext) -> err {
-    let failure = os.stderr()
-    if function.module_index < g.count { try write_all(failure, g.modules[function.module_index].path) } else { try write_all(failure, "<unknown>") }
-    try write_all(failure, ":")
-    try write_usize(failure, context.failure_token.line)
-    try write_all(failure, ":")
-    try write_usize(failure, context.failure_token.column)
-    try write_all(failure, ": error[E-CODEGEN-9999]: cannot select machine code for `")
-    try write_all(failure, function.name)
-    ret write_all(failure, "`\n")
+fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, function: nir.Function, context: *codegen_x64.FunctionContext) -> err {
+    if function.module_index < g.count { try write_all(report, g.modules[function.module_index].path) } else { try write_all(report, "<unknown>") }
+    try write_all(report, ":")
+    try write_usize(report, context.failure_token.line)
+    try write_all(report, ":")
+    try write_usize(report, context.failure_token.column)
+    try write_all(report, ": error[E-CODEGEN-9999]: cannot select machine code for `")
+    try write_all(report, function.name)
+    ret write_all(report, "`\n")
 }
 
-fn write_qualified_error(file: os.File, module_name: str, error_name: str) -> err {
+fn write_qualified_error(file: *Sink, module_name: str, error_name: str) -> err {
     try write_all(file, module_name)
     try write_all(file, ".")
     ret write_all(file, error_name)
 }
 
-fn print_error_table_diagnostic(conflict: *error_table.Conflict, validation_error: err) -> err {
-    let failure = os.stderr()
+fn print_error_table_diagnostic(report: *Sink, conflict: *error_table.Conflict, validation_error: err) -> err {
     if validation_error == error_table.HashZero {
-        try write_all(failure, "error[E-ERROR-9999]: error `")
-        try write_qualified_error(failure, conflict.first_module, conflict.first_name)
-        ret write_all(failure, "` hashes to reserved value 0; rename it\n")
+        try write_all(report, "error[E-ERROR-9999]: error `")
+        try write_qualified_error(report, conflict.first_module, conflict.first_name)
+        ret write_all(report, "` hashes to reserved value 0; rename it\n")
     }
-    try write_all(failure, "error[E-LINK-9999]: error hash collision: `")
-    try write_qualified_error(failure, conflict.first_module, conflict.first_name)
-    try write_all(failure, "` and `")
-    try write_qualified_error(failure, conflict.second_module, conflict.second_name)
-    ret write_all(failure, "` have the same 32-bit FNV-1a value\n")
+    try write_all(report, "error[E-LINK-9999]: error hash collision: `")
+    try write_qualified_error(report, conflict.first_module, conflict.first_name)
+    try write_all(report, "` and `")
+    try write_qualified_error(report, conflict.second_module, conflict.second_name)
+    ret write_all(report, "` have the same 32-bit FNV-1a value\n")
 }
 
 fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic) {
@@ -1854,6 +1982,7 @@ fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
     if args.len == 2usize && same(args[1usize], "self-test") {
         try self_test()
         try io.print("selfhost lexer ok\n")
@@ -2011,7 +2140,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if args.len == 3usize && same(args[1usize], "parse") {
-        let parse_error = validate_cli_parse(a, "<argument>", args[2usize])
+        let parse_error = validate_cli_parse(a, &report, "<argument>", args[2usize])
         if parse_error != ok { ret parse_error }
         try io.print("parse ok\n")
         ret ok
@@ -2028,7 +2157,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 3usize && same(args[1usize], "parse-file") {
         let (text, load_error) = source.load(a, args[2usize])
         if load_error != ok { ret load_error }
-        let parse_error = validate_cli_parse(a, args[2usize], text)
+        let parse_error = validate_cli_parse(a, &report, args[2usize], text)
         if parse_error != ok { ret parse_error }
         try io.print("parse file ok\n")
         ret ok
@@ -2052,7 +2181,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len >= 7usize && same(args[1usize], "graph-file") {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        try load_graph(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        try load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         if loaded.count != args.len - 6usize { ret graph.Capacity }
         var expected = 6usize
         while expected < args.len {
@@ -2065,22 +2194,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 6usize && same(args[1usize], "resolve-file") {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        try load_graph(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        try load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
         try resolve.collect(&resolver, &loaded)
         try io.print("module resolve ok\n")
         ret ok
     }
-    if args.len == 6usize && same(args[1usize], "check-file") {
+    // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md
+    // -- header, a diagnostic record each, the result -- on stdout (D228).
+    if (args.len == 6usize || (args.len == 7usize && same(args[6usize], "--json"))) && same(args[1usize], "check-file") {
+        if args.len == 7usize {
+            report.json = true
+            report.file = os.stdout()
+            try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+        }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        try load_graph(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        if load_error != ok {
+            // Not a diagnostic of the source but of the command: the operand itself.
+            if !report.json { ret load_error }
+            try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
+            try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
+            os.exit(2i32)
+            ret ok
+        }
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
         let resolve_error = resolve.collect(&resolver, &loaded)
         if resolve_error != ok {
-            try print_resolve_diagnostic(&loaded, &resolver, resolve_error)
+            try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
+            try finish_report(&report)
             os.exit(1i32)
             ret ok
         }
@@ -2090,23 +2235,29 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let check_error = check.run(&checker, &resolver, &loaded)
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
-                try print_check_diagnostic(&loaded, &checker, check_error)
+                try print_check_diagnostic(&report, &loaded, &checker, check_error)
             } else {
                 var diagnostic_at = 0usize
                 while diagnostic_at < checker.diagnostic_count {
                     select_check_diagnostic(&checker, checker.diagnostics[diagnostic_at])
-                    try print_check_diagnostic(&loaded, &checker, check_error)
+                    try print_check_diagnostic(&report, &loaded, &checker, check_error)
                     diagnostic_at += 1usize
                 }
             }
+            try finish_report(&report)
             os.exit(1i32)
             ret ok
         }
         var error_conflict: error_table.Conflict = zero
         let error_declaration_error = error_table.validate_declarations(&resolver, &loaded, &error_conflict)
         if error_declaration_error != ok {
-            try print_error_table_diagnostic(&error_conflict, error_declaration_error)
+            try print_error_table_diagnostic(&report, &error_conflict, error_declaration_error)
+            try finish_report(&report)
             os.exit(1i32)
+            ret ok
+        }
+        if report.json {
+            try finish_report(&report)
             ret ok
         }
         try io.print("module check ok\n")
@@ -2129,12 +2280,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         let emit_machine_code = same(args[1usize], "codegen-file") || emit_object || writes_executable || writes_em || writes_all_em
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        try load_graph(a, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        try load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
         let resolve_error = resolve.collect(&resolver, &loaded)
         if resolve_error != ok {
-            try print_resolve_diagnostic(&loaded, &resolver, resolve_error)
+            try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
             os.exit(1i32)
             ret ok
         }
@@ -2172,12 +2323,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
-                try print_check_diagnostic(&loaded, &checker, check_error)
+                try print_check_diagnostic(&report, &loaded, &checker, check_error)
             } else {
                 var diagnostic_at = 0usize
                 while diagnostic_at < checker.diagnostic_count {
                     select_check_diagnostic(&checker, checker.diagnostics[diagnostic_at])
-                    try print_check_diagnostic(&loaded, &checker, check_error)
+                    try print_check_diagnostic(&report, &loaded, &checker, check_error)
                     diagnostic_at += 1usize
                 }
             }
@@ -2190,7 +2341,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             error_validation_error = error_table.validate_link(&resolver, &loaded, &error_conflict)
         }
         if error_validation_error != ok {
-            try print_error_table_diagnostic(&error_conflict, error_validation_error)
+            try print_error_table_diagnostic(&report, &error_conflict, error_validation_error)
             os.exit(1i32)
             ret ok
         }
@@ -2249,7 +2400,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var first_entry_count = 0usize
             let first_error = lower.build_inline_oracle(&checker, &loaded, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count)
             if first_error != ok {
-                try print_lower_diagnostic(&loaded, &checker, first_error)
+                try print_lower_diagnostic(&report, &loaded, &checker, first_error)
                 os.exit(1i32)
                 ret ok
             }
@@ -2269,7 +2420,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var inline_entry_count = 0usize
             let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
             if oracle_error != ok {
-                try print_lower_diagnostic(&loaded, &checker, oracle_error)
+                try print_lower_diagnostic(&report, &loaded, &checker, oracle_error)
                 os.exit(1i32)
                 ret ok
             }
@@ -2295,14 +2446,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if !(writes_em || writes_all_em) {
                 let prune_error = nir.prune_unreachable(&builder, kept_functions, false)
                 if prune_error != ok {
-                    try print_lower_diagnostic(&loaded, &checker, prune_error)
+                    try print_lower_diagnostic(&report, &loaded, &checker, prune_error)
                     os.exit(1i32)
                     ret ok
                 }
             }
         }
         if lower_error != ok {
-            try print_lower_diagnostic(&loaded, &checker, lower_error)
+            try print_lower_diagnostic(&report, &loaded, &checker, lower_error)
             os.exit(1i32)
             ret ok
         }
@@ -2398,7 +2549,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let line_start = line_count
                 let codegen_error = codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
                 if codegen_error != ok {
-                    try print_codegen_diagnostic(&loaded, builder.functions[function_at], &codegen_context)
+                    try print_codegen_diagnostic(&report, &loaded, builder.functions[function_at], &codegen_context)
                     ret codegen_error
                 }
                 if want_fold {
@@ -2540,7 +2691,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try write_all(os.stderr(), "error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE]\n")
     os.exit(1i32)
     ret ok
 }

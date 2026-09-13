@@ -1643,6 +1643,18 @@ foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('
     if ($LASTEXITCODE -ne $case[2]) { throw "$($case[0]) --json on $($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "$($case[0]) --json on $($case[1]).e differs from the conformance corpus" }
 }
+# `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
+# error with its span, the result with the exit status, nothing on stderr.
+foreach ($case in @(@('accept', 'scalar', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1))) {
+    $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
+    $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
+    $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
+    $conformanceStderr = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).stderr"
+    cmd /c "`"$compiler`" check-file `"$conformanceFixture`" `"$repo`" x64 windows --json > `"$conformanceActual`" 2> `"$conformanceStderr`""
+    if ($LASTEXITCODE -ne $case[2]) { throw "check-file --json on $($case[0])/$($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
+    if ((Get-Item -LiteralPath $conformanceStderr).Length -ne 0) { throw "check-file --json on $($case[0])/$($case[1]).e wrote to stderr" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
+}
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'

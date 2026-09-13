@@ -4131,3 +4131,20 @@ unterminated literals and invalid UTF-8 inside a comment, and a parse that stops
 which both suites compare. The corpus is marked binary in .gitattributes, since its
 bytes are the point. Stdin, recovery past the first syntax error and the other
 commands are not there.
+
+## D228 — `check-file --json`, through one diagnostic emitter
+
+Every diagnostic printer in the driver wrote its own `path:line:col: error[CODE]:
+message` line to stderr. They now compose the message into a capture and hand
+path, token, code and message to one emitter, which writes that line or, under
+`--json`, docs/tooling.md's `diagnostic` record with the span from the token and the
+source as an operand named by the file's basename; the sink the text goes to
+carries the mode, and every printer takes it, so a command decides once. `check-file
+... --json` emits the header, the records of every error the front end reports --
+lexical, syntax, module, resolution, checking -- an unreadable operand as a
+location-free E-CLI-9999 with exit 2, and the result, with stderr empty. Every
+record validates against the schema, and tests/conformance gains accept/ and
+reject/ with five streams both suites compare byte for byte; the target named on
+the command line does not appear in them, so one expectation serves both
+platforms. Notes and fixes, project roots and the project-level `check` are not
+here.

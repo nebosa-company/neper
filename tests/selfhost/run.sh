@@ -1775,6 +1775,19 @@ for conformance_case in 'tokens every_kind 0' 'tokens hostile 1' 'parse every_ki
     cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
 ' "$1 --json on $2.e differs from the conformance corpus" >&2; exit 1; }
 done
+# `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
+# error with its span, the result with the exit status, nothing on stderr.
+for conformance_case in 'accept scalar 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1'; do
+    set -- $conformance_case
+    conformance_actual="$test_build/conformance-$1-$2.jsonl"
+    conformance_stderr="$test_build/conformance-$1-$2.stderr"
+    conformance_status=0
+    $test_build/neper-self check-file "$conformance_root/$1/$2.e" "$repo" x64 linux --json > "$conformance_actual" 2> "$conformance_stderr" || conformance_status=$?
+    [ "$conformance_status" -eq "$3" ]
+    [ ! -s "$conformance_stderr" ]
+    cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
+' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
+done
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"
