@@ -3982,3 +3982,26 @@ cut before them, and both call the plain one under a local name: on ELF a call t
 global symbol is a relocation the embedding does not apply, and the first attempt
 called the next instruction. link/debug_fills reads a fresh allocation, a reset's
 memory and the allocation that reuses it in both builds.
+
+## D218 — A `const` initialiser may call a function
+
+Section 9's interpreter evaluates four sites, and this compiler folded integer
+constant expressions and settled a `meta` question in an `if`; a call in a `const`
+initialiser was `InvalidConstant`. Now it is a `Call` constant expression, and the
+checker evaluates it by walking the callee's syntax tree: integer and bool values in
+locals, `let`/`var`, assignment and the compound forms, `if`/`else`, `while`,
+`break`/`continue`, `ret`, the arithmetic, bitwise, shift, comparison and logical
+operators with the same typing the folder uses, `!`, `-`, `~`, parentheses, a checked
+cast, module-scope constants, and calls to other such functions in the same module
+or a qualified one -- under the section's ten-million-step budget, and a call depth of
+sixty-four, since a frame is host stack. Anything else, and every reach into runtime
+state, is refused under E-COMPTIME-9999 naming the constant and what it reached. The
+callee's module is parsed and tokenized once into storage of its own and kept,
+because the graph's node storage holds the tree of the module being checked and a
+call chain may cross modules and return; the callee's tokens stand in for the
+caller's while its body runs. A constant that calls is evaluated once the program's
+signatures are collected, rather than with the other constants before them, so one
+used in a type or another module-scope declaration is refused with a reason. What
+the interpreter does not have is memory: arrays, structs, slices and the arena the
+section describes; nor does it run `[...]` arguments or `when` conditions, and a
+`const` is still an integer.

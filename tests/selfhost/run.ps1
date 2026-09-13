@@ -1602,6 +1602,21 @@ $nestedLinkWritten = & $compiler link-em $nestedLinked @nestedArtifactList
 if ($LASTEXITCODE -ne 0 -or $nestedLinkWritten -ne 'artifact executable written') { throw 'the nested artifacts did not link' }
 & $nestedLinked
 if ($LASTEXITCODE -ne 6) { throw "the relinked program did not carry the leaf's new body through both copies: exit $LASTEXITCODE" }
+# Section 9's compile-time evaluation of a call in a `const` (D218): seven constants
+# computed by the interpreter agree with the same functions at run time, one is an
+# array length; a call that reaches runtime state, and one that never returns, are
+# refused naming the constant.
+$comptimeCallPath = Join-Path $testBuild 'comptime-call-selfhost.exe'
+$comptimeCallWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\comptime_call\src\main.e') $repo 'x64' 'windows' $comptimeCallPath
+if ($LASTEXITCODE -ne 0 -or $comptimeCallWritten -ne 'executable written') { throw 'comptime call fixture executable emission failed' }
+& $comptimeCallPath
+if ($LASTEXITCODE -ne 0) { throw "a constant evaluated by the interpreter disagrees with run time: exit $LASTEXITCODE" }
+Require-Fixture 'check/comptime_call_runtime'
+$comptimeRuntime = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_runtime\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($comptimeRuntime -join "`n") -notmatch 'main\.e:8:19: error\[E-COMPTIME-9999\]: constant `CODE` cannot be evaluated at compile time: its call reached a statement it does not evaluate') { throw "a constant reaching runtime state was not refused: $($comptimeRuntime -join "`n")" }
+Require-Fixture 'check/comptime_call_budget'
+$comptimeBudget = & $compiler check-file (Join-Path $repo 'tests\selfhost\fixtures\check\comptime_call_budget\src\main.e') $repo 'x64' 'windows' 2>&1
+if ($LASTEXITCODE -ne 1 -or ($comptimeBudget -join "`n") -notmatch 'main\.e:6:11: error\[E-COMPTIME-9999\]: constant `FOREVER` cannot be evaluated at compile time: its call reached ten million steps') { throw "a constant past the budget was not refused: $($comptimeBudget -join "`n")" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'

@@ -28,6 +28,10 @@ error AliasCycle
 error ConstantCycle
 error ConstantOverflow
 error InvalidConstant
+// Section 9's compile-time evaluation (D218): a call in a `const` reached something the
+// interpreter does not evaluate, or its budget.
+error ComptimeUnsupported
+error ComptimeBudget
 error InvalidFormat
 error InvalidTry
 // The same, for `try`: the defer case now keeps `InvalidTry` to itself.
@@ -65,6 +69,8 @@ type DiagnosticKind = enum u8 {
     IteratorSignature,
     // A `when` condition that is not a question about `target` (D216).
     WhenCondition,
+    // A `const` initialiser's call reached what the interpreter does not evaluate (D218).
+    ComptimeEvaluation,
     RecursiveAggregate,
     InitializerType,
     GenericTypeArity,
@@ -307,6 +313,11 @@ type ConstantExprKind = enum u8 {
     Name,
     Unary,
     Binary,
+    // A call, evaluated by the interpreter (D218): `name` in `module_index`, and the
+    // arguments as `argument_count` entries from `first_argument`, each a wrapper
+    // whose `left` is the argument's own expression.
+    Call,
+    Argument,
     // `meta.array_len[X]()` where a length is written, with `X` in `ty` -- a parameter or
     // a still-generic vector until the arguments are bound, and then the array or vector
     // whose length it is. It is how `Mask[T, N]` is spelled for a `V` in `e.simd`.
@@ -323,6 +334,9 @@ type ConstantExpr = struct {
     left: usize,
     right: usize,
     has_right: bool,
+    first_argument: usize,
+    argument_count: usize,
+    site: syntax.Node,
 }
 
 // Spec section 5: `var` at module scope is mutable static storage, zero-initialised unless
@@ -388,6 +402,19 @@ type Checker = struct {
     // name, and the qualified error names above -- and interning takes a spelling, so
     // there has to be somewhere to build them.
     arena: *mem.Arena,
+    graph: *graph.Graph,
+    has_graph: bool,
+    // The interpreter's state (D218): set once the signatures are collected, the per-module
+    // trees and tokens it keeps, the constant being evaluated for its reports, its budget.
+    signatures_ready: bool,
+    interp_ready: bool,
+    interp_trees: []parse.Tree,
+    interp_parsed: []bool,
+    interp_tokens: [][]lex.Token,
+    interp_token_counts: []usize,
+    interp_constant: str,
+    interp_steps: usize,
+    interp_depth: usize,
     function_count: usize,
     parameter_count: usize,
     return_type_count: usize,
@@ -3539,10 +3566,63 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     var item: ConstantExpr = zero
     if node.kind == .CallExpr {
         let (subject, is_array_len) = array_len_subject(c, g, tree, module_index, node)
-        if !is_array_len { ret (0usize, InvalidConstant) }
-        item.kind = .ArrayLen
+        if is_array_len {
+            item.kind = .ArrayLen
+            item.module_index = module_index
+            item.ty = subject
+            let (stored_index, store_error) = store_constant_expr(c, item)
+            ret (stored_index, store_error)
+        }
+        // A call, for the interpreter (D218): the callee by name, the arguments copied
+        // first and then listed in a run of wrappers so the call finds them in order.
+        var callee_index = 0usize
+        var arguments: [16]usize = zero
+        var argument_count = 0usize
+        var first = true
+        let call_end = node.first_child + node.child_count
+        var call_at = node.first_child
+        while call_at < call_end {
+            if tree.children[call_at].node {
+                if first {
+                    callee_index = tree.children[call_at].index
+                    first = false
+                } else {
+                    if argument_count == arguments.len { ret (0usize, InvalidConstant) }
+                    let (copied, copy_error) = copy_constant_expr(c, g, tree, module_index, tree.children[call_at].index)
+                    if copy_error != ok { ret (0usize, copy_error) }
+                    arguments[argument_count] = copied
+                    argument_count += 1usize
+                }
+            }
+            call_at += 1usize
+        }
+        if first { ret (0usize, InvalidConstant) }
+        let callee = tree.nodes[callee_index]
+        item.kind = .Call
         item.module_index = module_index
-        item.ty = subject
+        item.site = node
+        if callee.kind == .NameExpr {
+            let callee_token = c.tokens[callee.token_start]
+            if callee_token.kind != .Identifier { ret (0usize, InvalidConstant) }
+            item.name = text[callee_token.start..callee_token.end]
+        } else {
+            if callee.kind != .FieldExpr { ret (0usize, InvalidConstant) }
+            let (target_module, member, found) = qualified_member(c, g, tree, module_index, callee)
+            if !found { ret (0usize, InvalidConstant) }
+            item.module_index = target_module
+            item.name = member
+        }
+        item.first_argument = c.constant_expr_count
+        item.argument_count = argument_count
+        var wrap_at = 0usize
+        while wrap_at < argument_count {
+            var wrapper: ConstantExpr = zero
+            wrapper.kind = .Argument
+            wrapper.left = arguments[wrap_at]
+            let (wrapped_index, wrap_error) = store_constant_expr(c, wrapper)
+            if wrap_error != ok { ret (0usize, wrap_error) }
+            wrap_at += 1usize
+        }
         let (stored_index, store_error) = store_constant_expr(c, item)
         ret (stored_index, store_error)
     }
@@ -3922,6 +4002,28 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
         if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
         ret (c.constants[constant_index].value, constant_type, ok)
     }
+    if expression.kind == .Call {
+        if !c.has_graph { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        var values: [16]IntegerValue = zero
+        var types: [16]Type = zero
+        if expression.argument_count > values.len { ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant) }
+        var argument_at = 0usize
+        while argument_at < expression.argument_count {
+            let wrapper = c.constant_exprs[expression.first_argument + argument_at]
+            let (value, value_type, value_error) = evaluate_constant_expr(c, wrapper.left, invalid_type())
+            if value_error != ok { ret (normalized_integer(0usize, false), invalid_type(), value_error) }
+            values[argument_at] = value
+            types[argument_at] = value_type
+            argument_at += 1usize
+        }
+        c.interp_steps = 0usize
+        c.interp_depth = 0usize
+        let (result, result_type, call_error) = interp_call(c, c.graph, expression.module_index, expression.name, values[..expression.argument_count], types[..expression.argument_count], expression.site, expression.module_index)
+        if call_error != ok { ret (normalized_integer(0usize, false), invalid_type(), call_error) }
+        let (contextual_type, context_error) = apply_context(c, result_type, expected)
+        if context_error != ok { ret (normalized_integer(0usize, false), invalid_type(), context_error) }
+        ret (result, contextual_type, ok)
+    }
     if expression.kind == .Unary {
         var operand_expected = expected
         if expression.op == .PunctMinus { operand_expected = invalid_type() }
@@ -3980,6 +4082,688 @@ fn evaluate_constant_expr(c: *Checker, expression_index: usize, expected: Type) 
     ret (normalized_integer(0usize, false), invalid_type(), InvalidConstant)
 }
 
+
+// ---- Section 9's compile-time evaluation of a call (D218) --------------------------
+//
+// A `const` initialiser may call a function. The call is evaluated by walking the
+// callee's syntax tree with integer and bool values alone: `let`/`var`, assignment
+// and the compound forms, `if`/`else`, `while`, `break`/`continue`, `ret`, the
+// arithmetic, bitwise, shift, comparison and logical operators, `!`, `-`, `~`,
+// parentheses, module-scope constants, and calls to other such functions, in the
+// same module or a qualified one. Anything else is a compile error naming the
+// constant and what it reached. The step budget is the section's ten million.
+//
+// ponytail: integers and bools in locals, nothing addressable. Arrays, structs,
+// slices and the arena are the interpreter memory the section describes and the
+// upgrade; every `const` written so far is an integer.
+
+type InterpFrame = struct {
+    names: [48]str,
+    values: [48]IntegerValue,
+    types: [48]Type,
+    count: usize,
+    marks: [16]usize,
+    mark_count: usize,
+    module_index: usize,
+    return_type: Type,
+    result: IntegerValue,
+    result_type: Type,
+}
+
+// An integer or bool type by its name, or an invalid type.
+fn primitive_type(name: str, module_index: usize) -> Type {
+    if is_integer_name(name) { ret make_type(.Integer, name, module_index) }
+    if same(name, "bool") { ret make_type(.Bool, "bool", module_index) }
+    ret invalid_type()
+}
+
+fn interp_control_next() -> usize { ret 0usize }
+fn interp_control_return() -> usize { ret 1usize }
+fn interp_control_break() -> usize { ret 2usize }
+fn interp_control_continue() -> usize { ret 3usize }
+
+fn interp_fail(c: *Checker, module_index: usize, node: syntax.Node, reason: str) -> err {
+    record_failure(c, module_index, node, .ComptimeEvaluation, c.interp_constant, reason)
+    ret ComptimeUnsupported
+}
+
+fn interp_step(c: *Checker, module_index: usize, node: syntax.Node) -> err {
+    c.interp_steps += 1usize
+    if c.interp_steps > 10000000usize {
+        record_failure(c, module_index, node, .ComptimeEvaluation, c.interp_constant, "ten million steps")
+        ret ComptimeBudget
+    }
+    ret ok
+}
+
+// The callee's module, parsed and tokenized once and kept: the graph's node storage
+// holds the tree of the module being checked, which a call from its body must not
+// disturb, and a call chain may cross modules and come back.
+fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, err) {
+    if module_index >= g.count { ret (0usize, InvalidConstant) }
+    if !c.interp_ready {
+        let (trees, trees_error) = mem.alloc[parse.Tree](c.arena, g.count)
+        if trees_error != ok { ret (0usize, trees_error) }
+        let (parsed, parsed_error) = mem.alloc[bool](c.arena, g.count)
+        if parsed_error != ok { ret (0usize, parsed_error) }
+        let (token_tables, token_tables_error) = mem.alloc[[]lex.Token](c.arena, g.count)
+        if token_tables_error != ok { ret (0usize, token_tables_error) }
+        let (token_counts, token_counts_error) = mem.alloc[usize](c.arena, g.count)
+        if token_counts_error != ok { ret (0usize, token_counts_error) }
+        var at = 0usize
+        while at < g.count {
+            parsed[at] = false
+            at += 1usize
+        }
+        c.interp_trees = trees
+        c.interp_parsed = parsed
+        c.interp_tokens = token_tables
+        c.interp_token_counts = token_counts
+        c.interp_ready = true
+    }
+    if c.interp_parsed[module_index] { ret (module_index, ok) }
+    // Parsed into scratch the size of the graph's own, then copied at its own size.
+    let (scratch_nodes, scratch_nodes_error) = mem.alloc[syntax.Node](c.arena, g.nodes.len)
+    if scratch_nodes_error != ok { ret (0usize, scratch_nodes_error) }
+    let (scratch_children, scratch_children_error) = mem.alloc[syntax.Child](c.arena, g.children.len)
+    if scratch_children_error != ok { ret (0usize, scratch_children_error) }
+    var tree: parse.Tree = zero
+    let init_error = parse.init_tree(&tree, scratch_nodes, scratch_children)
+    if init_error != ok { ret (0usize, init_error) }
+    let parse_error = parse.parse(&tree, g.modules[module_index].text)
+    if parse_error != ok { ret (0usize, parse_error) }
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](c.arena, tree.count)
+    if nodes_error != ok { ret (0usize, nodes_error) }
+    let (children, children_error) = mem.alloc[syntax.Child](c.arena, tree.child_count)
+    if children_error != ok { ret (0usize, children_error) }
+    var copy_at = 0usize
+    while copy_at < tree.count {
+        nodes[copy_at] = scratch_nodes[copy_at]
+        copy_at += 1usize
+    }
+    copy_at = 0usize
+    while copy_at < tree.child_count {
+        children[copy_at] = scratch_children[copy_at]
+        copy_at += 1usize
+    }
+    var kept: parse.Tree = zero
+    kept.nodes = nodes
+    kept.children = children
+    kept.count = tree.count
+    kept.child_count = tree.child_count
+    c.interp_trees[module_index] = kept
+    // The tokens likewise, at their own size.
+    let (scratch_tokens, scratch_tokens_error) = mem.alloc[lex.Token](c.arena, c.tokens.len)
+    if scratch_tokens_error != ok { ret (0usize, scratch_tokens_error) }
+    var scanner = lex.init(g.modules[module_index].text)
+    var token_count = 0usize
+    while true {
+        if token_count == scratch_tokens.len { ret (0usize, Capacity) }
+        let token = lex.next(&scanner)
+        if token.kind == .Invalid { ret (0usize, lex.InvalidSource) }
+        scratch_tokens[token_count] = token
+        token_count += 1usize
+        if token.kind == .Eof { break }
+    }
+    let (tokens, tokens_error) = mem.alloc[lex.Token](c.arena, token_count)
+    if tokens_error != ok { ret (0usize, tokens_error) }
+    copy_at = 0usize
+    while copy_at < token_count {
+        tokens[copy_at] = scratch_tokens[copy_at]
+        copy_at += 1usize
+    }
+    c.interp_tokens[module_index] = tokens
+    c.interp_token_counts[module_index] = token_count
+    c.interp_parsed[module_index] = true
+    ret (module_index, ok)
+}
+
+fn interp_lookup(frame: *InterpFrame, name: str) -> (usize, bool) {
+    var at = frame.count
+    while at > 0usize {
+        at = at - 1usize
+        if same(frame.names[at], name) { ret (at, true) }
+    }
+    ret (0usize, false)
+}
+
+fn interp_bind(frame: *InterpFrame, name: str, value: IntegerValue, ty: Type) -> err {
+    if frame.count == frame.names.len { ret Capacity }
+    frame.names[frame.count] = name
+    frame.values[frame.count] = value
+    frame.types[frame.count] = ty
+    frame.count += 1usize
+    ret ok
+}
+
+fn interp_bool_type(module_index: usize) -> Type { ret make_type(.Bool, "bool", module_index) }
+
+// A value into the type a binding, parameter or return declares: a typed value has
+// to agree, an untyped one has to fit.
+fn interp_convert(c: *Checker, module_index: usize, node: syntax.Node, value: IntegerValue, from: Type, into: Type) -> (IntegerValue, Type, err) {
+    if into.kind == .Invalid { ret (value, from, ok) }
+    if into.kind == .Bool {
+        if from.kind != .Bool { ret (value, from, interp_fail(c, module_index, node, "a bool from a number")) }
+        ret (value, into, ok)
+    }
+    if into.kind != .Integer { ret (value, from, interp_fail(c, module_index, node, "a type that is not an integer or bool")) }
+    if from.kind == .Bool { ret (value, from, interp_fail(c, module_index, node, "a number from a bool")) }
+    if from.kind == .Integer && !type_equal(c, from, into) { ret (value, from, interp_fail(c, module_index, node, "a value of another integer type")) }
+    if !integer_representable(value, into) { ret (value, from, interp_fail(c, module_index, node, "a value the type cannot hold")) }
+    ret (value, into, ok)
+}
+
+fn interp_compare(op: lex.Kind, left: IntegerValue, right: IntegerValue) -> bool {
+    var less = false
+    var equal = left.negative == right.negative && left.magnitude == right.magnitude
+    if left.negative && !right.negative { less = true }
+    if !left.negative && !right.negative { less = left.magnitude < right.magnitude }
+    if left.negative && right.negative { less = left.magnitude > right.magnitude }
+    if op == .PunctEqEq { ret equal }
+    if op == .PunctBangEq { ret !equal }
+    if op == .PunctLt { ret less }
+    if op == .PunctLtEq { ret less || equal }
+    if op == .PunctGt { ret !less && !equal }
+    ret !less
+}
+
+fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, node_index: usize, expected: Type) -> (IntegerValue, Type, err) {
+    let module_index = frame.module_index
+    let node = tree.nodes[node_index]
+    let text = g.modules[module_index].text
+    let none = normalized_integer(0usize, false)
+    let step_error = interp_step(c, module_index, node)
+    if step_error != ok { ret (none, invalid_type(), step_error) }
+    if node.kind == .GroupExpr {
+        let (inner, found) = first_node_child(tree, node)
+        if !found { ret (none, invalid_type(), parse.InvalidSyntax) }
+        let (grouped, grouped_type, grouped_error) = interp_expr(c, g, tree, frame, inner, expected)
+        ret (grouped, grouped_type, grouped_error)
+    }
+    if node.kind == .LiteralExpr {
+        let token = c.tokens[node.token_start]
+        if token.kind == .KwTrue { ret (normalized_integer(1usize, false), interp_bool_type(module_index), ok) }
+        if token.kind == .KwFalse { ret (none, interp_bool_type(module_index), ok) }
+        let (magnitude, spelled_type, literal_error) = integer_literal_value(c, text, node)
+        if literal_error != ok { ret (none, invalid_type(), interp_fail(c, module_index, node, "a literal that is not an integer")) }
+        var typed = spelled_type
+        if is_untyped(typed) && expected.kind == .Integer { typed = expected }
+        let value = normalized_integer(magnitude, false)
+        if typed.kind == .Integer && !integer_representable(value, typed) { ret (none, invalid_type(), interp_fail(c, module_index, node, "a literal the type cannot hold")) }
+        ret (value, typed, ok)
+    }
+    if node.kind == .NameExpr {
+        let token = c.tokens[node.token_start]
+        let name = text[token.start..token.end]
+        let (slot, found_local) = interp_lookup(frame, name)
+        if found_local { ret (frame.values[slot], frame.types[slot], ok) }
+        let (constant_index, found_constant) = find_constant(c, module_index, name)
+        if !found_constant { ret (none, invalid_type(), interp_fail(c, module_index, node, "a name that is no local or constant")) }
+        let dependency_error = evaluate_constant(c, constant_index)
+        if dependency_error != ok { ret (none, invalid_type(), dependency_error) }
+        ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
+    }
+    if node.kind == .FieldExpr {
+        let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
+        if !found_member { ret (none, invalid_type(), interp_fail(c, module_index, node, "a field, which no value here has")) }
+        let (constant_index, found_constant) = find_constant(c, target_module, member)
+        if !found_constant { ret (none, invalid_type(), interp_fail(c, module_index, node, "a qualified name that is no constant")) }
+        let dependency_error = evaluate_constant(c, constant_index)
+        if dependency_error != ok { ret (none, invalid_type(), dependency_error) }
+        ret (c.constants[constant_index].value, c.constants[constant_index].ty, ok)
+    }
+    if node.kind == .UnaryExpr {
+        let (inner, found) = first_node_child(tree, node)
+        if !found { ret (none, invalid_type(), parse.InvalidSyntax) }
+        let op = c.tokens[node.token_start].kind
+        if op == .PunctBang {
+            let (value, value_type, value_error) = interp_expr(c, g, tree, frame, inner, interp_bool_type(module_index))
+            if value_error != ok { ret (none, invalid_type(), value_error) }
+            if value_type.kind != .Bool { ret (none, invalid_type(), interp_fail(c, module_index, node, "`!` of a number")) }
+            if value.magnitude == 0usize { ret (normalized_integer(1usize, false), value_type, ok) }
+            ret (none, value_type, ok)
+        }
+        if op == .PunctMinus {
+            let (value, value_type, value_error) = interp_expr(c, g, tree, frame, inner, expected)
+            if value_error != ok { ret (none, invalid_type(), value_error) }
+            if value_type.kind == .Bool || (value_type.kind == .Integer && unsigned_integer_type(value_type)) { ret (none, invalid_type(), interp_fail(c, module_index, node, "`-` of an unsigned or bool value")) }
+            let negated = normalized_integer(value.magnitude, !value.negative)
+            if value_type.kind == .Integer && !integer_representable(negated, value_type) { ret (none, invalid_type(), interp_fail(c, module_index, node, "a negation the type cannot hold")) }
+            ret (negated, value_type, ok)
+        }
+        if op == .PunctTilde {
+            let (value, value_type, value_error) = interp_expr(c, g, tree, frame, inner, expected)
+            if value_error != ok { ret (none, invalid_type(), value_error) }
+            if value_type.kind != .Integer { ret (none, invalid_type(), interp_fail(c, module_index, node, "`~` of a value with no width")) }
+            let width = integer_width(value_type)
+            ret (integer_from_bits(integer_mask(width) - integer_bits(value, width), value_type), value_type, ok)
+        }
+        ret (none, invalid_type(), interp_fail(c, module_index, node, "an operator it does not evaluate"))
+    }
+    if node.kind == .BinaryExpr {
+        var children: [2]usize = zero
+        var count = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if count == children.len { ret (none, invalid_type(), parse.InvalidSyntax) }
+                children[count] = tree.children[at].index
+                count += 1usize
+            }
+            at += 1usize
+        }
+        if count != 2usize { ret (none, invalid_type(), parse.InvalidSyntax) }
+        let op = binary_operator(c, tree, node)
+        if op == .PunctAndAnd || op == .PunctOrOr {
+            let (left, left_type, left_error) = interp_expr(c, g, tree, frame, children[0usize], interp_bool_type(module_index))
+            if left_error != ok { ret (none, invalid_type(), left_error) }
+            if left_type.kind != .Bool { ret (none, invalid_type(), interp_fail(c, module_index, node, "`&&` or `||` of a number")) }
+            if op == .PunctAndAnd && left.magnitude == 0usize { ret (none, left_type, ok) }
+            if op == .PunctOrOr && left.magnitude != 0usize { ret (left, left_type, ok) }
+            let (right, right_type, right_error) = interp_expr(c, g, tree, frame, children[1usize], interp_bool_type(module_index))
+            if right_error != ok { ret (none, invalid_type(), right_error) }
+            if right_type.kind != .Bool { ret (none, invalid_type(), interp_fail(c, module_index, node, "`&&` or `||` of a number")) }
+            ret (right, right_type, ok)
+        }
+        var left_expected = expected
+        if is_comparison(op) || is_shift(op) { left_expected = invalid_type() }
+        let (left, left_type, left_error) = interp_expr(c, g, tree, frame, children[0usize], left_expected)
+        if left_error != ok { ret (none, invalid_type(), left_error) }
+        var right_expected = left_type
+        if is_shift(op) { right_expected = invalid_type() }
+        let (right, raw_right_type, right_error) = interp_expr(c, g, tree, frame, children[1usize], right_expected)
+        if right_error != ok { ret (none, invalid_type(), right_error) }
+        if is_comparison(op) {
+            if left_type.kind == .Bool || raw_right_type.kind == .Bool {
+                if left_type.kind != raw_right_type.kind || (op != .PunctEqEq && op != .PunctBangEq) { ret (none, invalid_type(), interp_fail(c, module_index, node, "an ordering of bools")) }
+            } else {
+                let (compared_type, compared_error) = constant_result_type(c, left_type, raw_right_type)
+                if compared_error != ok { ret (none, invalid_type(), interp_fail(c, module_index, node, "a comparison of two integer types")) }
+            }
+            if interp_compare(op, left, right) { ret (normalized_integer(1usize, false), interp_bool_type(module_index), ok) }
+            ret (none, interp_bool_type(module_index), ok)
+        }
+        if left_type.kind == .Bool || raw_right_type.kind == .Bool { ret (none, invalid_type(), interp_fail(c, module_index, node, "arithmetic on a bool")) }
+        var right_type = raw_right_type
+        var result_type = left_type
+        if is_shift(op) {
+            if right_type.kind == .UntypedInteger { right_type = make_type(.Integer, "u32", module_index) }
+            if result_type.kind == .UntypedInteger && expected.kind == .Integer { result_type = expected }
+            if result_type.kind != .Integer { ret (none, invalid_type(), interp_fail(c, module_index, node, "a shift of a value with no width")) }
+            if right_type.kind != .Integer || !unsigned_integer_type(right_type) { ret (none, invalid_type(), interp_fail(c, module_index, node, "a shift by a signed count")) }
+        } else {
+            let (resolved_type, type_error) = constant_result_type(c, left_type, right_type)
+            if type_error != ok { ret (none, invalid_type(), interp_fail(c, module_index, node, "arithmetic over two integer types")) }
+            result_type = resolved_type
+            if result_type.kind == .UntypedInteger && expected.kind == .Integer { result_type = expected }
+            if (op == .PunctAmp || op == .PunctCaret || op == .PunctPipe || op == .PunctAddWrap || op == .PunctSubWrap || op == .PunctMulWrap) && result_type.kind != .Integer { ret (none, invalid_type(), interp_fail(c, module_index, node, "a bitwise or wrapping operator on a value with no width")) }
+        }
+        if result_type.kind == .Integer && (!integer_representable(left, result_type) || !integer_representable(right, result_type)) { ret (none, invalid_type(), interp_fail(c, module_index, node, "an operand the type cannot hold")) }
+        if (op == .PunctSlash || op == .PunctPercent) && right.magnitude == 0usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a division by zero")) }
+        let (result, result_error) = evaluate_integer_binary(op, left, right, result_type, right_type)
+        if result_error != ok { ret (none, invalid_type(), interp_fail(c, module_index, node, "an operator it does not evaluate")) }
+        if result_type.kind == .Integer && op != .PunctAddWrap && op != .PunctSubWrap && op != .PunctMulWrap && !integer_representable(result, result_type) { ret (none, invalid_type(), interp_fail(c, module_index, node, "a result the type cannot hold")) }
+        ret (result, result_type, ok)
+    }
+    if node.kind == .CallExpr {
+        let (value, value_type, call_error) = interp_call_node(c, g, tree, frame, node)
+        ret (value, value_type, call_error)
+    }
+    ret (none, invalid_type(), interp_fail(c, module_index, node, "an expression it does not evaluate"))
+}
+
+// `f(a, b)` or `m.f(a, b)` inside an evaluated body; a primitive type name in the
+// callee position is section 4's checked cast.
+fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, node: syntax.Node) -> (IntegerValue, Type, err) {
+    let module_index = frame.module_index
+    let text = g.modules[module_index].text
+    let none = normalized_integer(0usize, false)
+    var callee_index = 0usize
+    var arguments: [16]usize = zero
+    var argument_count = 0usize
+    var first = true
+    let end = node.first_child + node.child_count
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            if first {
+                callee_index = tree.children[at].index
+                first = false
+            } else {
+                if argument_count == arguments.len { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call of more than sixteen arguments")) }
+                arguments[argument_count] = tree.children[at].index
+                argument_count += 1usize
+            }
+        }
+        at += 1usize
+    }
+    if first { ret (none, invalid_type(), parse.InvalidSyntax) }
+    let callee = tree.nodes[callee_index]
+    var target_module = module_index
+    var name = ""
+    if callee.kind == .NameExpr {
+        let token = c.tokens[callee.token_start]
+        name = text[token.start..token.end]
+        let cast_type = primitive_type(name, module_index)
+        if cast_type.kind == .Integer || cast_type.kind == .Bool {
+            if argument_count != 1usize { ret (none, invalid_type(), interp_fail(c, module_index, node, "a cast of other than one value")) }
+            let (value, value_type, value_error) = interp_expr(c, g, tree, frame, arguments[0usize], invalid_type())
+            if value_error != ok { ret (none, invalid_type(), value_error) }
+            if cast_type.kind != .Integer || value_type.kind == .Bool { ret (none, invalid_type(), interp_fail(c, module_index, node, "a cast that is not integer to integer")) }
+            if !integer_representable(value, cast_type) { ret (none, invalid_type(), interp_fail(c, module_index, node, "a cast of a value the type cannot hold")) }
+            ret (value, cast_type, ok)
+        }
+    } else {
+        if callee.kind != .FieldExpr { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call through a value")) }
+        let (qualified_module, member, found_member) = qualified_member(c, g, tree, module_index, callee)
+        if !found_member { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call through a value")) }
+        target_module = qualified_module
+        name = member
+    }
+    var values: [16]IntegerValue = zero
+    var types: [16]Type = zero
+    var argument_at = 0usize
+    while argument_at < argument_count {
+        let (value, value_type, value_error) = interp_expr(c, g, tree, frame, arguments[argument_at], invalid_type())
+        if value_error != ok { ret (none, invalid_type(), value_error) }
+        values[argument_at] = value
+        types[argument_at] = value_type
+        argument_at += 1usize
+    }
+    let (result, result_type, call_error) = interp_call(c, g, target_module, name, values[..argument_count], types[..argument_count], node, module_index)
+    ret (result, result_type, call_error)
+}
+
+// The evaluation of one call: the callee's declaration, its parameters bound, its
+// body run. `site` and `site_module` are where the call is written, for the report.
+fn interp_call(c: *Checker, g: *graph.Graph, module_index: usize, name: str, arguments: []const IntegerValue, argument_types: []const Type, site: syntax.Node, site_module: usize) -> (IntegerValue, Type, err) {
+    let none = normalized_integer(0usize, false)
+    if !c.signatures_ready { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call before the program's signatures are collected -- a constant used in a type or another module-scope declaration")) }
+    // ponytail: the section allows a thousand; a frame is stack, and the stack is the host's.
+    if c.interp_depth >= 64usize {
+        record_failure(c, site_module, site, .ComptimeEvaluation, c.interp_constant, "a call depth past sixty-four")
+        ret (none, invalid_type(), ComptimeBudget)
+    }
+    // `u8(x)` at the top of an initialiser is section 4's checked cast, as it is in a body.
+    let cast_type = primitive_type(name, module_index)
+    if cast_type.kind == .Integer {
+        if arguments.len != 1usize || argument_types[0usize].kind == .Bool { ret (none, invalid_type(), interp_fail(c, site_module, site, "a cast that is not one integer to an integer")) }
+        if !integer_representable(arguments[0usize], cast_type) { ret (none, invalid_type(), interp_fail(c, site_module, site, "a cast of a value the type cannot hold")) }
+        ret (arguments[0usize], cast_type, ok)
+    }
+    let (function_index, found) = find_function(c, module_index, name)
+    if !found { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a name that is no function")) }
+    let function = c.functions[function_index]
+    if function.generic || function.external || function.intrinsic { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a generic, extern or intrinsic function")) }
+    if function.parameter_count != arguments.len { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call with the wrong number of arguments")) }
+    if function.return_count != 1usize { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning other than one value")) }
+    let return_type = c.return_types[function.first_return]
+    if return_type.kind != .Integer && return_type.kind != .Bool { ret (none, invalid_type(), interp_fail(c, site_module, site, "a call to a function returning other than an integer or bool")) }
+    let (parsed_module, parse_error) = interp_module(c, g, module_index)
+    if parse_error != ok { ret (none, invalid_type(), parse_error) }
+    // The callee's tokens stand in for the caller's while its body runs.
+    let saved_tokens = c.tokens
+    let saved_token_count = c.token_count
+    c.tokens = c.interp_tokens[module_index]
+    c.token_count = c.interp_token_counts[module_index]
+    c.interp_depth += 1usize
+    let (result, result_type, body_error) = interp_function(c, g, module_index, function_index, function, arguments, argument_types, return_type)
+    c.interp_depth = c.interp_depth - 1usize
+    c.tokens = saved_tokens
+    c.token_count = saved_token_count
+    ret (result, result_type, body_error)
+}
+
+fn interp_function(c: *Checker, g: *graph.Graph, module_index: usize, function_index: usize, function: Function, arguments: []const IntegerValue, argument_types: []const Type, return_type: Type) -> (IntegerValue, Type, err) {
+    let none = normalized_integer(0usize, false)
+    let tree = &c.interp_trees[module_index]
+    let text = g.modules[module_index].text
+    var declaration = 0usize
+    var found_declaration = false
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .FnDecl {
+            let (declared_name, name_error) = function_name(c, text, node)
+            if name_error == ok && same(declared_name, function.name) {
+                declaration = node_index
+                found_declaration = true
+                break
+            }
+        }
+        node_index += 1usize
+    }
+    if !found_declaration { ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[0usize], "a function whose declaration it cannot find")) }
+    var frame: InterpFrame = zero
+    frame.module_index = module_index
+    frame.return_type = return_type
+    var parameter_at = 0usize
+    while parameter_at < function.parameter_count {
+        let parameter = c.parameters[function.first_parameter + parameter_at]
+        if parameter.ty.kind != .Integer && parameter.ty.kind != .Bool { ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[declaration], "a parameter that is not an integer or bool")) }
+        let (converted, converted_type, convert_error) = interp_convert(c, module_index, tree.nodes[declaration], arguments[parameter_at], argument_types[parameter_at], parameter.ty)
+        if convert_error != ok { ret (none, invalid_type(), convert_error) }
+        let bind_error = interp_bind(&frame, parameter.name, converted, converted_type)
+        if bind_error != ok { ret (none, invalid_type(), bind_error) }
+        parameter_at += 1usize
+    }
+    let declared = tree.nodes[declaration]
+    let end = declared.first_child + declared.child_count
+    var at = declared.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            if tree.nodes[child_index].kind == .Block {
+                let (control, control_error) = interp_block(c, g, tree, &frame, child_index)
+                if control_error != ok { ret (none, invalid_type(), control_error) }
+                if control != interp_control_return() { ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[child_index], "the end of a body without `ret`")) }
+                ret (frame.result, frame.result_type, ok)
+            }
+        }
+        at += 1usize
+    }
+    ret (none, invalid_type(), interp_fail(c, module_index, declared, "a function with no body"))
+}
+
+fn interp_block(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, block_index: usize) -> (usize, err) {
+    let block = tree.nodes[block_index]
+    if frame.mark_count == frame.marks.len { ret (0usize, Capacity) }
+    frame.marks[frame.mark_count] = frame.count
+    frame.mark_count += 1usize
+    var control = interp_control_next()
+    let end = block.first_child + block.child_count
+    var at = block.first_child
+    while at < end && control == interp_control_next() {
+        if tree.children[at].node {
+            let (statement_control, statement_error) = interp_statement(c, g, tree, frame, tree.children[at].index)
+            if statement_error != ok { ret (0usize, statement_error) }
+            control = statement_control
+        }
+        at += 1usize
+    }
+    frame.mark_count = frame.mark_count - 1usize
+    frame.count = frame.marks[frame.mark_count]
+    ret (control, ok)
+}
+
+fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, node_index: usize) -> (usize, err) {
+    let module_index = frame.module_index
+    let node = tree.nodes[node_index]
+    let text = g.modules[module_index].text
+    let step_error = interp_step(c, module_index, node)
+    if step_error != ok { ret (0usize, step_error) }
+    if node.kind == .Block {
+        let (control, block_error) = interp_block(c, g, tree, frame, node_index)
+        ret (control, block_error)
+    }
+    if node.kind == .BindingStmt {
+        var binding_index = 0usize
+        var has_binding = false
+        var declared_type = invalid_type()
+        var initializer_index = 0usize
+        var has_initializer = false
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                let child_index = tree.children[at].index
+                let child = tree.nodes[child_index]
+                if child.kind == .Binding {
+                    binding_index = child_index
+                    has_binding = true
+                } else {
+                    if child.kind == .NamedType {
+                        let type_token = c.tokens[child.token_start]
+                        declared_type = primitive_type(text[type_token.start..type_token.end], module_index)
+                        if declared_type.kind != .Integer && declared_type.kind != .Bool { ret (0usize, interp_fail(c, module_index, node, "a binding of a type that is not an integer or bool")) }
+                    } else {
+                        if is_type_node(child.kind) { ret (0usize, interp_fail(c, module_index, node, "a binding of a type that is not an integer or bool")) }
+                        initializer_index = child_index
+                        has_initializer = true
+                    }
+                }
+            }
+            at += 1usize
+        }
+        if !has_binding || !has_initializer { ret (0usize, interp_fail(c, module_index, node, "a binding without a value")) }
+        let binding = tree.nodes[binding_index]
+        let binding_token = c.tokens[binding.token_start]
+        if binding_token.kind != .Identifier { ret (0usize, interp_fail(c, module_index, node, "a binding that is not one name")) }
+        let (value, value_type, value_error) = interp_expr(c, g, tree, frame, initializer_index, declared_type)
+        if value_error != ok { ret (0usize, value_error) }
+        let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, value, value_type, declared_type)
+        if convert_error != ok { ret (0usize, convert_error) }
+        if converted_type.kind == .UntypedInteger { ret (0usize, interp_fail(c, module_index, node, "a binding with no type to give an untyped literal")) }
+        let bind_error = interp_bind(frame, text[binding_token.start..binding_token.end], converted, converted_type)
+        if bind_error != ok { ret (0usize, bind_error) }
+        ret (interp_control_next(), ok)
+    }
+    if node.kind == .AssignmentStmt {
+        var place_index = 0usize
+        var value_index = 0usize
+        var count = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if count == 0usize { place_index = tree.children[at].index }
+                value_index = tree.children[at].index
+                count += 1usize
+            }
+            at += 1usize
+        }
+        if count != 2usize { ret (0usize, interp_fail(c, module_index, node, "an assignment that is not `name op= value`")) }
+        let place = tree.nodes[place_index]
+        if place.kind != .NameExpr { ret (0usize, interp_fail(c, module_index, node, "an assignment to a place that is not a local")) }
+        let place_token = c.tokens[place.token_start]
+        let (slot, found) = interp_lookup(frame, text[place_token.start..place_token.end])
+        if !found { ret (0usize, interp_fail(c, module_index, node, "an assignment to a name that is no local")) }
+        let op = assignment_operator(c, place.token_end, tree.nodes[value_index].token_start)
+        let slot_type = frame.types[slot]
+        let (value, value_type, value_error) = interp_expr(c, g, tree, frame, value_index, slot_type)
+        if value_error != ok { ret (0usize, value_error) }
+        if op == .PunctAssign {
+            let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, value, value_type, slot_type)
+            if convert_error != ok { ret (0usize, convert_error) }
+            frame.values[slot] = converted
+            ret (interp_control_next(), ok)
+        }
+        let binary = compound_base_operator(op)
+        if binary == .Invalid || slot_type.kind != .Integer { ret (0usize, interp_fail(c, module_index, node, "a compound assignment it does not evaluate")) }
+        var right_type = value_type
+        if is_shift(binary) {
+            if right_type.kind == .UntypedInteger { right_type = make_type(.Integer, "u32", module_index) }
+            if right_type.kind != .Integer || !unsigned_integer_type(right_type) { ret (0usize, interp_fail(c, module_index, node, "a shift by a signed count")) }
+        } else {
+            let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, value, value_type, slot_type)
+            if convert_error != ok { ret (0usize, convert_error) }
+            right_type = converted_type
+        }
+        if (binary == .PunctSlash || binary == .PunctPercent) && value.magnitude == 0usize { ret (0usize, interp_fail(c, module_index, node, "a division by zero")) }
+        let (result, result_error) = evaluate_integer_binary(binary, frame.values[slot], value, slot_type, right_type)
+        if result_error != ok { ret (0usize, interp_fail(c, module_index, node, "a compound assignment it does not evaluate")) }
+        if binary != .PunctAddWrap && binary != .PunctSubWrap && binary != .PunctMulWrap && !integer_representable(result, slot_type) { ret (0usize, interp_fail(c, module_index, node, "a result the type cannot hold")) }
+        frame.values[slot] = result
+        ret (interp_control_next(), ok)
+    }
+    if node.kind == .ReturnStmt {
+        let (value_index, has_value) = first_node_child(tree, node)
+        if !has_value { ret (0usize, interp_fail(c, module_index, node, "a `ret` with no value")) }
+        let (value, value_type, value_error) = interp_expr(c, g, tree, frame, value_index, frame.return_type)
+        if value_error != ok { ret (0usize, value_error) }
+        let (converted, converted_type, convert_error) = interp_convert(c, module_index, node, value, value_type, frame.return_type)
+        if convert_error != ok { ret (0usize, convert_error) }
+        frame.result = converted
+        frame.result_type = converted_type
+        ret (interp_control_return(), ok)
+    }
+    if node.kind == .BreakStmt { ret (interp_control_break(), ok) }
+    if node.kind == .ContinueStmt { ret (interp_control_continue(), ok) }
+    if node.kind == .IfStmt || node.kind == .WhileStmt {
+        var condition_index = 0usize
+        var found_condition = false
+        var arms: [2]usize = zero
+        var arm_count = 0usize
+        let end = node.first_child + node.child_count
+        var at = node.first_child
+        while at < end {
+            if tree.children[at].node {
+                if !found_condition {
+                    condition_index = tree.children[at].index
+                    found_condition = true
+                } else {
+                    if arm_count == arms.len { ret (0usize, interp_fail(c, module_index, node, "an `if` of a shape it does not evaluate")) }
+                    arms[arm_count] = tree.children[at].index
+                    arm_count += 1usize
+                }
+            }
+            at += 1usize
+        }
+        if !found_condition || arm_count == 0usize { ret (0usize, parse.InvalidSyntax) }
+        while true {
+            let (condition, condition_type, condition_error) = interp_expr(c, g, tree, frame, condition_index, interp_bool_type(module_index))
+            if condition_error != ok { ret (0usize, condition_error) }
+            if condition_type.kind != .Bool { ret (0usize, interp_fail(c, module_index, node, "a condition that is not a bool")) }
+            if node.kind == .IfStmt {
+                if condition.magnitude != 0usize {
+                    let (taken_control, taken_error) = interp_statement(c, g, tree, frame, arms[0usize])
+                    ret (taken_control, taken_error)
+                }
+                if arm_count == 2usize {
+                    let (else_control, else_error) = interp_statement(c, g, tree, frame, arms[1usize])
+                    ret (else_control, else_error)
+                }
+                ret (interp_control_next(), ok)
+            }
+            if condition.magnitude == 0usize { break }
+            let (body_control, body_error) = interp_statement(c, g, tree, frame, arms[0usize])
+            if body_error != ok { ret (0usize, body_error) }
+            if body_control == interp_control_return() { ret (body_control, ok) }
+            if body_control == interp_control_break() { break }
+        }
+        ret (interp_control_next(), ok)
+    }
+    ret (0usize, interp_fail(c, module_index, node, "a statement it does not evaluate"))
+}
+
+fn compound_base_operator(op: lex.Kind) -> lex.Kind {
+    if op == .PunctAddAssign { ret .PunctPlus }
+    if op == .PunctSubAssign { ret .PunctMinus }
+    if op == .PunctMulAssign { ret .PunctStar }
+    if op == .PunctDivAssign { ret .PunctSlash }
+    if op == .PunctRemAssign { ret .PunctPercent }
+    if op == .PunctAddWrapAssign { ret .PunctAddWrap }
+    if op == .PunctSubWrapAssign { ret .PunctSubWrap }
+    if op == .PunctMulWrapAssign { ret .PunctMulWrap }
+    if op == .PunctShiftLeftAssign { ret .PunctShiftLeft }
+    if op == .PunctShiftRightAssign { ret .PunctShiftRight }
+    if op == .PunctBitAndAssign { ret .PunctAmp }
+    if op == .PunctBitXorAssign { ret .PunctCaret }
+    if op == .PunctBitOrAssign { ret .PunctPipe }
+    ret .Invalid
+}
+
 fn evaluate_constant(c: *Checker, constant_index: usize) -> err {
     if constant_index >= c.constant_count { ret InvalidConstant }
     if c.constants[constant_index].state == 2u8 { ret ok }
@@ -3989,7 +4773,10 @@ fn evaluate_constant(c: *Checker, constant_index: usize) -> err {
         ret ConstantCycle
     }
     c.constants[constant_index].state = 1u8
+    let outer_constant = c.interp_constant
+    c.interp_constant = c.constants[constant_index].name
     let (value, actual_type, value_error) = evaluate_constant_expr(c, c.constants[constant_index].expression, c.constants[constant_index].ty)
+    c.interp_constant = outer_constant
     if value_error != ok { ret value_error }
     var final_type = c.constants[constant_index].ty
     if final_type.kind == .Invalid {
@@ -4070,11 +4857,18 @@ fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err 
     }
     var constant_index = 0usize
     while constant_index < c.constant_count {
-        try evaluate_constant(c, constant_index)
+        // A constant that calls waits for the signatures (D218); its first use evaluates it.
+        if !constant_calls(c, constant_index) { try evaluate_constant(c, constant_index) }
         constant_index += 1usize
     }
     c.constants_ready = true
     ret ok
+}
+
+fn constant_calls(c: *Checker, constant_index: usize) -> bool {
+    let expression_index = c.constants[constant_index].expression
+    if expression_index >= c.constant_expr_count { ret false }
+    ret c.constant_exprs[expression_index].kind == .Call
 }
 
 fn find_local(c: *Checker, name: str) -> (usize, bool) {
@@ -10040,6 +10834,9 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
 fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     if c.function_generics.len < c.functions.len || c.comptime_parameters.len == 0usize || c.generic_arguments.len == 0usize || c.aggregates.len == 0usize || c.aggregate_fields.len == 0usize { ret Capacity }
     c.resolver = r
+    c.graph = g
+    c.has_graph = true
+    c.signatures_ready = false
     try collect_aliases(c, r, g, true)
     try collect_constants(c, r, g)
     try collect_aggregates(c, r, g)
@@ -10048,6 +10845,14 @@ fn run(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     try expand_aggregate_field_types(c)
     try validate_aggregate_value_cycles(c)
     try collect_signatures(c, r, g)
+    c.signatures_ready = true
+    // The constants that call are evaluated now (D218), so a failure is reported at
+    // the declaration whether or not anything uses it.
+    var constant_index = 0usize
+    while constant_index < c.constant_count {
+        if constant_calls(c, constant_index) { try evaluate_constant(c, constant_index) }
+        constant_index += 1usize
+    }
     ret check_bodies(c, r, g)
 }
 
@@ -10066,7 +10871,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .DuplicateEnumValue { ret "E-NAME-0001" }
     if kind == .IteratorMissing || kind == .ProtocolMissing { ret "E-NAME-9999" }
     if kind == .GenericInference { ret "E-TYPE-0001" }
-    if kind == .WhenCondition { ret "E-COMPTIME-9999" }
+    if kind == .WhenCondition || kind == .ComptimeEvaluation { ret "E-COMPTIME-9999" }
     ret "E-TYPE-9999"
 }
 

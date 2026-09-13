@@ -1363,6 +1363,12 @@ fn write_check_message(file: os.File, checker: *check.Checker, check_error: err)
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "` does not cross the C ABI (spec section 5's table), so it cannot be a parameter or return of one")
     }
+    if checker.failure_kind == .ComptimeEvaluation {
+        try write_all(file, "constant `")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` cannot be evaluated at compile time: its call reached ")
+        ret write_all(file, checker.failure_detail2)
+    }
     if checker.failure_kind == .WhenCondition {
         ret write_all(file, "a `when` condition asks about the target alone: `target.arch` or `target.os` compared with a member, under `!`, `&&`, `||` and parentheses")
     }
@@ -1941,6 +1947,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var checker: check.Checker = zero
         try init_cli_checker(a, &checker)
+        checker.arena = a
         let check_error = check.run(&checker, &resolver, &loaded)
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
@@ -1994,6 +2001,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var checker: check.Checker = zero
         try init_cli_checker(a, &checker)
+        checker.arena = a
         let check_error = check.run(&checker, &resolver, &loaded)
         if check_error != ok {
             if checker.diagnostic_count == 0usize {

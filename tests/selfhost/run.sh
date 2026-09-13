@@ -1735,6 +1735,17 @@ chmod +x "$nested_linked"
 nested_status=0
 "$nested_linked" || nested_status=$?
 [ "$nested_status" -eq 6 ]
+# Section 9's compile-time evaluation of a call in a `const` (D218): seven constants
+# computed by the interpreter agree with the same functions at run time, one is an
+# array length; a call that reaches runtime state, and one that never returns, are
+# refused naming the constant.
+comptime_call_path="$test_build/comptime-call-selfhost"
+comptime_call_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/comptime_call/src/main.e" "$repo" x64 linux "$comptime_call_path")
+[ "$comptime_call_written" = 'executable written' ]
+chmod +x "$comptime_call_path"
+"$comptime_call_path"
+check_protocol_diagnostic comptime_call_runtime 'main.e:8:19: error[E-COMPTIME-9999]: constant `CODE` cannot be evaluated at compile time: its call reached a statement it does not evaluate'
+check_protocol_diagnostic comptime_call_budget 'main.e:6:11: error[E-COMPTIME-9999]: constant `FOREVER` cannot be evaluated at compile time: its call reached ten million steps'
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"
