@@ -169,6 +169,14 @@ fn divide_register(buffer: *Buffer, divisor: usize, signed: bool) -> err {
     ret modrm(buffer, extension, divisor)
 }
 
+// `mul r/m64`: rdx:rax = rax * source, unsigned; CF and OF say the high half is nonzero.
+fn multiply_unsigned_register(buffer: *Buffer, source: usize) -> err {
+    try check_register(source)
+    try rex(buffer, 4usize, source)
+    try byte(buffer, 247usize)
+    ret modrm(buffer, 4usize, source)
+}
+
 fn and_immediate8(buffer: *Buffer, destination: usize, value: usize) -> err {
     try check_register(destination)
     if value > 255usize { ret InvalidByte }

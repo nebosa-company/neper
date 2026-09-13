@@ -3671,3 +3671,23 @@ an aggregate passed by address never comes through those paths and is never nil,
 the check is only where a pointer the program holds is followed. The compiler's own
 image grows by a seventh; no build mode elides the check yet. `link/trap_null` pins
 the four refusals on both platforms and that live pointers pass.
+
+## D202 — The `overflow` row: `+ - *` and unary `-` trap when the result does not fit
+
+Section 11's `overflow` row traps in a debug build and wraps in release; with no
+build modes yet, it traps, and `+% -% *%` remain the spelling for a wrap that is
+meant. Below 64 bits the operands sit sign- or zero-extended in their registers, so
+the 64-bit result of the instruction is exact and overflow is the normalised result
+differing from it -- one move and one compare. At 64 bits the flags say: `OF` after a
+signed operation, `CF` after an unsigned one. An unsigned 64-bit `*` is the case
+`imul` cannot flag, so it goes through `mul`, whose nonzero high half is the overflow,
+under the fixed-register discipline division already uses. Unary `-` on a signed type
+is checked the same way; on an unsigned type it is not. The record names the type and
+the operator -- `usize - overflows` -- and not the operands, which the instruction
+has consumed by the time the flags are read. The row found five library sites that
+meant the wrap: the borrow in `e.algo.decimal`'s negation, `e.algo.deflate`'s
+multiplicative hash, `e.algo.uuid`'s shift countdown, and the carry idioms of
+`e.math`'s wide add, subtract and multiply, and the negated process group `os.linux`
+hands to `kill`, all now `+% -% *%`. The compiler's own image grows by four percent. `link/trap_overflow` pins eight refusals across the
+widths, both signednesses and the four operators on both platforms, and that the same
+arithmetic in range, and `+%` past the edge, pass.

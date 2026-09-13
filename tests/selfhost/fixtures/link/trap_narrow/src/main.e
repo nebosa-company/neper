@@ -29,14 +29,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if b == 3usize { ret ok }
     }
     if str.eq(mode, "same") {
-        let b = i32(4294967000u32 + u32(n) - 300u32)
+        let b = i32(4294967000u32 - 300u32 + u32(n))
         if b == 3i32 { ret ok }
     }
     let fine = u8(n - 200usize) + u8(i32(n) - 250i32)
     if fine == 3u8 { ret ok }
     let low = i8(0i32 - i32(n) + 200i32)
     if low != -100i8 { ret ok }
-    let kept = u8.trunc(n) + u8.trunc(0i32 - i32(n))
+    let kept = u8.trunc(n) +% u8.trunc(0i32 - i32(n))
     if kept != 0u8 { ret ok }
     let signed_bits = i16.trunc(u32(n) + 65000u32)
     if signed_bits != -236i16 { ret ok }

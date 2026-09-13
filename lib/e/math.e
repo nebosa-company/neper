@@ -225,10 +225,10 @@ fn wide_add(a: *Wide, b: *const Wide) {
     var at = 0usize
     while at < 4usize {
         let left = a.limbs[at]
-        let sum = left + b.limbs[at]
+        let sum = left +% b.limbs[at]
         var next = 0u64
         if sum < left { next = 1u64 }
-        let total = sum + carry
+        let total = sum +% carry
         if total < sum { next = 1u64 }
         a.limbs[at] = total
         carry = next
@@ -243,10 +243,10 @@ fn wide_sub(a: *Wide, b: *const Wide) {
     while at < 4usize {
         let left = a.limbs[at]
         let right = b.limbs[at]
-        let difference = left - right
+        let difference = left -% right
         var next = 0u64
         if left < right { next = 1u64 }
-        let total = difference - borrow
+        let total = difference -% borrow
         if difference < borrow { next = 1u64 }
         a.limbs[at] = total
         borrow = next
@@ -320,10 +320,10 @@ fn wide_product(a: u64, b: u64) -> Wide {
     let high_low = a_high * b_low
     let high_high = a_high * b_high
     // The two middle products meet in the middle; their sum can carry into the top.
-    let middle = low_high + high_low
+    let middle = low_high +% high_low
     var middle_carry = 0u64
     if middle < low_high { middle_carry = 1u64 }
-    let low = low_low + (middle << 32u32)
+    let low = low_low +% (middle << 32u32)
     var low_carry = 0u64
     if low < low_low { low_carry = 1u64 }
     var w = wide_zero()

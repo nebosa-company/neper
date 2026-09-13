@@ -50,7 +50,7 @@ fn coefficient_of(m: Magnitude, negative: bool) -> (Coefficient, err) {
     if m.high > 9223372036854775808u64 || (m.high == 9223372036854775808u64 && m.low != 0u64) { ret (zero, Overflow) }
     c.low = 0u64 -% m.low
     var high = 0u64 -% m.high
-    if m.low != 0u64 { high -= 1u64 }
+    if m.low != 0u64 { high = high -% 1u64 }
     c.high = i64.trunc(high)
     ret (c, ok)
 }

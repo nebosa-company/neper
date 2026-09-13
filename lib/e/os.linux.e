@@ -1422,7 +1422,7 @@ fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, e
 fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
     var signal = SIGTERM
     if force { signal = SIGKILL }
-    let negated = 0usize - group.raw
+    let negated = 0usize -% group.raw
     ret from_errno(syscall(SYS_KILL, negated, signal, 0usize, 0usize, 0usize, 0usize))
 }
 

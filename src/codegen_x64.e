@@ -910,6 +910,8 @@ fn needs_fixed_registers(builder: *nir.Builder, current: nir.Function) -> bool {
     while at < end {
         let opcode = builder.instructions[at].opcode
         if opcode == .Divide || opcode == .Remainder || opcode == .ShiftLeft || opcode == .ShiftRight || opcode == .IndexAddress || opcode == .Slice || opcode == .Copy || opcode == .Call || opcode == .IndirectCall { ret true }
+        // An unsigned 64-bit `*` is checked through `mul`, which answers in rdx:rax (D202).
+        if opcode == .Multiply && unsigned_wide(builder.instructions[at].ty) { ret true }
         // The read-modify-write forms need rax, and the retried ones rcx as well.
         if opcode == .AtomicRmw || opcode == .AtomicCas { ret true }
         at += 1usize
@@ -1167,6 +1169,35 @@ fn emit_trap(builder: *nir.Builder, current: nir.Function, token: lex.Token, kin
     let (call_displacement, call_error) = emit_x64.call(output)
     if call_error != ok { ret call_error }
     ret add_relocation(context.relocations, context.relocation_count, call_displacement, function_ref)
+}
+
+// Section 11's `overflow` row for `+ - *` and unary `-`, which trap in a debug build
+// and wrap in release (nothing selects release yet). Below 64 bits the operands are
+// sign- or zero-extended, so the 64-bit result is exact and overflow is the
+// normalised result differing from it; at 64 bits the flags say: OF for a signed
+// operation, CF for an unsigned one. `destination` holds the exact result and r11 is
+// free, the right operand being consumed. The record names the type and operator.
+fn emit_overflow_check(builder: *nir.Builder, current: nir.Function, token: lex.Token, ty: check.Type, operator: str, destination: usize, context: *FunctionContext) -> err {
+    let output = context.output
+    let width = integer_width(ty)
+    let signed = signed_integer(ty)
+    var over = 0usize
+    if width == 64usize {
+        var condition = 3usize
+        if signed { condition = 1usize }
+        let (flagged, flag_error) = emit_x64.jump_condition(output, condition)
+        if flag_error != ok { ret flag_error }
+        over = flagged
+    } else {
+        try emit_x64.mov_register(output, 11usize, destination)
+        try emit_x64.normalize_integer(output, destination, destination, width, signed)
+        try emit_x64.compare_register(output, destination, 11usize)
+        let (same, same_error) = emit_x64.jump_condition(output, 4usize)
+        if same_error != ok { ret same_error }
+        over = same
+    }
+    try emit_trap(builder, current, token, "overflow", ty.name, "", "", 0usize, false, 0usize, 0usize, operator, context)
+    ret emit_x64.patch_relative32(output, over, output.count)
 }
 
 // `cmp a, b; jcc over; <trap>; over:` -- the check passes when `condition` holds.
@@ -1468,7 +1499,9 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     if destination != source { try emit_x64.mov_register(output, destination, source) }
                     if instruction.opcode == .Negate { try emit_x64.negate_register(output, destination) }
                     if instruction.opcode == .BitNot { try emit_x64.bit_not_register(output, destination) }
-                    try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty))
+                    let negated = instruction.opcode == .Negate && signed_integer(instruction.ty)
+                    if negated { try emit_overflow_check(builder, current, instruction.token, instruction.ty, " unary - overflows", destination, context) }
+                    if !(negated && integer_width(instruction.ty) != 64usize) { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
                 try store_result(allocations, instruction.result, destination, output)
             } else {
@@ -1500,7 +1533,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 try emit_x64.normalize_integer(output, destination, 10usize, integer_width(instruction.ty), signed_integer(instruction.ty))
                 try store_result(allocations, instruction.result, destination, output)
             } else {
-            if instruction.opcode == .Divide || instruction.opcode == .Remainder {
+            if instruction.opcode == .Divide || instruction.opcode == .Remainder || (instruction.opcode == .Multiply && unsigned_wide(instruction.ty)) {
                 if instruction.operand_count != 2usize || instruction.ty.kind != .Integer { ret Unsupported }
                 let left_value = builder.operands[instruction.first_operand]
                 let right_value = builder.operands[instruction.first_operand + 1usize]
@@ -1513,6 +1546,17 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                 if right_error != ok { ret right_error }
                 if right != 11usize { try emit_x64.mov_register(output, 11usize, right) }
                 if left != 0usize { try emit_x64.mov_register(output, 0usize, left) }
+                if instruction.opcode == .Multiply {
+                    // An unsigned 64-bit `*` through `mul`: rdx:rax, and a nonzero high
+                    // half is section 11's overflow (D202).
+                    try emit_x64.multiply_unsigned_register(output, 11usize)
+                    try emit_x64.test_register(output, 2usize)
+                    let (fits, fits_error) = emit_x64.jump_condition(output, 4usize)
+                    if fits_error != ok { ret fits_error }
+                    try emit_trap(builder, current, instruction.token, "overflow", instruction.ty.name, "", "", 0usize, false, 0usize, 0usize, " * overflows", context)
+                    try emit_x64.patch_relative32(output, fits, output.count)
+                    try emit_x64.mov_register(output, 10usize, 0usize)
+                } else {
                 let signed = signed_integer(left_type)
                 try emit_divide_checks(builder, current, instruction.token, instruction.opcode == .Remainder, integer_width(left_type), signed, context)
                 if signed { try emit_x64.extend_dividend_signed(output) } else { try emit_x64.extend_dividend_unsigned(output) }
@@ -1521,6 +1565,7 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     try emit_x64.mov_register(output, 10usize, 0usize)
                 } else {
                     try emit_x64.mov_register(output, 10usize, 2usize)
+                }
                 }
                 try restore_allocated_registers(output, preserve_base, preserve_count)
                 let (destination, destination_error) = result_register(allocations, instruction.result, 11usize)
@@ -1555,7 +1600,14 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
                     if instruction.opcode == .BitAnd { try emit_x64.bit_and_register(output, destination, right) }
                     if instruction.opcode == .BitXor { try emit_x64.bit_xor_register(output, destination, right) }
                     if instruction.opcode == .BitOr { try emit_x64.bit_or_register(output, destination, right) }
-                    if instruction.ty.kind == .Integer { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
+                    let checked = instruction.ty.kind == .Integer && (instruction.opcode == .Add || instruction.opcode == .Subtract || instruction.opcode == .Multiply)
+                    if checked {
+                        var operator = " + overflows"
+                        if instruction.opcode == .Subtract { operator = " - overflows" }
+                        if instruction.opcode == .Multiply { operator = " * overflows" }
+                        try emit_overflow_check(builder, current, instruction.token, instruction.ty, operator, destination, context)
+                    }
+                    if instruction.ty.kind == .Integer && !(checked && integer_width(instruction.ty) != 64usize) { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
                 try store_result(allocations, instruction.result, destination, output)
             } else {

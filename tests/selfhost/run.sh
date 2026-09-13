@@ -1501,6 +1501,77 @@ case "$null_output" in
 ' "the store case did not trap as section 11 says: $null_output" >&2; exit 1 ;;
 esac
 "$null_path" none
+# The `overflow` row: `+ - *` and unary `-` on every width, signed and unsigned, refused
+# when the result does not fit; the same in range, and `+%` past the edge, untouched.
+overflow_path="$test_build/trap-overflow-selfhost"
+overflow_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/trap_overflow/src/main.e" "$repo" x64 linux "$overflow_path")
+[ "$overflow_written" = 'executable written' ]
+chmod +x "$overflow_path"
+overflow_status=0
+overflow_output=$("$overflow_path" add32 2>&1) || overflow_status=$?
+[ "$overflow_status" -eq 134 ]
+case "$overflow_output" in
+    *'main.e:14:17: trap[overflow]: i32 + overflows'*) ;;
+    *) printf '%s
+' "the add32 case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
+esac
+overflow_status=0
+overflow_output=$("$overflow_path" sub8 2>&1) || overflow_status=$?
+[ "$overflow_status" -eq 134 ]
+case "$overflow_output" in
+    *'main.e:18:17: trap[overflow]: i8 - overflows'*) ;;
+    *) printf '%s
+' "the sub8 case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
+esac
+overflow_status=0
+overflow_output=$("$overflow_path" mulu16 2>&1) || overflow_status=$?
+[ "$overflow_status" -eq 134 ]
+case "$overflow_output" in
+    *'main.e:22:17: trap[overflow]: u16 * overflows'*) ;;
+    *) printf '%s
+' "the mulu16 case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
+esac
+overflow_status=0
+overflow_output=$("$overflow_path" add64 2>&1) || overflow_status=$?
+[ "$overflow_status" -eq 134 ]
+case "$overflow_output" in
+    *'main.e:26:17: trap[overflow]: i64 + overflows'*) ;;
+    *) printf '%s
+' "the add64 case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
+esac
+overflow_status=0
+overflow_output=$("$overflow_path" subusize 2>&1) || overflow_status=$?
+[ "$overflow_status" -eq 134 ]
+case "$overflow_output" in
+    *'main.e:30:17: trap[overflow]: usize - overflows'*) ;;
+    *) printf '%s
+' "the subusize case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
+esac
+overflow_status=0
+overflow_output=$("$overflow_path" mulusize 2>&1) || overflow_status=$?
+[ "$overflow_status" -eq 134 ]
+case "$overflow_output" in
+    *'main.e:34:17: trap[overflow]: usize * overflows'*) ;;
+    *) printf '%s
+' "the mulusize case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
+esac
+overflow_status=0
+overflow_output=$("$overflow_path" muli64 2>&1) || overflow_status=$?
+[ "$overflow_status" -eq 134 ]
+case "$overflow_output" in
+    *'main.e:38:17: trap[overflow]: i64 * overflows'*) ;;
+    *) printf '%s
+' "the muli64 case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
+esac
+overflow_status=0
+overflow_output=$("$overflow_path" neg 2>&1) || overflow_status=$?
+[ "$overflow_status" -eq 134 ]
+case "$overflow_output" in
+    *'main.e:43:17: trap[overflow]: i16 unary - overflows'*) ;;
+    *) printf '%s
+' "the neg case did not trap as section 11 says: $overflow_output" >&2; exit 1 ;;
+esac
+"$overflow_path" none
 # `os.syscall`, which exists on Linux alone -- so this step has no Windows counterpart.
 # Every argument position is exercised, including a six-argument `mmap` whose fifth and
 # sixth a register shuffle that stops early would drop.

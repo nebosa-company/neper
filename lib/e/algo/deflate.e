@@ -611,7 +611,7 @@ fn put_match(s: *EncoderState, length: u32, distance: u32) {
 
 fn hash3(buffer: []const u8, at: usize) -> usize {
     let key = (u32(buffer[at]) << 16u32) | (u32(buffer[at + 1usize]) << 8u32) | u32(buffer[at + 2usize])
-    ret usize((key * 2654435761u32) >> 20u32) & (HEAD - 1usize)
+    ret usize((key *% 2654435761u32) >> 20u32) & (HEAD - 1usize)
 }
 
 fn compress_block(s: *EncoderState, final: bool) {

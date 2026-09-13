@@ -36,7 +36,7 @@ fn v7(unix_millis: u64, random: [10]u8) -> (Uuid, err) {
     var at = 0usize
     while at < 6usize {
         u.bytes[at] = u8((unix_millis >> shift) & 255u64)
-        shift = shift - 8u64
+        shift = shift -% 8u64
         at += 1usize
     }
     at = 0usize

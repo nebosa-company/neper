@@ -43,7 +43,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     let v = node.Lit
     if v != 7i32 { ret ok }
-    let fits = i8(f64(n) * -18.0f64) + i8.trunc(u8(f32(n) * 36.0f32))
+    let fits = i8(f64(n) * -18.0f64) +% i8.trunc(u8(f32(n) * 36.0f32))
     if fits != 3i8 { ret ok }
     let edge = i64(-9.2e18f64) + i64(u32(4.29e9f64)) + i64(i16(-32768.9f64))
     if edge == 3i64 { ret ok }

@@ -1466,6 +1466,29 @@ $nullOutput = & $nullPath store 2>&1
 if ($LASTEXITCODE -ne 134 -or ($nullOutput -join "`n") -notmatch 'main\.e:34:9: trap\[null\]: nil dereferenced as \*i32') { throw "the store case did not trap as section 11 says: exit $LASTEXITCODE, $($nullOutput -join "`n")" }
 & $nullPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'a dereference of a live pointer trapped' }
+# The `overflow` row: `+ - *` and unary `-` on every width, signed and unsigned, refused
+# when the result does not fit; the same in range, and `+%` past the edge, untouched.
+$overflowPath = Join-Path $testBuild 'trap-overflow-selfhost.exe'
+$overflowWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\trap_overflow\src\main.e') $repo 'x64' 'windows' $overflowPath
+if ($LASTEXITCODE -ne 0 -or $overflowWritten -ne 'executable written') { throw 'overflow trap fixture executable emission failed' }
+$overflowOutput = & $overflowPath add32 2>&1
+if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:14:17: trap\[overflow\]: i32 \+ overflows') { throw "the add32 case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
+$overflowOutput = & $overflowPath sub8 2>&1
+if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:18:17: trap\[overflow\]: i8 - overflows') { throw "the sub8 case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
+$overflowOutput = & $overflowPath mulu16 2>&1
+if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:22:17: trap\[overflow\]: u16 \* overflows') { throw "the mulu16 case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
+$overflowOutput = & $overflowPath add64 2>&1
+if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:26:17: trap\[overflow\]: i64 \+ overflows') { throw "the add64 case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
+$overflowOutput = & $overflowPath subusize 2>&1
+if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:30:17: trap\[overflow\]: usize - overflows') { throw "the subusize case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
+$overflowOutput = & $overflowPath mulusize 2>&1
+if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:34:17: trap\[overflow\]: usize \* overflows') { throw "the mulusize case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
+$overflowOutput = & $overflowPath muli64 2>&1
+if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:38:17: trap\[overflow\]: i64 \* overflows') { throw "the muli64 case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
+$overflowOutput = & $overflowPath neg 2>&1
+if ($LASTEXITCODE -ne 134 -or ($overflowOutput -join "`n") -notmatch 'main\.e:43:17: trap\[overflow\]: i16 unary - overflows') { throw "the neg case did not trap as section 11 says: exit $LASTEXITCODE, $($overflowOutput -join "`n")" }
+& $overflowPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'arithmetic in range, or a wrapping operator, trapped' }
 # `e.path` is pure: the same answers on both platforms, so the fixture asserts exact
 # strings rather than only that nothing failed.
 # `os.syscall` exists on Linux alone, so on this target the name must not resolve at
