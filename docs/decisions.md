@@ -4379,3 +4379,77 @@ its per-test output land in WORKDIR, out of the source tree. `duration_ms` is 0 
 test times out yet -- real timing, the `timeout_s` outcome, the structured `trap` payload
 (stderr still carries a crash's raw text), an operand that defines its own `main`, and
 project-wide discovery are the gaps.
+
+## D241 -- `e.time.cron`, a cron-expression parser and next-fire clock (planned)
+
+A small module over `e.time` that parses a cron expression into a `Schedule` and
+answers "when does this next fire". It is a parser plus a clock, not a scheduler --
+running the job is the caller's concern; the module only turns an expression and a
+`time.Timestamp` into the next matching `time.Timestamp`. Planned, unimplemented;
+this section is the contract.
+
+### Two flavours, detected by field count
+
+Whitespace-split the expression:
+
+- one token beginning with `@` -- a named shortcut (below);
+- five fields -- `minute hour day-of-month month day-of-week`, with seconds fixed
+  to `{0}` (classic Vixie cron);
+- six fields -- `second minute hour day-of-month month day-of-week` (the seconds
+  flavour, as Quartz/node-cron write it, seconds first);
+- any other count -- `E-CRON` parse error.
+
+So the seconds flavour is just a six-field expression; no mode flag, the count
+decides. Ranges are: second/minute 0-59, hour 0-23, day-of-month 1-31, month 1-12
+(or `JAN`-`DEC`), day-of-week 0-6 (or `SUN`-`SAT`), with both `0` and `7` meaning
+Sunday.
+
+### Per-field grammar
+
+Each field is `*`, or a comma list of items; an item is `N`, `N-M` (range), `*/S`
+or `N-M/S` (step), or `N/S` (Vixie shorthand for `N-max/S`). Month and day-of-week
+accept case-insensitive three-letter names, including in ranges (`MON-FRI`); names
+resolve to numbers before the range expands. Each field lowers to a bitset:
+`seconds`/`minutes` as `u64`, `hours`/`doms` as `u32`, `months` as `u16`, `dows`
+as `u8`, plus a `dom_restricted`/`dow_restricted` flag recording whether that field
+was anything other than `*`.
+
+Named shortcuts expand to five-field forms: `@yearly`/`@annually` = `0 0 1 1 *`,
+`@monthly` = `0 0 1 * *`, `@weekly` = `0 0 * * 0`, `@daily`/`@midnight` =
+`0 0 * * *`, `@hourly` = `0 * * * *`. `@reboot` is rejected -- it has no wall-clock
+meaning, so a scheduler must handle it out of band.
+
+### The day-of-month / day-of-week OR rule
+
+The one semantic trap, kept faithful to Vixie: when **both** day fields are
+restricted the instant matches if the day-of-month **or** the day-of-week matches;
+when only one is restricted that field alone gates the day; when neither is (both
+`*`) any day passes. `0 0 13 * 5` therefore fires every 13th and every Friday, not
+only Friday the 13th. Day-of-week is derived from `time.days_from_civil` as
+`floor_mod(days + 4, 7)` (epoch day 0, 1970-01-01, is a Thursday, and Sunday is 0).
+
+### Surface
+
+    type Schedule = struct { ... bitsets and the two restricted flags, plus the
+                             offset_minutes the schedule is read in ... }
+
+    fn parse(a: *mem.Arena, expr: str, offset_minutes: i32) -> (Schedule, err)
+    fn matches(s: Schedule, t: time.Timestamp) -> bool
+    fn next(s: Schedule, after: time.Timestamp) -> (time.Timestamp, err)
+
+`parse` carries a fixed UTC offset because a cron expression names a wall clock;
+`matches` decomposes `t` with `time.to_date_at`/`time.to_time_at` at that offset and
+tests the six bitsets under the day rule; `next` returns the first match strictly
+after `after`. `next` steps field-coarsely -- it advances to the next candidate
+month, then day, then hour/minute/second, skipping whole non-matching ranges rather
+than scanning per second, so a yearly schedule costs a handful of steps, not 31
+million. Termination is guaranteed by a five-year horizon: an unsatisfiable
+expression (`0 0 30 2 *`, Feb 30) returns `E-CRON` rather than looping.
+
+### Out of scope for a first cut
+
+DST and timezone-rule transitions beyond the fixed `offset_minutes` (a schedule that
+must survive a DST jump is a gap, not a guarantee); `@reboot`; the Quartz `L` / `W` /
+`#` / `?` extensions and its seventh year field. It builds on nothing new -- `e.time`
+already supplies civil-time conversion and the epoch weekday -- so it is blocked only
+on being wanted, and sits at the end of the module backlog.
