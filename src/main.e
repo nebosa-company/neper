@@ -991,10 +991,20 @@ fn widen_artifact(a: *mem.Arena, packed: []const u8) -> ([]usize, err) {
 fn settle_incremental(a: *mem.Arena, g: *graph.Graph, directory: str, triple: str, fresh: [][]u8) -> err {
     let (keep, keep_error) = mem.alloc[bool](a, g.count)
     if keep_error != ok { ret keep_error }
+    // A fresh artifact widened once per dependent module, not once per edge (D213).
+    let (wide, wide_error) = mem.alloc[[]usize](a, g.count)
+    if wide_error != ok { ret wide_error }
+    let (widened, widened_error) = mem.alloc[bool](a, g.count)
+    if widened_error != ok { ret widened_error }
     var module_at = 0usize
     while module_at < g.count {
         let checkpoint = mem.mark(a)
         keep[module_at] = false
+        var clear_at = 0usize
+        while clear_at < g.count {
+            widened[clear_at] = false
+            clear_at += 1usize
+        }
         let (artifact_path, path_error) = compiled_module_path(a, directory, g.modules[module_at].name, triple)
         if path_error != ok { ret path_error }
         let (old, old_error) = load_artifact(a, artifact_path)
@@ -1011,7 +1021,6 @@ fn settle_incremental(a: *mem.Arena, g: *graph.Graph, directory: str, triple: st
                 if count_error != ok { ret count_error }
                 var edge_at = 0usize
                 while edge_at < edge_count && keep[module_at] {
-                    let edge_checkpoint = mem.mark(a)
                     let (dependency, dependency_error) = em.dependency_at(old, edge_at)
                     if dependency_error != ok { ret dependency_error }
                     let (target_name, target_name_error) = artifact_string(a, old, dependency.module_index)
@@ -1028,13 +1037,16 @@ fn settle_incremental(a: *mem.Arena, g: *graph.Graph, directory: str, triple: st
                     if !found_target {
                         keep[module_at] = false
                     } else {
-                        let (target_bytes, target_error) = widen_artifact(a, fresh[target_at])
-                        if target_error != ok { ret target_error }
-                        let (matches, match_error) = em.dependency_matches(old, edge_at, target_bytes)
+                        if !widened[target_at] {
+                            let (target_bytes, target_error) = widen_artifact(a, fresh[target_at])
+                            if target_error != ok { ret target_error }
+                            wide[target_at] = target_bytes
+                            widened[target_at] = true
+                        }
+                        let (matches, match_error) = em.dependency_matches(old, edge_at, wide[target_at])
                         if match_error != ok { ret match_error }
                         if !matches { keep[module_at] = false }
                     }
-                    mem.reset(a, edge_checkpoint)
                     edge_at += 1usize
                 }
             }
@@ -1073,6 +1085,9 @@ fn load_artifact(a: *mem.Arena, path: str) -> ([]usize, err) {
         bytes[at] = usize(packed[at])
         at += 1usize
     }
+    // The checksum is checked here, once; the readers check the layout alone (D213).
+    let validation_error = em.validate(bytes)
+    if validation_error != ok { ret (bytes, validation_error) }
     ret (bytes, ok)
 }
 
@@ -2199,16 +2214,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 // One entry per byte of the artifact, and `e.str` alone compiles to
                 // more than 256 KiB, so the old quarter-megabyte stopped every
                 // `emit-em-all` over a module that uses it.
-                let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 2097152usize)
+                let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 8388608usize)
                 if artifact_storage_error != ok { ret artifact_storage_error }
                 var artifact: binary.Buffer = zero
                 try binary.init(&artifact, artifact_storage)
-                let (scratch_storage, scratch_storage_error) = mem.alloc[usize](a, 262144usize)
+                let (scratch_storage, scratch_storage_error) = mem.alloc[usize](a, 4194304usize)
                 if scratch_storage_error != ok { ret scratch_storage_error }
                 var scratch: binary.Buffer = zero
                 try binary.init(&scratch, scratch_storage)
                 let (string_values, string_values_error) = mem.alloc[str](a, 32768usize)
                 if string_values_error != ok { ret string_values_error }
+                let (string_slots, string_slots_error) = mem.alloc[usize](a, 131072usize)
+                if string_slots_error != ok { ret string_slots_error }
+                var strings: em.StringTable = zero
+                try em.init_strings(&strings, string_values, string_slots)
                 let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
@@ -2216,7 +2235,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
                 if packed_error != ok { ret packed_error }
                 if writes_em {
-                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, string_values, sections, &scratch, &artifact)
+                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, &strings, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
                     try save_bytes(a, args[6usize], packed[..artifact.count])
                     try io.print("compiled module written\n")
@@ -2229,7 +2248,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 var module_at = 0usize
                 while module_at < loaded.count {
                     artifact.count = 0usize
-                    try em.write_module(&checker, &loaded, &builder, module_at, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, string_values, sections, &scratch, &artifact)
+                    try em.write_module(&checker, &loaded, &builder, module_at, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, &strings, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
                     if incremental_build {
                         let (copy, copy_error) = mem.alloc[u8](a, artifact.count)

@@ -3888,3 +3888,22 @@ where the call is on 16. And a function with no stack slots had no frame, so whe
 called it was no frame in the chain and its caller was skipped: every function has
 one now, a push, a move and a leave, which also puts the stack where the ABI wants
 it at the calls such a function makes.
+
+## D213 — The artifact path at the compiler's own size
+
+`emit-em-all` over the compiler's 31 modules took 4 m 49 s, and `--incremental` over
+the result 6 m 45 s, against 8 s for the executable, so the artifact path existed
+for fixtures alone. A sampled profile put nearly all of it in `artifact_hash.xor`, a
+sixty-four-iteration bit loop from before `^` existed, under the CRC that every
+artifact reader ran over the whole artifact on every call -- three hundred loop
+iterations a byte, and the edge walk called a reader per edge over five-megabyte
+artifacts while widening the target artifact per edge as well. Now `xor` is `^`;
+`validate` keeps the checksum but is called once, where an artifact is loaded and
+where one is written, and the readers check the layout alone; the edge walk widens a
+target once per dependent module; the string table under the writer has a hash
+index; and the artifact and scratch buffers grew to eight and four mebibytes, since
+`main.em` alone is 2.7 MB. The compiler's artifacts are byte-identical to before,
+`emit-em-all` takes 23 s, the incremental decision 5 s, and `link-em` links the
+compiler in 6 s -- the linked compiler passes its self-test, though it is not yet
+byte-equal to the source-linked one, which the fixtures are: a function order
+difference to find under the determinism row.

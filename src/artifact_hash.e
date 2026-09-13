@@ -14,21 +14,9 @@ fn rotate_left(value: usize, count: usize) -> usize {
     ret high + low
 }
 
-fn xor(a: usize, b: usize) -> usize {
-    var left = a
-    var right = b
-    var place = 1usize
-    var result = 0usize
-    var count = 0usize
-    while count < 64usize {
-        if left % 2usize != right % 2usize { result = result +% place }
-        left = left / 2usize
-        right = right / 2usize
-        place = place *% 2usize
-        count += 1usize
-    }
-    ret result
-}
+// Once a bit loop from before `^` existed, and the CRC over every artifact read or
+// written went through it three hundred times a byte: minutes per module (D213).
+fn xor(a: usize, b: usize) -> usize { ret a ^ b }
 
 fn read_u32(bytes: []const usize, at: usize) -> (usize, err) {
     if at + 4usize > bytes.len { ret (0usize, InvalidByte) }

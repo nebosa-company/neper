@@ -37,6 +37,10 @@ type Writer = struct {
 type StringTable = struct {
     values: []str,
     count: usize,
+    // An open-addressed index over the values, each slot the value's index plus one
+    // (D213): a module of the compiler's size interns tens of thousands of strings, and
+    // a linear scan per intern made the writer quadratic.
+    index: []usize,
 }
 
 type Declaration = struct {
@@ -351,12 +355,45 @@ fn opcode_id(opcode: nir.Opcode) -> usize {
     ret 0usize
 }
 
-fn init_strings(table: *StringTable, values: []str) -> err {
-    if values.len == 0usize { ret Capacity }
+fn init_strings(table: *StringTable, values: []str, index: []usize) -> err {
+    if values.len == 0usize || index.len < values.len * 2usize || index.len & (index.len - 1usize) != 0usize { ret Capacity }
     table.values = values
-    table.values[0usize] = ""
-    table.count = 1usize
-    ret ok
+    table.index = index
+    ret reset_strings(table)
+}
+
+// Back to the empty string alone, for the next module.
+fn reset_strings(table: *StringTable) -> err {
+    let index = table.index
+    var at = 0usize
+    while at < index.len {
+        index[at] = 0usize
+        at += 1usize
+    }
+    table.count = 0usize
+    let (empty, empty_error) = intern(table, "")
+    ret empty_error
+}
+
+fn string_hash(value: str) -> usize {
+    var hash = 14695981039346656037usize
+    var at = 0usize
+    while at < value.len {
+        hash = (hash ^ usize(value[at])) *% 1099511628211usize
+        at += 1usize
+    }
+    ret hash
+}
+
+// The slot holding `value`, or the empty slot where it would go.
+fn string_slot(table: *StringTable, value: str) -> usize {
+    let mask = table.index.len - 1usize
+    var slot = string_hash(value) & mask
+    while table.index[slot] != 0usize {
+        if same(table.values[table.index[slot] - 1usize], value) { ret slot }
+        slot = (slot + 1usize) & mask
+    }
+    ret slot
 }
 
 fn same(a: str, b: str) -> bool {
@@ -370,24 +407,19 @@ fn same(a: str, b: str) -> bool {
 }
 
 fn intern(table: *StringTable, value: str) -> (usize, err) {
-    var at = 0usize
-    while at < table.count {
-        if same(table.values[at], value) { ret (at, ok) }
-        at += 1usize
-    }
+    let slot = string_slot(table, value)
+    if table.index[slot] != 0usize { ret (table.index[slot] - 1usize, ok) }
     if table.count == table.values.len { ret (0usize, Capacity) }
     let index = table.count
     table.values[index] = value
     table.count += 1usize
+    table.index[slot] = index + 1usize
     ret (index, ok)
 }
 
 fn string_index(table: *StringTable, value: str) -> (usize, err) {
-    var at = 0usize
-    while at < table.count {
-        if same(table.values[at], value) { ret (at, ok) }
-        at += 1usize
-    }
+    let slot = string_slot(table, value)
+    if table.index[slot] != 0usize { ret (table.index[slot] - 1usize, ok) }
     ret (0usize, InvalidArtifact)
 }
 
@@ -1782,7 +1814,7 @@ fn write_lines(builder: *nir.Builder, module_index: usize, table: *StringTable, 
 // The rows of one code function, by its position in the Code section; an artifact with
 // no Lines section, or fewer functions in it, has none.
 fn read_code_lines(bytes: []const usize, function_index: usize, out: []LineRow) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (section, found, section_error) = find_section_unchecked(bytes, lines_kind())
     if section_error != ok { ret (0usize, section_error) }
@@ -1820,7 +1852,7 @@ fn read_code_lines(bytes: []const usize, function_index: usize, out: []LineRow) 
 
 // How many rows the artifact holds in all, to size the assembled program's table.
 fn artifact_line_row_total(bytes: []const usize) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (section, found, section_error) = find_section_unchecked(bytes, lines_kind())
     if section_error != ok { ret (0usize, section_error) }
@@ -1883,42 +1915,41 @@ fn write_debug(g: *graph.Graph, module_index: usize, table: *StringTable, scratc
     ret binary.little_u32(output, 0usize)
 }
 
-fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, line_count: usize, string_values: []str, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, line_count: usize, strings: *StringTable, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     if module_index >= g.count || target_triple.len == 0usize || section_values.len != 8usize || output.count != 0usize { ret InvalidArtifact }
-    var strings: StringTable = zero
-    try init_strings(&strings, string_values)
-    let (target_index, target_error) = intern(&strings, target_triple)
+    try reset_strings(strings)
+    let (target_index, target_error) = intern(strings, target_triple)
     if target_error != ok { ret target_error }
-    try collect_module_strings(c, g, builder, module_index, &strings)
-    try collect_line_paths(builder, module_index, machine, function_offsets, lines, line_count, &strings)
+    try collect_module_strings(c, g, builder, module_index, strings)
+    try collect_line_paths(builder, module_index, machine, function_offsets, lines, line_count, strings)
     var writer: Writer = zero
     try begin(&writer, output, section_values, target_index, 0usize, mode)
     try begin_section(&writer, strings_kind(), required_flag())
-    try write_strings(&strings, output)
+    try write_strings(strings, output)
     try end_section(&writer)
     try begin_section(&writer, interface_kind(), required_flag())
-    let interface_error = write_interface(c, g, builder, module_index, &strings, scratch, output)
+    let interface_error = write_interface(c, g, builder, module_index, strings, scratch, output)
     if interface_error != ok { ret interface_error }
     try end_section(&writer)
     try begin_section(&writer, deps_kind(), required_flag())
-    try write_dependencies(c, g, builder, module_index, &strings, scratch, output)
+    try write_dependencies(c, g, builder, module_index, strings, scratch, output)
     try end_section(&writer)
     try begin_section(&writer, nir_kind(), required_flag())
-    let nir_error = write_nir(c, g, builder, module_index, &strings, scratch, output)
+    let nir_error = write_nir(c, g, builder, module_index, strings, scratch, output)
     if nir_error != ok { ret nir_error }
     try end_section(&writer)
     try begin_section(&writer, code_kind(), required_flag())
-    let code_error = write_code(g, builder, module_index, &strings, machine, function_offsets, relocations, relocation_count, scratch, output)
+    let code_error = write_code(g, builder, module_index, strings, machine, function_offsets, relocations, relocation_count, scratch, output)
     if code_error != ok { ret code_error }
     try end_section(&writer)
     try begin_section(&writer, debug_kind(), required_flag())
-    try write_debug(g, module_index, &strings, scratch, output)
+    try write_debug(g, module_index, strings, scratch, output)
     try end_section(&writer)
     try begin_section(&writer, globals_kind(), required_flag())
-    try write_globals(builder, module_index, &strings, output)
+    try write_globals(builder, module_index, strings, output)
     try end_section(&writer)
     try begin_section(&writer, lines_kind(), required_flag())
-    try write_lines(builder, module_index, &strings, machine, function_offsets, lines, line_count, output)
+    try write_lines(builder, module_index, strings, machine, function_offsets, lines, line_count, output)
     try end_section(&writer)
     try finish(&writer)
     let validation_error = validate(output.bytes[0usize..output.count])
@@ -2210,7 +2241,7 @@ fn interface_errors_unchecked(bytes: []const usize) -> (InterfaceErrors, err) {
 
 fn interface_errors(bytes: []const usize) -> (InterfaceErrors, err) {
     let empty = InterfaceErrors { entries: 0usize, count: 0usize, module_index: 0usize }
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (empty, validation_error) }
     let (table, table_error) = interface_errors_unchecked(bytes)
     ret (table, table_error)
@@ -2221,7 +2252,7 @@ fn interface_errors(bytes: []const usize) -> (InterfaceErrors, err) {
 // error table entry by entry is quadratic with a CRC on every step; this is one validate and
 // one walk.
 fn read_error_table(bytes: []const usize, out: []ErrorValue) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (table, table_error) = interface_errors_unchecked(bytes)
     if table_error != ok { ret (0usize, table_error) }
@@ -2344,7 +2375,7 @@ fn read_code_functions(bytes: []const usize, out: []CodeFunction) -> (usize, err
 }
 
 fn artifact_code_count(bytes: []const usize) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (code, found_code, section_error) = find_section_unchecked(bytes, code_kind())
     if section_error != ok || !found_code || code.length < 4usize { ret (0usize, InvalidArtifact) }
@@ -2390,7 +2421,7 @@ fn artifact_code_relocation_at(bytes: []const usize, function: CodeFunction, ind
 // The module's `var`s, from the globals section: how many, and each by index. An artifact
 // written before the section existed has no section and no globals.
 fn artifact_global_count(bytes: []const usize) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (section, found, section_error) = find_section_unchecked(bytes, globals_kind())
     if section_error != ok { ret (0usize, section_error) }
@@ -2480,7 +2511,7 @@ fn artifact_code_content_hash(bytes: []const usize, function: CodeFunction, scra
 }
 
 fn interface_module_index(bytes: []const usize) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (interface, found_interface, section_error) = find_section_unchecked(bytes, interface_kind())
     if section_error != ok || !found_interface || interface.length < 16usize { ret (0usize, InvalidArtifact) }
@@ -2492,7 +2523,7 @@ fn interface_module_index(bytes: []const usize) -> (usize, err) {
 }
 
 fn artifact_target_index(bytes: []const usize) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (target_index, target_error) = binary.read_u32(bytes, 8usize)
     if target_error != ok { ret (0usize, InvalidArtifact) }
@@ -2503,7 +2534,7 @@ fn artifact_target_index(bytes: []const usize) -> (usize, err) {
 
 fn find_declaration(bytes: []const usize, name: str) -> (Declaration, bool, err) {
     let empty = Declaration { kind: 0usize, flags: 0usize, name_index: 0usize, signature_hash: 0usize, body_hash: 0usize }
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (empty, false, validation_error) }
     let (interface, found_interface, section_error) = find_section_unchecked(bytes, interface_kind())
     if section_error != ok || !found_interface || interface.length < 16usize { ret (empty, false, InvalidArtifact) }
@@ -2536,7 +2567,7 @@ fn find_declaration(bytes: []const usize, name: str) -> (Declaration, bool, err)
 
 fn dependency_at(bytes: []const usize, index: usize) -> (Dependency, err) {
     let empty = Dependency { kind: 0usize, module_index: 0usize, name_index: 0usize, hash: 0usize }
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (empty, validation_error) }
     let (deps, found_deps, section_error) = find_section_unchecked(bytes, deps_kind())
     if section_error != ok || !found_deps || deps.length < 4usize { ret (empty, InvalidArtifact) }
@@ -2559,14 +2590,14 @@ fn dependency_at(bytes: []const usize, index: usize) -> (Dependency, err) {
 // The source hash the Debug section carries: the incremental driver's first test (D205).
 // The header's build mode: 0 debug, 1 release (D211).
 fn artifact_mode(bytes: []const usize) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     if bytes.len < 17usize { ret (0usize, InvalidArtifact) }
     ret (bytes[16usize], ok)
 }
 
 fn artifact_source_hash(bytes: []const usize) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (debug, found_debug, section_error) = find_section_unchecked(bytes, debug_kind())
     if section_error != ok || !found_debug || debug.length < 20usize { ret (0usize, InvalidArtifact) }
@@ -2576,7 +2607,7 @@ fn artifact_source_hash(bytes: []const usize) -> (usize, err) {
 }
 
 fn artifact_dependency_count(bytes: []const usize) -> (usize, err) {
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (0usize, validation_error) }
     let (deps, found_deps, section_error) = find_section_unchecked(bytes, deps_kind())
     if section_error != ok || !found_deps || deps.length < 4usize { ret (0usize, InvalidArtifact) }
@@ -2587,7 +2618,7 @@ fn artifact_dependency_count(bytes: []const usize) -> (usize, err) {
 
 fn find_declaration_indexed(bytes: []const usize, query: []const usize, query_name_index: usize) -> (Declaration, bool, err) {
     let empty = Declaration { kind: 0usize, flags: 0usize, name_index: 0usize, signature_hash: 0usize, body_hash: 0usize }
-    let validation_error = validate(bytes)
+    let validation_error = check_layout(bytes)
     if validation_error != ok { ret (empty, false, validation_error) }
     let (interface, found_interface, section_error) = find_section_unchecked(bytes, interface_kind())
     if section_error != ok || !found_interface || interface.length < 16usize { ret (empty, false, InvalidArtifact) }
@@ -2644,7 +2675,19 @@ fn dependency_matches(dependent: []const usize, dependency_index: usize, target_
     ret (false, InvalidArtifact)
 }
 
+// The whole check: the layout, and the checksum over every byte. Once per artifact,
+// where it is loaded or written; the readers check the layout alone (D213), since a
+// checksum per read made an edge walk over the compiler's own artifacts take minutes.
 fn validate(bytes: []const usize) -> err {
+    try check_layout(bytes)
+    let (stored_checksum, checksum_read_error) = binary.read_u32(bytes, 28usize)
+    if checksum_read_error != ok { ret InvalidArtifact }
+    let (checksum, checksum_error) = artifact_hash.crc32c(bytes, 28usize, 4usize)
+    if checksum_error != ok || checksum != stored_checksum { ret InvalidArtifact }
+    ret ok
+}
+
+fn check_layout(bytes: []const usize) -> err {
     if bytes.len < header_size() || bytes[0usize] != 78usize || bytes[1usize] != 69usize || bytes[2usize] != 80usize || bytes[3usize] != 77usize { ret InvalidArtifact }
     let (version, version_error) = binary.read_u16(bytes, 4usize)
     if version_error != ok || version != format_version() { ret UnsupportedVersion }
@@ -2656,8 +2699,6 @@ fn validate(bytes: []const usize) -> err {
     let (stored_checksum, checksum_read_error) = binary.read_u32(bytes, 28usize)
     if target_error != ok || count_error != ok || directory_error != ok || checksum_read_error != ok || section_count == 0usize { ret InvalidArtifact }
     if directory < header_size() || directory > bytes.len || section_count > (bytes.len - directory) / directory_entry_size() { ret InvalidArtifact }
-    let (checksum, checksum_error) = artifact_hash.crc32c(bytes, 28usize, 4usize)
-    if checksum_error != ok || checksum != stored_checksum { ret InvalidArtifact }
     var prior_kind = 0usize
     var prior_end = directory + section_count * directory_entry_size()
     var strings = Section { kind: 0usize, flags: 0usize, offset: 0usize, length: 0usize }
@@ -2694,8 +2735,9 @@ fn self_test() -> err {
     try binary.init(&output, storage[..])
     var section_storage: [6]Section = zero
     var string_storage: [4]str = zero
+    var string_slots: [8]usize = zero
     var strings: StringTable = zero
-    try init_strings(&strings, string_storage[..])
+    try init_strings(&strings, string_storage[..], string_slots[..])
     let (target_index, target_error) = intern(&strings, "x64-linux")
     if target_error != ok || target_index != 1usize { ret InvalidArtifact }
     let (module_name, module_error) = intern(&strings, "main")
