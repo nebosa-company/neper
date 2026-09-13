@@ -10705,6 +10705,24 @@ fn when_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
             }
         }
     }
+    // Any other condition is section 9's comptime evaluation (D220): the interpreter
+    // over this module's tree with no locals in scope, and the answer has to be a bool.
+    if c.signatures_ready && c.has_graph {
+        var frame: InterpFrame = zero
+        frame.module_index = module_index
+        let outer_constant = c.interp_constant
+        c.interp_constant = ""
+        c.interp_steps = 0usize
+        c.interp_depth = 0usize
+        let (value, value_type, value_error) = interp_expr(c, g, tree, &frame, node_index, interp_bool_type(module_index))
+        c.interp_constant = outer_constant
+        if value_error != ok { ret (false, value_error) }
+        if value_type.kind != .Bool {
+            record_failure(c, module_index, node, .WhenCondition, "", "")
+            ret (false, InvalidCondition)
+        }
+        ret (value.magnitude != 0usize, ok)
+    }
     record_failure(c, module_index, node, .WhenCondition, "", "")
     ret (false, InvalidCondition)
 }

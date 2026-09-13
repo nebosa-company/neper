@@ -4016,3 +4016,13 @@ and an instance-heavy program evaluates the same length many times.
 `count_primes(20usize)` is a `[...]` argument and `count_primes(30usize)` an array
 length in link/comptime_call; the argument's type has to be the parameter's, as any
 comptime argument's does.
+
+## D220 — A `when` condition through the interpreter
+
+Section 9 names every `when` condition as one of the interpreter's four sites, and
+D216 took the target questions alone. A condition of any other shape now goes to
+D218's interpreter over the module's own tree with no locals in scope, and has to
+come back a bool: `when LEVEL > 2i64 && enabled(LEVEL)` is settled by the constant
+and the call. One it cannot evaluate -- a local, which is runtime state -- is
+refused under E-COMPTIME-9999 saying what it reached, in place of D216's report of
+the shape allowed.

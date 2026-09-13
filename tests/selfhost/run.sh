@@ -1759,16 +1759,16 @@ fills_release_written=$($test_build/neper-self emit-executable "$repo/tests/self
 chmod +x "$fills_release_path"
 "$fills_release_path" release
 # Section 6's `when` (D216): conditions over `target.arch` and `target.os`, settled at
-# compile time, the taken arms adding up to 23 on Linux; a condition that is not a
-# question about the target is refused under E-COMPTIME-9999.
+# compile time, the taken arms adding up to 27 on Linux, four of them through a
+# condition the interpreter evaluates (D220); one over runtime state is refused.
 when_path="$test_build/when-target-selfhost"
 when_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/when_target/src/main.e" "$repo" x64 linux "$when_path")
 [ "$when_written" = 'executable written' ]
 chmod +x "$when_path"
 when_status=0
 "$when_path" || when_status=$?
-[ "$when_status" -eq 23 ]
-check_protocol_diagnostic when_condition 'main.e:4:10: error[E-COMPTIME-9999]: a `when` condition asks about the target alone'
+[ "$when_status" -eq 27 ]
+check_protocol_diagnostic when_condition 'main.e:5:10: error[E-COMPTIME-9999]: a `when` condition cannot be evaluated at compile time: it reached a name that is no local or constant'
 # The trap protocol's backtrace: one `  at module.function` line per frame, from the
 # trapping function up to main, after the record.
 backtrace_path="$test_build/trap-backtrace-selfhost"

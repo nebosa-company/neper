@@ -1364,13 +1364,17 @@ fn write_check_message(file: os.File, checker: *check.Checker, check_error: err)
         ret write_all(file, "` does not cross the C ABI (spec section 5's table), so it cannot be a parameter or return of one")
     }
     if checker.failure_kind == .ComptimeEvaluation {
+        if checker.failure_detail.len == 0usize {
+            try write_all(file, "a `when` condition cannot be evaluated at compile time: it reached ")
+            ret write_all(file, checker.failure_detail2)
+        }
         try write_all(file, "constant `")
         try write_all(file, checker.failure_detail)
         try write_all(file, "` cannot be evaluated at compile time: its call reached ")
         ret write_all(file, checker.failure_detail2)
     }
     if checker.failure_kind == .WhenCondition {
-        ret write_all(file, "a `when` condition asks about the target alone: `target.arch` or `target.os` compared with a member, under `!`, `&&`, `||` and parentheses")
+        ret write_all(file, "a `when` condition is a question about the target -- `target.arch` or `target.os` compared with a member, under `!`, `&&`, `||` and parentheses -- or a bool the compile-time interpreter can evaluate")
     }
     if checker.failure_kind == .VariadicArgument {
         try write_all(file, "`")
