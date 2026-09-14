@@ -2573,7 +2573,12 @@ fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
     if nodes_error != ok { ret nodes_error }
     let (children, children_error) = mem.alloc[syntax.Child](a, 524288usize)
     if children_error != ok { ret children_error }
-    ret graph.init(loaded, modules, imports, nodes, children)
+    try graph.init(loaded, modules, imports, nodes, children)
+    // Dependency order (D304), one slot per module.
+    let (order, order_error) = mem.alloc[usize](a, modules.len)
+    if order_error != ok { ret order_error }
+    graph.set_order(loaded, order)
+    ret ok
 }
 
 fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
@@ -3841,6 +3846,37 @@ fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic
     checker.failure_detail2 = diagnostic.detail2
 }
 
+// The per-module front end (D304), each sweep in dependency order. Helpers rather than
+// loops in `main`, which is at the bootstrap's local limit.
+fn resolve_per_module(resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+    try resolve.begin(resolver, loaded)
+    var order_at = 0usize
+    while order_at < loaded.order_count {
+        try resolve.module(resolver, loaded, loaded.order[order_at])
+        order_at += 1usize
+    }
+    ret ok
+}
+
+fn declarations_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+    try check.begin_declarations(checker, resolver, loaded)
+    var order_at = 0usize
+    while order_at < loaded.order_count {
+        try check.declarations_module(checker, resolver, loaded, loaded.order[order_at])
+        order_at += 1usize
+    }
+    ret check.finish_declarations(checker)
+}
+
+fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+    var order_at = 0usize
+    while order_at < loaded.order_count {
+        try check.bodies_module(checker, resolver, loaded, loaded.order[order_at])
+        order_at += 1usize
+    }
+    ret check.finish_bodies(checker, resolver, loaded)
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     // Spec section 2's spellings -- `neper build FILE`, `neper check FILE`, ... -- are
@@ -4208,7 +4244,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
-        let resolve_error = resolve.collect(&resolver, &loaded)
+        // The front end runs per module in dependency order (D304), each module parsed
+        // once per sweep; the incremental artifact build keeps the whole-program passes,
+        // whose `keep` mask it decides between declarations and bodies.
+        var resolve_error = ok
+        if !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
+            resolve_error = resolve_per_module(&resolver, &loaded)
+        } else {
+            resolve_error = resolve.collect(&resolver, &loaded)
+        }
         try report_phase(&report, "resolve")
         if resolve_error != ok {
             try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
@@ -4229,7 +4273,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             keep[keep_at] = false
             keep_at += 1usize
         }
-        var check_error = check.run_declarations(&checker, &resolver, &loaded)
+        var check_error = ok
+        if !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
+            check_error = declarations_per_module(&checker, &resolver, &loaded)
+        } else {
+            check_error = check.run_declarations(&checker, &resolver, &loaded)
+        }
         try report_phase(&report, "check declarations")
         if check_error == ok && writes_all_em && incremental_build {
             let (settle_strings, settle_strings_error) = mem.alloc[str](a, 32768usize)
@@ -4248,7 +4297,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if release_build { settle_mode = .Release }
             try settle_early(a, &checker, &loaded, args[6usize], settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
         }
-        if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
+        if check_error == ok && !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
+            check_error = bodies_per_module(&checker, &resolver, &loaded)
+        } else {
+            if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
+        }
         try report_phase(&report, "check bodies")
         if check_error != ok {
             if checker.diagnostic_count == 0usize {

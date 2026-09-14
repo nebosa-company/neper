@@ -620,19 +620,30 @@ fn lower_constant(c: *check.Checker, constant_index: usize, ty: check.Type, toke
 // linker fills, because nothing here knows where the image will put it.
 // Every module-scope `var` the program declares, in the checker's order, so that a global's index
 // is the same number to the checker, the emitter and the linker.
+// Globals are laid out in graph order, module by module (D304): the front end collects
+// them in dependency order, and the artifact linker lays them out by artifact, which is
+// graph order, so this is what keeps an image byte-equal from either path.
 fn declare_globals(c: *check.Checker, builder: *nir.Builder) -> err {
     if builder.global_count != 0usize { ret ok }
-    var at = 0usize
-    while at < c.global_count {
-        let item = c.globals[at]
-        let (info, info_error) = layout.type_info(c, item.ty)
-        if info_error != ok { ret info_error }
-
-        let (initial, initial_error) = check.global_initial_bits(c, at)
-        if initial_error != ok { ret initial_error }
-        let (index, add_error) = nir.add_global(builder, item.module_index, item.name, info.size, info.alignment, initial, item.has_expression)
-        if add_error != ok { ret add_error }
-        at += 1usize
+    var module_count = 1usize
+    if c.has_graph { module_count = c.graph.count }
+    var module_at = 0usize
+    while module_at < module_count {
+        var at = 0usize
+        while at < c.global_count {
+            let item = c.globals[at]
+            if item.module_index == module_at || !c.has_graph {
+                let (info, info_error) = layout.type_info(c, item.ty)
+                if info_error != ok { ret info_error }
+                let (initial, initial_error) = check.global_initial_bits(c, at)
+                if initial_error != ok { ret initial_error }
+                let (index, add_error) = nir.add_global(builder, item.module_index, item.name, info.size, info.alignment, initial, item.has_expression)
+                if add_error != ok { ret add_error }
+                c.globals[at].nir_index = index
+            }
+            at += 1usize
+        }
+        module_at += 1usize
     }
     ret ok
 }
@@ -640,7 +651,7 @@ fn declare_globals(c: *check.Checker, builder: *nir.Builder) -> err {
 fn global_address(c: *check.Checker, global_index: usize, builder: *nir.Builder, token: lex.Token) -> (usize, check.Type, err) {
     if global_index >= c.global_count || global_index >= builder.global_count { ret (0usize, zero, check.InvalidConstant) }
     let item = c.globals[global_index]
-    let index = global_index
+    let index = item.nir_index
     let (element_index, store_error) = check.store_type(c, item.ty)
     if store_error != ok { ret (0usize, item.ty, store_error) }
     var pointer = check.make_type(.Pointer, "", item.module_index)
@@ -2020,9 +2031,8 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
-        try parse.init_tree(&tree, g.nodes, g.children)
-        try parse.parse(&tree, g.modules[module_index].text)
-        try check.tokenize(c, g.modules[module_index].text)
+        try graph.parse_module(g, module_index, &tree)
+        try check.tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
@@ -5757,9 +5767,8 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
         let template_module = c.functions[c.function_generics[first].template_index].module_index
         if template_module >= g.count { ret FunctionNotFound }
         var tree: parse.Tree = zero
-        try parse.init_tree(&tree, g.nodes, g.children)
-        try parse.parse(&tree, g.modules[template_module].text)
-        try check.tokenize(c, g.modules[template_module].text)
+        try graph.parse_module(g, template_module, &tree)
+        try check.tokenize_module(c, g, template_module)
         var at = first
         let end = c.function_count
         while at < end {
@@ -5782,9 +5791,8 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
 fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     if module_index >= g.count { ret FunctionNotFound }
     var tree: parse.Tree = zero
-    try parse.init_tree(&tree, g.nodes, g.children)
-    try parse.parse(&tree, g.modules[module_index].text)
-    try check.tokenize(c, g.modules[module_index].text)
+    try graph.parse_module(g, module_index, &tree)
+    try check.tokenize_module(c, g, module_index)
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]

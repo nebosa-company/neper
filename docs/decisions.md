@@ -6056,3 +6056,54 @@ every module's root through a checksum that the generator evaluates independentl
 generated and says so; what it has that a single file does not is the shape -- thousands
 of files of unequal size and calls that cross them. 40k lines in 80 modules peaks at
 83 MB of working set.
+
+## D304 -- The front end runs one module at a time, in dependency order
+
+D303 found that every collector -- aliases twice, constants, aggregates, signatures,
+then bodies and lowering -- re-parsed and re-tokenized every module from its text,
+because the graph's node pool holds one tree and each pass rebuilt it: six to eight
+parses per module per build, and most of the check-declarations phase. The cure is not
+to keep every tree (a million-line program would hold a million lines of trees) but to
+ask for each module once per sweep, which needs an order in which a module's imports
+are already known when it is looked at.
+
+**`graph.order` is `visit`'s post-order.** The cycle check already walks the import
+graph depth-first; recording each module as it finishes gives every module after the
+ones it imports, with the root last. **Every parse into the pool goes through
+`graph.parse_module`, which remembers what the pool holds**, and the two tokenizers
+remember their module the same way; so the twelve parse sites and eleven tokenize sites
+are unchanged in shape, a request for the module already in the pool costs nothing, and
+a request for another one is always correct because it is always what the pool holds.
+Nothing else parses into the pool.
+
+**Two sweeps, not one.** The checker's `begin_declarations` seeds the intrinsics and
+resets the tables; `declarations_module` runs the eight declaration steps on one
+module -- aliases with placeholders, constants and globals, aggregates registered then
+collected, aliases retyped in place now that their aggregates exist, field types
+resolved and cycles checked over the rows this module added, signatures -- and
+`finish_declarations` evaluates the constants that reach a call once every signature is
+in. Then `bodies_module` for every module and `finish_bodies` for the instances they
+made. Bodies could not join the first sweep: every generic path tests `function_index <
+signature_function_count` to tell a template from an instance, so every template has to
+precede every instance, and bodies are what make instances. The resolver got the same
+`begin` and `module` halves. The whole-program passes stay for the incremental artifact
+build, which decides its `keep` mask between declarations and bodies, and for every
+other caller.
+
+**Globals are laid out in graph order whatever order they were collected in.** The one
+table whose order reached the image was the module-scope `var`s: `declare_globals` walked
+`c.globals` in collection order, the artifact linker lays them out by artifact, which is
+graph order, and link/module_var compares the two executables byte for byte. So
+`declare_globals` walks modules in graph order and records each global's NIR index on the
+checker's record for `global_address` to read. All nine artifact-linked fixtures are
+byte-equal again.
+
+At 40k lines in 80 modules: check declarations 979 -> 163 ms, resolve 332 -> 176; the
+build 2.1 -> 1.1 s, 3.1 s before D303. The compiler building itself: 7.4 -> 5.0 s, and
+the fixed point holds. A module is now parsed three times per build -- once per sweep,
+once for lowering -- and the third is D306's.
+
+Two things the bootstrap taught along the way. `use X` reserves `X` against every local
+of the importing module, which is why D303's index module is `lookup`. And `main` is at
+exactly 256 locals, the bootstrap's limit, now reported as such; the sweeps are helpers
+so that `main` gains none, and the one flag it needed is spelled inline at its three uses.

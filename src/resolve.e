@@ -65,6 +65,9 @@ type Resolver = struct {
     failure_owner: str,
     // The (module, space, name) index over `symbols` (D303); absent, `find` scans.
     names: lookup.Index,
+    // The module whose tokens `tokens` holds (D304).
+    tokens_module: usize,
+    has_tokens_module: bool,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -91,6 +94,7 @@ fn init(r: *Resolver, symbols: []Symbol, tokens: []lex.Token, locals: []Local) -
     r.failure_name = ""
     r.failure_owner = ""
     r.names.entries = r.names.entries[0usize..0usize]
+    r.has_tokens_module = false
     ret ok
 }
 
@@ -116,8 +120,17 @@ fn last_segment(name: str) -> str {
     ret name
 }
 
+fn tokenize_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
+    if r.has_tokens_module && r.tokens_module == module_index { ret ok }
+    try tokenize(r, g.modules[module_index].text)
+    r.tokens_module = module_index
+    r.has_tokens_module = true
+    ret ok
+}
+
 fn tokenize(r: *Resolver, text: str) -> err {
     var scanner = lex.init(text)
+    r.has_tokens_module = false
     r.token_count = 0usize
     while true {
         if r.token_count == r.tokens.len { ret Capacity }
@@ -245,9 +258,8 @@ fn collect_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
         import_index += 1usize
     }
     var tree: parse.Tree = zero
-    try parse.init_tree(&tree, g.nodes, g.children)
-    try parse.parse(&tree, g.modules[module_index].text)
-    try tokenize(r, g.modules[module_index].text)
+    try graph.parse_module(g, module_index, &tree)
+    try tokenize_module(r, g, module_index)
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
@@ -927,11 +939,25 @@ fn validate_top_levels(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_
 
 fn validate_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
-    try parse.init_tree(&tree, g.nodes, g.children)
-    try parse.parse(&tree, g.modules[module_index].text)
-    try tokenize(r, g.modules[module_index].text)
+    try graph.parse_module(g, module_index, &tree)
+    try tokenize_module(r, g, module_index)
     try validate_top_levels(r, g, &tree, module_index)
     ret ok
+}
+
+// The per-module front end (D304): `begin` once, then `module` for each module in
+// dependency order -- its imports' symbols are in before its own bodies are validated
+// against them, which is the only order `collect` needed too.
+fn begin(r: *Resolver, g: *graph.Graph) -> err {
+    r.count = 0usize
+    r.failure_has_token = false
+    r.failure_has_context = false
+    ret seed_intrinsics(r, g)
+}
+
+fn module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
+    try collect_module(r, g, module_index)
+    ret validate_module(r, g, module_index)
 }
 
 fn collect(r: *Resolver, g: *graph.Graph) -> err {

@@ -48,6 +48,16 @@ type Graph = struct {
     // and the name, for the E-MODULE diagnostics (D215).
     failure_import: str,
     has_import_failure: bool,
+    // Dependency order (D304): `visit`'s post-order, so every module follows the ones
+    // it imports and the root is last. Recorded when `order` has room.
+    order: []usize,
+    order_count: usize,
+    // The one tree the node pool holds (D304). Every parse into the pool goes through
+    // `parse_module`, so a hit is always the tree still in the pool; the per-module
+    // sweep asks for the same module phase after phase and parses it once.
+    parsed: parse.Tree,
+    parsed_module: usize,
+    has_parsed: bool,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -68,6 +78,30 @@ fn init(g: *Graph, modules: []Module, imports: []Import, nodes: []syntax.Node, c
     g.children = children
     g.count = 0usize
     g.import_count = 0usize
+    g.order = g.order[0usize..0usize]
+    g.order_count = 0usize
+    g.has_parsed = false
+    ret ok
+}
+
+fn set_order(g: *Graph, order: []usize) {
+    g.order = order
+    g.order_count = 0usize
+}
+
+// The module's tree, parsed into the pool unless it is what the pool already holds.
+fn parse_module(g: *Graph, module_index: usize, tree: *parse.Tree) -> err {
+    if g.has_parsed && g.parsed_module == module_index {
+        *tree = g.parsed
+        ret ok
+    }
+    g.has_parsed = false
+    try parse.init_tree(tree, g.nodes, g.children)
+    let parse_error = parse.parse(tree, g.modules[module_index].text)
+    if parse_error != ok { ret parse_error }
+    g.parsed = *tree
+    g.parsed_module = module_index
+    g.has_parsed = true
     ret ok
 }
 
@@ -154,6 +188,7 @@ fn extract_import(a: *mem.Arena, text: str, node: syntax.Node) -> (Import, err) 
 
 fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
+    g.has_parsed = false
     try parse.init_tree(&tree, g.nodes, g.children)
     let parse_error = parse.parse(&tree, g.modules[module_index].text)
     if parse_error != ok {
@@ -250,6 +285,10 @@ fn visit(g: *Graph, module_index: usize) -> err {
         i += 1usize
     }
     g.modules[module_index].visit_state = 2u8
+    if g.order_count < g.order.len {
+        g.order[g.order_count] = module_index
+        g.order_count += 1usize
+    }
     ret ok
 }
 

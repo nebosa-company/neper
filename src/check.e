@@ -357,6 +357,10 @@ type Global = struct {
     expression: usize,
     has_expression: bool,
     token: lex.Token,
+    // The NIR global this became (D304): `declare_globals` lays globals out in graph
+    // order whatever order the front end collected them in, so an image links the same
+    // from source and from artifacts.
+    nir_index: usize,
 }
 
 type Constant = struct {
@@ -382,6 +386,8 @@ type Checker = struct {
     // The (module, table, name) index over the declaration tables (D303): table 1 is
     // functions, 2 aggregates, 3 aliases, 4 constants, 5 globals. Absent, the finders scan.
     names: lookup.Index,
+    tokens_module: usize,
+    has_tokens_module: bool,
     functions: []Function,
     function_generics: []FunctionGeneric,
     parameters: []Parameter,
@@ -529,6 +535,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     if functions.len == 0usize || parameters.len == 0usize || return_types.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize || constants.len == 0usize || globals.len == 0usize || constant_exprs.len == 0usize || diagnostics.len == 0usize { ret Capacity }
     c.functions = functions
     c.names.entries = c.names.entries[0usize..0usize]
+    c.has_tokens_module = false
     c.globals = globals
     c.global_count = 0usize
     c.parameters = parameters
@@ -881,8 +888,19 @@ fn apply_context(c: *Checker, actual: Type, expected: Type) -> (Type, err) {
     ret (invalid_type(), TypeMismatch)
 }
 
+// The module whose tokens `tokens` holds (D304): a phase that asks for the same
+// module again pays nothing. Any other tokenize invalidates it.
+fn tokenize_module(c: *Checker, g: *graph.Graph, module_index: usize) -> err {
+    if c.has_tokens_module && c.tokens_module == module_index { ret ok }
+    try tokenize(c, g.modules[module_index].text)
+    c.tokens_module = module_index
+    c.has_tokens_module = true
+    ret ok
+}
+
 fn tokenize(c: *Checker, text: str) -> err {
     var scanner = lex.init(text)
+    c.has_tokens_module = false
     c.token_count = 0usize
     while true {
         if c.token_count == c.tokens.len { ret Capacity }
@@ -1772,9 +1790,8 @@ fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_def
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
-        try parse.init_tree(&tree, g.nodes, g.children)
-        try parse.parse(&tree, g.modules[module_index].text)
-        try tokenize(c, g.modules[module_index].text)
+        try graph.parse_module(g, module_index, &tree)
+        try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
@@ -2359,9 +2376,8 @@ fn collect_aggregate_pass(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, re
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
-        try parse.init_tree(&tree, g.nodes, g.children)
-        try parse.parse(&tree, g.modules[module_index].text)
-        try tokenize(c, g.modules[module_index].text)
+        try graph.parse_module(g, module_index, &tree)
+        try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
@@ -2477,7 +2493,11 @@ fn type_has_value_cycle(c: *Checker, ty: Type, cycle_root: usize, depth: usize) 
 }
 
 fn validate_aggregate_value_cycles(c: *Checker) -> err {
-    var aggregate_index = 0usize
+    ret validate_aggregate_value_cycles_from(c, 0usize)
+}
+
+fn validate_aggregate_value_cycles_from(c: *Checker, first: usize) -> err {
+    var aggregate_index = first
     while aggregate_index < c.aggregate_count {
         let aggregate = c.aggregates[aggregate_index]
         if aggregate.kind != .Enum {
@@ -3435,9 +3455,8 @@ fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
-        try parse.init_tree(&tree, g.nodes, g.children)
-        try parse.parse(&tree, g.modules[module_index].text)
-        try tokenize(c, g.modules[module_index].text)
+        try graph.parse_module(g, module_index, &tree)
+        try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
@@ -5236,7 +5255,7 @@ fn collect_global_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
         if expression_error != ok { ret expression_error }
         copied_expression = copied
     }
-    c.globals[c.global_count] = Global { name: name, module_index: module_index, ty: declared_type, expression: copied_expression, has_expression: has_expression, token: c.tokens[node.token_start] }
+    c.globals[c.global_count] = Global { name: name, module_index: module_index, ty: declared_type, expression: copied_expression, has_expression: has_expression, token: c.tokens[node.token_start], nir_index: 0usize }
     c.global_count += 1usize
     ret ok
 }
@@ -5248,9 +5267,8 @@ fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err 
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
-        try parse.init_tree(&tree, g.nodes, g.children)
-        try parse.parse(&tree, g.modules[module_index].text)
-        try tokenize(c, g.modules[module_index].text)
+        try graph.parse_module(g, module_index, &tree)
+        try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
@@ -11193,9 +11211,8 @@ fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_i
     let template = c.functions[instance_generic.template_index]
     let template_generic = c.function_generics[instance_generic.template_index]
     var tree: parse.Tree = zero
-    try parse.init_tree(&tree, g.nodes, g.children)
-    try parse.parse(&tree, g.modules[instance.module_index].text)
-    try tokenize(c, g.modules[instance.module_index].text)
+    try graph.parse_module(g, instance.module_index, &tree)
+    try tokenize_module(c, g, instance.module_index)
     c.active_first_comptime = template_generic.first_comptime
     c.active_comptime_count = template_generic.comptime_count
     c.active_first_argument = instance_generic.first_argument
@@ -11242,9 +11259,8 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, skip: []cons
             continue
         }
         var tree: parse.Tree = zero
-        try parse.init_tree(&tree, g.nodes, g.children)
-        try parse.parse(&tree, g.modules[module_index].text)
-        try tokenize(c, g.modules[module_index].text)
+        try graph.parse_module(g, module_index, &tree)
+        try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
             let node = tree.nodes[node_index]
@@ -11253,6 +11269,201 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, skip: []cons
         }
         module_index += 1usize
     }
+    var instance_index = c.signature_function_count
+    while instance_index < c.function_count {
+        if c.function_generics[instance_index].instance && !c.function_generics[instance_index].checked && !c.functions[instance_index].generic {
+            c.function_generics[instance_index].checked = true
+            try check_instance(c, r, g, instance_index)
+        }
+        instance_index += 1usize
+    }
+    ret ok
+}
+
+// --- The per-module front end (D304) ------------------------------------------------
+//
+// `run_declarations` and `check_bodies` walk every module once per kind of declaration,
+// parsing it each time, because the node pool holds one tree and each pass rebuilds it.
+// In dependency order (`graph.order`) a module's imports are complete before it is
+// looked at, so the same steps run on one module at a time and its tree is parsed once
+// per sweep: declarations for every module, then bodies for every module. Two sweeps,
+// not one, because every template must precede every instance in `functions` -- the
+// `signature_function_count` boundary the generic paths test -- and bodies are what
+// create instances. The global invariants are the same as `run`'s; only the parses go.
+
+fn begin_declarations(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
+    if c.function_generics.len < c.functions.len || c.comptime_parameters.len == 0usize || c.generic_arguments.len == 0usize || c.aggregates.len == 0usize || c.aggregate_fields.len == 0usize { ret Capacity }
+    c.resolver = r
+    c.graph = g
+    c.has_graph = true
+    c.signatures_ready = false
+    c.alias_count = 0usize
+    c.type_count = 0usize
+    c.expand_aliases = false
+    c.constant_count = 0usize
+    c.constant_expr_count = 0usize
+    c.constants_ready = false
+    c.aggregate_count = 0usize
+    c.aggregate_field_count = 0usize
+    c.comptime_parameter_count = 0usize
+    c.generic_argument_count = 0usize
+    try seed_intrinsic_aggregates(c, g)
+    c.function_count = 0usize
+    c.parameter_count = 0usize
+    c.return_type_count = 0usize
+    c.signature_function_count = 0usize
+    ret seed_intrinsic_signatures(c, g)
+}
+
+// An alias whose right-hand side named an aggregate registered later in its module was
+// collected with a placeholder; once the module's aggregates are in, its right-hand
+// side is typed again in place. This is what the second `collect_aliases` pass did for
+// every alias of every module.
+fn retype_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
+    let end = node.first_child + node.child_count
+    var rhs_index = 0usize
+    var has_rhs = false
+    var generic = false
+    var at = node.first_child
+    while at < end {
+        if tree.children[at].node {
+            let child_index = tree.children[at].index
+            let child = tree.nodes[child_index]
+            if child.kind == .ComptimeParam { generic = true }
+            if is_type_node(child.kind) {
+                rhs_index = child_index
+                has_rhs = true
+            }
+        }
+        at += 1usize
+    }
+    if generic || !has_rhs { ret ok }
+    let text = g.modules[module_index].text
+    let (name, name_error) = declaration_name(c, text, node)
+    if name_error != ok { ret name_error }
+    let (alias_index, found) = find_alias(c, module_index, name)
+    if !found { ret ok }
+    let (rhs, rhs_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[rhs_index])
+    if rhs_error != ok { ret rhs_error }
+    c.aliases[alias_index].rhs = rhs
+    ret ok
+}
+
+fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_index: usize) -> err {
+    var tree: parse.Tree = zero
+    try graph.parse_module(g, module_index, &tree)
+    try tokenize_module(c, g, module_index)
+    let alias_from = c.alias_count
+    let constant_from = c.constant_count
+    let aggregate_from = c.aggregate_count
+    let field_from = c.aggregate_field_count
+    // Aliases, deferring a right-hand side that names something not yet registered.
+    c.expand_aliases = false
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .TypeDecl { try collect_alias_declaration(c, r, g, &tree, module_index, node, true) }
+        node_index += 1usize
+    }
+    c.expand_aliases = true
+    // Constants and globals; the ones that reach no call are settled now.
+    node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .ConstDecl { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
+        if node.top_level && node.kind == .VarDecl { try collect_global_declaration(c, r, g, &tree, module_index, node) }
+        node_index += 1usize
+    }
+    var constant_index = constant_from
+    while constant_index < c.constant_count {
+        let early_error = evaluate_constant(c, constant_index)
+        if early_error != ok && early_error != ComptimeDeferred { ret early_error }
+        constant_index += 1usize
+    }
+    c.constants_ready = true
+    // Aggregates: every one registered, then every one's fields collected.
+    node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .TypeDecl { try register_aggregate_declaration(c, r, g, &tree, module_index, node) }
+        node_index += 1usize
+    }
+    node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .TypeDecl { try collect_aggregate_declaration(c, r, g, &tree, module_index, node) }
+        node_index += 1usize
+    }
+    try refill_aggregate_instances(c)
+    if c.diagnostic_count != 0usize { ret InvalidType }
+    // Aliases again, now that the aggregates they may name exist, then resolved.
+    c.expand_aliases = false
+    node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .TypeDecl { try retype_alias_declaration(c, r, g, &tree, module_index, node) }
+        node_index += 1usize
+    }
+    c.expand_aliases = true
+    var alias_index = alias_from
+    while alias_index < c.alias_count {
+        if !c.aliases[alias_index].generic {
+            let (resolved, resolve_error) = canonical_type(c, c.aliases[alias_index].rhs)
+            if resolve_error != ok { ret resolve_error }
+            c.aliases[alias_index].resolved = resolved
+            c.aliases[alias_index].state = 2u8
+        }
+        alias_index += 1usize
+    }
+    var field_at = field_from
+    while field_at < c.aggregate_field_count {
+        let (resolved, resolve_error) = canonical_type(c, c.aggregate_fields[field_at].ty)
+        if resolve_error != ok { ret resolve_error }
+        c.aggregate_fields[field_at].ty = resolved
+        field_at += 1usize
+    }
+    try validate_aggregate_value_cycles_from(c, aggregate_from)
+    // Signatures.
+    node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl) {
+            try collect_function(c, r, g, &tree, module_index, node, node_index)
+        }
+        node_index += 1usize
+    }
+    ret ok
+}
+
+// After the last module: every template is in, so instances may follow, and the
+// constants that reach a call are evaluated (D218).
+fn finish_declarations(c: *Checker) -> err {
+    c.signature_function_count = c.function_count
+    c.signatures_ready = true
+    var constant_index = 0usize
+    while constant_index < c.constant_count {
+        if c.constants[constant_index].state != 2u8 { try evaluate_constant(c, constant_index) }
+        constant_index += 1usize
+    }
+    ret ok
+}
+
+fn bodies_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_index: usize) -> err {
+    var tree: parse.Tree = zero
+    try graph.parse_module(g, module_index, &tree)
+    try tokenize_module(c, g, module_index)
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .FnDecl { try check_function(c, r, g, &tree, module_index, node) }
+        node_index += 1usize
+    }
+    ret ok
+}
+
+// After the last module's bodies: the instances they created, checked against their
+// templates' modules, exactly as `check_bodies` ends.
+fn finish_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     var instance_index = c.signature_function_count
     while instance_index < c.function_count {
         if c.function_generics[instance_index].instance && !c.function_generics[instance_index].checked && !c.functions[instance_index].generic {
