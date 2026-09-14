@@ -5507,3 +5507,17 @@ from a model of the step loop, and the emitter is given a zero spread and a fixe
 so those checks draw nothing from the generator and are exact; the spread emitter is
 checked as a property -- inside its arc, inside its lifetime range -- which holds whatever
 the generator returns.
+
+## D280 -- The index is one span order over symbols and references
+
+Section 5: records sort by source identifier, span start, record kind, then qualified
+name. D271 put the references after the symbols, sorted among themselves; the stream
+is now one order. The references are collected first, then every symbol's id is
+settled before any record is written -- the id sequence is deterministic, one per
+declaration plus one per parameter, field or member under it, so a pass that only
+counts the nested declarations reproduces it -- and each reference goes out before
+the first symbol whose span starts after it, nested symbols included, so a type named
+in a signature comes between the parameters it sits between. The result's counts are
+unchanged, and the fixture's thirty records are monotone in span start. A reference
+to a declaration that comes later in the file names an id that has not been written
+yet; that is what the spec's stable ids are for.

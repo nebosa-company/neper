@@ -589,14 +589,39 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     let (known_types, known_types_error) = mem.alloc[bool](a, count + 1usize)
     if known_types_error != ok { ret (2usize, known_types_error) }
     var known = 0usize
+    // The references are collected first and put out in span order between the symbols
+    // (D280): every reference before a declaration's start goes before that symbol.
+    var known_pass = 0usize
+    var running = 1usize
+    while known_pass < count {
+        let known_symbol = symbols[known_pass]
+        if known_symbol.module_index == module_index && known_symbol.kind != .Qualifier && known_symbol.kind != .Intrinsic {
+            known_names[known] = known_symbol.name
+            known_ids[known] = running
+            known_types[known] = known_symbol.kind == .Type
+            known += 1usize
+            running += 1usize
+            // The ids a declaration's nested symbols will take (D258).
+            if known_symbol.kind == .Function || known_symbol.kind == .Type || known_symbol.kind == .Extern { running += index_nested_count(&tree, known_symbol.token_start, known_symbol.token_end - 1usize) }
+        }
+        known_pass += 1usize
+    }
+    let known_total = known
+    let (collected, collect_error) = index_collect_references(a, source, &tree, tokens[0usize..token_count])
+    if collect_error != ok { ret (2usize, collect_error) }
+    var refs = collected
+    refs.known_names = known_names[0usize..known_total]
+    refs.known_ids = known_ids[0usize..known_total]
+    refs.known_types = known_types[0usize..known_total]
+    known = 0usize
     var emitted = 1usize
     var at = 0usize
     while at < count {
         let symbol = symbols[at]
         if symbol.module_index == module_index && symbol.kind != .Qualifier && symbol.kind != .Intrinsic {
-            known_names[known] = symbol.name
-            known_ids[known] = emitted
-            known_types[known] = symbol.kind == .Type
+            let interleave_error = index_emit_references(&refs, &out, root, path, source, module_name, &tree, tokens[0usize..token_count], tokens[symbol.token_start].start)
+            if interleave_error != ok { ret (2usize, interleave_error) }
+            if known_ids[known] != emitted { ret (2usize, parse.InvalidSyntax) }
             known += 1usize
             var name_index = symbol.token_start + 1usize
             if symbol.kind == .Extern { name_index += 1usize }
@@ -620,16 +645,16 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
                     owner_at += 1usize
                     name_at += 1usize
                 }
-                let (nested, nested_error) = index_nested(a, &out, root, path, source, module_name, owner_storage[0usize..owner_at], &tree, tokens[0usize..token_count], symbol.token_start, symbol.token_end - 1usize, emitted - 1usize, emitted)
+                let (nested, nested_error) = index_nested(a, &out, root, path, source, module_name, owner_storage[0usize..owner_at], &tree, tokens[0usize..token_count], symbol.token_start, symbol.token_end - 1usize, emitted - 1usize, emitted, &refs)
                 if nested_error != ok { ret (2usize, nested_error) }
                 emitted += nested
             }
         }
         at += 1usize
     }
-    let (references, references_error) = index_references(a, &out, root, path, source, module_name, &tree, tokens[0usize..token_count], known_names[0usize..known], known_ids[0usize..known], known_types[0usize..known])
-    if references_error != ok { ret (2usize, references_error) }
-    let result_error = index_result(&out, emitted, references)
+    let drain_error = index_emit_references(&refs, &out, root, path, source, module_name, &tree, tokens[0usize..token_count], source.len + 1usize)
+    if drain_error != ok { ret (2usize, drain_error) }
+    let result_error = index_result(&out, emitted, refs.written)
     if result_error != ok { ret (2usize, result_error) }
     ret (0usize, ok)
 }
@@ -682,6 +707,18 @@ fn index_record(out: *Out, root: str, path: str, source: str, module_name: str, 
     ret flush(out)
 }
 
+// How many nested symbols index_nested will emit for the declaration at [first, last].
+fn index_nested_count(tree: *parse.Tree, first: usize, last: usize) -> usize {
+    var found = 0usize
+    var node_index = 1usize
+    while node_index < tree.count && found < 256usize {
+        let node = tree.nodes[node_index]
+        if !node.top_level && node.token_start >= first && node.token_start <= last && node.token_end > node.token_start && index_nested_kind(node.kind).len != 0usize { found += 1usize }
+        node_index += 1usize
+    }
+    ret found
+}
+
 // The section 7 kind of a nested declaration node, or "" for a node that is not one.
 fn index_nested_kind(kind: syntax.Kind) -> str {
     if kind == .Parameter { ret "parameter" }
@@ -696,7 +733,7 @@ fn index_nested_kind(kind: syntax.Kind) -> str {
 // order, since the parser appends a child before its parent (D258). Returns how many
 // records were written; `owner` is the declaration's qualified name.
 // ponytail: 256 nested declarations per top-level one is the cap; raise it if a struct needs more.
-fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, owner: str, tree: *parse.Tree, tokens: []const lex.Token, first: usize, last: usize, container_id: usize, next_id: usize) -> (usize, err) {
+fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, owner: str, tree: *parse.Tree, tokens: []const lex.Token, first: usize, last: usize, container_id: usize, next_id: usize, refs: *IndexRefs) -> (usize, err) {
     var picked: [256]usize = zero
     var picked_count = 0usize
     var node_index = 1usize
@@ -718,6 +755,9 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
     while written < picked_count {
         let node = tree.nodes[picked[written]]
         let name_token = tokens[node.token_start]
+        // References inside the signature so far come before this symbol (D280).
+        let interleave_error = index_emit_references(refs, out, root, path, source, module_name, tree, tokens, name_token.start)
+        if interleave_error != ok { ret (0usize, interleave_error) }
         let nested_error = index_record(out, root, path, source, module_name, next_id + written, index_nested_kind(node.kind), source[name_token.start..name_token.end], owner, tokens, node.token_start, node.token_end - 1usize, node.token_start, container_id)
         if nested_error != ok { ret (0usize, nested_error) }
         written += 1usize
@@ -732,19 +772,35 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
 // own symbols or nothing: spec section 5 lets no local shadow a module-scope name, so
 // the match is the resolution. Records go out sorted by span start.
 // ponytail: 4096 references per module is the cap; raise it when a module has more.
-fn index_references(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, tree: *parse.Tree, tokens: []const lex.Token, known_names: []const str, known_ids: []const usize, known_types: []const bool) -> (usize, err) {
+type IndexRefs = struct {
+    known_names: []const str,
+    known_ids: []const usize,
+    known_types: []const bool,
+    qualifiers: []str,
+    paths: []str,
+    imports: usize,
+    nodes: []usize,
+    roles: []usize,
+    picked: usize,
+    next: usize,
+    written: usize,
+}
+
+// The collection half: every candidate node, sorted by span start (D280).
+fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, tokens: []const lex.Token) -> (IndexRefs, err) {
+    var state: IndexRefs = zero
     // The imports: qualifier and module path, from every `use`.
     let (qualifiers, qualifiers_error) = mem.alloc[str](a, 256usize)
-    if qualifiers_error != ok { ret (0usize, qualifiers_error) }
+    if qualifiers_error != ok { ret (state, qualifiers_error) }
     let (paths, paths_error) = mem.alloc[str](a, 256usize)
-    if paths_error != ok { ret (0usize, paths_error) }
+    if paths_error != ok { ret (state, paths_error) }
     var imports = 0usize
     let (starts, starts_error) = mem.alloc[usize](a, 4096usize)
-    if starts_error != ok { ret (0usize, starts_error) }
+    if starts_error != ok { ret (state, starts_error) }
     let (nodes, nodes_error) = mem.alloc[usize](a, 4096usize)
-    if nodes_error != ok { ret (0usize, nodes_error) }
+    if nodes_error != ok { ret (state, nodes_error) }
     let (roles, roles_error) = mem.alloc[usize](a, 4096usize)
-    if roles_error != ok { ret (0usize, roles_error) }
+    if roles_error != ok { ret (state, roles_error) }
     var picked = 0usize
     var node_index = 1usize
     while node_index < tree.count {
@@ -783,9 +839,29 @@ fn index_references(a: *mem.Arena, out: *Out, root: str, path: str, source: str,
         }
         node_index += 1usize
     }
-    var written = 0usize
-    var at = 0usize
-    while at < picked {
+    state.qualifiers = qualifiers
+    state.paths = paths
+    state.imports = imports
+    state.nodes = nodes
+    state.roles = roles
+    state.picked = picked
+    ret (state, ok)
+}
+
+// The emission half: the references whose span starts before `before`, in order, so
+// symbols and references interleave in one span order (D280); `before` past the source
+// drains the rest.
+fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, source: str, module_name: str, tree: *parse.Tree, tokens: []const lex.Token, before: usize) -> err {
+    let known_names = state.known_names
+    let known_ids = state.known_ids
+    let known_types = state.known_types
+    let qualifiers = state.qualifiers
+    let paths = state.paths
+    let imports = state.imports
+    let nodes = state.nodes
+    let roles = state.roles
+    var at = state.next
+    while at < state.picked && tokens[tree.nodes[nodes[at]].token_start].start < before {
         let node = tree.nodes[nodes[at]]
         if roles[at] == 0usize {
             // The import: spelled as the path, its found the module.
@@ -794,8 +870,8 @@ fn index_references(a: *mem.Arena, out: *Out, root: str, path: str, source: str,
             while path_end + 1usize < node.token_end && tokens[path_end + 1usize].kind != .KwAs { path_end += 1usize }
             let spelling = source[path_start.start..tokens[path_end].end]
             let import_error = reference_record(out, root, path, path_start, tokens[path_end], "import", spelling, 0usize, false, spelling)
-            if import_error != ok { ret (0usize, import_error) }
-            written += 1usize
+            if import_error != ok { ret import_error }
+            state.written += 1usize
         } else {
             let first = node.token_start
             let name_token = tokens[first]
@@ -847,21 +923,22 @@ fn index_references(a: *mem.Arena, out: *Out, root: str, path: str, source: str,
                     scratch_at = nptest_copy(scratch[..], scratch_at, source[tokens[first + 2usize].start..tokens[first + 2usize].end])
                     qualified_name = scratch[0usize..scratch_at]
                     let record_error = reference_record(out, root, path, name_token, tokens[last_index], role_name, spelling, 0usize, false, qualified_name)
-                    if record_error != ok { ret (0usize, record_error) }
+                    if record_error != ok { ret record_error }
                 } else {
                     var scratch_at = nptest_copy(scratch[..], 0usize, module_name)
                     scratch[scratch_at] = 46u8
                     scratch_at += 1usize
                     scratch_at = nptest_copy(scratch[..], scratch_at, name)
                     let record_error = reference_record(out, root, path, name_token, tokens[last_index], role_name, spelling, known_ids[found], true, scratch[0usize..scratch_at])
-                    if record_error != ok { ret (0usize, record_error) }
+                    if record_error != ok { ret record_error }
                 }
-                written += 1usize
+                state.written += 1usize
             }
         }
         at += 1usize
     }
-    ret (written, ok)
+    state.next = at
+    ret ok
 }
 
 // A byte copy into a scratch buffer, returning the new length; a `.` is put between a
