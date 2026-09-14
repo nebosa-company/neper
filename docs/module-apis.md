@@ -3973,11 +3973,17 @@ type Atlas = struct { regions: []const Region, names: []const str }
 type Clip = struct { first: u16, count: u16, hold: u16, loops: bool, then: u16 }
 type Player = struct { clip: u16, frame: u16, timer: u16, finished: bool }
 error Unknown
+error Invalid
+
+const NONE: u16
 
 fn region(at: Atlas, name: str) -> (Region, err)
 fn play(p: *Player, clip: u16) -> err
 fn advance(p: *Player, clips: []const Clip) -> err
 fn frame(p: Player, clips: []const Clip) -> u16
+fn region_at(atlas: Atlas, index: u16) -> (Region, err)
+fn finished(p: Player) -> bool
+fn progress(p: Player, clips: []const Clip) -> (u16, u16)
 ```
 
 ### `e.game.tilemap`
@@ -4145,22 +4151,27 @@ fn decode(r: *snapshot.Reader, s: snapshot.Schema, peer: *Peer, out: []u8) -> er
 ```neper
 // The viewport transform and the ordered draw list: what is on screen, and in what
 // order it has to be drawn. Deciding the order is engine logic; drawing is not.
-type Camera = struct { x: fixed.Fx, y: fixed.Fx, zoom: fixed.Fx, width: fixed.Fx, height: fixed.Fx, dead_w: fixed.Fx, dead_h: fixed.Fx, shake: fixed.Fx, shake_ticks: u16 }
+type Camera = struct { x: fixed.Fx, y: fixed.Fx, zoom: fixed.Fx, width: fixed.Fx, height: fixed.Fx, dead_w: fixed.Fx, dead_h: fixed.Fx, shake: fixed.Fx, shake_ticks: u16, shake_x: fixed.Fx, shake_y: fixed.Fx }
 type Bounds = struct { min_x: fixed.Fx, min_y: fixed.Fx, max_x: fixed.Fx, max_y: fixed.Fx }
 type Item = struct { id: u32, layer: i16, sort: fixed.Fx }
-error Empty
+error Size
+error Bounds
 
 fn init(c: *Camera, width: fixed.Fx, height: fixed.Fx) -> err
+fn set_deadzone(c: *Camera, width: fixed.Fx, height: fixed.Fx) -> err
+fn set_zoom(c: *Camera, zoom: fixed.Fx) -> err
+fn view_half_width(c: Camera) -> fixed.Fx
+fn view_half_height(c: Camera) -> fixed.Fx
 fn follow(c: *Camera, tx: fixed.Fx, ty: fixed.Fx) -> err
 fn clamp_to(c: *Camera, b: Bounds) -> err
 fn shake(c: *Camera, amount: fixed.Fx, ticks: u16) -> err
-fn step(c: *Camera, state: *rand.State) -> err
+fn step(c: *Camera, state: *rand.Pcg64) -> err
 fn to_screen(c: Camera, wx: fixed.Fx, wy: fixed.Fx, parallax: fixed.Fx) -> (fixed.Fx, fixed.Fx)
 fn to_world(c: Camera, sx: fixed.Fx, sy: fixed.Fx) -> (fixed.Fx, fixed.Fx)
 fn visible(c: Camera, box: collide2d.Aabb) -> bool
 fn cull(c: Camera, boxes: []const collide2d.Aabb, out: []u32) -> (usize, err)
-fn sort_key(layer: i16, y: fixed.Fx) -> fixed.Fx
 fn order(items: []Item) -> err
+fn after(a: Item, b: Item) -> bool
 ```
 
 ### `e.game.grid`

@@ -5507,3 +5507,46 @@ from a model of the step loop, and the emitter is given a zero spread and a fixe
 so those checks draw nothing from the generator and are exact; the spread emitter is
 checked as a property -- inside its arc, inside its lifetime range -- which holds whatever
 the generator returns.
+
+## D281 -- Frames and transitions, and the order a frame is drawn in
+
+`e.game.sprite` and `e.game.camera`, batched because both answer questions the draw loop
+asks and neither draws: one says which frame, the other says where and in what order.
+
+**A clip ends by naming what follows.** `then` is the clip to run next, so an attack that
+returns to idle is data rather than a branch in the game, and a state machine over
+animations is a table. Looping is separate from that and deliberately so: a loop never
+finishes, a finished clip stays finished until something plays another, and the two answer
+`finished` differently. A clip with nothing after it holds its last frame rather than
+wrapping or blanking -- a hurt frame that silently restarts reads as a stutter, and one
+that blanks reads as a missing sprite.
+
+`play` always resets the cursor, so replaying the clip already running restarts it. The
+other convention -- continue if already in this state -- cannot be recovered by a caller
+that wanted a restart, while this one can: test `p.clip` first. A clip whose `hold` is
+zero is treated as one tick per frame, so a table with a forgotten hold animates fast
+rather than standing still forever, which is the failure that looks like a hang.
+
+**The camera answers what is on screen and in what order, together.** Culling that changed
+the order would break the painter's algorithm the order exists to serve, so `cull` and
+`order` live in one module and `cull` preserves input order. `order` is an insertion sort
+because it is *stable*: two items tying on layer and key keep the order they were given,
+so a draw list does not flicker between frames that produce ties -- and because it is
+nearly free on an almost-sorted list, which a draw list is from one frame to the next.
+Layer outranks the key, so a background never sorts in front of a foreground however deep
+it lies.
+
+Following uses a deadzone and moves only far enough to put the target back on its edge;
+a camera that centred every frame would swing on every step a character takes. Clamping
+centres a world narrower than the view, because no position satisfies both edges. Shake is
+integer and draws from the caller's generator, so a replay shakes the same way -- a camera
+that wandered by a float would put every rollback frame a pixel off the one it is compared
+against.
+
+`sort_key` was registered in D252 and is **removed rather than shipped**: it reduced to
+returning its own argument, since `Item.layer` already outranks the key in `after`. An
+identity function in a public surface is a promise that something happens.
+
+link/game_view pins 67 checks with four negative controls, one of them the stable-sort tie
+-- the case a sort that is merely correct would get wrong without ever failing a count.
+The shake is checked as a bound rather than a value, since it draws from the generator.
