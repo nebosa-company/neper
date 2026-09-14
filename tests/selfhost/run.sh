@@ -2619,6 +2619,12 @@ game_mind_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$game_mind_executable_written" = 'executable written' ]
 chmod +x "$game_mind_executable_path"
 "$game_mind_executable_path"
+# `e.net.snapshot` and `e.game.netsync` (D296): quantised deltas, prediction and rollback.
+game_net_executable_path="$test_build/game-net-selfhost"
+game_net_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_net/src/main.e" "$repo" x64 linux "$game_net_executable_path")
+[ "$game_net_executable_written" = 'executable written' ]
+chmod +x "$game_net_executable_path"
+"$game_net_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]

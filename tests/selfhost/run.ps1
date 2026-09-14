@@ -2377,6 +2377,12 @@ $gameMindExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gameMindExecutableWritten -ne 'executable written') { throw 'game mind PE executable emission failed' }
 & $gameMindExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'e.game.ai or e.game.input failed a check in the self-hosted PE executable' }
+# `e.net.snapshot` and `e.game.netsync` (D296): quantised deltas, prediction and rollback.
+$gameNetExecutablePath = Join-Path $testBuild 'game-net-selfhost.exe'
+$gameNetExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/game_net/src/main.e') $repo 'x64' 'windows' $gameNetExecutablePath
+if ($LASTEXITCODE -ne 0 -or $gameNetExecutableWritten -ne 'executable written') { throw 'game net PE executable emission failed' }
+& $gameNetExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'e.net.snapshot or e.game.netsync failed a check in the self-hosted PE executable' }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }

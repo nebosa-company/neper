@@ -5782,3 +5782,47 @@ toolchain `e.atomic` for its test runner; the earlier short-form steps passed on
 because their operands lay in the repo, whose own `lib/` served. The suites now give
 that binary a real toolchain layout, `build/<host>/short/` with the whole `lib/`
 copied beside it.
+## D296 -- Quantised deltas, and guessing ahead of the server
+
+`e.net.snapshot` and `e.game.netsync`, the last pair, and the two that only make sense
+together: a predictor with nothing to compare against cannot detect that it guessed wrong.
+
+**Quantising is what makes replication affordable, and integers are what make it agree.**
+A field is an offset into a state array, a range and a width on the wire; a position that
+matters to a tenth of a unit over a thousand-unit map is ten bits, not thirty-two. Both
+sides round to nearest with the same integer arithmetic, so a decoded value is the same
+value on both machines -- with floats it would be the same value *almost* always, which
+in a rollback scheme is the same as never.
+
+**A delta is one presence bit per field, then the fields that moved.** A still world costs
+a bit per still field rather than a field per still field, which is the entire economics of
+state replication. The comparison is on the *quantised code* rather than the raw value: a
+change too small to survive quantisation is not a change, and sending it would spend a
+field to convey nothing. A field the sender omitted keeps the baseline's value, which is
+what makes the delta lossless against that baseline rather than merely small.
+
+**Prediction repeats the last input.** A player holding a direction keeps holding it, so
+repeating is right far more often than zero would be, and the guess is stamped with the
+tick asked for rather than the tick it came from. Reconciliation compares the
+authoritative state against what this peer simulated byte for byte -- a comparison that is
+only meaningful because the whole engine core is integer. A frame older than the one
+already confirmed is `Late`: the network reordered it, and acting on it would undo a
+correction already applied. `recoverable` answers whether the replay window still fits in
+the input ring, because a replay whose inputs have been lapped cannot be exact and the
+caller should know rather than silently resimulate from nothing.
+
+`encode` adopts the state it just sent as the peer's new baseline. That is deliberate and
+it is also the risk: the sender assumes the frame arrives, so a transport that can drop has
+to re-acknowledge, which is what `Peer.acked` carries. Registered dependencies on
+`e.data.ring` and `e.bytes` were dropped -- the ring is indexed by tick modulo its length,
+which needs no ring type, and the bit packing is here rather than borrowed.
+
+One language finding worth recording: **`u32(-37)` traps.** Conversions are range-checked,
+which is the right default, but it means reinterpreting a negative value's bits has to go
+through `i64` and an explicit mask. The first `store` written here trapped on the signed
+field, and the fixture caught it.
+
+link/game_net pins 66 checks with five negative controls, including the exact wire widths
+-- 28 bits for a full snapshot of three fields, 3 for an unchanged delta, 13 for one
+changed -- so a delta that silently degraded to a full write would fail rather than pass
+quietly.

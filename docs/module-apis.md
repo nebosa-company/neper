@@ -3902,6 +3902,14 @@ type Reader = struct { bytes: []const u8, bit: usize }
 error Invalid
 error Full
 
+fn writer(bytes: []u8) -> Writer
+fn reader(bytes: []const u8) -> Reader
+fn bits_written(w: Writer) -> usize
+fn bytes_written(w: Writer) -> usize
+fn put_bits(w: *Writer, value: u32, count: u8) -> err
+fn get_bits(r: *Reader, count: u8) -> (u32, err)
+fn load(state: []const u8, offset: usize) -> i32
+fn store(state: []u8, offset: usize, value: i32)
 fn write_full(w: *Writer, s: Schema, state: []const u8) -> err
 fn write_delta(w: *Writer, s: Schema, baseline: []const u8, state: []const u8) -> err
 fn read_full(r: *Reader, s: Schema, out: []u8) -> err
@@ -4140,16 +4148,21 @@ fn age(particle: Particle) -> fixed.Fx
 type Input = struct { tick: u64, bits: u32 }
 type Peer = struct { acked: u64, baseline: []u8 }
 type Predictor = struct { inputs: []Input, head: usize, confirmed: u64, predicted: u64, divergences: u32 }
-error Desync
 error Late
+error Size
 
 fn init(p: *Predictor, inputs: []Input) -> err
+fn init_peer(peer: *Peer, baseline: []u8) -> err
+fn known(p: Predictor, tick: u64) -> bool
+fn replay_span(p: Predictor) -> u64
+fn recoverable(p: Predictor) -> bool
+fn divergences(p: Predictor) -> u32
 fn record(p: *Predictor, sample: Input) -> err
 fn predict(p: Predictor, tick: u64) -> (Input, err)
 fn confirm(p: *Predictor, tick: u64, authoritative: []const u8, local: []const u8) -> (bool, err)
 fn rollback_from(p: Predictor) -> u64
-fn encode(w: *snapshot.Writer, s: snapshot.Schema, peer: *Peer, state: []const u8) -> err
-fn decode(r: *snapshot.Reader, s: snapshot.Schema, peer: *Peer, out: []u8) -> err
+fn encode(w: *snapshot.Writer, s: snapshot.Schema, peer: *Peer, tick: u64, state: []const u8) -> err
+fn decode(r: *snapshot.Reader, s: snapshot.Schema, peer: *Peer, tick: u64, out: []u8) -> err
 ```
 
 ### `e.game.camera`
