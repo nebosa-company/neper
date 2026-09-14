@@ -5368,3 +5368,14 @@ and the format corpus's canonical side still compiles and runs, so a rule that j
 lines had not fused two statements. The repository's own style groups constants
 without blank lines in places; the contract says one blank line, and the formatter
 follows the contract.
+
+## D274 -- The leading `use` block sorts by module path, then alias
+
+Section 6: contiguous comment-free `use` declarations at the start of a file sort by
+module path then alias. The formatter now sorts that run -- the consecutive `use`
+lines after any leading comment lines, ended by a blank line or anything else -- in
+byte order of the whole line, which is path-then-alias order because the space
+before `as` sorts before a `.`: `use e.mem`, `use e.mem as m`, `use e.os`. It is a
+pass over the finished text, after the line pass, since the run has to be seen whole.
+The format fixture's two imports are written out of order and come out sorted, and
+its canonical side still compiles and runs.

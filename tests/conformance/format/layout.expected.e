@@ -1,5 +1,6 @@
 // A non-canonical source (D255): the format corpus pins what `fmt` makes of it.
 use e.mem
+use e.os
 
 type Pair = struct { a: i32, b: i32 }
 

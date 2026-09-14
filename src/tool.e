@@ -1114,7 +1114,77 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
     let (clean_storage, clean_error) = mem.alloc[u8](a, raw.count + 16usize)
     if clean_error != ok { ret ("", clean_error) }
     let clean_count = fmt_collapse(raw.bytes[0usize..raw.count], clean_storage)
+    let sort_error = fmt_sort_uses(a, clean_storage[0usize..clean_count])
+    if sort_error != ok { ret ("", sort_error) }
     ret (clean_storage[0usize..clean_count], ok)
+}
+
+// Section 6: the contiguous comment-free `use` declarations at the start of a file sort
+// by module path then alias (D274). The run is the consecutive `use` lines after any
+// leading comment lines; a blank line or anything else ends it. Byte order of the whole
+// line is path-then-alias order, since the space before `as` sorts before a `.`.
+// ponytail: 256 leading imports is the cap; raise it when a module has more.
+fn fmt_sort_uses(a: *mem.Arena, page: []u8) -> err {
+    var at = 0usize
+    while at < page.len && page[at] == 47u8 && at + 1usize < page.len && page[at + 1usize] == 47u8 {
+        while at < page.len && page[at] != 10u8 { at += 1usize }
+        if at < page.len { at += 1usize }
+    }
+    var starts: [256]usize = zero
+    var ends: [256]usize = zero
+    var count = 0usize
+    let run_start = at
+    while count < 256usize && at + 4usize <= page.len && page[at] == 117u8 && page[at + 1usize] == 115u8 && page[at + 2usize] == 101u8 && page[at + 3usize] == 32u8 {
+        starts[count] = at
+        while at < page.len && page[at] != 10u8 { at += 1usize }
+        ends[count] = at
+        if at < page.len { at += 1usize }
+        count += 1usize
+    }
+    if count < 2usize { ret ok }
+    // Sort the line indices, then rewrite the run through a copy.
+    var order: [256]usize = zero
+    var sorted = 0usize
+    while sorted < count {
+        var slot = sorted
+        while slot > 0usize && fmt_line_after(page, starts[order[slot - 1usize]], ends[order[slot - 1usize]], starts[sorted], ends[sorted]) {
+            order[slot] = order[slot - 1usize]
+            slot = slot - 1usize
+        }
+        order[slot] = sorted
+        sorted += 1usize
+    }
+    let run_end = at
+    let (copy, copy_error) = mem.alloc[u8](a, run_end - run_start)
+    if copy_error != ok { ret copy_error }
+    var written = 0usize
+    var line = 0usize
+    while line < count {
+        var from = starts[order[line]]
+        while from < ends[order[line]] {
+            copy[written] = page[from]
+            written += 1usize
+            from += 1usize
+        }
+        copy[written] = 10u8
+        written += 1usize
+        line += 1usize
+    }
+    var back = 0usize
+    while back < written {
+        page[run_start + back] = copy[back]
+        back += 1usize
+    }
+    ret ok
+}
+
+fn fmt_line_after(page: []const u8, a_start: usize, a_end: usize, b_start: usize, b_end: usize) -> bool {
+    var i = 0usize
+    while a_start + i < a_end && b_start + i < b_end {
+        if page[a_start + i] != page[b_start + i] { ret page[a_start + i] > page[b_start + i] }
+        i += 1usize
+    }
+    ret a_end - a_start > b_end - b_start
 }
 
 // The layout pass, in an err-returning function so `try` may propagate a buffer overflow.

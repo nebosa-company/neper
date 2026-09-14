@@ -1,4 +1,5 @@
 // A non-canonical source (D255): the format corpus pins what `fmt` makes of it.
+use   e.os
 use   e.mem
 
 
