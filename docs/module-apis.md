@@ -3986,6 +3986,11 @@ fn frame(p: Player, clips: []const Clip) -> u16
 type Layer = struct { tiles: []u16, width: u32, height: u32 }
 type Map = struct { layers: []Layer, tile_w: u32, tile_h: u32, solid: []u64, opaque: []u64, elevation: []u8 }
 error Bounds
+error Size
+
+fn cells(m: Map) -> usize
+fn width(m: Map) -> u32
+fn height(m: Map) -> u32
 
 fn init(m: *Map, layers: []Layer, tile_w: u32, tile_h: u32, solid: []u64, opaque: []u64, elevation: []u8) -> err
 fn at(m: Map, layer: usize, x: i32, y: i32) -> (u16, err)
@@ -3996,6 +4001,10 @@ fn in_bounds(m: Map, x: i32, y: i32) -> bool
 fn to_tile(m: Map, wx: fixed.Fx, wy: fixed.Fx) -> (i32, i32)
 fn to_world(m: Map, tx: i32, ty: i32) -> (fixed.Fx, fixed.Fx)
 fn height_at(m: Map, x: i32, y: i32) -> u8
+fn set_solid(m: *Map, x: i32, y: i32, value: bool) -> err
+fn set_opaque(m: *Map, x: i32, y: i32, value: bool) -> err
+fn set_height(m: *Map, x: i32, y: i32, value: u8) -> err
+fn derive(m: *Map, layer: usize, solid_ids: []const u16, opaque_ids: []const u16) -> err
 ```
 
 ### `e.game.collide2d`
@@ -4144,6 +4153,10 @@ fn order(items: []Item) -> err
 type Shape = enum u8 { Square, IsoDiamond, HexPointy, HexFlat }
 type Coord = struct { q: i32, r: i32 }
 error Bounds
+
+fn coord(q: i32, r: i32) -> Coord
+fn equal(a: Coord, b: Coord) -> bool
+fn hexed(s: Shape) -> bool
 
 fn to_world(s: Shape, c: Coord, tile_w: u32, tile_h: u32) -> (fixed.Fx, fixed.Fx)
 fn from_world(s: Shape, wx: fixed.Fx, wy: fixed.Fx, tile_w: u32, tile_h: u32) -> Coord

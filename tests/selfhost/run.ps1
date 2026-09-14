@@ -2256,6 +2256,12 @@ $gameCoreExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gameCoreExecutableWritten -ne 'executable written') { throw 'game core PE executable emission failed' }
 & $gameCoreExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'e.game.loop or e.game.ecs failed a check in the self-hosted PE executable' }
+# `e.game.grid` and `e.game.tilemap` (D270): coordinates and layered tile grids.
+$gameGridExecutablePath = Join-Path $testBuild 'game-grid-selfhost.exe'
+$gameGridExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/game_grid/src/main.e') $repo 'x64' 'windows' $gameGridExecutablePath
+if ($LASTEXITCODE -ne 0 -or $gameGridExecutableWritten -ne 'executable written') { throw 'game grid PE executable emission failed' }
+& $gameGridExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'e.game.grid or e.game.tilemap failed a check in the self-hosted PE executable' }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }
