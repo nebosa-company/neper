@@ -2707,6 +2707,9 @@ type Sink = struct {
     // A generated source map beside the operand (tooling section 8, D264): a diagnostic
     // inside a mapped range is reported at the original span, the generated one related.
     // ponytail: eight mappings per map is the cap; raise it when a generator needs more.
+    // A stale or malformed map (section 8, D300): reported as E-TOOL-0001 up front, the
+    // analysis still run for its own diagnostics, and the command failing with no artifact.
+    map_stale: bool,
     map_source: str,
     map_count: usize,
     map_generated_start: [8]usize,
@@ -2845,22 +2848,13 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
     if digest_error != ok { ret digest_error }
     let stale = !same(json_str_after(document, "\"generated_sha256\":\""), digest)
     if malformed || stale {
-        if !report.json {
-            if stale {
-                try stderr_text("error[E-TOOL-0001]: the generated source map is stale: its hash is not the operand's\n")
-            } else {
-                try stderr_text("error[E-TOOL-0001]: the generated source map is malformed\n")
-            }
-            os.exit(1i32)
-            ret ok
-        }
+        // Reported now, unmapped analysis after (D300): the caller ends the command.
+        report.map_stale = true
         if stale {
             try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is stale: its hash is not the operand's")
         } else {
             try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is malformed")
         }
-        try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"diagnostics\":1}}\n")
-        os.exit(1i32)
         ret ok
     }
     report.map_source = operand
@@ -4041,11 +4035,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             os.exit(1i32)
             ret ok
         }
-        if report.json {
-            try finish_report(&report)
-            ret ok
-        }
-        try io.print("module check ok\n")
+        if report.json { try finish_report(&report) }
+        // A stale map failed the command however clean the module was (D300).
+        if report.map_stale { os.exit(1i32) }
+        if !report.json { try io.print("module check ok\n") }
         ret ok
     }
     // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
@@ -4492,10 +4485,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
             if disassemble {
+                if report.map_stale {
+                    try finish_report(&report)
+                    os.exit(1i32)
+                }
                 try tool.disassembly_json(a, args[4usize], args[5usize], &builder, function_offsets, machine.bytes, machine.count, relocations, relocation_count)
                 ret ok
             }
             if writes_executable {
+                // A stale map (section 8, D300): the analysis ran and reported, no artifact.
+                if report.map_stale {
+                    try finish_report(&report)
+                    os.exit(1i32)
+                }
                 let executable_capacity = machine.count + 1048576usize
                 let (executable_storage, executable_storage_error) = mem.alloc[usize](a, executable_capacity)
                 if executable_storage_error != ok { ret executable_storage_error }

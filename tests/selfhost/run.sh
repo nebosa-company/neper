@@ -2071,6 +2071,14 @@ stale_status=0
 [ ! -e "$test_build/conformance-tools-stale-map.out" ]
 cmp -s "$test_build/conformance-tools-stale-map.jsonl" "$conformance_root/tools/stale_map.expected.jsonl" || { printf '%s
 ' "a stale source map is not refused as the conformance corpus says" >&2; exit 1; }
+# A stale map beside an operand that does not compile (D300): the analysis still runs,
+# its diagnostic follows the E-TOOL-0001 at its own unmapped span; exit 1, no artifact.
+stale_error_status=0
+(cd "$test_build" && rm -f conformance-tools-stale-map-error.out && ./neper-self emit-executable "$conformance_root/tools/stale_map_error.e" "$repo" x64 linux conformance-tools-stale-map-error.out --json > "conformance-tools-stale-map-error.jsonl") || stale_error_status=$?
+[ "$stale_error_status" -eq 1 ]
+[ ! -e "$test_build/conformance-tools-stale-map-error.out" ]
+cmp -s "$test_build/conformance-tools-stale-map-error.jsonl" "$conformance_root/tools/stale_map_error.expected.jsonl" || { printf '%s
+' "analysis under a stale source map differs from the conformance corpus" >&2; exit 1; }
 # An operand that defines `main` and carries tests (D281): the runner renames the
 # operand's `main`, both tests run, and a compile error after the rename still maps back.
 $test_build/neper-self test-file "$conformance_root/tools/test_main.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-main.jsonl"

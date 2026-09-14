@@ -1918,6 +1918,14 @@ cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $con
 if ($LASTEXITCODE -ne 1) { throw "a stale source map exited $LASTEXITCODE, not 1" }
 if (Test-Path -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map.out')) { throw 'a stale source map still wrote an artifact' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $staleActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/stale_map.expected.jsonl')).Hash) { throw "a stale source map is not refused as the conformance corpus says" }
+# A stale map beside an operand that does not compile (D300): the analysis still runs,
+# its diagnostic follows the E-TOOL-0001 at its own unmapped span; exit 1, no artifact.
+$staleErrorActual = Join-Path $testBuild 'conformance-tools-stale-map-error.jsonl'
+Remove-Item -ErrorAction SilentlyContinue -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map-error.out')
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools/stale_map_error.e')`" `"$repo`" x64 windows conformance-tools-stale-map-error.out --json > `"$staleErrorActual`""
+if ($LASTEXITCODE -ne 1) { throw "a stale source map over a rejected operand exited $LASTEXITCODE, not 1" }
+if (Test-Path -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map-error.out')) { throw 'a stale source map over a rejected operand wrote an artifact' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $staleErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/stale_map_error.expected.jsonl')).Hash) { throw 'analysis under a stale source map differs from the conformance corpus' }
 # An operand that defines `main` and carries tests (D281): the runner renames the
 # operand's `main`, both tests run, and a compile error after the rename still maps back.
 $testMainActual = Join-Path $testBuild 'conformance-tools-test-main.jsonl'

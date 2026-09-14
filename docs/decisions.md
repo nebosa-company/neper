@@ -5912,3 +5912,16 @@ end; one more than the count is `Invalid`.
 link/text_utf8 pins 65 checks with real exit codes, including every width boundary in
 both directions (U+007F/0080, U+07FF/0800, U+FFFF/10000, U+10FFFF) and five negative
 controls that each landed on their own check number.
+
+## D300 -- Analysis still runs under a stale source map
+
+Section 8: a stale or malformed map produces E-TOOL-0001 and the compiler still
+analyzes the generated file for its own errors, but the command fails and writes no
+artifact. D264 stopped at the diagnostic. Now `load_source_map` reports E-TOOL-0001
+and marks the sink instead of exiting; `check` and `build` (and `run`, which is a
+build first, and `dis`) go on unmapped, so the operand's own diagnostics follow at
+their generated spans, and at the point an artifact or a clean result would be
+written they end with the result record and exit 1 instead. The existing stale_map
+golden is unchanged, its operand being clean; tests/conformance/tools/stale_map_error
+pins a rejected operand under a stale map: E-TOOL-0001, then E-TYPE-0002, two
+diagnostics, exit 1, no artifact on either host.
