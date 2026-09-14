@@ -1025,6 +1025,12 @@ $textUnicodeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixt
 if ($LASTEXITCODE -ne 0 -or $textUnicodeWritten -ne 'executable written') { throw 'text_unicode emission failed' }
 & $textUnicodePath
 if ($LASTEXITCODE -ne 0) { throw "a text_unicode check failed: exit $LASTEXITCODE" }
+# `e.text.utf8` (D299): strict decode at every malformed shape, encode at every width boundary, count, byte_offset, lossy and strict iteration.
+$textUtf8Path = Join-Path $testBuild 'text-utf8-selfhost.exe'
+$textUtf8Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/text_utf8/src/main.e') $repo 'x64' 'windows' $textUtf8Path
+if ($LASTEXITCODE -ne 0 -or $textUtf8Written -ne 'executable written') { throw 'text_utf8 emission failed' }
+& $textUtf8Path
+if ($LASTEXITCODE -ne 0) { throw "a text_utf8 check failed: exit $LASTEXITCODE" }
 # `e.fmt.zstd`: libzstd's frames at three levels read back, the writer's frame read back, six refusals.
 $fmtZstdPath = Join-Path $testBuild 'fmt-zstd-selfhost.exe'
 $fmtZstdWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_zstd\src\main.e') $repo 'x64' 'windows' $fmtZstdPath

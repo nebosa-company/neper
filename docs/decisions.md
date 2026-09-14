@@ -5858,3 +5858,39 @@ where two are declared (E-TYPE-0003); and an `i32` as an `if` condition, the
 catch-all E-TYPE-9999. What stays unpinned is E-LINK-9999, an error-hash collision
 no small fixture produces, and E-GPU, E-SAFETY and E-TOOL-9999, whose subjects do not
 yet diagnose. Both suites check every fixture.
+## D299 -- `e.text.utf8`: the question asked once
+
+`str` is bytes and nothing about the type says they are well-formed. Two modules have
+answered that themselves -- `e.text.unicode` and `e.fmt.html` each carry a private
+twenty-line reader (D184, D186) -- and `e.text.regex` and `e.text.normalize` are
+registered to depend on this one. The module is delivered at `surface: source`, the fence
+exactly as `module-apis.md` has carried it, and the `post-m2-library-hardening` gate it
+was blocked by is cleared: "basic `e.text.utf8`" was the gate's own wording for this.
+
+**`decode` is strict and never guesses.** Every malformed shape Unicode names answers
+`Invalid` at its first byte: a lead of 0xC0/0xC1 or 0xF5 and above, a missing or wrong
+continuation, an overlong three- or four-byte form, a surrogate, a scalar past U+10FFFF.
+An offset past the end is `Invalid` as well, not a trap. `encode` refuses a surrogate or
+a value past the last plane for the same reason: nothing should be able to write bytes
+that no decoder accepts.
+
+**`TooSmall` is measured against the width this scalar needs, not four.** A two-byte
+buffer takes `é` and refuses `€`, so a caller sizing for what it writes is not made to
+over-allocate.
+
+**One replacement per byte.** `iterator_next` turns a malformed byte into U+FFFD and
+advances one, so a corrupt run degrades to replacement characters rather than swallowing
+the text after it, and the iteration always reaches the end. That is the policy
+`e.text.unicode.read_utf8` already has; the W3C "maximal subpart" rule, which would make
+a truncated `E2 82` one replacement rather than two, was not adopted, because two modules
+that read the same string differently is worse than either rule. `iterator_next_err` is
+the strict form: it stops on the fault and leaves the offset on it, so a caller can say
+where.
+
+**`byte_offset(s, count)` is `s.len`.** An index equal to the scalar count answers one
+past the last byte, so `s[byte_offset(a)..byte_offset(b)]` slices up to and including the
+end; one more than the count is `Invalid`.
+
+link/text_utf8 pins 65 checks with real exit codes, including every width boundary in
+both directions (U+007F/0080, U+07FF/0800, U+FFFF/10000, U+10FFFF) and five negative
+controls that each landed on their own check number.

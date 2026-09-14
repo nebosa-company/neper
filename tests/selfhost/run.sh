@@ -992,6 +992,11 @@ text_unicode_written=$($test_build/neper-self emit-executable "$repo/tests/selfh
 [ "$text_unicode_written" = 'executable written' ]
 chmod +x "$test_build/text-unicode-selfhost"
 "$test_build/text-unicode-selfhost"
+# `e.text.utf8` (D299): strict decode at every malformed shape, encode at every width boundary, count, byte_offset, lossy and strict iteration.
+text_utf8_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_utf8/src/main.e" "$repo" x64 linux "$test_build/text-utf8-selfhost")
+[ "$text_utf8_written" = 'executable written' ]
+chmod +x "$test_build/text-utf8-selfhost"
+"$test_build/text-utf8-selfhost"
 # `e.fmt.zstd`: libzstd's frames at three levels read back, the writer's frame read back, six refusals.
 fmt_zstd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_zstd/src/main.e" "$repo" x64 linux "$test_build/fmt-zstd-selfhost")
 [ "$fmt_zstd_written" = 'executable written' ]

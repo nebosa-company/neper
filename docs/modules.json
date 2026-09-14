@@ -1918,13 +1918,11 @@
   {
    "name": "e.text.utf8",
    "layer": 2,
-   "surface": "planned",
+   "surface": "source",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [],
-   "blocked_by": [
-    "post-m2-library-hardening"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.thread",
