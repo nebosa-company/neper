@@ -26,3 +26,16 @@ fn name(colour: Colour) -> str {
         ret "blue"
     }
 }
+
+fn literals(Flag: bool) -> i32 {
+    let small = Small { a: 1i32, b: 2i32 }
+    if Flag { ret small.a }
+    let wide = Wide {
+        first_field_name: 100000000i32,
+        second_field_name: 200000000i32,
+        third_field_name: 3i32,
+        fourth_field_name: 4i32,
+        fifth_field_name: 5i32,
+    }
+    ret wide.first_field_name + small.b
+}

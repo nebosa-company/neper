@@ -5605,3 +5605,15 @@ they sit at the `switch`'s own indent, the statements under them one level in, w
 is how every switch in the repository is written. Every compiler and library source
 still formats idempotently, and a compiler built from its own formatted source agrees
 with the new golden.
+
+## D285 -- An aggregate literal's body is a list
+
+D277 left aggregate literals alone because `Pair {` and `if p {` look the same at the
+token level. They are told apart the way the parser tells them apart: a `{` after a
+PascalCase name is a literal's, unless a control header -- `if`, `while`, `for`,
+`switch`, `when`, `else` -- or a signature's `-> Type` is open on the line, in which
+case it is a block's. The first draft forgot the signature and rewrote `-> Sink {` as
+a one-line literal body, which a compiler built from the formatted sources refused to
+parse; that check is why the rule was found before the golden moved. With it, a
+literal joins when it fits and breaks one field per line when it does not, exactly as
+a type body does, and every compiler and library source still formats idempotently.

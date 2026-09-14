@@ -1383,15 +1383,29 @@ fn fmt_list_plan(a: *mem.Arena, source: str, tokens: []const lex.Token) -> ([]us
     // A stack of open soft delimiters.
     var openers: [64]usize = zero
     var open_count = 0usize
+    // Whether an `if`/`while`/`for`/`switch`/`when`/`else` header is open on this line:
+    // its `{` is a block, however Pascal the name before it (the parser's own rule).
+    var header_open = false
     at = 0usize
     while at < tokens.len {
         let kind = tokens[at].kind
+        // A signature's `-> Type {` opens a body too, however Pascal the type.
+        if kind == .KwIf || kind == .KwWhile || kind == .KwFor || kind == .KwSwitch || kind == .KwWhen || kind == .KwElse || kind == .PunctArrow { header_open = true }
+        if kind == .Newline { header_open = false }
         var opens = kind == .PunctLParen || kind == .PunctLBracket
         if kind == .PunctLBrace && at != 0usize {
             let before = tokens[at - 1usize].kind
             // `struct {`, `union {`, `enum u8 {`, `union enum u8 {`: a type body.
             if before == .KwStruct || before == .KwUnion || before == .KwEnum || (before == .Identifier && at >= 2usize && tokens[at - 2usize].kind == .KwEnum) { opens = true }
+            // `Pair {`: an aggregate literal, a PascalCase name before the brace outside a
+            // control header (D285) -- the parser's `named_aggregate_follows`.
+            if before == .Identifier && !header_open && !opens {
+                let first = source[tokens[at - 1usize].start]
+                if first >= 65u8 && first <= 90u8 && !(at >= 2usize && tokens[at - 2usize].kind == .KwEnum) { opens = true }
+            }
+            if kind == .PunctLBrace && opens { header_open = false }
         }
+        if kind == .PunctLBrace && open_count == 0usize { header_open = false }
         if opens && open_count < 64usize {
             openers[open_count] = at
             open_count += 1usize
