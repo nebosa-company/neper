@@ -1,5 +1,6 @@
 // x64 instruction selection from allocated scalar NIR.
 
+use e.mem
 use check
 use emit_x64
 use lex
@@ -42,6 +43,14 @@ type Relocation = struct {
 
 type FunctionContext = struct {
     allocations: []regalloc.Allocation,
+    // The live register mask at every instruction of the function (D305), built once
+    // per function from the ranges in the arena, so a call or a fixed-register
+    // sequence reads its mask instead of walking every value. Absent (no arena), the
+    // walk stands.
+    arena: *mem.Arena,
+    has_arena: bool,
+    live_masks: []usize,
+    live_base: usize,
     // The live ranges the allocations came from (D226): a call saves and restores
     // only the registers whose values are live across it. Shorter than the values,
     // and every register is saved, as before.
@@ -1409,6 +1418,10 @@ fn live_register_mask(context: *FunctionContext, value_count: usize, instruction
         let every = 1usize << count
         ret every - 1usize
     }
+    if context.live_masks.len != 0usize && instruction_index >= context.live_base && instruction_index - context.live_base < context.live_masks.len {
+        let every = 1usize << count
+        ret context.live_masks[instruction_index - context.live_base] & (every - 1usize)
+    }
     var mask = 0usize
     var value = 0usize
     while value < value_count {
@@ -1713,7 +1726,72 @@ fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.I
     ret restore_live_registers(output, mask, preserve_base, preserve_count)
 }
 
+// For every instruction of the function, the registers holding a value live strictly
+// across it: a value in register r contributes r over (first, last) exclusive. Built as
+// one difference array per register and a prefix sum, so the cost is the values plus
+// the instructions, not their product.
+fn build_live_masks(builder: *nir.Builder, current: nir.Function, context: *FunctionContext, deltas: []usize, masks: []usize) -> err {
+    let count = current.instruction_count
+    var at = 0usize
+    while at < count * 16usize {
+        deltas[at] = 0usize
+        at += 1usize
+    }
+    var value = 0usize
+    while value < current.value_count {
+        let allocation = context.allocations[value]
+        if allocation.kind == .Register && allocation.index < 16usize {
+            let range = context.ranges[value]
+            if range.defined && range.last > range.first + 1usize && range.first >= current.first_instruction {
+                let from = range.first + 1usize - current.first_instruction
+                var to = range.last - current.first_instruction
+                if to > count { to = count }
+                if from < count { deltas[allocation.index * count + from] += 1usize }
+                if to < count { deltas[allocation.index * count + to] = deltas[allocation.index * count + to] -% 1usize }
+            }
+        }
+        value += 1usize
+    }
+    at = 0usize
+    while at < count {
+        masks[at] = 0usize
+        at += 1usize
+    }
+    var register = 0usize
+    while register < 16usize {
+        var live = 0usize
+        at = 0usize
+        while at < count {
+            live = live +% deltas[register * count + at]
+            if live != 0usize { masks[at] = masks[at] | (1usize << register) }
+            at += 1usize
+        }
+        register += 1usize
+    }
+    ret ok
+}
+
 fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
+    if !context.has_arena || function_index >= builder.function_count {
+        context.live_masks = context.live_masks[0usize..0usize]
+        ret function_body(builder, function_index, stack_slots, context)
+    }
+    let current = builder.functions[function_index]
+    let mark = mem.mark(context.arena)
+    let (deltas, deltas_error) = mem.alloc[usize](context.arena, current.instruction_count * 16usize + 1usize)
+    if deltas_error != ok { ret deltas_error }
+    let (masks, masks_error) = mem.alloc[usize](context.arena, current.instruction_count + 1usize)
+    if masks_error != ok { ret masks_error }
+    try build_live_masks(builder, current, context, deltas, masks)
+    context.live_masks = masks[0usize..current.instruction_count]
+    context.live_base = current.first_instruction
+    let body_error = function_body(builder, function_index, stack_slots, context)
+    context.live_masks = context.live_masks[0usize..0usize]
+    mem.reset(context.arena, mark)
+    ret body_error
+}
+
+fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usize, context: *FunctionContext) -> err {
     let allocations = context.allocations
     let abi = context.abi
     let block_offsets = context.block_offsets
@@ -1756,12 +1834,13 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     let end = current.first_instruction + current.instruction_count
     var fixup_count = 0usize
     var at = current.first_instruction
+    // Blocks begin in instruction order, so the next block to start is a cursor, not a
+    // scan of every block per instruction (D305).
+    var next_block = 0usize
     while at < end {
-        var block_at = 0usize
-        while block_at < current.block_count {
-            let block = builder.blocks[current.first_block + block_at]
-            if block.first_instruction == at { block_offsets[block_at] = output.count }
-            block_at += 1usize
+        while next_block < current.block_count && builder.blocks[current.first_block + next_block].first_instruction == at {
+            block_offsets[next_block] = output.count
+            next_block += 1usize
         }
         let instruction = builder.instructions[at]
         context.failure_token = instruction.token
@@ -2314,7 +2393,9 @@ fn self_test() -> err {
     try nir.end_function(&builder)
     var ranges: [1]regalloc.LiveRange = zero
     var allocations: [1]regalloc.Allocation = zero
-    let (stack_slots, allocation_error) = regalloc.allocate(&builder, 0usize, 1usize, ranges[..], allocations[..])
+    var scratch: [4096]u8 = zero
+    var scratch_arena = mem.arena_from(scratch[..])
+    let (stack_slots, allocation_error) = regalloc.allocate(&builder, 0usize, 1usize, ranges[..], allocations[..], &scratch_arena)
     if allocation_error != ok || stack_slots != 0usize { ret Unsupported }
     var storage: [128]usize = zero
     var output: emit_x64.Buffer = zero
@@ -2325,7 +2406,8 @@ fn self_test() -> err {
     var relocation_count = 0usize
     var lines: [8]LineEntry = zero
     var line_count = 0usize
-    var context = FunctionContext { allocations: allocations[..], ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize }
+    let no_masks = block_offsets[0usize..0usize]
+    var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize }
     try function(&builder, 0usize, stack_slots, &context)
     if output.count != 14usize || output.bytes[0usize] != 85usize || output.bytes[4usize] != 184usize || output.bytes[5usize] != 7usize || output.bytes[12usize] != 93usize || output.bytes[13usize] != 195usize { ret Unsupported }
     allocations[0usize].kind = .Stack
@@ -2375,7 +2457,7 @@ fn self_test() -> err {
     try nir.end_function(&builder)
     var branch_ranges: [5]regalloc.LiveRange = zero
     var branch_allocations: [5]regalloc.Allocation = zero
-    let (branch_stack_slots, branch_allocation_error) = regalloc.allocate(&builder, 1usize, 3usize, branch_ranges[..], branch_allocations[..])
+    let (branch_stack_slots, branch_allocation_error) = regalloc.allocate(&builder, 1usize, 3usize, branch_ranges[..], branch_allocations[..], &scratch_arena)
     if branch_allocation_error != ok || branch_stack_slots != 0usize { ret Unsupported }
     var branch_storage: [96]usize = zero
     var branch_output: emit_x64.Buffer = zero

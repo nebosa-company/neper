@@ -1514,6 +1514,14 @@ fn nptest_now() -> usize {
 // `--time` (D303): one line per phase on stderr, milliseconds since the previous one.
 // The state rides on the report sink like `--json` does: `main` is at the bootstrap's
 // local limit and takes no new locals.
+fn report_ms(ns: usize) -> err {
+    var line_storage: [64]u8 = zero
+    var line = capture_sink(line_storage[..])
+    try write_usize(&line, ns / 1000000usize)
+    try write_all(&line, " ms\n")
+    ret stderr_text(line_storage[..line.count])
+}
+
 fn report_phase(report: *Sink, name: str) -> err {
     if !report.timing { ret ok }
     let now = nptest_now()
@@ -2734,6 +2742,10 @@ type Sink = struct {
     // `--time` (D303): a line per phase on stderr, and when the last one ended.
     timing: bool,
     phase_started: usize,
+    // Within the codegen phase: nanoseconds in register allocation and in emission.
+    regalloc_ns: usize,
+    codegen_ns: usize,
+    fold_ns: usize,
     // `--path VIRTUAL` (D262): the operand's identity in every span, in place of its
     // basename; a diagnostic in any other module keeps that module's basename.
     operand_source: str,
@@ -4452,6 +4464,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if ranges_error != ok { ret ranges_error }
         let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, builder.instruction_count + 4096usize)
         if allocations_error != ok { ret allocations_error }
+        if allocations_error != ok { ret allocations_error }
         var machine_capacity = 1usize
         if emit_machine_code {
             // One entry per emitted byte, so this allocation is eight times the
@@ -4518,6 +4531,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if same(args[5usize], "windows") { machine_abi = .Windows }
         var codegen_context: codegen_x64.FunctionContext = zero
         codegen_context.allocations = allocations
+        codegen_context.arena = a
+        codegen_context.has_arena = true
         codegen_context.ranges = ranges
         codegen_context.abi = machine_abi
         codegen_context.block_offsets = block_offsets
@@ -4532,14 +4547,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         codegen_context.lines = line_entries
         codegen_context.line_count = &line_count
         while function_at < builder.function_count {
-            let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, codegen_x64.register_pool_count(), ranges, allocations)
+            if report.timing { report.regalloc_ns = report.regalloc_ns - nptest_now() }
+            let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, codegen_x64.register_pool_count(), ranges, allocations, a)
+            if report.timing { report.regalloc_ns = report.regalloc_ns + nptest_now() }
             if allocation_error != ok { ret allocation_error }
             if emit_machine_code {
                 let function_start = machine.count
                 function_offsets[function_at] = function_start
                 let relocation_start = relocation_count
                 let line_start = line_count
+                if report.timing { report.codegen_ns = report.codegen_ns - nptest_now() }
                 let codegen_error = codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
+                if report.timing { report.codegen_ns = report.codegen_ns + nptest_now() }
                 if codegen_error != ok {
                     try print_codegen_diagnostic(&report, &loaded, builder.functions[function_at], &codegen_context)
                     try finish_report(&report)
@@ -4547,6 +4566,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     ret ok
                 }
                 if want_fold {
+                    if report.timing { report.fold_ns = report.fold_ns - nptest_now() }
                     fold_scratch.count = 0usize
                     let hash_input_error = em.write_code_hash_input(&loaded, &builder, &machine, function_start, machine.count, relocations, relocation_count, &fold_scratch)
                     // A function too large for the scratch is simply not folded: the hash cannot be
@@ -4574,6 +4594,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             }
                         }
                     }
+                    if report.timing { report.fold_ns = report.fold_ns + nptest_now() }
                 }
             }
             function_at += 1usize
@@ -4653,6 +4674,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
                 try report_phase(&report, "regalloc and codegen")
+                if report.timing {
+                    try stderr_text("  of which regalloc: ")
+                    try report_ms(report.regalloc_ns)
+                    try stderr_text("  of which codegen: ")
+                    try report_ms(report.codegen_ns)
+                    try stderr_text("  of which folding: ")
+                    try report_ms(report.fold_ns)
+                }
                 if machine_abi == .Windows {
                     try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
                     try link_pe.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)

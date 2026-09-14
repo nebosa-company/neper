@@ -1647,13 +1647,27 @@ fn function_code_end(builder: *nir.Builder, machine: *emit_x64.Buffer, function_
     ret (machine.count, ok)
 }
 
+// Relocations are appended as code is emitted, so their displacements ascend: the
+// first one at or past `start` is a binary search, and a function's relocations are
+// the run from there (D305). Every function used to scan all of them, twice.
+fn first_relocation_from(relocations: []codegen_x64.Relocation, relocation_count: usize, start: usize) -> usize {
+    var low = 0usize
+    var high = relocation_count
+    while low < high {
+        let mid = (low + high) / 2usize
+        if relocations[mid].displacement_at < start { low = mid + 1usize } else { high = mid }
+    }
+    ret low
+}
+
 fn relocation_count_for_range(relocations: []codegen_x64.Relocation, relocation_count: usize, start: usize, end: usize) -> (usize, err) {
     if relocation_count > relocations.len { ret (0usize, InvalidArtifact) }
     var count = 0usize
-    var at = 0usize
+    var at = first_relocation_from(relocations, relocation_count, start)
     while at < relocation_count {
         let offset = relocations[at].displacement_at
-        if offset >= start && offset < end {
+        if offset >= end { break }
+        if offset >= start {
             if offset + 4usize > end { ret (0usize, InvalidArtifact) }
             count += 1usize
         }
@@ -1669,9 +1683,10 @@ fn write_code_hash_input(g: *graph.Graph, builder: *nir.Builder, machine: *emit_
     try binary.little_u32(output, end - start)
     try binary.copy(output, machine.bytes[start..end])
     try binary.little_u32(output, count)
-    var at = 0usize
+    var at = first_relocation_from(relocations, relocation_count, start)
     while at < relocation_count {
         let relocation = relocations[at]
+        if relocation.displacement_at >= end { break }
         if relocation.displacement_at >= start && relocation.displacement_at < end {
             try binary.little_u32(output, relocation.displacement_at - start)
             if relocation.global {

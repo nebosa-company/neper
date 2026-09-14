@@ -6107,3 +6107,39 @@ Two things the bootstrap taught along the way. `use X` reserves `X` against ever
 of the importing module, which is why D303's index module is `lookup`. And `main` is at
 exactly 256 locals, the bootstrap's limit, now reported as such; the sweeps are helpers
 so that `main` gains none, and the one flag it needed is spelled inline at its three uses.
+
+## D305 -- Code generation stops walking every value per instruction
+
+With the front end per module (D304), the compiler building itself spent 2.8 of its
+5.0 seconds in register allocation and code selection -- and the 40k-line benchmark
+spent 36 ms there. The difference is function size: `main` has ten thousand values, and
+three loops were quadratic or worse in it. Every change here makes the same decisions
+as before, value for value: the benchmark executable and the compiler itself come out
+byte-identical from the old allocator and the new.
+
+**The allocator was cubic.** For each value, for each of ten registers, it walked every
+earlier value to ask whether one still in that register was live, and on a spill walked
+them all again for the live one ending last. Both answers depend only on the largest
+(last, value) among the values a register holds, so each register keeps them in a
+max-heap and answers from its top; the spill pops it. 2758 -> 1793 ms, and the heaps
+are taken from the arena for the length of the call and given back -- `mem.mark` and
+`mem.reset`, the first use of either in the compiler.
+
+**The live mask was recomputed per call.** Every call and every fixed-register sequence
+asked which registers held a value live across it by walking every value. Now the mask
+at every instruction of the function is built once, as one difference array per register
+and a prefix sum -- the values plus the instructions, not their product -- and read.
+Every instruction also scanned every block to find the one starting there; blocks begin
+in instruction order, so a cursor does it. 1142 -> 780 ms of selection.
+
+**Folding hashed every relocation in the program per function.** Identical-code folding
+copies a function's bytes and relocations for hashing, and both the count and the copy
+walked all relocations. They ascend with the code, so a lower-bound search finds a
+function's run: 237 -> 70 ms, and the artifact writer's `write_code` gets the same run.
+
+The compiler building itself: 5.0 -> 3.4 s, with every phase now under a second; the
+fixed point holds. `--time` gained sub-timers for allocation, selection and folding.
+The bootstrap's program-wide `use` table was at its limit of 128 and `regalloc.e`'s
+`use e.mem` was the 129th; `UseDecl` is a few words, so it is 256 now. The self-hosted
+resolver also refused what the bootstrap accepted -- a `mem.` call in a module without
+`use e.mem` -- which is the right order for the two to be strict in.

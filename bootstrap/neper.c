@@ -45,7 +45,7 @@
 #define MAX_PARAMS 32
 #define MAX_LOCALS 256
 #define MAX_ARGS 16
-#define MAX_USES 128
+#define MAX_USES 256
 #define MAX_STRINGS 4096
 #define MAX_DIAGNOSTICS 4096
 #define MAX_TRAP_SITES 16384

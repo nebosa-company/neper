@@ -1,5 +1,6 @@
 // Deterministic linear-scan allocation for function-local NIR SSA values.
 
+use e.mem
 use check
 use nir
 
@@ -233,60 +234,143 @@ fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRan
     ret extend_loop_liveness(builder, function, ranges)
 }
 
-fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize, ranges: []LiveRange, allocations: []Allocation) -> (usize, err) {
+// --- The allocation (D305) ------------------------------------------------------------
+//
+// Every value takes the lowest register no live value holds, or, when all are held,
+// steals the register of the live value that ends last if that is later than its own
+// end, else goes to the stack. The scan that decided "held" and "ends last" walked
+// every earlier value for every register for every value -- cubic, and 2.7 of the
+// compiler's 5 seconds building itself, because `main` has ten thousand values. The
+// decisions depend only on the largest (last, value) among the values each register
+// holds, so each register keeps them in a max-heap and the answers are its top. The
+// decisions are the same ones, value for value.
+
+fn heap_greater(heaps: []usize, a: usize, b: usize) -> bool {
+    if heaps[a] != heaps[b] { ret heaps[a] > heaps[b] }
+    ret heaps[a + 1usize] > heaps[b + 1usize]
+}
+
+fn heap_swap(heaps: []usize, a: usize, b: usize) {
+    let last = heaps[a]
+    let value = heaps[a + 1usize]
+    heaps[a] = heaps[b]
+    heaps[a + 1usize] = heaps[b + 1usize]
+    heaps[b] = last
+    heaps[b + 1usize] = value
+}
+
+// Adds (last, value) to the register's heap: `capacity` pairs per register in `heaps`.
+fn heap_push(heaps: []usize, counts: []usize, capacity: usize, register: usize, last: usize, value: usize) -> err {
+    let base = register * capacity * 2usize
+    var at = counts[register]
+    if at >= capacity { ret Capacity }
+    counts[register] = at + 1usize
+    heaps[base + at * 2usize] = last
+    heaps[base + at * 2usize + 1usize] = value
+    while at > 0usize {
+        let parent = (at - 1usize) / 2usize
+        if !heap_greater(heaps, base + at * 2usize, base + parent * 2usize) { break }
+        heap_swap(heaps, base + at * 2usize, base + parent * 2usize)
+        at = parent
+    }
+    ret ok
+}
+
+fn heap_pop(heaps: []usize, counts: []usize, capacity: usize, register: usize) {
+    let base = register * capacity * 2usize
+    let count = counts[register]
+    if count == 0usize { ret }
+    counts[register] = count - 1usize
+    if count == 1usize { ret }
+    heap_swap(heaps, base, base + (count - 1usize) * 2usize)
+    let size = count - 1usize
+    var at = 0usize
+    while true {
+        let left = at * 2usize + 1usize
+        let right = left + 1usize
+        var largest = at
+        if left < size && heap_greater(heaps, base + left * 2usize, base + largest * 2usize) { largest = left }
+        if right < size && heap_greater(heaps, base + right * 2usize, base + largest * 2usize) { largest = right }
+        if largest == at { break }
+        heap_swap(heaps, base + at * 2usize, base + largest * 2usize)
+        at = largest
+    }
+}
+
+// The heaps are register_count segments of value_count pairs, taken from the arena for
+// the length of the call.
+fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize, ranges: []LiveRange, allocations: []Allocation, a: *mem.Arena) -> (usize, err) {
     if register_count == 0usize { ret (0usize, NoRegisters) }
+    if register_count > 16usize { ret (0usize, Capacity) }
     if function_index >= builder.function_count { ret (0usize, InvalidIR) }
     let function = builder.functions[function_index]
     if function.value_count > allocations.len { ret (0usize, Capacity) }
+    let capacity = function.value_count
+    // The heaps live only as long as this call: taken from the arena and given back.
+    let mark = mem.mark(a)
+    let (heaps, heaps_error) = mem.alloc[usize](a, register_count * capacity * 2usize + 1usize)
+    if heaps_error != ok { ret (0usize, heaps_error) }
+    let (slots, allocate_error) = allocate_with(builder, function, register_count, ranges, allocations, heaps, capacity)
+    mem.reset(a, mark)
+    ret (slots, allocate_error)
+}
+
+fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: usize, ranges: []LiveRange, allocations: []Allocation, heaps: []usize, capacity: usize) -> (usize, err) {
     let promotion_error = promote_locals(builder, function)
     if promotion_error != ok { ret (0usize, promotion_error) }
     let ranges_error = build_ranges(builder, function, ranges)
     if ranges_error != ok { ret (0usize, ranges_error) }
+    var counts: [16]usize = zero
     var value_at = 0usize
     var stack_slots = 0usize
     while value_at < function.value_count {
         var empty_allocation: Allocation = zero
         allocations[value_at] = empty_allocation
+        let first = ranges[value_at].first
+        let last = ranges[value_at].last
         var register = 0usize
         var found_register = false
         while register < register_count {
-            var occupied = false
-            var previous = 0usize
-            while previous < value_at {
-                let allocation = allocations[previous]
-                if allocation.kind == .Register && allocation.index == register && ranges[previous].last >= ranges[value_at].first {
-                    occupied = true
-                    break
-                }
-                previous += 1usize
-            }
-            if !occupied {
+            if counts[register] == 0usize || heaps[register * capacity * 2usize] < first {
                 found_register = true
                 break
             }
             register += 1usize
         }
         if found_register {
+            let push_error = heap_push(heaps, counts[..], capacity, register, last, value_at)
+            if push_error != ok { ret (0usize, push_error) }
             allocations[value_at] = Allocation { kind: .Register, index: register }
         } else {
-            var spill_candidate = 0usize
+            // Every register's top ends at or after this value starts; the latest of them,
+            // ties to the higher value, is what the scan found.
+            var spill_register = 0usize
+            var spill_last = 0usize
+            var spill_value = 0usize
             var found_candidate = false
-            var previous = 0usize
-            while previous < value_at {
-                let allocation = allocations[previous]
-                if allocation.kind == .Register && ranges[previous].last >= ranges[value_at].first {
-                    if !found_candidate || ranges[previous].last > ranges[spill_candidate].last || (ranges[previous].last == ranges[spill_candidate].last && previous > spill_candidate) {
-                        spill_candidate = previous
-                        found_candidate = true
+            register = 0usize
+            while register < register_count {
+                if counts[register] != 0usize {
+                    let top_last = heaps[register * capacity * 2usize]
+                    let top_value = heaps[register * capacity * 2usize + 1usize]
+                    if top_last >= first {
+                        if !found_candidate || top_last > spill_last || (top_last == spill_last && top_value > spill_value) {
+                            spill_register = register
+                            spill_last = top_last
+                            spill_value = top_value
+                            found_candidate = true
+                        }
                     }
                 }
-                previous += 1usize
+                register += 1usize
             }
-            if found_candidate && ranges[spill_candidate].last > ranges[value_at].last {
-                let stolen_register = allocations[spill_candidate].index
-                allocations[spill_candidate] = Allocation { kind: .Stack, index: stack_slots }
+            if found_candidate && spill_last > last {
+                heap_pop(heaps, counts[..], capacity, spill_register)
+                allocations[spill_value] = Allocation { kind: .Stack, index: stack_slots }
                 stack_slots += 1usize
-                allocations[value_at] = Allocation { kind: .Register, index: stolen_register }
+                let push_error = heap_push(heaps, counts[..], capacity, spill_register, last, value_at)
+                if push_error != ok { ret (0usize, push_error) }
+                allocations[value_at] = Allocation { kind: .Register, index: spill_register }
             } else {
                 allocations[value_at] = Allocation { kind: .Stack, index: stack_slots }
                 stack_slots += 1usize
@@ -335,7 +419,9 @@ fn self_test() -> err {
     builder.operands[2usize] = 2usize
     var ranges: [3]LiveRange = zero
     var allocations: [3]Allocation = zero
-    let (stack_slots, allocation_error) = allocate(&builder, 0usize, 2usize, ranges[..], allocations[..])
+    var scratch: [4096]u8 = zero
+    var arena = mem.arena_from(scratch[..])
+    let (stack_slots, allocation_error) = allocate(&builder, 0usize, 2usize, ranges[..], allocations[..], &arena)
     if allocation_error != ok || stack_slots != 1usize { ret InvalidIR }
     if allocations[0usize].kind != .Register || allocations[0usize].index != 0usize { ret InvalidIR }
     if allocations[1usize].kind != .Register || allocations[1usize].index != 1usize { ret InvalidIR }
