@@ -5739,3 +5739,16 @@ already does -- and `emit-executable` and the artifact link set 0755 on a file t
 wrote for a Linux target, on either host. `run` and the test runner launch the file
 itself; nothing about their streams changes, since the shell only ever `exec`ed. The
 Linux suite requires the corpus build's executable to be one before running it.
+
+## D292 -- `neper test FILE` works under `.neper/debug/test/`
+
+D276 left `test` out of the short spellings because its positional form takes a
+WORKDIR and nothing in `neper test FILE` names one. With D287 the answer is the
+project's: the short form is `test FILE [--json] [--project DIR]`, always the stream,
+its WORKDIR `.neper/debug/test/` under `--project DIR` or else the project the operand
+is in -- the directory `project.discover` finds, the operand's own when it is in none
+-- and each level is made when missing, `Exists` accepted. Everything else is the
+positional `test-file`: the runner, its map, the child's captured streams, all live
+in that directory, and the stream is the same bytes once the runner's path is
+normalised. Both suites run the short spelling from a copy of the compiler beside
+`lib/` and require the positional form's golden.

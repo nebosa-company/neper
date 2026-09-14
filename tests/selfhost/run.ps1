@@ -1750,6 +1750,15 @@ Copy-Item -LiteralPath $compiler -Destination $shortCompiler -Force
 $buildShortActual = Join-Path $testBuild 'conformance-tools-build-short.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$shortCompiler`" build `"$(Join-Path $conformanceRoot 'tools\build.e')`" -o conformance-tools-build.out --json > `"$buildShortActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $buildShortActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\build.expected.jsonl')).Hash) { throw 'the short build spelling differs from the positional form' }
+# `neper test FILE` (D292): the short spelling is the test stream, its WORKDIR
+# `.neper/debug/test/` under the operand's project -- the repo here -- made by the command.
+$testShortActual = Join-Path $testBuild 'conformance-tools-test-short.jsonl'
+if (Test-Path -LiteralPath (Join-Path $repo '.neper\debug\test')) { Remove-Item -Recurse -Force -LiteralPath (Join-Path $repo '.neper\debug\test') }
+cmd /c "`"$shortCompiler`" test `"$(Join-Path $conformanceRoot 'tools\test.e')`" > `"$testShortActual`""
+if ($LASTEXITCODE -ne 1) { throw "the short test spelling exited $LASTEXITCODE, expected 1" }
+if (-not (Test-Path -LiteralPath (Join-Path $repo '.neper\debug\test\nptest-runner.e'))) { throw 'the short test spelling did not work under .neper/debug/test/' }
+[IO.File]::WriteAllText($testShortActual, ([IO.File]::ReadAllText($testShortActual) -replace '"duration_ms":\d+', '"duration_ms":0' -replace '[^" (]*nptest-runner\.e', 'nptest-runner.e'), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testShortActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\test.expected.jsonl')).Hash) { throw 'the short test spelling differs from the positional form' }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'

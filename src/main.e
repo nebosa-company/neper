@@ -954,7 +954,10 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     let is_index = same(command, "index")
     let is_dis = same(command, "dis")
     let is_manifest = same(command, "build-manifest")
-    if !(is_build || is_run || is_check || is_fmt || is_index || is_dis || is_manifest) { ret (args, false, ok) }
+    // `test FILE [--json] [--project DIR]` (D292): always the stream, its WORKDIR
+    // `.neper/debug/test/` under the project root, made when missing.
+    let is_test = same(command, "test")
+    if !(is_build || is_run || is_check || is_fmt || is_index || is_dis || is_manifest || is_test) { ret (args, false, ok) }
     if args.len < 3usize { ret (args, false, ok) }
     let file = args[2usize]
     let root = own_directory(args[0usize])
@@ -1068,6 +1071,19 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         }
         ret (long_form[0usize..count], true, ok)
     }
+    if is_test {
+        let (workdir, workdir_error) = test_workdir(a, file, project_dir)
+        if workdir_error != ok { ret (args, false, workdir_error) }
+        long_form[count] = "test-file"
+        long_form[count + 1usize] = file
+        long_form[count + 2usize] = root
+        long_form[count + 3usize] = arch
+        long_form[count + 4usize] = os_name
+        long_form[count + 5usize] = workdir
+        long_form[count + 6usize] = "--json"
+        count += 7usize
+        ret (long_form[0usize..count], true, ok)
+    }
     if is_check { long_form[count] = "check-file" }
     if is_index { long_form[count] = "index-file" }
     if is_dis { long_form[count] = "dis-file" }
@@ -1088,6 +1104,37 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         count += 2usize
     }
     ret (long_form[0usize..count], true, ok)
+}
+
+// The short `test`'s WORKDIR (D292): `.neper/debug/test` under `project_dir` when given,
+// else under the project the operand is in, or its own directory; each level made once.
+fn test_workdir(a: *mem.Arena, file: str, project_dir: str) -> (str, err) {
+    var root = project_dir
+    if root.len == 0usize {
+        let (discovered, discovery_error) = project.discover(a, file)
+        if discovery_error != ok { ret ("", discovery_error) }
+        root = discovered.root
+    }
+    let (dot_dir, dot_error) = tool.manifest_join(a, root, ".neper")
+    if dot_error != ok { ret ("", dot_error) }
+    let dot_made = ensure_dir(a, dot_dir)
+    if dot_made != ok { ret ("", dot_made) }
+    let (mode_dir, mode_error) = tool.manifest_join(a, dot_dir, "debug")
+    if mode_error != ok { ret ("", mode_error) }
+    let mode_made = ensure_dir(a, mode_dir)
+    if mode_made != ok { ret ("", mode_made) }
+    let (workdir, workdir_error) = tool.manifest_join(a, mode_dir, "test")
+    if workdir_error != ok { ret ("", workdir_error) }
+    let made = ensure_dir(a, workdir)
+    if made != ok { ret ("", made) }
+    ret (workdir, ok)
+}
+
+// A directory that is there afterwards: made, or already present.
+fn ensure_dir(a: *mem.Arena, path: str) -> err {
+    let made = os.mkdir(a, path)
+    if made != ok && made != os.Exists { ret made }
+    ret ok
 }
 
 fn host_target() -> str {
