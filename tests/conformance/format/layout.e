@@ -1,0 +1,29 @@
+// A non-canonical source (D255): the format corpus pins what `fmt` makes of it.
+use   e.mem
+
+
+type   Pair=struct{a:i32,b : i32}
+
+error Odd
+fn add( x : i32 , y:i32 )->i32{
+  ret x+y*2i32
+}
+fn   pick(values : [] const i32,index:usize)->i32   {
+        let chosen=values[ index ]    // one space before a trailing comment
+
+        if chosen<0i32{ret -chosen}
+
+
+        ret chosen
+}
+fn main(a:*mem.Arena,args:[]str)->err {
+    var pair:Pair=Pair{a:1i32,b:2i32}
+    let total = add(pair.a , pair.b)
+    if total!=5i32 { ret Odd }
+    var values:[3]i32=zero
+    values[0usize]=total
+    let slice=values[0usize..2usize]
+    let first=pick(slice[..],0usize)
+    if first==5i32&&!(total==0i32) { ret ok }
+    ret Odd
+}

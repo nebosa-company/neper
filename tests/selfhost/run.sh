@@ -1844,6 +1844,15 @@ fmt_actual="$test_build/conformance-tools-fmt.jsonl"
 $test_build/neper-self fmt-file "$conformance_root/tools/fmt.e" --json > "$fmt_actual"
 cmp -s "$fmt_actual" "$conformance_root/tools/fmt.expected.jsonl" || { printf '%s
 ' "fmt --json differs from the conformance corpus" >&2; exit 1; }
+# The format corpus (D255): each `format/<name>.e` is a non-canonical source and
+# `format/<name>.expected.e` what `fmt` makes of it, byte for byte; the canonical side
+# passes `--check`, which pins idempotence.
+for format_case in layout; do
+    "$test_build/neper-self" fmt-file "$conformance_root/format/$format_case.e" > "$test_build/conformance-format-$format_case.e"
+    cmp -s "$test_build/conformance-format-$format_case.e" "$conformance_root/format/$format_case.expected.e" || { printf '%s
+' "fmt on format/$format_case.e differs from the conformance corpus" >&2; exit 1; }
+    "$test_build/neper-self" fmt-file "$conformance_root/format/$format_case.expected.e" --check --json > /dev/null
+done
 # `fmt --check --json` (D244): a canonical source passes, a non-canonical one reports E-FORMAT-0001.
 "$test_build/neper-self" fmt-file "$conformance_root/tools/fmt.e" --check --json > /dev/null
 fmt_check_status=0

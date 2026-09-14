@@ -1223,6 +1223,12 @@ fn fmt_command(a: *mem.Arena, args: []str) -> err {
     ret ok
 }
 
+fn fmt_plain_command(a: *mem.Arena, args: []str) -> err {
+    let (text, load_error) = source.load(a, args[2usize])
+    if load_error != ok { ret load_error }
+    ret tool.fmt_plain(a, text)
+}
+
 fn fmt_check_command(a: *mem.Arena, args: []str) -> err {
     let (text, load_error) = source.load(a, args[2usize])
     if load_error != ok { ret load_error }
@@ -2696,9 +2702,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
     if args.len == 7usize && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
-    // `fmt-file PATH --json` (D234): the operand's canonical layout as one `formatted` record.
+    // `fmt-file PATH [--json]` (D234): the operand's canonical layout as one `formatted` record.
     if args.len == 5usize && same(args[1usize], "fmt-file") && same(args[3usize], "--check") && same(args[4usize], "--json") { ret fmt_check_command(a, args) }
     if args.len == 4usize && same(args[1usize], "fmt-file") && same(args[3usize], "--json") { ret fmt_command(a, args) }
+    if args.len == 3usize && same(args[1usize], "fmt-file") { ret fmt_plain_command(a, args) }
     if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
     if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
     if args.len == 9usize && same(args[1usize], "test-file") && same(args[8usize], "--json") { ret test_command(a, args) }

@@ -4831,3 +4831,22 @@ self-hosted one does not, and the stable-stage build exited 1 with nothing on st
 the first time the manifest was written for anything bigger than a fixture. It now takes
 bytes and walks them a 64-byte block at a time through one block buffer, the message
 never copied; the `abc` vector, the corpus goldens and `sha256sum` agree.
+
+## D255 -- The format corpus, and a space inside a brace pair
+
+tooling.md section 9 names six corpus roots; five existed. `tests/conformance/format/`
+is the sixth: a deliberately non-canonical source beside what `fmt` makes of it, byte
+for byte, and the canonical side must itself pass `fmt --check`, so one pair pins both
+the transformation and its idempotence. The row that claimed every root was present was
+wrong, and is corrected.
+
+Writing the first pair found a rule `fmt` did not have. Its delimiter rule was "no space
+inside delimiters", which is right for `(` and `[` and produced `struct {a: i32, b: i32}`,
+`if x {ret ok}` and `Pair {a: 1i32}` for braces -- layouts nothing in this repository
+writes. A brace pair on one line now has one space inside each side and an empty `{}`
+none; `(` and `[` still hug their contents. The existing canonical fixture had no inline
+braces, which is how the gap stayed hidden: a corpus whose inputs are already canonical
+pins idempotence and nothing else. The format root's inputs are mangled on purpose.
+
+`fmt-file PATH` without `--json` prints the canonical text itself, so the corpus check is
+a byte compare and a person can diff or pipe it.

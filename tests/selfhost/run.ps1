@@ -1705,6 +1705,16 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $disActual).Hash -ne (Get-FileH
 $fmtActual = Join-Path $testBuild 'conformance-tools-fmt.jsonl'
 cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt.e')`" --json > `"$fmtActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/fmt.expected.jsonl')).Hash) { throw "fmt --json differs from the conformance corpus" }
+# The format corpus (D255): each `format/<name>.e` is a non-canonical source and
+# `format/<name>.expected.e` what `fmt` makes of it, byte for byte; the canonical side
+# passes `--check`, which pins idempotence.
+foreach ($formatCase in @('layout')) {
+    $formatActual = Join-Path $testBuild "conformance-format-$formatCase.e"
+    cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot "format/$formatCase.e")`" > `"$formatActual`""
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $formatActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "format/$formatCase.expected.e")).Hash) { throw "fmt on format/$formatCase.e differs from the conformance corpus" }
+    cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot "format/$formatCase.expected.e")`" --check --json > nul"
+    if ($LASTEXITCODE -ne 0) { throw "the canonical side of format/$formatCase is not canonical" }
+}
 # `fmt --check --json` (D244): a canonical source passes, a non-canonical one reports E-FORMAT-0001.
 cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt.e')`" --check --json > `"$(Join-Path $testBuild 'fmt-check-ok.jsonl')`""
 if ($LASTEXITCODE -ne 0) { throw "fmt --check on a canonical source did not exit 0" }

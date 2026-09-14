@@ -717,6 +717,10 @@ fn fmt_prefixable(kind: lex.Kind) -> bool {
 // `prev_unary` is set when the previous token was a prefix operator, so this one glues.
 fn fmt_space_before(prev: lex.Kind, prev_unary: bool, cur: lex.Kind) -> bool {
     if prev_unary { ret false }
+    // One space inside a brace pair on one line -- `{ ret ok }`, `struct { a: i32 }` -- and
+    // none inside an empty `{}` (D255); `(` and `[` hug their contents.
+    if prev == .PunctLBrace { ret cur != .PunctRBrace }
+    if cur == .PunctRBrace { ret prev != .PunctLBrace }
     if fmt_is_open(prev) { ret false }
     if fmt_is_close(cur) { ret false }
     if cur == .PunctComma { ret false }
@@ -952,6 +956,21 @@ fn fmt_check_result(out: *Out, canonical: bool) -> err {
 }
 
 // `fmt --json` (D234): one `formatted` record whose `text` is the canonical layout.
+// `fmt-file PATH` without `--json` (D255): the canonical text itself, for a diff or a pipe.
+fn fmt_plain(a: *mem.Arena, source: str) -> err {
+    let (formatted, format_error) = format_source(a, source)
+    if format_error != ok { ret format_error }
+    let stdout = os.stdout()
+    var at = 0usize
+    while at < formatted.len {
+        let (written, write_error) = os.write(stdout, formatted[at..formatted.len])
+        if write_error != ok { ret write_error }
+        if written == 0usize { ret Capacity }
+        at += written
+    }
+    ret ok
+}
+
 fn fmt_json(a: *mem.Arena, source: str) -> (usize, err) {
     let (formatted, format_error) = format_source(a, source)
     if format_error != ok { ret (1usize, format_error) }
