@@ -5752,3 +5752,15 @@ positional `test-file`: the runner, its map, the child's captured streams, all l
 in that directory, and the stream is the same bytes once the runner's path is
 normalised. Both suites run the short spelling from a copy of the compiler beside
 `lib/` and require the positional form's golden.
+
+## D293 -- An artifact's manifest path is project-relative
+
+Section 7 says artifacts carry project-relative paths; D254 wrote the executable as it
+was named, which is relative to wherever the build ran. Now the name is made absolute
+under the current directory unless it already is -- `os.current_dir` (D290) is what
+this waited on -- and so is the project root, `.` and a trailing `/.` meaning the
+directory itself; when the one lies under the other, either separator standing for the
+other, the rest is the path with `/` separators. An artifact outside the project keeps
+its absolute spelling: not project-relative, but a spelling that finds it, which is
+more than the bare name was. `.` and `..` segments are kept, as in D290. Both suites
+read the corpus build's artifact from the manifest by its project-relative spelling.

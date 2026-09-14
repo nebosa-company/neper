@@ -1871,7 +1871,9 @@ python3 "$repo/scripts/validate_stream.py" "$repo/.neper/debug/build-manifest.js
 ' "the build manifest a build writes does not validate against the v1 schema" >&2; exit 1; }
 [ -d "$repo/.neper/debug" ] || { printf '%s
 ' "the build did not make .neper/debug/" >&2; exit 1; }
-manifest_artifact=$(sed -n 's/.*"artifacts":\[{"path":"conformance-tools-build.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
+# The artifact's path is project-relative (D293): the executable was named beside the
+# test build directory, and the manifest spells it from the repo.
+manifest_artifact=$(sed -n 's/.*"artifacts":\[{"path":"build\/linux\/tests\/selfhost\/conformance-tools-build.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
 [ "$manifest_artifact" = "$(sha256sum "$test_build/conformance-tools-build.out" | cut -c1-64)" ] || { printf '%s
 ' "the build manifest does not carry the executable's SHA-256" >&2; exit 1; }
 # Reproducible builds (D261): the same source built again is the same bytes, and the
@@ -1880,7 +1882,7 @@ manifest_artifact=$(sed -n 's/.*"artifacts":\[{"path":"conformance-tools-build.o
 (cd "$test_build" && ./neper-self emit-executable "$conformance_root/tools/build.e" "$repo" x64 linux "conformance-tools-build-again.out" > /dev/null)
 cmp -s "$test_build/conformance-tools-build.out" "$test_build/conformance-tools-build-again.out" || { printf '%s
 ' "the same source built twice is not the same executable" >&2; exit 1; }
-manifest_again=$(sed -n 's/.*"artifacts":\[{"path":"conformance-tools-build-again.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
+manifest_again=$(sed -n 's/.*"artifacts":\[{"path":"build\/linux\/tests\/selfhost\/conformance-tools-build-again.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
 [ "$manifest_again" = "$manifest_artifact" ] || { printf '%s
 ' "the second build's manifest does not carry the first build's artifact hash" >&2; exit 1; }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that

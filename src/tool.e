@@ -2213,6 +2213,64 @@ fn manifest_join(a: *mem.Arena, dir: str, name: str) -> (str, err) {
 // Every build writes `.neper/<mode>/build-manifest.json` under the project root (section 7,
 // D254) when that directory exists, the executable it just wrote as the one artifact with
 // its SHA-256. `main` sits at the bootstrap's local cap, so the mode is settled here.
+// Whether `path` begins with `root` and a separator, either separator standing for the
+// other, so a root spelled one way matches a directory spelled the other.
+fn manifest_under(path: str, root: str) -> bool {
+    if root.len == 0usize || path.len <= root.len { ret false }
+    var at = 0usize
+    while at < root.len {
+        var p = path[at]
+        var r = root[at]
+        if p == 92u8 { p = 47u8 }
+        if r == 92u8 { r = 47u8 }
+        if p != r { ret false }
+        at += 1usize
+    }
+    if root[root.len - 1usize] == 47u8 || root[root.len - 1usize] == 92u8 { ret true }
+    ret path[root.len] == 47u8 || path[root.len] == 92u8
+}
+
+// A path under the current directory unless it is absolute already: a leading
+// separator or a drive letter.
+fn manifest_absolute(a: *mem.Arena, path: str) -> (str, err) {
+    if path.len != 0usize && (path[0usize] == 47u8 || path[0usize] == 92u8 || (path.len >= 2usize && path[1usize] == 58u8)) { ret (path, ok) }
+    let (dir, dir_error) = os.current_dir(a)
+    if dir_error != ok { ret ("", dir_error) }
+    // `.` is the directory itself, as is a trailing `/.` -- what `project.discover`
+    // answers for an operand given relative to the project root.
+    var trimmed = path
+    if graph.same(trimmed, ".") { trimmed = "" }
+    if trimmed.len >= 2usize && graph.same(trimmed[trimmed.len - 2usize..trimmed.len], "/.") { trimmed = trimmed[0usize..trimmed.len - 2usize] }
+    if trimmed.len == 0usize { ret (dir, ok) }
+    let (joined, join_error) = manifest_join(a, dir, trimmed)
+    ret (joined, join_error)
+}
+
+// Section 7: an artifact's path is project-relative (D293). The path as named is made
+// absolute under the current directory unless it already is, and when that lies under
+// the project root the rest is the path, with `/` separators; an artifact outside the
+// project keeps its absolute spelling, which is at least a spelling that finds it.
+// ponytail: `.` and `..` segments are kept, as in `--absolute-paths` (D290).
+fn manifest_artifact_path(a: *mem.Arena, project_root: str, named: str) -> (str, err) {
+    if named.len == 0usize { ret (named, ok) }
+    let (absolute, absolute_error) = manifest_absolute(a, named)
+    if absolute_error != ok { ret ("", absolute_error) }
+    let (root, root_error) = manifest_absolute(a, project_root)
+    if root_error != ok { ret ("", root_error) }
+    if !manifest_under(absolute, root) { ret (absolute, ok) }
+    var from = root.len
+    if !(root[root.len - 1usize] == 47u8 || root[root.len - 1usize] == 92u8) { from += 1usize }
+    let (relative, relative_error) = mem.alloc[u8](a, absolute.len - from)
+    if relative_error != ok { ret ("", relative_error) }
+    var at = 0usize
+    while from + at < absolute.len {
+        relative[at] = absolute[from + at]
+        if relative[at] == 92u8 { relative[at] = 47u8 }
+        at += 1usize
+    }
+    ret (relative[0usize..at], ok)
+}
+
 fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, artifact_path: str, packed: []const u8) -> err {
     var mode = "debug"
     if release_mode { mode = "release" }
@@ -2242,7 +2300,9 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
     if storage_error != ok { ret storage_error }
     var out = Out { bytes: storage, count: 0usize, absolute: "" }
-    try manifest_write(a, &out, arch, os_name, g, mode, artifact_path, digest)
+    let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
+    if relative_error != ok { ret relative_error }
+    try manifest_write(a, &out, arch, os_name, g, mode, relative_path, digest)
     try byte(&out, 10u8)
     var at = 0usize
     var write_error = ok

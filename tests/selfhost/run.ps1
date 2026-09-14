@@ -1733,7 +1733,9 @@ $manifestPath = Join-Path $repo '.neper\debug\build-manifest.json'
 if (-not (Test-Path -LiteralPath (Join-Path $repo '.neper\debug') -PathType Container)) { throw 'the build did not make .neper/debug/' }
 & python (Join-Path $repo 'scripts/validate_stream.py') $manifestPath
 if ($LASTEXITCODE -ne 0) { throw 'the build manifest a build writes does not validate against the v1 schema' }
-$manifestArtifact = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"conformance-tools-build.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
+# The artifact's path is project-relative (D293): the executable was named beside the
+# test build directory, and the manifest spells it from the repo.
+$manifestArtifact = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"build/windows/tests/selfhost/conformance-tools-build.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
 if ($manifestArtifact -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out')).Hash.ToLower()) { throw "the build manifest does not carry the executable's SHA-256" }
 # Reproducible builds (D261): the same source built again is the same bytes, and the
 # manifest of the second build carries the same artifact hash as the first -- so a
@@ -1741,7 +1743,7 @@ if ($manifestArtifact -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Pat
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools\build.e')`" `"$repo`" x64 windows conformance-tools-build-again.out > nul"
 if ($LASTEXITCODE -ne 0) { throw "the second build of build.e exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build-again.out')).Hash) { throw 'the same source built twice is not the same executable' }
-$manifestAgain = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"conformance-tools-build-again.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
+$manifestAgain = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"build/windows/tests/selfhost/conformance-tools-build-again.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
 if ($manifestAgain -ne $manifestArtifact) { throw "the second build's manifest does not carry the first build's artifact hash" }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
