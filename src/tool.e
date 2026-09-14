@@ -60,6 +60,13 @@ fn flush(out: *Out) -> err {
 // of the controls, everything else as it is.
 fn quoted(out: *Out, value: str) -> err {
     try byte(out, 34u8)
+    try quoted_body(out, value)
+    ret byte(out, 34u8)
+}
+
+// The bytes of a JSON string without its quotes, so several source lines can join into
+// one value (D251).
+fn quoted_body(out: *Out, value: str) -> err {
     var at = 0usize
     while at < value.len {
         let c = value[at]
@@ -89,7 +96,7 @@ fn quoted(out: *Out, value: str) -> err {
         }
         at += 1usize
     }
-    ret byte(out, 34u8)
+    ret ok
 }
 
 fn hex_digit(value: usize) -> u8 {
@@ -231,9 +238,127 @@ fn index_qualified(out: *Out, module_name: str, name: str) -> err {
     ret byte(out, 34u8)
 }
 
+// Where a comment line's text begins. A comment is the leading trivia of the `Newline`
+// token that ends its line, and that trivia runs to the newline byte itself, so the
+// line is the trivia with its indentation skipped.
+fn index_comment_start(source: str, token: lex.Token) -> usize {
+    var at = token.leading_start
+    while at < token.start && (source[at] == 32u8 || source[at] == 9u8) { at += 1usize }
+    ret at
+}
+
+// Whether the token at `at` ends one of spec section 3's `///` documentation lines. The
+// comment must start the line -- a trailing `/// x` after code is trivia of the same
+// `Newline`, so the token before one that qualifies is itself a newline.
+fn index_is_doc_line(source: str, tokens: []const lex.Token, at: usize) -> bool {
+    let token = tokens[at]
+    if token.kind != .Newline { ret false }
+    if at != 0usize && tokens[at - 1usize].kind != .Newline { ret false }
+    let start = index_comment_start(source, token)
+    if token.start < start + 3usize { ret false }
+    if source[start] != 47u8 { ret false }
+    if source[start + 1usize] != 47u8 { ret false }
+    if source[start + 2usize] != 47u8 { ret false }
+    ret true
+}
+
+// The token a declaration's attributes begin at. Section 12 requires them adjacent, so
+// only newlines sit between one and the next; `@name` and `@name(...)` are both walked.
+// ponytail: 64 attributes on one declaration is the cap, raise it if anything needs more.
+fn index_attribute_start(tokens: []const lex.Token, opener: usize) -> usize {
+    var at = opener
+    var guard = 0usize
+    while guard < 64usize {
+        guard += 1usize
+        var probe = at
+        while probe > 0usize && tokens[probe - 1usize].kind == .Newline { probe = probe - 1usize }
+        if probe < 2usize { ret at }
+        var back = probe - 1usize
+        if tokens[back].kind == .PunctRParen {
+            var depth = 0usize
+            var closed = false
+            while closed == false {
+                if tokens[back].kind == .PunctRParen { depth += 1usize }
+                if tokens[back].kind == .PunctLParen {
+                    depth = depth - 1usize
+                    if depth == 0usize { closed = true }
+                }
+                if closed == false {
+                    if back == 0usize { ret at }
+                    back = back - 1usize
+                }
+            }
+            if back == 0usize { ret at }
+            back = back - 1usize
+        }
+        if tokens[back].kind != .Identifier { ret at }
+        if back == 0usize { ret at }
+        if tokens[back - 1usize].kind != .PunctAt { ret at }
+        at = back - 1usize
+    }
+    ret at
+}
+
+// `[...]` of the attribute names written on a declaration, in source order.
+fn index_attributes(out: *Out, source: str, tokens: []const lex.Token, from: usize, opener: usize) -> err {
+    try byte(out, 91u8)
+    var at = from
+    var written = 0usize
+    while at < opener {
+        if tokens[at].kind == .PunctAt && at + 1usize < opener && tokens[at + 1usize].kind == .Identifier {
+            if written != 0usize { try byte(out, 44u8) }
+            let name = tokens[at + 1usize]
+            try quoted(out, source[name.start..name.end])
+            written += 1usize
+        }
+        at += 1usize
+    }
+    ret byte(out, 93u8)
+}
+
+// Spec section 3's documentation: the run of `///` lines immediately above, one optional
+// space after the slashes removed and the lines joined with LF. A blank line or an
+// ordinary `//` ends the run, because neither is a documentation line.
+fn index_documentation(out: *Out, source: str, tokens: []const lex.Token, from: usize) -> err {
+    var first = from
+    while first > 0usize && index_is_doc_line(source, tokens, first - 1usize) { first = first - 1usize }
+    if first == from { ret text(out, "null") }
+    try byte(out, 34u8)
+    var at = first
+    while at < from {
+        if at != first { try text(out, "\\n") }
+        var start = index_comment_start(source, tokens[at]) + 3usize
+        if start < tokens[at].start && source[start] == 32u8 { start += 1usize }
+        try quoted_body(out, source[start..tokens[at].start])
+        at += 1usize
+    }
+    ret byte(out, 34u8)
+}
+
+// A declaration's signature is its header: everything up to the body a reader does not
+// need in order to call it. The body opens at the first `{` outside any bracket, so a
+// declaration without one -- a `const`, a `var`, an `extern fn` -- is its own signature.
+fn index_signature(out: *Out, source: str, tokens: []const lex.Token, opener: usize, closer: usize) -> err {
+    var depth = 0usize
+    var at = opener
+    var last = closer
+    while at <= closer {
+        let kind = tokens[at].kind
+        if kind == .PunctLParen || kind == .PunctLBracket { depth += 1usize }
+        if (kind == .PunctRParen || kind == .PunctRBracket) && depth != 0usize { depth = depth - 1usize }
+        if kind == .PunctLBrace && depth == 0usize && at != opener {
+            last = at - 1usize
+            at = closer
+        }
+        at += 1usize
+    }
+    ret quoted(out, source[tokens[opener].start..tokens[last].end])
+}
+
 // `index --json` (D232): a `symbol` record for the module and each of its module-scope
-// declarations. Locals, parameters, fields, members, documentation, signatures and every
-// reference are the gap -- the resolver does not carry them, so this names only what it does.
+// declarations, each carrying its signature, its attributes and its `///` documentation
+// (D251). Locals, parameters, fields, members and every reference are the gap -- the
+// resolver does not carry them, so this names only what it does.
 fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize) -> (usize, err) {
     let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
     if scan_error != ok { ret (2usize, scan_error) }
@@ -253,7 +378,7 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
             var name_index = symbol.token_start + 1usize
             if symbol.kind == .Extern { name_index += 1usize }
             if symbol.token_end == 0usize || symbol.token_end > token_count || name_index >= token_count { ret (2usize, parse.InvalidSyntax) }
-            let record_error = index_symbol_record(&out, root, path, module_name, emitted, symbol, tokens[symbol.token_start], tokens[symbol.token_end - 1usize], tokens[name_index])
+            let record_error = index_symbol_record(&out, root, path, source, module_name, emitted, symbol, tokens[0usize..token_count], symbol.token_start, symbol.token_end - 1usize, name_index)
             if record_error != ok { ret (2usize, record_error) }
             emitted += 1usize
         }
@@ -275,7 +400,11 @@ fn index_module_record(out: *Out, module_name: str) -> err {
     ret flush(out)
 }
 
-fn index_symbol_record(out: *Out, root: str, path: str, module_name: str, id: usize, symbol: resolve.Symbol, opener: lex.Token, closer: lex.Token, name_token: lex.Token) -> err {
+fn index_symbol_record(out: *Out, root: str, path: str, source: str, module_name: str, id: usize, symbol: resolve.Symbol, tokens: []const lex.Token, first: usize, last: usize, name_index: usize) -> err {
+    let opener = tokens[first]
+    let closer = tokens[last]
+    let name_token = tokens[name_index]
+    let attribute_start = index_attribute_start(tokens, first)
     try text(out, "{\"record\":\"symbol\",\"id\":")
     try decimal(out, id)
     try text(out, ",\"kind\":")
@@ -286,11 +415,17 @@ fn index_symbol_record(out: *Out, root: str, path: str, module_name: str, id: us
     try index_qualified(out, module_name, symbol.name)
     try text(out, ",\"module\":")
     try quoted(out, module_name)
-    try text(out, ",\"signature\":null,\"span\":")
+    try text(out, ",\"signature\":")
+    try index_signature(out, source, tokens, first, last)
+    try text(out, ",\"span\":")
     try span(out, root, path, opener.start, closer.end, opener.line, opener.column, closer.end_line, closer.end_column, opener.column_utf16, closer.end_column_utf16)
     try text(out, ",\"selection_span\":")
     try span(out, root, path, name_token.start, name_token.end, name_token.line, name_token.column, name_token.end_line, name_token.end_column, name_token.column_utf16, name_token.end_column_utf16)
-    try text(out, ",\"container_id\":0,\"attributes\":[],\"documentation\":null}")
+    try text(out, ",\"container_id\":0,\"attributes\":")
+    try index_attributes(out, source, tokens, attribute_start, first)
+    try text(out, ",\"documentation\":")
+    try index_documentation(out, source, tokens, attribute_start)
+    try byte(out, 125u8)
     ret flush(out)
 }
 

@@ -4719,3 +4719,35 @@ polygons, joints, slopes and one-way platforms -- is genuinely large, and
 platformer or a top-down ARPG actually uses. It gets registered when a game needs to stack
 rigid bodies, not before. `e.fmt.tiled` is likewise left out: importing TMX is a thin
 adapter over `e.fmt.xml` and `e.fmt.json`, not a codec.
+
+## D251 -- A symbol carries its signature, its attributes and its `///` documentation
+
+`index --json` named every module-scope declaration (D232) and left three of section
+7's fields empty: `signature` was null, `attributes` was `[]`, `documentation` was null.
+All three are answerable from the token stream the command already scans, so they are
+filled from it, and the resolver -- which carries none of them -- is not widened.
+
+The signature is the declaration's header: the source from its first token to the token
+before the first `{` outside any bracket. A function's is everything up to its body; a
+`const`, a `var`, an `error` or an `extern fn`, having no body, is its own signature; a
+struct's stops at `struct`. That is the text a reader needs to use the declaration and
+none of how it is written.
+
+Attributes are spec section 12's: adjacent to the declaration, so the walk back from the
+opening keyword crosses newlines, then either `@name` or `@name(...)`, and stops at the
+first token that is neither. The names come out in source order.
+
+Documentation is spec section 3's, as written there: the run of `///` lines immediately
+above, one optional space after the slashes removed, joined with LF; a blank line or an
+ordinary `//` ends the run. Two facts of the lexer shaped the code. A comment is the
+leading trivia of the `Newline` token that ends its line, not of the token that follows,
+so the run is read off consecutive `Newline` tokens walking back from the attributes.
+And `Token.leading_comment` does not mean "this trivia holds a comment": it records
+whether the trivia *began* inside one, the continuation flag the trivia scanner needs.
+The first draft tested it and found no documentation anywhere. Whether a line is a
+`///` line is decided by its first three non-blank bytes, and nothing else.
+
+The run attaches through the attributes -- documentation above `@test` documents the
+test -- because attributes are part of the declaration, and a reader writes the doc
+above the whole thing. tests/conformance/tools/index.e pins a two-line doc, a documented
+`@test`, and a run that a blank line detaches.
