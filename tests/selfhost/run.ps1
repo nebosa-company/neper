@@ -1715,6 +1715,11 @@ cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_timeo
 if ($LASTEXITCODE -ne 1) { throw "test --json deadline exited $LASTEXITCODE, expected 1" }
 [IO.File]::WriteAllText($timeoutActual, ([IO.File]::ReadAllText($timeoutActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $timeoutActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_timeout.expected.jsonl')).Hash) { throw "test --json deadline differs from the conformance corpus" }
+# Every record of the corpus against docs/schemas/neper-v1.schema.json (D250). The
+# goldens are what the commands emit, byte for byte, so validating them validates the
+# emitters; the script skips itself where the `jsonschema` package is absent.
+& python (Join-Path $repo 'scripts/validate_stream.py')
+if ($LASTEXITCODE -ne 0) { throw "the conformance corpus does not validate against the v1 schema" }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 $fillsPath = Join-Path $testBuild 'debug-fills-selfhost.exe'

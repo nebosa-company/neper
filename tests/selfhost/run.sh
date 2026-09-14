@@ -1858,6 +1858,11 @@ $test_build/neper-self test-file "$conformance_root/tools/test_timeout.e" "$repo
 sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$timeout_actual"
 cmp -s "$timeout_actual" "$conformance_root/tools/test_timeout.expected.jsonl" || { printf '%s
 ' "test --json deadline differs from the conformance corpus" >&2; exit 1; }
+# Every record of the corpus against docs/schemas/neper-v1.schema.json (D250). The
+# goldens are what the commands emit, byte for byte, so validating them validates the
+# emitters; the script skips itself where the `jsonschema` package is absent.
+python3 "$repo/scripts/validate_stream.py" || { printf '%s
+' "the conformance corpus does not validate against the v1 schema" >&2; exit 1; }
 # Section 11's debug fills (D217): a fresh allocation reads 0xCD and a reset's memory
 # 0xDD in the debug build, and neither in release.
 fills_path="$test_build/debug-fills-selfhost"

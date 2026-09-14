@@ -4654,3 +4654,28 @@ Interest management -- replicating only what a player can see, which is both a b
 saving and the standard measure against maphacks -- is the natural meeting of
 `e.game.vision` and `e.game.netsync`. They are deliberately not coupled: the game wires
 one to the other, so neither module forces the other on anyone.
+
+## D250 -- The corpus is validated against the v1 schema, by both suites
+
+`docs/schemas/neper-v1.schema.json` has described the machine protocols since section 1
+was written, and nothing checked anything against it: the schema and the emitters could
+drift apart indefinitely and the only symptom would be a consumer failing somewhere
+else. `scripts/validate_stream.py` closes that, and both suites run it.
+
+It validates the committed goldens, not a freshly captured stream, because the suites
+already compare every emitted stream to its golden byte for byte. The goldens therefore
+*are* what the commands emit, and validating them validates the emitters -- without
+ordering the schema check after every command, and without a second capture path that
+could itself drift. Today that is 895 records across 23 `.jsonl` files, plus
+`docs/modules.json` as a whole document: three of the schema's five top-level shapes
+(`streamRecord`, `buildManifest`, `modulePlan`). `sourceMap` and `packageManifest` are
+described and unproduced, so they are validated the day something emits them.
+
+Two details earn their lines. A validator that accepted everything would pass all 895
+records and prove nothing, so before the corpus the script validates one record that
+must fail -- a header whose `command` is not in the registry -- and exits non-zero if
+the schema takes it. And the suites so far have needed nothing but the toolchain; rather
+than make `jsonschema` a hard prerequisite of running them, an absent package prints a
+skip and exits zero. The check runs wherever the package is installed, which is both
+development hosts, and a fresh machine still gets a green suite.
+
