@@ -13,3 +13,15 @@ fn arithmetic_holds(a: *mem.Arena) -> err {
 fn reports_a_failure(a: *mem.Arena) -> err {
     ret Mismatch
 }
+
+fn pick(values: []const i32, index: usize) -> i32 {
+    ret values[index]
+}
+
+@test
+fn crashes(a: *mem.Arena) -> err {
+    var values: [5]i32 = zero
+    let chosen = pick(values[..], usize(values[0usize]) + 7usize)
+    if chosen == 0i32 { ret ok }
+    ret Mismatch
+}

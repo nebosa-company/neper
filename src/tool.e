@@ -195,9 +195,206 @@ fn captured(out: *Out, value: str) -> err {
     ret quoted(out, value)
 }
 
+// The byte a `line:column` names in `source`, and the column in UTF-16 units: the trap
+// record carries the lexer's columns, which count code points.
+fn trap_byte_at(source: str, line: usize, column: usize) -> (usize, usize) {
+    var at = 0usize
+    var current = 1usize
+    while current < line && at < source.len {
+        if source[at] == 10u8 { current += 1usize }
+        at += 1usize
+    }
+    var seen = 1usize
+    var seen_utf16 = 1usize
+    while seen < column && at < source.len && source[at] != 10u8 {
+        let width = lex.utf8_width(source, at)
+        if width == 0usize { ret (at, seen_utf16) }
+        seen += 1usize
+        seen_utf16 += 1usize
+        if width == 4usize { seen_utf16 += 1usize }
+        at += width
+    }
+    ret (at, seen_utf16)
+}
+
+fn trap_decimal(digits: str) -> usize {
+    var value = 0usize
+    var at = 0usize
+    while at < digits.len {
+        if digits[at] < 48u8 || digits[at] > 57u8 { ret value }
+        value = value * 10usize + usize(digits[at] - 48u8)
+        at += 1usize
+    }
+    ret value
+}
+
+// `file:line` split at its last colon; `(0, 0)` when there is none.
+fn trap_split_line(site: str) -> (usize, usize) {
+    var colon = site.len
+    var at = 0usize
+    while at < site.len {
+        if site[at] == 58u8 { colon = at }
+        at += 1usize
+    }
+    if colon == site.len { ret (0usize, 0usize) }
+    ret (colon, trap_decimal(site[colon + 1usize..site.len]))
+}
+
+fn trap_line_end(bytes: str, from: usize) -> usize {
+    var at = from
+    while at < bytes.len && bytes[at] != 10u8 { at += 1usize }
+    if at > from && bytes[at - 1usize] == 13u8 { ret at - 1usize }
+    ret at
+}
+
+// A frame's source: the operand, when the frame's file is the operand as the child
+// spells it and the line lies inside the operand's own text; null otherwise, since the
+// printed path does not say which root another module lies under.
+fn trap_source(out: *Out, path: str, file: str, spelled: str, line: usize, line_offset: usize, line_count: usize) -> err {
+    if graph.same(file, spelled) && line > line_offset && line - line_offset <= line_count {
+        try text(out, "{\"root\":\"operand\",\"path\":")
+        try quoted(out, path)
+        ret byte(out, 125u8)
+    }
+    ret text(out, "null")
+}
+
+// `module.function` with the child's module name -- the runner's, under `test` --
+// replaced by the operand's when the frame lies in the operand's text.
+// The module name a file is printed under: its stem, section 2's naming rule.
+fn trap_stem(spelled: str) -> str {
+    var start = 0usize
+    var at = 0usize
+    while at < spelled.len {
+        if spelled[at] == 47u8 || spelled[at] == 92u8 { start = at + 1usize }
+        at += 1usize
+    }
+    var end = spelled.len
+    if end >= start + 2usize && spelled[end - 2usize] == 46u8 && spelled[end - 1usize] == 101u8 { end = end - 2usize }
+    ret spelled[start..end]
+}
+
+fn trap_function(out: *Out, function: str, module_name: str, spelled: str, file: str, line: usize, line_offset: usize, line_count: usize) -> err {
+    var dot = 0usize
+    while dot < function.len && function[dot] != 46u8 { dot += 1usize }
+    let spelled_module = trap_stem(spelled)
+    if dot < function.len && graph.same(function[0usize..dot], spelled_module) && graph.same(file, spelled) && line > line_offset && line - line_offset <= line_count {
+        try byte(out, 34u8)
+        try quoted_body(out, module_name)
+        try quoted_body(out, function[dot..function.len])
+        ret byte(out, 34u8)
+    }
+    ret quoted(out, function)
+}
+
+fn trap_line_count(source: str) -> usize {
+    var count = 1usize
+    var at = 0usize
+    while at < source.len {
+        if source[at] == 10u8 { count += 1usize }
+        at += 1usize
+    }
+    ret count
+}
+
+// Section 11's trap record read back into section 7's `trap` payload (D253). The
+// record is `file:line:col: trap[kind]: values`, then one `  at module.function
+// (file:line)` frame per line. The operand's own file -- spelled `spelled` by the
+// child, its text beginning `line_offset` lines down -- gets a byte-precise span and
+// the `operand` source. `values` is the record's text after the kind, as one entry:
+// the operands are in there, and which words are operands is the check's business.
+// Without a record the payload is null.
+fn trap_json(out: *Out, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str, line_offset: usize) -> err {
+    var at = 0usize
+    var found = stderr_bytes.len
+    while at + 7usize <= stderr_bytes.len && found == stderr_bytes.len {
+        if graph.same(stderr_bytes[at..at + 7usize], ": trap[") { found = at }
+        at += 1usize
+    }
+    if found == stderr_bytes.len { ret text(out, "null") }
+    let line_count = trap_line_count(source)
+    var record_start = found
+    while record_start > 0usize && stderr_bytes[record_start - 1usize] != 10u8 { record_start = record_start - 1usize }
+    // `file:line:col`, split from the right.
+    let (column_colon, column) = trap_split_line(stderr_bytes[record_start..found])
+    let (line_colon, line) = trap_split_line(stderr_bytes[record_start..record_start + column_colon])
+    let file = stderr_bytes[record_start..record_start + line_colon]
+    var kind_end = found + 7usize
+    while kind_end < stderr_bytes.len && stderr_bytes[kind_end] != 93u8 { kind_end += 1usize }
+    try text(out, "{\"kind\":")
+    try quoted(out, stderr_bytes[found + 7usize..kind_end])
+    try text(out, ",\"span\":")
+    if graph.same(file, spelled) && line > line_offset && line - line_offset <= line_count {
+        let (offset, column_utf16) = trap_byte_at(source, line - line_offset, column)
+        try span(out, "operand", path, offset, offset, line - line_offset, column, line - line_offset, column, column_utf16, column_utf16)
+    } else {
+        try text(out, "null")
+    }
+    var values_start = kind_end + 1usize
+    if values_start < stderr_bytes.len && stderr_bytes[values_start] == 58u8 { values_start += 1usize }
+    if values_start < stderr_bytes.len && stderr_bytes[values_start] == 32u8 { values_start += 1usize }
+    let values_end = trap_line_end(stderr_bytes, kind_end)
+    try text(out, ",\"values\":[")
+    if values_start < values_end { try quoted(out, stderr_bytes[values_start..values_end]) }
+    try text(out, "],\"backtrace\":[")
+    var frames = 0usize
+    var cursor = trap_line_end(stderr_bytes, kind_end)
+    while cursor < stderr_bytes.len {
+        if stderr_bytes[cursor] == 13u8 || stderr_bytes[cursor] == 10u8 { cursor += 1usize }
+        let end = trap_line_end(stderr_bytes, cursor)
+        if end < cursor + 5usize || !graph.same(stderr_bytes[cursor..cursor + 5usize], "  at ") { ret text(out, "]}") }
+        // `  at module.function (file:line)`
+        var open = cursor + 5usize
+        while open < end && stderr_bytes[open] != 40u8 { open += 1usize }
+        var function_end = open
+        if function_end > cursor + 5usize && stderr_bytes[function_end - 1usize] == 32u8 { function_end = function_end - 1usize }
+        var close = end
+        if close > open && stderr_bytes[close - 1usize] == 41u8 { close = close - 1usize }
+        var site_start = open
+        if site_start < close { site_start += 1usize }
+        let (frame_colon, frame_line) = trap_split_line(stderr_bytes[site_start..close])
+        let frame_file = stderr_bytes[site_start..site_start + frame_colon]
+        if frames != 0usize { try byte(out, 44u8) }
+        try text(out, "{\"function\":")
+        try trap_function(out, stderr_bytes[cursor + 5usize..function_end], module_name, spelled, frame_file, frame_line, line_offset, line_count)
+        try text(out, ",\"source\":")
+        try trap_source(out, path, frame_file, spelled, frame_line, line_offset, line_count)
+        try text(out, ",\"line\":")
+        if frame_line == 0usize {
+            try text(out, "null")
+        } else {
+            if graph.same(frame_file, spelled) && frame_line > line_offset && frame_line - line_offset <= line_count { try decimal(out, frame_line - line_offset) } else { try decimal(out, frame_line) }
+        }
+        try byte(out, 125u8)
+        frames += 1usize
+        cursor = end
+    }
+    ret text(out, "]}")
+}
+
+// A failed test's `error`: the qualified name after `error: `, the runner's module
+// replaced by the operand's the way a frame's is.
+fn test_error_name(out: *Out, stderr_bytes: str, module_name: str, spelled: str) -> err {
+    if stderr_bytes.len < 7usize || !graph.same(stderr_bytes[0usize..7usize], "error: ") { ret text(out, "null") }
+    let end = trap_line_end(stderr_bytes, 7usize)
+    let name = stderr_bytes[7usize..end]
+    let spelled_module = trap_stem(spelled)
+    var dot = 0usize
+    while dot < name.len && name[dot] != 46u8 { dot += 1usize }
+    if dot < name.len && graph.same(name[0usize..dot], spelled_module) {
+        try byte(out, 34u8)
+        try quoted_body(out, module_name)
+        try quoted_body(out, name[dot..name.len])
+        ret byte(out, 34u8)
+    }
+    ret quoted(out, name)
+}
+
 // `run --json` (D231): the program's exit status and its whole stdout and stderr as one
-// record; a trap is not yet read out of the stderr text.
-fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str) -> err {
+// record, with section 11's trap record read back as the `trap` payload (D253).
+// `spelled` is the operand as the compiler was given it, which is how the child prints
+// it; `path` is section 2's operand identity, the basename.
+fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, (stdout_bytes.len + stderr_bytes.len) * 6usize + 256usize)
     if storage_error != ok { ret storage_error }
     var out = Out { bytes: storage, count: 0usize }
@@ -212,7 +409,9 @@ fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str) 
     try captured(&out, stdout_bytes)
     try text(&out, ",\"stderr\":")
     try captured(&out, stderr_bytes)
-    try text(&out, ",\"trap\":null}")
+    try text(&out, ",\"trap\":")
+    try trap_json(&out, stderr_bytes, module_name, path, source, spelled, 0usize)
+    try byte(&out, 125u8)
     ret flush(&out)
 }
 
@@ -856,7 +1055,7 @@ fn test_outcome_name(outcome: usize) -> str {
 // `test --json` (D240): the header, one buffered `test` record per @test function in source
 // order, a `test_summary`, and the result. duration_ms is 0 and no test times out yet -- real
 // timing and the structured trap payload are the gap; stderr still carries a crash's raw text.
-fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []const str, lines: []const usize, outcomes: []const usize, durations: []const usize, stdouts: []const str, stderrs: []const str, count: usize, summary_duration: usize, timeout_s: usize) -> err {
+fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str, spelled: str, names: []const str, lines: []const usize, outcomes: []const usize, statuses: []const i32, durations: []const usize, stdouts: []const str, stderrs: []const str, count: usize, summary_duration: usize, timeout_s: usize) -> err {
     var capacity = 8192usize
     var at = 0usize
     while at < count {
@@ -882,7 +1081,7 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []con
                 if outcomes[at] == 2usize { crashed += 1usize } else { timedout += 1usize }
             }
         }
-        try test_record(&out, module_name, root, path, names[at], lines[at], outcomes[at], durations[at], timeout_s, stdouts[at], stderrs[at])
+        try test_record(&out, module_name, root, path, source, spelled, names[at], lines[at], outcomes[at], statuses[at], durations[at], timeout_s, stdouts[at], stderrs[at])
         at += 1usize
     }
     try text(&out, "{\"record\":\"test_summary\",\"passed\":")
@@ -906,7 +1105,9 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, names: []con
     ret flush(&out)
 }
 
-fn test_record(out: *Out, module_name: str, root: str, path: str, name: str, line: usize, outcome: usize, duration_ms: usize, timeout_s: usize, stdout_bytes: str, stderr_bytes: str) -> err {
+// The runner is the operand's text two `use` lines down (D240), and `spelled` is its
+// path as the child prints it; a trap or an error name in it maps back onto the operand.
+fn test_record(out: *Out, module_name: str, root: str, path: str, source: str, spelled: str, name: str, line: usize, outcome: usize, status: i32, duration_ms: usize, timeout_s: usize, stdout_bytes: str, stderr_bytes: str) -> err {
     try text(out, "{\"record\":\"test\",\"name\":")
     try quoted(out, name)
     try text(out, ",\"module\":")
@@ -919,7 +1120,13 @@ fn test_record(out: *Out, module_name: str, root: str, path: str, name: str, lin
     try decimal(out, line)
     try text(out, ",\"outcome\":")
     try quoted(out, test_outcome_name(outcome))
-    try text(out, ",\"error\":null,\"message\":null,\"duration_ms\":")
+    try text(out, ",\"error\":")
+    if outcome == 0usize {
+        try text(out, "\"ok\"")
+    } else {
+        if outcome == 1usize { try test_error_name(out, stderr_bytes, module_name, "nptest-runner.e") } else { try text(out, "null") }
+    }
+    try text(out, ",\"message\":null,\"duration_ms\":")
     try decimal(out, duration_ms)
     try text(out, ",\"timeout_s\":")
     try decimal(out, timeout_s)
@@ -927,7 +1134,31 @@ fn test_record(out: *Out, module_name: str, root: str, path: str, name: str, lin
     try captured(out, stdout_bytes)
     try text(out, ",\"stderr\":")
     try captured(out, stderr_bytes)
-    try text(out, ",\"trap\":null}")
+    try text(out, ",\"trap\":")
+    // A crash with no trap record is section 7's `exit` kind, its values the status.
+    if outcome == 2usize && stderr_bytes.len >= 7usize && graph.same(stderr_bytes[0usize..7usize], "error: ") == false {
+        var probe = 0usize
+        var recorded = false
+        while probe + 7usize <= stderr_bytes.len && recorded == false {
+            if graph.same(stderr_bytes[probe..probe + 7usize], ": trap[") { recorded = true }
+            probe += 1usize
+        }
+        if recorded {
+            try trap_json(out, stderr_bytes, module_name, path, source, spelled, 2usize)
+        } else {
+            try text(out, "{\"kind\":\"exit\",\"span\":null,\"values\":[\"")
+            if status < 0i32 {
+                try byte(out, 45u8)
+                try decimal(out, usize(0i32 - status))
+            } else {
+                try decimal(out, usize(status))
+            }
+            try text(out, "\"],\"backtrace\":[]}")
+        }
+    } else {
+        try trap_json(out, stderr_bytes, module_name, path, source, spelled, 2usize)
+    }
+    try byte(out, 125u8)
     ret flush(out)
 }
 

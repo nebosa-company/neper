@@ -1143,6 +1143,8 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if stderrs_error != ok { ret stderrs_error }
     let (durations, durations_error) = mem.alloc[usize](a, 256usize)
     if durations_error != ok { ret durations_error }
+    let (statuses, statuses_error) = mem.alloc[i32](a, 256usize)
+    if statuses_error != ok { ret statuses_error }
     let suite_start = nptest_now()
     var index_storage: [8]u8 = zero
     var at = 0usize
@@ -1166,6 +1168,7 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
             if status == 124i32 { outcome = 3usize }
         }
         outcomes[at] = outcome
+        statuses[at] = status
         stdouts[at] = child_out
         stderrs[at] = child_err
         at += 1usize
@@ -1175,7 +1178,7 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if suite_end > suite_start { suite_ms = (suite_end - suite_start) / 1000000usize }
     var timeout_s = (timeout_ms + 999usize) / 1000usize
     if timeout_s == 0usize { timeout_s = 1usize }
-    try tool.test_json(a, nptest_stem(args[2usize]), "operand", basename(args[2usize]), names[0usize..count], lines[0usize..count], outcomes[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
+    try tool.test_json(a, nptest_stem(args[2usize]), "operand", basename(args[2usize]), text, runner_path, names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
     var any = false
     at = 0usize
     while at < count {
@@ -3143,7 +3146,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         os.exit(2i32)
                         ret ok
                     }
-                    try tool.run_record(a, status, stdout_captured, stderr_captured)
+                    try tool.run_record(a, status, stdout_captured, stderr_captured, loaded.modules[0usize].name, basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].path)
                     try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
                     try write_json_string(&report, args[6usize])
                     try write_all(&report, ",\"process_exit_code\":")

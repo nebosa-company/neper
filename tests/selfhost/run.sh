@@ -1811,6 +1811,13 @@ run_actual="$test_build/conformance-tools-run.jsonl"
 (cd "$test_build" && ./neper-self run "$conformance_root/tools/run.e" "$repo" x64 linux conformance-tools-run.out --json > "conformance-tools-run.jsonl")
 cmp -s "$run_actual" "$conformance_root/tools/run.expected.jsonl" || { printf '%s
 ' "run --json differs from the conformance corpus" >&2; exit 1; }
+# `run --json` on a program that traps (D253): section 11's record read back as the
+# `trap` payload. The operand is spelled relative to the test build dir, whose depth is
+# the same on both hosts, so the child's stderr -- and the golden -- carry no host path.
+run_trap_actual="$test_build/conformance-tools-run-trap.jsonl"
+(cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_trap.e "$repo" x64 linux conformance-tools-run-trap.out --json > "conformance-tools-run-trap.jsonl")
+cmp -s "$run_trap_actual" "$conformance_root/tools/run_trap.expected.jsonl" || { printf '%s
+' "run --json on a trapping program differs from the conformance corpus" >&2; exit 1; }
 # `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
 index_actual="$test_build/conformance-tools-index.jsonl"
 $test_build/neper-self index-file "$conformance_root/tools/index.e" "$repo" x64 linux --json > "$index_actual"
@@ -1847,6 +1854,8 @@ $test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 li
 [ "$test_status" -eq 1 ]
 # duration_ms is real wall time (D241): normalise it out before the byte-exact compare.
 sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_actual"
+# The crashed test's stderr spells the runner by WORKDIR (D253): normalise that too.
+sed -i "s#$test_build/nptest-runner.e#nptest-runner.e#g" "$test_actual"
 cmp -s "$test_actual" "$conformance_root/tools/test.expected.jsonl" || { printf '%s
 ' "test --json differs from the conformance corpus" >&2; exit 1; }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's

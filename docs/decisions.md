@@ -4751,3 +4751,44 @@ The run attaches through the attributes -- documentation above `@test` documents
 test -- because attributes are part of the declaration, and a reader writes the doc
 above the whole thing. tests/conformance/tools/index.e pins a two-line doc, a documented
 `@test`, and a run that a blank line detaches.
+
+## D253 -- A trap's record is read back as the `trap` payload, under `run` and `test`
+
+Section 11's trap protocol writes `file:line:col: trap[kind]: values` to stderr, then
+one `  at module.function (file:line)` line per frame. `run --json` and `test --json`
+captured those bytes and left section 7's `trap` field null. It is now the structured
+payload the schema describes, read back out of the captured stderr by one parser both
+commands share.
+
+`kind` is the bracketed word. `span` is byte-precise and zero-width at the site, when
+the site's file is the operand: the record carries the lexer's line and column, which
+count code points, so the byte and the UTF-16 column are found by walking the operand's
+text the driver already holds. `values` is the record's text after the kind, as one
+entry. The spec says the values are the operands the check saw, and they are in that
+text -- but which words are operands is decided per kind by the check that wrote them,
+and a parser guessing at digit runs would read the `8` of `u8` in a cast trap as one.
+One lossless entry is honest; splitting it per kind is the gap. `backtrace` has one
+frame per `  at` line: the qualified function, the operand source where the frame's
+file is the operand, and the line.
+
+Two facts of the child shaped the mapping. The child spells the operand's file exactly
+as the compiler was given it -- an absolute path prints absolute -- so the payload keys
+on that spelling, not on a basename, and the `run` conformance fixture is spelled
+relative to the test build directory, whose depth is the same on both hosts, so its
+golden carries no host path. And under `test` the child is not the operand but the
+generated runner: the operand's text two `use` lines down, spelled by WORKDIR (D240).
+A trap in it is therefore mapped back -- lines shifted by two, the runner's module name
+replaced by the operand's in each frame's function -- when the frame lies inside the
+operand's own line count. A frame in the runner's scaffolding (`nptest_dispatch`,
+`main`) keeps its printed name with no source: that is where it is. The suites
+normalise the WORKDIR spelling out of the captured stderr the way they already
+normalise `duration_ms`.
+
+Two smaller fields follow from the same read. A crash with no record is the spec's
+`exit` kind, its one value the status. And a test's `error` is `"ok"` when it passed
+and the qualified name after `error: ` when it failed, the runner's module name mapped
+to the operand's the same way -- `test.Mismatch`, not `nptest-runner.Mismatch`.
+
+A frame in a module other than the operand has no source, because the printed path
+does not say which root it lies under and the driver has no primitive to find out; its
+qualified function names the module, which is enough to look it up.

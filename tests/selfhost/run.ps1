@@ -1676,6 +1676,12 @@ if ($LASTEXITCODE -ne 0) { throw "the executable of build --json exited $LASTEXI
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run `"$(Join-Path $conformanceRoot 'tools/run.e')`" `"$repo`" x64 windows conformance-tools-run.out --json > `"$runActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run.expected.jsonl')).Hash) { throw "run --json differs from the conformance corpus" }
+# `run --json` on a program that traps (D253): section 11's record read back as the
+# `trap` payload. The operand is spelled relative to the test build dir, whose depth is
+# the same on both hosts, so the child's stderr -- and the golden -- carry no host path.
+$runTrapActual = Join-Path $testBuild 'conformance-tools-run-trap.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_trap.e `"$repo`" x64 windows conformance-tools-run-trap.out --json > `"$runTrapActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runTrapActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_trap.expected.jsonl')).Hash) { throw "run --json on a trapping program differs from the conformance corpus" }
 # `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
@@ -1703,10 +1709,11 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestActual).Hash -ne (Get-
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
 $testActual = Join-Path $testBuild 'conformance-tools-test.jsonl'
-cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testActual`""
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test.e')`" `"$repo`" x64 windows `"$($testBuild.Replace('\', '/'))`" --json > `"$testActual`""
 if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" }
 # duration_ms is real wall time (D241): normalise it out before the byte-exact compare.
-[IO.File]::WriteAllText($testActual, ([IO.File]::ReadAllText($testActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
+# The crashed test's stderr spells the runner by WORKDIR (D253): normalise that too.
+[IO.File]::WriteAllText($testActual, ([IO.File]::ReadAllText($testActual) -replace '"duration_ms":\d+', '"duration_ms":0' -replace [regex]::Escape($testBuild.Replace('\', '/') + '/nptest-runner.e'), 'nptest-runner.e'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test.expected.jsonl')).Hash) { throw "test --json differs from the conformance corpus" }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.

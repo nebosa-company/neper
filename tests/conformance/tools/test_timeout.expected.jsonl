@@ -1,5 +1,5 @@
 {"schema":"neper-stream","version":1,"record":"header","command":"test","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
-{"record":"test","name":"returns_at_once","module":"test_timeout","file":{"root":"operand","path":"test_timeout.e"},"line":6,"outcome":"passed","error":null,"message":null,"duration_ms":0,"timeout_s":1,"stdout":"","stderr":"","trap":null}
+{"record":"test","name":"returns_at_once","module":"test_timeout","file":{"root":"operand","path":"test_timeout.e"},"line":6,"outcome":"passed","error":"ok","message":null,"duration_ms":0,"timeout_s":1,"stdout":"","stderr":"","trap":null}
 {"record":"test","name":"never_returns","module":"test_timeout","file":{"root":"operand","path":"test_timeout.e"},"line":11,"outcome":"timeout","error":null,"message":null,"duration_ms":0,"timeout_s":1,"stdout":"","stderr":"","trap":null}
 {"record":"test_summary","passed":1,"failed":0,"crashed":0,"timeout":1,"total":2,"duration_ms":0}
 {"record":"result","ok":false,"exit_code":1,"data":{"tests":2}}
