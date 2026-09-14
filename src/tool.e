@@ -556,11 +556,20 @@ fn index_signature(out: *Out, source: str, tokens: []const lex.Token, opener: us
 
 // `index --json` (D232): a `symbol` record for the module and each of its module-scope
 // declarations, each carrying its signature, its attributes and its `///` documentation
-// (D251). Locals, parameters, fields, members and every reference are the gap -- the
-// resolver does not carry them, so this names only what it does.
+// (D251), and under a function or type its parameters, fields and members from the parse
+// tree (D258). Locals and every reference are the gap.
 fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize) -> (usize, err) {
     let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
     if scan_error != ok { ret (2usize, scan_error) }
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, source.len + 1024usize)
+    if nodes_error != ok { ret (2usize, nodes_error) }
+    let (children, children_error) = mem.alloc[syntax.Child](a, source.len + 1024usize)
+    if children_error != ok { ret (2usize, children_error) }
+    var tree: parse.Tree = zero
+    let init_error = parse.init_tree(&tree, nodes, children)
+    if init_error != ok { ret (2usize, init_error) }
+    let parse_error = parse.parse(&tree, source)
+    if parse_error != ok { ret (2usize, parse_error) }
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
     var out = Out { bytes: storage, count: 0usize }
@@ -580,6 +589,26 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
             let record_error = index_symbol_record(&out, root, path, source, module_name, emitted, symbol, tokens[0usize..token_count], symbol.token_start, symbol.token_end - 1usize, name_index)
             if record_error != ok { ret (2usize, record_error) }
             emitted += 1usize
+            if symbol.kind == .Function || symbol.kind == .Type || symbol.kind == .Extern {
+                let (owner_storage, owner_error) = mem.alloc[u8](a, module_name.len + 1usize + symbol.name.len)
+                if owner_error != ok { ret (2usize, owner_error) }
+                var owner_at = 0usize
+                while owner_at < module_name.len {
+                    owner_storage[owner_at] = module_name[owner_at]
+                    owner_at += 1usize
+                }
+                owner_storage[owner_at] = 46u8
+                owner_at += 1usize
+                var name_at = 0usize
+                while name_at < symbol.name.len {
+                    owner_storage[owner_at] = symbol.name[name_at]
+                    owner_at += 1usize
+                    name_at += 1usize
+                }
+                let (nested, nested_error) = index_nested(a, &out, root, path, source, module_name, owner_storage[0usize..owner_at], &tree, tokens[0usize..token_count], symbol.token_start, symbol.token_end - 1usize, emitted - 1usize, emitted)
+                if nested_error != ok { ret (2usize, nested_error) }
+                emitted += nested
+            }
         }
         at += 1usize
     }
@@ -600,6 +629,12 @@ fn index_module_record(out: *Out, module_name: str) -> err {
 }
 
 fn index_symbol_record(out: *Out, root: str, path: str, source: str, module_name: str, id: usize, symbol: resolve.Symbol, tokens: []const lex.Token, first: usize, last: usize, name_index: usize) -> err {
+    ret index_record(out, root, path, source, module_name, id, index_kind_name(symbol.kind), symbol.name, module_name, tokens, first, last, name_index, 0usize)
+}
+
+// One symbol record: `owner` is the qualified name this one nests under -- the module for
+// a declaration, `module.Type` for a field or member, `module.fn` for a parameter (D258).
+fn index_record(out: *Out, root: str, path: str, source: str, module_name: str, id: usize, kind: str, name: str, owner: str, tokens: []const lex.Token, first: usize, last: usize, name_index: usize, container_id: usize) -> err {
     let opener = tokens[first]
     let closer = tokens[last]
     let name_token = tokens[name_index]
@@ -607,11 +642,11 @@ fn index_symbol_record(out: *Out, root: str, path: str, source: str, module_name
     try text(out, "{\"record\":\"symbol\",\"id\":")
     try decimal(out, id)
     try text(out, ",\"kind\":")
-    try quoted(out, index_kind_name(symbol.kind))
+    try quoted(out, kind)
     try text(out, ",\"name\":")
-    try quoted(out, symbol.name)
+    try quoted(out, name)
     try text(out, ",\"qualified_name\":")
-    try index_qualified(out, module_name, symbol.name)
+    try index_qualified(out, owner, name)
     try text(out, ",\"module\":")
     try quoted(out, module_name)
     try text(out, ",\"signature\":")
@@ -620,12 +655,57 @@ fn index_symbol_record(out: *Out, root: str, path: str, source: str, module_name
     try span(out, root, path, opener.start, closer.end, opener.line, opener.column, closer.end_line, closer.end_column, opener.column_utf16, closer.end_column_utf16)
     try text(out, ",\"selection_span\":")
     try span(out, root, path, name_token.start, name_token.end, name_token.line, name_token.column, name_token.end_line, name_token.end_column, name_token.column_utf16, name_token.end_column_utf16)
-    try text(out, ",\"container_id\":0,\"attributes\":")
+    try text(out, ",\"container_id\":")
+    try decimal(out, container_id)
+    try text(out, ",\"attributes\":")
     try index_attributes(out, source, tokens, attribute_start, first)
     try text(out, ",\"documentation\":")
     try index_documentation(out, source, tokens, attribute_start)
     try byte(out, 125u8)
     ret flush(out)
+}
+
+// The section 7 kind of a nested declaration node, or "" for a node that is not one.
+fn index_nested_kind(kind: syntax.Kind) -> str {
+    if kind == .Parameter { ret "parameter" }
+    if kind == .FieldDecl { ret "field" }
+    if kind == .EnumMember || kind == .UnionMember { ret "member" }
+    ret ""
+}
+
+// The parameters, fields and members declared inside the top-level declaration whose
+// tokens are [first, last]: each nested node starts at its name token, so one pass over
+// the tree keeps the ones whose start lies in that range, and they go out in token
+// order, since the parser appends a child before its parent (D258). Returns how many
+// records were written; `owner` is the declaration's qualified name.
+// ponytail: 256 nested declarations per top-level one is the cap; raise it if a struct needs more.
+fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, owner: str, tree: *parse.Tree, tokens: []const lex.Token, first: usize, last: usize, container_id: usize, next_id: usize) -> (usize, err) {
+    var picked: [256]usize = zero
+    var picked_count = 0usize
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if !node.top_level && node.token_start >= first && node.token_start <= last && node.token_end > node.token_start && index_nested_kind(node.kind).len != 0usize && picked_count < 256usize {
+            // Insertion by token position keeps the list ordered as it grows.
+            var slot = picked_count
+            while slot > 0usize && tree.nodes[picked[slot - 1usize]].token_start > node.token_start {
+                picked[slot] = picked[slot - 1usize]
+                slot = slot - 1usize
+            }
+            picked[slot] = node_index
+            picked_count += 1usize
+        }
+        node_index += 1usize
+    }
+    var written = 0usize
+    while written < picked_count {
+        let node = tree.nodes[picked[written]]
+        let name_token = tokens[node.token_start]
+        let nested_error = index_record(out, root, path, source, module_name, next_id + written, index_nested_kind(node.kind), source[name_token.start..name_token.end], owner, tokens, node.token_start, node.token_end - 1usize, node.token_start, container_id)
+        if nested_error != ok { ret (0usize, nested_error) }
+        written += 1usize
+    }
+    ret (written, ok)
 }
 
 fn index_result(out: *Out, symbols: usize) -> err {

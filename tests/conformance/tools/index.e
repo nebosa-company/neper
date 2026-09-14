@@ -1,8 +1,15 @@
 // `index --json` (D232): the module and its module-scope declarations as symbol records,
-// each with its signature, attributes and `///` documentation (D251).
+// each with its signature, attributes and `///` documentation (D251), and the parameters,
+// fields and members nested under a function or type (D258).
 use e.mem
 const K: i32 = 7i32
-type Pair = struct { a: i32, b: i32 }
+/// A pair of halves.
+type Pair = struct {
+    /// The left half.
+    a: i32,
+    b: i32,
+}
+type Colour = enum u8 { Red, Green }
 error Bad
 var counter: i32 = 0i32
 /// Adds two numbers.

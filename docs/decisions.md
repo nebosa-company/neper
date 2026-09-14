@@ -4895,3 +4895,23 @@ implement -- one statement per line, one blank line between top-level declaratio
 100-column wrapping, sorted `use` and attributes -- are not refusals; they are the
 formatter's own gap, named in the readiness row, and D255's inline brace spacing sits
 on the "one statement per line" question until that is decided.
+
+## D258 -- A declaration's parameters, fields and members are symbols under it
+
+`index --json` named module-scope declarations only (D232, D251), because it read the
+resolver's symbol table and the resolver carries nothing below that level. What lies
+below is in the parse tree, which the command did not build. It builds it now, once,
+and under each function or type emits what the tree declares inside it: `parameter`,
+`field` and `member` symbols -- the union enum's and the enum's members alike -- with
+the declaration's id as `container_id`, the qualified name `module.Decl.name`, and each
+carrying its own signature (`a: i32`, `Red`) and its own `///` documentation, since spec
+section 3 attaches documentation to fields and members too.
+
+Two facts of the tree shaped the walk. A nested declaration node starts at its name
+token, so a symbol's name and selection span are the node's first token and nothing
+has to be searched for. And the parser appends a child before its parent, so tree
+order is not source order: the nodes inside one declaration are picked by token range
+and put out in token order, or a struct's fields would follow the next declaration.
+
+The result's symbol count includes them. tests/conformance/tools/index.e now pins a
+documented field, two enum members and three parameters under their owners.
