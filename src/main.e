@@ -3138,6 +3138,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     os.exit(2i32)
                     ret ok
                 }
+                // Every build writes `.neper/<mode>/build-manifest.json` under the project root
+                // (section 7, D254), with the executable it just wrote as the one artifact.
+                try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, args[6usize], packed)
                 if running {
                     let (status, stdout_captured, stderr_captured, run_error) = run_program(a, args[6usize])
                     if run_error != ok {

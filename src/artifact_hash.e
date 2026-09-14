@@ -268,43 +268,52 @@ fn sha_hex_digit(value: usize) -> u8 {
     ret u8(97usize + value - 10usize)
 }
 
-// The lowercase hex SHA-256 of the bytes, into the arena. `bytes` holds one byte per slot.
-fn sha256_hex(a: *mem.Arena, bytes: []const usize) -> (str, err) {
-    var offset = 0usize
-    while offset < bytes.len {
-        if bytes[offset] > 255usize { ret ("", InvalidByte) }
-        offset += 1usize
-    }
-    // A scratch buffer holds the message plus the 0x80 byte, zero padding to a multiple
-    // of 64, and the 8-byte big-endian bit length.
+// The lowercase hex SHA-256 of the bytes, into the arena. The message is walked a
+// 64-byte block at a time through one block buffer -- no copy of it is made, since an
+// executable of some megabytes widened to a slot per byte, twice, is what the
+// self-hosted compiler ran out of arena on (D254).
+fn sha256_hex(a: *mem.Arena, bytes: []const u8) -> (str, err) {
+    var state = [8]usize{ 1779033703usize, 3144134277usize, 1013904242usize, 2773480762usize, 1359893119usize, 2600822924usize, 528734635usize, 1541459225usize }
+    var block: [64]usize = zero
     let total = bytes.len
-    var padded = total + 1usize + 8usize
-    while padded % 64usize != 0usize { padded += 1usize }
-    let (scratch, scratch_error) = mem.alloc[usize](a, padded)
-    if scratch_error != ok { ret ("", scratch_error) }
     var at = 0usize
-    while at < total {
-        scratch[at] = bytes[at] & 255usize
-        at += 1usize
+    while at + 64usize <= total {
+        var fill = 0usize
+        while fill < 64usize {
+            block[fill] = usize(bytes[at + fill])
+            fill += 1usize
+        }
+        sha_compress(state[..], block[..])
+        at += 64usize
     }
-    scratch[total] = 128usize
-    at = total + 1usize
-    while at < padded {
-        scratch[at] = 0usize
-        at += 1usize
+    // The tail: what remains, the 0x80 byte, zeros to 56 mod 64, and the bit length --
+    // one block when the tail fits before the length, two otherwise.
+    var fill = 0usize
+    while at + fill < total {
+        block[fill] = usize(bytes[at + fill])
+        fill += 1usize
+    }
+    block[fill] = 128usize
+    fill += 1usize
+    if fill > 56usize {
+        while fill < 64usize {
+            block[fill] = 0usize
+            fill += 1usize
+        }
+        sha_compress(state[..], block[..])
+        fill = 0usize
+    }
+    while fill < 56usize {
+        block[fill] = 0usize
+        fill += 1usize
     }
     let bits = total * 8usize
     var byte_index = 0usize
     while byte_index < 8usize {
-        scratch[padded - 1usize - byte_index] = (bits >> (byte_index * 8usize)) & 255usize
+        block[63usize - byte_index] = (bits >> (byte_index * 8usize)) & 255usize
         byte_index += 1usize
     }
-    var state = [8]usize{ 1779033703usize, 3144134277usize, 1013904242usize, 2773480762usize, 1359893119usize, 2600822924usize, 528734635usize, 1541459225usize }
-    var block_at = 0usize
-    while block_at < padded {
-        sha_compress(state[..], scratch[block_at..block_at + 64usize])
-        block_at += 64usize
-    }
+    sha_compress(state[..], block[..])
     let (hex, hex_error) = mem.alloc[u8](a, 64usize)
     if hex_error != ok { ret ("", hex_error) }
     var word = 0usize

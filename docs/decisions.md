@@ -4792,3 +4792,42 @@ to the operand's the same way -- `test.Mismatch`, not `nptest-runner.Mismatch`.
 A frame in a module other than the operand has no source, because the printed path
 does not say which root it lies under and the driver has no primitive to find out; its
 qualified function names the module, which is enough to look it up.
+
+## D254 -- A build writes its manifest, into a directory the project makes once
+
+Section 7 says every build writes `.neper/<mode>/build-manifest.json`. `build-manifest`
+(D238) could print the object; no build wrote it, and the object had no artifact in it.
+Now `emit-executable` -- and `run`, which is a build first -- writes it under the
+project root after the executable is saved: `mode` is `release` under `--release` and
+`debug` otherwise, and `artifacts` carries the executable as it was named, kind
+`executable`, the target, and the SHA-256 of the bytes just written. The `build-manifest`
+command emits the same object through the same writer, with no artifact, because it runs
+no build.
+
+The directory is the project's to make. The fixed os surface (spec section 12, the
+bootstrap's `os.e`) has `open`, `readdir`, `spawn` and no `mkdir`, and the compiler must
+stay inside that surface to be built by the bootstrap. Three ways around were tried and
+put down. Adding `os.mkdir` to the surface is the right fix -- one line in the bootstrap's
+intrinsic table, a C body per host, a lowering entry, and a body in each runtime prefix
+-- and a change of that shape has cost a session before (D149-D151); it is recorded as
+the gap, not folded into this. Creating it through the host's shell worked in neither
+form: `cmd /c mkdir` runs Git's `mkdir.exe` rather than the internal command once the
+argument is quoted, which the runtime's spawn always does, and a child with no standard
+handles at all is refused by `CreateProcess`. And writing the manifest somewhere that
+does exist -- beside the executable -- would put it where no consumer looks. So the
+build writes the manifest when `.neper/<mode>/` exists and writes nothing when it does
+not: an absent directory is `NotFound` from `open`, and that one error is taken as "not
+asked for". A consumer that wants the manifest creates the directory once, the way a
+repository has a `.git`. Both suites make it, then check the manifest a build wrote
+validates against the schema and carries the SHA-256 of the executable on disk.
+
+`.neper/` is ignored by git, since every build under the repository -- its fixtures'
+project roots included -- would otherwise leave one behind.
+
+The artifact hash found a second thing. `sha256_hex` (D238) took one byte per `usize`
+slot and copied the whole message into a padded scratch of the same shape, so hashing a
+5.5 MB compiler cost 88 MB of arena; the bootstrap-built compiler has that, the
+self-hosted one does not, and the stable-stage build exited 1 with nothing on stderr --
+the first time the manifest was written for anything bigger than a fixture. It now takes
+bytes and walks them a 64-byte block at a time through one block buffer, the message
+never copied; the `abc` vector, the corpus goldens and `sha256sum` agree.

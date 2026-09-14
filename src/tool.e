@@ -992,36 +992,36 @@ fn manifest_basename(path: str) -> str {
 
 // The SHA-256 of a module's source bytes, widened one byte per slot for the hasher.
 fn manifest_sha256(a: *mem.Arena, content: str) -> (str, err) {
-    let (widened, widen_error) = mem.alloc[usize](a, content.len + 1usize)
-    if widen_error != ok { ret ("", widen_error) }
-    var at = 0usize
-    while at < content.len {
-        widened[at] = usize(content[at])
-        at += 1usize
-    }
-    let (digest, digest_error) = artifact_hash.sha256_hex(a, widened[0usize..content.len])
+    let (digest, digest_error) = artifact_hash.sha256_hex(a, content)
     ret (digest, digest_error)
 }
 
-// `build-manifest --json` (D236): the canonical `neper-build-manifest` object of section 7 --
+// `build-manifest --json` (D238): the canonical `neper-build-manifest` object of section 7 --
 // versions, target, mode, root module and one input per source module with its SHA-256.
-// Not yet: the dependency interface/body split, libraries, assets, the built artifact's hash,
-// and non-empty options; those wait on the parts of a build this command does not run.
+// This command runs no build, so its mode is debug and its artifacts are empty; a build
+// writes the same object with its artifact to `.neper/<mode>/build-manifest.json` (D254).
+// Not yet: the dependency interface/body split, libraries, assets and non-empty options.
 fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize)
     if storage_error != ok { ret (2usize, storage_error) }
     var out = Out { bytes: storage, count: 0usize }
-    let build_error = manifest_write(a, &out, arch, os_name, g)
+    let build_error = manifest_write(a, &out, arch, os_name, g, "debug", "", "")
     if build_error != ok { ret (2usize, build_error) }
+    let flush_error = flush(&out)
+    if flush_error != ok { ret (2usize, flush_error) }
     ret (0usize, ok)
 }
 
-fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph) -> err {
+// The object, into `out`, without a newline: the command flushes it as a record and a
+// build saves it as a file. An empty `artifact_path` is no artifact.
+fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, artifact_path: str, artifact_sha256: str) -> err {
     try text(out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1,\"target\":\"")
     try text(out, arch)
     try byte(out, 45u8)
     try text(out, os_name)
-    try text(out, "\",\"mode\":\"debug\",\"root_module\":")
+    try text(out, "\",\"mode\":\"")
+    try text(out, mode)
+    try text(out, "\",\"root_module\":")
     if g.count == 0usize {
         try text(out, "null")
     } else {
@@ -1040,8 +1040,82 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try byte(out, 125u8)
         at += 1usize
     }
-    try text(out, "],\"dependencies\":[],\"libraries\":[],\"assets\":[],\"artifacts\":[],\"options\":{}}")
-    ret flush(out)
+    try text(out, "],\"dependencies\":[],\"libraries\":[],\"assets\":[],\"artifacts\":[")
+    if artifact_path.len != 0usize {
+        try text(out, "{\"path\":")
+        try quoted(out, artifact_path)
+        try text(out, ",\"kind\":\"executable\",\"target\":\"")
+        try text(out, arch)
+        try byte(out, 45u8)
+        try text(out, os_name)
+        try text(out, "\",\"sha256\":")
+        try quoted(out, artifact_sha256)
+        try byte(out, 125u8)
+    }
+    ret text(out, "],\"options\":{}}")
+}
+
+fn manifest_join(a: *mem.Arena, dir: str, name: str) -> (str, err) {
+    var separator = 1usize
+    if dir.len != 0usize && (dir[dir.len - 1usize] == 47u8 || dir[dir.len - 1usize] == 92u8) { separator = 0usize }
+    let (buffer, buffer_error) = mem.alloc[u8](a, dir.len + separator + name.len)
+    if buffer_error != ok { ret ("", buffer_error) }
+    var at = 0usize
+    while at < dir.len {
+        buffer[at] = dir[at]
+        at += 1usize
+    }
+    if separator == 1usize {
+        buffer[at] = 47u8
+        at += 1usize
+    }
+    var from = 0usize
+    while from < name.len {
+        buffer[at] = name[from]
+        at += 1usize
+        from += 1usize
+    }
+    ret (buffer[0usize..at], ok)
+}
+
+// Every build writes `.neper/<mode>/build-manifest.json` under the project root (section 7,
+// D254) when that directory exists, the executable it just wrote as the one artifact with
+// its SHA-256. `main` sits at the bootstrap's local cap, so the mode is settled here.
+fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, artifact_path: str, packed: []const u8) -> err {
+    var mode = "debug"
+    if release_mode { mode = "release" }
+    let (dot_dir, dot_error) = manifest_join(a, g.project.root, ".neper")
+    if dot_error != ok { ret dot_error }
+    let (mode_dir, mode_error) = manifest_join(a, dot_dir, mode)
+    if mode_error != ok { ret mode_error }
+    let (manifest_path, path_error) = manifest_join(a, mode_dir, "build-manifest.json")
+    if path_error != ok { ret path_error }
+    let (digest, digest_error) = manifest_sha256(a, packed)
+    if digest_error != ok { ret digest_error }
+    let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
+    if storage_error != ok { ret storage_error }
+    var out = Out { bytes: storage, count: 0usize }
+    try manifest_write(a, &out, arch, os_name, g, mode, artifact_path, digest)
+    try byte(&out, 10u8)
+    let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
+    // The fixed os surface has no mkdir, so `.neper/<mode>/` is the project's to make,
+    // once; until it exists the build has nowhere to put the manifest and writes none.
+    // ponytail: add os.mkdir to the fixed surface (bootstrap and both runtimes) and make
+    // the directory here when a consumer needs the manifest without that step.
+    let (file, open_error) = os.open(a, manifest_path, flags)
+    if open_error == os.NotFound { ret ok }
+    if open_error != ok { ret open_error }
+    var at = 0usize
+    var write_error = ok
+    while at < out.count && write_error == ok {
+        let (written, chunk_error) = os.write(file, out.bytes[at..out.count])
+        write_error = chunk_error
+        if written == 0usize && chunk_error == ok { write_error = Capacity }
+        at += written
+    }
+    let close_error = os.close(file)
+    if write_error != ok { ret write_error }
+    ret close_error
 }
 
 // The section 7 name of a test outcome: 0 passed, 1 failed, 2 crashed.
@@ -1053,8 +1127,8 @@ fn test_outcome_name(outcome: usize) -> str {
 }
 
 // `test --json` (D240): the header, one buffered `test` record per @test function in source
-// order, a `test_summary`, and the result. duration_ms is 0 and no test times out yet -- real
-// timing and the structured trap payload are the gap; stderr still carries a crash's raw text.
+// order, a `test_summary`, and the result -- each with its real wall time (D242), its deadline
+// (D246), its error name and a crash's structured trap payload (D253).
 fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str, spelled: str, names: []const str, lines: []const usize, outcomes: []const usize, statuses: []const i32, durations: []const usize, stdouts: []const str, stderrs: []const str, count: usize, summary_duration: usize, timeout_s: usize) -> err {
     var capacity = 8192usize
     var at = 0usize

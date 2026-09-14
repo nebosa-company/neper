@@ -1662,6 +1662,9 @@ if ($LASTEXITCODE -ne 0) { throw "info --json exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $infoActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\info.x64-windows.expected.jsonl')).Hash) { throw "info --json differs from the conformance corpus" }
 # `emit-executable --json` (D230): the build stream, the executable named as given,
 # a rejected program's diagnostics as records; both byte for byte from testBuild.
+# A build writes `.neper/<mode>/build-manifest.json` under the project root when that
+# directory exists (D254); the repo is the corpus's project root, so it is made here.
+[void](New-Item -ItemType Directory -Force -Path (Join-Path $repo '.neper\debug'))
 foreach ($case in @(@('tools\build.e', 'build', 0), @('reject\scope.e', 'build_reject', 1))) {
     $buildActual = Join-Path $testBuild "conformance-tools-$($case[1]).jsonl"
     cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot $case[0])`" `"$repo`" x64 windows conformance-tools-$($case[1]).out --json > `"$buildActual`""
@@ -1671,6 +1674,13 @@ foreach ($case in @(@('tools\build.e', 'build', 0), @('reject\scope.e', 'build_r
 Copy-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out') -Destination (Join-Path $testBuild 'conformance-tools-build.exe') -Force
 & (Join-Path $testBuild 'conformance-tools-build.exe')
 if ($LASTEXITCODE -ne 0) { throw "the executable of build --json exited $LASTEXITCODE" }
+# The manifest the build.e build wrote: valid against the schema, naming the executable
+# as given with the SHA-256 of the bytes on disk.
+$manifestPath = Join-Path $repo '.neper\debug\build-manifest.json'
+& python (Join-Path $repo 'scripts/validate_stream.py') $manifestPath
+if ($LASTEXITCODE -ne 0) { throw 'the build manifest a build writes does not validate against the v1 schema' }
+$manifestArtifact = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"conformance-tools-build.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
+if ($manifestArtifact -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out')).Hash.ToLower()) { throw "the build manifest does not carry the executable's SHA-256" }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'

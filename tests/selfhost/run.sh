@@ -1795,6 +1795,9 @@ cmp -s "$info_actual" "$conformance_root/tools/info.x64-linux.expected.jsonl" ||
 ' "info --json differs from the conformance corpus" >&2; exit 1; }
 # `emit-executable --json` (D230): the build stream, the executable named as given,
 # a rejected program's diagnostics as records; both byte for byte from test_build.
+# A build writes `.neper/<mode>/build-manifest.json` under the project root when that
+# directory exists (D254); the repo is the corpus's project root, so it is made here.
+mkdir -p "$repo/.neper/debug"
 for build_case in 'tools/build.e build 0' 'reject/scope.e build_reject 1'; do
     set -- $build_case
     build_status=0
@@ -1805,6 +1808,13 @@ for build_case in 'tools/build.e build 0' 'reject/scope.e build_reject 1'; do
 done
 chmod +x "$test_build/conformance-tools-build.out"
 "$test_build/conformance-tools-build.out"
+# The manifest the build.e build wrote: valid against the schema, naming the executable
+# as given with the SHA-256 of the bytes on disk.
+python3 "$repo/scripts/validate_stream.py" "$repo/.neper/debug/build-manifest.json" || { printf '%s
+' "the build manifest a build writes does not validate against the v1 schema" >&2; exit 1; }
+manifest_artifact=$(sed -n 's/.*"artifacts":\[{"path":"conformance-tools-build.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
+[ "$manifest_artifact" = "$(sha256sum "$test_build/conformance-tools-build.out" | cut -c1-64)" ] || { printf '%s
+' "the build manifest does not carry the executable's SHA-256" >&2; exit 1; }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 run_actual="$test_build/conformance-tools-run.jsonl"
