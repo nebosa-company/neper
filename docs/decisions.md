@@ -5209,6 +5209,30 @@ Every link fixture numbers its checks that way, so a runner that reports `failed
 $LASTEXITCODE` always reports 1. The numbering still marks the failing line in the source;
 it is not a status. Left as it stands rather than changed under 175 fixtures here.
 
+## D269 -- `dis` lists mnemonics, from a decoder over what the emitter produces
+
+`dis --json` listed each function's bytes as hex (D233): faithful, and unreadable. The
+listing is now one line per instruction -- the function-relative offset, the mnemonic
+and operands in Intel order, the bytes after a `;` -- from `src/disasm_x64.e`, a
+linear-sweep decoder over the encodings `emit_x64.e` produces: the REX, 66, F2/F3 and
+lock prefixes; the one-byte map's moves, arithmetic, shifts, groups 1/3/5, pushes,
+pops, immediates, calls and jumps; the two-byte map's conditionals (jcc, setcc,
+cmovcc), movzx/movsx, imul, bt, xadd, cmpxchg, fences, syscall, ud2, and the scalar SSE
+forms with movd/movq; ModRM with SIB, disp8/disp32 and rip-relative memory; signed
+immediates; jump targets as offsets. A byte the table does not know is a `db` line,
+never a failure.
+
+Two things a decoder for this emitter has to know. Code selection lays section 11's
+trap record inline after an unconditional forward `jmp` -- the path, the kind, the
+operand text with 0/1 separator bytes -- and a sweep reads it as code; the bytes a
+`jmp` skips are listed as one `text` line when every one is printable, NUL, a
+separator or a newline, and decoded as the else-branch they otherwise are. And a `66`
+before `0F` is SSE's mandatory prefix, not an operand-size override: the first draft
+printed `movq r10w, xmm0`, which is what turned up when the listing was checked against
+GNU objdump. That check -- 3,546 instructions across three fixtures, every function up
+to its first inline text -- found no other semantic difference, and eight fixtures
+(42,000 instructions) list with no unknown byte. The per-host goldens of
+tests/conformance/tools/dis.e are regenerated; the bytes in them are the same.
 ## D270 -- One coordinate vocabulary for four shapes, and a tilemap that is bits beside tiles
 
 `e.game.grid` and `e.game.tilemap`, batched because a grid without a map to index is

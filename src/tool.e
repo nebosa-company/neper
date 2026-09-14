@@ -12,6 +12,7 @@ use nir
 use graph
 use project
 use artifact_hash
+use disasm_x64
 
 error Capacity
 error InvalidSource
@@ -717,10 +718,11 @@ fn index_result(out: *Out, symbols: usize) -> err {
 }
 
 // `dis --json` (D233): one `disassembly` record per function. The `text` is the
-// function's machine bytes as space-separated lowercase hex -- a faithful listing of
-// what code selection produced. Mnemonic (AT&T/Intel) disassembly is the gap.
+// function's listing (D269): one line per instruction -- the function-relative offset,
+// the Intel-order mnemonic and operands, then the bytes after `;` -- from a linear sweep
+// over the encodings emit_x64 produces; a byte the sweep does not know is a `db` line.
 fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const usize, machine_count: usize) -> err {
-    let (storage, storage_error) = mem.alloc[u8](a, machine_count * 3usize + 8192usize)
+    let (storage, storage_error) = mem.alloc[u8](a, machine_count * 64usize + 8192usize)
     if storage_error != ok { ret storage_error }
     var out = Out { bytes: storage, count: 0usize }
     try header(&out, "dis")
@@ -745,16 +747,15 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
         try text(&out, arch)
         try byte(&out, 45u8)
         try text(&out, os_name)
-        try text(&out, "\",\"text\":\"")
-        var byte_at = start
-        while byte_at < stop {
-            if byte_at != start { try byte(&out, 32u8) }
-            let value = machine[byte_at] & 255usize
-            try byte(&out, hex_digit(value / 16usize))
-            try byte(&out, hex_digit(value % 16usize))
-            byte_at += 1usize
-        }
-        try text(&out, "\"}")
+        try text(&out, "\",\"text\":")
+        let checkpoint = mem.mark(a)
+        let (listing, listing_error) = mem.alloc[u8](a, (stop - start) * 48usize + 64usize)
+        if listing_error != ok { ret listing_error }
+        let (listed, decode_error) = disasm_x64.disassemble(machine[start..stop], listing)
+        if decode_error != ok { ret decode_error }
+        try quoted(&out, listing[0usize..listed])
+        mem.reset(a, checkpoint)
+        try byte(&out, 125u8)
         try flush(&out)
         at += 1usize
     }
