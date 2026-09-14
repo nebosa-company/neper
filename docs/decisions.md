@@ -5858,6 +5858,24 @@ where two are declared (E-TYPE-0003); and an `i32` as an `if` condition, the
 catch-all E-TYPE-9999. What stays unpinned is E-LINK-9999, an error-hash collision
 no small fixture produces, and E-GPU, E-SAFETY and E-TOOL-9999, whose subjects do not
 yet diagnose. Both suites check every fixture.
+
+## D298 -- `neper index` with no operand indexes the project
+
+Spec section 13: `index` with no `FILE.e` covers every `.e` under the project's roots.
+`index-project DIR ROOT ARCH OS WORKDIR --json` is the shape `check-project` and
+`test-project` have: every `.e` under DIR/src and DIR/lib in byte order, each indexed
+by `index-file --json --path REL` in its own process -- `index-file` now takes the
+`--path` identity the other file commands take -- and the symbol, reference and
+diagnostic records forwarded under one header, the result carrying the symbol,
+reference and module totals, exit 1 when any module failed. Section 5 says a symbol's
+`id` is its record number among the stream's symbols, so each child's `id`,
+`container_id` and numeric `target_id` are moved up by the symbols forwarded before
+it; `null` stays `null`. The short `index` with no operand, or a `--` flag first, is
+that over the project the current directory is in, working under
+`.neper/debug/index/`. tests/conformance/tools/index_project pins a two-module
+project; both suites compare the positional and the short form to it. `--all`, the
+toolchain's `lib/`, is not yet taken.
+
 ## D299 -- `e.text.utf8`: the question asked once
 
 `str` is bytes and nothing about the type says they are well-formed. Two modules have

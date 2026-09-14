@@ -960,7 +960,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     if !(is_build || is_run || is_check || is_fmt || is_index || is_dis || is_manifest || is_test) { ret (args, false, ok) }
     // `check` and `test` with no operand (D294): the project the current directory is in,
     // as `check-project` and `test-project`; a `--` flag first is no operand either.
-    let project_form = (is_check || is_test || is_fmt) && (args.len == 2usize || (args[2usize].len >= 2usize && args[2usize][0usize] == 45u8 && args[2usize][1usize] == 45u8))
+    let project_form = (is_check || is_test || is_fmt || is_index) && (args.len == 2usize || (args[2usize].len >= 2usize && args[2usize][0usize] == 45u8 && args[2usize][1usize] == 45u8))
     if args.len < 3usize && !project_form { ret (args, false, ok) }
     var file = ""
     if !project_form { file = args[2usize] }
@@ -1076,9 +1076,12 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         }
         var leaf = "check"
         if is_test { leaf = "test" }
+        if is_index { leaf = "index" }
         let (project_workdir, project_workdir_error) = workdir_under(a, dir, leaf)
         if project_workdir_error != ok { ret (args, false, project_workdir_error) }
-        if is_test { long_form[count] = "test-project" } else { long_form[count] = "check-project" }
+        long_form[count] = "check-project"
+        if is_test { long_form[count] = "test-project" }
+        if is_index { long_form[count] = "index-project" }
         long_form[count + 1usize] = dir
         long_form[count + 2usize] = root
         long_form[count + 3usize] = arch
@@ -1995,6 +1998,126 @@ fn str_after(a: str, b: str) -> bool {
 // one result with the total. A diagnostic in an imported module is dropped from that
 // child's stream: it is reported when that module is the one checked, and would
 // otherwise come out twice under two names.
+// `index-project DIR ROOT ARCH OS WORKDIR --json` (D298): every `.e` under DIR/src
+// and DIR/lib in byte order, each indexed by `index-file --json --path REL` in its own
+// process, the symbol, reference and diagnostic records forwarded under one header
+// and one result carrying the totals; a module that fails to index fails the command.
+fn index_project_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
+    report.json = true
+    report.file = os.stdout()
+    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+    let (paths, paths_error) = mem.alloc[str](a, 4096usize)
+    if paths_error != ok { ret paths_error }
+    let (rels, rels_error) = mem.alloc[str](a, 4096usize)
+    if rels_error != ok { ret rels_error }
+    var count = 0usize
+    var root_at = 0usize
+    while root_at < 2usize {
+        var leaf = "src"
+        if root_at == 1usize { leaf = "lib" }
+        let (dir, dir_error) = nptest_join(a, args[2usize], leaf)
+        if dir_error != ok { ret dir_error }
+        let (probe, probe_error) = os.readdir(a, dir)
+        if probe_error == ok { try walk_sources(a, dir, leaf, paths, rels, &count) }
+        root_at += 1usize
+    }
+    let (child_base, child_base_error) = nptest_join(a, args[6usize], "npindex-child")
+    if child_base_error != ok { ret child_base_error }
+    var symbols = 0usize
+    var references = 0usize
+    var failed = false
+    var at = 0usize
+    while at < count {
+        var argv: [9]str = zero
+        argv[0usize] = args[0usize]
+        argv[1usize] = "index-file"
+        argv[2usize] = paths[at]
+        argv[3usize] = args[3usize]
+        argv[4usize] = args[4usize]
+        argv[5usize] = args[5usize]
+        argv[6usize] = "--json"
+        argv[7usize] = "--path"
+        argv[8usize] = rels[at]
+        let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[..], child_base)
+        if spawn_error != ok { ret spawn_error }
+        if status != 0i32 { failed = true }
+        let (child_symbols, child_references, forward_error) = forward_index(&report, child_out, symbols)
+        if forward_error != ok { ret forward_error }
+        symbols += child_symbols
+        references += child_references
+        at += 1usize
+    }
+    if failed {
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"symbols\":")
+    } else {
+        try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"symbols\":")
+    }
+    try write_usize(&report, symbols)
+    try write_all(&report, ",\"references\":")
+    try write_usize(&report, references)
+    try write_all(&report, ",\"modules\":")
+    try write_usize(&report, count)
+    try write_all(&report, "}}\n")
+    if failed { os.exit(1i32) }
+    ret ok
+}
+
+// One index record with `base` added to its `id`, `container_id` and `target_id` when
+// they are numbers; `null` and every other byte copied as they are.
+fn forward_renumbered(report: *Sink, line: str, base: usize) -> err {
+    var at = 0usize
+    while at < line.len {
+        var key_len = 0usize
+        if at + 5usize <= line.len && same(line[at..at + 5usize], "\"id\":") && at > 0usize && (line[at - 1usize] == 44u8 || line[at - 1usize] == 123u8) { key_len = 5usize }
+        if at + 15usize <= line.len && same(line[at..at + 15usize], "\"container_id\":") { key_len = 15usize }
+        if at + 12usize <= line.len && same(line[at..at + 12usize], "\"target_id\":") { key_len = 12usize }
+        if key_len != 0usize && at + key_len < line.len && line[at + key_len] >= 48u8 && line[at + key_len] <= 57u8 {
+            try write_all(report, line[at..at + key_len])
+            var end = at + key_len
+            var value = 0usize
+            while end < line.len && line[end] >= 48u8 && line[end] <= 57u8 {
+                value = value * 10usize + usize(line[end] - 48u8)
+                end += 1usize
+            }
+            try write_usize(report, value + base)
+            at = end
+        } else {
+            try write_all(report, line[at..at + 1usize])
+            at += 1usize
+        }
+    }
+    ret ok
+}
+
+// Every record of one child's index stream but its header and result, forwarded as it
+// is; the symbols and references counted.
+fn forward_index(report: *Sink, stream: str, base: usize) -> (usize, usize, err) {
+    var symbols = 0usize
+    var references = 0usize
+    var at = 0usize
+    while at < stream.len {
+        var end = at
+        while end < stream.len && stream[end] != 10u8 { end += 1usize }
+        let line = stream[at..end]
+        let is_symbol = line.len > 18usize && same(line[0usize..18usize], "{\"record\":\"symbol\"")
+        let is_reference = line.len > 21usize && same(line[0usize..21usize], "{\"record\":\"reference\"")
+        let is_diagnostic = line.len > 22usize && same(line[0usize..22usize], "{\"record\":\"diagnostic\"")
+        if is_symbol || is_reference || is_diagnostic {
+            // Section 5: `id` is the record number among the stream's symbols, so a
+            // child's ids, and what points at them, move up by the symbols before it.
+            let write_error = forward_renumbered(report, line, base)
+            if write_error != ok { ret (0usize, 0usize, write_error) }
+            let newline_error = write_all(report, "\n")
+            if newline_error != ok { ret (0usize, 0usize, newline_error) }
+            if is_symbol { symbols += 1usize }
+            if is_reference { references += 1usize }
+        }
+        at = end + 1usize
+    }
+    ret (symbols, references, ok)
+}
+
 fn check_project_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     report.json = true
@@ -2306,7 +2429,9 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
         os.exit(1i32)
         ret ok
     }
-    let (index_exit, index_error) = tool.index_json(a, "operand", basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path)
+    var identity = basename(args[2usize])
+    if args.len == 9usize { identity = args[8usize] }
+    let (index_exit, index_error) = tool.index_json(a, "operand", identity, loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path)
     if index_error != ok { ret index_error }
     if index_exit != 0usize { os.exit(i32(index_exit)) }
     ret ok
@@ -3925,6 +4050,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
     if (args.len == 7usize || (args.len == 8usize && same(args[7usize], "--absolute-paths"))) && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
+    // `... --json --path REL` (D298): the operand's identity under its project's src.
+    if args.len == 9usize && same(args[1usize], "index-file") && same(args[6usize], "--json") && same(args[7usize], "--path") { ret index_command(a, args) }
+    // `index-project DIR ROOT ARCH OS WORKDIR --json` (D298): every module under DIR/src
+    // and DIR/lib, one stream.
+    if args.len == 8usize && same(args[1usize], "index-project") && same(args[7usize], "--json") { ret index_project_command(a, args) }
     // `fmt-file PATH [--json]` (D234): the operand's canonical layout as one `formatted` record.
     // `-` reads stdin under a `--path` identity, on every form (D289).
     let fmt_args = fmt_form(args)

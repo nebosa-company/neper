@@ -1808,6 +1808,16 @@ Copy-Item -LiteralPath (Join-Path $conformanceRoot 'format\layout.e') -Destinati
 cmd /c "`"$shortCompiler`" fmt `"$(Join-Path $testBuild 'fmt-in-place.e')`""
 if ($LASTEXITCODE -ne 0) { throw "fmt FILE exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'fmt-in-place.e')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'format\layout.expected.e')).Hash) { throw 'fmt FILE did not format the file in place' }
+# `index-project --json` (D298): every module under a project's src and lib, each
+# indexed under its path from the root, one stream; and `neper index` with no operand
+# from inside the project is the same stream.
+$indexProjectActual = Join-Path $testBuild 'conformance-tools-index-project.jsonl'
+cmd /c "`"$compiler`" index-project `"$(Join-Path $conformanceRoot 'tools\index_project')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$indexProjectActual`""
+if ($LASTEXITCODE -ne 0) { throw "index-project --json exited $LASTEXITCODE" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\index_project.expected.jsonl')).Hash) { throw 'index-project --json differs from the conformance corpus' }
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\index_project')`" && `"$shortCompiler`" index > `"$indexProjectActual`""
+if ($LASTEXITCODE -ne 0) { throw "the operand-less index exited $LASTEXITCODE" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\index_project.expected.jsonl')).Hash) { throw 'the operand-less index differs from index-project' }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'
