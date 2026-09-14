@@ -1861,7 +1861,9 @@ for build_case in 'tools/build.e build 0' 'reject/scope.e build_reject 1'; do
     cmp -s "$test_build/conformance-tools-$2.jsonl" "$conformance_root/tools/$2.expected.jsonl" || { printf '%s
 ' "emit-executable --json on $1 differs from the conformance corpus" >&2; exit 1; }
 done
-chmod +x "$test_build/conformance-tools-build.out"
+# The build wrote the file executable (D291): it runs as written, with no chmod first.
+[ -x "$test_build/conformance-tools-build.out" ] || { printf '%s
+' "the build did not write an executable file" >&2; exit 1; }
 "$test_build/conformance-tools-build.out"
 # The manifest the build.e build wrote: valid against the schema, naming the executable
 # as given with the SHA-256 of the bytes on disk.

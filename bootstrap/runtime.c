@@ -332,6 +332,22 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     return made ? NP_OK : np_error(GetLastError());
 }
 
+/* Windows keeps one bit of a mode: a file no one may write is read-only. */
+uint32_t neper_os_set_mode(NpArena *arena, const unsigned char *path, size_t path_len, uint32_t mode) {
+    wchar_t *wide = np_wide((NpStr){path, path_len});
+    DWORD current, wanted;
+    BOOL set;
+    (void)arena;
+    if (!wide) return NP_OUT_OF_MEMORY;
+    current = GetFileAttributesW(wide);
+    if (current == INVALID_FILE_ATTRIBUTES) { HeapFree(GetProcessHeap(), 0, wide); return np_error(GetLastError()); }
+    wanted = (mode & 0222u) ? (current & ~(DWORD)FILE_ATTRIBUTE_READONLY) : (current | FILE_ATTRIBUTE_READONLY);
+    if (!wanted) wanted = FILE_ATTRIBUTE_NORMAL;
+    set = SetFileAttributesW(wide, wanted);
+    HeapFree(GetProcessHeap(), 0, wide);
+    return set ? NP_OK : np_error(GetLastError());
+}
+
 void neper_os_current_dir(void *result, NpArena *arena) {
     unsigned char *out = (unsigned char *)result, *bytes;
     wchar_t *wide;
@@ -580,6 +596,15 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     if (!name) return NP_OUT_OF_MEMORY;
     made = mkdir(name, 0777); arena->off = saved;
     return made == 0 ? NP_OK : np_error(errno);
+}
+
+uint32_t neper_os_set_mode(NpArena *arena, const unsigned char *path, size_t path_len, uint32_t mode) {
+    size_t saved = arena ? arena->off : 0;
+    char *name = np_c_string_arena(arena, (NpStr){path, path_len});
+    int changed;
+    if (!name) return NP_OUT_OF_MEMORY;
+    changed = chmod(name, (mode_t)(mode & 07777u)); arena->off = saved;
+    return changed == 0 ? NP_OK : np_error(errno);
 }
 
 void neper_os_current_dir(void *result, NpArena *arena) {

@@ -5727,3 +5727,15 @@ positionals; the count-shaped matching it replaces accepted the same forms. Both
 suites take the field out of a `check` stream over an absolute operand and a `tokens`
 stream over a relative one and require the golden, having first required the field
 with the expected spelling.
+
+## D291 -- A Linux build writes its executable executable
+
+D231 launched a Linux program through `sh -c 'chmod +x -- "$0" && exec "$0" "$@"'`
+because the fixed surface opened files 0666 and had no way to change that; D240's
+test runner went the same way with the test index as `$1`. `os.set_mode` now follows
+D287, D289 and D290 onto the bootstrap's surface -- `chmod(2)`, and on Windows the one
+bit a mode has there, read-only when no write bit is set, as the per-host source
+already does -- and `emit-executable` and the artifact link set 0755 on a file they
+wrote for a Linux target, on either host. `run` and the test runner launch the file
+itself; nothing about their streams changes, since the shell only ever `exec`ed. The
+Linux suite requires the corpus build's executable to be one before running it.

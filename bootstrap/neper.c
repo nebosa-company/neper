@@ -1029,6 +1029,7 @@ static void install_os_intrinsics(Compiler *c) {
     Token token = c->tokens[0];
     Type u8 = type_make(TY_INT, "u8"), i32 = type_make(TY_INT, "i32");
     Type i64 = type_make(TY_INT, "i64"), usize = type_make(TY_INT, "usize");
+    Type u32 = type_make(TY_INT, "u32");
     Type error = type_make(TY_ERR, "err"), arena = type_make(TY_ARENA, "mem.Arena");
     Type string = type_make(TY_STR, "str"), byte_pointer = intrinsic_pointer(u8, 0);
     Type file = type_make(TY_NAMED, "os.File"), proc = type_make(TY_NAMED, "os.Proc");
@@ -1089,6 +1090,7 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.stderr", "neper_os_stderr"); intrinsic_returns(fn, 1, file, error);
     OS_FN("os.readdir", "neper_os_readdir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, entries, error);
     OS_FN("os.mkdir", "neper_os_mkdir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 1, error, error);
+    OS_FN("os.set_mode", "neper_os_set_mode"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "mode", u32); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.spawn", "neper_os_spawn"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "argv", const_strings); intrinsic_param(fn, token, "stdio", stdio_type); intrinsic_returns(fn, 2, proc, error);
     OS_FN("os.wait", "neper_os_wait"); intrinsic_param(fn, token, "p", proc); intrinsic_returns(fn, 2, i32, error);
     OS_FN("os.exit", "neper_os_exit"); intrinsic_param(fn, token, "code", i32); intrinsic_returns(fn, 0, error, error);
@@ -7262,7 +7264,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN CommandLineToArgvW:PROC\n"
         "EXTERN neper_os_set_args:PROC\nEXTERN neper_os_open:PROC\nEXTERN neper_os_read:PROC\n"
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
-        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_spawn:PROC\n"
+        "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"

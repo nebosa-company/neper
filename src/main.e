@@ -1113,9 +1113,6 @@ fn with_suffix(a: *mem.Arena, path: str, suffix: str) -> (str, err) {
 
 // `run` (D231): the executable just written, its stdout and stderr into files beside it,
 // read back whole once it has exited.
-// ponytail: the fixed os surface creates files 0666 and has no chmod, so on Linux the
-// program goes through `sh -c` which marks it executable first; drop that when
-// emit-executable can write an executable file.
 fn has_dashdash(args: []str) -> bool {
     var at = 7usize
     while at < args.len {
@@ -1178,14 +1175,6 @@ fn run_program(a: *mem.Arena, path: str, arguments: []str) -> (i32, str, str, er
         launched = spelled[0usize..launched.len]
     }
     argv[0usize] = launched
-    if same(host_target(), "x64-linux") {
-        // `$0` is the program; the shell hands every further argument on as `"$@"`.
-        argv[0usize] = "/bin/sh"
-        argv[1usize] = "-c"
-        argv[2usize] = "chmod +x -- \"$0\" && exec \"$0\" \"$@\""
-        argv[3usize] = launched
-        argc = 4usize
-    }
     var argument = 0usize
     while argument < arguments.len {
         argv[argc] = arguments[argument]
@@ -1384,22 +1373,12 @@ fn nptest_spawn(a: *mem.Arena, argv: []str, base: str) -> (i32, str, str, err) {
     ret (status, out_text, err_text, ok)
 }
 
-// Run one test by index; the fixed os surface has no chmod, so on Linux the child goes
-// through `sh -c` which marks the runner executable and forwards the index as $1.
+// Run one test by index; the runner was written executable by its build (D291).
 fn nptest_run(a: *mem.Arena, exe: str, index: str, base: str) -> (i32, str, str, err) {
-    var argv: [5]str = zero
-    var argc = 2usize
+    var argv: [2]str = zero
     argv[0usize] = exe
     argv[1usize] = index
-    if same(host_target(), "x64-linux") {
-        argv[0usize] = "/bin/sh"
-        argv[1usize] = "-c"
-        argv[2usize] = "chmod +x -- \"$0\" && exec \"$0\" \"$1\""
-        argv[3usize] = exe
-        argv[4usize] = index
-        argc = 5usize
-    }
-    let (status, out_text, err_text, spawn_error) = nptest_spawn(a, argv[0usize..argc], base)
+    let (status, out_text, err_text, spawn_error) = nptest_spawn(a, argv[..], base)
     ret (status, out_text, err_text, spawn_error)
 }
 
@@ -2708,6 +2687,14 @@ fn write_bytes(file: os.File, bytes: []u8) -> err {
     ret ok
 }
 
+// An executable for `os_name`: the bytes, then mode 0755 when the target is Linux, so
+// the file runs where it was written (D291). A Windows host keeps its one bit as is.
+fn save_executable(a: *mem.Arena, path: str, bytes: []u8, os_name: str) -> err {
+    try save_bytes(a, path, bytes)
+    if same(os_name, "linux") { try os.set_mode(a, path, 493u32) }
+    ret ok
+}
+
 fn save_bytes(a: *mem.Arena, path: str, bytes: []u8) -> err {
     let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
     let (file, open_error) = os.open(a, path, flags)
@@ -3565,6 +3552,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if packed_error != ok { ret packed_error }
         try emit_x64.pack(&executable, packed)
         try save_bytes(a, args[2usize], packed)
+        if is_linux { try os.set_mode(a, args[2usize], 493u32) }
         try io.print("artifact executable written\n")
         ret ok
     }
@@ -4203,7 +4191,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let (packed, packed_error) = mem.alloc[u8](a, executable.count)
                 if packed_error != ok { ret packed_error }
                 try emit_x64.pack(&executable, packed)
-                let save_error = save_bytes(a, args[6usize], packed)
+                let save_error = save_executable(a, args[6usize], packed, args[5usize])
                 if save_error != ok {
                     if !report.json { ret save_error }
                     try emit_command_diagnostic(&report, "E-CLI-9999", "the executable could not be written")
