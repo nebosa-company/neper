@@ -1667,6 +1667,15 @@ $checkProjectActual = Join-Path $testBuild 'conformance-tools-check-project.json
 cmd /c "`"$compiler`" check-project `"$(Join-Path $conformanceRoot 'tools/check_project')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$checkProjectActual`""
 if ($LASTEXITCODE -ne 1) { throw "check-project --json exited $LASTEXITCODE, not 1" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $checkProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/check_project.expected.jsonl')).Hash) { throw "check-project --json differs from the conformance corpus" }
+# `--language-version` (D283): the advertised 0.1 is accepted on any command and taken
+# off the arguments; another is E-CLI-9999 before any source is read, as a stream under
+# `--json` whose header names the command.
+$versionActual = Join-Path $testBuild 'conformance-tools-info-version.jsonl'
+cmd /c "`"$compiler`" info --json --language-version 0.1 > `"$versionActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $versionActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/info.x64-windows.expected.jsonl')).Hash) { throw '--language-version 0.1 changed the info stream' }
+cmd /c "`"$compiler`" info --json --language-version 9.9 > `"$versionActual`""
+if ($LASTEXITCODE -ne 2) { throw "an unadvertised language version exited $LASTEXITCODE, not 2" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $versionActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/info_version.expected.jsonl')).Hash) { throw 'an unadvertised language version is not refused as the conformance corpus says' }
 # `emit-executable --json` (D230): the build stream, the executable named as given,
 # a rejected program's diagnostics as records; both byte for byte from testBuild.
 # A build writes `.neper/<mode>/build-manifest.json` under the project root when that

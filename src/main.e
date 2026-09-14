@@ -881,7 +881,62 @@ error NotShortForm
 
 // `main` sits at the bootstrap's local cap, so the rewrite and the second dispatch
 // live here: `NotShortForm` means the arguments were already positional.
+// Section 1's header command for a spelling, short or positional; `info` for the rest.
+fn stream_command_name(spelling: str) -> str {
+    if same(spelling, "build") || same(spelling, "emit-executable") { ret "build" }
+    if same(spelling, "run") { ret "run" }
+    if same(spelling, "check") || same(spelling, "check-file") || same(spelling, "check-project") { ret "check" }
+    if same(spelling, "test") || same(spelling, "test-file") || same(spelling, "test-project") { ret "test" }
+    if same(spelling, "fmt") || same(spelling, "fmt-file") { ret "fmt" }
+    if same(spelling, "tokens") { ret "tokens" }
+    if same(spelling, "parse") { ret "parse" }
+    if same(spelling, "index") || same(spelling, "index-file") { ret "index" }
+    if same(spelling, "dis") || same(spelling, "dis-file") { ret "dis" }
+    ret "info"
+}
+
 fn dispatch_short_form(a: *mem.Arena, args: []str) -> err {
+    // `--language-version MAJOR.MINOR` (section 1, D283) selects an advertised version;
+    // the one advertised is 0.1, so a match is taken off the arguments and anything else
+    // is E-CLI-9999 before any source is read, as a record under `--json`.
+    var at = 1usize
+    while at + 1usize < args.len {
+        if same(args[at], "--language-version") {
+            if !same(args[at + 1usize], "0.1") {
+                var report = stderr_sink()
+                var json = false
+                var scan = 1usize
+                while scan < args.len {
+                    if same(args[scan], "--json") { json = true }
+                    scan += 1usize
+                }
+                if json {
+                    report.json = true
+                    report.file = os.stdout()
+                    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"")
+                    try write_all(&report, stream_command_name(args[1usize]))
+                    try write_all(&report, "\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+                }
+                try emit_command_diagnostic(&report, "E-CLI-9999", "the language version is not advertised; `info --json` lists the profiles")
+                if json { try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n") }
+                os.exit(2i32)
+                ret ok
+            }
+            let (stripped, stripped_error) = mem.alloc[str](a, args.len)
+            if stripped_error != ok { ret stripped_error }
+            var count = 0usize
+            var copy = 0usize
+            while copy < args.len {
+                if copy != at && copy != at + 1usize {
+                    stripped[count] = args[copy]
+                    count += 1usize
+                }
+                copy += 1usize
+            }
+            ret main(a, stripped[0usize..count])
+        }
+        at += 1usize
+    }
     let (long_form, rewritten, rewrite_error) = short_form(a, args)
     if rewrite_error != ok { ret rewrite_error }
     if !rewritten { ret NotShortForm }

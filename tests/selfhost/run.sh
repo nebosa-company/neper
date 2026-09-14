@@ -1801,6 +1801,17 @@ $test_build/neper-self check-project "$conformance_root/tools/check_project" "$r
 [ "$check_project_status" -eq 1 ]
 cmp -s "$test_build/conformance-tools-check-project.jsonl" "$conformance_root/tools/check_project.expected.jsonl" || { printf '%s
 ' "check-project --json differs from the conformance corpus" >&2; exit 1; }
+# `--language-version` (D283): the advertised 0.1 is accepted on any command and taken
+# off the arguments; another is E-CLI-9999 before any source is read, as a stream under
+# `--json` whose header names the command.
+$test_build/neper-self info --json --language-version 0.1 > "$test_build/conformance-tools-info-version.jsonl"
+cmp -s "$test_build/conformance-tools-info-version.jsonl" "$conformance_root/tools/info.x64-linux.expected.jsonl" || { printf '%s
+' "--language-version 0.1 changed the info stream" >&2; exit 1; }
+version_status=0
+$test_build/neper-self info --json --language-version 9.9 > "$test_build/conformance-tools-info-version.jsonl" || version_status=$?
+[ "$version_status" -eq 2 ]
+cmp -s "$test_build/conformance-tools-info-version.jsonl" "$conformance_root/tools/info_version.expected.jsonl" || { printf '%s
+' "an unadvertised language version is not refused as the conformance corpus says" >&2; exit 1; }
 # `emit-executable --json` (D230): the build stream, the executable named as given,
 # a rejected program's diagnostics as records; both byte for byte from test_build.
 # A build writes `.neper/<mode>/build-manifest.json` under the project root when that

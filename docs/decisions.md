@@ -5578,3 +5578,15 @@ identity function in a public surface is a promise that something happens.
 link/game_view pins 67 checks with four negative controls, one of them the stable-sort tie
 -- the case a sort that is merely correct would get wrong without ever failing a count.
 The shake is checked as a bound rather than a value, since it draws from the generator.
+
+## D283 -- `--language-version` selects the advertised profile, or refuses before reading
+
+Section 1: `--language-version MAJOR.MINOR` selects one advertised version and defaults
+to the newest non-experimental one; an unsupported value is E-CLI-9999 before source is
+read. There is one advertised profile, 0.1, so the flag on any command -- short or
+positional -- is taken off the arguments when it names 0.1 and the command proceeds
+unchanged; any other value is refused before a file is opened, as the human line or,
+under `--json`, as a stream whose header names the command the flag was given to and
+whose result exits 2. The flag is handled where the short spellings are (D276), ahead
+of every dispatch, which is what "before source is read" needs. The refusal is pinned
+by tests/conformance/tools/info_version.
