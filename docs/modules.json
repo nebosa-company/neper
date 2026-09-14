@@ -1277,7 +1277,7 @@
   {
    "name": "e.game.ecs",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1311,7 +1311,7 @@
   {
    "name": "e.game.loop",
    "layer": 2,
-   "surface": "planned",
+   "surface": "source",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [

@@ -2250,6 +2250,12 @@ $mathFixedExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $mathFixedExecutableWritten -ne 'executable written') { throw 'math.fixed PE executable emission failed' }
 & $mathFixedExecutablePath
 if ($LASTEXITCODE -ne 0) { throw "e.math.fixed failed check $LASTEXITCODE in the self-hosted PE executable" }
+# `e.game.loop` and `e.game.ecs` (D268): the fixed step and the entity store.
+$gameCoreExecutablePath = Join-Path $testBuild 'game-core-selfhost.exe'
+$gameCoreExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/game_core/src/main.e') $repo 'x64' 'windows' $gameCoreExecutablePath
+if ($LASTEXITCODE -ne 0 -or $gameCoreExecutableWritten -ne 'executable written') { throw 'game core PE executable emission failed' }
+& $gameCoreExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'e.game.loop or e.game.ecs failed a check in the self-hosted PE executable' }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }

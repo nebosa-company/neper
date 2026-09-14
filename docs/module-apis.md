@@ -3915,10 +3915,12 @@ fn dequantize(code: u32, f: Field) -> i32
 ```neper
 type Entity = struct { slot: u32, generation: u32 }
 type Column = struct { id: u16, stride: usize, bytes: []u8, present: []u64 }
-type Store = struct { columns: []Column, generations: []u32, free: []u32, count: usize }
+type Store = struct { columns: []Column, generations: []u32, free: []u32, count: usize, free_count: usize }
 type Query = struct { store: *Store, ids: []const u16, at: usize }
 error Full
 error Unknown
+error Stale
+error Size
 
 fn init(s: *Store, columns: []Column, generations: []u32, free: []u32) -> err
 fn spawn(s: *Store) -> (Entity, err)
@@ -3926,9 +3928,11 @@ fn despawn(s: *Store, e: Entity) -> err
 fn alive(s: Store, e: Entity) -> bool
 fn attach(s: *Store, e: Entity, id: u16, value: []const u8) -> err
 fn detach(s: *Store, e: Entity, id: u16) -> err
+fn has(s: Store, e: Entity, id: u16) -> bool
 fn get(s: Store, e: Entity, id: u16) -> ([]u8, err)
 fn query(s: *Store, ids: []const u16) -> Query
 fn next(q: *Query) -> (Entity, bool)
+fn live_count(s: Store) -> usize
 ```
 
 ### `e.game.loop`
@@ -3939,6 +3943,7 @@ fn next(q: *Query) -> (Entity, bool)
 // the elapsed time rather than reading one, so a scripted clock replays exactly.
 type Clock = struct { step: fixed.Fx, accumulator: fixed.Fx, ticks: u64 }
 type Timer = struct { remaining: fixed.Fx, period: fixed.Fx, repeating: bool }
+error Invalid
 
 fn init(c: *Clock, step: fixed.Fx) -> err
 fn advance(c: *Clock, elapsed: fixed.Fx, max_steps: usize) -> usize
