@@ -757,10 +757,21 @@ fn has_flag(args: []str, name: str) -> bool {
     var at = 7usize
     while at < args.len {
         if same(args[at], name) { ret true }
-        if same(args[at], "--arena") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") { at += 1usize }
         at += 1usize
     }
     ret false
+}
+
+// `--project DIR` (D263): the project root, in place of discovering it from the operand.
+fn project_flag(args: []str) -> str {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--project") { ret args[at + 1usize] }
+        if same(args[at], "--arena") { at += 1usize }
+        at += 1usize
+    }
+    ret ""
 }
 
 fn flags_known(args: []str) -> bool {
@@ -772,7 +783,12 @@ fn flags_known(args: []str) -> bool {
             if !size_ok { ret false }
             at += 1usize
         } else {
-            if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") { ret false }
+            if same(args[at], "--project") {
+                if at + 1usize >= args.len { ret false }
+                at += 1usize
+            } else {
+                if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") { ret false }
+            }
         }
         at += 1usize
     }
@@ -810,6 +826,7 @@ fn arena_flag(args: []str) -> usize {
             let (size, size_ok) = arena_size(args[at + 1usize])
             if size_ok { ret size }
         }
+        if same(args[at], "--project") { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -1113,6 +1130,144 @@ fn nptest_now() -> usize {
     ret usize(ticks)
 }
 
+// Section 2's module name of a path under a source root: the separators become dots and
+// the `.e` comes off -- `nested/deep.e` is `nested.deep`.
+fn nptest_module_name(a: *mem.Arena, rel: str) -> (str, err) {
+    let stem_end = nptest_stem_end(rel)
+    let (buffer, buffer_error) = mem.alloc[u8](a, stem_end)
+    if buffer_error != ok { ret ("", buffer_error) }
+    var at = 0usize
+    while at < stem_end {
+        buffer[at] = rel[at]
+        if buffer[at] == 47u8 || buffer[at] == 92u8 { buffer[at] = 46u8 }
+        at += 1usize
+    }
+    ret (buffer[0usize..stem_end], ok)
+}
+
+fn nptest_stem_end(path: str) -> usize {
+    if path.len >= 2usize && path[path.len - 2usize] == 46u8 && path[path.len - 1usize] == 101u8 { ret path.len - 2usize }
+    ret path.len
+}
+
+// The decimal after `key` in a JSON line, or 0 when the key is absent.
+fn json_usize_after(line: str, key: str) -> usize {
+    var at = 0usize
+    while at + key.len <= line.len {
+        if same(line[at..at + key.len], key) { ret nptest_parse_usize(line[at + key.len..line.len]) }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+// `test-project` (D263): `test-file --json --path REL` on every module under DIR/src in
+// byte order, each in its own process, the children's streams merged -- the header once,
+// every `test` record and every diagnostic, one `test_summary` adding the children's up,
+// one result. A module with no tests contributes nothing but its count.
+fn test_project_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
+    report.json = true
+    report.file = os.stdout()
+    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+    let (paths, paths_error) = mem.alloc[str](a, 1024usize)
+    if paths_error != ok { ret paths_error }
+    let (rels, rels_error) = mem.alloc[str](a, 1024usize)
+    if rels_error != ok { ret rels_error }
+    let (source_dir, source_dir_error) = nptest_join(a, args[2usize], "src")
+    if source_dir_error != ok { ret source_dir_error }
+    var count = 0usize
+    let walk_error = walk_sources(a, source_dir, "", paths, rels, &count)
+    if walk_error != ok {
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the project has no readable src directory")
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"tests\":0,\"modules\":0}}\n")
+        os.exit(2i32)
+        ret ok
+    }
+    let (child_base, child_base_error) = nptest_join(a, args[6usize], "nptest-project-child")
+    if child_base_error != ok { ret child_base_error }
+    var passed = 0usize
+    var failed = 0usize
+    var crashed = 0usize
+    var timed_out = 0usize
+    var total = 0usize
+    var duration = 0usize
+    var refused = false
+    var at = 0usize
+    while at < count {
+        var argv: [11]str = zero
+        argv[0usize] = args[0usize]
+        argv[1usize] = "test-file"
+        argv[2usize] = paths[at]
+        argv[3usize] = args[3usize]
+        argv[4usize] = args[4usize]
+        argv[5usize] = args[5usize]
+        argv[6usize] = args[6usize]
+        var argc = 7usize
+        if args.len == 9usize {
+            argv[argc] = args[7usize]
+            argc += 1usize
+        }
+        argv[argc] = "--json"
+        argv[argc + 1usize] = "--path"
+        argv[argc + 2usize] = rels[at]
+        argc += 3usize
+        let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[0usize..argc], child_base)
+        if spawn_error != ok { ret spawn_error }
+        if status == 2i32 { refused = true }
+        // Forward the child's test records and diagnostics; add its summary up.
+        var line_at = 0usize
+        while line_at < child_out.len {
+            var end = line_at
+            while end < child_out.len && child_out[end] != 10u8 { end += 1usize }
+            let line = child_out[line_at..end]
+            if line.len > 24usize && same(line[0usize..24usize], "{\"record\":\"test_summary\"") {
+                passed += json_usize_after(line, "\"passed\":")
+                failed += json_usize_after(line, "\"failed\":")
+                crashed += json_usize_after(line, "\"crashed\":")
+                timed_out += json_usize_after(line, "\"timeout\":")
+                total += json_usize_after(line, "\"total\":")
+                duration += json_usize_after(line, "\"duration_ms\":")
+            } else {
+                if (line.len > 16usize && same(line[0usize..16usize], "{\"record\":\"test\"")) || (line.len > 22usize && same(line[0usize..22usize], "{\"record\":\"diagnostic\"")) {
+                    try write_all(&report, line)
+                    try write_all(&report, "\n")
+                }
+            }
+            line_at = end + 1usize
+        }
+        at += 1usize
+    }
+    try write_all(&report, "{\"record\":\"test_summary\",\"passed\":")
+    try write_usize(&report, passed)
+    try write_all(&report, ",\"failed\":")
+    try write_usize(&report, failed)
+    try write_all(&report, ",\"crashed\":")
+    try write_usize(&report, crashed)
+    try write_all(&report, ",\"timeout\":")
+    try write_usize(&report, timed_out)
+    try write_all(&report, ",\"total\":")
+    try write_usize(&report, total)
+    try write_all(&report, ",\"duration_ms\":")
+    try write_usize(&report, duration)
+    try write_all(&report, "}\n")
+    var exit_code = 0usize
+    if passed != total { exit_code = 1usize }
+    if refused { exit_code = 2usize }
+    if exit_code == 0usize {
+        try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"tests\":")
+    } else {
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":")
+        try write_usize(&report, exit_code)
+        try write_all(&report, ",\"data\":{\"tests\":")
+    }
+    try write_usize(&report, total)
+    try write_all(&report, ",\"modules\":")
+    try write_usize(&report, count)
+    try write_all(&report, "}}\n")
+    if exit_code != 0usize { os.exit(i32(exit_code)) }
+    ret ok
+}
+
 fn nptest_stem(path: str) -> str {
     var start = 0usize
     var at = 0usize
@@ -1137,6 +1292,10 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if names_error != ok { ret names_error }
     let (lines, lines_error) = mem.alloc[usize](a, 256usize)
     if lines_error != ok { ret lines_error }
+    if args.len >= 10usize {
+        report.operand_source = args[2usize]
+        report.operand_path = args[args.len - 1usize]
+    }
     var bad: lex.Token = zero
     var bad_kind = 0usize
     let (count, discover_error) = discover_tests(a, text, names, lines, &bad, &bad_kind)
@@ -1154,10 +1313,23 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
         os.exit(2i32)
         ret ok
     }
-    // `test-file ... WORKDIR [TIMEOUT_MS] --json`: the default is a minute (D246).
+    // `test-file ... WORKDIR [TIMEOUT_MS] --json [--path REL]`: the default is a minute (D246).
     var timeout_ms = 60000usize
-    if args.len == 9usize { timeout_ms = nptest_parse_usize(args[7usize]) }
+    if args.len == 9usize || args.len == 11usize { timeout_ms = nptest_parse_usize(args[7usize]) }
     if timeout_ms == 0usize { timeout_ms = 1usize }
+    // The identity (D263): the operand's basename and stem, or the `--path` given.
+    var identity = basename(args[2usize])
+    if args.len >= 10usize { identity = args[args.len - 1usize] }
+    let (module_name, module_name_error) = nptest_module_name(a, identity)
+    if module_name_error != ok { ret module_name_error }
+    // A module with no tests has nothing to compile or run: its stream is the header,
+    // an empty summary and the result, and `test-project` counts it (D263).
+    if count == 0usize {
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+        try write_all(&report, "{\"record\":\"test_summary\",\"passed\":0,\"failed\":0,\"crashed\":0,\"timeout\":0,\"total\":0,\"duration_ms\":0}\n")
+        try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"tests\":0}}\n")
+        ret ok
+    }
     let (runner_source, runner_error) = generate_runner(a, text, names[0usize..count], count, timeout_ms * 1000000usize)
     if runner_error != ok { ret runner_error }
     let (runner_path, runner_path_error) = nptest_join(a, args[6usize], "nptest-runner.e")
@@ -1165,8 +1337,10 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     let (runner_exe, runner_exe_error) = nptest_join(a, args[6usize], "nptest-runner.exe")
     if runner_exe_error != ok { ret runner_exe_error }
     try save_bytes(a, runner_path, runner_source)
-    // Compile the runner by spawning this compiler again; args[0] is its own path.
-    var build_argv: [7]str = zero
+    // Compile the runner by spawning this compiler again; args[0] is its own path. The
+    // runner lives in WORKDIR but is built as part of the operand's project (D263), so
+    // the operand's `use` of its sibling modules resolves from there.
+    var build_argv: [9]str = zero
     build_argv[0usize] = args[0usize]
     build_argv[1usize] = "emit-executable"
     build_argv[2usize] = runner_path
@@ -1174,7 +1348,14 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     build_argv[4usize] = args[4usize]
     build_argv[5usize] = args[5usize]
     build_argv[6usize] = runner_exe
-    let (build_status, build_out, build_err, build_spawn_error) = nptest_spawn(a, build_argv[..], runner_exe)
+    var build_argc = 7usize
+    let (operand_project, project_error) = project.discover(a, args[2usize])
+    if project_error == ok && operand_project.has_sources {
+        build_argv[7usize] = "--project"
+        build_argv[8usize] = operand_project.root
+        build_argc = 9usize
+    }
+    let (build_status, build_out, build_err, build_spawn_error) = nptest_spawn(a, build_argv[0usize..build_argc], runner_exe)
     if build_spawn_error != ok { ret build_spawn_error }
     if build_status != 0i32 {
         try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
@@ -1226,7 +1407,7 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if suite_end > suite_start { suite_ms = (suite_end - suite_start) / 1000000usize }
     var timeout_s = (timeout_ms + 999usize) / 1000usize
     if timeout_s == 0usize { timeout_s = 1usize }
-    try tool.test_json(a, nptest_stem(args[2usize]), "operand", basename(args[2usize]), text, runner_path, names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
+    try tool.test_json(a, module_name, "operand", identity, text, runner_path, names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
     var any = false
     at = 0usize
     while at < count {
@@ -2487,7 +2668,11 @@ fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, re
 // Every module is parsed while the graph is loaded, so a syntax error anywhere in
 // the program surfaces here with the module that holds it.
 fn load_graph(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, root: str, arch: str, target_os: str) -> err {
-    let load_error = graph.load(a, loaded, path, root, arch, target_os)
+    ret load_graph_in(a, report, loaded, path, root, arch, target_os, "")
+}
+
+fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
+    let load_error = graph.load(a, loaded, path, root, arch, target_os, project_root)
     if load_error != ok && loaded.has_failure && loaded.failure_module < loaded.count {
         let module = loaded.modules[loaded.failure_module]
         try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name)
@@ -2973,6 +3158,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
     if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
     if args.len == 9usize && same(args[1usize], "test-file") && same(args[8usize], "--json") { ret test_command(a, args) }
+    // `... --json --path REL` (D263): the operand's identity under its project's src.
+    if args.len == 10usize && same(args[1usize], "test-file") && same(args[7usize], "--json") && same(args[8usize], "--path") { ret test_command(a, args) }
+    if args.len == 11usize && same(args[1usize], "test-file") && same(args[8usize], "--json") && same(args[9usize], "--path") { ret test_command(a, args) }
+    // `test-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR [TIMEOUT_MS] --json` (D263): every
+    // module under DIR/src, one stream.
+    if args.len == 8usize && same(args[1usize], "test-project") && same(args[7usize], "--json") { ret test_project_command(a, args) }
+    if args.len == 9usize && same(args[1usize], "test-project") && same(args[8usize], "--json") { ret test_project_command(a, args) }
     let writes_object = args.len == 7usize && same(args[1usize], "emit-object")
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner
@@ -3006,7 +3198,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        let load_error = load_graph_in(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize], project_flag(args))
         if load_error != ok {
             if disassemble {
                 var envelope = json_sink()

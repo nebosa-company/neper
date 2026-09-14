@@ -1762,6 +1762,14 @@ $rejectActual = Join-Path $testBuild 'conformance-tools-test-reject.jsonl'
 cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_reject.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$rejectActual`""
 if ($LASTEXITCODE -ne 2) { throw "test --json on a non-test exited $LASTEXITCODE, not 2" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rejectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_reject.expected.jsonl')).Hash) { throw "test --json on a non-test differs from the conformance corpus" }
+# `test-project --json` (D263): every module under a project's src in byte order, each
+# run through `test-file --json --path REL` in its own process with its runner built as
+# part of the project, the records merged; a module with no tests is counted and skipped.
+$testProjectActual = Join-Path $testBuild 'conformance-tools-test-project.jsonl'
+cmd /c "`"$compiler`" test-project `"$(Join-Path $conformanceRoot 'tools/test_project')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testProjectActual`""
+if ($LASTEXITCODE -ne 1) { throw "test-project --json exited $LASTEXITCODE, not 1" }
+[IO.File]::WriteAllText($testProjectActual, ([IO.File]::ReadAllText($testProjectActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_project.expected.jsonl')).Hash) { throw "test-project --json differs from the conformance corpus" }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 $timeoutActual = Join-Path $testBuild 'conformance-tools-test-timeout.jsonl'

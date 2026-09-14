@@ -1908,6 +1908,15 @@ $test_build/neper-self test-file "$conformance_root/tools/test_reject.e" "$repo"
 [ "$reject_status" -eq 2 ]
 cmp -s "$test_build/conformance-tools-test-reject.jsonl" "$conformance_root/tools/test_reject.expected.jsonl" || { printf '%s
 ' "test --json on a non-test differs from the conformance corpus" >&2; exit 1; }
+# `test-project --json` (D263): every module under a project's src in byte order, each
+# run through `test-file --json --path REL` in its own process with its runner built as
+# part of the project, the records merged; a module with no tests is counted and skipped.
+test_project_status=0
+$test_build/neper-self test-project "$conformance_root/tools/test_project" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-project.jsonl" || test_project_status=$?
+[ "$test_project_status" -eq 1 ]
+sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-project.jsonl"
+cmp -s "$test_build/conformance-tools-test-project.jsonl" "$conformance_root/tools/test_project.expected.jsonl" || { printf '%s
+' "test-project --json differs from the conformance corpus" >&2; exit 1; }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 timeout_actual="$test_build/conformance-tools-test-timeout.jsonl"

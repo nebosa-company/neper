@@ -4993,3 +4993,33 @@ tests/conformance/tools/check_project pins three modules, one of them in a
 subdirectory, two with an error. `WORKDIR` is where the children's output is captured,
 the same need `test` has and for the same reason: the fixed os surface spawns onto
 files, not pipes.
+
+## D263 -- `test-project` runs every module under a project, and a runner is built as part of it
+
+`test-file` ran one module's tests. `test-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR
+[TIMEOUT_MS] --json` runs every module under `DIR/src`, the way `check-project` checks
+them (D262): the tree walked in byte order, `test-file --json --path REL` spawned per
+module, the children's `test` records and diagnostics forwarded, their summaries added
+into one `test_summary`, one result with the test and module counts. A module with no
+`@test` is counted and skipped -- its stream is the header, an empty summary and the
+result, with nothing generated, compiled or run -- which is also why a module that
+defines `main` and has no tests, the usual shape of `main.e`, no longer collides with
+the runner's `main`.
+
+Two things the single-file command had never needed. First, identity: `test-file`
+takes `--path REL`, and the record's `file` is that path and its `module` the dotted
+name section 2 gives it -- `nested/deep.e` is `nested.deep` -- so two `t.e` in
+different directories are two modules, not one. Second, and the real finding: the
+runner is the operand's text copied into WORKDIR, and a test that `use`s a sibling
+module could not build there, because module resolution finds the project from the
+operand's own path and WORKDIR is not in it. The lazy fix -- writing the runner into
+the project's tree -- would leave generated files in a user's `src`. Instead
+`emit-executable` takes `--project DIR`, naming the project root outright in place of
+discovering it, and the runner is compiled with the operand's own root; a file outside
+the tree is built as part of the project. `test-file` discovers that root itself, so
+`test-project` passes nothing extra.
+
+tests/conformance/tools/test_project pins three modules: `main.e` with no tests,
+`helper.e` with a passing and a failing test, and `nested/deep.e` whose test uses
+`helper`. What remains is a module that both defines `main` and carries tests, which
+the runner's own `main` still collides with.

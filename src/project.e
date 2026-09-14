@@ -77,6 +77,11 @@ fn has_source_root(a: *mem.Arena, directory: str) -> (bool, err) {
     ret (found, ok)
 }
 
+// A project named outright rather than discovered (D263): `--project DIR`.
+fn explicit(root: str) -> Project {
+    ret Project{ root: root, has_sources: true }
+}
+
 fn discover(a: *mem.Arena, named_file: str) -> (Project, err) {
     let original = parent(named_file)
     var directory = original

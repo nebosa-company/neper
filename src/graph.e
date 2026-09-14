@@ -249,10 +249,17 @@ fn visit(g: *Graph, module_index: usize) -> err {
     ret ok
 }
 
-fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, os: str) -> err {
+// `project_root` names the project explicitly; empty, it is discovered from the operand
+// (spec section 2). A file outside the project -- a generated test runner -- is built
+// as part of it that way (D263).
+fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, os: str, project_root: str) -> err {
     if !project.valid_arch(arch) || !project.valid_os(os) || !project.valid_target(arch, os) { ret project.InvalidTarget }
-    let (discovered, discovery_error) = project.discover(a, root_path)
-    if discovery_error != ok { ret discovery_error }
+    var discovered = project.explicit(project_root)
+    if project_root.len == 0usize {
+        let (found, discovery_error) = project.discover(a, root_path)
+        if discovery_error != ok { ret discovery_error }
+        discovered = found
+    }
     let (root_name, name_error) = project.module_name(a, discovered, root_path)
     if name_error != ok { ret name_error }
     g.project = discovered
