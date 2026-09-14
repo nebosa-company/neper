@@ -4014,6 +4014,10 @@ type Aabb = struct { x: fixed.Fx, y: fixed.Fx, half_w: fixed.Fx, half_h: fixed.F
 type Hit = struct { hit: bool, time: fixed.Fx, normal_x: i32, normal_y: i32 }
 type Grid = struct { heads: []u32, next: []u32, width: u32, height: u32, cell: fixed.Fx }
 error Bounds
+error Size
+
+fn aabb(x: fixed.Fx, y: fixed.Fx, half_w: fixed.Fx, half_h: fixed.Fx) -> Aabb
+fn miss() -> Hit
 
 fn overlaps(a: Aabb, b: Aabb) -> bool
 fn sweep(a: Aabb, dx: fixed.Fx, dy: fixed.Fx, b: Aabb) -> Hit
@@ -4033,16 +4037,17 @@ fn grid_near(g: Grid, box: Aabb, out: []u32) -> (usize, err)
 type Cell = enum u8 { Unseen, Explored, Visible }
 type Field = struct { width: u32, height: u32, visible: []u64, explored: []u64 }
 error Bounds
+error Size
 
 fn init(f: *Field, width: u32, height: u32, visible: []u64, explored: []u64) -> err
 fn clear_visible(f: *Field) -> err
 fn cast(f: *Field, m: tilemap.Map, x: i32, y: i32, radius: u32) -> err
-fn cast_cone(f: *Field, m: tilemap.Map, x: i32, y: i32, facing: fixed.Fx, half_angle: fixed.Fx, radius: u32) -> err
 fn line_of_sight(m: tilemap.Map, x0: i32, y0: i32, x1: i32, y1: i32) -> bool
 fn cell(f: Field, x: i32, y: i32) -> Cell
 fn is_visible(f: Field, x: i32, y: i32) -> bool
 fn is_explored(f: Field, x: i32, y: i32) -> bool
 fn merge(dst: *Field, src: Field) -> err
+fn visible_count(f: Field) -> usize
 ```
 
 ### `e.game.ai`

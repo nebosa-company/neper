@@ -2497,6 +2497,12 @@ game_grid_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$game_grid_executable_written" = 'executable written' ]
 chmod +x "$game_grid_executable_path"
 "$game_grid_executable_path"
+# `e.game.collide2d` and `e.game.vision` (D272): swept boxes and shadowcast fog.
+game_sight_executable_path="$test_build/game-sight-selfhost"
+game_sight_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_sight/src/main.e" "$repo" x64 linux "$game_sight_executable_path")
+[ "$game_sight_executable_written" = 'executable written' ]
+chmod +x "$game_sight_executable_path"
+"$game_sight_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]
