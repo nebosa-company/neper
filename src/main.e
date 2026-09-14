@@ -1514,6 +1514,64 @@ fn nptest_now() -> usize {
 // `--time` (D303): one line per phase on stderr, milliseconds since the previous one.
 // The state rides on the report sink like `--json` does: `main` is at the bootstrap's
 // local limit and takes no new locals.
+// `--time` also prints what the program filled (D306): the source, and every pool's
+// high-water mark, which is what the pools are sized from.
+fn report_count(name: str, value: usize) -> err {
+    var line_storage: [96]u8 = zero
+    var line = capture_sink(line_storage[..])
+    try write_all(&line, "count ")
+    try write_all(&line, name)
+    try write_all(&line, ": ")
+    try write_usize(&line, value)
+    try write_all(&line, "\n")
+    ret stderr_text(line_storage[..line.count])
+}
+
+fn report_counts(loaded: *graph.Graph, resolver: *resolve.Resolver, checker: *check.Checker, builder: *nir.Builder) -> err {
+    var bytes = 0usize
+    var largest = 0usize
+    var at = 0usize
+    while at < loaded.count {
+        bytes += loaded.modules[at].text.len
+        if loaded.modules[at].text.len > largest { largest = loaded.modules[at].text.len }
+        at += 1usize
+    }
+    try report_count("modules", loaded.count)
+    try report_count("imports", loaded.import_count)
+    try report_count("source bytes", bytes)
+    try report_count("largest module bytes", largest)
+    try report_count("symbols", resolver.count)
+    try report_count("checker tokens (last module)", checker.token_count)
+    try report_count("locals (last function)", checker.local_count)
+    try report_count("types", checker.type_count)
+    try report_count("functions", checker.function_count)
+    try report_count("parameters", checker.parameter_count)
+    try report_count("return types", checker.return_type_count)
+    try report_count("aggregates", checker.aggregate_count)
+    try report_count("aggregate fields", checker.aggregate_field_count)
+    try report_count("aliases", checker.alias_count)
+    try report_count("constants", checker.constant_count)
+    try report_count("constant exprs", checker.constant_expr_count)
+    try report_count("globals", checker.global_count)
+    try report_count("generic arguments", checker.generic_argument_count)
+    try report_count("nir functions", builder.function_count)
+    try report_count("nir blocks", builder.block_count)
+    try report_count("nir instructions", builder.instruction_count)
+    try report_count("nir operands", builder.operand_count)
+    try report_count("nir function refs", builder.function_ref_count)
+    try report_count("nir strings", builder.string_count)
+    ret ok
+}
+
+// A pool sized from the program (D306): `base` for a small program plus one entry per
+// `per` bytes of source. Every pool after loading is sized this way, so what a program
+// commits is proportional to the program on both hosts -- on Windows the arena commits
+// what is allocated, not what is touched, so a pool sized for millions of lines would
+// have cost every build those pages.
+fn sized(base: usize, bytes: usize, per: usize) -> usize {
+    ret base + bytes / per
+}
+
 fn report_ms(ns: usize) -> err {
     var line_storage: [64]u8 = zero
     var line = capture_sink(line_storage[..])
@@ -1532,7 +1590,9 @@ fn report_phase(report: *Sink, name: str) -> err {
     try write_all(&line, name)
     try write_all(&line, ": ")
     try write_usize(&line, (now - started) / 1000000usize)
-    try write_all(&line, " ms\n")
+    try write_all(&line, " ms, arena ")
+    try write_usize(&line, report.arena_used / 1048576usize)
+    try write_all(&line, " MB\n")
     report.phase_started = now
     ret stderr_text(line_storage[..line.count])
 }
@@ -2447,7 +2507,7 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var resolver: resolve.Resolver = zero
-    try init_cli_resolver(a, &resolver)
+    try init_cli_resolver(a, &resolver, &loaded)
     let resolve_error = resolve.collect(&resolver, &loaded)
     if resolve_error != ok {
         try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
@@ -2573,13 +2633,15 @@ fn validate_cli_parse(a: *mem.Arena, report: *Sink, path: str, text: str) -> err
 }
 
 fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
-    let (modules, modules_error) = mem.alloc[graph.Module](a, 128usize)
+    // Modules and imports are the two pools that exist before anything is measured
+    // (D306); the tree pool starts small and grows to the largest module as it loads.
+    let (modules, modules_error) = mem.alloc[graph.Module](a, 8192usize)
     if modules_error != ok { ret modules_error }
-    let (imports, imports_error) = mem.alloc[graph.Import](a, 2048usize)
+    let (imports, imports_error) = mem.alloc[graph.Import](a, 262144usize)
     if imports_error != ok { ret imports_error }
-    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 65536usize)
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 4096usize)
     if nodes_error != ok { ret nodes_error }
-    let (children, children_error) = mem.alloc[syntax.Child](a, 524288usize)
+    let (children, children_error) = mem.alloc[syntax.Child](a, 16384usize)
     if children_error != ok { ret children_error }
     try graph.init(loaded, modules, imports, nodes, children)
     // Dependency order (D304), one slot per module.
@@ -2589,16 +2651,18 @@ fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
     ret ok
 }
 
-fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
-    let (symbols, symbols_error) = mem.alloc[resolve.Symbol](a, 16384usize)
+fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+    let total = loaded.total_bytes
+    let largest = loaded.largest_bytes
+    let (symbols, symbols_error) = mem.alloc[resolve.Symbol](a, sized(4096usize, total, 64usize))
     if symbols_error != ok { ret symbols_error }
     // The largest module, `check.e`, needs between 65536 and 69632 tokens, measured
     // by bisecting this until resolution reports `resolve.Capacity`. 131072 keeps
     // about twice that; `MAX_TOKENS` in the bootstrap is the same number for the same
     // reason.
-    let (tokens, tokens_error) = mem.alloc[lex.Token](a, 131072usize)
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, sized(4096usize, largest, 3usize))
     if tokens_error != ok { ret tokens_error }
-    let (locals, locals_error) = mem.alloc[resolve.Local](a, 16384usize)
+    let (locals, locals_error) = mem.alloc[resolve.Local](a, sized(16384usize, largest, 16usize))
     if locals_error != ok { ret locals_error }
     try resolve.init(resolver, symbols, tokens, locals)
     // The name index (D303): four entries per symbol covers the doubling regions.
@@ -2607,44 +2671,46 @@ fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
     ret resolve.attach_index(resolver, entries)
 }
 
-fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
-    let (functions, functions_error) = mem.alloc[check.Function](a, 4096usize)
+fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph) -> err {
+    let total = loaded.total_bytes
+    let largest = loaded.largest_bytes
+    let (functions, functions_error) = mem.alloc[check.Function](a, sized(4096usize, total, 128usize))
     if functions_error != ok { ret functions_error }
-    let (function_generics, function_generics_error) = mem.alloc[check.FunctionGeneric](a, 4096usize)
+    let (function_generics, function_generics_error) = mem.alloc[check.FunctionGeneric](a, sized(4096usize, total, 128usize))
     if function_generics_error != ok { ret function_generics_error }
-    let (parameters, parameters_error) = mem.alloc[check.Parameter](a, 32768usize)
+    let (parameters, parameters_error) = mem.alloc[check.Parameter](a, sized(8192usize, total, 64usize))
     if parameters_error != ok { ret parameters_error }
-    let (return_types, return_types_error) = mem.alloc[check.Type](a, 32768usize)
+    let (return_types, return_types_error) = mem.alloc[check.Type](a, sized(65536usize, total, 64usize))
     if return_types_error != ok { ret return_types_error }
-    let (comptime_parameters, comptime_parameters_error) = mem.alloc[check.ComptimeParameter](a, 1024usize)
+    let (comptime_parameters, comptime_parameters_error) = mem.alloc[check.ComptimeParameter](a, sized(1024usize, total, 1024usize))
     if comptime_parameters_error != ok { ret comptime_parameters_error }
-    let (generic_arguments, generic_arguments_error) = mem.alloc[check.GenericArgument](a, 4096usize)
+    let (generic_arguments, generic_arguments_error) = mem.alloc[check.GenericArgument](a, sized(4096usize, total, 256usize))
     if generic_arguments_error != ok { ret generic_arguments_error }
-    let (aggregates, aggregates_error) = mem.alloc[check.Aggregate](a, 4096usize)
+    let (aggregates, aggregates_error) = mem.alloc[check.Aggregate](a, sized(4096usize, total, 256usize))
     if aggregates_error != ok { ret aggregates_error }
-    let (aggregate_fields, aggregate_fields_error) = mem.alloc[check.AggregateField](a, 8192usize)
+    let (aggregate_fields, aggregate_fields_error) = mem.alloc[check.AggregateField](a, sized(8192usize, total, 128usize))
     if aggregate_fields_error != ok { ret aggregate_fields_error }
-    let (checked_switches, checked_switches_error) = mem.alloc[check.CheckedSwitch](a, 4096usize)
+    let (checked_switches, checked_switches_error) = mem.alloc[check.CheckedSwitch](a, sized(4096usize, total, 256usize))
     if checked_switches_error != ok { ret checked_switches_error }
-    let (function_signatures, function_signatures_error) = mem.alloc[check.FunctionSignature](a, 4096usize)
+    let (function_signatures, function_signatures_error) = mem.alloc[check.FunctionSignature](a, sized(4096usize, total, 128usize))
     if function_signatures_error != ok { ret function_signatures_error }
-    let (tokens, tokens_error) = mem.alloc[lex.Token](a, 131072usize)
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, sized(4096usize, largest, 3usize))
     if tokens_error != ok { ret tokens_error }
-    let (locals, locals_error) = mem.alloc[check.Local](a, 16384usize)
+    let (locals, locals_error) = mem.alloc[check.Local](a, sized(16384usize, largest, 16usize))
     if locals_error != ok { ret locals_error }
-    let (types, types_error) = mem.alloc[check.Type](a, 65536usize)
+    let (types, types_error) = mem.alloc[check.Type](a, sized(65536usize, total, 64usize))
     if types_error != ok { ret types_error }
-    let (aliases, aliases_error) = mem.alloc[check.Alias](a, 4096usize)
+    let (aliases, aliases_error) = mem.alloc[check.Alias](a, sized(4096usize, total, 256usize))
     if aliases_error != ok { ret aliases_error }
-    let (constants, constants_error) = mem.alloc[check.Constant](a, 4096usize)
+    let (constants, constants_error) = mem.alloc[check.Constant](a, sized(4096usize, total, 256usize))
     if constants_error != ok { ret constants_error }
     // Module-scope `var`s. Small on purpose: the whole point of the surface is that ambient
     // mutable state is rare, and a program that wants hundreds of them wants a struct instead.
-    let (globals, globals_error) = mem.alloc[check.Global](a, 256usize)
+    let (globals, globals_error) = mem.alloc[check.Global](a, sized(256usize, total, 1024usize))
     if globals_error != ok { ret globals_error }
-    let (constant_exprs, constant_exprs_error) = mem.alloc[check.ConstantExpr](a, 32768usize)
+    let (constant_exprs, constant_exprs_error) = mem.alloc[check.ConstantExpr](a, sized(32768usize, total, 256usize))
     if constant_exprs_error != ok { ret constant_exprs_error }
-    let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, 4096usize)
+    let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, sized(4096usize, total, 4096usize))
     if diagnostics_error != ok { ret diagnostics_error }
     try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, globals, constant_exprs, diagnostics)
     try check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
@@ -2658,18 +2724,19 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
 
 // The inlining oracle's builder (D207): the short functions of every module, which the
 // source filter keeps to a few instructions each, so a tenth of the program's tables.
-fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize) -> err {
-    let (functions, functions_error) = mem.alloc[nir.Function](a, 4096usize)
+fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph) -> err {
+    let total = loaded.total_bytes
+    let (functions, functions_error) = mem.alloc[nir.Function](a, sized(4096usize, total, 64usize))
     if functions_error != ok { ret functions_error }
-    let (blocks, blocks_error) = mem.alloc[nir.Block](a, 32768usize)
+    let (blocks, blocks_error) = mem.alloc[nir.Block](a, sized(32768usize, total, 64usize))
     if blocks_error != ok { ret blocks_error }
-    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, 131072usize)
+    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, sized(131072usize, total, 16usize))
     if instructions_error != ok { ret instructions_error }
-    let (operands, operands_error) = mem.alloc[usize](a, 524288usize)
+    let (operands, operands_error) = mem.alloc[usize](a, sized(524288usize, total, 16usize))
     if operands_error != ok { ret operands_error }
-    let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, 8192usize)
+    let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize, total, 128usize))
     if function_refs_error != ok { ret function_refs_error }
-    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 8192usize)
+    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, sized(8192usize, total, 256usize))
     if strings_error != ok { ret strings_error }
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
     let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, 256usize)
@@ -2684,7 +2751,7 @@ fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signat
     ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
-fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize) -> err {
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph) -> err {
     // Every module carries its own copy of the generic instances it uses, so the
     // NIR function count scales with instantiation sites, not with declarations.
     //
@@ -2695,10 +2762,11 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     // gate saved address space, not memory.
     // ponytail: fixed pools, sized for the compiler itself; growable pools when a
     // program past half a million instructions exists.
-    let function_capacity = 16384usize
-    let block_capacity = 131072usize
-    let instruction_capacity = 524288usize
-    let operand_capacity = 2097152usize
+    let total = loaded.total_bytes
+    let function_capacity = sized(16384usize, total, 128usize)
+    let block_capacity = sized(65536usize, total, 16usize)
+    let instruction_capacity = sized(262144usize, total, 6usize)
+    let operand_capacity = sized(1048576usize, total, 6usize)
     let (functions, functions_error) = mem.alloc[nir.Function](a, function_capacity)
     if functions_error != ok { ret functions_error }
     let (blocks, blocks_error) = mem.alloc[nir.Block](a, block_capacity)
@@ -2707,12 +2775,17 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     if instructions_error != ok { ret instructions_error }
     let (operands, operands_error) = mem.alloc[usize](a, operand_capacity)
     if operands_error != ok { ret operands_error }
-    let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, 8192usize)
+    let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize, total, 128usize))
     if function_refs_error != ok { ret function_refs_error }
-    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 8192usize)
+    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, sized(8192usize, total, 256usize))
     if strings_error != ok { ret strings_error }
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
-    let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, 256usize)
+    let (ref_entries, ref_entries_error) = mem.alloc[lookup.Entry](a, function_refs.len * 4usize)
+    if ref_entries_error != ok { ret ref_entries_error }
+    let (string_entries, string_entries_error) = mem.alloc[lookup.Entry](a, strings.len * 4usize)
+    if string_entries_error != ok { ret string_entries_error }
+    try nir.attach_indexes(builder, ref_entries, string_entries)
+    let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, sized(256usize, total, 1024usize))
     if global_data_error != ok { ret global_data_error }
     try nir.init_globals(builder, global_data)
     // One entry per NIR function, indexed by the same function index: a signature
@@ -2742,6 +2815,8 @@ type Sink = struct {
     // `--time` (D303): a line per phase on stderr, and when the last one ended.
     timing: bool,
     phase_started: usize,
+    // The arena's offset when the phase ended, set by the caller before reporting.
+    arena_used: usize,
     // Within the codegen phase: nanoseconds in register allocation and in emission.
     regalloc_ns: usize,
     codegen_ns: usize,
@@ -4110,7 +4185,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try init_cli_graph(a, &loaded)
         try load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         var resolver: resolve.Resolver = zero
-        try init_cli_resolver(a, &resolver)
+        try init_cli_resolver(a, &resolver, &loaded)
         try resolve.collect(&resolver, &loaded)
         try io.print("module resolve ok\n")
         ret ok
@@ -4134,7 +4209,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var resolver: resolve.Resolver = zero
-        try init_cli_resolver(a, &resolver)
+        try init_cli_resolver(a, &resolver, &loaded)
         let resolve_error = resolve.collect(&resolver, &loaded)
         if resolve_error != ok {
             try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
@@ -4143,7 +4218,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var checker: check.Checker = zero
-        try init_cli_checker(a, &checker)
+        try init_cli_checker(a, &checker, &loaded)
         checker.arena = a
         let check_error = check.run(&checker, &resolver, &loaded)
         if check_error != ok {
@@ -4241,6 +4316,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         report.timing = trailing_flags && has_flag(args, "--time")
         report.phase_started = nptest_now()
         let load_error = load_graph_in(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize], project_flag(args))
+        report.arena_used = mem.stats(a).used
         try report_phase(&report, "load and parse")
         if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         if load_error != ok {
@@ -4255,7 +4331,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var resolver: resolve.Resolver = zero
-        try init_cli_resolver(a, &resolver)
+        try init_cli_resolver(a, &resolver, &loaded)
         // The front end runs per module in dependency order (D304), each module parsed
         // once per sweep; the incremental artifact build keeps the whole-program passes,
         // whose `keep` mask it decides between declarations and bodies.
@@ -4265,6 +4341,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             resolve_error = resolve.collect(&resolver, &loaded)
         }
+        report.arena_used = mem.stats(a).used
         try report_phase(&report, "resolve")
         if resolve_error != ok {
             try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
@@ -4273,7 +4350,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var checker: check.Checker = zero
-        try init_cli_checker(a, &checker)
+        try init_cli_checker(a, &checker, &loaded)
         checker.arena = a
         // The declarations first; then, incrementally, the edge rule decides the kept
         // modules from the Interfaces they give, and only the other bodies are checked
@@ -4291,6 +4368,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             check_error = check.run_declarations(&checker, &resolver, &loaded)
         }
+        report.arena_used = mem.stats(a).used
         try report_phase(&report, "check declarations")
         if check_error == ok && writes_all_em && incremental_build {
             let (settle_strings, settle_strings_error) = mem.alloc[str](a, 32768usize)
@@ -4314,6 +4392,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         } else {
             if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
         }
+        report.arena_used = mem.stats(a).used
         try report_phase(&report, "check bodies")
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
@@ -4357,12 +4436,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var signatures: nir.Signatures = zero
         // One more parameter type than the declarations need: `neper_report_failure`,
         // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize)
-        let (bindings, bindings_error) = mem.alloc[lower.Binding](a, 16384usize)
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded)
+        let (bindings, bindings_error) = mem.alloc[lower.Binding](a, sized(16384usize, loaded.total_bytes, 64usize))
         if bindings_error != ok { ret bindings_error }
-        let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, 128usize)
+        let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, loaded.count + 1usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
-        let (kept_functions, kept_functions_error) = mem.alloc[bool](a, 65536usize)
+        let (kept_functions, kept_functions_error) = mem.alloc[bool](a, builder.functions.len + 1usize)
         if kept_functions_error != ok { ret kept_functions_error }
         builder.nocheck = release_build
         builder.release = release_build
@@ -4373,7 +4452,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // in its backtrace is a real call, so the oracle is not even built.
         var oracle: nir.Builder = zero
         var oracle_signatures: nir.Signatures = zero
-        let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, 8192usize)
+        let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
         if inlined_error != ok { ret inlined_error }
         builder.inlined = inlined
         builder.inlined_count = 0usize
@@ -4385,12 +4464,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // lowered against it, so its bodies hold one level of copies, and a call
             // the program inlines from it is two levels deep. Each pass records, per
             // function, the callees it copied, for the body edges.
-            try init_oracle_nir(a, &first_oracle, &first_signatures, checker.parameter_count + checker.return_type_count + 1usize)
+            try init_oracle_nir(a, &first_oracle, &first_signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded)
             first_oracle.nocheck = true
             first_oracle.release = true
-            let (first_entries, first_entries_error) = mem.alloc[nir.InlineEntry](a, 4096usize)
+            let (first_entries, first_entries_error) = mem.alloc[nir.InlineEntry](a, sized(4096usize, loaded.total_bytes, 128usize))
             if first_entries_error != ok { ret first_entries_error }
-            let (first_inlined, first_inlined_error) = mem.alloc[nir.InlinedRef](a, 8192usize)
+            let (first_inlined, first_inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
             if first_inlined_error != ok { ret first_inlined_error }
             first_oracle.inlined = first_inlined
             var first_entry_count = 0usize
@@ -4401,7 +4480,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             os.exit(1i32)
                 ret ok
             }
-            try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize)
+            try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded)
             oracle.nocheck = true
             oracle.release = true
             oracle.oracle = &first_oracle
@@ -4409,13 +4488,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             oracle.has_oracle = true
             oracle.inline_entries = first_entries
             oracle.inline_entry_count = first_entry_count
-            let (oracle_inlined, oracle_inlined_error) = mem.alloc[nir.InlinedRef](a, 8192usize)
+            let (oracle_inlined, oracle_inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
             if oracle_inlined_error != ok { ret oracle_inlined_error }
             oracle.inlined = oracle_inlined
-            let (inline_entries, inline_entries_error) = mem.alloc[nir.InlineEntry](a, 4096usize)
+            let (inline_entries, inline_entries_error) = mem.alloc[nir.InlineEntry](a, sized(4096usize, loaded.total_bytes, 128usize))
             if inline_entries_error != ok { ret inline_entries_error }
             var inline_entry_count = 0usize
             let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
+            report.arena_used = mem.stats(a).used
             try report_phase(&report, "inline oracles")
             if oracle_error != ok {
                 try print_lower_diagnostic(&report, &loaded, &checker, &oracle, oracle_error)
@@ -4436,6 +4516,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             lower_error = lower.all_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules, keep)
         } else {
             lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
+        report.arena_used = mem.stats(a).used
         try report_phase(&report, "lower")
         }
         if lower_error == ok {
@@ -4445,6 +4526,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // prunes, as the executable path does here.
             if !(writes_em || writes_all_em) {
                 let prune_error = nir.prune_unreachable(&builder, kept_functions, false)
+                report.arena_used = mem.stats(a).used
                 try report_phase(&report, "prune")
                 if prune_error != ok {
                     try print_lower_diagnostic(&report, &loaded, &checker, &builder, prune_error)
@@ -4484,7 +4566,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 names_total += builder.functions[named_at].module_name.len + 1usize + builder.functions[named_at].name.len
                 named_at += 1usize
             }
-            machine_capacity = builder.instruction_count * 64usize + builder.function_count * 24usize + names_total + 65536usize
+            machine_capacity = builder.instruction_count * 24usize + builder.function_count * 24usize + names_total + 65536usize
         }
         let (machine_storage, machine_storage_error) = mem.alloc[usize](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }
@@ -4525,6 +4607,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             try binary.init(&fold_scratch, fs)
         }
         var relocation_count = 0usize
+        report.arena_used = mem.stats(a).used
         try report_phase(&report, "codegen setup")
         var function_at = 0usize
         var machine_abi: codegen_x64.Abi = .SystemV
@@ -4547,18 +4630,18 @@ fn main(a: *mem.Arena, args: []str) -> err {
         codegen_context.lines = line_entries
         codegen_context.line_count = &line_count
         while function_at < builder.function_count {
-            if report.timing { report.regalloc_ns = report.regalloc_ns - nptest_now() }
+            if report.timing { report.regalloc_ns = report.regalloc_ns -% nptest_now() }
             let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, codegen_x64.register_pool_count(), ranges, allocations, a)
-            if report.timing { report.regalloc_ns = report.regalloc_ns + nptest_now() }
+            if report.timing { report.regalloc_ns = report.regalloc_ns +% nptest_now() }
             if allocation_error != ok { ret allocation_error }
             if emit_machine_code {
                 let function_start = machine.count
                 function_offsets[function_at] = function_start
                 let relocation_start = relocation_count
                 let line_start = line_count
-                if report.timing { report.codegen_ns = report.codegen_ns - nptest_now() }
+                if report.timing { report.codegen_ns = report.codegen_ns -% nptest_now() }
                 let codegen_error = codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
-                if report.timing { report.codegen_ns = report.codegen_ns + nptest_now() }
+                if report.timing { report.codegen_ns = report.codegen_ns +% nptest_now() }
                 if codegen_error != ok {
                     try print_codegen_diagnostic(&report, &loaded, builder.functions[function_at], &codegen_context)
                     try finish_report(&report)
@@ -4566,7 +4649,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     ret ok
                 }
                 if want_fold {
-                    if report.timing { report.fold_ns = report.fold_ns - nptest_now() }
+                    if report.timing { report.fold_ns = report.fold_ns -% nptest_now() }
                     fold_scratch.count = 0usize
                     let hash_input_error = em.write_code_hash_input(&loaded, &builder, &machine, function_start, machine.count, relocations, relocation_count, &fold_scratch)
                     // A function too large for the scratch is simply not folded: the hash cannot be
@@ -4594,7 +4677,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                             }
                         }
                     }
-                    if report.timing { report.fold_ns = report.fold_ns + nptest_now() }
+                    if report.timing { report.fold_ns = report.fold_ns +% nptest_now() }
                 }
             }
             function_at += 1usize
@@ -4668,11 +4751,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     try finish_report(&report)
                     os.exit(1i32)
                 }
-                let executable_capacity = machine.count + 1048576usize
-                let (executable_storage, executable_storage_error) = mem.alloc[usize](a, executable_capacity)
-                if executable_storage_error != ok { ret executable_storage_error }
-                var executable: emit_x64.Buffer = zero
-                try emit_x64.init(&executable, executable_storage)
+                report.arena_used = mem.stats(a).used
                 try report_phase(&report, "regalloc and codegen")
                 if report.timing {
                     try stderr_text("  of which regalloc: ")
@@ -4682,14 +4761,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     try stderr_text("  of which folding: ")
                     try report_ms(report.fold_ns)
                 }
+                // The symbol table first, then the image buffer sized from the code with it
+                // (D306): sized before it, a mebibyte of slack covered the table of a small
+                // program and not the twenty of a large one.
+                try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
+                let executable_capacity = machine.count + 1048576usize
+                let (executable_storage, executable_storage_error) = mem.alloc[usize](a, executable_capacity)
+                if executable_storage_error != ok { ret executable_storage_error }
+                var executable: emit_x64.Buffer = zero
+                try emit_x64.init(&executable, executable_storage)
                 if machine_abi == .Windows {
-                    try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
                     try link_pe.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
                 } else {
-                    try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
                     try link_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
                 }
+                report.arena_used = mem.stats(a).used
                 try report_phase(&report, "link")
+                if report.timing { try report_counts(&loaded, &resolver, &checker, &builder) }
                 let (packed, packed_error) = mem.alloc[u8](a, executable.count)
                 if packed_error != ok { ret packed_error }
                 try emit_x64.pack(&executable, packed)
@@ -4739,11 +4827,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 var object: emit_x64.Buffer = zero
                 try emit_x64.init(&object, object_storage)
                 if machine_abi == .Windows {
-                    let (symbols, symbols_error) = mem.alloc[object_coff.Symbol](a, 16384usize)
+                    let (symbols, symbols_error) = mem.alloc[object_coff.Symbol](a, sized(16384usize, loaded.total_bytes, 64usize))
                     if symbols_error != ok { ret symbols_error }
                     try object_coff.write(&builder, &machine, function_offsets, relocations, relocation_count, symbols, &object)
                 } else {
-                    let (symbols, symbols_error) = mem.alloc[object_elf.Symbol](a, 16384usize)
+                    let (symbols, symbols_error) = mem.alloc[object_elf.Symbol](a, sized(16384usize, loaded.total_bytes, 64usize))
                     if symbols_error != ok { ret symbols_error }
                     try object_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, symbols, &object)
                 }

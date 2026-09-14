@@ -58,6 +58,9 @@ type Graph = struct {
     parsed: parse.Tree,
     parsed_module: usize,
     has_parsed: bool,
+    // What the program measures (D306): every pool after loading is sized from these.
+    total_bytes: usize,
+    largest_bytes: usize,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -68,6 +71,28 @@ fn same(a: str, b: str) -> bool {
         i += 1usize
     }
     ret true
+}
+
+// The tree pool holds one module at a time and is sized for the largest (D306): when a
+// module needs more than it has, a larger one replaces it and the old one is left
+// behind -- doubled each time, so what is left behind is under what is kept.
+fn ensure_tree_pool(a: *mem.Arena, g: *Graph, bytes: usize) -> err {
+    // A node per four bytes and a child per two, measured; twice that here.
+    let nodes_needed = bytes / 2usize + 4096usize
+    let children_needed = bytes + 8192usize
+    if g.nodes.len >= nodes_needed && g.children.len >= children_needed { ret ok }
+    var node_count = g.nodes.len * 2usize
+    if node_count < nodes_needed { node_count = nodes_needed }
+    var child_count = g.children.len * 2usize
+    if child_count < children_needed { child_count = children_needed }
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, node_count)
+    if nodes_error != ok { ret nodes_error }
+    let (children, children_error) = mem.alloc[syntax.Child](a, child_count)
+    if children_error != ok { ret children_error }
+    g.nodes = nodes
+    g.children = children
+    g.has_parsed = false
+    ret ok
 }
 
 fn init(g: *Graph, modules: []Module, imports: []Import, nodes: []syntax.Node, children: []syntax.Child) -> err {
@@ -81,6 +106,8 @@ fn init(g: *Graph, modules: []Module, imports: []Import, nodes: []syntax.Node, c
     g.order = g.order[0usize..0usize]
     g.order_count = 0usize
     g.has_parsed = false
+    g.total_bytes = 0usize
+    g.largest_bytes = 0usize
     ret ok
 }
 
@@ -188,6 +215,7 @@ fn extract_import(a: *mem.Arena, text: str, node: syntax.Node) -> (Import, err) 
 
 fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
+    try ensure_tree_pool(a, g, g.modules[module_index].text.len)
     g.has_parsed = false
     try parse.init_tree(&tree, g.nodes, g.children)
     let parse_error = parse.parse(&tree, g.modules[module_index].text)
@@ -263,6 +291,8 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     let index = g.count
     g.modules[index] = Module { name: name, path: path, text: text, first_import: 0usize, import_count: 0usize, visit_state: 0u8 }
     g.count += 1usize
+    g.total_bytes += text.len
+    if text.len > g.largest_bytes { g.largest_bytes = text.len }
     ret (index, ok)
 }
 

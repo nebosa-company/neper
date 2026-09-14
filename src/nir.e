@@ -2,6 +2,7 @@
 
 use check
 use lex
+use lookup
 
 error Capacity
 error InvalidControlFlow
@@ -104,6 +105,23 @@ fn atomic_rmw_kind_rank(kind: AtomicRmwKind) -> usize {
     ret 5usize
 }
 
+type Site = struct {
+    start: usize,
+    end: usize,
+    line: usize,
+    column: usize,
+}
+
+// The token a site was recorded from, with the fields nothing downstream reads zero.
+fn site_token(site: Site) -> lex.Token {
+    var token: lex.Token = zero
+    token.start = site.start
+    token.end = site.end
+    token.line = site.line
+    token.column = site.column
+    ret token
+}
+
 type Instruction = struct {
     opcode: Opcode,
     result: usize,
@@ -114,7 +132,9 @@ type Instruction = struct {
     immediate: usize,
     target: usize,
     target2: usize,
-    token: lex.Token,
+    // Where the instruction came from, as much of the token as anything downstream reads
+    // (D306): a whole `lex.Token` is 120 bytes and made an instruction 180.
+    site: Site,
     // Emitted inside `@nocheck { ... }`: the debug-only checks are left out of it (D203).
     nocheck: bool,
     // The source file the instruction came from: its function's, unless it was inlined
@@ -163,6 +183,10 @@ type FunctionRef = struct {
     // distinction has to survive as far as the linker.
     library: str,
     symbol: str,
+    // The function this reference names, once `codegen_x64.resolve_calls` has looked it
+    // up (D306): every relocation to it then reads the index instead of searching.
+    target: usize,
+    has_target: bool,
 }
 
 type StringConstant = struct {
@@ -209,6 +233,11 @@ type InlinedRef = struct {
 }
 
 type Builder = struct {
+    // The (module, instance, name) index over `function_refs` and the name index over
+    // `strings` (D306): both interners scanned their whole table per call site and per
+    // literal. Absent, they scan; the CLI attaches them.
+    ref_names: lookup.Index,
+    string_names: lookup.Index,
     functions: []Function,
     blocks: []Block,
     instructions: []Instruction,
@@ -306,13 +335,58 @@ fn references_function(opcode: Opcode) -> bool {
     ret opcode == .Call || opcode == .FunctionAddress
 }
 
-fn function_for_reference(builder: *Builder, reference: FunctionRef) -> (usize, bool) {
+// Every reference matched to its function once, by one pass over the functions (D306):
+// `prune_unreachable` and `codegen_x64.resolve_calls` then read the answer instead of
+// scanning the functions per call instruction and per relocation.
+fn resolve_reference_targets(builder: *Builder) {
     var at = 0usize
-    while at < builder.function_count {
-        let candidate = builder.functions[at]
-        if candidate.module_index == reference.module_index && candidate.instance == reference.instance && check.same(candidate.name, reference.name) { ret (at, true) }
+    while at < builder.function_ref_count {
+        builder.function_refs[at].has_target = false
         at += 1usize
     }
+    var function_at = 0usize
+    while function_at < builder.function_count {
+        let candidate = builder.functions[function_at]
+        let (reference_index, found) = find_reference(builder, candidate.module_index, candidate.name, candidate.instance)
+        if found && !builder.function_refs[reference_index].has_target {
+            builder.function_refs[reference_index].target = function_at
+            builder.function_refs[reference_index].has_target = true
+        }
+        function_at += 1usize
+    }
+    // A program linked from artifacts carries the same reference more than once, one
+    // per artifact that made it; the later ones take the first one's target.
+    at = 0usize
+    while at < builder.function_ref_count {
+        if !builder.function_refs[at].has_target {
+            let reference = builder.function_refs[at]
+            let (first, found) = find_reference(builder, reference.module_index, reference.name, reference.instance)
+            if found && first != at && builder.function_refs[first].has_target {
+                builder.function_refs[at].target = builder.function_refs[first].target
+                builder.function_refs[at].has_target = true
+            }
+        }
+        at += 1usize
+    }
+}
+
+// The reference naming a function, through the index when there is one.
+fn find_reference(builder: *Builder, module_index: usize, name: str, instance: usize) -> (usize, bool) {
+    if index_references(builder) {
+        let (found_at, found) = lookup.find(&builder.ref_names, module_index, instance, name)
+        ret (found_at, found)
+    }
+    var at = 0usize
+    while at < builder.function_ref_count {
+        let reference = builder.function_refs[at]
+        if reference.module_index == module_index && reference.instance == instance && check.same(reference.name, name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn function_for_reference(builder: *Builder, reference: FunctionRef) -> (usize, bool) {
+    if reference.has_target { ret (reference.target, true) }
     ret (0usize, false)
 }
 
@@ -338,6 +412,7 @@ fn inlined_function(builder: *Builder, function: Function) -> bool {
 }
 
 fn prune_unreachable(builder: *Builder, keep: []bool, keep_inlined: bool) -> err {
+    resolve_reference_targets(builder)
     if builder.function_count > keep.len { ret Capacity }
     var at = 0usize
     while at < builder.function_count {
@@ -462,6 +537,9 @@ fn prune_references(builder: *Builder) -> err {
         reference_at += 1usize
     }
     builder.function_ref_count = written
+    // The references moved, so the name index over them is rebuilt from nothing the
+    // next time one is asked for (D306).
+    if lookup.attached(&builder.ref_names) { try lookup.attach(&builder.ref_names, builder.ref_names.entries) }
     ret ok
 }
 
@@ -482,6 +560,8 @@ fn init(builder: *Builder, functions: []Function, blocks: []Block, instructions:
     builder.instruction_count = 0usize
     builder.operand_count = 0usize
     builder.function_ref_count = 0usize
+    builder.ref_names.entries = builder.ref_names.entries[0usize..0usize]
+    builder.string_names.entries = builder.string_names.entries[0usize..0usize]
     builder.runtime_prefix = 0usize
     builder.string_count = 0usize
     builder.current_function = 0usize
@@ -500,7 +580,35 @@ fn init_signatures(signatures: *Signatures, entries: []Signature, types: []check
     ret ok
 }
 
+fn attach_indexes(builder: *Builder, ref_entries: []lookup.Entry, string_entries: []lookup.Entry) -> err {
+    try lookup.attach(&builder.ref_names, ref_entries)
+    ret lookup.attach(&builder.string_names, string_entries)
+}
+
+// Brings the reference index up to the table; answers whether it is complete.
+fn index_references(builder: *Builder) -> bool {
+    if !lookup.attached(&builder.ref_names) { ret false }
+    while builder.ref_names.indexed[0usize] < builder.function_ref_count {
+        let row = builder.ref_names.indexed[0usize]
+        let insert_error = lookup.insert(&builder.ref_names, builder.function_refs[row].module_index, builder.function_refs[row].instance, builder.function_refs[row].name, row)
+        if insert_error != ok { ret false }
+        builder.ref_names.indexed[0usize] = row + 1usize
+    }
+    ret true
+}
+
 fn intern_function(builder: *Builder, module_index: usize, name: str, instance: usize) -> (usize, err) {
+    if lookup.attached(&builder.ref_names) {
+        if index_references(builder) {
+            let (found_at, found) = lookup.find(&builder.ref_names, module_index, instance, name)
+            if found { ret (found_at, ok) }
+            if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
+            let index = builder.function_ref_count
+            builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false }
+            builder.function_ref_count += 1usize
+            ret (index, ok)
+        }
+    }
     var at = 0usize
     while at < builder.function_ref_count {
         let reference = builder.function_refs[at]
@@ -509,7 +617,7 @@ fn intern_function(builder: *Builder, module_index: usize, name: str, instance: 
     }
     if builder.function_ref_count == builder.function_refs.len { ret (0usize, Capacity) }
     let index = builder.function_ref_count
-    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "" }
+    builder.function_refs[index] = FunctionRef { module_index: module_index, name: name, instance: instance, live: false, renumbered: 0usize, library: "", symbol: "", target: 0usize, has_target: false }
     builder.function_ref_count += 1usize
     ret (index, ok)
 }
@@ -642,6 +750,23 @@ fn import_flat_index(builder: *Builder, library: usize, entry: usize) -> usize {
 }
 
 fn intern_string(builder: *Builder, spelling: str) -> (usize, err) {
+    if lookup.attached(&builder.string_names) {
+        while builder.string_names.indexed[0usize] < builder.string_count {
+            let row = builder.string_names.indexed[0usize]
+            let insert_error = lookup.insert(&builder.string_names, 0usize, 0usize, builder.strings[row].spelling, row)
+            if insert_error != ok { break }
+            builder.string_names.indexed[0usize] = row + 1usize
+        }
+        if builder.string_names.indexed[0usize] == builder.string_count {
+            let (found_at, found) = lookup.find(&builder.string_names, 0usize, 0usize, spelling)
+            if found { ret (found_at, ok) }
+            if builder.string_count == builder.strings.len { ret (0usize, Capacity) }
+            let index = builder.string_count
+            builder.strings[index] = StringConstant { spelling: spelling }
+            builder.string_count += 1usize
+            ret (index, ok)
+        }
+    }
     var at = 0usize
     while at < builder.string_count {
         if check.same(builder.strings[at].spelling, spelling) { ret (at, ok) }
@@ -735,7 +860,7 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         immediate: immediate,
         target: 0usize,
         target2: 0usize,
-        token: token,
+        site: Site { start: token.start, end: token.end, line: token.line, column: token.column },
         nocheck: builder.nocheck,
         path: builder.current_path,
     }

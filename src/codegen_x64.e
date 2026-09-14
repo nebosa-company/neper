@@ -2,6 +2,7 @@
 
 use e.mem
 use check
+use lookup
 use emit_x64
 use lex
 use nir
@@ -96,6 +97,7 @@ fn add_global_relocation(relocations: []Relocation, count: *usize, displacement_
 
 fn resolve_calls(builder: *nir.Builder, function_offsets: []usize, relocations: []Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret Unsupported }
+    nir.resolve_reference_targets(builder)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         // A global's address depends on where the image puts its data, which is the linker's to
@@ -106,23 +108,16 @@ fn resolve_calls(builder: *nir.Builder, function_offsets: []usize, relocations: 
         }
         let reference_index = relocations[relocation_at].function_ref
         if reference_index >= builder.function_ref_count { ret Unsupported }
-        let reference = builder.function_refs[reference_index]
-        var function_at = 0usize
-        var found = false
-        while function_at < builder.function_count {
-            let candidate = builder.functions[function_at]
-            if candidate.module_index == reference.module_index && candidate.instance == reference.instance && check.same(candidate.name, reference.name) {
-                try emit_x64.patch_relative32(output, relocations[relocation_at].displacement_at, function_offsets[function_at])
-                relocations[relocation_at].resolved = true
-                found = true
-                break
-            }
-            function_at += 1usize
+        if builder.function_refs[reference_index].has_target {
+            let function_at = builder.function_refs[reference_index].target
+            try emit_x64.patch_relative32(output, relocations[relocation_at].displacement_at, function_offsets[function_at])
+            relocations[relocation_at].resolved = true
         }
         relocation_at += 1usize
     }
     ret ok
 }
+
 
 // The allocator's registers: five the calls clobber -- rax, rcx, rdx, r8, r9 -- and
 // then five the callee keeps -- rbx, r12, r13, r14, r15 (D235). A value in one of the
@@ -853,7 +848,7 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
     try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
     var saturated = 0usize
     if instruction.immediate == 0usize && !instruction.nocheck {
-        try emit_float_range_check(builder, current, instruction.token, instruction.path, instruction.ty, source_width == 64usize, context)
+        try emit_float_range_check(builder, current, nir.site_token(instruction.site), instruction.path, instruction.ty, source_width == 64usize, context)
     } else {
         // Section 4's release result: the target's extreme for a value past its range,
         // zero for NaN, on every target; the compare sequence branches past the
@@ -1062,8 +1057,10 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     let table_start = machine.count
     var emitted = 0usize
     var at = 0usize
+    var line_cursor_1 = 0usize
+    var placed_max_1 = 0usize
     while at < builder.function_count {
-        if function_is_placed(builder, function_offsets, at) { emitted += 1usize }
+        if is_placed_after(builder, function_offsets, at, &placed_max_1) { emitted += 1usize }
         at += 1usize
     }
     try emit_x64.little_u32(machine, emitted)
@@ -1072,15 +1069,17 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     var names_at = 4usize + emitted * 24usize
     var names_total = 0usize
     at = 0usize
+    var line_cursor_2 = 0usize
+    var placed_max_2 = 0usize
     while at < builder.function_count {
-        if function_is_placed(builder, function_offsets, at) {
+        if is_placed_after(builder, function_offsets, at, &placed_max_2) {
             names_total += builder.functions[at].module_name.len + 1usize + builder.functions[at].name.len
         }
         at += 1usize
     }
     // The distinct paths, at most one per module, laid out after the names.
-    var paths: [512]str = zero
-    var path_offsets: [512]usize = zero
+    var paths: [8192]str = zero
+    var path_offsets: [8192]usize = zero
     var path_count = 0usize
     var paths_total = 0usize
     var row = 0usize
@@ -1098,11 +1097,13 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     let rows_at = names_at + names_total + paths_total
     var rows_written = 0usize
     at = 0usize
+    var line_cursor_3 = 0usize
+    var placed_max_3 = 0usize
     while at < builder.function_count {
-        if function_is_placed(builder, function_offsets, at) {
+        if is_placed_after(builder, function_offsets, at, &placed_max_3) {
             let placed = builder.functions[at]
             let start = function_offsets[at]
-            let (end, end_error) = function_placed_end(builder, function_offsets, at, table_start)
+            let (end, end_error) = placed_end_after(builder, function_offsets, at, table_start)
             if end_error != ok { ret end_error }
             var relative = 0usize
             if start <= table_start { relative = 4294967296usize - (table_start - start) }
@@ -1113,7 +1114,7 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
             let name_length = placed.module_name.len + 1usize + placed.name.len
             try emit_x64.little_u32(machine, name_length)
             names_at += name_length
-            let (first_row, row_total) = line_rows_of(lines, line_count, start, end)
+            let (first_row, row_total) = line_rows_from(lines, line_count, start, end, &line_cursor_3)
             try emit_x64.little_u32(machine, rows_at + rows_written * 16usize)
             try emit_x64.little_u32(machine, row_total)
             rows_written += row_total
@@ -1121,8 +1122,10 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
         at += 1usize
     }
     at = 0usize
+    var line_cursor_4 = 0usize
+    var placed_max_4 = 0usize
     while at < builder.function_count {
-        if function_is_placed(builder, function_offsets, at) {
+        if is_placed_after(builder, function_offsets, at, &placed_max_4) {
             let placed = builder.functions[at]
             try emit_text(machine, placed.module_name)
             try emit_x64.byte(machine, 46usize)
@@ -1136,12 +1139,14 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
         path_at += 1usize
     }
     at = 0usize
+    var line_cursor_5 = 0usize
+    var placed_max_5 = 0usize
     while at < builder.function_count {
-        if function_is_placed(builder, function_offsets, at) {
+        if is_placed_after(builder, function_offsets, at, &placed_max_5) {
             let start = function_offsets[at]
-            let (end, end_error) = function_placed_end(builder, function_offsets, at, table_start)
+            let (end, end_error) = placed_end_after(builder, function_offsets, at, table_start)
             if end_error != ok { ret end_error }
-            let (first_row, row_total) = line_rows_of(lines, line_count, start, end)
+            let (first_row, row_total) = line_rows_from(lines, line_count, start, end, &line_cursor_5)
             var row_at = first_row
             while row_at < first_row + row_total {
                 let entry = lines[row_at]
@@ -1200,6 +1205,43 @@ fn line_rows_of(lines: []LineEntry, line_count: usize, start: usize, end: usize)
 // Whether a function has its own code: a folded duplicate shares an offset with an
 // earlier function, and only the earlier one is listed. Placement is read from the
 // offsets alone, so the artifact path, whose functions carry no NIR, agrees.
+// A function is placed when its code was emitted rather than folded onto an earlier
+// function's: code is emitted in index order, so a placed function's offset is above
+// every earlier one's and a folded function's equals an earlier placed one's (D306).
+// `placed_max` is the running maximum the caller threads through its loop.
+fn is_placed_after(builder: *nir.Builder, function_offsets: []usize, index: usize, placed_max: *usize) -> bool {
+    if index >= function_offsets.len || index >= builder.function_count { ret false }
+    if index != 0usize && function_offsets[index] <= *placed_max { ret false }
+    *placed_max = function_offsets[index]
+    ret true
+}
+
+// The end of a placed function's code: the first later offset above its own, which is
+// the next placed function's start, or the end of the code. The functions between are
+// folded ones, each passed over once by the placed function before them.
+fn placed_end_after(builder: *nir.Builder, function_offsets: []usize, index: usize, code_end: usize) -> (usize, err) {
+    let start = function_offsets[index]
+    var at = index + 1usize
+    while at < builder.function_count && at < function_offsets.len {
+        if function_offsets[at] > start { ret (function_offsets[at], ok) }
+        at += 1usize
+    }
+    if code_end < start { ret (0usize, Unsupported) }
+    ret (code_end, ok)
+}
+
+// The line rows of a placed function: rows ascend with the code and the functions are
+// visited in code order, so a cursor left where the last function ended finds them.
+fn line_rows_from(lines: []LineEntry, line_count: usize, start: usize, end: usize, cursor: *usize) -> (usize, usize) {
+    var at = *cursor
+    if at > line_count { at = line_count }
+    while at < line_count && lines[at].offset < start { at += 1usize }
+    let first = at
+    while at < line_count && lines[at].offset < end { at += 1usize }
+    *cursor = at
+    ret (first, at - first)
+}
+
 fn function_is_placed(builder: *nir.Builder, function_offsets: []usize, index: usize) -> bool {
     if index >= function_offsets.len || index >= builder.function_count { ret false }
     var earlier = 0usize
@@ -1677,7 +1719,7 @@ fn select_index_address(builder: *nir.Builder, current: nir.Function, instructio
         let (length, length_error) = read_value(allocations, length_value, 0usize, output)
         if length_error != ok { ret length_error }
         if length != 0usize { try emit_x64.mov_register(output, 0usize, length) }
-        try emit_checked(builder, current, instruction.token, instruction.path, 2usize, "bounds", "index ", " out of bounds for len ", "", 11usize, 0usize, context)
+        try emit_checked(builder, current, nir.site_token(instruction.site), instruction.path, 2usize, "bounds", "index ", " out of bounds for len ", "", 11usize, 0usize, context)
     }
     if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 11usize, 11usize, instruction.immediate) }
     try emit_x64.add_register(output, 11usize, 10usize)
@@ -1714,8 +1756,8 @@ fn select_slice(builder: *nir.Builder, current: nir.Function, instruction: nir.I
     if upper_error != ok { ret upper_error }
     if upper_source != 1usize { try emit_x64.mov_register(output, 1usize, upper_source) }
     if !instruction.nocheck {
-        try emit_checked(builder, current, instruction.token, instruction.path, 6usize, "bounds", "slice start ", " after end ", "", 0usize, 1usize, context)
-        try emit_checked(builder, current, instruction.token, instruction.path, 6usize, "bounds", "slice end ", " out of bounds for len ", "", 1usize, 11usize, context)
+        try emit_checked(builder, current, nir.site_token(instruction.site), instruction.path, 6usize, "bounds", "slice start ", " after end ", "", 0usize, 1usize, context)
+        try emit_checked(builder, current, nir.site_token(instruction.site), instruction.path, 6usize, "bounds", "slice end ", " out of bounds for len ", "", 1usize, 11usize, context)
     }
     try emit_x64.subtract_register(output, 1usize, 0usize)
     if instruction.immediate != 1usize { try emit_x64.multiply_immediate(output, 0usize, 0usize, instruction.immediate) }
@@ -1843,21 +1885,21 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
             next_block += 1usize
         }
         let instruction = builder.instructions[at]
-        context.failure_token = instruction.token
+        context.failure_token = nir.site_token(instruction.site)
         context.failure_instruction = at
         // The line table: a row wherever the line or the file changes (D209).
-        if instruction.token.line != 0usize {
+        if instruction.site.line != 0usize {
             var line_path = instruction.path
             if line_path.len == 0usize { line_path = current.path }
             let line_count = *context.line_count
             var changed = true
             if line_count != 0usize {
                 let last = context.lines[line_count - 1usize]
-                if last.line == instruction.token.line && check.same(last.path, line_path) && last.offset >= function_code_start { changed = false }
+                if last.line == instruction.site.line && check.same(last.path, line_path) && last.offset >= function_code_start { changed = false }
             }
             if changed {
                 if line_count == context.lines.len { ret Unsupported }
-                context.lines[line_count] = LineEntry { offset: output.count, line: instruction.token.line, path: line_path }
+                context.lines[line_count] = LineEntry { offset: output.count, line: instruction.site.line, path: line_path }
                 *context.line_count = line_count + 1usize
             }
         }
@@ -2004,7 +2046,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                             if equal_error != ok { ret equal_error }
                             fits = equal
                         }
-                        try emit_trap(builder, current, instruction.token, instruction.path, "narrow", "", " does not fit ", "", 1usize, signed_integer(source_type), kept, 0usize, instruction.ty.name, context)
+                        try emit_trap(builder, current, nir.site_token(instruction.site), instruction.path, "narrow", "", " does not fit ", "", 1usize, signed_integer(source_type), kept, 0usize, instruction.ty.name, context)
                         try emit_x64.patch_relative32(output, fits, output.count)
                     }
                 } else {
@@ -2012,7 +2054,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     if instruction.opcode == .Negate { try emit_x64.negate_register(output, destination) }
                     if instruction.opcode == .BitNot { try emit_x64.bit_not_register(output, destination) }
                     let negated = instruction.opcode == .Negate && signed_integer(instruction.ty) && !instruction.nocheck
-                    if negated { try emit_overflow_check(builder, current, instruction.token, instruction.path, instruction.ty, " unary - overflows", destination, context) }
+                    if negated { try emit_overflow_check(builder, current, nir.site_token(instruction.site), instruction.path, instruction.ty, " unary - overflows", destination, context) }
                     if !(negated && integer_width(instruction.ty) != 64usize) { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
                 try store_result(allocations, instruction.result, destination, output)
@@ -2037,7 +2079,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 if right_error != ok { ret right_error }
                 if left != 10usize { try emit_x64.mov_register(output, 10usize, left) }
                 if right != 1usize { try emit_x64.mov_register(output, 1usize, right) }
-                if !instruction.nocheck { try emit_shift_check(builder, current, instruction.token, instruction.path, integer_width(left_type), context) }
+                if !instruction.nocheck { try emit_shift_check(builder, current, nir.site_token(instruction.site), instruction.path, integer_width(left_type), context) }
                 try emit_x64.and_immediate8(output, 1usize, integer_width(left_type) - 1usize)
                 try emit_x64.shift_register(output, 10usize, instruction.opcode == .ShiftLeft, signed_integer(left_type))
                 try restore_live_registers(output, shift_mask, preserve_base, preserve_count)
@@ -2068,13 +2110,13 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                         try emit_x64.test_register(output, 2usize)
                         let (fits, fits_error) = emit_x64.jump_condition(output, 4usize)
                         if fits_error != ok { ret fits_error }
-                        try emit_trap(builder, current, instruction.token, instruction.path, "overflow", instruction.ty.name, "", "", 0usize, false, 0usize, 0usize, " * overflows", context)
+                        try emit_trap(builder, current, nir.site_token(instruction.site), instruction.path, "overflow", instruction.ty.name, "", "", 0usize, false, 0usize, 0usize, " * overflows", context)
                         try emit_x64.patch_relative32(output, fits, output.count)
                     }
                     try emit_x64.mov_register(output, 10usize, 0usize)
                 } else {
                 let signed = signed_integer(left_type)
-                try emit_divide_checks(builder, current, instruction.token, instruction.path, instruction.opcode == .Remainder, integer_width(left_type), signed, context)
+                try emit_divide_checks(builder, current, nir.site_token(instruction.site), instruction.path, instruction.opcode == .Remainder, integer_width(left_type), signed, context)
                 if signed { try emit_x64.extend_dividend_signed(output) } else { try emit_x64.extend_dividend_unsigned(output) }
                 try emit_x64.divide_register(output, 11usize, signed)
                 if instruction.opcode == .Divide {
@@ -2132,7 +2174,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                         var operator = " + overflows"
                         if instruction.opcode == .Subtract { operator = " - overflows" }
                         if instruction.opcode == .Multiply { operator = " * overflows" }
-                        try emit_overflow_check(builder, current, instruction.token, instruction.path, instruction.ty, operator, destination, context)
+                        try emit_overflow_check(builder, current, nir.site_token(instruction.site), instruction.path, instruction.ty, operator, destination, context)
                     }
                     if instruction.ty.kind == .Integer && !(checked && integer_width(instruction.ty) != 64usize) { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
@@ -2295,7 +2337,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                         if operand_source != 10usize + operand_at { try emit_x64.mov_register(output, 10usize + operand_at, operand_source) }
                         operand_at += 1usize
                     }
-                    try emit_trap(builder, current, instruction.token, instruction.path, kind, message, "", "", instruction.operand_count, signed, 10usize, 11usize, "", context)
+                    try emit_trap(builder, current, nir.site_token(instruction.site), instruction.path, kind, message, "", "", instruction.operand_count, signed, 10usize, 11usize, "", context)
                 } else {
                 if instruction.opcode == .Return {
                     if instruction.operand_count == 1usize {

@@ -39,13 +39,10 @@ fn scalar_size(ty: check.Type) -> usize {
 fn aggregate_index(c: *check.Checker, ty: check.Type) -> (usize, bool) {
     if (ty.kind == .Named || ty.kind == .Tag) && ty.has_element && ty.element < c.aggregate_count { ret (ty.element, true) }
     if ty.kind != .Named && ty.kind != .Tag { ret (0usize, false) }
-    var at = 0usize
-    while at < c.aggregate_count {
-        let candidate = c.aggregates[at]
-        if candidate.module_index == ty.module_index && check.same(candidate.name, ty.name) { ret (at, true) }
-        at += 1usize
-    }
-    ret (0usize, false)
+    // By the checker's (module, name) index (D306); this scanned every aggregate for
+    // every type a layout was asked about.
+    let (found_at, found) = check.find_aggregate(c, ty.module_index, ty.name)
+    ret (found_at, found)
 }
 
 fn type_info_depth(c: *check.Checker, ty: check.Type, depth: usize) -> (Info, err) {

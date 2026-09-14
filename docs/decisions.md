@@ -6143,3 +6143,82 @@ The bootstrap's program-wide `use` table was at its limit of 128 and `regalloc.e
 `use e.mem` was the 129th; `UseDecl` is a few words, so it is 256 now. The self-hosted
 resolver also refused what the bootstrap accepted -- a `mem.` call in a module without
 `use e.mem` -- which is the right order for the two to be strict in.
+
+## D306 -- Two million lines: pools sized from the program, and the constants underneath
+
+The target set in this stream was a compiler that takes millions of lines, measured on a
+generated program of two million lines in two thousand files. This decision is what it
+took to get there from D305, in the order the profile found it, and the measurement.
+
+**Pools are sized from the program, not the arena.** The first attempt scaled every pool
+by the arena's gibibytes, on the reasoning that a reserved page costs nothing until
+touched. On Windows that is false one level down: the runtime commits up to the
+*allocation* offset (D133's chunked growth), so a pool sized for millions of lines was
+charged in full by every build, and a 64 GiB compiler spent its first seconds committing
+40 GB. Linux is touch-native and would not have shown it. So the loader now measures
+the program -- `graph.total_bytes` and `largest_bytes`, since every module's text is read
+before anything else is done with it -- and every pool after loading is `base + bytes /
+per`: symbols a sixteenth of the source, instructions a fifth, tokens and trees the
+largest module. The tree pool grows to the largest module as the loader meets it,
+doubling and leaving the smaller one behind. Commit is proportional to the program on
+both hosts; the 2M-line build peaks at 2.9 GB. A debug-built compiler fills every
+allocation with 0xCD (§11) and so touches every pool it allocates -- 8.4 GB for the
+same build -- which is what `--release` is for; the numbers below are a release compiler.
+
+**The constants, in the order the profile surfaced them.** `--time` and a Linux `perf`
+run mapped through the image's own symbol table (`benchmarks/scale/symmap.py` is the
+mapper) found each:
+- `intern_function` and `intern_string` scanned their tables per call site and literal;
+  both have `lookup` indexes now. `prune_references` compacts the references, which had
+  left the index pointing past the table and every codegen-time intern on the scan.
+- `resolve_calls` matched every relocation's target by scanning every function by name;
+  `function_for_reference` did the same per call instruction in the prune. Each
+  reference is matched once by one pass over the functions (`resolve_reference_targets`).
+- The symbol table decided "placed" by scanning earlier functions, found a function's
+  end by scanning all of them, and found its line rows by scanning all rows -- three
+  quadratics per function. Placed functions and rows ascend with the code, so a running
+  maximum and two cursors do it.
+- `lower_function_index` zeroed a 256-entry `DeferState` -- 230 KB, a `CallInfo` and a
+  token per entry -- for every function, byte by byte. One per module sweep now.
+- `sha_k` rebuilt the sixty-four round constants on the stack per round; built once per
+  block. The manifest hashes every source file of every build.
+- `layout.aggregate_index` scanned the aggregates by name; it uses the checker's index.
+- The lexer probed up to twenty-eight two- and three-byte operators per punctuation
+  token through a bounds-checked call each, and compared every identifier against all
+  thirty-four keywords; three bytes read once and a first-letter dispatch.
+- **Aggregate copies and fills were byte loops** -- five instructions per byte -- and
+  every token returned by value, every node or instruction read from a table, every
+  `= zero` paid it. Eight bytes per iteration with the byte loop as the tail; the bytes
+  were checked against GNU `as`. This was the single largest constant in the compiler.
+- `nir.Instruction` was 180 bytes because it carried a whole 120-byte `lex.Token`;
+  nothing downstream reads more than its start, end, line and column, so it carries a
+  32-byte `Site` and rebuilds a token for the few callers that want one. This is what
+  puts the compiler's own build back under the 512 MiB default arena the suite's
+  own-stage test emits it with -- at 484 MB, which is the next thing to widen: the
+  machine-code buffer and the image buffer hold one byte per `usize`.
+- Three ceilings the 2M program hit: `lowered_modules` at 128, the symbol table's paths
+  at 512 per program, and the image buffer sized from the code *before* the symbol
+  table was appended to it with a mebibyte of slack. Sized from the program, 8192, and
+  after the table, respectively. A fourth stays: a Linux image's arena is a 32-bit
+  immediate in its startup stub, so `--arena` tops out under 2 GiB there.
+
+**Measurements**, one host, release compiler, best of three unless noted:
+
+| program | lines | modules | compile | peak | image | run |
+|---|---|---|---|---|---|---|
+| compiler itself (debug compiler) | 42k | 34 | 7.4 s -> 3.4 s | -- | 5.9 MB | -- |
+| scale, 40k | 40k | 80 | 3.1 s -> 1.1 s | 83 MB | 0.5 MB | -- |
+| scale, 200k | 184k | 200 | 26 s -> 4.9 s | 1.4 GB | 1.3 MB | -- |
+| scale, 2M | 1.84M | 2000 | 36-58 s | 2.9 GB | 12.7 MB | 3.3 s |
+
+Every output checks against the generator's independently evaluated answer. Two million
+lines is 32k to 46k lines a second, against 6k at the start of the stream. Every change
+here is output-preserving for the programs that fit before -- the 40k image and the
+compiler's own image are byte-identical from D305's compiler and this one when the
+operand is spelled the same way, which cost an hour to learn -- except the copy loops,
+which change every image and hold the fixed point and the artifact fixtures.
+
+What the profile says now is that the remaining time is lexing and parsing (a third),
+then checking and lowering at a few microseconds per node. The next order of magnitude
+is not another scan; it is the per-module architecture (parse once, not three times;
+NIR and machine code per module, discarded) and then the lexer's inner loop.

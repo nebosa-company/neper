@@ -200,8 +200,11 @@ fn sha_rotr(x: usize, n: usize) -> usize {
     ret masked
 }
 
-fn sha_k(index: usize) -> usize {
-    let table = [64]usize{
+// The round constants, built once per compression rather than once per round (D306):
+// as a literal inside `sha_k` the table was rebuilt on the stack sixty-four times per
+// block, and the manifest hashes every source file of every build.
+fn sha_table() -> [64]usize {
+    ret [64]usize{
         1116352408usize, 1899447441usize, 3049323471usize, 3921009573usize, 961987163usize, 1508970993usize, 2453635748usize, 2870763221usize,
         3624381080usize, 310598401usize, 607225278usize, 1426881987usize, 1925078388usize, 2162078206usize, 2614888103usize, 3248222580usize,
         3835390401usize, 4022224774usize, 264347078usize, 604807628usize, 770255983usize, 1249150122usize, 1555081692usize, 1996064986usize,
@@ -210,7 +213,6 @@ fn sha_k(index: usize) -> usize {
         2730485921usize, 2820302411usize, 3259730800usize, 3345764771usize, 3516065817usize, 3600352804usize, 4094571909usize, 275423344usize,
         430227734usize, 506948616usize, 659060556usize, 883997877usize, 958139571usize, 1322822218usize, 1537002063usize, 1747873779usize,
         1955562222usize, 2024104815usize, 2227730452usize, 2361852424usize, 2428436474usize, 2756734187usize, 3204031479usize, 3329325298usize }
-    ret table[index]
 }
 
 // Compress one 64-byte block (given as 64 usize byte-slots) into the eight-word state.
@@ -236,10 +238,11 @@ fn sha_compress(state: []usize, block: []const usize) {
     var g = state[6usize]
     var h = state[7usize]
     t = 0usize
+    let k = sha_table()
     while t < 64usize {
         let big1 = sha_rotr(e, 6usize) ^ sha_rotr(e, 11usize) ^ sha_rotr(e, 25usize)
         let choose = (e & f) ^ ((e ^ mask32()) & g)
-        let t1 = (h + big1 + choose + sha_k(t) + w[t]) & mask32()
+        let t1 = (h + big1 + choose + k[t] + w[t]) & mask32()
         let big0 = sha_rotr(a, 2usize) ^ sha_rotr(a, 13usize) ^ sha_rotr(a, 22usize)
         let majority = (a & b) ^ (a & c) ^ (b & c)
         let t2 = (big0 + majority) & mask32()

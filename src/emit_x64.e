@@ -514,10 +514,33 @@ fn store_memory(buffer: *Buffer, address: usize, source: usize, width: usize) ->
     ret memory_modrm(buffer, source, address)
 }
 
+// Aggregate fills and copies run eight bytes per iteration with a byte loop for the
+// tail (D306). They ran a byte per iteration, five instructions each, and every
+// struct read out of a table -- a token, a node, an instruction -- is a copy: the
+// compiler spent more of its time in these two loops than in any pass.
+fn emit_bytes(buffer: *Buffer, bytes: []const usize) -> err {
+    var at = 0usize
+    while at < bytes.len {
+        try byte(buffer, bytes[at])
+        at += 1usize
+    }
+    ret ok
+}
+
 fn zero_memory(buffer: *Buffer, address: usize, size: usize) -> err {
     if size == 0usize { ret ok }
     if address != 10usize { try mov_register(buffer, 10usize, address) }
     try mov_immediate(buffer, 11usize, size)
+    // cmp r11, 8; jb tail
+    let seq1 = [_]usize{ 73usize, 131usize, 251usize, 8usize, 114usize, 21usize }
+    try emit_bytes(buffer, seq1[..])
+    // loop8: mov qword [r10], 0; add r10, 8; sub r11, 8; cmp r11, 8; jae loop8
+    let seq2 = [_]usize{ 73usize, 199usize, 2usize, 0usize, 0usize, 0usize, 0usize, 73usize, 131usize, 194usize, 8usize, 73usize, 131usize, 235usize, 8usize, 73usize, 131usize, 251usize, 8usize, 115usize, 235usize }
+    try emit_bytes(buffer, seq2[..])
+    // tail: test r11, r11; jz done
+    let seq3 = [_]usize{ 77usize, 133usize, 219usize, 116usize, 12usize }
+    try emit_bytes(buffer, seq3[..])
+    // byte loop: mov byte [r10], 0; inc r10; dec r11; jnz
     try byte(buffer, 65usize)
     try byte(buffer, 198usize)
     try byte(buffer, 2usize)
@@ -537,6 +560,16 @@ fn copy_memory(buffer: *Buffer, destination: usize, source: usize, size: usize) 
     if destination != 10usize { try mov_register(buffer, 10usize, destination) }
     if source != 11usize { try mov_register(buffer, 11usize, source) }
     try mov_immediate(buffer, 0usize, size)
+    // cmp rax, 8; jb tail
+    let seq4 = [_]usize{ 72usize, 131usize, 248usize, 8usize, 114usize, 24usize }
+    try emit_bytes(buffer, seq4[..])
+    // loop8: mov r9, [r11]; mov [r10], r9; add r11, 8; add r10, 8; sub rax, 8; cmp rax, 8; jae loop8
+    let seq5 = [_]usize{ 77usize, 139usize, 11usize, 77usize, 137usize, 10usize, 73usize, 131usize, 195usize, 8usize, 73usize, 131usize, 194usize, 8usize, 72usize, 131usize, 232usize, 8usize, 72usize, 131usize, 248usize, 8usize, 115usize, 232usize }
+    try emit_bytes(buffer, seq5[..])
+    // tail: test rax, rax; jz done
+    let seq6 = [_]usize{ 72usize, 133usize, 192usize, 116usize, 17usize }
+    try emit_bytes(buffer, seq6[..])
+    // byte loop: mov r9b, [r11]; mov [r10], r9b; inc r11; inc r10; dec rax; jnz
     try byte(buffer, 69usize)
     try byte(buffer, 138usize)
     try byte(buffer, 11usize)
@@ -729,7 +762,7 @@ fn self_test() -> err {
     try init(&probe, probe_storage[..])
     try function_prologue(&probe, 1024usize)
     if probe.count != 26usize || probe.bytes[4usize] != 72usize || probe.bytes[11usize] != 246usize || probe.bytes[15usize] != 72usize || probe.bytes[22usize] != 246usize { ret InvalidRegister }
-    var memory_storage: [80]usize = zero
+    var memory_storage: [160]usize = zero
     var memory: Buffer = zero
     try init(&memory, memory_storage[..])
     try stack_address(&memory, 10usize, 1usize)
@@ -745,10 +778,10 @@ fn self_test() -> err {
     try zero_memory(&memory, 9usize, 24usize)
     try multiply_immediate(&memory, 10usize, 11usize, 24usize)
     try bounds_check(&memory, 10usize, 11usize)
-    if memory.count != 76usize { ret InvalidRegister }
+    if memory.count != 108usize { ret InvalidRegister }
     if memory.bytes[0usize] != 76usize || memory.bytes[1usize] != 141usize || memory.bytes[7usize] != 73usize || memory.bytes[14usize] != 77usize || memory.bytes[16usize] != 182usize || memory.bytes[31usize] != 102usize || memory.bytes[40usize] != 26usize { ret InvalidRegister }
-    if memory.bytes[41usize] != 77usize || memory.bytes[44usize] != 65usize || memory.bytes[45usize] != 187usize || memory.bytes[50usize] != 65usize || memory.bytes[61usize] != 244usize { ret InvalidRegister }
-    if memory.bytes[62usize] != 77usize || memory.bytes[63usize] != 105usize || memory.bytes[69usize] != 77usize || memory.bytes[72usize] != 114usize || memory.bytes[75usize] != 11usize { ret InvalidRegister }
+    if memory.bytes[41usize] != 77usize || memory.bytes[44usize] != 65usize || memory.bytes[45usize] != 187usize || memory.bytes[50usize] != 73usize || memory.bytes[56usize] != 73usize || memory.bytes[57usize] != 199usize || memory.bytes[82usize] != 65usize || memory.bytes[93usize] != 244usize { ret InvalidRegister }
+    if memory.bytes[94usize] != 77usize || memory.bytes[95usize] != 105usize || memory.bytes[101usize] != 77usize || memory.bytes[104usize] != 114usize || memory.bytes[107usize] != 11usize { ret InvalidRegister }
     ret ok
 }
 

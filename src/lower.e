@@ -2028,6 +2028,7 @@ fn find_inline_entry(builder: *nir.Builder, module_index: usize, name: str, inst
 fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, entries: []nir.InlineEntry, entry_count: *usize) -> err {
     try declare_globals(c, oracle)
     *entry_count = 0usize
+    var oracle_defers: DeferState = zero
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
@@ -2044,7 +2045,7 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
                     let function = c.functions[function_index]
                     if !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
                         let before = oracle.function_count
-                        let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings)
+                        let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, &oracle_defers)
                         if lower_error != ok { ret lower_error }
                         let lowered = oracle.functions[before]
                         var hidden = false
@@ -2183,13 +2184,13 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                         if return_sites == 1usize {
                             single_result = returned
                         } else {
-                            let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, slot_size, instruction.token)
+                            let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, slot_size, nir.site_token(instruction.site))
                             if store_error != ok { ret store_error }
                             try nir.add_operand(builder, store_instruction, slot)
                             try nir.add_operand(builder, store_instruction, returned)
                         }
                     }
-                    let (leave, leave_error) = emit_branch(builder, instruction.token)
+                    let (leave, leave_error) = emit_branch(builder, nir.site_token(instruction.site))
                     if leave_error != ok { ret leave_error }
                     try nir.set_branch_targets(builder, leave, continuation, 0usize)
                 } else {
@@ -2223,7 +2224,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                     }
                     let was_nocheck = builder.nocheck
                     builder.nocheck = was_nocheck || instruction.nocheck
-                    let (copied, result, copy_error) = nir.emit(builder, instruction.opcode, instruction.ty, instruction.has_result, immediate, instruction.token)
+                    let (copied, result, copy_error) = nir.emit(builder, instruction.opcode, instruction.ty, instruction.has_result, immediate, nir.site_token(instruction.site))
                     builder.nocheck = was_nocheck
                     if copy_error != ok { ret copy_error }
                     if instruction.path.len != 0usize { builder.instructions[copied].path = instruction.path }
@@ -4908,7 +4909,7 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     ret ok
 }
 
-fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, function_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, defers: *DeferState) -> err {
     let text = g.modules[module_index].text
     let (name, name_error) = declaration_name(c, text, node)
     if name_error != ok { ret name_error }
@@ -4939,7 +4940,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if block_error != ok { ret block_error }
     let local_checkpoint = c.local_count
     var binding_count = 0usize
-    var defers: DeferState = zero
+    // The defer stack is the caller's, one per module sweep (D306): zeroing its 256
+    // entries here cost every function more than lowering its body did.
+    defers.count = 0usize
     var hidden_parameters = 0usize
     var function_call: check.CallInfo = zero
     function_call.function = function
@@ -4971,7 +4974,7 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             let child = tree.nodes[tree.children[at].index]
             if child.kind == .Block {
                 found_body = true
-                try lower_block(c, g, tree, module_index, function, child, builder, bindings, &binding_count, &no_loop, &defers)
+                try lower_block(c, g, tree, module_index, function, child, builder, bindings, &binding_count, &no_loop, defers)
             }
         }
         at += 1usize
@@ -4987,16 +4990,16 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     ret end_error
 }
 
-fn lower_declaration(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+fn lower_declaration(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, defers: *DeferState) -> err {
     let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
     let (function_index, found) = check.find_function(c, module_index, name)
     if !found { ret FunctionNotFound }
     if c.functions[function_index].generic { ret ok }
-    ret lower_function_index(c, g, tree, module_index, node, function_index, builder, signatures, bindings)
+    ret lower_function_index(c, g, tree, module_index, node, function_index, builder, signatures, bindings, defers)
 }
 
-fn lower_instance(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, instance_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+fn lower_instance(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, instance_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, defers: *DeferState) -> err {
     if instance_index >= c.function_count { ret FunctionNotFound }
     let instance = c.functions[instance_index]
     let instance_generic = c.function_generics[instance_index]
@@ -5014,7 +5017,7 @@ fn lower_instance(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
                 c.active_comptime_count = template_generic.comptime_count
                 c.active_first_argument = instance_generic.first_argument
                 c.active_arguments = true
-                let lower_error = lower_function_index(c, g, tree, module_index, node, instance_index, builder, signatures, bindings)
+                let lower_error = lower_function_index(c, g, tree, module_index, node, instance_index, builder, signatures, bindings, defers)
                 c.active_first_comptime = 0usize
                 c.active_comptime_count = 0usize
                 c.active_first_argument = 0usize
@@ -5753,6 +5756,7 @@ fn pending_formatter(c: *check.Checker, owner_module_index: usize) -> (usize, bo
 // pass parses one declaring module and lowers every pending instance from it;
 // instances that pass creates in turn are picked up by the next one.
 fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
+    var defers: DeferState = zero
     while true {
         // A formatter instance has no declaring module to parse, so it is drained
         // first and on its own; either kind can create the other.
@@ -5777,7 +5781,7 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
                 c.function_generics[at].lowered = true
                 c.active_owner_module = module_index
                 c.active_owner_set = true
-                let lower_error = lower_instance(c, g, &tree, template_module, at, builder, signatures, bindings)
+                let lower_error = lower_instance(c, g, &tree, template_module, at, builder, signatures, bindings, &defers)
                 c.active_owner_set = false
                 c.active_owner_module = 0usize
                 if lower_error != ok { ret lower_error }
@@ -5790,13 +5794,14 @@ fn lower_owned_instances(c: *check.Checker, g: *graph.Graph, module_index: usize
 
 fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding) -> err {
     if module_index >= g.count { ret FunctionNotFound }
+    var defers: DeferState = zero
     var tree: parse.Tree = zero
     try graph.parse_module(g, module_index, &tree)
     try check.tokenize_module(c, g, module_index)
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl { try lower_declaration(c, g, &tree, module_index, node, builder, signatures, bindings) }
+        if node.top_level && node.kind == .FnDecl { try lower_declaration(c, g, &tree, module_index, node, builder, signatures, bindings, &defers) }
         node_index += 1usize
     }
     if module_index == 0usize && c.main_reports_failure {

@@ -338,42 +338,97 @@ fn float_suffix_is_valid(source: str, start: usize, end: usize) -> bool {
     ret source[offset + 1usize] == 54u8 && source[offset + 2usize] == 52u8
 }
 
+// Keywords by first byte (D306): every identifier compared itself against all
+// thirty-four keywords; now against the few sharing its first letter.
 fn keyword(source: str, start: usize, end: usize) -> Kind {
-    if text_is(source, start, end, "use") { ret .KwUse }
-    if text_is(source, start, end, "type") { ret .KwType }
-    if text_is(source, start, end, "const") { ret .KwConst }
-    if text_is(source, start, end, "var") { ret .KwVar }
-    if text_is(source, start, end, "let") { ret .KwLet }
-    if text_is(source, start, end, "fn") { ret .KwFn }
-    if text_is(source, start, end, "ret") { ret .KwRet }
-    if text_is(source, start, end, "if") { ret .KwIf }
-    if text_is(source, start, end, "else") { ret .KwElse }
-    if text_is(source, start, end, "while") { ret .KwWhile }
-    if text_is(source, start, end, "for") { ret .KwFor }
-    if text_is(source, start, end, "in") { ret .KwIn }
-    if text_is(source, start, end, "switch") { ret .KwSwitch }
-    if text_is(source, start, end, "case") { ret .KwCase }
-    if text_is(source, start, end, "default") { ret .KwDefault }
-    if text_is(source, start, end, "break") { ret .KwBreak }
-    if text_is(source, start, end, "continue") { ret .KwContinue }
-    if text_is(source, start, end, "defer") { ret .KwDefer }
-    if text_is(source, start, end, "try") { ret .KwTry }
-    if text_is(source, start, end, "struct") { ret .KwStruct }
-    if text_is(source, start, end, "union") { ret .KwUnion }
-    if text_is(source, start, end, "enum") { ret .KwEnum }
-    if text_is(source, start, end, "error") { ret .KwError }
-    if text_is(source, start, end, "when") { ret .KwWhen }
-    if text_is(source, start, end, "true") { ret .KwTrue }
-    if text_is(source, start, end, "false") { ret .KwFalse }
-    if text_is(source, start, end, "nil") { ret .KwNil }
-    if text_is(source, start, end, "ok") { ret .KwOk }
-    if text_is(source, start, end, "as") { ret .KwAs }
-    if text_is(source, start, end, "zero") { ret .KwZero }
-    if text_is(source, start, end, "undef") { ret .KwUndef }
-    if text_is(source, start, end, "extern") { ret .KwExtern }
-    if text_is(source, start, end, "unreachable") { ret .KwUnreachable }
-    if text_is(source, start, end, "shared") { ret .KwShared }
     if end - start == 1usize && source[start] == 95u8 { ret .PunctUnderscore }
+    if end - start < 2usize || end - start > 11usize { ret .Identifier }
+    let first = source[start]
+    if first == 97u8 {
+        if text_is(source, start, end, "as") { ret .KwAs }
+        ret .Identifier
+    }
+    if first == 98u8 {
+        if text_is(source, start, end, "break") { ret .KwBreak }
+        ret .Identifier
+    }
+    if first == 99u8 {
+        if text_is(source, start, end, "const") { ret .KwConst }
+        if text_is(source, start, end, "case") { ret .KwCase }
+        if text_is(source, start, end, "continue") { ret .KwContinue }
+        ret .Identifier
+    }
+    if first == 100u8 {
+        if text_is(source, start, end, "default") { ret .KwDefault }
+        if text_is(source, start, end, "defer") { ret .KwDefer }
+        ret .Identifier
+    }
+    if first == 101u8 {
+        if text_is(source, start, end, "else") { ret .KwElse }
+        if text_is(source, start, end, "enum") { ret .KwEnum }
+        if text_is(source, start, end, "error") { ret .KwError }
+        if text_is(source, start, end, "extern") { ret .KwExtern }
+        ret .Identifier
+    }
+    if first == 102u8 {
+        if text_is(source, start, end, "fn") { ret .KwFn }
+        if text_is(source, start, end, "for") { ret .KwFor }
+        if text_is(source, start, end, "false") { ret .KwFalse }
+        ret .Identifier
+    }
+    if first == 105u8 {
+        if text_is(source, start, end, "if") { ret .KwIf }
+        if text_is(source, start, end, "in") { ret .KwIn }
+        ret .Identifier
+    }
+    if first == 108u8 {
+        if text_is(source, start, end, "let") { ret .KwLet }
+        ret .Identifier
+    }
+    if first == 110u8 {
+        if text_is(source, start, end, "nil") { ret .KwNil }
+        ret .Identifier
+    }
+    if first == 111u8 {
+        if text_is(source, start, end, "ok") { ret .KwOk }
+        ret .Identifier
+    }
+    if first == 114u8 {
+        if text_is(source, start, end, "ret") { ret .KwRet }
+        ret .Identifier
+    }
+    if first == 115u8 {
+        if text_is(source, start, end, "switch") { ret .KwSwitch }
+        if text_is(source, start, end, "struct") { ret .KwStruct }
+        if text_is(source, start, end, "shared") { ret .KwShared }
+        ret .Identifier
+    }
+    if first == 116u8 {
+        if text_is(source, start, end, "type") { ret .KwType }
+        if text_is(source, start, end, "try") { ret .KwTry }
+        if text_is(source, start, end, "true") { ret .KwTrue }
+        ret .Identifier
+    }
+    if first == 117u8 {
+        if text_is(source, start, end, "use") { ret .KwUse }
+        if text_is(source, start, end, "union") { ret .KwUnion }
+        if text_is(source, start, end, "undef") { ret .KwUndef }
+        if text_is(source, start, end, "unreachable") { ret .KwUnreachable }
+        ret .Identifier
+    }
+    if first == 118u8 {
+        if text_is(source, start, end, "var") { ret .KwVar }
+        ret .Identifier
+    }
+    if first == 119u8 {
+        if text_is(source, start, end, "while") { ret .KwWhile }
+        if text_is(source, start, end, "when") { ret .KwWhen }
+        ret .Identifier
+    }
+    if first == 122u8 {
+        if text_is(source, start, end, "zero") { ret .KwZero }
+        ret .Identifier
+    }
     ret .Identifier
 }
 
@@ -765,111 +820,117 @@ fn next(s: *Scanner) -> Token {
         ret token(s, kind, start, line, column, column_utf16)
     }
 
-    if has3(s, 46u8, 46u8, 46u8) {
+    // The next two bytes, read once (D306): every punctuation token probed up to
+    // twenty-eight two- and three-byte operators through a call and a bounds check each.
+    var d = 0u8
+    var e = 0u8
+    if s.off + 1usize < s.source.len { d = s.source[s.off + 1usize] }
+    if s.off + 2usize < s.source.len { e = s.source[s.off + 2usize] }
+    if c == 46u8 && d == 46u8 && e == 46u8 {
         take(s, 3usize)
         ret token(s, .PunctEllipsis, start, line, column, column_utf16)
     }
-    if has3(s, 43u8, 37u8, 61u8) {
+    if c == 43u8 && d == 37u8 && e == 61u8 {
         take(s, 3usize)
         ret token(s, .PunctAddWrapAssign, start, line, column, column_utf16)
     }
-    if has3(s, 45u8, 37u8, 61u8) {
+    if c == 45u8 && d == 37u8 && e == 61u8 {
         take(s, 3usize)
         ret token(s, .PunctSubWrapAssign, start, line, column, column_utf16)
     }
-    if has3(s, 42u8, 37u8, 61u8) {
+    if c == 42u8 && d == 37u8 && e == 61u8 {
         take(s, 3usize)
         ret token(s, .PunctMulWrapAssign, start, line, column, column_utf16)
     }
-    if has3(s, 60u8, 60u8, 61u8) {
+    if c == 60u8 && d == 60u8 && e == 61u8 {
         take(s, 3usize)
         ret token(s, .PunctShiftLeftAssign, start, line, column, column_utf16)
     }
-    if has3(s, 62u8, 62u8, 61u8) {
+    if c == 62u8 && d == 62u8 && e == 61u8 {
         take(s, 3usize)
         ret token(s, .PunctShiftRightAssign, start, line, column, column_utf16)
     }
-    if has(s, 46u8, 46u8) {
+    if c == 46u8 && d == 46u8 {
         take(s, 2usize)
         ret token(s, .PunctRange, start, line, column, column_utf16)
     }
-    if has(s, 45u8, 62u8) {
+    if c == 45u8 && d == 62u8 {
         take(s, 2usize)
         ret token(s, .PunctArrow, start, line, column, column_utf16)
     }
-    if has(s, 61u8, 61u8) {
+    if c == 61u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctEqEq, start, line, column, column_utf16)
     }
-    if has(s, 33u8, 61u8) {
+    if c == 33u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctBangEq, start, line, column, column_utf16)
     }
-    if has(s, 60u8, 61u8) {
+    if c == 60u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctLtEq, start, line, column, column_utf16)
     }
-    if has(s, 62u8, 61u8) {
+    if c == 62u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctGtEq, start, line, column, column_utf16)
     }
-    if has(s, 60u8, 60u8) {
+    if c == 60u8 && d == 60u8 {
         take(s, 2usize)
         ret token(s, .PunctShiftLeft, start, line, column, column_utf16)
     }
-    if has(s, 62u8, 62u8) {
+    if c == 62u8 && d == 62u8 {
         take(s, 2usize)
         ret token(s, .PunctShiftRight, start, line, column, column_utf16)
     }
-    if has(s, 43u8, 37u8) {
+    if c == 43u8 && d == 37u8 {
         take(s, 2usize)
         ret token(s, .PunctAddWrap, start, line, column, column_utf16)
     }
-    if has(s, 45u8, 37u8) {
+    if c == 45u8 && d == 37u8 {
         take(s, 2usize)
         ret token(s, .PunctSubWrap, start, line, column, column_utf16)
     }
-    if has(s, 42u8, 37u8) {
+    if c == 42u8 && d == 37u8 {
         take(s, 2usize)
         ret token(s, .PunctMulWrap, start, line, column, column_utf16)
     }
-    if has(s, 43u8, 61u8) {
+    if c == 43u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctAddAssign, start, line, column, column_utf16)
     }
-    if has(s, 45u8, 61u8) {
+    if c == 45u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctSubAssign, start, line, column, column_utf16)
     }
-    if has(s, 42u8, 61u8) {
+    if c == 42u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctMulAssign, start, line, column, column_utf16)
     }
-    if has(s, 47u8, 61u8) {
+    if c == 47u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctDivAssign, start, line, column, column_utf16)
     }
-    if has(s, 37u8, 61u8) {
+    if c == 37u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctRemAssign, start, line, column, column_utf16)
     }
-    if has(s, 38u8, 61u8) {
+    if c == 38u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctBitAndAssign, start, line, column, column_utf16)
     }
-    if has(s, 94u8, 61u8) {
+    if c == 94u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctBitXorAssign, start, line, column, column_utf16)
     }
-    if has(s, 124u8, 61u8) {
+    if c == 124u8 && d == 61u8 {
         take(s, 2usize)
         ret token(s, .PunctBitOrAssign, start, line, column, column_utf16)
     }
-    if has(s, 38u8, 38u8) {
+    if c == 38u8 && d == 38u8 {
         take(s, 2usize)
         ret token(s, .PunctAndAnd, start, line, column, column_utf16)
     }
-    if has(s, 124u8, 124u8) {
+    if c == 124u8 && d == 124u8 {
         take(s, 2usize)
         ret token(s, .PunctOrOr, start, line, column, column_utf16)
     }
