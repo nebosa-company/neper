@@ -1853,6 +1853,13 @@ for format_case in layout; do
 ' "fmt on format/$format_case.e differs from the conformance corpus" >&2; exit 1; }
     "$test_build/neper-self" fmt-file "$conformance_root/format/$format_case.expected.e" --check --json > /dev/null
 done
+# `fmt --json` on what it refuses (D257): an invalid token under its lexical code and a
+# comment splitting an attribute from its declaration under E-FORMAT-9999, exit 1.
+fmt_reject_status=0
+$test_build/neper-self fmt-file "$conformance_root/tools/fmt_reject.e" --json > "$test_build/conformance-tools-fmt-reject.jsonl" || fmt_reject_status=$?
+[ "$fmt_reject_status" -eq 1 ]
+cmp -s "$test_build/conformance-tools-fmt-reject.jsonl" "$conformance_root/tools/fmt_reject.expected.jsonl" || { printf '%s
+' "fmt --json on a refused source differs from the conformance corpus" >&2; exit 1; }
 # `fmt --check --json` (D244): a canonical source passes, a non-canonical one reports E-FORMAT-0001.
 "$test_build/neper-self" fmt-file "$conformance_root/tools/fmt.e" --check --json > /dev/null
 fmt_check_status=0

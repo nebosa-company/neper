@@ -4869,3 +4869,29 @@ had; nothing is generated, compiled or run. The signature check is a token walk 
 `(` name `:` `*` [module `.`] `Arena` `)` `->` `err` `{` -- so the arena's module may be
 aliased or omitted, and anything else is refused. The first offender is reported;
 tests/conformance/tools/test_reject.e pins a test without its arena.
+
+## D257 -- What `fmt` refuses is diagnostics, in every form
+
+`fmt` on a source with an invalid token printed `error: tool.InvalidSource` and exited
+1: a bare line naming an internal error value, no location, no code, and not in the
+stream at all under `--json`. Now the refusal is the diagnostics themselves. Each
+invalid token is a record under its lexical code, the shape and the code `tokens --json`
+already emits for it (D227), and the stream ends in a result that exits 1 with no
+`formatted` record; the plain form prints the same as `path:line:col: error[CODE]:
+invalid token` lines on stderr and exits 1; `--check` refuses the same way, since a
+source that does not lex is not canonical and is not "not canonical at byte N" either.
+
+Section 6 also has one contract a layout pass cannot honour by rewriting: a comment
+between attributes and their declaration is illegal, because attributes must be
+adjacent and a comment is never moved across a declaration. The formatter cannot both
+keep the comment where it is and keep the attribute adjacent, so it refuses, as
+E-FORMAT-9999 -- the registry's "other formatter input or contract violation" -- at the
+comment. That is the first use of the code. The check is a line-shape one: a line whose
+first token is `@`, then a line holding only a comment, before any other token.
+
+tests/conformance/tools/fmt_reject.e carries both and pins two diagnostics in one
+stream. The other formatter contracts section 6 states and the layout pass does not yet
+implement -- one statement per line, one blank line between top-level declarations,
+100-column wrapping, sorted `use` and attributes -- are not refusals; they are the
+formatter's own gap, named in the readiness row, and D255's inline brace spacing sits
+on the "one statement per line" question until that is decided.

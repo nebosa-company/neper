@@ -880,14 +880,92 @@ fn format_into(raw: *Out, source: str) -> err {
 // `fmt --check --json` (D242+): the canonical-layout check. Emits E-FORMAT-0001 pointing at
 // the first byte that differs from canonical and exits 1 when the source is not already
 // canonical, and just the header and a passing result when it is.
+// One invalid-token diagnostic, the shape `tokens --json` emits (D227).
+fn invalid_token_diagnostic(out: *Out, root: str, path: str, source: str, token: lex.Token) -> err {
+    try text(out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":")
+    try quoted(out, lex.invalid_code(source, token))
+    try text(out, ",\"message\":\"invalid token\",\"span\":")
+    try span(out, root, path, token.start, token.end, token.line, token.column, token.end_line, token.end_column, token.column_utf16, token.end_column_utf16)
+    try text(out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
+    ret flush(out)
+}
+
+// What `fmt` refuses, as diagnostics (D257): each invalid token under its lexical code,
+// and section 6's one formatter contract a layout pass cannot honour -- a comment
+// between an attribute and its declaration, since attributes must stay adjacent --
+// as E-FORMAT-9999 at the comment. Returns how many were written; zero means format.
+fn fmt_refuse(a: *mem.Arena, out: *Out, source: str, path: str) -> (usize, err) {
+    let (tokens, count, invalid, scan_error) = scan_all(a, source)
+    if scan_error != ok { ret (0usize, scan_error) }
+    var written = 0usize
+    var at = 0usize
+    var after_attribute = false
+    var line_first = true
+    while at < count {
+        let token = tokens[at]
+        if token.kind == .Invalid {
+            let invalid_error = invalid_token_diagnostic(out, "operand", path, source, token)
+            if invalid_error != ok { ret (0usize, invalid_error) }
+            written += 1usize
+        }
+        if token.kind == .Newline {
+            // A newline whose line holds only a comment, right after an attribute line.
+            if after_attribute && line_first && token.leading_start < token.start {
+                let comment_start = index_comment_start(source, token)
+                if comment_start + 1usize < token.start && source[comment_start] == 47u8 && source[comment_start + 1usize] == 47u8 {
+                    var comment: lex.Token = token
+                    comment.start = comment_start
+                    comment.end = token.start
+                    comment.column = token.leading_column + (comment_start - token.leading_start)
+                    comment.column_utf16 = token.leading_column_utf16 + (comment_start - token.leading_start)
+                    comment.line = token.leading_line
+                    comment.end_line = token.line
+                    comment.end_column = token.column
+                    comment.end_column_utf16 = token.column_utf16
+                    let contract_error = text(out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-FORMAT-9999\",\"message\":\"a comment may not separate an attribute from its declaration\",\"span\":")
+                    if contract_error != ok { ret (0usize, contract_error) }
+                    let span_error = span(out, "operand", path, comment.start, comment.end, comment.line, comment.column, comment.end_line, comment.end_column, comment.column_utf16, comment.end_column_utf16)
+                    if span_error != ok { ret (0usize, span_error) }
+                    let tail_error = text(out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
+                    if tail_error != ok { ret (0usize, tail_error) }
+                    let flush_error = flush(out)
+                    if flush_error != ok { ret (0usize, flush_error) }
+                    written += 1usize
+                    after_attribute = false
+                }
+            }
+            line_first = true
+        } else {
+            if line_first { after_attribute = token.kind == .PunctAt }
+            line_first = false
+        }
+        at += 1usize
+    }
+    ret (written, ok)
+}
+
+fn fmt_refused_result(out: *Out, diagnostics: usize) -> err {
+    try text(out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"diagnostics\":")
+    try decimal(out, diagnostics)
+    try text(out, "}}")
+    ret flush(out)
+}
+
 fn fmt_check_json(a: *mem.Arena, source: str, path: str) -> (usize, err) {
-    let (formatted, format_error) = format_source(a, source)
-    if format_error != ok { ret (1usize, format_error) }
-    let (storage, storage_error) = mem.alloc[u8](a, source.len + formatted.len + 4096usize)
+    let (storage, storage_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
     var out = Out { bytes: storage, count: 0usize }
     let header_error = header(&out, "fmt")
     if header_error != ok { ret (2usize, header_error) }
+    let (refused, refuse_error) = fmt_refuse(a, &out, source, path)
+    if refuse_error != ok { ret (2usize, refuse_error) }
+    if refused != 0usize {
+        let refused_error = fmt_refused_result(&out, refused)
+        if refused_error != ok { ret (2usize, refused_error) }
+        ret (1usize, ok)
+    }
+    let (formatted, format_error) = format_source(a, source)
+    if format_error != ok { ret (1usize, format_error) }
     var canonical = formatted.len == source.len
     var diff_at = 0usize
     if canonical {
@@ -957,28 +1035,80 @@ fn fmt_check_result(out: *Out, canonical: bool) -> err {
 
 // `fmt --json` (D234): one `formatted` record whose `text` is the canonical layout.
 // `fmt-file PATH` without `--json` (D255): the canonical text itself, for a diff or a pipe.
-fn fmt_plain(a: *mem.Arena, source: str) -> err {
+fn fmt_plain(a: *mem.Arena, source: str, path: str) -> (usize, err) {
+    // A refusal goes to stderr as the human lines of the same diagnostics, exit 1.
+    let (scratch, scratch_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
+    if scratch_error != ok { ret (2usize, scratch_error) }
+    var probe = Out { bytes: scratch, count: 0usize }
+    let (refused, refuse_error) = fmt_refuse_plain(a, &probe, source, path)
+    if refuse_error != ok { ret (2usize, refuse_error) }
+    if refused != 0usize { ret (1usize, ok) }
     let (formatted, format_error) = format_source(a, source)
-    if format_error != ok { ret format_error }
+    if format_error != ok { ret (1usize, format_error) }
     let stdout = os.stdout()
     var at = 0usize
     while at < formatted.len {
         let (written, write_error) = os.write(stdout, formatted[at..formatted.len])
-        if write_error != ok { ret write_error }
-        if written == 0usize { ret Capacity }
+        if write_error != ok { ret (2usize, write_error) }
+        if written == 0usize { ret (2usize, Capacity) }
         at += written
     }
+    ret (0usize, ok)
+}
+
+// The plain form's refusals: `path:line:col: error[CODE]: message` on stderr.
+fn fmt_plain_line(out: *Out, path: str, source: str, token: lex.Token) -> err {
+    try text(out, path)
+    try byte(out, 58u8)
+    try decimal(out, token.line)
+    try byte(out, 58u8)
+    try decimal(out, token.column)
+    try text(out, ": error[")
+    try text(out, lex.invalid_code(source, token))
+    try text(out, "]: invalid token\n")
+    let stderr = os.stderr()
+    var from = 0usize
+    while from < out.count {
+        let (put, write_error) = os.write(stderr, out.bytes[from..out.count])
+        if write_error != ok { ret write_error }
+        if put == 0usize { ret Capacity }
+        from += put
+    }
+    out.count = 0usize
     ret ok
 }
 
-fn fmt_json(a: *mem.Arena, source: str) -> (usize, err) {
-    let (formatted, format_error) = format_source(a, source)
-    if format_error != ok { ret (1usize, format_error) }
-    let (storage, storage_error) = mem.alloc[u8](a, formatted.len * 2usize + 4096usize)
+fn fmt_refuse_plain(a: *mem.Arena, out: *Out, source: str, path: str) -> (usize, err) {
+    let (tokens, count, invalid, scan_error) = scan_all(a, source)
+    if scan_error != ok { ret (0usize, scan_error) }
+    var written = 0usize
+    var at = 0usize
+    while at < count {
+        if tokens[at].kind == .Invalid {
+            let line_error = fmt_plain_line(out, path, source, tokens[at])
+            if line_error != ok { ret (0usize, line_error) }
+            written += 1usize
+        }
+        at += 1usize
+    }
+    ret (written, ok)
+}
+
+fn fmt_json(a: *mem.Arena, source: str, path: str) -> (usize, err) {
+    let (storage, storage_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
     var out = Out { bytes: storage, count: 0usize }
     let header_error = header(&out, "fmt")
     if header_error != ok { ret (2usize, header_error) }
+    let (refused, refuse_error) = fmt_refuse(a, &out, source, path)
+    if refuse_error != ok { ret (2usize, refuse_error) }
+    if refused != 0usize {
+        let refused_error = fmt_refused_result(&out, refused)
+        if refused_error != ok { ret (2usize, refused_error) }
+        ret (1usize, ok)
+    }
+    let (formatted, format_error) = format_source(a, source)
+    if format_error != ok { ret (1usize, format_error) }
     let record_error = fmt_record(&out, formatted)
     if record_error != ok { ret (2usize, record_error) }
     let result_error = fmt_result(&out)

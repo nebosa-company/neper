@@ -1715,6 +1715,12 @@ foreach ($formatCase in @('layout')) {
     cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot "format/$formatCase.expected.e")`" --check --json > nul"
     if ($LASTEXITCODE -ne 0) { throw "the canonical side of format/$formatCase is not canonical" }
 }
+# `fmt --json` on what it refuses (D257): an invalid token under its lexical code and a
+# comment splitting an attribute from its declaration under E-FORMAT-9999, exit 1.
+$fmtRejectActual = Join-Path $testBuild 'conformance-tools-fmt-reject.jsonl'
+cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt_reject.e')`" --json > `"$fmtRejectActual`""
+if ($LASTEXITCODE -ne 1) { throw "fmt --json on a refused source exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtRejectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/fmt_reject.expected.jsonl')).Hash) { throw "fmt --json on a refused source differs from the conformance corpus" }
 # `fmt --check --json` (D244): a canonical source passes, a non-canonical one reports E-FORMAT-0001.
 cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot 'tools/fmt.e')`" --check --json > `"$(Join-Path $testBuild 'fmt-check-ok.jsonl')`""
 if ($LASTEXITCODE -ne 0) { throw "fmt --check on a canonical source did not exit 0" }

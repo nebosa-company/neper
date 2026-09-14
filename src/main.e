@@ -1265,7 +1265,7 @@ fn manifest_command(a: *mem.Arena, args: []str) -> err {
 fn fmt_command(a: *mem.Arena, args: []str) -> err {
     let (text, load_error) = source.load(a, args[2usize])
     if load_error != ok { ret load_error }
-    let (fmt_exit, fmt_error) = tool.fmt_json(a, text)
+    let (fmt_exit, fmt_error) = tool.fmt_json(a, text, basename(args[2usize]))
     if fmt_error != ok { ret fmt_error }
     if fmt_exit != 0usize { os.exit(i32(fmt_exit)) }
     ret ok
@@ -1274,7 +1274,10 @@ fn fmt_command(a: *mem.Arena, args: []str) -> err {
 fn fmt_plain_command(a: *mem.Arena, args: []str) -> err {
     let (text, load_error) = source.load(a, args[2usize])
     if load_error != ok { ret load_error }
-    ret tool.fmt_plain(a, text)
+    let (plain_exit, plain_error) = tool.fmt_plain(a, text, basename(args[2usize]))
+    if plain_error != ok { ret plain_error }
+    if plain_exit != 0usize { os.exit(i32(plain_exit)) }
+    ret ok
 }
 
 fn fmt_check_command(a: *mem.Arena, args: []str) -> err {
