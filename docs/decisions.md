@@ -5521,3 +5521,18 @@ in a signature comes between the parameters it sits between. The result's counts
 unchanged, and the fixture's thirty records are monotone in span start. A reference
 to a declaration that comes later in the file names an id that has not been written
 yet; that is what the spec's stable ids are for.
+
+## D281 -- The runner renames the operand's `main`, and the map carries the seam
+
+An operand that defined `main` and carried tests could not be tested: the runner is
+the operand's text plus a `main` of its own, and two `main`s do not compile. Discovery
+now also notes the operand's top-level `fn main`, and the runner writes it as
+`nptest_operand_main` -- one identifier replaced as the text is copied, nothing else
+touched. The runner's source map (D264) then has two mappings instead of one: the
+operand's bytes up to the renamed name, and the bytes after it shifted by the fifteen
+bytes the longer name adds, so a compile error in a test declared after `main` still
+lands on the operand's own line and column. The second mapping begins mid-line, which
+is the one place the map's "columns are kept" assumption is not true: a diagnostic on
+the `main` line itself, after the name, would be off by fifteen columns. Two fixtures
+pin both halves: tests/conformance/tools/test_main runs two tests around a `main`, and
+test_main_error mistypes a test after it.

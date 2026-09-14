@@ -1803,6 +1803,17 @@ cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $con
 if ($LASTEXITCODE -ne 1) { throw "a stale source map exited $LASTEXITCODE, not 1" }
 if (Test-Path -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map.out')) { throw 'a stale source map still wrote an artifact' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $staleActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/stale_map.expected.jsonl')).Hash) { throw "a stale source map is not refused as the conformance corpus says" }
+# An operand that defines `main` and carries tests (D281): the runner renames the
+# operand's `main`, both tests run, and a compile error after the rename still maps back.
+$testMainActual = Join-Path $testBuild 'conformance-tools-test-main.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_main.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testMainActual`""
+if ($LASTEXITCODE -ne 0) { throw "test --json on an operand with main exited $LASTEXITCODE" }
+[IO.File]::WriteAllText($testMainActual, ([IO.File]::ReadAllText($testMainActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testMainActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_main.expected.jsonl')).Hash) { throw "test --json on an operand with main differs from the conformance corpus" }
+$testMainErrorActual = Join-Path $testBuild 'conformance-tools-test-main-error.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_main_error.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$testMainErrorActual`""
+if ($LASTEXITCODE -ne 2) { throw "a compile error past the renamed main exited $LASTEXITCODE, not 2" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testMainErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_main_error.expected.jsonl')).Hash) { throw "a compile error past the renamed main differs from the conformance corpus" }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 $timeoutActual = Join-Path $testBuild 'conformance-tools-test-timeout.jsonl'

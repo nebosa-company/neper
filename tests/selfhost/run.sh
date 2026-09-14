@@ -1951,6 +1951,17 @@ stale_status=0
 [ ! -e "$test_build/conformance-tools-stale-map.out" ]
 cmp -s "$test_build/conformance-tools-stale-map.jsonl" "$conformance_root/tools/stale_map.expected.jsonl" || { printf '%s
 ' "a stale source map is not refused as the conformance corpus says" >&2; exit 1; }
+# An operand that defines `main` and carries tests (D281): the runner renames the
+# operand's `main`, both tests run, and a compile error after the rename still maps back.
+$test_build/neper-self test-file "$conformance_root/tools/test_main.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-main.jsonl"
+sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-main.jsonl"
+cmp -s "$test_build/conformance-tools-test-main.jsonl" "$conformance_root/tools/test_main.expected.jsonl" || { printf '%s
+' "test --json on an operand with main differs from the conformance corpus" >&2; exit 1; }
+main_error_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test_main_error.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-main-error.jsonl" || main_error_status=$?
+[ "$main_error_status" -eq 2 ]
+cmp -s "$test_build/conformance-tools-test-main-error.jsonl" "$conformance_root/tools/test_main_error.expected.jsonl" || { printf '%s
+' "a compile error past the renamed main differs from the conformance corpus" >&2; exit 1; }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 timeout_actual="$test_build/conformance-tools-test-timeout.jsonl"
