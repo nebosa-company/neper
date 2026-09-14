@@ -5964,3 +5964,45 @@ each landing on its own number. Three of those controls first came back passing:
 `sed` patterns carrying `\x` escapes never matched, so the check was never broken. The
 controls were redone through a Python substitution. A control that cannot fail is not a
 control, and this one nearly went unnoticed.
+
+## D302 -- One NIR tier for every program, and a capacity that says so
+
+The NIR pools were allocated in two tiers: 32768 instructions for any program under 257
+functions, sixteen times that above. The gate was not a flag, so an application could
+not opt out, and the small tier was overrun twice in practice -- the `e.math` fixture at
+880 checks had to be split into families (D147), and `e.text.regex` was being planned as
+two fixtures for the same reason. When it filled, the diagnostic read `cannot lower
+`main`: lowering failed: NIR capacity exhausted`: it named the function being lowered
+when the pool ran out, which is the program's last function and never its cause, and in
+one reproduction here it pointed at `lib/e/str.e:564` -- a string helper blamed for the
+size of the program calling it.
+
+**Every program gets the compiler's own tier.** The root arena is reserved and committed
+as it is touched (D133) and `mem.alloc` is a bump, so a pool a small program fills a
+tenth of costs a tenth of its pages; the gate saved address space, not memory. The
+reservation is about 85 MB against the compiler's 1 GiB arena, which already held this
+tier and two oracles to build itself. The tier stays fixed -- growable pools are the
+production answer and wait for a program past half a million instructions to exist.
+
+**The capacity diagnostic names the pool, its size and the program.** `NIR instruction
+capacity (524288) exhausted while lowering `f`: the program so far is N functions, B
+blocks and I instructions; the pools are sized once per program, and a program this
+large has to be split.` The pool is found at the report site by asking the builder which
+count reached its length, so `nir.e` carries no new plumbing. The limit is recorded in
+the diagnostic registry as an implementation limit; it stays under `E-TYPE-9999` because
+a new code is a specification change.
+
+**The ceiling behind the ceiling.** With lowering no longer the first to fail, a
+3000-check `main` was refused by code selection: `codegen_x64` had a flat 8192-entry
+block table per function, and `regalloc`'s ranges and allocations and the branch
+fixups were flat too, while their siblings (`relocations`, `line_entries`) were already
+sized from the lowered program's counts. All four are now sized the same way; a
+3000-check function compiles and runs. The next one is not in this decision: at 15000
+checks the parser reports `E-SYNTAX-9999: unexpected end of line` at line 8741, which is
+the program-wide pool of 65536 syntax nodes in `init_cli_graph` filling and `parse.e`
+answering `InvalidSyntax` for it -- a capacity indistinguishable from a typo, and the
+benchmark's 14,700-line ceiling by another route. That is its own decision.
+
+Verified by shrinking the instruction pool to 4096 and reading the message, by the
+3000-check program against the previous compiler (refused) and this one (runs), and by
+both suites, which build the compiler with itself under the same arena.

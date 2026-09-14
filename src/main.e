@@ -2644,19 +2644,21 @@ fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signat
     ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
-fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, compiler_scale: bool) -> err {
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize) -> err {
     // Every module carries its own copy of the generic instances it uses, so the
     // NIR function count scales with instantiation sites, not with declarations.
-    var function_capacity = 1024usize
-    var block_capacity = 8192usize
-    var instruction_capacity = 32768usize
-    var operand_capacity = 131072usize
-    if compiler_scale {
-        function_capacity = 16384usize
-        block_capacity = 131072usize
-        instruction_capacity = 524288usize
-        operand_capacity = 2097152usize
-    }
+    //
+    // One tier for every program (D302). There were two, a sixteenth of this for any
+    // program under 257 functions, which an application cannot opt out of and which an
+    // 880-check fixture overran. The root arena is reserved and committed as it is
+    // touched (D133), so a pool a small program fills a tenth of costs a tenth; the
+    // gate saved address space, not memory.
+    // ponytail: fixed pools, sized for the compiler itself; growable pools when a
+    // program past half a million instructions exists.
+    let function_capacity = 16384usize
+    let block_capacity = 131072usize
+    let instruction_capacity = 524288usize
+    let operand_capacity = 2097152usize
     let (functions, functions_error) = mem.alloc[nir.Function](a, function_capacity)
     if functions_error != ok { ret functions_error }
     let (blocks, blocks_error) = mem.alloc[nir.Block](a, block_capacity)
@@ -3667,37 +3669,91 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
     ret print_token_diagnostic(report, g, resolver.failure_module, token, "E-NAME-9999", "name resolution failed")
 }
 
-fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checker, lower_error: err) -> err {
+// The NIR pools are program-wide (D302): a capacity that fills names the whole program,
+// not the function being lowered when it filled, and the message says which pool and
+// how large the program is so the limit reads as a limit rather than a fault in `main`.
+fn write_capacity_diagnostic(message: *Sink, builder: *nir.Builder, name: str) -> err {
+    var pool = "NIR"
+    var limit = 0usize
+    if builder.instruction_count >= builder.instructions.len {
+        pool = "NIR instruction"
+        limit = builder.instructions.len
+    } else {
+        if builder.block_count >= builder.blocks.len {
+            pool = "NIR block"
+            limit = builder.blocks.len
+        } else {
+            if builder.operand_count >= builder.operands.len {
+                pool = "NIR operand"
+                limit = builder.operands.len
+            } else {
+                if builder.function_count >= builder.functions.len {
+                    pool = "NIR function"
+                    limit = builder.functions.len
+                } else {
+                    if builder.function_ref_count >= builder.function_refs.len {
+                        pool = "NIR function reference"
+                        limit = builder.function_refs.len
+                    } else {
+                        if builder.string_count >= builder.strings.len {
+                            pool = "NIR string"
+                            limit = builder.strings.len
+                        }
+                    }
+                }
+            }
+        }
+    }
+    try write_all(message, pool)
+    try write_all(message, " capacity")
+    if limit != 0usize {
+        try write_all(message, " (")
+        try write_usize(message, limit)
+        try write_all(message, ")")
+    }
+    try write_all(message, " exhausted while lowering `")
+    try write_all(message, name)
+    try write_all(message, "`: the program so far is ")
+    try write_usize(message, builder.function_count)
+    try write_all(message, " functions, ")
+    try write_usize(message, builder.block_count)
+    try write_all(message, " blocks and ")
+    try write_usize(message, builder.instruction_count)
+    try write_all(message, " instructions; the pools are sized once per program, and a program this large has to be split")
+    ret ok
+}
+
+fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, lower_error: err) -> err {
     var path = "<unknown>"
     if checker.failure_module < g.count { path = g.modules[checker.failure_module].path }
     var message_storage: [1024]u8 = zero
     var message = capture_sink(message_storage[..])
+    if lower_error == nir.Capacity {
+        try write_capacity_diagnostic(&message, builder, checker.failure_name)
+        ret emit_diagnostic(report, path, checker.failure_token, checker.failure_has_token, "E-TYPE-9999", message_storage[..message.count])
+    }
     try write_all(&message, "cannot lower `")
     try write_all(&message, checker.failure_name)
     try write_all(&message, "`: ")
     if lower_error == check.Unsupported {
         try write_all(&message, "construct is not implemented in self-hosted lowering")
     } else {
-        if lower_error == nir.Capacity {
-            try write_all(&message, "lowering failed: NIR capacity exhausted")
+        if lower_error == nir.InvalidControlFlow {
+            try write_all(&message, "lowering failed: invalid NIR control flow")
         } else {
-            if lower_error == nir.InvalidControlFlow {
-                try write_all(&message, "lowering failed: invalid NIR control flow")
+            if lower_error == check.InvalidSwitch {
+                try write_all(&message, "lowering failed: invalid switch")
             } else {
-                if lower_error == check.InvalidSwitch {
-                    try write_all(&message, "lowering failed: invalid switch")
+                if lower_error == check.MissingReturn {
+                    try write_all(&message, "lowering failed: missing return")
                 } else {
-                    if lower_error == check.MissingReturn {
-                        try write_all(&message, "lowering failed: missing return")
+                    if lower_error == check.InvalidType {
+                        try write_all(&message, "lowering failed: invalid type")
                     } else {
-                        if lower_error == check.InvalidType {
-                            try write_all(&message, "lowering failed: invalid type")
+                        if lower_error == nir.InvalidValue {
+                            try write_all(&message, "lowering failed: invalid NIR value")
                         } else {
-                            if lower_error == nir.InvalidValue {
-                                try write_all(&message, "lowering failed: invalid NIR value")
-                            } else {
-                                try write_all(&message, "lowering failed")
-                            }
+                            try write_all(&message, "lowering failed")
                         }
                     }
                 }
@@ -4200,7 +4256,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var signatures: nir.Signatures = zero
         // One more parameter type than the declarations need: `neper_report_failure`,
         // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, checker.function_count > 256usize)
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize)
         let (bindings, bindings_error) = mem.alloc[lower.Binding](a, 16384usize)
         if bindings_error != ok { ret bindings_error }
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, 128usize)
@@ -4239,7 +4295,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var first_entry_count = 0usize
             let first_error = lower.build_inline_oracle(&checker, &loaded, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count)
             if first_error != ok {
-                try print_lower_diagnostic(&report, &loaded, &checker, first_error)
+                try print_lower_diagnostic(&report, &loaded, &checker, &first_oracle, first_error)
                 try finish_report(&report)
             os.exit(1i32)
                 ret ok
@@ -4260,7 +4316,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var inline_entry_count = 0usize
             let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
             if oracle_error != ok {
-                try print_lower_diagnostic(&report, &loaded, &checker, oracle_error)
+                try print_lower_diagnostic(&report, &loaded, &checker, &oracle, oracle_error)
                 try finish_report(&report)
             os.exit(1i32)
                 ret ok
@@ -4287,7 +4343,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if !(writes_em || writes_all_em) {
                 let prune_error = nir.prune_unreachable(&builder, kept_functions, false)
                 if prune_error != ok {
-                    try print_lower_diagnostic(&report, &loaded, &checker, prune_error)
+                    try print_lower_diagnostic(&report, &loaded, &checker, &builder, prune_error)
                     try finish_report(&report)
             os.exit(1i32)
                     ret ok
@@ -4295,14 +4351,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
         }
         if lower_error != ok {
-            try print_lower_diagnostic(&report, &loaded, &checker, lower_error)
+            try print_lower_diagnostic(&report, &loaded, &checker, &builder, lower_error)
             try finish_report(&report)
             os.exit(1i32)
             ret ok
         }
-        let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, 32768usize)
+        let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, builder.instruction_count + 4096usize)
         if ranges_error != ok { ret ranges_error }
-        let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, 32768usize)
+        let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, builder.instruction_count + 4096usize)
         if allocations_error != ok { ret allocations_error }
         var machine_capacity = 1usize
         if emit_machine_code {
@@ -4329,9 +4385,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if machine_storage_error != ok { ret machine_storage_error }
         var machine: emit_x64.Buffer = zero
         try emit_x64.init(&machine, machine_storage)
-        let (block_offsets, block_offsets_error) = mem.alloc[usize](a, 8192usize)
+        let (block_offsets, block_offsets_error) = mem.alloc[usize](a, builder.block_count + 1usize)
         if block_offsets_error != ok { ret block_offsets_error }
-        let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, 32768usize)
+        let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, builder.instruction_count + 16usize)
         if fixups_error != ok { ret fixups_error }
         // Two per trap site -- the call and the symbol table (D206) -- and one per call,
         // so the count follows the instructions rather than a constant.

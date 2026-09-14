@@ -1037,6 +1037,12 @@ $textNormalizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fi
 if ($LASTEXITCODE -ne 0 -or $textNormalizeWritten -ne 'executable written') { throw 'text_normalize emission failed' }
 & $textNormalizePath
 if ($LASTEXITCODE -ne 0) { throw "a text_normalize check failed: exit $LASTEXITCODE" }
+# One function of 3000 checks (D302): wider than the old small NIR tier and than codegen's old per-function block table.
+$capacityWidePath = Join-Path $testBuild 'capacity-wide-selfhost.exe'
+$capacityWideWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/capacity_wide/src/main.e') $repo 'x64' 'windows' $capacityWidePath
+if ($LASTEXITCODE -ne 0 -or $capacityWideWritten -ne 'executable written') { throw 'capacity_wide emission failed' }
+& $capacityWidePath
+if ($LASTEXITCODE -ne 0) { throw "a capacity_wide check failed: exit $LASTEXITCODE" }
 # `e.fmt.zstd`: libzstd's frames at three levels read back, the writer's frame read back, six refusals.
 $fmtZstdPath = Join-Path $testBuild 'fmt-zstd-selfhost.exe'
 $fmtZstdWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_zstd\src\main.e') $repo 'x64' 'windows' $fmtZstdPath

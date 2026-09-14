@@ -46,3 +46,13 @@ before implementation begins. The documentation phase may split a `9999` case in
 new stable code alongside its conformance fixture. An implementation may not emit an
 unregistered code, and adding a code is a specification change even when it does not
 change accepted programs.
+
+## Implementation limits
+
+The self-hosted compiler lowers every program into fixed pools sized once per program
+(D302): 524288 NIR instructions, 131072 blocks, 2097152 operands and 16384 functions --
+the sizes the compiler itself needs. A program that fills one is rejected under
+`E-TYPE-9999` with a message naming the pool, its size and the program's counts so far;
+the function named is where the pool filled, not the cause. Machine-code selection and
+register allocation size their per-function tables from the lowered program and have no
+separate ceiling.

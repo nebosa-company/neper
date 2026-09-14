@@ -1002,6 +1002,11 @@ text_normalize_written=$($test_build/neper-self emit-executable "$repo/tests/sel
 [ "$text_normalize_written" = 'executable written' ]
 chmod +x "$test_build/text-normalize-selfhost"
 "$test_build/text-normalize-selfhost"
+# One function of 3000 checks (D302): wider than the old small NIR tier and than codegen's old per-function block table.
+capacity_wide_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/capacity_wide/src/main.e" "$repo" x64 linux "$test_build/capacity-wide-selfhost")
+[ "$capacity_wide_written" = 'executable written' ]
+chmod +x "$test_build/capacity-wide-selfhost"
+"$test_build/capacity-wide-selfhost"
 # `e.fmt.zstd`: libzstd's frames at three levels read back, the writer's frame read back, six refusals.
 fmt_zstd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_zstd/src/main.e" "$repo" x64 linux "$test_build/fmt-zstd-selfhost")
 [ "$fmt_zstd_written" = 'executable written' ]
