@@ -2452,6 +2452,12 @@ ret_group_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$ret_group_executable_written" = 'executable written' ]
 chmod +x "$ret_group_executable_path"
 "$ret_group_executable_path"
+# `e.math.fixed` (D265): Q16.16 arithmetic and angles in turns.
+math_fixed_executable_path="$test_build/math-fixed-selfhost"
+math_fixed_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_fixed/src/main.e" "$repo" x64 linux "$math_fixed_executable_path")
+[ "$math_fixed_executable_written" = 'executable written' ]
+chmod +x "$math_fixed_executable_path"
+"$math_fixed_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]

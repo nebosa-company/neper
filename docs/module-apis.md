@@ -3854,12 +3854,18 @@ fn seek(d: *Decoder, frame: usize) -> err
 ### `e.math.fixed`
 
 ```neper
-// Q16.16 in i32 and Q32.32 in i64. Every operation is integer, so a result is
-// bit-identical on every target -- the basis for lockstep, rollback and replay.
+// Q16.16 in i32. Every operation is integer, so a result is bit-identical on every
+// target -- the basis for lockstep, rollback and replay. Angles are turns, not radians:
+// one turn is ONE, so reducing an angle is masking and sin is defined for any i32.
 type Fx = i32
 type Fx64 = i64
-error Overflow
 error DivideByZero
+error Domain
+
+const ONE: Fx
+const HALF: Fx
+const QUARTER: Fx
+const EIGHTH: Fx
 
 fn from_int(n: i32) -> Fx
 fn to_int(x: Fx) -> i32
@@ -3867,13 +3873,18 @@ fn from_ratio(num: i32, den: i32) -> (Fx, err)
 fn mul(a: Fx, b: Fx) -> Fx
 fn div(a: Fx, b: Fx) -> (Fx, err)
 fn floor(x: Fx) -> i32
+fn ceil(x: Fx) -> i32
 fn round(x: Fx) -> i32
 fn abs(x: Fx) -> Fx
+fn min(a: Fx, b: Fx) -> Fx
+fn max(a: Fx, b: Fx) -> Fx
 fn clamp(x: Fx, lo: Fx, hi: Fx) -> Fx
 fn lerp(a: Fx, b: Fx, t: Fx) -> Fx
+fn isqrt64(value: i64) -> i64
 fn sqrt(x: Fx) -> (Fx, err)
-fn sin(x: Fx) -> Fx
-fn cos(x: Fx) -> Fx
+fn sin(angle: Fx) -> Fx
+fn cos(angle: Fx) -> Fx
+fn tan(angle: Fx) -> (Fx, err)
 fn atan2(y: Fx, x: Fx) -> Fx
 fn length(x: Fx, y: Fx) -> Fx
 fn normalize(x: Fx, y: Fx) -> (Fx, Fx)

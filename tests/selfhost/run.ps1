@@ -2218,6 +2218,12 @@ $retGroupExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $retGroupExecutableWritten -ne 'executable written') { throw 'ret-group PE executable emission failed' }
 & $retGroupExecutablePath
 if ($LASTEXITCODE -ne 0) { throw "grouped return expressions failed check $LASTEXITCODE in the self-hosted PE executable" }
+# `e.math.fixed` (D265): Q16.16 arithmetic and angles in turns.
+$mathFixedExecutablePath = Join-Path $testBuild 'math-fixed-selfhost.exe'
+$mathFixedExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/math_fixed/src/main.e') $repo 'x64' 'windows' $mathFixedExecutablePath
+if ($LASTEXITCODE -ne 0 -or $mathFixedExecutableWritten -ne 'executable written') { throw 'math.fixed PE executable emission failed' }
+& $mathFixedExecutablePath
+if ($LASTEXITCODE -ne 0) { throw "e.math.fixed failed check $LASTEXITCODE in the self-hosted PE executable" }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }
