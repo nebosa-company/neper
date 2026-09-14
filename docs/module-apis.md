@@ -4081,6 +4081,16 @@ type Node = struct { text: str, speaker: u16, first_choice: u16, choice_count: u
 type Tree = struct { nodes: []const Node, choices: []const Choice }
 type State = struct { at: u16, flags: []u64, vars: []i32, finished: bool }
 error Invalid
+error Bounds
+
+const NONE: u16
+const END: u16
+
+fn always() -> Condition
+fn holds(s: State, c: Condition) -> bool
+fn set_flag(s: *State, key: u16) -> err
+fn add_value(s: *State, key: u16, delta: i32) -> err
+fn finished(s: State) -> bool
 
 fn start(s: *State, t: Tree, flags: []u64, vars: []i32) -> err
 fn node(s: State, t: Tree) -> (Node, err)
@@ -4095,16 +4105,19 @@ fn value(s: State, key: u16) -> i32
 
 ```neper
 type Particle = struct { x: fixed.Fx, y: fixed.Fx, vx: fixed.Fx, vy: fixed.Fx, life: u16, max_life: u16, kind: u16 }
-type Emitter = struct { x: fixed.Fx, y: fixed.Fx, spread: fixed.Fx, speed: fixed.Fx, life_min: u16, life_max: u16, kind: u16 }
+type Emitter = struct { x: fixed.Fx, y: fixed.Fx, facing: fixed.Fx, spread: fixed.Fx, speed: fixed.Fx, life_min: u16, life_max: u16, kind: u16 }
 type Pool = struct { particles: []Particle, count: usize }
 error Full
+error Size
 
 fn init(p: *Pool, particles: []Particle) -> err
-fn emit(p: *Pool, e: Emitter, state: *rand.State) -> (usize, err)
-fn burst(p: *Pool, e: Emitter, state: *rand.State, count: u16) -> (usize, err)
+fn emit(p: *Pool, e: Emitter, state: *rand.Pcg64) -> (usize, err)
+fn burst(p: *Pool, e: Emitter, state: *rand.Pcg64, count: u16) -> (usize, err)
 fn step(p: *Pool, gravity_x: fixed.Fx, gravity_y: fixed.Fx, damping: fixed.Fx) -> usize
 fn clear(p: *Pool) -> err
 fn alive(p: Pool) -> usize
+fn capacity(p: Pool) -> usize
+fn age(particle: Particle) -> fixed.Fx
 ```
 
 ### `e.game.netsync`

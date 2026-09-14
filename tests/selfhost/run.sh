@@ -2510,6 +2510,12 @@ game_sight_executable_written=$($test_build/neper-self emit-executable "$repo/te
 [ "$game_sight_executable_written" = 'executable written' ]
 chmod +x "$game_sight_executable_path"
 "$game_sight_executable_path"
+# `e.game.dialog` and `e.game.particle` (D278): branching conversation and particle pools.
+game_story_executable_path="$test_build/game-story-selfhost"
+game_story_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_story/src/main.e" "$repo" x64 linux "$game_story_executable_path")
+[ "$game_story_executable_written" = 'executable written' ]
+chmod +x "$game_story_executable_path"
+"$game_story_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]
