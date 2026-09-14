@@ -5129,3 +5129,62 @@ the surface rather than left as a promise.
 link/math_fixed pins thirty-seven checks whose expected values were computed
 independently rather than read back from this implementation, including a round trip that
 recovers an angle through `sin`, `cos` and `atan2` across the whole circle.
+
+## D268 -- The fixed step and the entity store, and a fixture check that is not the suite
+
+`e.game.loop` and `e.game.ecs`, the first two of D249's engine modules, taken as one batch
+because the ceremony around a module -- a decision, a runner block, a regenerated
+readiness page -- costs more than either module does.
+
+**`e.game.loop`.** The clock is handed the elapsed time rather than reading one. That is
+the whole point: a simulation driven by a scripted clock replays exactly, which is what
+makes a deterministic engine testable with no machine to render on, and what rollback
+needs. `advance` returns the whole steps owed and caps them, and on hitting the cap it
+drops the backlog rather than carrying it, because a machine that cannot keep up would
+otherwise owe more every frame than the frame before. A repeating timer carries its
+overshoot into the next period, so a period that is not a whole number of steps does not
+drift. Easing lives here rather than in a module of its own: these are a handful of Q16
+curves, and `e.ui.animation` is layer 6 and bound to the widget tree, so the game core
+cannot reach it. `ease_elastic` damps with a cube rather than the usual power of two,
+which would want an exponential; it is table-free, lands exactly on both ends, and rings
+the same way.
+
+**`e.game.ecs`.** An `Entity` is a slot and the generation that slot held when it was
+handed out, so a handle kept across a despawn is detectably stale rather than quietly
+addressing whoever moved in afterwards. A generation is odd while its slot is live and
+even once it is free, which makes `alive` a comparison and needs no second table.
+Components live in parallel columns, a bit per slot saying whether this slot has one, and
+`get` hands back the store's own bytes so a write through it sticks. Every buffer is the
+caller's: the store allocates nothing, so its capacity is what `init` was given and a full
+store is an error rather than a surprise. `query` walks slots in order, so it answers the
+same sequence on every machine.
+
+Both surfaces were corrected against what was actually written rather than left as
+registered. `e.game.ecs` needed a `free_count` the registered `Store` did not name, and
+three errors beyond the two registered; it is `partial`, since its bit helpers sit beyond
+the declared fence and section 12 has no visibility. `e.game.loop` names everything it
+defines, so it is `source`.
+
+**`scripts/check-fixture.sh`** is the other half of this decision. The suite makes 415
+compiler invocations across 175 fixtures and builds the compiler two or three times for
+the fixed point. That is the right price when a change can reach the compiler -- anything
+under `src/`, `bootstrap/` or `scripts/`, or an edit to a lib module something imports --
+and the wrong price for a change that only adds a module and its own fixture, where
+nothing else in the suite can see it. The script builds the compiler only when a source
+is newer and then runs one fixture: 1.1 seconds warm against five to fifteen minutes, or
+50 seconds cold including the compiler. The rule is targeted checks during development,
+the full suite once per batch at merge -- which is where this batch's two green suites
+came from. It does not cover the runner block a new fixture adds, so the merge gate stays.
+
+Measured rather than assumed, twice over: the Linux suite wedged fifteen minutes on the
+self-host build with no output while free memory sat at 2.5 GB, and the same build took
+48 seconds once memory freed. A stall under contention is indistinguishable from a hang,
+which is its own argument for not paying the full price on every module.
+
+link/game_core pins 55 checks across both modules, and a deliberately broken check was
+confirmed to fail before the fixture was trusted. That check also turned up something
+worth recording: `fn main() -> i64` compiles, though section 13 says `main` has one
+signature and any other is a compile error, and whatever it returns the process exits 1.
+Every link fixture numbers its checks that way, so a runner that reports `failed check
+$LASTEXITCODE` always reports 1. The numbering still marks the failing line in the source;
+it is not a status. Left as it stands rather than changed under 175 fixtures here.

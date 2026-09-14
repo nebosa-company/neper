@@ -2481,6 +2481,12 @@ math_fixed_executable_written=$($test_build/neper-self emit-executable "$repo/te
 [ "$math_fixed_executable_written" = 'executable written' ]
 chmod +x "$math_fixed_executable_path"
 "$math_fixed_executable_path"
+# `e.game.loop` and `e.game.ecs` (D268): the fixed step and the entity store.
+game_core_executable_path="$test_build/game-core-selfhost"
+game_core_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_core/src/main.e" "$repo" x64 linux "$game_core_executable_path")
+[ "$game_core_executable_written" = 'executable written' ]
+chmod +x "$game_core_executable_path"
+"$game_core_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]
