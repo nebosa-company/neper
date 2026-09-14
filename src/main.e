@@ -3994,7 +3994,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
             if disassemble {
-                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, function_offsets, machine.bytes, machine.count)
+                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, function_offsets, machine.bytes, machine.count, relocations, relocation_count)
                 ret ok
             }
             if writes_executable {

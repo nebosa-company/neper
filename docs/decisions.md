@@ -5451,3 +5451,13 @@ answers the format and index goldens byte for byte. That sweep also found D273's
 pass writing past a buffer sized before it learned to insert blank lines, which the
 old compiler tripped on `check.e` as a bounds trap; the buffer has room for one
 insertion per line now.
+
+## D278 -- A `call` in the listing is named
+
+`dis` listed `call -0x38` and `call 0x52`: the first a resolved displacement into
+another function of the image, the second a zero the image fills at link time. Both
+now carry the name after their bytes. A resolved displacement is followed back to the
+function whose start it lands on -- `-> dis.add` -- and an unresolved one is named from
+the relocation that will fill it, the rel32 sitting one byte after the opcode --
+`-> neper_os_exit`. The decoder stays generic; the naming is a pass over its lines in
+the command that has the function table and the relocations to hand.

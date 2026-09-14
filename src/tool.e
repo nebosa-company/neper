@@ -11,6 +11,7 @@ use resolve
 use nir
 use graph
 use project
+use codegen_x64
 use artifact_hash
 use disasm_x64
 
@@ -900,11 +901,100 @@ fn index_result(out: *Out, symbols: usize, references: usize) -> err {
     ret flush(out)
 }
 
+// The four-digit hex offset a listing line begins with.
+fn fmt_hex_prefix(line: []const u8) -> usize {
+    var value = 0usize
+    var at = 0usize
+    while at < 4usize && at < line.len {
+        var digit = usize(line[at]) - 48usize
+        if line[at] >= 97u8 { digit = usize(line[at]) - 87usize }
+        value = value * 16usize + digit
+        at += 1usize
+    }
+    ret value
+}
+
+// The listing as a JSON string, each `call 0x..`/`call -0x..` line whose landing is a
+// function's start getting `-> module.function` appended after its bytes (D278).
+fn quoted_listing(out: *Out, listing: []const u8, start: usize, builder: *nir.Builder, offsets: []const usize, relocations: []const codegen_x64.Relocation, relocation_count: usize) -> err {
+    try byte(out, 34u8)
+    var line_start = 0usize
+    while line_start < listing.len {
+        var line_end = line_start
+        while line_end < listing.len && listing[line_end] != 10u8 { line_end += 1usize }
+        let line = listing[line_start..line_end]
+        try quoted_body(out, line)
+        // `NNNN  call 0x..  ; bytes` -- the mnemonic begins at column 6.
+        if line.len > 11usize && line[6usize] == 99u8 && line[7usize] == 97u8 && line[8usize] == 108u8 && line[9usize] == 108u8 && line[10usize] == 32u8 {
+            var at = 11usize
+            var negative = false
+            if at < line.len && line[at] == 45u8 {
+                negative = true
+                at += 1usize
+            }
+            if at + 2usize < line.len && line[at] == 48u8 && line[at + 1usize] == 120u8 {
+                at += 2usize
+                var value = 0usize
+                var digits = 0usize
+                while at < line.len && ((line[at] >= 48u8 && line[at] <= 57u8) || (line[at] >= 97u8 && line[at] <= 102u8)) {
+                    var digit = usize(line[at]) - 48usize
+                    if line[at] >= 97u8 { digit = usize(line[at]) - 87usize }
+                    value = value * 16usize + digit
+                    digits += 1usize
+                    at += 1usize
+                }
+                var landing = start + value
+                var lands = digits != 0usize
+                if negative {
+                    if value > start { lands = false } else { landing = start - value }
+                }
+                var named = false
+                if lands {
+                    var function = 0usize
+                    while function < builder.function_count {
+                        if offsets[function] == landing {
+                            try text(out, "  -> ")
+                            if builder.functions[function].module_name.len != 0usize {
+                                try quoted_body(out, builder.functions[function].module_name)
+                                try byte(out, 46u8)
+                            }
+                            try quoted_body(out, builder.functions[function].name)
+                            named = true
+                            function = builder.function_count
+                        }
+                        function += 1usize
+                    }
+                }
+                // A displacement the image fills later -- a runtime or imported symbol --
+                // is named from its relocation: the rel32 sits one byte after the opcode.
+                if !named {
+                    let call_at = start + fmt_hex_prefix(line)
+                    var relocation = 0usize
+                    while relocation < relocation_count {
+                        if !relocations[relocation].global && relocations[relocation].displacement_at == call_at + 1usize && relocations[relocation].function_ref < builder.function_ref_count {
+                            try text(out, "  -> ")
+                            try quoted_body(out, builder.function_refs[relocations[relocation].function_ref].name)
+                            relocation = relocation_count
+                        }
+                        relocation += 1usize
+                    }
+                }
+            }
+        }
+        if line_end < listing.len {
+            try text(out, "\\n")
+            line_end += 1usize
+        }
+        line_start = line_end
+    }
+    ret byte(out, 34u8)
+}
+
 // `dis --json` (D233): one `disassembly` record per function. The `text` is the
 // function's listing (D269): one line per instruction -- the function-relative offset,
 // the Intel-order mnemonic and operands, then the bytes after `;` -- from a linear sweep
 // over the encodings emit_x64 produces; a byte the sweep does not know is a `db` line.
-fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const usize, machine_count: usize) -> err {
+fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const usize, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, machine_count * 64usize + 8192usize)
     if storage_error != ok { ret storage_error }
     var out = Out { bytes: storage, count: 0usize }
@@ -936,7 +1026,9 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
         if listing_error != ok { ret listing_error }
         let (listed, decode_error) = disasm_x64.disassemble(machine[start..stop], listing)
         if decode_error != ok { ret decode_error }
-        try quoted(&out, listing[0usize..listed])
+        // A `call` whose target is another function's start is named after its bytes
+        // (D278): the displacements were resolved before this, so the target is known.
+        try quoted_listing(&out, listing[0usize..listed], start, builder, offsets, relocations, relocation_count)
         mem.reset(a, checkpoint)
         try byte(&out, 125u8)
         try flush(&out)
