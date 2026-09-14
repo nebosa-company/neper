@@ -1078,7 +1078,7 @@ fn quoted_listing(out: *Out, listing: []const u8, start: usize, builder: *nir.Bu
 // function's listing (D269): one line per instruction -- the function-relative offset,
 // the Intel-order mnemonic and operands, then the bytes after `;` -- from a linear sweep
 // over the encodings emit_x64 produces; a byte the sweep does not know is a `db` line.
-fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const usize, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize) -> err {
+fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const u8, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, machine_count * 64usize + 8192usize)
     if storage_error != ok { ret storage_error }
     var out = Out { bytes: storage, count: 0usize, absolute: "" }
@@ -1108,7 +1108,15 @@ fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builde
         let checkpoint = mem.mark(a)
         let (listing, listing_error) = mem.alloc[u8](a, (stop - start) * 48usize + 64usize)
         if listing_error != ok { ret listing_error }
-        let (listed, decode_error) = disasm_x64.disassemble(machine[start..stop], listing)
+        // The disassembler reads a byte per word (D307): widen the function's range.
+        let (words, words_error) = mem.alloc[usize](a, stop - start + 1usize)
+        if words_error != ok { ret words_error }
+        var widen_at = 0usize
+        while widen_at < stop - start {
+            words[widen_at] = usize(machine[start + widen_at])
+            widen_at += 1usize
+        }
+        let (listed, decode_error) = disasm_x64.disassemble(words[0usize..stop - start], listing)
         if decode_error != ok { ret decode_error }
         // A `call` whose target is another function's start is named after its bytes
         // (D278): the displacements were resolved before this, so the target is known.

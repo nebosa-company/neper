@@ -155,7 +155,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try pad_to(output, text_offset)
     var byte_at = 0usize
     while byte_at < machine.count {
-        try emit_x64.byte(output, machine.bytes[byte_at])
+        try emit_x64.byte(output, usize(machine.bytes[byte_at]))
         byte_at += 1usize
     }
     try pad_to(output, relocation_offset)
@@ -238,22 +238,22 @@ fn self_test() -> err {
     var constant_function: nir.Function = zero
     constant_function.name = "constant"
     functions[0usize] = constant_function
-    var machine_storage: [5]usize = zero
+    var machine_storage: [5]u8 = zero
     var machine: emit_x64.Buffer = zero
     try emit_x64.init(&machine, machine_storage[..])
     try emit_x64.byte(&machine, 195usize)
     var offsets: [1]usize = zero
     var relocations: [1]codegen_x64.Relocation = zero
     var symbols: [3]Symbol = zero
-    var object_storage: [640]usize = zero
+    var object_storage: [640]u8 = zero
     var object: emit_x64.Buffer = zero
     try emit_x64.init(&object, object_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 0usize, symbols[..], &object)
     if object.count != 560usize { ret InvalidObject }
-    if object.bytes[0usize] != 127usize || object.bytes[1usize] != 69usize || object.bytes[2usize] != 76usize || object.bytes[3usize] != 70usize { ret InvalidObject }
-    if object.bytes[16usize] != 1usize || object.bytes[18usize] != 62usize || object.bytes[40usize] != 176usize || object.bytes[52usize] != 64usize || object.bytes[58usize] != 64usize || object.bytes[60usize] != 6usize || object.bytes[62usize] != 5usize { ret InvalidObject }
-    if object.bytes[64usize] != 195usize || object.bytes[100usize] != 18usize || object.bytes[102usize] != 1usize || object.bytes[112usize] != 1usize || object.bytes[120usize] != 0usize || object.bytes[121usize] != 99usize { ret InvalidObject }
-    if object.bytes[240usize] != 1usize || object.bytes[244usize] != 1usize || object.bytes[248usize] != 6usize || object.bytes[264usize] != 64usize || object.bytes[272usize] != 1usize || object.bytes[288usize] != 16usize { ret InvalidObject }
+    if object.bytes[0usize] != 127u8 || object.bytes[1usize] != 69u8 || object.bytes[2usize] != 76u8 || object.bytes[3usize] != 70u8 { ret InvalidObject }
+    if object.bytes[16usize] != 1u8 || object.bytes[18usize] != 62u8 || object.bytes[40usize] != 176u8 || object.bytes[52usize] != 64u8 || object.bytes[58usize] != 64u8 || object.bytes[60usize] != 6u8 || object.bytes[62usize] != 5u8 { ret InvalidObject }
+    if object.bytes[64usize] != 195u8 || object.bytes[100usize] != 18u8 || object.bytes[102usize] != 1u8 || object.bytes[112usize] != 1u8 || object.bytes[120usize] != 0u8 || object.bytes[121usize] != 99u8 { ret InvalidObject }
+    if object.bytes[240usize] != 1u8 || object.bytes[244usize] != 1u8 || object.bytes[248usize] != 6u8 || object.bytes[264usize] != 64u8 || object.bytes[272usize] != 1u8 || object.bytes[288usize] != 16u8 { ret InvalidObject }
     builder.function_ref_count = 1usize
     var external_reference: nir.FunctionRef = zero
     external_reference.module_index = 1usize
@@ -268,9 +268,9 @@ fn self_test() -> err {
     relocations[0usize] = external_relocation
     try emit_x64.init(&object, object_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 1usize, symbols[..], &object)
-    if object.count != 624usize || object.bytes[40usize] != 240usize || object.bytes[64usize] != 232usize { ret InvalidObject }
-    if object.bytes[72usize] != 1usize || object.bytes[80usize] != 2usize || object.bytes[84usize] != 2usize || object.bytes[88usize] != 252usize || object.bytes[89usize] != 255usize { ret InvalidObject }
-    if object.bytes[178usize] != 101usize || object.bytes[368usize] != 7usize || object.bytes[372usize] != 4usize || object.bytes[392usize] != 72usize || object.bytes[400usize] != 24usize || object.bytes[408usize] != 3usize || object.bytes[412usize] != 1usize || object.bytes[424usize] != 24usize { ret InvalidObject }
-    if object.bytes[432usize] != 18usize || object.bytes[436usize] != 2usize || object.bytes[456usize] != 96usize || object.bytes[464usize] != 72usize || object.bytes[472usize] != 4usize || object.bytes[476usize] != 1usize || object.bytes[480usize] != 8usize || object.bytes[488usize] != 24usize { ret InvalidObject }
+    if object.count != 624usize || object.bytes[40usize] != 240u8 || object.bytes[64usize] != 232u8 { ret InvalidObject }
+    if object.bytes[72usize] != 1u8 || object.bytes[80usize] != 2u8 || object.bytes[84usize] != 2u8 || object.bytes[88usize] != 252u8 || object.bytes[89usize] != 255u8 { ret InvalidObject }
+    if object.bytes[178usize] != 101u8 || object.bytes[368usize] != 7u8 || object.bytes[372usize] != 4u8 || object.bytes[392usize] != 72u8 || object.bytes[400usize] != 24u8 || object.bytes[408usize] != 3u8 || object.bytes[412usize] != 1u8 || object.bytes[424usize] != 24u8 { ret InvalidObject }
+    if object.bytes[432usize] != 18u8 || object.bytes[436usize] != 2u8 || object.bytes[456usize] != 96u8 || object.bytes[464usize] != 72u8 || object.bytes[472usize] != 4u8 || object.bytes[476usize] != 1u8 || object.bytes[480usize] != 8u8 || object.bytes[488usize] != 24u8 { ret InvalidObject }
     ret ok
 }

@@ -1681,7 +1681,7 @@ fn write_code_hash_input(g: *graph.Graph, builder: *nir.Builder, machine: *emit_
     let (count, count_error) = relocation_count_for_range(relocations, relocation_count, start, end)
     if count_error != ok { ret count_error }
     try binary.little_u32(output, end - start)
-    try binary.copy(output, machine.bytes[start..end])
+    try binary.copy_bytes(output, machine.bytes[start..end])
     try binary.little_u32(output, count)
     var at = first_relocation_from(relocations, relocation_count, start)
     while at < relocation_count {
@@ -1735,7 +1735,7 @@ fn write_code(g: *graph.Graph, builder: *nir.Builder, module_index: usize, table
             try binary.little_u64(output, content_hash)
             try binary.little_u32(output, end - start)
             try binary.little_u32(output, count)
-            try binary.copy(output, machine.bytes[start..end])
+            try binary.copy_bytes(output, machine.bytes[start..end])
             var relocation_at = 0usize
             while relocation_at < relocation_count {
                 let relocation = relocations[relocation_at]

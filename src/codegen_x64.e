@@ -2439,7 +2439,7 @@ fn self_test() -> err {
     var scratch_arena = mem.arena_from(scratch[..])
     let (stack_slots, allocation_error) = regalloc.allocate(&builder, 0usize, 1usize, ranges[..], allocations[..], &scratch_arena)
     if allocation_error != ok || stack_slots != 0usize { ret Unsupported }
-    var storage: [128]usize = zero
+    var storage: [128]u8 = zero
     var output: emit_x64.Buffer = zero
     try emit_x64.init(&output, storage[..])
     var block_offsets: [4]usize = zero
@@ -2451,18 +2451,18 @@ fn self_test() -> err {
     let no_masks = block_offsets[0usize..0usize]
     var context = FunctionContext { allocations: allocations[..], arena: &scratch_arena, has_arena: true, live_masks: no_masks, live_base: 0usize, ranges: ranges[..], abi: .SystemV, block_offsets: block_offsets[..], fixups: fixups[..], relocations: relocations[..], relocation_count: &relocation_count, output: &output, failure_token: zero, failure_instruction: 0usize, lines: lines[..], line_count: &line_count, fused: false, fused_value: 0usize, fused_condition: 0usize }
     try function(&builder, 0usize, stack_slots, &context)
-    if output.count != 14usize || output.bytes[0usize] != 85usize || output.bytes[4usize] != 184usize || output.bytes[5usize] != 7usize || output.bytes[12usize] != 93usize || output.bytes[13usize] != 195usize { ret Unsupported }
+    if output.count != 14usize || output.bytes[0usize] != 85u8 || output.bytes[4usize] != 184u8 || output.bytes[5usize] != 7u8 || output.bytes[12usize] != 93u8 || output.bytes[13usize] != 195u8 { ret Unsupported }
     allocations[0usize].kind = .Stack
     allocations[0usize].index = 0usize
-    var spill_storage: [64]usize = zero
+    var spill_storage: [64]u8 = zero
     var spill_output: emit_x64.Buffer = zero
     try emit_x64.init(&spill_output, spill_storage[..])
     context.output = &spill_output
     try function(&builder, 0usize, 1usize, &context)
     if spill_output.count != 39usize { ret InvalidLoadWidth }
-    if spill_output.bytes[0usize] != 85usize { ret InvalidFieldAddress }
-    if spill_output.bytes[11usize] != 65usize { ret InvalidMemoryAddress }
-    if spill_output.bytes[38usize] != 195usize { ret InvalidStoreWidth }
+    if spill_output.bytes[0usize] != 85u8 { ret InvalidFieldAddress }
+    if spill_output.bytes[11usize] != 65u8 { ret InvalidMemoryAddress }
+    if spill_output.bytes[38usize] != 195u8 { ret InvalidStoreWidth }
 
     let (branch_function, branch_function_error) = nir.begin_function(&builder, 0usize, "branch", 0usize)
     if branch_function_error != ok || branch_function != 1usize { ret Unsupported }
@@ -2501,26 +2501,26 @@ fn self_test() -> err {
     var branch_allocations: [5]regalloc.Allocation = zero
     let (branch_stack_slots, branch_allocation_error) = regalloc.allocate(&builder, 1usize, 3usize, branch_ranges[..], branch_allocations[..], &scratch_arena)
     if branch_allocation_error != ok || branch_stack_slots != 0usize { ret Unsupported }
-    var branch_storage: [96]usize = zero
+    var branch_storage: [96]u8 = zero
     var branch_output: emit_x64.Buffer = zero
     try emit_x64.init(&branch_output, branch_storage[..])
     context.allocations = branch_allocations[..]
     context.ranges = branch_ranges[..]
     context.output = &branch_output
     try function(&builder, 1usize, 0usize, &context)
-    if branch_output.count == 0usize || branch_output.bytes[branch_output.count - 1usize] != 195usize { ret Unsupported }
+    if branch_output.count == 0usize || branch_output.bytes[branch_output.count - 1usize] != 195u8 { ret Unsupported }
     var saw_compare = false
     var saw_conditional = false
     var scan_at = 0usize
     while scan_at + 1usize < branch_output.count {
-        if branch_output.bytes[scan_at] == 57usize { saw_compare = true }
-        if branch_output.bytes[scan_at] == 15usize && branch_output.bytes[scan_at + 1usize] == 140usize { saw_conditional = true }
+        if branch_output.bytes[scan_at] == 57u8 { saw_compare = true }
+        if branch_output.bytes[scan_at] == 15u8 && branch_output.bytes[scan_at + 1usize] == 140u8 { saw_conditional = true }
         scan_at += 1usize
     }
     if !saw_compare || !saw_conditional { ret Unsupported }
     let (reference_index, reference_error) = nir.intern_function(&builder, 0usize, "constant", 0usize)
     if reference_error != ok { ret reference_error }
-    var call_storage: [32]usize = zero
+    var call_storage: [32]u8 = zero
     var call_output: emit_x64.Buffer = zero
     try emit_x64.init(&call_output, call_storage[..])
     let (call_displacement, call_error) = emit_x64.call(&call_output)
@@ -2530,6 +2530,6 @@ fn self_test() -> err {
     var function_offsets: [2]usize = zero
     function_offsets[0usize] = 20usize
     try resolve_calls(&builder, function_offsets[..], relocations[..], 1usize, &call_output)
-    if !relocations[0usize].resolved || call_output.bytes[1usize] != 15usize { ret Unsupported }
+    if !relocations[0usize].resolved || call_output.bytes[1usize] != 15u8 { ret Unsupported }
     ret ok
 }

@@ -4,12 +4,14 @@ error Capacity
 error InvalidByte
 error InvalidRegister
 
+// One byte per byte (D307): the buffer held one byte per `usize`, and the machine code
+// and the image were the two largest allocations of a build, eight times over.
 type Buffer = struct {
-    bytes: []usize,
+    bytes: []u8,
     count: usize,
 }
 
-fn init(buffer: *Buffer, bytes: []usize) -> err {
+fn init(buffer: *Buffer, bytes: []u8) -> err {
     if bytes.len == 0usize { ret Capacity }
     buffer.bytes = bytes
     buffer.count = 0usize
@@ -19,7 +21,7 @@ fn init(buffer: *Buffer, bytes: []usize) -> err {
 fn byte(buffer: *Buffer, value: usize) -> err {
     if value > 255usize { ret InvalidByte }
     if buffer.count == buffer.bytes.len { ret Capacity }
-    buffer.bytes[buffer.count] = value
+    buffer.bytes[buffer.count] = u8(value)
     buffer.count += 1usize
     ret ok
 }
@@ -28,7 +30,7 @@ fn pack(buffer: *Buffer, destination: []u8) -> err {
     if buffer.count > destination.len { ret Capacity }
     var at = 0usize
     while at < buffer.count {
-        destination[at] = u8(buffer.bytes[at])
+        destination[at] = buffer.bytes[at]
         at += 1usize
     }
     ret ok
@@ -62,7 +64,7 @@ fn patch_little_u32(buffer: *Buffer, at: usize, value: usize) -> err {
     var remaining = value
     var offset = 0usize
     while offset < 4usize {
-        buffer.bytes[at + offset] = remaining % 256usize
+        buffer.bytes[at + offset] = u8(remaining % 256usize)
         remaining = remaining / 256usize
         offset += 1usize
     }
@@ -696,7 +698,7 @@ fn return_instruction(buffer: *Buffer) -> err {
 }
 
 fn self_test() -> err {
-    var storage: [64]usize = zero
+    var storage: [64]u8 = zero
     var buffer: Buffer = zero
     try init(&buffer, storage[..])
     try mov_immediate(&buffer, 0usize, 0x0102030405060708usize)
@@ -720,10 +722,10 @@ fn self_test() -> err {
     if buffer.count != expected.len { ret InvalidRegister }
     var at = 0usize
     while at < expected.len {
-        if buffer.bytes[at] != expected[at] { ret InvalidRegister }
+        if usize(buffer.bytes[at]) != expected[at] { ret InvalidRegister }
         at += 1usize
     }
-    var scalar_storage: [64]usize = zero
+    var scalar_storage: [64]u8 = zero
     var scalar: Buffer = zero
     try init(&scalar, scalar_storage[..])
     try negate_register(&scalar, 0usize)
@@ -745,10 +747,10 @@ fn self_test() -> err {
     if scalar.count != scalar_expected.len { ret InvalidRegister }
     at = 0usize
     while at < scalar_expected.len {
-        if scalar.bytes[at] != scalar_expected[at] { ret InvalidRegister }
+        if usize(scalar.bytes[at]) != scalar_expected[at] { ret InvalidRegister }
         at += 1usize
     }
-    var frame_storage: [64]usize = zero
+    var frame_storage: [64]u8 = zero
     var frame: Buffer = zero
     try init(&frame, frame_storage[..])
     try function_prologue(&frame, 2usize)
@@ -756,13 +758,13 @@ fn self_test() -> err {
     try load_stack(&frame, 11usize, 1usize)
     try function_epilogue(&frame)
     if frame.count != 30usize { ret InvalidRegister }
-    if frame.bytes[0usize] != 85usize || frame.bytes[4usize] != 72usize || frame.bytes[11usize] != 76usize || frame.bytes[18usize] != 76usize || frame.bytes[29usize] != 195usize { ret InvalidRegister }
-    var probe_storage: [64]usize = zero
+    if frame.bytes[0usize] != 85u8 || frame.bytes[4usize] != 72u8 || frame.bytes[11usize] != 76u8 || frame.bytes[18usize] != 76u8 || frame.bytes[29usize] != 195u8 { ret InvalidRegister }
+    var probe_storage: [64]u8 = zero
     var probe: Buffer = zero
     try init(&probe, probe_storage[..])
     try function_prologue(&probe, 1024usize)
-    if probe.count != 26usize || probe.bytes[4usize] != 72usize || probe.bytes[11usize] != 246usize || probe.bytes[15usize] != 72usize || probe.bytes[22usize] != 246usize { ret InvalidRegister }
-    var memory_storage: [160]usize = zero
+    if probe.count != 26usize || probe.bytes[4usize] != 72u8 || probe.bytes[11usize] != 246u8 || probe.bytes[15usize] != 72u8 || probe.bytes[22usize] != 246u8 { ret InvalidRegister }
+    var memory_storage: [160]u8 = zero
     var memory: Buffer = zero
     try init(&memory, memory_storage[..])
     try stack_address(&memory, 10usize, 1usize)
@@ -779,9 +781,9 @@ fn self_test() -> err {
     try multiply_immediate(&memory, 10usize, 11usize, 24usize)
     try bounds_check(&memory, 10usize, 11usize)
     if memory.count != 108usize { ret InvalidRegister }
-    if memory.bytes[0usize] != 76usize || memory.bytes[1usize] != 141usize || memory.bytes[7usize] != 73usize || memory.bytes[14usize] != 77usize || memory.bytes[16usize] != 182usize || memory.bytes[31usize] != 102usize || memory.bytes[40usize] != 26usize { ret InvalidRegister }
-    if memory.bytes[41usize] != 77usize || memory.bytes[44usize] != 65usize || memory.bytes[45usize] != 187usize || memory.bytes[50usize] != 73usize || memory.bytes[56usize] != 73usize || memory.bytes[57usize] != 199usize || memory.bytes[82usize] != 65usize || memory.bytes[93usize] != 244usize { ret InvalidRegister }
-    if memory.bytes[94usize] != 77usize || memory.bytes[95usize] != 105usize || memory.bytes[101usize] != 77usize || memory.bytes[104usize] != 114usize || memory.bytes[107usize] != 11usize { ret InvalidRegister }
+    if memory.bytes[0usize] != 76u8 || memory.bytes[1usize] != 141u8 || memory.bytes[7usize] != 73u8 || memory.bytes[14usize] != 77u8 || memory.bytes[16usize] != 182u8 || memory.bytes[31usize] != 102u8 || memory.bytes[40usize] != 26u8 { ret InvalidRegister }
+    if memory.bytes[41usize] != 77u8 || memory.bytes[44usize] != 65u8 || memory.bytes[45usize] != 187u8 || memory.bytes[50usize] != 73u8 || memory.bytes[56usize] != 73u8 || memory.bytes[57usize] != 199u8 || memory.bytes[82usize] != 65u8 || memory.bytes[93usize] != 244u8 { ret InvalidRegister }
+    if memory.bytes[94usize] != 77u8 || memory.bytes[95usize] != 105u8 || memory.bytes[101usize] != 77u8 || memory.bytes[104usize] != 114u8 || memory.bytes[107usize] != 11u8 { ret InvalidRegister }
     ret ok
 }
 

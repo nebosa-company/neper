@@ -71,7 +71,7 @@ fn patch_little_u64(output: *emit_x64.Buffer, offset: usize, value: usize) -> er
     var at = 0usize
     var remaining = value
     while at < 8usize {
-        output.bytes[offset + at] = remaining % 256usize
+        output.bytes[offset + at] = u8(remaining % 256usize)
         remaining = remaining / 256usize
         at += 1usize
     }
@@ -425,7 +425,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     let machine_start = output.count
     var at = 0usize
     while at < machine.count {
-        try emit_x64.byte(output, machine.bytes[at])
+        try emit_x64.byte(output, usize(machine.bytes[at]))
         at += 1usize
     }
     let runtime_start = output.count
@@ -591,7 +591,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let machine_start = output.count
     var at = 0usize
     while at < machine.count {
-        try emit_x64.byte(output, machine.bytes[at])
+        try emit_x64.byte(output, usize(machine.bytes[at]))
         at += 1usize
     }
     let runtime_start = output.count
@@ -679,13 +679,13 @@ fn self_test() -> err {
     var main_function: nir.Function = zero
     main_function.name = "main"
     functions[0usize] = main_function
-    var machine_storage: [1]usize = zero
+    var machine_storage: [1]u8 = zero
     var machine: emit_x64.Buffer = zero
     try emit_x64.init(&machine, machine_storage[..])
     try emit_x64.byte(&machine, 195usize)
     var offsets: [1]usize = zero
     var relocations: [1]codegen_x64.Relocation = zero
-    var executable_storage: [8192]usize = zero
+    var executable_storage: [8192]u8 = zero
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
@@ -696,10 +696,10 @@ fn self_test() -> err {
     let machine_start = 120usize + 235usize
     let total = machine_start + machine.count
     if executable.count != total { ret InvalidExecutable }
-    if executable.bytes[0usize] != 127usize || executable.bytes[16usize] != 2usize || executable.bytes[18usize] != 62usize || executable.bytes[24usize] != 120usize || executable.bytes[25usize] != 0usize || executable.bytes[26usize] != 64usize { ret InvalidExecutable }
-    if executable.bytes[64usize] != 1usize || executable.bytes[68usize] != 5usize { ret InvalidExecutable }
-    if executable.bytes[96usize] != total % 256usize || executable.bytes[97usize] != (total / 256usize) % 256usize { ret InvalidExecutable }
-    if executable.bytes[120usize] != 73usize || executable.bytes[319usize] != 232usize { ret InvalidExecutable }
-    if executable.bytes[machine_start] != 195usize { ret InvalidExecutable }
+    if executable.bytes[0usize] != 127u8 || executable.bytes[16usize] != 2u8 || executable.bytes[18usize] != 62u8 || executable.bytes[24usize] != 120u8 || executable.bytes[25usize] != 0u8 || executable.bytes[26usize] != 64u8 { ret InvalidExecutable }
+    if executable.bytes[64usize] != 1u8 || executable.bytes[68usize] != 5u8 { ret InvalidExecutable }
+    if executable.bytes[96usize] != u8(total % 256usize) || executable.bytes[97usize] != u8((total / 256usize) % 256usize) { ret InvalidExecutable }
+    if executable.bytes[120usize] != 73u8 || executable.bytes[319usize] != 232u8 { ret InvalidExecutable }
+    if executable.bytes[machine_start] != 195u8 { ret InvalidExecutable }
     ret ok
 }

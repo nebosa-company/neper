@@ -367,7 +367,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
         line_total += rows
         line_artifact += 1usize
     }
-    let (machine_storage, machine_error) = mem.alloc[usize](a, capacity(code_size + function_count * 24usize + names_total + line_total * 16usize + 65536usize))
+    let (machine_storage, machine_error) = mem.alloc[u8](a, capacity(code_size + function_count * 24usize + names_total + line_total * 16usize + 65536usize))
     if machine_error != ok { ret machine_error }
     try emit_x64.init(&program.machine, machine_storage)
     let (function_offsets, offsets_error) = mem.alloc[usize](a, function_count)

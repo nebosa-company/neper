@@ -6222,3 +6222,24 @@ What the profile says now is that the remaining time is lexing and parsing (a th
 then checking and lowering at a few microseconds per node. The next order of magnitude
 is not another scan; it is the per-module architecture (parse once, not three times;
 NIR and machine code per module, discarded) and then the lexer's inner loop.
+
+## D307 -- The code buffer holds bytes
+
+`emit_x64.Buffer` held one byte per `usize`. The machine code, the image and every
+object file were written through it, so a build's two largest allocations were eight
+times the size of what they held: 4.4 GB of code buffer at the first 2M-line attempt
+(D306), and 55 MB of image buffer in the compiler's own build, which is what stood
+between it and the 512 MiB default arena.
+
+The buffer is `[]u8` now. `byte` narrows on the way in, `pack` is a copy, the two
+patchers write narrowed octets, and the readers that fed bytes back into another
+buffer -- the two linkers, the two object writers, the artifact writer's code copy,
+the artifact linker -- widen on the way out. The disassembler still reads a byte per
+word and is the one place a range is widened before use, since it serves `dis` alone.
+The self-tests that pinned bytes compare against `u8` literals now.
+
+Output is byte-identical to D306's for the 40k program and for the compiler itself.
+The compiler's own build peaks at 424 MB instead of 484 -- after the instruction pool
+went from a sixth of the source to a quarter, because the 2M program's 8.3 million
+instructions were three percent over a sixth and D302's diagnostic said so, by name and
+by count. The 2M-line build peaks at 2.1 GB instead of 2.9 and takes 44 s.

@@ -398,7 +398,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         var arena_remaining = builder.arena_bytes
         var arena_byte = 0usize
         while arena_byte < 8usize {
-            output.bytes[runtime_file + arena_offset + arena_byte] = arena_remaining % 256usize
+            output.bytes[runtime_file + arena_offset + arena_byte] = u8(arena_remaining % 256usize)
             arena_remaining = arena_remaining / 256usize
             arena_byte += 1usize
         }
@@ -406,7 +406,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     let machine_file = output.count
     var machine_at = 0usize
     while machine_at < machine.count {
-        try emit_x64.byte(output, machine.bytes[machine_at])
+        try emit_x64.byte(output, usize(machine.bytes[machine_at]))
         machine_at += 1usize
     }
     let main_file = machine_file + function_offsets[main_index]
@@ -471,13 +471,13 @@ fn self_test() -> err {
     var main_function: nir.Function = zero
     main_function.name = "main"
     functions[0usize] = main_function
-    var machine_storage: [1]usize = zero
+    var machine_storage: [1]u8 = zero
     var machine: emit_x64.Buffer = zero
     try emit_x64.init(&machine, machine_storage[..])
     try emit_x64.byte(&machine, 195usize)
     var offsets: [1]usize = zero
     var relocations: [1]codegen_x64.Relocation = zero
-    var executable_storage: [8192]usize = zero
+    var executable_storage: [8192]u8 = zero
     var executable: emit_x64.Buffer = zero
     try emit_x64.init(&executable, executable_storage[..])
     try write(&builder, &machine, offsets[..], relocations[..], 0usize, &executable)
@@ -504,29 +504,29 @@ fn self_test() -> err {
     let (idata_raw_size, idata_raw_error) = align_up(import_section_size(&builder, idata_address), 512usize)
     if idata_raw_error != ok { ret idata_raw_error }
     if executable.count != idata_raw_offset + idata_raw_size { ret InvalidExecutable }
-    if executable.bytes[0usize] != 77usize || executable.bytes[1usize] != 90usize || executable.bytes[60usize] != 128usize { ret InvalidExecutable }
-    if executable.bytes[128usize] != 80usize || executable.bytes[129usize] != 69usize || executable.bytes[132usize] != 100usize || executable.bytes[133usize] != 134usize || executable.bytes[134usize] != 2usize { ret InvalidExecutable }
-    if executable.bytes[168usize] != 0usize || executable.bytes[169usize] != 16usize { ret InvalidExecutable }
-    if executable.bytes[272usize] != idata_address % 256usize || executable.bytes[273usize] != (idata_address / 256usize) % 256usize { ret InvalidExecutable }
-    if executable.bytes[360usize] != import_address_address % 256usize || executable.bytes[361usize] != (import_address_address / 256usize) % 256usize { ret InvalidExecutable }
-    if executable.bytes[392usize] != 46usize || executable.bytes[432usize] != 46usize { ret InvalidExecutable }
+    if executable.bytes[0usize] != 77u8 || executable.bytes[1usize] != 90u8 || executable.bytes[60usize] != 128u8 { ret InvalidExecutable }
+    if executable.bytes[128usize] != 80u8 || executable.bytes[129usize] != 69u8 || executable.bytes[132usize] != 100u8 || executable.bytes[133usize] != 134u8 || executable.bytes[134usize] != 2u8 { ret InvalidExecutable }
+    if executable.bytes[168usize] != 0u8 || executable.bytes[169usize] != 16u8 { ret InvalidExecutable }
+    if executable.bytes[272usize] != u8(idata_address % 256usize) || executable.bytes[273usize] != u8((idata_address / 256usize) % 256usize) { ret InvalidExecutable }
+    if executable.bytes[360usize] != u8(import_address_address % 256usize) || executable.bytes[361usize] != u8((import_address_address / 256usize) % 256usize) { ret InvalidExecutable }
+    if executable.bytes[392usize] != 46u8 || executable.bytes[432usize] != 46u8 { ret InvalidExecutable }
     // The runtime's first import thunk, patched to reach entry 0 of the address table --
     // the first import the entry reaches is the first in the list: `patch_import` writes
     // the displacement from the instruction after it.
     // The thunk sits two bytes later since D225: the arena size is read from a word
     // rather than an immediate.
     let first_import = import_address_address - 4138usize
-    if executable.bytes[512usize] != 83usize { ret InvalidExecutable }
-    if executable.bytes[550usize] != first_import % 256usize || executable.bytes[551usize] != (first_import / 256usize) % 256usize { ret InvalidExecutable }
-    if executable.bytes[code_at] != 195usize { ret InvalidExecutable }
+    if executable.bytes[512usize] != 83u8 { ret InvalidExecutable }
+    if executable.bytes[550usize] != u8(first_import % 256usize) || executable.bytes[551usize] != u8((first_import / 256usize) % 256usize) { ret InvalidExecutable }
+    if executable.bytes[code_at] != 195u8 { ret InvalidExecutable }
     // The import directory's first name RVA, which points 40 bytes into idata.
     let first_name_rva = import_lookup_address(&builder, idata_address, 0usize)
-    if executable.bytes[idata_raw_offset] != first_name_rva % 256usize || executable.bytes[idata_raw_offset + 1usize] != (first_name_rva / 256usize) % 256usize { ret InvalidExecutable }
+    if executable.bytes[idata_raw_offset] != u8(first_name_rva % 256usize) || executable.bytes[idata_raw_offset + 1usize] != u8((first_name_rva / 256usize) % 256usize) { ret InvalidExecutable }
     // The library name and the first import name, both at offsets derived from the
     // import list rather than written down: adding a symbol moves them, and a literal
     // here is the thing that made adding one a hazard.
     let dll_at = idata_raw_offset + import_dll_address(&builder, idata_address, 0usize) - idata_address
     let first_name_at = idata_raw_offset + import_thunk(&builder, idata_address, 0usize, 0usize) - idata_address + 2usize
-    if executable.bytes[dll_at] != 75usize || executable.bytes[first_name_at] != usize(runtime_pe_x64.import_name(0usize)[0usize]) { ret InvalidExecutable }
+    if executable.bytes[dll_at] != 75u8 || executable.bytes[first_name_at] != runtime_pe_x64.import_name(0usize)[0usize] { ret InvalidExecutable }
     ret ok
 }

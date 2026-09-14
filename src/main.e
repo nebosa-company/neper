@@ -2765,8 +2765,8 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let total = loaded.total_bytes
     let function_capacity = sized(16384usize, total, 128usize)
     let block_capacity = sized(65536usize, total, 16usize)
-    let instruction_capacity = sized(262144usize, total, 6usize)
-    let operand_capacity = sized(1048576usize, total, 6usize)
+    let instruction_capacity = sized(262144usize, total, 4usize)
+    let operand_capacity = sized(1048576usize, total, 4usize)
     let (functions, functions_error) = mem.alloc[nir.Function](a, function_capacity)
     if functions_error != ok { ret functions_error }
     let (blocks, blocks_error) = mem.alloc[nir.Block](a, block_capacity)
@@ -4053,7 +4053,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if !is_windows && !is_linux { ret em_link.TargetMismatch }
         // The symbol and line table goes after the code before the image is sized (D206, D209).
         try codegen_x64.append_symbol_table(&program.builder, &program.machine, program.function_offsets, program.relocations, program.relocation_count, program.lines, program.line_count)
-        let (executable_storage, executable_storage_error) = mem.alloc[usize](a, program.machine.count + 65536usize)
+        let (executable_storage, executable_storage_error) = mem.alloc[u8](a, program.machine.count + 65536usize)
         if executable_storage_error != ok { ret executable_storage_error }
         var executable: emit_x64.Buffer = zero
         try emit_x64.init(&executable, executable_storage)
@@ -4568,7 +4568,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             machine_capacity = builder.instruction_count * 24usize + builder.function_count * 24usize + names_total + 65536usize
         }
-        let (machine_storage, machine_storage_error) = mem.alloc[usize](a, machine_capacity)
+        let (machine_storage, machine_storage_error) = mem.alloc[u8](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }
         var machine: emit_x64.Buffer = zero
         try emit_x64.init(&machine, machine_storage)
@@ -4766,7 +4766,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 // program and not the twenty of a large one.
                 try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
                 let executable_capacity = machine.count + 1048576usize
-                let (executable_storage, executable_storage_error) = mem.alloc[usize](a, executable_capacity)
+                let (executable_storage, executable_storage_error) = mem.alloc[u8](a, executable_capacity)
                 if executable_storage_error != ok { ret executable_storage_error }
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
@@ -4822,7 +4822,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             }
             if emit_object {
                 let object_capacity = machine.count + builder.function_count * 256usize + relocation_count * 32usize + 65536usize
-                let (object_storage, object_storage_error) = mem.alloc[usize](a, object_capacity)
+                let (object_storage, object_storage_error) = mem.alloc[u8](a, object_capacity)
                 if object_storage_error != ok { ret object_storage_error }
                 var object: emit_x64.Buffer = zero
                 try emit_x64.init(&object, object_storage)

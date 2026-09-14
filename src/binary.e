@@ -42,6 +42,16 @@ fn copy(buffer: *Buffer, bytes: []const usize) -> err {
     ret ok
 }
 
+// The same over machine code, which is bytes (D307).
+fn copy_bytes(buffer: *Buffer, bytes: []const u8) -> err {
+    var at = 0usize
+    while at < bytes.len {
+        try byte(buffer, usize(bytes[at]))
+        at += 1usize
+    }
+    ret ok
+}
+
 fn text(buffer: *Buffer, value: str) -> err {
     var at = 0usize
     while at < value.len {
