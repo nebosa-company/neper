@@ -1293,6 +1293,8 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
     let clean_count = fmt_collapse(raw.bytes[0usize..raw.count], clean_storage)
     let sort_error = fmt_sort_uses(a, clean_storage[0usize..clean_count])
     if sort_error != ok { ret ("", sort_error) }
+    let attribute_error = fmt_sort_attributes(a, clean_storage[0usize..clean_count])
+    if attribute_error != ok { ret ("", attribute_error) }
     ret (clean_storage[0usize..clean_count], ok)
 }
 
@@ -1351,6 +1353,79 @@ fn fmt_sort_uses(a: *mem.Arena, page: []u8) -> err {
     while back < written {
         page[run_start + back] = copy[back]
         back += 1usize
+    }
+    ret ok
+}
+
+// Section 6: attribute lines are sorted by attribute name (D286). Each run of
+// consecutive lines beginning with `@` at the same indent is sorted in byte order of
+// the whole line, which orders by name first; a run is at most 16 attributes.
+fn fmt_sort_attributes(a: *mem.Arena, page: []u8) -> err {
+    var at = 0usize
+    while at < page.len {
+        // The next line, and whether it is an attribute line.
+        var content = at
+        while content < page.len && page[content] == 32u8 { content += 1usize }
+        if content < page.len && page[content] == 64u8 {
+            var starts: [16]usize = zero
+            var ends: [16]usize = zero
+            var count = 0usize
+            let run_start = at
+            let indent = content - at
+            var scan = at
+            while count < 16usize && scan < page.len {
+                var probe = scan
+                var spaces = 0usize
+                while probe < page.len && page[probe] == 32u8 {
+                    probe += 1usize
+                    spaces += 1usize
+                }
+                if !(probe < page.len && page[probe] == 64u8 && spaces == indent) { break }
+                starts[count] = scan
+                while probe < page.len && page[probe] != 10u8 { probe += 1usize }
+                ends[count] = probe
+                count += 1usize
+                scan = probe
+                if scan < page.len { scan += 1usize }
+            }
+            if count >= 2usize {
+                var order: [16]usize = zero
+                var sorted = 0usize
+                while sorted < count {
+                    var slot = sorted
+                    while slot > 0usize && fmt_line_after(page, starts[order[slot - 1usize]], ends[order[slot - 1usize]], starts[sorted], ends[sorted]) {
+                        order[slot] = order[slot - 1usize]
+                        slot = slot - 1usize
+                    }
+                    order[slot] = sorted
+                    sorted += 1usize
+                }
+                let (copy, copy_error) = mem.alloc[u8](a, scan - run_start)
+                if copy_error != ok { ret copy_error }
+                var written = 0usize
+                var line = 0usize
+                while line < count {
+                    var from = starts[order[line]]
+                    while from < ends[order[line]] {
+                        copy[written] = page[from]
+                        written += 1usize
+                        from += 1usize
+                    }
+                    copy[written] = 10u8
+                    written += 1usize
+                    line += 1usize
+                }
+                var back = 0usize
+                while back < written {
+                    page[run_start + back] = copy[back]
+                    back += 1usize
+                }
+            }
+            at = scan
+        } else {
+            while at < page.len && page[at] != 10u8 { at += 1usize }
+            if at < page.len { at += 1usize }
+        }
     }
     ret ok
 }

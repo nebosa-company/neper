@@ -5617,3 +5617,11 @@ a one-line literal body, which a compiler built from the formatted sources refus
 parse; that check is why the rule was found before the golden moved. With it, a
 literal joins when it fits and breaks one field per line when it does not, exactly as
 a type body does, and every compiler and library source still formats idempotently.
+
+## D286 -- Attribute lines sort by name
+
+Section 6: attribute lines stay adjacent to their declaration and sort by attribute
+name. A run of consecutive `@` lines at one indent is now sorted in byte order of the
+whole line, which is name order first, by a pass over the finished text like the
+`use` block's (D274). Duplicates stay a compile error, not the formatter's business.
+The format fixture pins `@packed` and `@align(8)` written the other way round.

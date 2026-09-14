@@ -39,3 +39,7 @@ fn literals(Flag: bool) -> i32 {
     }
     ret wide.first_field_name + small.b
 }
+
+@align(8)
+@packed
+type Packed = struct { a: u8, b: u32 }

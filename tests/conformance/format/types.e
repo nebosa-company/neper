@@ -29,3 +29,6 @@ fn literals(Flag: bool) -> i32 {
     let wide = Wide { first_field_name: 100000000i32, second_field_name: 200000000i32, third_field_name: 3i32, fourth_field_name: 4i32, fifth_field_name: 5i32 }
     ret wide.first_field_name + small.b
 }
+@packed
+@align(8)
+type Packed=struct{a:u8,b:u32}
