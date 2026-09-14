@@ -2292,6 +2292,12 @@ $gameStoryExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRo
 if ($LASTEXITCODE -ne 0 -or $gameStoryExecutableWritten -ne 'executable written') { throw 'game story PE executable emission failed' }
 & $gameStoryExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'e.game.dialog or e.game.particle failed a check in the self-hosted PE executable' }
+# `e.game.sprite` and `e.game.camera` (D282): clip playback and the ordered draw list.
+$gameViewExecutablePath = Join-Path $testBuild 'game-view-selfhost.exe'
+$gameViewExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/game_view/src/main.e') $repo 'x64' 'windows' $gameViewExecutablePath
+if ($LASTEXITCODE -ne 0 -or $gameViewExecutableWritten -ne 'executable written') { throw 'game view PE executable emission failed' }
+& $gameViewExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'e.game.sprite or e.game.camera failed a check in the self-hosted PE executable' }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }

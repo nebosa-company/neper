@@ -2527,6 +2527,12 @@ game_story_executable_written=$($test_build/neper-self emit-executable "$repo/te
 [ "$game_story_executable_written" = 'executable written' ]
 chmod +x "$game_story_executable_path"
 "$game_story_executable_path"
+# `e.game.sprite` and `e.game.camera` (D282): clip playback and the ordered draw list.
+game_view_executable_path="$test_build/game-view-selfhost"
+game_view_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_view/src/main.e" "$repo" x64 linux "$game_view_executable_path")
+[ "$game_view_executable_written" = 'executable written' ]
+chmod +x "$game_view_executable_path"
+"$game_view_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]
