@@ -4850,3 +4850,22 @@ pins idempotence and nothing else. The format root's inputs are mangled on purpo
 
 `fmt-file PATH` without `--json` prints the canonical text itself, so the corpus check is
 a byte compare and a person can diff or pipe it.
+
+## D256 -- A `@test` that is not a test is E-TEST-9999, before anything is compiled
+
+Discovery (D240) took every top-level `fn` under a `@test` attribute and ignored the
+attribute on anything else. A test with another signature -- no arena, a second
+parameter, a return that is not `err` -- was then found out by the generated runner
+failing to compile, reported as the location-free "the tests could not be compiled"
+(E-CLI-9999), which names neither the test nor the rule it broke. And `@test` on a
+`const` was silently nothing.
+
+Both are now E-TEST-9999 (diagnostics.md, "invalid test declaration"), the one code
+the registry has for them, at the declaration: the function's name token for a
+signature that is not spec section 13's one signature, the declaration's first token
+for a `@test` that marks something other than a function. The stream is the header, the
+diagnostic and a result exiting 2, the shape a runner that fails to compile already
+had; nothing is generated, compiled or run. The signature check is a token walk --
+`(` name `:` `*` [module `.`] `Arena` `)` `->` `err` `{` -- so the arena's module may be
+aliased or omitted, and anything else is refused. The first offender is reported;
+tests/conformance/tools/test_reject.e pins a test without its arena.

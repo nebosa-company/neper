@@ -1735,6 +1735,12 @@ if ($LASTEXITCODE -ne 1) { throw "test --json exited $LASTEXITCODE, expected 1" 
 # The crashed test's stderr spells the runner by WORKDIR (D253): normalise that too.
 [IO.File]::WriteAllText($testActual, ([IO.File]::ReadAllText($testActual) -replace '"duration_ms":\d+', '"duration_ms":0' -replace [regex]::Escape($testBuild.Replace('\', '/') + '/nptest-runner.e'), 'nptest-runner.e'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test.expected.jsonl')).Hash) { throw "test --json differs from the conformance corpus" }
+# `test --json` on a `@test` that is not a test (D256): E-TEST-9999 at the declaration,
+# exit 2, nothing compiled or run.
+$rejectActual = Join-Path $testBuild 'conformance-tools-test-reject.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_reject.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$rejectActual`""
+if ($LASTEXITCODE -ne 2) { throw "test --json on a non-test exited $LASTEXITCODE, not 2" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rejectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_reject.expected.jsonl')).Hash) { throw "test --json on a non-test differs from the conformance corpus" }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 $timeoutActual = Join-Path $testBuild 'conformance-tools-test-timeout.jsonl'

@@ -1877,6 +1877,13 @@ sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_actual"
 sed -i "s#$test_build/nptest-runner.e#nptest-runner.e#g" "$test_actual"
 cmp -s "$test_actual" "$conformance_root/tools/test.expected.jsonl" || { printf '%s
 ' "test --json differs from the conformance corpus" >&2; exit 1; }
+# `test --json` on a `@test` that is not a test (D256): E-TEST-9999 at the declaration,
+# exit 2, nothing compiled or run.
+reject_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test_reject.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-reject.jsonl" || reject_status=$?
+[ "$reject_status" -eq 2 ]
+cmp -s "$test_build/conformance-tools-test-reject.jsonl" "$conformance_root/tools/test_reject.expected.jsonl" || { printf '%s
+' "test --json on a non-test differs from the conformance corpus" >&2; exit 1; }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 timeout_actual="$test_build/conformance-tools-test-timeout.jsonl"

@@ -937,7 +937,32 @@ fn nptest_append_decimal(dst: []u8, at: usize, value: usize) -> usize {
 
 // The @test functions of the operand, in source order: an `@test` attribute followed by an
 // `fn` at the top level (D240). Names into `names`, one-based lines into `lines`.
-fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize) -> (usize, err) {
+// Spec section 13's one test signature: `fn NAME(NAME: *mem.Arena) -> err {`, the arena's
+// module under any alias or none. Anything else on a `@test` function is E-TEST-9999.
+fn nptest_signature_ok(tokens: []const lex.Token, text: str, first: usize, count: usize) -> bool {
+    if first + 10usize >= count { ret false }
+    if tokens[first + 2usize].kind != .PunctLParen { ret false }
+    if tokens[first + 3usize].kind != .Identifier { ret false }
+    if tokens[first + 4usize].kind != .PunctColon { ret false }
+    if tokens[first + 5usize].kind != .PunctStar { ret false }
+    var at = first + 6usize
+    if tokens[at].kind != .Identifier { ret false }
+    if tokens[at + 1usize].kind == .PunctDot {
+        at += 2usize
+        if at + 4usize >= count { ret false }
+        if tokens[at].kind != .Identifier { ret false }
+    }
+    if !same(text[tokens[at].start..tokens[at].end], "Arena") { ret false }
+    if tokens[at + 1usize].kind != .PunctRParen { ret false }
+    if tokens[at + 2usize].kind != .PunctArrow { ret false }
+    if tokens[at + 3usize].kind != .Identifier { ret false }
+    if !same(text[tokens[at + 3usize].start..tokens[at + 3usize].end], "err") { ret false }
+    ret tokens[at + 4usize].kind == .PunctLBrace
+}
+
+// `bad` names the first `@test` that is not a test -- not a function, or a function with
+// another signature -- and `bad_kind` says which (1, 2); 0 when every one is a test (D256).
+fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *lex.Token, bad_kind: *usize) -> (usize, err) {
     let (tokens, token_count, invalid, scan_error) = tool.scan_all(a, text)
     if scan_error != ok { ret (0usize, scan_error) }
     let (nodes, nodes_error) = mem.alloc[syntax.Node](a, text.len + 1024usize)
@@ -962,11 +987,19 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize) -> (us
                 if node.kind == .FnDecl && pending {
                     if count == names.len { ret (0usize, parse.InvalidSyntax) }
                     let fn_name = tokens[node.token_start + 1usize]
+                    if *bad_kind == 0usize && !nptest_signature_ok(tokens[0usize..token_count], text, node.token_start, token_count) {
+                        *bad = fn_name
+                        *bad_kind = 2usize
+                    }
                     names[count] = text[fn_name.start..fn_name.end]
                     lines[count] = tokens[node.token_start].line
                     count += 1usize
                     pending = false
                 } else {
+                    if pending && *bad_kind == 0usize {
+                        *bad = tokens[node.token_start]
+                        *bad_kind = 1usize
+                    }
                     pending = false
                 }
             }
@@ -1104,8 +1137,23 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if names_error != ok { ret names_error }
     let (lines, lines_error) = mem.alloc[usize](a, 256usize)
     if lines_error != ok { ret lines_error }
-    let (count, discover_error) = discover_tests(a, text, names, lines)
+    var bad: lex.Token = zero
+    var bad_kind = 0usize
+    let (count, discover_error) = discover_tests(a, text, names, lines, &bad, &bad_kind)
     if discover_error != ok { ret discover_error }
+    // A `@test` that is not a test is E-TEST-9999 (D256): the header, the diagnostic at the
+    // declaration, and a result that exits 2, the way a runner that fails to compile does.
+    if bad_kind != 0usize {
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+        if bad_kind == 1usize {
+            try emit_diagnostic(&report, args[2usize], bad, true, "E-TEST-9999", "`@test` marks a function, and this declaration is not one")
+        } else {
+            try emit_diagnostic(&report, args[2usize], bad, true, "E-TEST-9999", "a test takes one arena and returns `err`: `fn name(a: *mem.Arena) -> err`")
+        }
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"tests\":0}}\n")
+        os.exit(2i32)
+        ret ok
+    }
     // `test-file ... WORKDIR [TIMEOUT_MS] --json`: the default is a minute (D246).
     var timeout_ms = 60000usize
     if args.len == 9usize { timeout_ms = nptest_parse_usize(args[7usize]) }
