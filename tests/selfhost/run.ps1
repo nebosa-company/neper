@@ -1681,6 +1681,14 @@ $manifestPath = Join-Path $repo '.neper\debug\build-manifest.json'
 if ($LASTEXITCODE -ne 0) { throw 'the build manifest a build writes does not validate against the v1 schema' }
 $manifestArtifact = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"conformance-tools-build.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
 if ($manifestArtifact -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out')).Hash.ToLower()) { throw "the build manifest does not carry the executable's SHA-256" }
+# Reproducible builds (D261): the same source built again is the same bytes, and the
+# manifest of the second build carries the same artifact hash as the first -- so a
+# manifest is a witness two builds can be compared by, without the executables.
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools\build.e')`" `"$repo`" x64 windows conformance-tools-build-again.out > nul"
+if ($LASTEXITCODE -ne 0) { throw "the second build of build.e exited $LASTEXITCODE" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build-again.out')).Hash) { throw 'the same source built twice is not the same executable' }
+$manifestAgain = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"conformance-tools-build-again.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
+if ($manifestAgain -ne $manifestArtifact) { throw "the second build's manifest does not carry the first build's artifact hash" }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'

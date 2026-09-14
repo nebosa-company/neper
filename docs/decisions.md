@@ -4944,3 +4944,20 @@ shape rather than from six more golden files that would differ only in one name 
 one object. `build-manifest` is left as it was: it emits a document, not a stream, and
 a stream header naming it `build` would be a lie -- what its failure should look like
 is a question for the manifest's own row.
+
+## D261 -- A program built twice is the same bytes, and its manifest says so
+
+Both suites have long checked the compiler's own fixed point: the compiler the
+self-hosted compiler builds, building itself, is the same bytes. Nothing checked the
+same for a program. Now each suite builds the conformance corpus's `build.e` a second
+time and compares the two executables byte for byte, and compares the second build's
+manifest against the first's artifact hash. The second half is the point of the
+increment: D254 wrote the SHA-256 of every executable into `.neper/<mode>/build-manifest.json`,
+so two builds -- on one machine, or one recorded and one repeated -- can be compared by
+their manifests alone, with neither executable in hand. The check that the hash agrees
+with the bytes on disk (D254) and the check that it agrees across two builds (this) are
+what make the manifest that witness.
+
+No source changed; the suites are the deliverable. A Windows and a Linux build of the
+same program differ by design -- different runtime prefix, different image format --
+so reproducibility is claimed per host, and the row says so.

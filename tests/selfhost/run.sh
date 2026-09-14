@@ -1815,6 +1815,15 @@ python3 "$repo/scripts/validate_stream.py" "$repo/.neper/debug/build-manifest.js
 manifest_artifact=$(sed -n 's/.*"artifacts":\[{"path":"conformance-tools-build.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
 [ "$manifest_artifact" = "$(sha256sum "$test_build/conformance-tools-build.out" | cut -c1-64)" ] || { printf '%s
 ' "the build manifest does not carry the executable's SHA-256" >&2; exit 1; }
+# Reproducible builds (D261): the same source built again is the same bytes, and the
+# manifest of the second build carries the same artifact hash as the first -- so a
+# manifest is a witness two builds can be compared by, without the executables.
+(cd "$test_build" && ./neper-self emit-executable "$conformance_root/tools/build.e" "$repo" x64 linux "conformance-tools-build-again.out" > /dev/null)
+cmp -s "$test_build/conformance-tools-build.out" "$test_build/conformance-tools-build-again.out" || { printf '%s
+' "the same source built twice is not the same executable" >&2; exit 1; }
+manifest_again=$(sed -n 's/.*"artifacts":\[{"path":"conformance-tools-build-again.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
+[ "$manifest_again" = "$manifest_artifact" ] || { printf '%s
+' "the second build's manifest does not carry the first build's artifact hash" >&2; exit 1; }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 run_actual="$test_build/conformance-tools-run.jsonl"
