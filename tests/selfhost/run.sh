@@ -997,6 +997,11 @@ text_utf8_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost
 [ "$text_utf8_written" = 'executable written' ]
 chmod +x "$test_build/text-utf8-selfhost"
 "$test_build/text-utf8-selfhost"
+# `e.text.normalize` (D301): four forms, ordering, exclusions, Hangul, compatibility mappings, is_normalized in a stack window.
+text_normalize_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/text_normalize/src/main.e" "$repo" x64 linux "$test_build/text-normalize-selfhost")
+[ "$text_normalize_written" = 'executable written' ]
+chmod +x "$test_build/text-normalize-selfhost"
+"$test_build/text-normalize-selfhost"
 # `e.fmt.zstd`: libzstd's frames at three levels read back, the writer's frame read back, six refusals.
 fmt_zstd_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/fmt_zstd/src/main.e" "$repo" x64 linux "$test_build/fmt-zstd-selfhost")
 [ "$fmt_zstd_written" = 'executable written' ]

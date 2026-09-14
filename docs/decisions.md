@@ -5925,3 +5925,42 @@ written they end with the result record and exit 1 instead. The existing stale_m
 golden is unchanged, its operand being clean; tests/conformance/tools/stale_map_error
 pins a rejected operand under a stale map: E-TOOL-0001, then E-TYPE-0002, two
 diagnostics, exit 1, no artifact on either host.
+## D301 -- `e.text.normalize`: four forms, one window
+
+Two strings that look the same can differ in bytes -- `é` is one scalar or two -- and a
+comparison, a hash or a sort that does not normalize first answers by accident. The module
+delivers the four forms of UAX #15 at `surface: partial` (the fence, plus the tables and the
+Hangul constants), generated from Python's `unicodedata` at the same 15.0.0 that
+`e.text.unicode` reports, by the script beside the fixture that also writes the fixture's
+expectations. 81 KB of tables: 5857 single-level decompositions over a 8663-scalar pool,
+941 composition pairs, and 72 starters that can be the second of a pair. The module
+source is 293 KB with one 169 KB literal; both compilers took it.
+
+**Decomposition is single-level and recursed, as UnicodeData carries it.** Storing the full
+expansion would have been simpler to read and three times the pool; the recursion is ten
+lines. **Composition exclusions are folded into the table**, not checked at run time: a pair
+is listed only if NFC actually recomposes it, so the exclusions, the singletons and the
+non-starter decompositions are simply absent, and `compose` needs no second lookup.
+**Hangul is arithmetic in both directions** and never touches a table.
+
+**`is_normalized` has no arena, so it normalizes in a stack window, segment by segment.**
+A segment is cut before a starter that neither decomposes under the requested form nor can
+be the second of a composition -- nothing normalization does can cross such a scalar,
+because it cannot be reordered past, decomposed, or absorbed. That last condition is why
+the starter-second table exists: Hangul V and T jamo and 24 Indic vowel signs are
+starters that compose with what precedes them, and cutting before one would report an
+un-composed pair as normalized. The fixture pins Bengali E + AA and LV + T for exactly
+that. Most segments are one scalar and a few marks; a segment that decomposes past the
+512-scalar window answers `Invalid`, marked as the ceiling it is.
+
+`normalize` allocates by the worst case rather than measuring first: 4 scalars per input
+scalar for the canonical forms, 18 for the compatibility ones (U+FDFA), then 4 bytes per
+scalar out. Two allocations, no second pass.
+
+link/text_normalize pins 66 checks with real exit codes -- composition reaching past a
+lower-class mark and blocked by an equal one, the 18-scalar mapping, a starter whose
+decomposition is two non-starters (U+0F73), idempotence -- and seven negative controls,
+each landing on its own number. Three of those controls first came back passing: the
+`sed` patterns carrying `\x` escapes never matched, so the check was never broken. The
+controls were redone through a Python substitution. A control that cannot fail is not a
+control, and this one nearly went unnoticed.

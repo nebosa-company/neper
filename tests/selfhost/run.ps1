@@ -1031,6 +1031,12 @@ $textUtf8Written = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixture
 if ($LASTEXITCODE -ne 0 -or $textUtf8Written -ne 'executable written') { throw 'text_utf8 emission failed' }
 & $textUtf8Path
 if ($LASTEXITCODE -ne 0) { throw "a text_utf8 check failed: exit $LASTEXITCODE" }
+# `e.text.normalize` (D301): four forms, ordering, exclusions, Hangul, compatibility mappings, is_normalized in a stack window.
+$textNormalizePath = Join-Path $testBuild 'text-normalize-selfhost.exe'
+$textNormalizeWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/text_normalize/src/main.e') $repo 'x64' 'windows' $textNormalizePath
+if ($LASTEXITCODE -ne 0 -or $textNormalizeWritten -ne 'executable written') { throw 'text_normalize emission failed' }
+& $textNormalizePath
+if ($LASTEXITCODE -ne 0) { throw "a text_normalize check failed: exit $LASTEXITCODE" }
 # `e.fmt.zstd`: libzstd's frames at three levels read back, the writer's frame read back, six refusals.
 $fmtZstdPath = Join-Path $testBuild 'fmt-zstd-selfhost.exe'
 $fmtZstdWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\fmt_zstd\src\main.e') $repo 'x64' 'windows' $fmtZstdPath
