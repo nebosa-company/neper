@@ -1659,6 +1659,26 @@ cmd /c "`"$compiler`" fmt-file - < `"$(Join-Path $conformanceRoot 'tools\fmt.e')
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\fmt.e')).Hash) { throw 'fmt from stdin is not the canonical source' }
 cmd /c "`"$compiler`" tokens --json - < `"$(Join-Path $conformanceRoot 'tokens\every_kind.e')`" > nul 2>&1"
 if ($LASTEXITCODE -ne 1) { throw "tokens - without --path exited $LASTEXITCODE, not 1" }
+# `--absolute-paths` (D290): the operand's absolute spelling as `absolute_path` beside its
+# identity and nothing else -- the stream with that field taken out is the golden. An
+# absolute operand is spelled as given; a relative one under the current directory.
+$absoluteActual = Join-Path $testBuild 'conformance-absolute-check.jsonl'
+$absoluteFixture = Join-Path $conformanceRoot 'reject\scope.e'
+cmd /c "`"$compiler`" check-file `"$absoluteFixture`" `"$repo`" x64 windows --json --absolute-paths > `"$absoluteActual`""
+if ($LASTEXITCODE -ne 1) { throw "check-file --absolute-paths exited $LASTEXITCODE, not 1" }
+$absoluteField = ',"absolute_path":"' + $absoluteFixture.Replace('\', '\\') + '"'
+$absoluteText = [IO.File]::ReadAllText($absoluteActual)
+if (-not $absoluteText.Contains($absoluteField)) { throw "--absolute-paths did not write the operand's absolute path" }
+[IO.File]::WriteAllText($absoluteActual, $absoluteText.Replace($absoluteField, ''), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $absoluteActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'reject\scope.expected.jsonl')).Hash) { throw '--absolute-paths changed more than absolute_path on check' }
+Copy-Item -LiteralPath (Join-Path $conformanceRoot 'tokens\every_kind.e') -Destination (Join-Path $testBuild 'every_kind.e') -Force
+$absoluteActual = Join-Path $testBuild 'conformance-absolute-tokens.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" tokens --json --absolute-paths every_kind.e > `"$absoluteActual`""
+$absoluteField = ',"absolute_path":"' + (Join-Path $testBuild 'every_kind.e').Replace('\', '\\') + '"'
+$absoluteText = [IO.File]::ReadAllText($absoluteActual)
+if (-not $absoluteText.Contains($absoluteField)) { throw "--absolute-paths did not spell a relative operand under the current directory" }
+[IO.File]::WriteAllText($absoluteActual, $absoluteText.Replace($absoluteField, ''), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $absoluteActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tokens\every_kind.expected.jsonl')).Hash) { throw '--absolute-paths changed more than absolute_path on tokens' }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
 foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1))) {

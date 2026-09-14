@@ -5704,3 +5704,26 @@ VIRTUAL.e` -- the short `fmt` spelling carries it through -- with the identity t
 form writes source and names nothing. Both suites pipe a fixture in under its
 basename and require the file's own golden, and pin `tokens -` without `--path` as
 usage. `index -` stays out: it loads a module graph from a path.
+
+## D290 -- `--absolute-paths` adds `absolute_path` beside the operand's identity
+
+Section 2: machine output carries no absolute path unless `--absolute-paths` is
+passed, and then a separate `absolute_path` field is added and never replaces the
+source identifier. `tokens`, `parse`, `check` and `index` take the flag; every source
+object that names the operand gains the field, a source object naming any other
+module -- a generated runner's, a dependency's -- does not, and the schema already
+allowed it. The spelling is the operand as given when it is already absolute -- a
+leading `/` or `\`, or a drive letter -- and otherwise the current directory, the
+host's separator and the operand as given; `.` and `..` segments are kept, since the
+field is a spelling and not an identity. For `-` there is no directory to spell and no
+field is written.
+
+`os.current_dir` is what it needed, and it followed D287 and D289 onto the bootstrap's
+fixed surface: a table line and a C body per host, `GetCurrentDirectoryW` and
+`getcwd`, the self-hosted side having the per-host source already. `main` sits at
+the bootstrap's local cap, so `check-file`'s flags moved out of it into `check_flags`,
+which reads `--json`, `--path` and `--absolute-paths` in any order after the four
+positionals; the count-shaped matching it replaces accepted the same forms. Both
+suites take the field out of a `check` stream over an absolute operand and a `tokens`
+stream over a relative one and require the golden, having first required the field
+with the expected spelling.

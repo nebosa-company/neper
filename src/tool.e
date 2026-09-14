@@ -22,6 +22,9 @@ error InvalidSource
 type Out = struct {
     bytes: []u8,
     count: usize,
+    // `--absolute-paths` (section 2, D290): the operand's absolute spelling, written as
+    // `absolute_path` beside every source identity when it is not empty.
+    absolute: str,
 }
 
 fn byte(out: *Out, value: u8) -> err {
@@ -133,6 +136,10 @@ fn span(out: *Out, root: str, path: str, byte_start: usize, byte_end: usize, lin
     try quoted(out, root)
     try text(out, ",\"path\":")
     try quoted(out, path)
+    if out.absolute.len != 0usize {
+        try text(out, ",\"absolute_path\":")
+        try quoted(out, out.absolute)
+    }
     try text(out, "},\"byte_start\":")
     try decimal(out, byte_start)
     try text(out, ",\"byte_end\":")
@@ -175,7 +182,7 @@ fn result(out: *Out, succeeded: bool, exit_code: usize, tokens: usize, diagnosti
 fn info_json(a: *mem.Arena, host: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, 4096usize)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: "" }
     try header(&out, "info")
     try text(&out, "{\"record\":\"info\",\"tool_version\":\"0.1.0\",\"language_profiles\":[{\"language_version\":\"0.1\",\"grammar_revision\":1,\"stream_version\":1,\"experimental\":false}],\"commands\":[\"build\",\"check\",\"dis\",\"fmt\",\"index\",\"info\",\"parse\",\"run\",\"test\",\"tokens\"],\"host_target\":")
     try quoted(&out, host)
@@ -400,7 +407,7 @@ fn test_error_name(out: *Out, stderr_bytes: str, module_name: str, spelled: str)
 fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, (stdout_bytes.len + stderr_bytes.len) * 6usize + 256usize)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: "" }
     try text(&out, "{\"record\":\"run\",\"process_exit_code\":")
     if status < 0i32 {
         try byte(&out, 45u8)
@@ -561,7 +568,7 @@ fn index_signature(out: *Out, source: str, tokens: []const lex.Token, opener: us
 // declarations, each carrying its signature, its attributes and its `///` documentation
 // (D251), and under a function or type its parameters, fields and members from the parse
 // tree (D258). Locals and every reference are the gap.
-fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize) -> (usize, err) {
+fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str) -> (usize, err) {
     let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
     if scan_error != ok { ret (2usize, scan_error) }
     let (nodes, nodes_error) = mem.alloc[syntax.Node](a, source.len + 1024usize)
@@ -575,7 +582,7 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     if parse_error != ok { ret (2usize, parse_error) }
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: absolute }
     let header_error = header(&out, "index")
     if header_error != ok { ret (2usize, header_error) }
     // The module itself is the first symbol, so every declaration's container is id 0.
@@ -1074,7 +1081,7 @@ fn quoted_listing(out: *Out, listing: []const u8, start: usize, builder: *nir.Bu
 fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const usize, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, machine_count * 64usize + 8192usize)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: "" }
     try header(&out, "dis")
     var at = 0usize
     while at < builder.function_count {
@@ -1280,7 +1287,7 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
     if lex.validate(source) != ok { ret ("", InvalidSource) }
     let (raw_storage, raw_error) = mem.alloc[u8](a, source.len * 2usize + 4096usize)
     if raw_error != ok { ret ("", raw_error) }
-    var raw = Out { bytes: raw_storage, count: 0usize }
+    var raw = Out { bytes: raw_storage, count: 0usize, absolute: "" }
     let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
     if scan_error != ok { ret ("", scan_error) }
     let (lists, lists_error) = fmt_list_plan(a, source, tokens[0usize..token_count])
@@ -1808,7 +1815,7 @@ fn fmt_refused_result(out: *Out, diagnostics: usize) -> err {
 fn fmt_check_json(a: *mem.Arena, source: str, path: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: "" }
     let header_error = header(&out, "fmt")
     if header_error != ok { ret (2usize, header_error) }
     let (refused, refuse_error) = fmt_refuse(a, &out, source, path)
@@ -1893,7 +1900,7 @@ fn fmt_plain(a: *mem.Arena, source: str, path: str) -> (usize, err) {
     // A refusal goes to stderr as the human lines of the same diagnostics, exit 1.
     let (scratch, scratch_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
     if scratch_error != ok { ret (2usize, scratch_error) }
-    var probe = Out { bytes: scratch, count: 0usize }
+    var probe = Out { bytes: scratch, count: 0usize, absolute: "" }
     let (refused, refuse_error) = fmt_refuse_plain(a, &probe, source, path)
     if refuse_error != ok { ret (2usize, refuse_error) }
     if refused != 0usize { ret (1usize, ok) }
@@ -1951,7 +1958,7 @@ fn fmt_refuse_plain(a: *mem.Arena, out: *Out, source: str, path: str) -> (usize,
 fn fmt_json(a: *mem.Arena, source: str, path: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: "" }
     let header_error = header(&out, "fmt")
     if header_error != ok { ret (2usize, header_error) }
     let (refused, refuse_error) = fmt_refuse(a, &out, source, path)
@@ -2104,7 +2111,7 @@ fn manifest_sha256(a: *mem.Arena, content: str) -> (str, err) {
 fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: "" }
     let build_error = manifest_write(a, &out, arch, os_name, g, "debug", "", "")
     if build_error != ok { ret (2usize, build_error) }
     let flush_error = flush(&out)
@@ -2234,7 +2241,7 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     if digest_error != ok { ret digest_error }
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: "" }
     try manifest_write(a, &out, arch, os_name, g, mode, artifact_path, digest)
     try byte(&out, 10u8)
     var at = 0usize
@@ -2270,7 +2277,7 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str,
     }
     let (storage, storage_error) = mem.alloc[u8](a, capacity)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: "" }
     try header(&out, "test")
     var passed = 0usize
     var failed = 0usize
@@ -2555,10 +2562,10 @@ fn scan_all(a: *mem.Arena, source: str) -> ([]lex.Token, usize, usize, err) {
 }
 
 // `tokens --json`: the header, the token records, the result.
-fn tokens_json(a: *mem.Arena, root: str, path: str, source: str) -> (usize, err) {
+fn tokens_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 4096usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: absolute }
     let header_error = header(&out, "tokens")
     if header_error != ok { ret (2usize, header_error) }
     let (tokens, count, invalid, scan_error) = scan_all(a, source)
@@ -2689,10 +2696,10 @@ fn syntax_node(out: *Out, tree: *parse.Tree, tokens: []const lex.Token, node_ind
 
 // `parse --json`: the token records as `tokens` gives them, a syntax diagnostic where
 // the parser stopped, one `syntax` record for the tree that exists, and the result.
-fn parse_json(a: *mem.Arena, root: str, path: str, source: str) -> (usize, err) {
+fn parse_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 4096usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize }
+    var out = Out { bytes: storage, count: 0usize, absolute: absolute }
     let header_error = header(&out, "parse")
     if header_error != ok { ret (2usize, header_error) }
     let (tokens, count, invalid, scan_error) = scan_all(a, source)
@@ -2753,7 +2760,7 @@ fn parse_json(a: *mem.Arena, root: str, path: str, source: str) -> (usize, err) 
     // The tree can outgrow the record buffer the tokens used: one sized to it.
     let (tree_storage, tree_storage_error) = mem.alloc[u8](a, tree.count * 512usize + tree.child_count * 32usize + 4096usize)
     if tree_storage_error != ok { ret (2usize, tree_storage_error) }
-    var tree_out = Out { bytes: tree_storage, count: 0usize }
+    var tree_out = Out { bytes: tree_storage, count: 0usize, absolute: absolute }
     let s1 = text(&tree_out, "{\"record\":\"syntax\",\"root\":")
     if s1 != ok { ret (2usize, s1) }
     let s2 = syntax_node(&tree_out, &tree, tokens[..count], 0usize, root, path, 0usize)

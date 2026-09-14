@@ -332,6 +332,27 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     return made ? NP_OK : np_error(GetLastError());
 }
 
+void neper_os_current_dir(void *result, NpArena *arena) {
+    unsigned char *out = (unsigned char *)result, *bytes;
+    wchar_t *wide;
+    DWORD need;
+    size_t length = 0;
+    *(NpStr *)out = (NpStr){0, 0}; *(uint32_t *)(out + 16) = NP_OK;
+    need = GetCurrentDirectoryW(0, 0);
+    if (!need) { *(uint32_t *)(out + 16) = np_error(GetLastError()); return; }
+    wide = (wchar_t *)HeapAlloc(GetProcessHeap(), 0, need * sizeof(wchar_t));
+    if (!wide) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    if (!GetCurrentDirectoryW(need, wide)) {
+        *(uint32_t *)(out + 16) = np_error(GetLastError());
+        HeapFree(GetProcessHeap(), 0, wide);
+        return;
+    }
+    bytes = np_utf8_arena(arena, wide, &length);
+    HeapFree(GetProcessHeap(), 0, wide);
+    if (!bytes) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+    *(NpStr *)out = (NpStr){bytes, length};
+}
+
 void neper_os_stdin(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_INPUT_HANDLE); }
 void neper_os_stdout(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_OUTPUT_HANDLE); }
 void neper_os_stderr(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_ERROR_HANDLE); }
@@ -559,6 +580,24 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     if (!name) return NP_OUT_OF_MEMORY;
     made = mkdir(name, 0777); arena->off = saved;
     return made == 0 ? NP_OK : np_error(errno);
+}
+
+void neper_os_current_dir(void *result, NpArena *arena) {
+    unsigned char *out = (unsigned char *)result;
+    size_t capacity = 256, saved = arena ? arena->off : 0, length;
+    *(NpStr *)out = (NpStr){0, 0}; *(uint32_t *)(out + 16) = NP_OK;
+    for (;;) {
+        char *buffer = (char *)np_arena_alloc(arena, capacity, 1);
+        if (!buffer) { *(uint32_t *)(out + 16) = NP_OUT_OF_MEMORY; return; }
+        if (getcwd(buffer, capacity)) {
+            for (length = 0; buffer[length]; ++length) {}
+            *(NpStr *)out = (NpStr){(unsigned char *)buffer, length};
+            return;
+        }
+        arena->off = saved;
+        if (errno != ERANGE) { *(uint32_t *)(out + 16) = np_error(errno); return; }
+        capacity *= 2;
+    }
 }
 
 void neper_os_stdin(void *result) { *(uintptr_t *)result = 0; }

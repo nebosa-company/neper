@@ -2031,6 +2031,49 @@ fn fmt_form(args: []str) -> []str {
     ret args
 }
 
+// `check-file PATH ROOT ARCH OS [--json] [--path VIRTUAL.e] [--absolute-paths]`: the
+// flags after the positionals, into the sink; false when one is not a flag.
+fn check_flags(a: *mem.Arena, report: *Sink, args: []str) -> bool {
+    var at = 6usize
+    while at < args.len {
+        if same(args[at], "--json") {
+            report.json = true
+            report.file = os.stdout()
+        } else {
+            if same(args[at], "--path") && at + 1usize < args.len {
+                report.operand_source = args[2usize]
+                report.operand_path = args[at + 1usize]
+                at += 1usize
+            } else {
+                if !same(args[at], "--absolute-paths") { ret false }
+                report.operand_source = args[2usize]
+                report.absolute_path = absolute_operand(a, args[2usize])
+            }
+        }
+        at += 1usize
+    }
+    ret true
+}
+
+// The operand's absolute spelling for `--absolute-paths` (section 2, D290): as given
+// when it is already absolute, else under the current directory. Empty for `-` or
+// when the directory cannot be read, and then no `absolute_path` is written.
+// ponytail: `.` and `..` segments are kept; collapse them if a consumer compares paths.
+fn absolute_operand(a: *mem.Arena, operand: str) -> str {
+    if same(operand, "-") || operand.len == 0usize { ret "" }
+    if operand[0usize] == 47u8 || operand[0usize] == 92u8 || (operand.len >= 2usize && operand[1usize] == 58u8) { ret operand }
+    let (dir, dir_error) = os.current_dir(a)
+    if dir_error != ok { ret "" }
+    var separator = "/"
+    if dir.len >= 2usize && dir[1usize] == 58u8 { separator = "\\" }
+    let (joined, join_error) = mem.alloc[u8](a, dir.len + 1usize + operand.len)
+    if join_error != ok { ret "" }
+    var n = nptest_append(joined, 0usize, dir)
+    n = nptest_append(joined, n, separator)
+    n = nptest_append(joined, n, operand)
+    ret joined[0usize..n]
+}
+
 fn fmt_command(a: *mem.Arena, args: []str) -> err {
     let path = fmt_identity(args)
     let (text, load_error) = operand_text(a, args[2usize])
@@ -2074,6 +2117,8 @@ fn fmt_check_command(a: *mem.Arena, args: []str) -> err {
 
 fn index_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
+    var absolute_path = ""
+    if args.len == 8usize { absolute_path = absolute_operand(a, args[2usize]) }
     report.json = true
     report.file = os.stdout()
     var loaded: graph.Graph = zero
@@ -2096,7 +2141,7 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
         os.exit(1i32)
         ret ok
     }
-    let (index_exit, index_error) = tool.index_json(a, "operand", basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count)
+    let (index_exit, index_error) = tool.index_json(a, "operand", basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].name, 0usize, resolver.symbols[0usize..resolver.count], resolver.count, absolute_path)
     if index_error != ok { ret index_error }
     if index_exit != 0usize { os.exit(i32(index_exit)) }
     ret ok
@@ -2112,26 +2157,33 @@ fn tool_command(a: *mem.Arena, args: []str) -> err {
     var has_virtual = false
     var file = ""
     var has_file = false
+    var absolute = false
     var at = 2usize
     while at < args.len {
         if same(args[at], "--json") {
             json = true
         } else {
-            if same(args[at], "--path") && at + 1usize < args.len {
-                virtual_path = args[at + 1usize]
-                has_virtual = true
-                at += 1usize
+            if same(args[at], "--absolute-paths") {
+                absolute = true
             } else {
-                if has_file {
-                    has_file = false
-                    break
+                if same(args[at], "--path") && at + 1usize < args.len {
+                    virtual_path = args[at + 1usize]
+                    has_virtual = true
+                    at += 1usize
+                } else {
+                    if has_file {
+                        has_file = false
+                        break
+                    }
+                    file = args[at]
+                    has_file = true
                 }
-                file = args[at]
-                has_file = true
             }
         }
         at += 1usize
     }
+    var absolute_path = ""
+    if absolute { absolute_path = absolute_operand(a, file) }
     // `-` is stdin, and then `--path` is its identity and required (section 4, D289).
     if !has_file || (same(file, "-") && !has_virtual) { ret tool_usage() }
     let (text, load_error) = operand_text(a, file)
@@ -2146,11 +2198,11 @@ fn tool_command(a: *mem.Arena, args: []str) -> err {
     if json {
         var exit_code = 0usize
         if parsing {
-            let (parse_exit, parse_error) = tool.parse_json(a, "operand", path, text)
+            let (parse_exit, parse_error) = tool.parse_json(a, "operand", path, text, absolute_path)
             if parse_error != ok { ret parse_error }
             exit_code = parse_exit
         } else {
-            let (tokens_exit, tokens_error) = tool.tokens_json(a, "operand", path, text)
+            let (tokens_exit, tokens_error) = tool.tokens_json(a, "operand", path, text, absolute_path)
             if tokens_error != ok { ret tokens_error }
             exit_code = tokens_exit
         }
@@ -2359,6 +2411,9 @@ type Sink = struct {
     // basename; a diagnostic in any other module keeps that module's basename.
     operand_source: str,
     operand_path: str,
+    // `--absolute-paths` (section 2, D290): the operand's absolute spelling, written as
+    // `absolute_path` beside the operand's identity and no other module's.
+    absolute_path: str,
     // A generated source map beside the operand (tooling section 8, D264): a diagnostic
     // inside a mapped range is reported at the original span, the generated one related.
     // ponytail: eight mappings per map is the cap; raise it when a generator needs more.
@@ -2416,15 +2471,16 @@ fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, 
         original.end = at.end - report.map_generated_start[mapping] + report.map_original_start[mapping]
         original.line = at.line - report.map_generated_line[mapping] + report.map_original_line[mapping]
         original.end_line = at.end_line - report.map_generated_line[mapping] + report.map_original_line[mapping]
-        try write_span(report, report.map_original_path[mapping], original)
+        try write_span(report, report.map_original_path[mapping], original, false)
         try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source\",\"span\":")
-        try write_span(report, basename(path), at)
+        try write_span(report, basename(path), at, false)
         try write_all(report, "}],\"fixes\":[]}")
     } else {
-        if report.operand_path.len != 0usize && same(path, report.operand_source) {
-            try write_span(report, report.operand_path, at)
+        let is_operand = same(path, report.operand_source)
+        if report.operand_path.len != 0usize && is_operand {
+            try write_span(report, report.operand_path, at, true)
         } else {
-            try write_span(report, basename(path), at)
+            try write_span(report, basename(path), at, is_operand)
         }
         try write_all(report, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
     }
@@ -2433,9 +2489,13 @@ fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, 
     ret ok
 }
 
-fn write_span(report: *Sink, identity: str, at: lex.Token) -> err {
+fn write_span(report: *Sink, identity: str, at: lex.Token, operand: bool) -> err {
     try write_all(report, "{\"source\":{\"root\":\"operand\",\"path\":")
     try write_json_string(report, identity)
+    if operand && report.absolute_path.len != 0usize {
+        try write_all(report, ",\"absolute_path\":")
+        try write_json_string(report, report.absolute_path)
+    }
     try write_all(report, "},\"byte_start\":")
     try write_usize(report, at.start)
     try write_all(report, ",\"byte_end\":")
@@ -3630,14 +3690,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md
     // -- header, a diagnostic record each, the result -- on stdout (D228).
-    if (args.len == 6usize || (args.len == 7usize && same(args[6usize], "--json")) || (args.len == 9usize && same(args[6usize], "--json") && same(args[7usize], "--path"))) && same(args[1usize], "check-file") {
-        if args.len >= 7usize {
-            report.json = true
-            report.file = os.stdout()
-            if args.len == 9usize {
-                report.operand_source = args[2usize]
-                report.operand_path = args[8usize]
-            }
+    if args.len >= 6usize && same(args[1usize], "check-file") && check_flags(a, &report, args) {
+        if report.json {
             try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
         }
         var loaded: graph.Graph = zero
@@ -3696,7 +3750,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
-    if args.len == 7usize && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
+    if (args.len == 7usize || (args.len == 8usize && same(args[7usize], "--absolute-paths"))) && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
     // `fmt-file PATH [--json]` (D234): the operand's canonical layout as one `formatted` record.
     // `-` reads stdin under a `--path` identity, on every form (D289).
     let fmt_args = fmt_form(args)

@@ -1792,6 +1792,24 @@ cmp -s "$test_build/conformance-stdin-fmt.e" "$conformance_root/tools/fmt.e" || 
 stdin_usage_status=0
 $test_build/neper-self tokens --json - < "$conformance_root/tokens/every_kind.e" > /dev/null 2>&1 || stdin_usage_status=$?
 [ "$stdin_usage_status" -eq 1 ]
+# `--absolute-paths` (D290): the operand's absolute spelling as `absolute_path` beside its
+# identity and nothing else -- the stream with that field taken out is the golden. An
+# absolute operand is spelled as given; a relative one under the current directory.
+absolute_status=0
+$test_build/neper-self check-file "$conformance_root/reject/scope.e" "$repo" x64 linux --json --absolute-paths > "$test_build/conformance-absolute-check.jsonl" || absolute_status=$?
+[ "$absolute_status" -eq 1 ]
+grep -q ",\"absolute_path\":\"$conformance_root/reject/scope.e\"" "$test_build/conformance-absolute-check.jsonl" || { printf '%s
+' "--absolute-paths did not write the operand's absolute path" >&2; exit 1; }
+sed -i "s|,\"absolute_path\":\"$conformance_root/reject/scope.e\"||g" "$test_build/conformance-absolute-check.jsonl"
+cmp -s "$test_build/conformance-absolute-check.jsonl" "$conformance_root/reject/scope.expected.jsonl" || { printf '%s
+' "--absolute-paths changed more than absolute_path on check" >&2; exit 1; }
+cp "$conformance_root/tokens/every_kind.e" "$test_build/every_kind.e"
+(cd "$test_build" && ./neper-self tokens --json --absolute-paths every_kind.e > "conformance-absolute-tokens.jsonl")
+grep -q ",\"absolute_path\":\"$test_build/every_kind.e\"" "$test_build/conformance-absolute-tokens.jsonl" || { printf '%s
+' "--absolute-paths did not spell a relative operand under the current directory" >&2; exit 1; }
+sed -i "s|,\"absolute_path\":\"$test_build/every_kind.e\"||g" "$test_build/conformance-absolute-tokens.jsonl"
+cmp -s "$test_build/conformance-absolute-tokens.jsonl" "$conformance_root/tokens/every_kind.expected.jsonl" || { printf '%s
+' "--absolute-paths changed more than absolute_path on tokens" >&2; exit 1; }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
 for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1'; do
