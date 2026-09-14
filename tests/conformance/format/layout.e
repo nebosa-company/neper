@@ -27,3 +27,13 @@ fn main(a:*mem.Arena,args:[]str)->err {
     if first==5i32&&!(total==0i32) { ret ok }
     ret Odd
 }
+fn nothing() {
+}
+fn sign(x: i32) -> i32 {
+    if x < 0i32 {
+        ret -1i32
+    }
+    else {
+        ret 1i32
+    }
+}

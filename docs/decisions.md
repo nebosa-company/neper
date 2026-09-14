@@ -5349,3 +5349,22 @@ first run and the implementation was right: a ray 32 units east from the middle 
 reaches only the next open tile, not the border I had asserted it would strike. The
 arithmetic was checked before the fixture was changed, and the short ray was kept as a
 deliberate no-hit case, which makes it a better fixture than the one intended.
+
+## D273 -- One blank line between declarations, `{}`, and `else` beside `}`
+
+Three of section 6's layout rules the formatter did not have, all settled in the
+line pass that already collapsed blank runs. Exactly one blank line separates
+top-level declarations: a column-0 line that opens one -- `fn`, `type`, `const`,
+`var`, `error`, `extern`, `use`, an attribute, or a comment that leads into one --
+gets a blank before it, unless what precedes is what leads into it: an attribute, a
+`///` or `//` line, or a `use` before another `use`, so a documented and attributed
+function stays one unit and the import block stays contiguous. An empty block is
+`{}`: a line that is only `}` joins the `{` above it. And `else` follows `}` on the
+same line: a line beginning `else` joins the `}` above it with one space.
+
+Two things were checked before the goldens moved. The existing canonical fixture
+(tools/fmt.e) was still canonical under the new rules, so `--check` on it is unchanged;
+and the format corpus's canonical side still compiles and runs, so a rule that joined
+lines had not fused two statements. The repository's own style groups constants
+without blank lines in places; the contract says one blank line, and the formatter
+follows the contract.

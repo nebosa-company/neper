@@ -4,9 +4,11 @@ use e.mem
 type Pair = struct { a: i32, b: i32 }
 
 error Odd
+
 fn add(x: i32, y: i32) -> i32 {
     ret x + y * 2i32
 }
+
 fn pick(values: []const i32, index: usize) -> i32 {
     let chosen = values[index] // one space before a trailing comment
 
@@ -14,6 +16,7 @@ fn pick(values: []const i32, index: usize) -> i32 {
 
     ret chosen
 }
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var pair: Pair = Pair { a: 1i32, b: 2i32 }
     let total = add(pair.a, pair.b)
@@ -24,4 +27,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let first = pick(slice[..], 0usize)
     if first == 5i32 && !(total == 0i32) { ret ok }
     ret Odd
+}
+
+fn nothing() {}
+
+fn sign(x: i32) -> i32 {
+    if x < 0i32 {
+        ret -1i32
+    } else {
+        ret 1i32
+    }
 }

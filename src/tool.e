@@ -1018,7 +1018,7 @@ fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
     while at < raw.len && raw[at] == 10u8 { at += 1usize }
     while at < raw.len {
         // Copy one line including its trailing newline (if any).
-        let line_start = at
+        var line_start = at
         while at < raw.len && raw[at] != 10u8 { at += 1usize }
         var line_end = at
         if at < raw.len { at += 1usize }
@@ -1043,6 +1043,35 @@ fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
                 at = probe
             }
         } else {
+            // Section 6: exactly one blank line separates top-level declarations (D273). A
+            // line at column 0 that opens one -- or a comment that leads into one -- gets a
+            // blank before it unless what precedes is what leads into it: an attribute, a
+            // `///` or `//` line, or a `use` before another `use`.
+            if written != 0usize && out[written - 1usize] == 10u8 && (written < 2usize || out[written - 2usize] != 10u8) && fmt_opens_declaration(raw, line_start, line_end) {
+                var previous_start = written - 1usize
+                while previous_start > 0usize && out[previous_start - 1usize] != 10u8 { previous_start = previous_start - 1usize }
+                let previous = out[previous_start..written - 1usize]
+                var leads = fmt_starts_with(previous, "@") || fmt_starts_with(previous, "//")
+                if fmt_starts_with(previous, "use ") && fmt_starts_with(raw[line_start..line_end], "use ") { leads = true }
+                if !leads {
+                    out[written] = 10u8
+                    written += 1usize
+                }
+            }
+            // Section 6: an empty block is `{}`, and `else` follows `}` on the same line
+            // (D273); both join this line onto the one before it.
+            var content = line_start
+            while content < line_end && raw[content] == 32u8 { content += 1usize }
+            let joins_close = content + 1usize == line_end && raw[content] == 125u8 && written >= 2usize && out[written - 2usize] == 123u8
+            let joins_else = line_end >= content + 4usize && fmt_starts_with(raw[content..line_end], "else") && (line_end == content + 4usize || raw[content + 4usize] == 32u8) && written >= 2usize && out[written - 2usize] == 125u8
+            if joins_close || joins_else {
+                written = written - 1usize
+                if joins_else {
+                    out[written] = 32u8
+                    written += 1usize
+                }
+                line_start = content
+            }
             var copy = line_start
             while copy < line_end {
                 out[written] = raw[copy]
@@ -1054,6 +1083,24 @@ fn fmt_collapse(raw: []const u8, out: []u8) -> usize {
         }
     }
     ret written
+}
+
+fn fmt_starts_with(line: []const u8, prefix: str) -> bool {
+    if line.len < prefix.len { ret false }
+    var at = 0usize
+    while at < prefix.len {
+        if line[at] != prefix[at] { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+// A column-0 line that begins a top-level declaration, its attributes, or the comment
+// that leads into one.
+fn fmt_opens_declaration(raw: []const u8, line_start: usize, line_end: usize) -> bool {
+    let line = raw[line_start..line_end]
+    if line.len == 0usize || line[0usize] == 32u8 || line[0usize] == 125u8 { ret false }
+    ret fmt_starts_with(line, "fn ") || fmt_starts_with(line, "type ") || fmt_starts_with(line, "const ") || fmt_starts_with(line, "var ") || fmt_starts_with(line, "error ") || fmt_starts_with(line, "extern ") || fmt_starts_with(line, "use ") || fmt_starts_with(line, "@") || fmt_starts_with(line, "//")
 }
 
 // The canonical layout of a source, or an error if it does not tokenize.
