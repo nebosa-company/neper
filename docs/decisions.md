@@ -5461,3 +5461,49 @@ function whose start it lands on -- `-> dis.add` -- and an unresolved one is nam
 the relocation that will fill it, the rel32 sitting one byte after the opcode --
 `-> neper_os_exit`. The decoder stays generic; the naming is a pass over its lines in
 the command that has the function table and the relocations to hand.
+## D279 -- A conversation is data, and a particle pool forgets in order
+
+`e.game.dialog` and `e.game.particle`, batched because each is self-contained and neither
+needed a new foundation.
+
+**A dialogue tree is two flat arrays.** Nodes, and the choices they own as a run inside one
+shared choice array -- no pointers, no allocation, so a tree is data a game can author,
+ship as a constant and hand straight to `start`. The mutable half is the `State`: where
+the conversation is, which flags are set, what the counters hold, all in the caller's
+buffers.
+
+Each choice carries its own guard, so **whether an option is offered is part of the data**
+rather than a branch in the game. A guard reads flags and counters and nothing else, which
+makes evaluation total: no expression language, nothing that can fail to parse, and no
+condition the checker cannot see through. The cost is that arithmetic past "add to a
+counter" belongs to the game, which is the right trade for a stdlib module -- `e.game.ai`
+will want the same guards, and a shared evaluator that can fail would push that failure
+into both.
+
+`choose` takes the index into the shared choice array, the value `available` returned, not
+a position within that answer -- so a caller that filters the offered list again still
+names the same choice. A guarded choice is refused even when named directly, and `advance`
+refuses a node that still offers something, because advancing past a live decision would
+silently skip it.
+
+**The particle pool keeps its live set contiguous.** An expired particle is replaced by the
+last live one and the count drops, so `step` walks a prefix without testing a flag per
+slot. Survivors are therefore not in emission order, which costs nothing, because
+particles are drawn as a set. A full pool drops the new particle rather than growing or
+evicting: effects are the first thing to sacrifice under load, and a dropped spark is not
+a bug where an allocation in the middle of a hit reaction would be.
+
+Randomness is `e.algo.rand`'s PCG64, threaded in by the caller rather than held inside, so
+a replay that seeds it the same way produces the same sparks in the same places. The
+registered dependency on `e.data.slot_map` was dropped -- a pool with a contiguous live
+prefix does not need generational handles, and carrying the dependency would have implied
+the particles were addressable, which they are not.
+
+Both are `partial`. `Emitter` gained a `facing`, since a spread without a direction to
+spread around is only ever a full circle.
+
+link/game_story pins 64 checks with four negative controls. The particle expectations came
+from a model of the step loop, and the emitter is given a zero spread and a fixed lifetime
+so those checks draw nothing from the generator and are exact; the spread emitter is
+checked as a property -- inside its arc, inside its lifetime range -- which holds whatever
+the generator returns.

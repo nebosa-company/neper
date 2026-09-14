@@ -1265,7 +1265,7 @@
   {
    "name": "e.game.dialog",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
@@ -1335,13 +1335,12 @@
   {
    "name": "e.game.particle",
    "layer": 2,
-   "surface": "planned",
+   "surface": "partial",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
     "e.math.fixed",
-    "e.algo.rand",
-    "e.data.slot_map"
+    "e.algo.rand"
    ],
    "blocked_by": []
   },
