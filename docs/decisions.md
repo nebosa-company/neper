@@ -5425,3 +5425,29 @@ bootstrap's local cap, so the rewrite and the second dispatch live in one helper
 stage-one compiler beside the toolchain `lib/` and compare the short `build`'s stream
 to the positional golden. A short `test` is not offered: its WORKDIR has no short
 answer until the fixed os surface can make a directory.
+
+## D277 -- Lists break at 100 columns, one element per line, and join when they fit
+
+Section 6's one line-breaking rule: a bracketed list that exceeds 100 columns breaks
+after its opening delimiter, one element per line with a trailing comma, and closes on
+its owning indentation; otherwise it is one line with no trailing comma. The layout
+pass now works over the token array with a plan: every soft opener is matched to its
+closer up front, and at the opener the list's one-line width is measured with the
+pass's own spacing, from the column the opener sits on. Fits: the newlines inside are
+soft and dropped, a trailing comma before the closer dropped. Does not fit: a newline
+after the opener, elements four columns in from the opener's line, `,` ending each,
+the closer back on that line's indent. Nested lists measure from their own column.
+
+What may break is what the grammar lets carry a trailing comma: a `(` after a callee,
+`ret` or `fn`, and a type body's `{` after `struct`, `union` or an enum's element type.
+A grouping `(` and every `[` only join -- the first draft broke `(a && b)` in `main.e`
+and produced a `,` no parser takes, which is how the rule was found -- and a list with
+a comment inside is left as written, since a comment is never moved. Aggregate-literal
+bodies are not lists yet: at the token level `Pair {` and `if p {` look the same.
+
+The check that settled it: every source file of the compiler and the library formats
+without failure and idempotently, and a compiler built from its own formatted sources
+answers the format and index goldens byte for byte. That sweep also found D273's line
+pass writing past a buffer sized before it learned to insert blank lines, which the
+old compiler tripped on `check.e` as a bounds trap; the buffer has room for one
+insertion per line now.

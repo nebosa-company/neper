@@ -39,3 +39,25 @@ fn sign(x: i32) -> i32 {
         ret 1i32
     }
 }
+
+type Wide = struct {
+    first_field_name: i32,
+    second_field_name: i32,
+    third_field_name: i32,
+    fourth_field_name: i32,
+}
+
+fn long_parameters(
+    first_parameter: i32,
+    second_parameter: i32,
+    third_parameter: i32,
+    fourth_parameter: i32,
+) -> i32 {
+    let total = long_parameters(
+        first_parameter,
+        second_parameter,
+        third_parameter,
+        fourth_parameter,
+    )
+    ret total
+}

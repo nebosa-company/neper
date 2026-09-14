@@ -1109,9 +1109,14 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
     let (raw_storage, raw_error) = mem.alloc[u8](a, source.len * 2usize + 4096usize)
     if raw_error != ok { ret ("", raw_error) }
     var raw = Out { bytes: raw_storage, count: 0usize }
-    let build_error = format_into(&raw, source)
+    let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
+    if scan_error != ok { ret ("", scan_error) }
+    let (lists, lists_error) = fmt_list_plan(a, source, tokens[0usize..token_count])
+    if lists_error != ok { ret ("", lists_error) }
+    let build_error = format_into(&raw, source, tokens[0usize..token_count], lists)
     if build_error != ok { ret ("", build_error) }
-    let (clean_storage, clean_error) = mem.alloc[u8](a, raw.count + 16usize)
+    // The line pass inserts a blank before each declaration (D273): room for one per line.
+    let (clean_storage, clean_error) = mem.alloc[u8](a, raw.count * 2usize + 16usize)
     if clean_error != ok { ret ("", clean_error) }
     let clean_count = fmt_collapse(raw.bytes[0usize..raw.count], clean_storage)
     let sort_error = fmt_sort_uses(a, clean_storage[0usize..clean_count])
@@ -1187,16 +1192,138 @@ fn fmt_line_after(page: []const u8, a_start: usize, a_end: usize, b_start: usize
     ret a_end - a_start > b_end - b_start
 }
 
+// Section 6's bracketed lists (D277). For every soft opener -- `(`, `[`, or the `{` of a
+// type body after `struct`, `union` or an enum's element type -- the plan says which
+// token closes it and what to do with it: 0 leave as written (a comment lies inside, or
+// it is not a list this pass handles), 1 join onto one line, 2 break one element per
+// line with a trailing comma. A list joins when its one-line width from the column it
+// opens on fits in 100 columns, breaks otherwise; the width is measured with the same
+// spacing the pass emits, newlines inside the list being soft.
+fn fmt_list_plan(a: *mem.Arena, source: str, tokens: []const lex.Token) -> ([]usize, err) {
+    // plan[i] for an opener at i: closer index * 4 + action; 0 for every other token.
+    let (plan, plan_error) = mem.alloc[usize](a, tokens.len + 1usize)
+    if plan_error != ok { ret (plan, plan_error) }
+    var at = 0usize
+    while at < tokens.len {
+        plan[at] = 0usize
+        at += 1usize
+    }
+    // A stack of open soft delimiters.
+    var openers: [64]usize = zero
+    var open_count = 0usize
+    at = 0usize
+    while at < tokens.len {
+        let kind = tokens[at].kind
+        var opens = kind == .PunctLParen || kind == .PunctLBracket
+        if kind == .PunctLBrace && at != 0usize {
+            let before = tokens[at - 1usize].kind
+            // `struct {`, `union {`, `enum u8 {`, `union enum u8 {`: a type body.
+            if before == .KwStruct || before == .KwUnion || before == .KwEnum || (before == .Identifier && at >= 2usize && tokens[at - 2usize].kind == .KwEnum) { opens = true }
+        }
+        if opens && open_count < 64usize {
+            openers[open_count] = at
+            open_count += 1usize
+        }
+        let closes = kind == .PunctRParen || kind == .PunctRBracket || kind == .PunctRBrace
+        if closes && open_count != 0usize {
+            let opener = openers[open_count - 1usize]
+            let opener_kind = tokens[opener].kind
+            let matches = (kind == .PunctRParen && opener_kind == .PunctLParen) || (kind == .PunctRBracket && opener_kind == .PunctLBracket) || (kind == .PunctRBrace && opener_kind == .PunctLBrace)
+            if matches {
+                open_count = open_count - 1usize
+                // A `(` after a callee, `ret` or `fn` is a list that may break; a grouping
+                // `(` and every `[` only join -- a trailing comma inside them is not syntax.
+                var action = 2usize
+                if opener_kind == .PunctLBrace { action = 1usize }
+                if opener_kind == .PunctLParen && opener != 0usize {
+                    let lead = tokens[opener - 1usize].kind
+                    if fmt_value_end(lead) || lead == .KwRet || lead == .KwFn { action = 1usize }
+                }
+                plan[opener] = at * 4usize + action
+            }
+        }
+        at += 1usize
+    }
+    ret (plan, ok)
+}
+
+// The one-line width of tokens [from, to] with the pass's own spacing, newlines soft,
+// in Unicode scalars; `prev` and `prev_unary` are the spacing state before `from`.
+fn fmt_inline_width(source: str, tokens: []const lex.Token, from: usize, to: usize, prev_in: lex.Kind, prev_unary_in: bool) -> usize {
+    var width = 0usize
+    var prev = prev_in
+    var prev_unary = prev_unary_in
+    var at = from
+    while at <= to {
+        let token = tokens[at]
+        if token.kind != .Newline {
+            if at != from && fmt_space_before(prev, prev_unary, token.kind) { width += 1usize }
+            var scan = token.start
+            while scan < token.end {
+                if source[scan] < 128u8 || source[scan] >= 192u8 { width += 1usize }
+                scan += 1usize
+            }
+            prev_unary = fmt_is_unary(prev, token.kind)
+            prev = token.kind
+        }
+        at += 1usize
+    }
+    ret width
+}
+
+// Whether a comment lies within tokens [from, to]: the pass leaves such a list alone.
+fn fmt_has_comment(source: str, tokens: []const lex.Token, from: usize, to: usize) -> bool {
+    var at = from
+    while at <= to {
+        if tokens[at].kind == .Newline {
+            var trivia = lex.trivia_init(source, tokens[at])
+            while true {
+                let item = lex.next_trivia(&trivia)
+                if item.kind == .End { break }
+                if item.kind == .Comment { ret true }
+            }
+        }
+        at += 1usize
+    }
+    ret false
+}
+
+fn fmt_indent(raw: *Out, columns: usize) -> err {
+    var at = 0usize
+    while at < columns {
+        try byte(raw, 32u8)
+        at += 1usize
+    }
+    ret ok
+}
+
 // The layout pass, in an err-returning function so `try` may propagate a buffer overflow.
-fn format_into(raw: *Out, source: str) -> err {
+// Lists (D277): an opener whose list fits is joined -- its newlines dropped, a trailing
+// comma before the closer dropped -- and one that does not is broken, one element per
+// line four columns in from the line the opener is on, each with a trailing comma, the
+// closer back on the opener's line indent.
+fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const usize) -> err {
     var depth = 0usize
     var line_has_content = false
+    var line_indent = 0usize
+    var column = 0usize
     var prev: lex.Kind = .Newline
     var prev_unary = false
-    var scanner = lex.init(source)
-    while true {
-        let token = lex.next(&scanner)
+    // The open lists: closer index, element indent, and whether broken.
+    var list_closers: [64]usize = zero
+    var list_indents: [64]usize = zero
+    var list_broken: [64]bool = zero
+    var list_count = 0usize
+    var at = 0usize
+    while at < tokens.len {
+        let token = tokens[at]
         if token.kind == .Eof { break }
+        // Inside a list this pass joined or broke, a newline is soft.
+        let inside_list = list_count != 0usize
+        if token.kind == .Newline && inside_list {
+            at += 1usize
+            continue
+        }
         if token.kind == .Newline {
             // A comment in this newline's leading trivia is a trailing comment when the line
             // already has content, otherwise a standalone comment line at the current indent.
@@ -1220,41 +1347,121 @@ fn format_into(raw: *Out, source: str) -> err {
                 }
                 try byte(raw, 10u8)
                 line_has_content = false
+                column = 0usize
                 prev = .Newline
                 prev_unary = false
             } else {
                 if has_comment {
-                    var indent = 0usize
-                    while indent < depth * 4usize {
-                try byte(raw, 32u8)
-                indent += 1usize
-            }
+                    try fmt_indent(raw, depth * 4usize)
                     try text(raw, source[comment_start..comment_end])
                     try byte(raw, 10u8)
                 } else {
                     try byte(raw, 10u8)
                 }
             }
-        } else {
-            let at_line_start = !line_has_content
-            if token.kind == .PunctRBrace && depth > 0usize && at_line_start { depth = depth - 1usize }
-            if at_line_start {
-                var indent = 0usize
-                while indent < depth * 4usize {
-                try byte(raw, 32u8)
-                indent += 1usize
-            }
+            at += 1usize
+            continue
+        }
+        // The closer of the innermost list.
+        if inside_list && at == list_closers[list_count - 1usize] {
+            list_count = list_count - 1usize
+            if list_broken[list_count] {
+                // The last element's trailing comma, then the closer on the owning indent;
+                // after a comma the element line was already begun, and is taken back.
+                if prev == .Newline {
+                    raw.count = raw.count - list_indents[list_count]
+                } else {
+                    if prev != .PunctComma { try byte(raw, 44u8) }
+                    try byte(raw, 10u8)
+                }
+                let owning = list_indents[list_count] - 4usize
+                try fmt_indent(raw, owning)
+                column = owning
+                line_indent = owning
+                if token.kind == .PunctRBrace && depth > 0usize { depth = depth - 1usize }
+                try text(raw, source[token.start..token.end])
+                column += token.end - token.start
                 line_has_content = true
-            } else {
-                if fmt_space_before(prev, prev_unary, token.kind) { try byte(raw, 32u8) }
+                prev_unary = false
+                prev = token.kind
+                at += 1usize
+                continue
+            }
+            // Joined: a trailing comma before the closer is dropped.
+            if prev == .PunctComma && raw.count != 0usize && raw.bytes[raw.count - 1usize] == 44u8 {
+                raw.count = raw.count - 1usize
+                column = column - 1usize
+                prev = .Identifier
+                prev_unary = false
+            }
+            if token.kind == .PunctRBrace && depth > 0usize { depth = depth - 1usize }
+            if fmt_space_before(prev, prev_unary, token.kind) {
+                try byte(raw, 32u8)
+                column += 1usize
             }
             try text(raw, source[token.start..token.end])
-            if token.kind == .PunctLBrace { depth += 1usize }
-            // A close brace mid-line (e.g. `{}` or `} else {`) still lowers the depth.
-            if token.kind == .PunctRBrace && !at_line_start && depth > 0usize { depth = depth - 1usize }
-            prev_unary = fmt_is_unary(prev, token.kind)
+            column += token.end - token.start
+            prev_unary = false
             prev = token.kind
+            at += 1usize
+            continue
         }
+        // A comma at the top level of a broken list ends an element.
+        if inside_list && list_broken[list_count - 1usize] && token.kind == .PunctComma {
+            try byte(raw, 44u8)
+            try byte(raw, 10u8)
+            try fmt_indent(raw, list_indents[list_count - 1usize])
+            column = list_indents[list_count - 1usize]
+            line_indent = column
+            prev = .Newline
+            prev_unary = false
+            at += 1usize
+            continue
+        }
+        let at_line_start = !line_has_content
+        if token.kind == .PunctRBrace && depth > 0usize && at_line_start { depth = depth - 1usize }
+        if at_line_start {
+            try fmt_indent(raw, depth * 4usize)
+            column = depth * 4usize
+            line_indent = column
+            line_has_content = true
+        } else {
+            if prev != .Newline && fmt_space_before(prev, prev_unary, token.kind) {
+                try byte(raw, 32u8)
+                column += 1usize
+            }
+        }
+        try text(raw, source[token.start..token.end])
+        column += token.end - token.start
+        if token.kind == .PunctLBrace { depth += 1usize }
+        // A close brace mid-line (e.g. `{}` or `} else {`) still lowers the depth.
+        if token.kind == .PunctRBrace && !at_line_start && depth > 0usize { depth = depth - 1usize }
+        // An opener with a plan opens a list: joined when it fits, broken when it does not.
+        if plan[at] != 0usize && list_count < 64usize {
+            let closer = plan[at] / 4usize
+            if !fmt_has_comment(source, tokens, at, closer) {
+                let width = fmt_inline_width(source, tokens, at + 1usize, closer, token.kind, false)
+                list_closers[list_count] = closer
+                list_indents[list_count] = line_indent + 4usize
+                // The opener is already on the line: what follows must fit beside it.
+                let breaks = column + width > 100usize && closer > at + 1usize && plan[at] % 4usize == 1usize
+                list_broken[list_count] = breaks
+                list_count += 1usize
+                if breaks {
+                    try byte(raw, 10u8)
+                    try fmt_indent(raw, line_indent + 4usize)
+                    column = line_indent + 4usize
+                    line_indent = column
+                    prev = .Newline
+                    prev_unary = false
+                    at += 1usize
+                    continue
+                }
+            }
+        }
+        prev_unary = fmt_is_unary(prev, token.kind)
+        prev = token.kind
+        at += 1usize
     }
     ret ok
 }
