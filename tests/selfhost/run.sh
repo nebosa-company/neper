@@ -1845,6 +1845,10 @@ run_trap_actual="$test_build/conformance-tools-run-trap.jsonl"
 (cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_trap.e "$repo" x64 linux conformance-tools-run-trap.out --json > "conformance-tools-run-trap.jsonl")
 cmp -s "$run_trap_actual" "$conformance_root/tools/run_trap.expected.jsonl" || { printf '%s
 ' "run --json on a trapping program differs from the conformance corpus" >&2; exit 1; }
+# `run --json -- ARGS...` (D267): what follows `--` reaches the program, spaces and all.
+(cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_args.e "$repo" x64 linux conformance-tools-run-args.out --json -- first "second word" 3 > "conformance-tools-run-args.jsonl")
+cmp -s "$test_build/conformance-tools-run-args.jsonl" "$conformance_root/tools/run_args.expected.jsonl" || { printf '%s
+' "run --json with program arguments differs from the conformance corpus" >&2; exit 1; }
 # `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
 index_actual="$test_build/conformance-tools-index.jsonl"
 $test_build/neper-self index-file "$conformance_root/tools/index.e" "$repo" x64 linux --json > "$index_actual"
@@ -2475,7 +2479,7 @@ ret_group_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$ret_group_executable_written" = 'executable written' ]
 chmod +x "$ret_group_executable_path"
 "$ret_group_executable_path"
-# `e.math.fixed` (D266): Q16.16 arithmetic and angles in turns.
+# `e.math.fixed` (D267): Q16.16 arithmetic and angles in turns.
 math_fixed_executable_path="$test_build/math-fixed-selfhost"
 math_fixed_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/math_fixed/src/main.e" "$repo" x64 linux "$math_fixed_executable_path")
 [ "$math_fixed_executable_written" = 'executable written' ]

@@ -1707,6 +1707,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runActual).Hash -ne (Get-FileH
 $runTrapActual = Join-Path $testBuild 'conformance-tools-run-trap.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_trap.e `"$repo`" x64 windows conformance-tools-run-trap.out --json > `"$runTrapActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runTrapActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_trap.expected.jsonl')).Hash) { throw "run --json on a trapping program differs from the conformance corpus" }
+# `run --json -- ARGS...` (D267): what follows `--` reaches the program, spaces and all.
+$runArgsActual = Join-Path $testBuild 'conformance-tools-run-args.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_args.e `"$repo`" x64 windows conformance-tools-run-args.out --json -- first `"second word`" 3 > `"$runArgsActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runArgsActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_args.expected.jsonl')).Hash) { throw "run --json with program arguments differs from the conformance corpus" }
 # `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
@@ -2240,7 +2244,7 @@ $retGroupExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $retGroupExecutableWritten -ne 'executable written') { throw 'ret-group PE executable emission failed' }
 & $retGroupExecutablePath
 if ($LASTEXITCODE -ne 0) { throw "grouped return expressions failed check $LASTEXITCODE in the self-hosted PE executable" }
-# `e.math.fixed` (D266): Q16.16 arithmetic and angles in turns.
+# `e.math.fixed` (D267): Q16.16 arithmetic and angles in turns.
 $mathFixedExecutablePath = Join-Path $testBuild 'math-fixed-selfhost.exe'
 $mathFixedExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/math_fixed/src/main.e') $repo 'x64' 'windows' $mathFixedExecutablePath
 if ($LASTEXITCODE -ne 0 -or $mathFixedExecutableWritten -ne 'executable written') { throw 'math.fixed PE executable emission failed' }

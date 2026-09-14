@@ -5129,3 +5129,24 @@ the surface rather than left as a promise.
 link/math_fixed pins thirty-seven checks whose expected values were computed
 independently rather than read back from this implementation, including a round trip that
 recovers an angle through `sin`, `cos` and `atan2` across the whole circle.
+
+## D267 -- `run` passes what follows `--` to the program
+
+`run --json` launched the program with no arguments; a program that reads its command
+line could not be exercised through the stream. Everything after a `--` at the end of
+the command is now the program's, as given -- `-- first "second word" 3` reaches
+`main`'s `args` as three strings, the space kept -- on both hosts: on Windows the
+runtime's spawn quotes each argument into the command line, and on Linux, where the
+fixed os surface's lack of chmod sends the launch through `sh -c`, the shell passes
+`"$@"` on after `exec "$0"`. The compiler's own flag scan stops at `--`, so nothing the
+program is given is read as `--release` or `--arena`.
+
+The same probe found that a relative OUTPUT with a directory in it -- `build/out.exe`
+-- could not be launched on Windows at all: CreateProcess reads a relative path
+spelled with `/` as no path, and the suite had only ever launched bare names. The
+launch now spells the path the host's way. tests/conformance/tools/run_args.e echoes
+its arguments and exits with their count.
+
+Found on the way: a build hashed every module for its manifest before asking whether
+`.neper/<mode>/` exists, so a project that never made the directory paid for a manifest
+it never got. The open comes first now, and an absent directory costs nothing.

@@ -756,6 +756,7 @@ fn self_test() -> err {
 fn has_flag(args: []str, name: str) -> bool {
     var at = 7usize
     while at < args.len {
+        if same(args[at], "--") { ret false }
         if same(args[at], name) { ret true }
         if same(args[at], "--arena") || same(args[at], "--project") { at += 1usize }
         at += 1usize
@@ -767,6 +768,7 @@ fn has_flag(args: []str, name: str) -> bool {
 fn project_flag(args: []str) -> str {
     var at = 7usize
     while at + 1usize < args.len {
+        if same(args[at], "--") { ret "" }
         if same(args[at], "--project") { ret args[at + 1usize] }
         if same(args[at], "--arena") { at += 1usize }
         at += 1usize
@@ -777,6 +779,8 @@ fn project_flag(args: []str) -> str {
 fn flags_known(args: []str) -> bool {
     var at = 7usize
     while at < args.len {
+        // `-- ARGS...` (D267): the program's own arguments, not the compiler's flags.
+        if same(args[at], "--") { ret true }
         if same(args[at], "--arena") {
             if at + 1usize >= args.len { ret false }
             let (size, size_ok) = arena_size(args[at + 1usize])
@@ -822,6 +826,7 @@ fn arena_size(spelling: str) -> (usize, bool) {
 fn arena_flag(args: []str) -> usize {
     var at = 7usize
     while at + 1usize < args.len {
+        if same(args[at], "--") { ret 0usize }
         if same(args[at], "--arena") {
             let (size, size_ok) = arena_size(args[at + 1usize])
             if size_ok { ret size }
@@ -878,7 +883,26 @@ fn with_suffix(a: *mem.Arena, path: str, suffix: str) -> (str, err) {
 // ponytail: the fixed os surface creates files 0666 and has no chmod, so on Linux the
 // program goes through `sh -c` which marks it executable first; drop that when
 // emit-executable can write an executable file.
-fn run_program(a: *mem.Arena, path: str) -> (i32, str, str, err) {
+fn has_dashdash(args: []str) -> bool {
+    var at = 7usize
+    while at < args.len {
+        if same(args[at], "--") { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// The program's arguments: everything after a `--` (D267), none without one.
+fn program_arguments(args: []str) -> []str {
+    var at = 7usize
+    while at < args.len {
+        if same(args[at], "--") { ret args[at + 1usize..args.len] }
+        at += 1usize
+    }
+    ret args[0usize..0usize]
+}
+
+fn run_program(a: *mem.Arena, path: str, arguments: []str) -> (i32, str, str, err) {
     let (stdout_path, stdout_path_error) = with_suffix(a, path, ".stdout")
     if stdout_path_error != ok { ret (0i32, "", "", stdout_path_error) }
     let (stderr_path, stderr_path_error) = with_suffix(a, path, ".stderr")
@@ -904,15 +928,36 @@ fn run_program(a: *mem.Arena, path: str) -> (i32, str, str, err) {
         if prefix_error != ok { ret (0i32, "", "", prefix_error) }
         launched = prefixed
     }
-    var argv: [4]str = zero
+    let (argv, argv_error) = mem.alloc[str](a, arguments.len + 4usize)
+    if argv_error != ok { ret (0i32, "", "", argv_error) }
     var argc = 1usize
+    // CreateProcess reads a relative path with `/` as no path at all (D267): spell it
+    // the host's way when launching on Windows.
+    if !same(host_target(), "x64-linux") {
+        let (spelled, spelled_error) = mem.alloc[u8](a, launched.len)
+        if spelled_error != ok { ret (0i32, "", "", spelled_error) }
+        var fix = 0usize
+        while fix < launched.len {
+            spelled[fix] = launched[fix]
+            if spelled[fix] == 47u8 { spelled[fix] = 92u8 }
+            fix += 1usize
+        }
+        launched = spelled[0usize..launched.len]
+    }
     argv[0usize] = launched
     if same(host_target(), "x64-linux") {
+        // `$0` is the program; the shell hands every further argument on as `"$@"`.
         argv[0usize] = "/bin/sh"
         argv[1usize] = "-c"
-        argv[2usize] = "chmod +x -- \"$0\" && exec \"$0\""
+        argv[2usize] = "chmod +x -- \"$0\" && exec \"$0\" \"$@\""
         argv[3usize] = launched
         argc = 4usize
+    }
+    var argument = 0usize
+    while argument < arguments.len {
+        argv[argc] = arguments[argument]
+        argc += 1usize
+        argument += 1usize
     }
     let (child, spawn_error) = os.spawn(a, argv[..argc], streams)
     let stdout_close_error = os.close(stdout_file)
@@ -3344,7 +3389,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner
     // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
-    let trailing_flags = args.len >= 8usize && args.len <= 12usize && flags_known(args)
+    let trailing_flags = args.len >= 8usize && (args.len <= 12usize || has_dashdash(args)) && flags_known(args)
     let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all")) && has_flag(args, "--release")
     // `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then
     // the program's whole output as one `run` record before the result.
@@ -3785,7 +3830,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 // (section 7, D254), with the executable it just wrote as the one artifact.
                 try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, args[6usize], packed)
                 if running {
-                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, args[6usize])
+                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, args[6usize], program_arguments(args))
                     if run_error != ok {
                         try emit_command_diagnostic(&report, "E-CLI-9999", "the executable could not be run")
                         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
@@ -3844,7 +3889,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [--json] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [--json] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

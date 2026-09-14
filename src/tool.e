@@ -1442,6 +1442,15 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     if mode_error != ok { ret mode_error }
     let (manifest_path, path_error) = manifest_join(a, mode_dir, "build-manifest.json")
     if path_error != ok { ret path_error }
+    let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
+    // The fixed os surface has no mkdir, so `.neper/<mode>/` is the project's to make,
+    // once; until it exists the build has nowhere to put the manifest and writes none --
+    // and hashes nothing, since the open comes first (D267).
+    // ponytail: add os.mkdir to the fixed surface (bootstrap and both runtimes) and make
+    // the directory here when a consumer needs the manifest without that step.
+    let (file, open_error) = os.open(a, manifest_path, flags)
+    if open_error == os.NotFound { ret ok }
+    if open_error != ok { ret open_error }
     let (digest, digest_error) = manifest_sha256(a, packed)
     if digest_error != ok { ret digest_error }
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
@@ -1449,14 +1458,6 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     var out = Out { bytes: storage, count: 0usize }
     try manifest_write(a, &out, arch, os_name, g, mode, artifact_path, digest)
     try byte(&out, 10u8)
-    let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
-    // The fixed os surface has no mkdir, so `.neper/<mode>/` is the project's to make,
-    // once; until it exists the build has nowhere to put the manifest and writes none.
-    // ponytail: add os.mkdir to the fixed surface (bootstrap and both runtimes) and make
-    // the directory here when a consumer needs the manifest without that step.
-    let (file, open_error) = os.open(a, manifest_path, flags)
-    if open_error == os.NotFound { ret ok }
-    if open_error != ok { ret open_error }
     var at = 0usize
     var write_error = ok
     while at < out.count && write_error == ok {
