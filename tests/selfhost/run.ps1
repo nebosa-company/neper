@@ -2262,6 +2262,12 @@ $gameGridExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gameGridExecutableWritten -ne 'executable written') { throw 'game grid PE executable emission failed' }
 & $gameGridExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'e.game.grid or e.game.tilemap failed a check in the self-hosted PE executable' }
+# `e.game.collide2d` and `e.game.vision` (D271): swept boxes and shadowcast fog.
+$gameSightExecutablePath = Join-Path $testBuild 'game-sight-selfhost.exe'
+$gameSightExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/game_sight/src/main.e') $repo 'x64' 'windows' $gameSightExecutablePath
+if ($LASTEXITCODE -ne 0 -or $gameSightExecutableWritten -ne 'executable written') { throw 'game sight PE executable emission failed' }
+& $gameSightExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'e.game.collide2d or e.game.vision failed a check in the self-hosted PE executable' }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }

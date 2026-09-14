@@ -5282,3 +5282,46 @@ link/game_grid pins 63 checks against values computed independently, and **three
 deliberately broken checks were confirmed to fail before the fixture was trusted** --
 including the floor-versus-truncate one, which passes under either rule everywhere except
 the negative edge it was written for.
+
+## D271 -- Contact times and shadows, both answered in integers
+
+`e.game.collide2d` and `e.game.vision`, batched because both read the solid and opaque
+bits of a tilemap and neither is much use without the other: a mover that cannot see and
+a watcher that walks through walls are the same bug from two directions.
+
+**A sweep answers *when*, not *whether*.** Every test here reduces by the Minkowski trick
+-- grow the target by the mover's half extents and a box against a box becomes a ray
+against a box -- and returns a time along the motion in Q16 with the face that was struck.
+A caller then advances to the moment of contact instead of stepping and testing, which is
+what stops a fast mover tunnelling through a wall rather than making the steps smaller and
+hoping. A mover that already overlaps reports time zero; `overlaps` is the question for
+that case. `ray_tiles` walks tile boundaries by advancing whichever axis reaches its next
+edge first, so no tile on the line is skipped and none is visited twice.
+
+**Shadowcasting compares slopes without dividing them.** A slope is a pair of integers and
+`slope_greater` cross-multiplies, so visibility is identical on every machine -- which
+lockstep requires, since disagreeing about who can see whom desynchronises a session as
+surely as disagreeing about position. The subtlety that makes it work is a sign
+normalisation: every octant scans with a negative row, so the denominators are negative,
+and cross-multiplication only orders correctly when both are positive. Without normalising
+first the comparisons invert and the scan reveals nothing at all -- which is exactly what
+the reference implementation did on its first run, before any of this was written in
+Neper.
+
+Fog is two bitsets and no third table: `visible` is recomputed each tick, `explored` is
+sticky, and a cell in neither is unseen. `line_of_sight` lives beside them because the AI
+and the fog must answer the same question the same way -- an enemy that can see you and a
+tile you can see cannot disagree.
+
+Both are `partial`; each keeps helpers the declared surface does not name. `cast_cone` was
+registered in D249 and is **removed from the surface rather than left as a promise**, the
+way `Overflow` was in D266: it is not implemented, and a declared function that does not
+exist is worse than an absent one.
+
+link/game_sight pins 65 checks with three negative controls. The visibility expectations
+-- including that exactly 37 cells are lit -- come from an independent shadowcaster rather
+than from this implementation, so the two agreeing means something. One check failed on
+first run and the implementation was right: a ray 32 units east from the middle of a tile
+reaches only the next open tile, not the border I had asserted it would strike. The
+arithmetic was checked before the fixture was changed, and the short ray was kept as a
+deliberate no-hit case, which makes it a better fixture than the one intended.
