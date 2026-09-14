@@ -1777,7 +1777,7 @@ for conformance_case in 'tokens every_kind 0' 'tokens hostile 1' 'parse every_ki
 done
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-for conformance_case in 'accept scalar 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1'; do
+for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1'; do
     set -- $conformance_case
     conformance_actual="$test_build/conformance-$1-$2.jsonl"
     conformance_stderr="$test_build/conformance-$1-$2.stderr"
@@ -1886,7 +1886,7 @@ cmp -s "$fmt_actual" "$conformance_root/tools/fmt.expected.jsonl" || { printf '%
 # The format corpus (D255): each `format/<name>.e` is a non-canonical source and
 # `format/<name>.expected.e` what `fmt` makes of it, byte for byte; the canonical side
 # passes `--check`, which pins idempotence.
-for format_case in layout; do
+for format_case in layout types; do
     "$test_build/neper-self" fmt-file "$conformance_root/format/$format_case.e" > "$test_build/conformance-format-$format_case.e"
     cmp -s "$test_build/conformance-format-$format_case.e" "$conformance_root/format/$format_case.expected.e" || { printf '%s
 ' "fmt on format/$format_case.e differs from the conformance corpus" >&2; exit 1; }

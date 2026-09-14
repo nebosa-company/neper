@@ -5590,3 +5590,18 @@ under `--json`, as a stream whose header names the command the flag was given to
 whose result exits 2. The flag is handled where the short spellings are (D276), ahead
 of every dispatch, which is what "before source is read" needs. The refusal is pinned
 by tests/conformance/tools/info_version.
+
+## D284 -- A second fixture per corpus root, and what writing them found
+
+Section 9's corpus had one fixture under `accept/` and one under `format/`. Each root
+now has at least two: accept/aggregate checks structs, an enum, a generic function and
+a `switch`, and format/types writes type bodies, an enum, a generic signature and a
+`switch` badly and pins what `fmt` makes of them. The second found two things the
+formatter got wrong, which is what a fixture written to be unlike the first is for. A
+`.` glued to whatever preceded it, so `case .Red` came out `case.Red` -- a `.` glues to
+a value on its left and to what is on its right, and a member literal after a keyword
+keeps its space. And `case` labels were indented as statements of the switch's block;
+they sit at the `switch`'s own indent, the statements under them one level in, which
+is how every switch in the repository is written. Every compiler and library source
+still formats idempotently, and a compiler built from its own formatted source agrees
+with the new golden.

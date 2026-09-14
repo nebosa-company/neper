@@ -1159,7 +1159,10 @@ fn fmt_space_before(prev: lex.Kind, prev_unary: bool, cur: lex.Kind) -> bool {
     if fmt_is_close(cur) { ret false }
     if cur == .PunctComma { ret false }
     if cur == .PunctColon { ret false }
-    if cur == .PunctDot || prev == .PunctDot { ret false }
+    // `.` glues to a value on its left (a field) and to whatever is on its right; a
+    // member literal after a keyword -- `case .Red`, `ret .Red` -- keeps its space (D284).
+    if cur == .PunctDot && fmt_value_end(prev) { ret false }
+    if prev == .PunctDot { ret false }
     if cur == .PunctRange || prev == .PunctRange { ret false }
     if prev == .PunctAt { ret false }
     if cur == .PunctLParen || cur == .PunctLBracket {
@@ -1590,8 +1593,12 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
         let at_line_start = !line_has_content
         if token.kind == .PunctRBrace && depth > 0usize && at_line_start { depth = depth - 1usize }
         if at_line_start {
-            try fmt_indent(raw, depth * 4usize)
-            column = depth * 4usize
+            // A `case` or `default` label sits at its `switch`'s indent, one level out from
+            // the statements under it (D284).
+            var indent = depth * 4usize
+            if (token.kind == .KwCase || token.kind == .KwDefault) && depth > 0usize { indent = indent - 4usize }
+            try fmt_indent(raw, indent)
+            column = indent
             line_indent = column
             line_has_content = true
         } else {

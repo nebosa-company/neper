@@ -1645,7 +1645,7 @@ foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('
 }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-foreach ($case in @(@('accept', 'scalar', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1))) {
+foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
@@ -1743,7 +1743,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtActual).Hash -ne (Get-FileH
 # The format corpus (D255): each `format/<name>.e` is a non-canonical source and
 # `format/<name>.expected.e` what `fmt` makes of it, byte for byte; the canonical side
 # passes `--check`, which pins idempotence.
-foreach ($formatCase in @('layout')) {
+foreach ($formatCase in @('layout', 'types')) {
     $formatActual = Join-Path $testBuild "conformance-format-$formatCase.e"
     cmd /c "`"$compiler`" fmt-file `"$(Join-Path $conformanceRoot "format/$formatCase.e")`" > `"$formatActual`""
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $formatActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "format/$formatCase.expected.e")).Hash) { throw "fmt on format/$formatCase.e differs from the conformance corpus" }
