@@ -2491,6 +2491,12 @@ game_core_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$game_core_executable_written" = 'executable written' ]
 chmod +x "$game_core_executable_path"
 "$game_core_executable_path"
+# `e.game.grid` and `e.game.tilemap` (D270): coordinates and layered tile grids.
+game_grid_executable_path="$test_build/game-grid-selfhost"
+game_grid_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_grid/src/main.e" "$repo" x64 linux "$game_grid_executable_path")
+[ "$game_grid_executable_written" = 'executable written' ]
+chmod +x "$game_grid_executable_path"
+"$game_grid_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]

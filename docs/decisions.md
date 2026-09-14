@@ -5233,3 +5233,52 @@ GNU objdump. That check -- 3,546 instructions across three fixtures, every funct
 to its first inline text -- found no other semantic difference, and eight fixtures
 (42,000 instructions) list with no unknown byte. The per-host goldens of
 tests/conformance/tools/dis.e are regenerated; the bytes in them are the same.
+## D270 -- One coordinate vocabulary for four shapes, and a tilemap that is bits beside tiles
+
+`e.game.grid` and `e.game.tilemap`, batched because a grid without a map to index is
+half an idea, and because the ceremony costs more than either module.
+
+**Isometric is a coordinate transform plus a depth order.** That is the whole of what
+2.5D means here, and it is why there is one `Coord` -- axial `q`, `r` -- and one set of
+operations answering for square, isometric diamond and hex in both orientations. A game
+changes its look by changing the `Shape` it passes, not its map, its pathfinding or its
+AI. `depth` returns the painter's key: the row, or the diagonal for a diamond, times 256
+with elevation in the low byte, so a raised tile sits in front of the flat ground it
+shares a row with while a nearer row still beats a further one at any elevation.
+
+The shapes are kept internally consistent rather than conventionally so. Square and
+diamond have four neighbours and Manhattan distance, so their rings are diamonds; hex has
+six and hex distance, so its rings are hexes. A ring is always *the cells at exactly
+`radius` under the distance that shape uses* -- mixing Manhattan distance with a square
+ring is the usual bug, and it makes `distance` and `ring` disagree about what a radius is.
+
+`from_world` floors rather than truncates, and `floor_div` exists to make it so. Integer
+division rounds toward zero, which folds the tile left of the origin onto the tile right
+of it: every map is then wrong along two edges, and only there, which is the kind of bug
+that survives a demo. Hex needs more than a floor -- fractional axial coordinates are
+rounded in cube space, where the three components must sum to zero, so the component that
+moved furthest is recomputed from the other two. Without that a line drawn across a hex
+grid leaves the lattice.
+
+**The tilemap keeps what is drawn apart from what is simulated.** Tiles are layers;
+solidity, opacity and elevation are bitsets and a byte array beside them. Collision asks
+`is_solid`, vision asks `is_opaque`, the depth order asks `height_at`, and none of them
+needs to know how many layers a map has or which of them is scenery. A wall and a window
+then differ by one bit rather than by a tile id every system has to agree about, and
+`derive` fills the bits from a table of blocking ids because a map is authored as tiles
+and derived into bits, not the other way round.
+
+Off the map reads as solid and as opaque. A mover walking off the edge is stopped by the
+same test that stops it at a wall, and sight does not run out past the border, so neither
+caller carries a bounds check of its own. Layers that disagree about their size are
+refused by `init` rather than trusted, since a ragged map makes every index ambiguous.
+
+Both are `partial`: each keeps helpers the declared surface does not name -- `floor_div`,
+`cube_round`, `abs32`, the bit accessors -- and section 12 has no visibility. Both
+surfaces were corrected to what was written: `tilemap` gained `Size`, the three setters,
+`derive` and the size accessors, and `grid` gained `coord`, `equal` and `hexed`.
+
+link/game_grid pins 63 checks against values computed independently, and **three
+deliberately broken checks were confirmed to fail before the fixture was trusted** --
+including the floor-versus-truncate one, which passes under either rule everywhere except
+the negative edge it was written for.
