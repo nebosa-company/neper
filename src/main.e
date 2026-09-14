@@ -11,6 +11,7 @@ use em_link
 use error_table
 use emit_x64
 use graph
+use lookup
 use lex
 use link_elf
 use link_pe
@@ -791,7 +792,7 @@ fn flags_known(args: []str) -> bool {
                 if at + 1usize >= args.len { ret false }
                 at += 1usize
             } else {
-                if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") { ret false }
+                if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") { ret false }
             }
         }
         at += 1usize
@@ -1508,6 +1509,24 @@ fn nptest_now() -> usize {
     if clock_error != ok { ret 0usize }
     if ticks < 0i64 { ret 0usize }
     ret usize(ticks)
+}
+
+// `--time` (D303): one line per phase on stderr, milliseconds since the previous one.
+// The state rides on the report sink like `--json` does: `main` is at the bootstrap's
+// local limit and takes no new locals.
+fn report_phase(report: *Sink, name: str) -> err {
+    if !report.timing { ret ok }
+    let now = nptest_now()
+    let started = report.phase_started
+    var line_storage: [128]u8 = zero
+    var line = capture_sink(line_storage[..])
+    try write_all(&line, "time ")
+    try write_all(&line, name)
+    try write_all(&line, ": ")
+    try write_usize(&line, (now - started) / 1000000usize)
+    try write_all(&line, " ms\n")
+    report.phase_started = now
+    ret stderr_text(line_storage[..line.count])
 }
 
 // Section 2's module name of a path under a source root: the separators become dots and
@@ -2568,7 +2587,11 @@ fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver) -> err {
     if tokens_error != ok { ret tokens_error }
     let (locals, locals_error) = mem.alloc[resolve.Local](a, 16384usize)
     if locals_error != ok { ret locals_error }
-    ret resolve.init(resolver, symbols, tokens, locals)
+    try resolve.init(resolver, symbols, tokens, locals)
+    // The name index (D303): four entries per symbol covers the doubling regions.
+    let (entries, entries_error) = mem.alloc[lookup.Entry](a, symbols.len * 4usize)
+    if entries_error != ok { ret entries_error }
+    ret resolve.attach_index(resolver, entries)
 }
 
 fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
@@ -2613,7 +2636,11 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker) -> err {
     try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, globals, constant_exprs, diagnostics)
     try check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
     try check.init_aggregates(checker, aggregates, aggregate_fields)
-    ret check.init_control(checker, checked_switches, function_signatures)
+    try check.init_control(checker, checked_switches, function_signatures)
+    // The declaration index (D303): the five named tables, four entries per row.
+    let (entries, entries_error) = mem.alloc[lookup.Entry](a, (functions.len + aggregates.len + aliases.len + constants.len + globals.len) * 4usize)
+    if entries_error != ok { ret entries_error }
+    ret check.attach_index(checker, entries)
 }
 
 // The inlining oracle's builder (D207): the short functions of every module, which the
@@ -2699,6 +2726,9 @@ type Sink = struct {
     capturing: bool,
     // `--json` (D228): a diagnostic is a record on stdout, not a line on stderr.
     json: bool,
+    // `--time` (D303): a line per phase on stderr, and when the last one ended.
+    timing: bool,
+    phase_started: usize,
     // `--path VIRTUAL` (D262): the operand's identity in every span, in place of its
     // basename; a diagnostic in any other module keeps that module's basename.
     operand_source: str,
@@ -4160,7 +4190,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
+        report.timing = trailing_flags && has_flag(args, "--time")
+        report.phase_started = nptest_now()
         let load_error = load_graph_in(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize], project_flag(args))
+        try report_phase(&report, "load and parse")
         if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         if load_error != ok {
             if disassemble {
@@ -4176,6 +4209,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var resolver: resolve.Resolver = zero
         try init_cli_resolver(a, &resolver)
         let resolve_error = resolve.collect(&resolver, &loaded)
+        try report_phase(&report, "resolve")
         if resolve_error != ok {
             try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
             try finish_report(&report)
@@ -4196,6 +4230,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             keep_at += 1usize
         }
         var check_error = check.run_declarations(&checker, &resolver, &loaded)
+        try report_phase(&report, "check declarations")
         if check_error == ok && writes_all_em && incremental_build {
             let (settle_strings, settle_strings_error) = mem.alloc[str](a, 32768usize)
             if settle_strings_error != ok { ret settle_strings_error }
@@ -4214,6 +4249,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             try settle_early(a, &checker, &loaded, args[6usize], settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
         }
         if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
+        try report_phase(&report, "check bodies")
         if check_error != ok {
             if checker.diagnostic_count == 0usize {
                 try print_check_diagnostic(&report, &loaded, &checker, check_error)
@@ -4315,6 +4351,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if inline_entries_error != ok { ret inline_entries_error }
             var inline_entry_count = 0usize
             let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
+            try report_phase(&report, "inline oracles")
             if oracle_error != ok {
                 try print_lower_diagnostic(&report, &loaded, &checker, &oracle, oracle_error)
                 try finish_report(&report)
@@ -4334,6 +4371,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             lower_error = lower.all_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules, keep)
         } else {
             lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
+        try report_phase(&report, "lower")
         }
         if lower_error == ok {
             // Everything was lowered so that the order is the one the artifacts also use; what
@@ -4342,6 +4380,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             // prunes, as the executable path does here.
             if !(writes_em || writes_all_em) {
                 let prune_error = nir.prune_unreachable(&builder, kept_functions, false)
+                try report_phase(&report, "prune")
                 if prune_error != ok {
                     try print_lower_diagnostic(&report, &loaded, &checker, &builder, prune_error)
                     try finish_report(&report)
@@ -4420,6 +4459,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             try binary.init(&fold_scratch, fs)
         }
         var relocation_count = 0usize
+        try report_phase(&report, "codegen setup")
         var function_at = 0usize
         var machine_abi: codegen_x64.Abi = .SystemV
         if same(args[5usize], "windows") { machine_abi = .Windows }
@@ -4559,6 +4599,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if executable_storage_error != ok { ret executable_storage_error }
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
+                try report_phase(&report, "regalloc and codegen")
                 if machine_abi == .Windows {
                     try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
                     try link_pe.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
@@ -4566,6 +4607,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
                     try link_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
                 }
+                try report_phase(&report, "link")
                 let (packed, packed_error) = mem.alloc[u8](a, executable.count)
                 if packed_error != ok { ret packed_error }
                 try emit_x64.pack(&executable, packed)

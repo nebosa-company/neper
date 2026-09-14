@@ -1,6 +1,7 @@
 // Module, lexical-scope and reference resolution.
 
 use graph
+use lookup
 use lex
 use parse
 use syntax
@@ -62,6 +63,8 @@ type Resolver = struct {
     failure_has_context: bool,
     failure_name: str,
     failure_owner: str,
+    // The (module, space, name) index over `symbols` (D303); absent, `find` scans.
+    names: lookup.Index,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -87,7 +90,12 @@ fn init(r: *Resolver, symbols: []Symbol, tokens: []lex.Token, locals: []Local) -
     r.failure_has_context = false
     r.failure_name = ""
     r.failure_owner = ""
+    r.names.entries = r.names.entries[0usize..0usize]
     ret ok
+}
+
+fn attach_index(r: *Resolver, entries: []lookup.Entry) -> err {
+    ret lookup.attach(&r.names, entries)
 }
 
 fn reserved(name: str) -> bool {
@@ -122,7 +130,26 @@ fn tokenize(r: *Resolver, text: str) -> err {
     ret ok
 }
 
+fn space_tag(space: Namespace) -> usize {
+    if space == .Type { ret 0usize }
+    ret 1usize
+}
+
 fn find(r: *Resolver, module_index: usize, name: str, space: Namespace) -> (usize, bool) {
+    if lookup.attached(&r.names) {
+        // Index the symbols added since the last search, then probe.
+        while r.names.indexed[0usize] < r.count {
+            let at = r.names.indexed[0usize]
+            let s = r.symbols[at]
+            let insert_error = lookup.insert(&r.names, s.module_index, space_tag(s.space), s.name, at)
+            if insert_error != ok { break }
+            r.names.indexed[0usize] = at + 1usize
+        }
+        if r.names.indexed[0usize] == r.count {
+            let (found_at, found) = lookup.find(&r.names, module_index, space_tag(space), name)
+            ret (found_at, found)
+        }
+    }
     var i = 0usize
     while i < r.count {
         if r.symbols[i].module_index == module_index && r.symbols[i].space == space && same(r.symbols[i].name, name) {

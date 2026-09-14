@@ -6006,3 +6006,53 @@ benchmark's 14,700-line ceiling by another route. That is its own decision.
 Verified by shrinking the instruction pool to 4096 and reading the message, by the
 3000-check program against the previous compiler (refused) and this one (runs), and by
 both suites, which build the compiler with itself under the same arena.
+
+## D303 -- Measure the compiler, then index its names
+
+The target is a compiler that takes millions of lines, and the first honest number was
+6,000 lines a second: the compiler builds its own 42k lines in 7.4 s. Nothing had ever
+measured where that goes, so the first change is the instrument: `emit-executable
+--time` prints a line per phase on stderr -- load and parse, resolve, check declarations,
+check bodies, inline oracles, lower, prune, codegen setup, regalloc and codegen, link --
+with milliseconds since the previous one. The phase subcommands (`nir-file` and the
+rest) could not serve, because each prints its whole result and the printing dominates.
+The state rides on the report sink like `--json` does, because `main` is at the
+bootstrap's 256-local limit and a new local there fails with an unrelated type error
+at an unrelated line.
+
+**The profile, at 40k lines in 80 modules, was not what a compiler's profile usually
+is.** Parsing ran at 340k lines a second and code generation took 38 ms of 3.1 s.
+Two-thirds of the time was in resolve and check declarations -- the phases that look at
+names, not code -- and the exponent from 10k to 40k was near one. Not a hot spot: a
+slow constant, about a million instructions per declaration.
+
+**Every name lookup was a walk over every declaration in the program.** `resolve.find`
+scanned all symbols for a (module, space, name), and `add` called it, so building the
+symbol table was N^2; the checker's `find_function`, `find_aggregate`, `find_alias`,
+`find_constant` and `find_global` each scanned their whole table by (module, name), and
+every reference in every body paid one. `src/lookup.e` is the hash index those walks
+become: open addressing over (module, table, name), FNV-1a with the wrapping operators
+`em.e` already hashes with. It is named `lookup` because a `use` qualifier is reserved against every local of the importing module (spec section 5), and `index` is a local 42 times in the checker. It fills lazily -- a finder indexes its table's tail before
+probing, so the tables' seven append sites are untouched, first match still wins on a
+duplicate, and a caller that never attaches an index keeps the scan. The entries array
+is reserved at four rows per pool row but the live table starts at 64 and moves to the
+region after itself at double the size when half full, zeroing only that region, so a
+small program commits a few pages: the same reserve-and-commit discipline as D133.
+
+At 40k lines: resolve 831 -> 332 ms, check bodies 351 -> 194, lower 646 -> 377, the
+build 3.1 -> 2.1 s, the answer unchanged. Check declarations went 1075 -> 979, and that
+is the finding that decides the next step: every collector -- aliases twice, constants,
+aggregates, signatures, then bodies and lowering -- re-parses and re-tokenizes every
+module from its text, because the graph's node pool holds one module's tree at a time
+and each pass rebuilds it. A module is parsed six to eight times per build. (It also
+corrects D302's account: the 65,536-node pool is per module, not per program.) The fix
+is not to cache the trees, which would make the front end hold every tree of a
+million-line program at once; it is to run every phase on one module at a time in
+dependency order, which is D304 and the shape the target asked for.
+
+The benchmark generator is under `benchmarks/scale/`: a DAG of modules of log-normal
+size, each function a loop with a branch and a cross-module call, and `main` folding
+every module's root through a checksum that the generator evaluates independently. It is
+generated and says so; what it has that a single file does not is the shape -- thousands
+of files of unequal size and calls that cross them. 40k lines in 80 modules peaks at
+83 MB of working set.

@@ -2,6 +2,7 @@
 
 use e.mem
 use graph
+use lookup
 use lex
 use parse
 use resolve
@@ -378,6 +379,9 @@ type Diagnostic = struct {
 
 type Checker = struct {
     resolver: *resolve.Resolver,
+    // The (module, table, name) index over the declaration tables (D303): table 1 is
+    // functions, 2 aggregates, 3 aliases, 4 constants, 5 globals. Absent, the finders scan.
+    names: lookup.Index,
     functions: []Function,
     function_generics: []FunctionGeneric,
     parameters: []Parameter,
@@ -524,6 +528,7 @@ fn default_failure_kind(failure: err, node: syntax.Node) -> DiagnosticKind {
 fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_types: []Type, tokens: []lex.Token, locals: []Local, types: []Type, aliases: []Alias, constants: []Constant, globals: []Global, constant_exprs: []ConstantExpr, diagnostics: []Diagnostic) -> err {
     if functions.len == 0usize || parameters.len == 0usize || return_types.len == 0usize || tokens.len == 0usize || locals.len == 0usize || types.len == 0usize || aliases.len == 0usize || constants.len == 0usize || globals.len == 0usize || constant_exprs.len == 0usize || diagnostics.len == 0usize { ret Capacity }
     c.functions = functions
+    c.names.entries = c.names.entries[0usize..0usize]
     c.globals = globals
     c.global_count = 0usize
     c.parameters = parameters
@@ -1012,7 +1017,23 @@ fn is_type_node(kind: syntax.Kind) -> bool {
     ret kind == .NamedType || kind == .PointerType || kind == .SliceType || kind == .ArrayType || kind == .FunctionType
 }
 
+fn attach_index(c: *Checker, entries: []lookup.Entry) -> err {
+    ret lookup.attach(&c.names, entries)
+}
+
 fn find_alias(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    if lookup.attached(&c.names) {
+        while c.names.indexed[3usize] < c.alias_count {
+            let row = c.names.indexed[3usize]
+            let insert_error = lookup.insert(&c.names, c.aliases[row].module_index, 3usize, c.aliases[row].name, row)
+            if insert_error != ok { break }
+            c.names.indexed[3usize] = row + 1usize
+        }
+        if c.names.indexed[3usize] == c.alias_count {
+            let (found_at, found) = lookup.find(&c.names, module_index, 3usize, name)
+            ret (found_at, found)
+        }
+    }
     var at = 0usize
     while at < c.alias_count {
         if c.aliases[at].module_index == module_index && same(c.aliases[at].name, name) { ret (at, true) }
@@ -1778,6 +1799,18 @@ fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_def
 }
 
 fn find_aggregate(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    if lookup.attached(&c.names) {
+        while c.names.indexed[2usize] < c.aggregate_count {
+            let row = c.names.indexed[2usize]
+            let insert_error = lookup.insert(&c.names, c.aggregates[row].module_index, 2usize, c.aggregates[row].name, row)
+            if insert_error != ok { break }
+            c.names.indexed[2usize] = row + 1usize
+        }
+        if c.names.indexed[2usize] == c.aggregate_count {
+            let (found_at, found) = lookup.find(&c.names, module_index, 2usize, name)
+            ret (found_at, found)
+        }
+    }
     var at = 0usize
     while at < c.aggregate_count {
         if c.aggregates[at].module_index == module_index && same(c.aggregates[at].name, name) { ret (at, true) }
@@ -3482,6 +3515,18 @@ fn type_crosses(c: *Checker, ty: Type, depth: usize) -> bool {
 }
 
 fn find_function(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    if lookup.attached(&c.names) {
+        while c.names.indexed[1usize] < c.function_count {
+            let row = c.names.indexed[1usize]
+            let insert_error = lookup.insert(&c.names, c.functions[row].module_index, 1usize, c.functions[row].name, row)
+            if insert_error != ok { break }
+            c.names.indexed[1usize] = row + 1usize
+        }
+        if c.names.indexed[1usize] == c.function_count {
+            let (found_at, found) = lookup.find(&c.names, module_index, 1usize, name)
+            ret (found_at, found)
+        }
+    }
     var i = 0usize
     while i < c.function_count {
         if c.functions[i].module_index == module_index && same(c.functions[i].name, name) { ret (i, true) }
@@ -3516,6 +3561,18 @@ fn global_initial_bits(c: *Checker, global_index: usize) -> (usize, err) {
 }
 
 fn find_global(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    if lookup.attached(&c.names) {
+        while c.names.indexed[5usize] < c.global_count {
+            let row = c.names.indexed[5usize]
+            let insert_error = lookup.insert(&c.names, c.globals[row].module_index, 5usize, c.globals[row].name, row)
+            if insert_error != ok { break }
+            c.names.indexed[5usize] = row + 1usize
+        }
+        if c.names.indexed[5usize] == c.global_count {
+            let (found_at, found) = lookup.find(&c.names, module_index, 5usize, name)
+            ret (found_at, found)
+        }
+    }
     var at = 0usize
     while at < c.global_count {
         if c.globals[at].module_index == module_index && same(c.globals[at].name, name) { ret (at, true) }
@@ -3525,6 +3582,18 @@ fn find_global(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
 }
 
 fn find_constant(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
+    if lookup.attached(&c.names) {
+        while c.names.indexed[4usize] < c.constant_count {
+            let row = c.names.indexed[4usize]
+            let insert_error = lookup.insert(&c.names, c.constants[row].module_index, 4usize, c.constants[row].name, row)
+            if insert_error != ok { break }
+            c.names.indexed[4usize] = row + 1usize
+        }
+        if c.names.indexed[4usize] == c.constant_count {
+            let (found_at, found) = lookup.find(&c.names, module_index, 4usize, name)
+            ret (found_at, found)
+        }
+    }
     var at = 0usize
     while at < c.constant_count {
         if c.constants[at].module_index == module_index && same(c.constants[at].name, name) { ret (at, true) }
