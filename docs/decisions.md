@@ -4679,3 +4679,43 @@ than make `jsonschema` a hard prerequisite of running them, an absent package pr
 skip and exits zero. The check runs wherever the package is installed, which is both
 development hosts, and a fresh machine still gets a green suite.
 
+
+## D252 -- What classical 2D and 2.5D still needed: a camera, a grid, input and placed sound
+
+D249 covered simulation. Four gaps remained before the core could carry an ordinary 2D or
+2.5D game, and they are registered here.
+
+`e.game.camera` is the viewport -- follow with a deadzone, clamp to world bounds, shake,
+zoom, parallax, and world-to-screen both ways. Culling and the depth sort live here too
+rather than in a module of their own, because deciding *what is on screen and in what
+order* is one question with one answer: an ordered draw list. Producing that order is
+engine logic; drawing from it is not, and stays outside.
+
+`e.game.grid` is the 2.5D enabler, and the reason is unglamorous: isometric is a
+coordinate transform plus a depth order. One vocabulary -- square, iso diamond, and hex
+in both orientations -- answers conversion, neighbours, distance, line, ring and area for
+all of them, and `depth` folds elevation in so a tile stack sorts correctly. Tilemaps,
+vision and pathfinding all want the same answers, so it sits below them rather than
+inside any one.
+
+`e.game.input` is the pure half of input. `e.ui.input` is the device at layer 6; this is
+the action map above it -- rebinding, axes, and the buffering an action game is unplayable
+without: a press a few ticks early still lands, and an ordered run of presses inside a
+window is a combo. It is separate from `e.game.netsync`, which rings inputs for rollback;
+that is history, this is interpretation.
+
+`e.audio.spatial` turns a source at a point into a gain and a pan on a mixer voice, with a
+cue layer over variants so a footstep is not the same sample twice. Integer pan and
+attenuation, so a positioned mix stays as reproducible as an unpositioned one.
+
+Two things were folded in rather than given modules. `e.game.tilemap` gains an
+`elevation` layer and `height_at`, because isometric height is a field, not a subsystem.
+Easing goes into `e.game.loop`: it is a handful of Q16 curves, and `e.ui.animation` is
+layer 6 and bound to the widget tree, so the game core cannot reach it anyway.
+
+One was deliberately refused. `e.game.physics2d` -- an impulse solver with circles,
+polygons, joints, slopes and one-way platforms -- is genuinely large, and
+`e.game.collide2d` already carries swept AABB, raycast and a broadphase, which is what a
+platformer or a top-down ARPG actually uses. It gets registered when a game needs to stack
+rigid bodies, not before. `e.fmt.tiled` is likewise left out: importing TMX is a thin
+adapter over `e.fmt.xml` and `e.fmt.json`, not a codec.

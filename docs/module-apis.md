@@ -3936,6 +3936,15 @@ fn timer(period: fixed.Fx, repeating: bool) -> Timer
 fn tick(t: *Timer, step: fixed.Fx) -> bool
 fn ready(t: Timer) -> bool
 fn reset(t: *Timer) -> err
+
+// Easing lives here rather than in a module of its own: these are a handful of Q16
+// curves, and `e.ui.animation` is layer 6 and bound to the widget tree, so the game
+// core cannot reach it.
+fn ease_in(t: fixed.Fx) -> fixed.Fx
+fn ease_out(t: fixed.Fx) -> fixed.Fx
+fn ease_in_out(t: fixed.Fx) -> fixed.Fx
+fn ease_back(t: fixed.Fx) -> fixed.Fx
+fn ease_elastic(t: fixed.Fx) -> fixed.Fx
 ```
 
 ### `e.game.sprite`
@@ -3959,10 +3968,10 @@ fn frame(p: Player, clips: []const Clip) -> u16
 
 ```neper
 type Layer = struct { tiles: []u16, width: u32, height: u32 }
-type Map = struct { layers: []Layer, tile_w: u32, tile_h: u32, solid: []u64, opaque: []u64 }
+type Map = struct { layers: []Layer, tile_w: u32, tile_h: u32, solid: []u64, opaque: []u64, elevation: []u8 }
 error Bounds
 
-fn init(m: *Map, layers: []Layer, tile_w: u32, tile_h: u32, solid: []u64, opaque: []u64) -> err
+fn init(m: *Map, layers: []Layer, tile_w: u32, tile_h: u32, solid: []u64, opaque: []u64, elevation: []u8) -> err
 fn at(m: Map, layer: usize, x: i32, y: i32) -> (u16, err)
 fn set(m: *Map, layer: usize, x: i32, y: i32, tile: u16) -> err
 fn is_solid(m: Map, x: i32, y: i32) -> bool
@@ -3970,6 +3979,7 @@ fn is_opaque(m: Map, x: i32, y: i32) -> bool
 fn in_bounds(m: Map, x: i32, y: i32) -> bool
 fn to_tile(m: Map, wx: fixed.Fx, wy: fixed.Fx) -> (i32, i32)
 fn to_world(m: Map, tx: i32, ty: i32) -> (fixed.Fx, fixed.Fx)
+fn height_at(m: Map, x: i32, y: i32) -> u8
 ```
 
 ### `e.game.collide2d`
@@ -4085,4 +4095,87 @@ fn confirm(p: *Predictor, tick: u64, authoritative: []const u8, local: []const u
 fn rollback_from(p: Predictor) -> u64
 fn encode(w: *snapshot.Writer, s: snapshot.Schema, peer: *Peer, state: []const u8) -> err
 fn decode(r: *snapshot.Reader, s: snapshot.Schema, peer: *Peer, out: []u8) -> err
+```
+
+### `e.game.camera`
+
+```neper
+// The viewport transform and the ordered draw list: what is on screen, and in what
+// order it has to be drawn. Deciding the order is engine logic; drawing is not.
+type Camera = struct { x: fixed.Fx, y: fixed.Fx, zoom: fixed.Fx, width: fixed.Fx, height: fixed.Fx, dead_w: fixed.Fx, dead_h: fixed.Fx, shake: fixed.Fx, shake_ticks: u16 }
+type Bounds = struct { min_x: fixed.Fx, min_y: fixed.Fx, max_x: fixed.Fx, max_y: fixed.Fx }
+type Item = struct { id: u32, layer: i16, sort: fixed.Fx }
+error Empty
+
+fn init(c: *Camera, width: fixed.Fx, height: fixed.Fx) -> err
+fn follow(c: *Camera, tx: fixed.Fx, ty: fixed.Fx) -> err
+fn clamp_to(c: *Camera, b: Bounds) -> err
+fn shake(c: *Camera, amount: fixed.Fx, ticks: u16) -> err
+fn step(c: *Camera, state: *rand.State) -> err
+fn to_screen(c: Camera, wx: fixed.Fx, wy: fixed.Fx, parallax: fixed.Fx) -> (fixed.Fx, fixed.Fx)
+fn to_world(c: Camera, sx: fixed.Fx, sy: fixed.Fx) -> (fixed.Fx, fixed.Fx)
+fn visible(c: Camera, box: collide2d.Aabb) -> bool
+fn cull(c: Camera, boxes: []const collide2d.Aabb, out: []u32) -> (usize, err)
+fn sort_key(layer: i16, y: fixed.Fx) -> fixed.Fx
+fn order(items: []Item) -> err
+```
+
+### `e.game.grid`
+
+```neper
+// Square, isometric and hex coordinates over one integer vocabulary. Isometric is a
+// coordinate transform plus a depth order, which is most of what 2.5D means in practice.
+type Shape = enum u8 { Square, IsoDiamond, HexPointy, HexFlat }
+type Coord = struct { q: i32, r: i32 }
+error Bounds
+
+fn to_world(s: Shape, c: Coord, tile_w: u32, tile_h: u32) -> (fixed.Fx, fixed.Fx)
+fn from_world(s: Shape, wx: fixed.Fx, wy: fixed.Fx, tile_w: u32, tile_h: u32) -> Coord
+fn neighbours(s: Shape, c: Coord, out: []Coord) -> (usize, err)
+fn distance(s: Shape, a: Coord, b: Coord) -> u32
+fn line(s: Shape, a: Coord, b: Coord, out: []Coord) -> (usize, err)
+fn ring(s: Shape, centre: Coord, radius: u32, out: []Coord) -> (usize, err)
+fn area(s: Shape, centre: Coord, radius: u32, out: []Coord) -> (usize, err)
+fn depth(s: Shape, c: Coord, elevation: u8) -> i32
+```
+
+### `e.game.input`
+
+```neper
+// Action maps over device codes, and the buffering an action game needs: a press a few
+// ticks early still lands, and an ordered run of presses inside a window is a combo.
+// `e.ui.input` is the device layer at layer 6; this is the pure logic above it.
+type Action = struct { id: u16, primary: u16, secondary: u16 }
+type Axis = struct { id: u16, negative: u16, positive: u16 }
+type Combo = struct { id: u16, first: u16, count: u16, window: u16 }
+type State = struct { held: []u64, pressed: []u64, released: []u64, buffer: []u16, ages: []u16, head: usize }
+error Unknown
+
+fn begin(s: *State) -> err
+fn apply(s: *State, code: u16, down: bool) -> err
+fn held(s: State, a: Action) -> bool
+fn pressed(s: State, a: Action) -> bool
+fn released(s: State, a: Action) -> bool
+fn buffered(s: State, a: Action, window: u16) -> bool
+fn consume(s: *State, a: Action) -> bool
+fn axis(s: State, x: Axis) -> fixed.Fx
+fn combo(s: State, c: Combo, steps: []const u16) -> bool
+fn rebind(a: *Action, primary: u16, secondary: u16) -> err
+```
+
+### `e.audio.spatial`
+
+```neper
+// A source at a point in the world becomes a gain and a pan on a mixer voice. Integer
+// throughout, so a positioned mix stays as reproducible as an unpositioned one.
+type Listener = struct { x: fixed.Fx, y: fixed.Fx, facing: fixed.Fx }
+type Source = struct { x: fixed.Fx, y: fixed.Fx, gain: i32, min_distance: fixed.Fx, max_distance: fixed.Fx }
+type Cue = struct { id: u16, first_variant: u16, variant_count: u16, gain: i32, cooldown: u16, remaining: u16 }
+error Unknown
+
+fn pan(l: Listener, s: Source) -> i32
+fn attenuate(l: Listener, s: Source) -> i32
+fn place(m: *mixer.Mixer, voice: usize, l: Listener, s: Source) -> err
+fn trigger(m: *mixer.Mixer, c: *Cue, variants: []const audio.Frames, state: *rand.State, l: Listener, s: Source) -> (usize, err)
+fn step_cues(cues: []Cue) -> err
 ```
