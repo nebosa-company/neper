@@ -1775,6 +1775,23 @@ for conformance_case in 'tokens every_kind 0' 'tokens hostile 1' 'parse every_ki
     cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
 ' "$1 --json on $2.e differs from the conformance corpus" >&2; exit 1; }
 done
+# `-` reads stdin under `--path` (D289): a fixture piped in with its basename as the
+# identity is its own golden, for tokens, parse and fmt; `-` without `--path` is usage.
+$test_build/neper-self tokens --json --path every_kind.e - < "$conformance_root/tokens/every_kind.e" > "$test_build/conformance-stdin-tokens.jsonl"
+cmp -s "$test_build/conformance-stdin-tokens.jsonl" "$conformance_root/tokens/every_kind.expected.jsonl" || { printf '%s
+' "tokens --json from stdin differs from the conformance corpus" >&2; exit 1; }
+$test_build/neper-self parse --json --path every_kind.e - < "$conformance_root/parse/every_kind.e" > "$test_build/conformance-stdin-parse.jsonl"
+cmp -s "$test_build/conformance-stdin-parse.jsonl" "$conformance_root/parse/every_kind.expected.jsonl" || { printf '%s
+' "parse --json from stdin differs from the conformance corpus" >&2; exit 1; }
+$test_build/neper-self fmt-file - --json --path fmt.e < "$conformance_root/tools/fmt.e" > "$test_build/conformance-stdin-fmt.jsonl"
+cmp -s "$test_build/conformance-stdin-fmt.jsonl" "$conformance_root/tools/fmt.expected.jsonl" || { printf '%s
+' "fmt --json from stdin differs from the conformance corpus" >&2; exit 1; }
+$test_build/neper-self fmt-file - < "$conformance_root/tools/fmt.e" > "$test_build/conformance-stdin-fmt.e"
+cmp -s "$test_build/conformance-stdin-fmt.e" "$conformance_root/tools/fmt.e" || { printf '%s
+' "fmt from stdin is not the canonical source" >&2; exit 1; }
+stdin_usage_status=0
+$test_build/neper-self tokens --json - < "$conformance_root/tokens/every_kind.e" > /dev/null 2>&1 || stdin_usage_status=$?
+[ "$stdin_usage_status" -eq 1 ]
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
 for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1'; do
@@ -2547,7 +2564,7 @@ game_view_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$game_view_executable_written" = 'executable written' ]
 chmod +x "$game_view_executable_path"
 "$game_view_executable_path"
-# `e.game.ai` and `e.game.input` (D288): steering, behaviour trees, A* and input buffering.
+# `e.game.ai` and `e.game.input` (D289): steering, behaviour trees, A* and input buffering.
 game_mind_executable_path="$test_build/game-mind-selfhost"
 game_mind_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_mind/src/main.e" "$repo" x64 linux "$game_mind_executable_path")
 [ "$game_mind_executable_written" = 'executable written' ]

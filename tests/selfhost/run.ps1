@@ -1643,6 +1643,22 @@ foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('
     if ($LASTEXITCODE -ne $case[2]) { throw "$($case[0]) --json on $($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "$($case[0]) --json on $($case[1]).e differs from the conformance corpus" }
 }
+# `-` reads stdin under `--path` (D289): a fixture piped in with its basename as the
+# identity is its own golden, for tokens, parse and fmt; `-` without `--path` is usage.
+$stdinActual = Join-Path $testBuild 'conformance-stdin-tokens.jsonl'
+cmd /c "`"$compiler`" tokens --json --path every_kind.e - < `"$(Join-Path $conformanceRoot 'tokens\every_kind.e')`" > `"$stdinActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tokens\every_kind.expected.jsonl')).Hash) { throw 'tokens --json from stdin differs from the conformance corpus' }
+$stdinActual = Join-Path $testBuild 'conformance-stdin-parse.jsonl'
+cmd /c "`"$compiler`" parse --json --path every_kind.e - < `"$(Join-Path $conformanceRoot 'parse\every_kind.e')`" > `"$stdinActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'parse\every_kind.expected.jsonl')).Hash) { throw 'parse --json from stdin differs from the conformance corpus' }
+$stdinActual = Join-Path $testBuild 'conformance-stdin-fmt.jsonl'
+cmd /c "`"$compiler`" fmt-file - --json --path fmt.e < `"$(Join-Path $conformanceRoot 'tools\fmt.e')`" > `"$stdinActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\fmt.expected.jsonl')).Hash) { throw 'fmt --json from stdin differs from the conformance corpus' }
+$stdinActual = Join-Path $testBuild 'conformance-stdin-fmt.e'
+cmd /c "`"$compiler`" fmt-file - < `"$(Join-Path $conformanceRoot 'tools\fmt.e')`" > `"$stdinActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\fmt.e')).Hash) { throw 'fmt from stdin is not the canonical source' }
+cmd /c "`"$compiler`" tokens --json - < `"$(Join-Path $conformanceRoot 'tokens\every_kind.e')`" > nul 2>&1"
+if ($LASTEXITCODE -ne 1) { throw "tokens - without --path exited $LASTEXITCODE, not 1" }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
 foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1))) {
@@ -2309,7 +2325,7 @@ $gameViewExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gameViewExecutableWritten -ne 'executable written') { throw 'game view PE executable emission failed' }
 & $gameViewExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'e.game.sprite or e.game.camera failed a check in the self-hosted PE executable' }
-# `e.game.ai` and `e.game.input` (D288): steering, behaviour trees, A* and input buffering.
+# `e.game.ai` and `e.game.input` (D289): steering, behaviour trees, A* and input buffering.
 $gameMindExecutablePath = Join-Path $testBuild 'game-mind-selfhost.exe'
 $gameMindExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/game_mind/src/main.e') $repo 'x64' 'windows' $gameMindExecutablePath
 if ($LASTEXITCODE -ne 0 -or $gameMindExecutableWritten -ne 'executable written') { throw 'game mind PE executable emission failed' }

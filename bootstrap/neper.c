@@ -1084,6 +1084,7 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.read", "neper_os_read"); intrinsic_param(fn, token, "f", file); intrinsic_param(fn, token, "buf", bytes); intrinsic_returns(fn, 2, usize, error);
     OS_FN("os.write", "neper_os_write"); intrinsic_param(fn, token, "f", file); intrinsic_param(fn, token, "buf", const_bytes); intrinsic_returns(fn, 2, usize, error);
     OS_FN("os.close", "neper_os_close"); intrinsic_param(fn, token, "f", file); intrinsic_returns(fn, 1, error, error);
+    OS_FN("os.stdin", "neper_os_stdin"); intrinsic_returns(fn, 1, file, error);
     OS_FN("os.stdout", "neper_os_stdout"); intrinsic_returns(fn, 1, file, error);
     OS_FN("os.stderr", "neper_os_stderr"); intrinsic_returns(fn, 1, file, error);
     OS_FN("os.readdir", "neper_os_readdir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_returns(fn, 2, entries, error);
@@ -7259,7 +7260,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN GetCommandLineW:PROC\nEXTERN WideCharToMultiByte:PROC\nEXTERN LocalFree:PROC\n"
         "EXTERN CommandLineToArgvW:PROC\n"
         "EXTERN neper_os_set_args:PROC\nEXTERN neper_os_open:PROC\nEXTERN neper_os_read:PROC\n"
-        "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdout:PROC\n"
+        "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"

@@ -302,7 +302,11 @@ void neper_os_read(void *result, uintptr_t raw, unsigned char *buffer, size_t le
     unsigned char *out = (unsigned char *)result;
     DWORD got = 0, request = length > 0xffffffffu ? 0xffffffffu : (DWORD)length;
     *(size_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
-    if (!ReadFile((HANDLE)raw, buffer, request, &got, 0)) { *(uint32_t *)(out + 8) = np_error(GetLastError()); return; }
+    if (!ReadFile((HANDLE)raw, buffer, request, &got, 0)) {
+        /* A writer that is gone is the end of a pipe, not a failure -- as the PE runtime reads it. */
+        if (GetLastError() == ERROR_BROKEN_PIPE) return;
+        *(uint32_t *)(out + 8) = np_error(GetLastError()); return;
+    }
     *(size_t *)out = got;
 }
 
@@ -328,6 +332,7 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     return made ? NP_OK : np_error(GetLastError());
 }
 
+void neper_os_stdin(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_INPUT_HANDLE); }
 void neper_os_stdout(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_OUTPUT_HANDLE); }
 void neper_os_stderr(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_ERROR_HANDLE); }
 
@@ -556,6 +561,7 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     return made == 0 ? NP_OK : np_error(errno);
 }
 
+void neper_os_stdin(void *result) { *(uintptr_t *)result = 0; }
 void neper_os_stdout(void *result) { *(uintptr_t *)result = 1; }
 void neper_os_stderr(void *result) { *(uintptr_t *)result = 2; }
 

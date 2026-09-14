@@ -5685,3 +5685,22 @@ link/game_mind pins 74 checks with four negative controls. The path expectations
 an independent A* over the same map -- eleven tiles around a gapped wall -- and the fixture
 additionally proves every step is one tile from the last and lands on open ground, so a
 path that were merely the right length would still fail.
+
+## D289 -- `-` reads stdin on `tokens`, `parse` and `fmt`
+
+Section 4 says `-` reads UTF-8 source from stdin with `--path` as its identity, and
+section 6 that `fmt -` writes only the formatted source. What blocked it was the same
+gap as D287's: the bootstrap's fixed surface had `stdout` and `stderr` but no `stdin`,
+while both per-host `e.os` sources already had it. So `os.stdin` is added to the
+bootstrap alone -- a table line and a body per host, `GetStdHandle(STD_INPUT_HANDLE)`
+and descriptor 0 -- and the bootstrap's Windows read now takes `ERROR_BROKEN_PIPE` as
+the end of the stream, as the PE runtime prefix always did.
+
+`source.load_stdin` reads the handle to its end without closing it. `tokens` and
+`parse` take `-` and then require `--path`, usage otherwise, exactly as section 4
+says. `fmt-file` takes `-` on all three forms and an optional trailing `--path
+VIRTUAL.e` -- the short `fmt` spelling carries it through -- with the identity the
+`--path` spelling, else the operand's basename, which for `-` is `-` itself: the plain
+form writes source and names nothing. Both suites pipe a fixture in under its
+basename and require the file's own golden, and pin `tokens -` without `--path` as
+usage. `index -` stays out: it loads a module graph from a path.

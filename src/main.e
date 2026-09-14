@@ -849,7 +849,7 @@ fn basename(path: str) -> str {
 }
 
 fn tool_usage() -> err {
-    try stderr_text("error[E-CLI-9999]: usage: neper-self tokens|parse [--json] [--path VIRTUAL.e] FILE, or info --json\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self tokens|parse [--json] [--path VIRTUAL.e] FILE|-, fmt-file FILE|- [--check] [--json] [--path VIRTUAL.e], or info --json; - needs --path\n")
     os.exit(1i32)
     ret ok
 }
@@ -1060,6 +1060,11 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         if json || check_only {
             long_form[count] = "--json"
             count += 1usize
+        }
+        if virtual_path.len != 0usize {
+            long_form[count] = "--path"
+            long_form[count + 1usize] = virtual_path
+            count += 2usize
         }
         ret (long_form[0usize..count], true, ok)
     }
@@ -2002,39 +2007,66 @@ fn diagnostic_names(line: str, rel: str) -> bool {
     ret false
 }
 
+// An operand's text: the file's, or all of stdin for `-` (D289).
+fn operand_text(a: *mem.Arena, file: str) -> (str, err) {
+    if same(file, "-") {
+        let (piped, piped_error) = source.load_stdin(a)
+        ret (piped, piped_error)
+    }
+    let (text, load_error) = source.load(a, file)
+    ret (text, load_error)
+}
+
+// `fmt`'s operand identity: the `--path` spelling when given, else the file's basename
+// -- or `-` itself, since section 6's `fmt -` needs no identity to write source (D289).
+fn fmt_identity(args: []str) -> str {
+    if args.len >= 5usize && same(args[args.len - 2usize], "--path") { ret args[args.len - 1usize] }
+    ret basename(args[2usize])
+}
+
+// `fmt-file PATH|- [--check] [--json] [--path VIRTUAL.e]`: the form is matched with the
+// `--path` pair taken off the end, so the count checks below see only the flags.
+fn fmt_form(args: []str) -> []str {
+    if args.len >= 5usize && same(args[args.len - 2usize], "--path") { ret args[0usize..args.len - 2usize] }
+    ret args
+}
+
 fn fmt_command(a: *mem.Arena, args: []str) -> err {
-    let (text, load_error) = source.load(a, args[2usize])
+    let path = fmt_identity(args)
+    let (text, load_error) = operand_text(a, args[2usize])
     if load_error != ok {
         var report = json_sink()
         ret unreadable_operand(&report, "fmt", "{\"diagnostics\":1}")
     }
-    let (fmt_exit, fmt_error) = tool.fmt_json(a, text, basename(args[2usize]))
+    let (fmt_exit, fmt_error) = tool.fmt_json(a, text, path)
     if fmt_error != ok { ret fmt_error }
     if fmt_exit != 0usize { os.exit(i32(fmt_exit)) }
     ret ok
 }
 
 fn fmt_plain_command(a: *mem.Arena, args: []str) -> err {
-    let (text, load_error) = source.load(a, args[2usize])
+    let path = fmt_identity(args)
+    let (text, load_error) = operand_text(a, args[2usize])
     if load_error != ok {
         var report = stderr_sink()
         try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read")
         os.exit(2i32)
         ret ok
     }
-    let (plain_exit, plain_error) = tool.fmt_plain(a, text, basename(args[2usize]))
+    let (plain_exit, plain_error) = tool.fmt_plain(a, text, path)
     if plain_error != ok { ret plain_error }
     if plain_exit != 0usize { os.exit(i32(plain_exit)) }
     ret ok
 }
 
 fn fmt_check_command(a: *mem.Arena, args: []str) -> err {
-    let (text, load_error) = source.load(a, args[2usize])
+    let path = fmt_identity(args)
+    let (text, load_error) = operand_text(a, args[2usize])
     if load_error != ok {
         var report = json_sink()
         ret unreadable_operand(&report, "fmt", "{\"diagnostics\":1}")
     }
-    let (check_exit, check_error) = tool.fmt_check_json(a, text, basename(args[2usize]))
+    let (check_exit, check_error) = tool.fmt_check_json(a, text, path)
     if check_error != ok { ret check_error }
     if check_exit != 0usize { os.exit(i32(check_exit)) }
     ret ok
@@ -2100,8 +2132,9 @@ fn tool_command(a: *mem.Arena, args: []str) -> err {
         }
         at += 1usize
     }
-    if !has_file || same(file, "-") { ret tool_usage() }
-    let (text, load_error) = source.load(a, file)
+    // `-` is stdin, and then `--path` is its identity and required (section 4, D289).
+    if !has_file || (same(file, "-") && !has_virtual) { ret tool_usage() }
+    let (text, load_error) = operand_text(a, file)
     if load_error != ok {
         if !json { ret load_error }
         var envelope = json_sink()
@@ -3665,9 +3698,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
     if args.len == 7usize && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
     // `fmt-file PATH [--json]` (D234): the operand's canonical layout as one `formatted` record.
-    if args.len == 5usize && same(args[1usize], "fmt-file") && same(args[3usize], "--check") && same(args[4usize], "--json") { ret fmt_check_command(a, args) }
-    if args.len == 4usize && same(args[1usize], "fmt-file") && same(args[3usize], "--json") { ret fmt_command(a, args) }
-    if args.len == 3usize && same(args[1usize], "fmt-file") { ret fmt_plain_command(a, args) }
+    // `-` reads stdin under a `--path` identity, on every form (D289).
+    let fmt_args = fmt_form(args)
+    if fmt_args.len == 5usize && same(fmt_args[1usize], "fmt-file") && same(fmt_args[3usize], "--check") && same(fmt_args[4usize], "--json") { ret fmt_check_command(a, args) }
+    if fmt_args.len == 4usize && same(fmt_args[1usize], "fmt-file") && same(fmt_args[3usize], "--json") { ret fmt_command(a, args) }
+    if fmt_args.len == 3usize && same(fmt_args[1usize], "fmt-file") { ret fmt_plain_command(a, args) }
     // `check-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR --json` (D262): every module under
     // DIR/src, one stream.
     if args.len == 8usize && same(args[1usize], "check-project") && same(args[7usize], "--json") { ret check_project_command(a, args) }
