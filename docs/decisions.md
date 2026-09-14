@@ -5282,3 +5282,28 @@ link/game_grid pins 63 checks against values computed independently, and **three
 deliberately broken checks were confirmed to fail before the fixture was trusted** --
 including the floor-versus-truncate one, which passes under either rule everywhere except
 the negative edge it was written for.
+
+## D271 -- References in the index, resolved by the rule that forbids shadowing
+
+`index --json` had symbols and no references, and the result said `"references":0`.
+Now every use of one of the module's own module-scope names, and every name reached
+through a `use` qualifier, is a `reference` record: `import` for each `use`, `type` in a
+type position -- or for a type's name standing in a path, `Colour.Red` -- `call` before
+a `(`, `instantiate` before a `[`, `write` before an assignment operator, `address`
+after `&`, and `read` otherwise. A bare name is resolved by matching it against the
+module-scope symbols the same stream just emitted, and that match is the resolution:
+spec section 5 forbids a local or parameter from reusing a module-scope name of its
+own module (the resolver's `ModuleShadow`), so a bare name that matches a declaration
+can be nothing else. A name through a qualifier is spelled as written and named
+`path.name` with a null id, since other modules are not symbols of this stream. A name
+that matches nothing -- a local, a parameter, a builtin type, a generic parameter -- is
+not a reference to a symbol and is not emitted.
+
+The classification is the tokens around the name, which is what the parser itself used
+to build the node: the tree says where a name expression or a named type is, the
+neighbouring tokens say what it does. No checker state is consulted, so the index costs
+a parse and nothing more; compiler-origin references -- protocol resolutions, the
+iterator's `_next`, formatting calls -- are the gap, and they are the checker's to
+report. Records go out after the symbols, sorted by span start among themselves;
+section 5's single order over both kinds is the other gap. tests/conformance/tools/index.e
+pins eleven references across every role but `protocol`.

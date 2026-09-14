@@ -580,11 +580,23 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     // The module itself is the first symbol, so every declaration's container is id 0.
     let module_error = index_module_record(&out, module_name)
     if module_error != ok { ret (2usize, module_error) }
+    // Every module-scope name and its id, for the references (D271).
+    let (known_names, known_names_error) = mem.alloc[str](a, count + 1usize)
+    if known_names_error != ok { ret (2usize, known_names_error) }
+    let (known_ids, known_ids_error) = mem.alloc[usize](a, count + 1usize)
+    if known_ids_error != ok { ret (2usize, known_ids_error) }
+    let (known_types, known_types_error) = mem.alloc[bool](a, count + 1usize)
+    if known_types_error != ok { ret (2usize, known_types_error) }
+    var known = 0usize
     var emitted = 1usize
     var at = 0usize
     while at < count {
         let symbol = symbols[at]
         if symbol.module_index == module_index && symbol.kind != .Qualifier && symbol.kind != .Intrinsic {
+            known_names[known] = symbol.name
+            known_ids[known] = emitted
+            known_types[known] = symbol.kind == .Type
+            known += 1usize
             var name_index = symbol.token_start + 1usize
             if symbol.kind == .Extern { name_index += 1usize }
             if symbol.token_end == 0usize || symbol.token_end > token_count || name_index >= token_count { ret (2usize, parse.InvalidSyntax) }
@@ -614,7 +626,9 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
         }
         at += 1usize
     }
-    let result_error = index_result(&out, emitted)
+    let (references, references_error) = index_references(a, &out, root, path, source, module_name, &tree, tokens[0usize..token_count], known_names[0usize..known], known_ids[0usize..known], known_types[0usize..known])
+    if references_error != ok { ret (2usize, references_error) }
+    let result_error = index_result(&out, emitted, references)
     if result_error != ok { ret (2usize, result_error) }
     ret (0usize, ok)
 }
@@ -710,10 +724,179 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
     ret (written, ok)
 }
 
-fn index_result(out: *Out, symbols: usize) -> err {
+// The `reference` records (D271): every use of a module-scope name of the operand, and
+// every use of a name through a `use` qualifier, classified by the tokens around it --
+// `f(` is a call, `f[` an instantiation, `= x` a write, `&x` an address, a type position
+// a type, a `use` an import, anything else a read. A bare name is one of the operand's
+// own symbols or nothing: spec section 5 lets no local shadow a module-scope name, so
+// the match is the resolution. Records go out sorted by span start.
+// ponytail: 4096 references per module is the cap; raise it when a module has more.
+fn index_references(a: *mem.Arena, out: *Out, root: str, path: str, source: str, module_name: str, tree: *parse.Tree, tokens: []const lex.Token, known_names: []const str, known_ids: []const usize, known_types: []const bool) -> (usize, err) {
+    // The imports: qualifier and module path, from every `use`.
+    let (qualifiers, qualifiers_error) = mem.alloc[str](a, 256usize)
+    if qualifiers_error != ok { ret (0usize, qualifiers_error) }
+    let (paths, paths_error) = mem.alloc[str](a, 256usize)
+    if paths_error != ok { ret (0usize, paths_error) }
+    var imports = 0usize
+    let (starts, starts_error) = mem.alloc[usize](a, 4096usize)
+    if starts_error != ok { ret (0usize, starts_error) }
+    let (nodes, nodes_error) = mem.alloc[usize](a, 4096usize)
+    if nodes_error != ok { ret (0usize, nodes_error) }
+    let (roles, roles_error) = mem.alloc[usize](a, 4096usize)
+    if roles_error != ok { ret (0usize, roles_error) }
+    var picked = 0usize
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        var role = 99usize
+        if node.kind == .UseDecl {
+            role = 0usize
+            if imports < 256usize {
+                // `use a.b.c [as q]`: the qualifier is the alias or the last segment.
+                var last = node.token_start + 1usize
+                var path_end = last
+                while path_end + 1usize < node.token_end && (tokens[path_end + 1usize].kind == .PunctDot || tokens[path_end + 1usize].kind == .Identifier) && tokens[path_end + 1usize].kind != .KwAs {
+                    path_end += 1usize
+                    if tokens[path_end].kind == .Identifier { last = path_end }
+                }
+                var qualifier = tokens[last]
+                if path_end + 2usize < node.token_end && tokens[path_end + 1usize].kind == .KwAs { qualifier = tokens[path_end + 2usize] }
+                qualifiers[imports] = source[qualifier.start..qualifier.end]
+                paths[imports] = source[tokens[node.token_start + 1usize].start..tokens[path_end].end]
+                imports += 1usize
+            }
+        }
+        if node.kind == .NameExpr || node.kind == .NamedType { role = 1usize }
+        var wanted = role == 0usize
+        if role == 1usize && node.token_end > node.token_start && tokens[node.token_start].kind == .Identifier { wanted = true }
+        if wanted && picked < 4096usize {
+            var slot = picked
+            while slot > 0usize && tree.nodes[nodes[slot - 1usize]].token_start > node.token_start {
+                nodes[slot] = nodes[slot - 1usize]
+                roles[slot] = roles[slot - 1usize]
+                slot = slot - 1usize
+            }
+            nodes[slot] = node_index
+            roles[slot] = role
+            picked += 1usize
+        }
+        node_index += 1usize
+    }
+    var written = 0usize
+    var at = 0usize
+    while at < picked {
+        let node = tree.nodes[nodes[at]]
+        if roles[at] == 0usize {
+            // The import: spelled as the path, its found the module.
+            let path_start = tokens[node.token_start + 1usize]
+            var path_end = node.token_start + 1usize
+            while path_end + 1usize < node.token_end && tokens[path_end + 1usize].kind != .KwAs { path_end += 1usize }
+            let spelling = source[path_start.start..tokens[path_end].end]
+            let import_error = reference_record(out, root, path, path_start, tokens[path_end], "import", spelling, 0usize, false, spelling)
+            if import_error != ok { ret (0usize, import_error) }
+            written += 1usize
+        } else {
+            let first = node.token_start
+            let name_token = tokens[first]
+            let name = source[name_token.start..name_token.end]
+            var qualified_import = 256usize
+            var last_index = first
+            // `q.name` through a use qualifier.
+            if first + 2usize < tokens.len && tokens[first + 1usize].kind == .PunctDot && tokens[first + 2usize].kind == .Identifier {
+                var import_at = 0usize
+                while import_at < imports {
+                    if graph.same(qualifiers[import_at], name) {
+                        qualified_import = import_at
+                        import_at = imports
+                    }
+                    import_at += 1usize
+                }
+                if qualified_import < 256usize { last_index = first + 2usize }
+            }
+            var found = known_ids.len
+            if qualified_import == 256usize {
+                var known_at = 0usize
+                while known_at < known_names.len {
+                    if graph.same(known_names[known_at], name) {
+                        found = known_at
+                        known_at = known_names.len
+                    }
+                    known_at += 1usize
+                }
+            }
+            if qualified_import < 256usize || found < known_ids.len {
+                var role_name = "read"
+                if node.kind == .NamedType { role_name = "type" }
+                // A type's name in a value position -- `Colour.Red` -- names the type.
+                if found < known_ids.len && known_types[found] { role_name = "type" }
+                let after = last_index + 1usize
+                if node.kind == .NameExpr && after < tokens.len {
+                    if tokens[after].kind == .PunctLParen { role_name = "call" }
+                    if tokens[after].kind == .PunctLBracket { role_name = "instantiate" }
+                    if parse.is_assignment_op(tokens[after].kind) { role_name = "write" }
+                }
+                if node.kind == .NameExpr && first > 0usize && tokens[first - 1usize].kind == .PunctAmp && !graph.same(role_name, "write") { role_name = "address" }
+                let spelling = source[name_token.start..tokens[last_index].end]
+                var qualified_name = spelling
+                var scratch: [512]u8 = zero
+                if qualified_import < 256usize {
+                    var scratch_at = nptest_copy(scratch[..], 0usize, paths[qualified_import])
+                    scratch[scratch_at] = 46u8
+                    scratch_at += 1usize
+                    scratch_at = nptest_copy(scratch[..], scratch_at, source[tokens[first + 2usize].start..tokens[first + 2usize].end])
+                    qualified_name = scratch[0usize..scratch_at]
+                    let record_error = reference_record(out, root, path, name_token, tokens[last_index], role_name, spelling, 0usize, false, qualified_name)
+                    if record_error != ok { ret (0usize, record_error) }
+                } else {
+                    var scratch_at = nptest_copy(scratch[..], 0usize, module_name)
+                    scratch[scratch_at] = 46u8
+                    scratch_at += 1usize
+                    scratch_at = nptest_copy(scratch[..], scratch_at, name)
+                    let record_error = reference_record(out, root, path, name_token, tokens[last_index], role_name, spelling, known_ids[found], true, scratch[0usize..scratch_at])
+                    if record_error != ok { ret (0usize, record_error) }
+                }
+                written += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret (written, ok)
+}
+
+// A byte copy into a scratch buffer, returning the new length; a `.` is put between a
+// module path and a name by the caller.
+fn nptest_copy(dst: []u8, at: usize, src: str) -> usize {
+    var to = at
+    var from = 0usize
+    while from < src.len && to < dst.len {
+        dst[to] = src[from]
+        to += 1usize
+        from += 1usize
+    }
+    ret to
+}
+
+fn reference_record(out: *Out, root: str, path: str, first: lex.Token, last: lex.Token, role: str, spelling: str, target_id: usize, has_target: bool, qualified: str) -> err {
+    try text(out, "{\"record\":\"reference\",\"source_span\":")
+    try span(out, root, path, first.start, last.end, first.line, first.column, last.end_line, last.end_column, first.column_utf16, last.end_column_utf16)
+    try text(out, ",\"role\":")
+    try quoted(out, role)
+    try text(out, ",\"spelling\":")
+    try quoted(out, spelling)
+    try text(out, ",\"target_id\":")
+    if has_target { try decimal(out, target_id) } else { try text(out, "null") }
+    try text(out, ",\"target_qualified_name\":")
+    try quoted(out, qualified)
+    try text(out, ",\"origin\":\"source\"}")
+    ret flush(out)
+}
+
+fn index_result(out: *Out, symbols: usize, references: usize) -> err {
     try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"symbols\":")
     try decimal(out, symbols)
-    try text(out, ",\"references\":0}}")
+    try text(out, ",\"references\":")
+    try decimal(out, references)
+    try text(out, "}}")
     ret flush(out)
 }
 

@@ -27,3 +27,10 @@ fn attributed(a: *mem.Arena) -> err {
 /// A blank line breaks attachment, so M has no documentation.
 
 const M: i32 = 9i32
+fn uses(pair: Pair) -> i32 {
+    counter = pair.a
+    let here = &counter
+    let shade = Colour.Red
+    let doubled = add(K, M)
+    ret doubled
+}
