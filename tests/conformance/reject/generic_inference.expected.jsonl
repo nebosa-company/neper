@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"record":"diagnostic","severity":"error","code":"E-TYPE-0001","message":"cannot infer compile-time parameter `T`","span":{"source":{"root":"operand","path":"generic_inference.e"},"byte_start":117,"byte_end":122,"line":8,"column":13,"end_line":8,"end_column":18,"column_utf16":13,"end_column_utf16":18},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

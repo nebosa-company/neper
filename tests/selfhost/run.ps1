@@ -1681,7 +1681,7 @@ if (-not $absoluteText.Contains($absoluteField)) { throw "--absolute-paths did n
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $absoluteActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tokens\every_kind.expected.jsonl')).Hash) { throw '--absolute-paths changed more than absolute_path on tokens' }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1))) {
+foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1), @('reject', 'module_missing', 1), @('reject', 'qualifier_collision', 1), @('reject', 'reserved_local', 1), @('reject', 'try_not_fallible', 1), @('reject', 'return_count', 1), @('reject', 'generic_inference', 1), @('reject', 'condition_type', 1), @('reject', 'atomic_ordering', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
@@ -1690,6 +1690,14 @@ foreach ($case in @(@('accept', 'scalar', 0), @('accept', 'aggregate', 0), @('re
     if ($LASTEXITCODE -ne $case[2]) { throw "check-file --json on $($case[0])/$($case[1]).e exited $LASTEXITCODE, not $($case[2])" }
     if ((Get-Item -LiteralPath $conformanceStderr).Length -ne 0) { throw "check-file --json on $($case[0])/$($case[1]).e wrote to stderr" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $conformanceExpected).Hash) { throw "check-file --json on $($case[0])/$($case[1]).e differs from the conformance corpus" }
+}
+# A reject fixture that is a project (D297): a cycle and an ambiguous variant need
+# more than one module, so the operand is `reject/<name>/src/main.e`.
+foreach ($rejectProject in @('module_cycle', 'module_variants')) {
+    $rejectProjectActual = Join-Path $testBuild "conformance-reject-$rejectProject.jsonl"
+    cmd /c "`"$compiler`" check-file `"$(Join-Path $conformanceRoot "reject\$rejectProject\src\main.e")`" `"$repo`" x64 windows --json > `"$rejectProjectActual`""
+    if ($LASTEXITCODE -ne 1) { throw "check-file --json on reject/$rejectProject exited $LASTEXITCODE, not 1" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $rejectProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "reject\$rejectProject.expected.jsonl")).Hash) { throw "check-file --json on reject/$rejectProject differs from the conformance corpus" }
 }
 # `info --json` (D229): the capability record for this host, byte for byte.
 $infoActual = Join-Path $testBuild 'conformance-tools-info.jsonl'

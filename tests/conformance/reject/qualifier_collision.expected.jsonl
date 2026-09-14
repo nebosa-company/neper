@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"record":"diagnostic","severity":"error","code":"E-NAME-0002","message":"`mem` collides with a use qualifier in this module","span":{"source":{"root":"operand","path":"qualifier_collision.e"},"byte_start":14,"byte_end":17,"line":3,"column":4,"end_line":3,"end_column":7,"column_utf16":4,"end_column_utf16":7},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

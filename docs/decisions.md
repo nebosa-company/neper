@@ -5842,3 +5842,19 @@ link/game_net pins 66 checks with five negative controls, including the exact wi
 -- 28 bits for a full snapshot of three fields, 3 for an unchanged delta, 13 for one
 changed -- so a delta that silently degraded to a full write would fail rather than pass
 quietly.
+
+## D297 -- A reject fixture for every code the compiler raises
+
+docs/diagnostics.md registers thirty codes; the corpus pinned sixteen. Ten more now
+have a `reject/` fixture whose `check-file --json` stream is the golden: a `use` of no
+module (E-MODULE-0001), a two-module import cycle (E-MODULE-0002) and a module with
+two source variants for the target -- `.x64.e` beside `.linux.e` and `.windows.e`,
+so the ambiguity holds on either host (E-MODULE-9999), the last two as projects
+under `reject/<name>/src/` since one file cannot make them; a function named like a
+`use` qualifier (E-NAME-0002); `target` as a local (E-NAME-0003); `try` in a function
+that returns no `err` (E-ERROR-9999); `atomic.load` with `.Release` (E-MEM-9999); an
+inferable generic parameter that nothing fixes (E-TYPE-0001); a `ret` of one value
+where two are declared (E-TYPE-0003); and an `i32` as an `if` condition, the
+catch-all E-TYPE-9999. What stays unpinned is E-LINK-9999, an error-hash collision
+no small fixture produces, and E-GPU, E-SAFETY and E-TOOL-9999, whose subjects do not
+yet diagnose. Both suites check every fixture.

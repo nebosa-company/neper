@@ -1812,7 +1812,7 @@ cmp -s "$test_build/conformance-absolute-tokens.jsonl" "$conformance_root/tokens
 ' "--absolute-paths changed more than absolute_path on tokens" >&2; exit 1; }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1'; do
+for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1' 'reject module_missing 1' 'reject qualifier_collision 1' 'reject reserved_local 1' 'reject try_not_fallible 1' 'reject return_count 1' 'reject generic_inference 1' 'reject condition_type 1' 'reject atomic_ordering 1'; do
     set -- $conformance_case
     conformance_actual="$test_build/conformance-$1-$2.jsonl"
     conformance_stderr="$test_build/conformance-$1-$2.stderr"
@@ -1822,6 +1822,15 @@ for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_valu
     [ ! -s "$conformance_stderr" ]
     cmp -s "$conformance_actual" "$conformance_root/$1/$2.expected.jsonl" || { printf '%s
 ' "check-file --json on $1/$2.e differs from the conformance corpus" >&2; exit 1; }
+done
+# A reject fixture that is a project (D297): a cycle and an ambiguous variant need
+# more than one module, so the operand is `reject/<name>/src/main.e`.
+for reject_project in module_cycle module_variants; do
+    reject_project_status=0
+    $test_build/neper-self check-file "$conformance_root/reject/$reject_project/src/main.e" "$repo" x64 linux --json > "$test_build/conformance-reject-$reject_project.jsonl" || reject_project_status=$?
+    [ "$reject_project_status" -eq 1 ]
+    cmp -s "$test_build/conformance-reject-$reject_project.jsonl" "$conformance_root/reject/$reject_project.expected.jsonl" || { printf '%s
+' "check-file --json on reject/$reject_project differs from the conformance corpus" >&2; exit 1; }
 done
 # `info --json` (D229): the capability record for this host, byte for byte.
 info_actual="$test_build/conformance-tools-info.jsonl"
