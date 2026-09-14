@@ -5379,3 +5379,26 @@ before `as` sorts before a `.`: `use e.mem`, `use e.mem as m`, `use e.os`. It is
 pass over the finished text, after the line pass, since the run has to be seen whole.
 The format fixture's two imports are written out of order and come out sorted, and
 its canonical side still compiles and runs.
+
+## D275 -- Every recovered failure is a diagnostic, and a barrier crossing is E-SYNTAX-0012
+
+The parser already recovered: a statement or declaration that failed became an
+`ErrorNode` and the parse went on (D-early), so a tree with three broken statements had
+three `ErrorNode`s. But it kept one failure -- the first, frozen so the human line
+never moved -- and `parse --json` reported that one. The tree now keeps every failure
+recovery went past, in order, and `parse --json` emits one diagnostic per failure at
+its own token; the first is still the primary the compile pipeline reports. The list
+takes a failure once even though a declaration's failure is recorded by the statement
+and again by the file that contains it.
+
+Spec section 3's barrier rule was detected and not named. A `(`, `[` or a literal's
+`{` still open when a column-0 declaration keyword arrives is a compile error reported
+at the *opener*, naming the keyword that ended it -- one precise diagnostic instead of a
+cascade -- and the parser stopped there under the generic E-SYNTAX-9999 at the token it
+happened to be on. Now the token that opened each soft delimiter is remembered as it
+opens, the crossing records the innermost one at the moment it is seen (the depth is
+gone by the time the failure is unwound to the file), and the diagnostic is
+E-SYNTAX-0012 with the spec's own wording -- `` `(` opened here is still unclosed at
+`fn` on line 6 `` -- in the parse stream, the check stream and the human line alike.
+That is the code's first use. tests/conformance/parse pins two_errors and barrier, and
+reject/barrier pins the check stream.

@@ -14,6 +14,14 @@ type Tree = struct {
     failure_token: lex.Token,
     failure_reserved_name: bool,
     has_failure: bool,
+    // Every failure the parser recovered past, in order (D275): the token, whether it
+    // was a soft delimiter still open at a column-0 declaration (E-SYNTAX-0012, at the
+    // opener), and that declaration's keyword. The first is `failure_token`.
+    // ponytail: 64 failures per file is the cap; a file with more has one problem.
+    failure_count: usize,
+    failures: [64]lex.Token,
+    failure_barriers: [64]bool,
+    failure_keywords: [64]lex.Token,
 }
 
 fn init_tree(tree: *Tree, nodes: []syntax.Node, children: []syntax.Child) -> err {
@@ -48,6 +56,13 @@ type Parser = struct {
     failure_frozen: bool,
     last_node: usize,
     tree: *Tree,
+    // The token before `current`, and the token that opened each soft delimiter
+    // still open, so a barrier crossing can be reported at the opener (D275).
+    previous: lex.Token,
+    soft_openers: [32]lex.Token,
+    barrier_pending: bool,
+    barrier_keyword: lex.Token,
+    barrier_opener: lex.Token,
 }
 
 // Spec section 3: a syntax error reports where it is. The first declaration to
@@ -55,11 +70,22 @@ type Parser = struct {
 // the reader has to look at. Within one declaration the earliest record wins,
 // which is the token the parser actually stopped on.
 fn record_failure(p: *Parser, token: lex.Token, reserved_name: bool) {
+    var at = token
+    if p.barrier_pending { at = p.barrier_opener }
     if !p.failure_frozen && !p.tree.has_failure {
-        p.tree.failure_token = token
+        p.tree.failure_token = at
         p.tree.failure_reserved_name = reserved_name
         p.tree.has_failure = true
     }
+    // The list keeps every failure recovery goes past, the primary included, once each:
+    // one declaration's failure is recorded by the statement and again by the file.
+    if p.tree.failure_count < 64usize && (p.tree.failure_count == 0usize || p.tree.failures[p.tree.failure_count - 1usize].start != at.start || p.tree.failures[p.tree.failure_count - 1usize].kind != at.kind) {
+        p.tree.failures[p.tree.failure_count] = at
+        p.tree.failure_barriers[p.tree.failure_count] = p.barrier_pending
+        p.tree.failure_keywords[p.tree.failure_count] = p.barrier_keyword
+        p.tree.failure_count += 1usize
+    }
+    p.barrier_pending = false
 }
 
 fn init(tree: *Tree, source: str) -> Parser {
@@ -75,6 +101,7 @@ fn init(tree: *Tree, source: str) -> Parser {
     p.tree.failure_token = no_token
     p.tree.failure_reserved_name = false
     p.tree.has_failure = false
+    p.tree.failure_count = 0usize
     p.tree.nodes[0usize] = syntax.node(.File, 0usize, 0usize, 1usize, 0usize)
     ret p
 }
@@ -82,6 +109,7 @@ fn init(tree: *Tree, source: str) -> Parser {
 fn advance(p: *Parser) -> err {
     if p.current.kind == .Invalid { ret InvalidSyntax }
     if p.current.kind != .Eof {
+        p.previous = p.current
         p.current = lex.next(&p.scanner)
         p.token_index += 1usize
     }
@@ -200,6 +228,9 @@ fn soft_barrier_follows(p: *Parser) -> bool {
     if following.kind == .Eof || following.kind == .KwCase || following.kind == .KwDefault { ret true }
     if following.column == 1usize && is_top_barrier(following.kind) {
         p.soft_top_barrier = true
+        p.barrier_pending = true
+        p.barrier_keyword = following
+        if p.soft_depth != 0usize && p.soft_depth <= 32usize { p.barrier_opener = p.soft_openers[p.soft_depth - 1usize] }
         ret true
     }
     ret false
@@ -215,6 +246,7 @@ fn skip_separators(p: *Parser) -> err {
 }
 
 fn enter_soft(p: *Parser) {
+    if p.soft_depth < 32usize { p.soft_openers[p.soft_depth] = p.previous }
     p.soft_depth += 1usize
 }
 

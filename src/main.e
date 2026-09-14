@@ -2852,6 +2852,20 @@ fn print_token_diagnostic(report: *Sink, g: *graph.Graph, module_index: usize, t
 // A syntax error names its position and, where the parser knows why, its reason.
 // A keyword in a binding position is the one reason worth spelling out: it reads
 // as an ordinary name and the generic "unexpected" wording explains nothing.
+// Spec section 3: a soft delimiter still open at a column-0 declaration keyword is
+// E-SYNTAX-0012, reported at the opener and naming the keyword that ended it (D275).
+fn print_barrier_failure(report: *Sink, path: str, text: str, opener: lex.Token, keyword: lex.Token) -> err {
+    var message_storage: [256]u8 = zero
+    var message = capture_sink(message_storage[..])
+    try write_all(&message, "`")
+    try write_all(&message, text[opener.start..opener.end])
+    try write_all(&message, "` opened here is still unclosed at `")
+    try write_all(&message, text[keyword.start..keyword.end])
+    try write_all(&message, "` on line ")
+    try write_usize(&message, keyword.line)
+    ret emit_diagnostic(report, path, opener, true, "E-SYNTAX-0012", message.capture[0usize..message.count])
+}
+
 fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, reserved_name: bool) -> err {
     var message_storage: [1024]u8 = zero
     var message = capture_sink(message_storage[..])
@@ -2894,7 +2908,11 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, 
     let load_error = graph.load(a, loaded, path, root, arch, target_os, project_root)
     if load_error != ok && loaded.has_failure && loaded.failure_module < loaded.count {
         let module = loaded.modules[loaded.failure_module]
-        try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name)
+        if loaded.failure_barrier {
+            try print_barrier_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_keyword)
+        } else {
+            try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name)
+        }
         try finish_report(report)
         os.exit(1i32)
     }

@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":1}
+{"record":"diagnostic","severity":"error","code":"E-SYNTAX-0012","message":"`(` opened here is still unclosed at `fn` on line 6","span":{"source":{"root":"operand","path":"barrier.e"},"byte_start":186,"byte_end":187,"line":4,"column":17,"end_line":4,"end_column":18,"column_utf16":17,"end_column_utf16":18},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

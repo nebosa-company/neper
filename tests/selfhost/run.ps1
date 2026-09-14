@@ -1635,7 +1635,7 @@ if ($LASTEXITCODE -ne 1 -or ($arenaSmallOutput -join "`n") -notmatch 'error: e\.
 # docs/tooling.md sections 4 and 9 (D227): `tokens --json` and `parse --json` against the
 # conformance corpus, byte for byte, with the exit status the result record carries.
 $conformanceRoot = Join-Path $repo 'tests\conformance'
-foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('parse', 'every_kind', 0), @('parse', 'recovery', 1))) {
+foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('parse', 'every_kind', 0), @('parse', 'recovery', 1), @('parse', 'two_errors', 1), @('parse', 'barrier', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"
@@ -1645,7 +1645,7 @@ foreach ($case in @(@('tokens', 'every_kind', 0), @('tokens', 'hostile', 1), @('
 }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-foreach ($case in @(@('accept', 'scalar', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1))) {
+foreach ($case in @(@('accept', 'scalar', 0), @('reject', 'enum_values', 1), @('reject', 'lexical', 1), @('reject', 'when_local', 1), @('reject', 'scope', 1), @('reject', 'barrier', 1))) {
     $conformanceFixture = Join-Path $conformanceRoot "$($case[0])\$($case[1]).e"
     $conformanceExpected = Join-Path $conformanceRoot "$($case[0])\$($case[1]).expected.jsonl"
     $conformanceActual = Join-Path $testBuild "conformance-$($case[0])-$($case[1]).jsonl"

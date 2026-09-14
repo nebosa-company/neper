@@ -41,6 +41,8 @@ type Graph = struct {
     failure_module: usize,
     failure_token: lex.Token,
     failure_reserved_name: bool,
+    failure_barrier: bool,
+    failure_keyword: lex.Token,
     has_failure: bool,
     // A `use` that names no module, or one that closes a cycle: the importing module
     // and the name, for the E-MODULE diagnostics (D215).
@@ -161,6 +163,8 @@ fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
             g.failure_module = module_index
             g.failure_token = tree.failure_token
             g.failure_reserved_name = tree.failure_reserved_name
+            g.failure_barrier = tree.failure_count != 0usize && tree.failure_barriers[0usize]
+            if g.failure_barrier { g.failure_keyword = tree.failure_keywords[0usize] }
             g.has_failure = true
         }
         ret parse_error

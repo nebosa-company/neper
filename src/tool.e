@@ -2231,17 +2231,46 @@ fn parse_json(a: *mem.Arena, root: str, path: str, source: str) -> (usize, err) 
     if init_error != ok { ret (2usize, init_error) }
     let parse_error = parse.parse(&tree, source)
     if parse_error != ok {
-        diagnostics += 1usize
-        var at = tree.failure_token
-        if !tree.has_failure { at = tokens[count - 1usize] }
-        let d1 = text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-SYNTAX-9999\",\"message\":\"unexpected token\",\"span\":")
-        if d1 != ok { ret (2usize, d1) }
-        let d2 = span(&out, root, path, at.start, at.end, at.line, at.column, at.end_line, at.end_column, at.column_utf16, at.end_column_utf16)
-        if d2 != ok { ret (2usize, d2) }
-        let d3 = text(&out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
-        if d3 != ok { ret (2usize, d3) }
-        let d4 = flush(&out)
-        if d4 != ok { ret (2usize, d4) }
+        // Every failure recovery went past, each at its own token (D275); a barrier
+        // crossing is E-SYNTAX-0012 at the opener, naming the keyword that ended it.
+        var failure = 0usize
+        while failure < tree.failure_count || (failure == 0usize && tree.failure_count == 0usize) {
+            var at = tokens[count - 1usize]
+            var barrier = false
+            var keyword = at
+            if failure < tree.failure_count {
+                at = tree.failures[failure]
+                barrier = tree.failure_barriers[failure]
+                keyword = tree.failure_keywords[failure]
+            }
+            diagnostics += 1usize
+            if barrier {
+                let b1 = text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-SYNTAX-0012\",\"message\":\"`")
+                if b1 != ok { ret (2usize, b1) }
+                let b2 = text(&out, source[at.start..at.end])
+                if b2 != ok { ret (2usize, b2) }
+                let b3 = text(&out, "` opened here is still unclosed at `")
+                if b3 != ok { ret (2usize, b3) }
+                let b4 = text(&out, source[keyword.start..keyword.end])
+                if b4 != ok { ret (2usize, b4) }
+                let b5 = text(&out, "` on line ")
+                if b5 != ok { ret (2usize, b5) }
+                let b6 = decimal(&out, keyword.line)
+                if b6 != ok { ret (2usize, b6) }
+                let b7 = text(&out, "\",\"span\":")
+                if b7 != ok { ret (2usize, b7) }
+            } else {
+                let d1 = text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-SYNTAX-9999\",\"message\":\"unexpected token\",\"span\":")
+                if d1 != ok { ret (2usize, d1) }
+            }
+            let d2 = span(&out, root, path, at.start, at.end, at.line, at.column, at.end_line, at.end_column, at.column_utf16, at.end_column_utf16)
+            if d2 != ok { ret (2usize, d2) }
+            let d3 = text(&out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
+            if d3 != ok { ret (2usize, d3) }
+            let d4 = flush(&out)
+            if d4 != ok { ret (2usize, d4) }
+            failure += 1usize
+        }
     }
     // The tree can outgrow the record buffer the tokens used: one sized to it.
     let (tree_storage, tree_storage_error) = mem.alloc[u8](a, tree.count * 512usize + tree.child_count * 32usize + 4096usize)
