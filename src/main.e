@@ -12,6 +12,7 @@ use error_table
 use emit_x64
 use graph
 use lookup
+use stats
 use lex
 use link_elf
 use link_pe
@@ -792,7 +793,7 @@ fn flags_known(args: []str) -> bool {
                 if at + 1usize >= args.len { ret false }
                 at += 1usize
             } else {
-                if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") { ret false }
+                if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") { ret false }
             }
         }
         at += 1usize
@@ -1581,9 +1582,14 @@ fn report_ms(ns: usize) -> err {
 }
 
 fn report_phase(report: *Sink, name: str) -> err {
-    if !report.timing { ret ok }
+    if !report.timing && !report.build.on { ret ok }
     let now = nptest_now()
     let started = report.phase_started
+    stats.record_phase(&report.build, name, (now - started) / 1000000usize)
+    if !report.timing {
+        report.phase_started = now
+        ret ok
+    }
     var line_storage: [128]u8 = zero
     var line = capture_sink(line_storage[..])
     try write_all(&line, "time ")
@@ -2507,7 +2513,7 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     var resolver: resolve.Resolver = zero
-    try init_cli_resolver(a, &resolver, &loaded)
+    try init_cli_resolver(a, &resolver, &loaded, &report)
     let resolve_error = resolve.collect(&resolver, &loaded)
     if resolve_error != ok {
         try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
@@ -2651,67 +2657,87 @@ fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
     ret ok
 }
 
-fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+fn init_cli_resolver(a: *mem.Arena, resolver: *resolve.Resolver, loaded: *graph.Graph, report: *Sink) -> err {
     let total = loaded.total_bytes
     let largest = loaded.largest_bytes
     let (symbols, symbols_error) = mem.alloc[resolve.Symbol](a, sized(4096usize, total, 64usize))
     if symbols_error != ok { ret symbols_error }
+    report.build.pools[stats.POOL_SYMBOLS] = symbols.len
     // The largest module, `check.e`, needs between 65536 and 69632 tokens, measured
     // by bisecting this until resolution reports `resolve.Capacity`. 131072 keeps
     // about twice that; `MAX_TOKENS` in the bootstrap is the same number for the same
     // reason.
     let (tokens, tokens_error) = mem.alloc[lex.Token](a, sized(4096usize, largest, 3usize))
     if tokens_error != ok { ret tokens_error }
+    report.build.pools[stats.POOL_RESOLVER_TOKENS] = tokens.len
     let (locals, locals_error) = mem.alloc[resolve.Local](a, sized(16384usize, largest, 16usize))
     if locals_error != ok { ret locals_error }
+    report.build.pools[stats.POOL_RESOLVER_LOCALS] = locals.len
     try resolve.init(resolver, symbols, tokens, locals)
     // The name index (D303): four entries per symbol covers the doubling regions.
     let (entries, entries_error) = mem.alloc[lookup.Entry](a, symbols.len * 4usize)
     if entries_error != ok { ret entries_error }
+    report.build.pools[stats.POOL_RESOLVER_INDEX] = entries.len
     ret resolve.attach_index(resolver, entries)
 }
 
-fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph) -> err {
+fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, report: *Sink) -> err {
     let total = loaded.total_bytes
     let largest = loaded.largest_bytes
     let (functions, functions_error) = mem.alloc[check.Function](a, sized(4096usize, total, 128usize))
     if functions_error != ok { ret functions_error }
+    report.build.pools[stats.POOL_FUNCTIONS] = functions.len
     let (function_generics, function_generics_error) = mem.alloc[check.FunctionGeneric](a, sized(4096usize, total, 128usize))
     if function_generics_error != ok { ret function_generics_error }
     let (parameters, parameters_error) = mem.alloc[check.Parameter](a, sized(8192usize, total, 64usize))
     if parameters_error != ok { ret parameters_error }
+    report.build.pools[stats.POOL_PARAMETERS] = parameters.len
     let (return_types, return_types_error) = mem.alloc[check.Type](a, sized(65536usize, total, 64usize))
     if return_types_error != ok { ret return_types_error }
+    report.build.pools[stats.POOL_RETURN_TYPES] = return_types.len
     let (comptime_parameters, comptime_parameters_error) = mem.alloc[check.ComptimeParameter](a, sized(1024usize, total, 1024usize))
     if comptime_parameters_error != ok { ret comptime_parameters_error }
+    report.build.pools[stats.POOL_COMPTIME_PARAMETERS] = comptime_parameters.len
     let (generic_arguments, generic_arguments_error) = mem.alloc[check.GenericArgument](a, sized(4096usize, total, 256usize))
     if generic_arguments_error != ok { ret generic_arguments_error }
+    report.build.pools[stats.POOL_GENERIC_ARGUMENTS] = generic_arguments.len
     let (aggregates, aggregates_error) = mem.alloc[check.Aggregate](a, sized(4096usize, total, 256usize))
     if aggregates_error != ok { ret aggregates_error }
+    report.build.pools[stats.POOL_AGGREGATES] = aggregates.len
     let (aggregate_fields, aggregate_fields_error) = mem.alloc[check.AggregateField](a, sized(8192usize, total, 128usize))
     if aggregate_fields_error != ok { ret aggregate_fields_error }
+    report.build.pools[stats.POOL_AGGREGATE_FIELDS] = aggregate_fields.len
     let (checked_switches, checked_switches_error) = mem.alloc[check.CheckedSwitch](a, sized(4096usize, total, 256usize))
     if checked_switches_error != ok { ret checked_switches_error }
+    report.build.pools[stats.POOL_CHECKED_SWITCHES] = checked_switches.len
     let (function_signatures, function_signatures_error) = mem.alloc[check.FunctionSignature](a, sized(4096usize, total, 128usize))
     if function_signatures_error != ok { ret function_signatures_error }
     let (tokens, tokens_error) = mem.alloc[lex.Token](a, sized(4096usize, largest, 3usize))
     if tokens_error != ok { ret tokens_error }
+    report.build.pools[stats.POOL_CHECKER_TOKENS] = tokens.len
     let (locals, locals_error) = mem.alloc[check.Local](a, sized(16384usize, largest, 16usize))
     if locals_error != ok { ret locals_error }
+    report.build.pools[stats.POOL_CHECKER_LOCALS] = locals.len
     let (types, types_error) = mem.alloc[check.Type](a, sized(65536usize, total, 64usize))
     if types_error != ok { ret types_error }
+    report.build.pools[stats.POOL_TYPES] = types.len
     let (aliases, aliases_error) = mem.alloc[check.Alias](a, sized(4096usize, total, 256usize))
     if aliases_error != ok { ret aliases_error }
+    report.build.pools[stats.POOL_ALIASES] = aliases.len
     let (constants, constants_error) = mem.alloc[check.Constant](a, sized(4096usize, total, 256usize))
     if constants_error != ok { ret constants_error }
+    report.build.pools[stats.POOL_CONSTANTS] = constants.len
     // Module-scope `var`s. Small on purpose: the whole point of the surface is that ambient
     // mutable state is rare, and a program that wants hundreds of them wants a struct instead.
     let (globals, globals_error) = mem.alloc[check.Global](a, sized(256usize, total, 1024usize))
     if globals_error != ok { ret globals_error }
+    report.build.pools[stats.POOL_GLOBALS] = globals.len
     let (constant_exprs, constant_exprs_error) = mem.alloc[check.ConstantExpr](a, sized(32768usize, total, 256usize))
     if constant_exprs_error != ok { ret constant_exprs_error }
+    report.build.pools[stats.POOL_CONSTANT_EXPRS] = constant_exprs.len
     let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, sized(4096usize, total, 4096usize))
     if diagnostics_error != ok { ret diagnostics_error }
+    report.build.pools[stats.POOL_DIAGNOSTICS] = diagnostics.len
     try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, globals, constant_exprs, diagnostics)
     try check.init_generics(checker, function_generics, comptime_parameters, generic_arguments)
     try check.init_aggregates(checker, aggregates, aggregate_fields)
@@ -2719,6 +2745,7 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph
     // The declaration index (D303): the five named tables, four entries per row.
     let (entries, entries_error) = mem.alloc[lookup.Entry](a, (functions.len + aggregates.len + aliases.len + constants.len + globals.len) * 4usize)
     if entries_error != ok { ret entries_error }
+    report.build.pools[stats.POOL_CHECKER_INDEX] = entries.len
     ret check.attach_index(checker, entries)
 }
 
@@ -2751,7 +2778,7 @@ fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signat
     ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
-fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph) -> err {
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph, report: *Sink) -> err {
     // Every module carries its own copy of the generic instances it uses, so the
     // NIR function count scales with instantiation sites, not with declarations.
     //
@@ -2769,24 +2796,32 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let operand_capacity = sized(1048576usize, total, 4usize)
     let (functions, functions_error) = mem.alloc[nir.Function](a, function_capacity)
     if functions_error != ok { ret functions_error }
+    report.build.pools[stats.POOL_NIR_FUNCTIONS] = functions.len
     let (blocks, blocks_error) = mem.alloc[nir.Block](a, block_capacity)
     if blocks_error != ok { ret blocks_error }
+    report.build.pools[stats.POOL_NIR_BLOCKS] = blocks.len
     let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, instruction_capacity)
     if instructions_error != ok { ret instructions_error }
+    report.build.pools[stats.POOL_NIR_INSTRUCTIONS] = instructions.len
     let (operands, operands_error) = mem.alloc[usize](a, operand_capacity)
     if operands_error != ok { ret operands_error }
+    report.build.pools[stats.POOL_NIR_OPERANDS] = operands.len
     let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize, total, 128usize))
     if function_refs_error != ok { ret function_refs_error }
+    report.build.pools[stats.POOL_NIR_REFS] = function_refs.len
     let (strings, strings_error) = mem.alloc[nir.StringConstant](a, sized(8192usize, total, 256usize))
     if strings_error != ok { ret strings_error }
+    report.build.pools[stats.POOL_NIR_STRINGS] = strings.len
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
     let (ref_entries, ref_entries_error) = mem.alloc[lookup.Entry](a, function_refs.len * 4usize)
     if ref_entries_error != ok { ret ref_entries_error }
+    report.build.pools[stats.POOL_NIR_INDEX] = ref_entries.len
     let (string_entries, string_entries_error) = mem.alloc[lookup.Entry](a, strings.len * 4usize)
     if string_entries_error != ok { ret string_entries_error }
     try nir.attach_indexes(builder, ref_entries, string_entries)
     let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, sized(256usize, total, 1024usize))
     if global_data_error != ok { ret global_data_error }
+    report.build.pools[stats.POOL_NIR_GLOBALS] = global_data.len
     try nir.init_globals(builder, global_data)
     // One entry per NIR function, indexed by the same function index: a signature
     // table smaller than the function table makes every function past its end fail to
@@ -2812,6 +2847,8 @@ type Sink = struct {
     capturing: bool,
     // `--json` (D228): a diagnostic is a record on stdout, not a line on stderr.
     json: bool,
+    // `--stats` (D308): the build's measurements, printed after the image is written.
+    build: stats.Build,
     // `--time` (D303): a line per phase on stderr, and when the last one ended.
     timing: bool,
     phase_started: usize,
@@ -4185,7 +4222,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try init_cli_graph(a, &loaded)
         try load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         var resolver: resolve.Resolver = zero
-        try init_cli_resolver(a, &resolver, &loaded)
+        try init_cli_resolver(a, &resolver, &loaded, &report)
         try resolve.collect(&resolver, &loaded)
         try io.print("module resolve ok\n")
         ret ok
@@ -4209,7 +4246,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var resolver: resolve.Resolver = zero
-        try init_cli_resolver(a, &resolver, &loaded)
+        try init_cli_resolver(a, &resolver, &loaded, &report)
         let resolve_error = resolve.collect(&resolver, &loaded)
         if resolve_error != ok {
             try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
@@ -4218,7 +4255,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var checker: check.Checker = zero
-        try init_cli_checker(a, &checker, &loaded)
+        try init_cli_checker(a, &checker, &loaded, &report)
         checker.arena = a
         let check_error = check.run(&checker, &resolver, &loaded)
         if check_error != ok {
@@ -4314,7 +4351,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         report.timing = trailing_flags && has_flag(args, "--time")
+        report.build.full = trailing_flags && has_flag(args, "--stats-full")
+        report.build.on = report.build.full || (trailing_flags && has_flag(args, "--stats"))
+        report.build.release = release_build
+        report.build.arch = args[4usize]
+        report.build.target_os = args[5usize]
         report.phase_started = nptest_now()
+        report.build.started = report.phase_started
         let load_error = load_graph_in(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize], project_flag(args))
         report.arena_used = mem.stats(a).used
         try report_phase(&report, "load and parse")
@@ -4331,7 +4374,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var resolver: resolve.Resolver = zero
-        try init_cli_resolver(a, &resolver, &loaded)
+        try init_cli_resolver(a, &resolver, &loaded, &report)
         // The front end runs per module in dependency order (D304), each module parsed
         // once per sweep; the incremental artifact build keeps the whole-program passes,
         // whose `keep` mask it decides between declarations and bodies.
@@ -4350,7 +4393,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var checker: check.Checker = zero
-        try init_cli_checker(a, &checker, &loaded)
+        try init_cli_checker(a, &checker, &loaded, &report)
         checker.arena = a
         // The declarations first; then, incrementally, the edge rule decides the kept
         // modules from the Interfaces they give, and only the other bodies are checked
@@ -4436,9 +4479,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var signatures: nir.Signatures = zero
         // One more parameter type than the declarations need: `neper_report_failure`,
         // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded)
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report)
         let (bindings, bindings_error) = mem.alloc[lower.Binding](a, sized(16384usize, loaded.total_bytes, 64usize))
         if bindings_error != ok { ret bindings_error }
+        report.build.pools[stats.POOL_BINDINGS] = bindings.len
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, loaded.count + 1usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, builder.functions.len + 1usize)
@@ -4570,6 +4614,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         let (machine_storage, machine_storage_error) = mem.alloc[u8](a, machine_capacity)
         if machine_storage_error != ok { ret machine_storage_error }
+        report.build.pools[stats.POOL_MACHINE] = machine_storage.len
         var machine: emit_x64.Buffer = zero
         try emit_x64.init(&machine, machine_storage)
         let (block_offsets, block_offsets_error) = mem.alloc[usize](a, builder.block_count + 1usize)
@@ -4580,6 +4625,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // so the count follows the instructions rather than a constant.
         let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, builder.instruction_count + 4096usize)
         if relocations_error != ok { ret relocations_error }
+        report.build.pools[stats.POOL_RELOCATIONS] = relocations.len
         // Indexed by NIR function index, like the signature table above: sized to the
         // function count and not to a constant of its own.
         let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.function_count + 1usize)
@@ -4626,6 +4672,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // Section 13's line table (D209): a row per line change, so at most one per instruction.
         let (line_entries, line_entries_error) = mem.alloc[codegen_x64.LineEntry](a, builder.instruction_count + 16usize)
         if line_entries_error != ok { ret line_entries_error }
+        report.build.pools[stats.POOL_LINE_ENTRIES] = line_entries.len
         var line_count = 0usize
         codegen_context.lines = line_entries
         codegen_context.line_count = &line_count
@@ -4768,6 +4815,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let executable_capacity = machine.count + 1048576usize
                 let (executable_storage, executable_storage_error) = mem.alloc[u8](a, executable_capacity)
                 if executable_storage_error != ok { ret executable_storage_error }
+                report.build.pools[stats.POOL_IMAGE] = executable_storage.len
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
                 if machine_abi == .Windows {
@@ -4792,8 +4840,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 // Every build writes `.neper/<mode>/build-manifest.json` under the project root
                 // (section 7, D254), with the executable it just wrote as the one artifact.
                 try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, args[6usize], packed)
+                report.build.wall_ms = (nptest_now() - report.build.started) / 1000000usize
+                report.build.image_bytes = packed.len
                 if running {
+                    report.build.started = nptest_now()
                     let (status, stdout_captured, stderr_captured, run_error) = run_program(a, args[6usize], program_arguments(args))
+                    report.build.ran = true
+                    report.build.run_ms = (nptest_now() - report.build.started) / 1000000usize
+                    report.build.exit_code = status
+                    if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder) }
                     if run_error != ok {
                         try emit_command_diagnostic(&report, "E-CLI-9999", "the executable could not be run")
                         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
@@ -4818,6 +4873,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     ret write_all(&report, ",\"diagnostics\":0}}\n")
                 }
                 try io.print("executable written\n")
+                if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder) }
                 ret ok
             }
             if emit_object {
@@ -4852,7 +4908,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [--json] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

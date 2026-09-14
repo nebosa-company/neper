@@ -6243,3 +6243,28 @@ The compiler's own build peaks at 424 MB instead of 484 -- after the instruction
 went from a sixth of the source to a quarter, because the 2M program's 8.3 million
 instructions were three percent over a sixth and D302's diagnostic said so, by name and
 by count. The 2M-line build peaks at 2.1 GB instead of 2.9 and takes 44 s.
+
+## D308 -- `--stats`: what a build was, measured after it
+
+`emit-executable --stats` and `run --stats` print a table after the image is written:
+the program (files, lines split into code, comment and blank, module sizes at the
+minimum, median and maximum, functions and instances, imports, types, constants, vars,
+errors, parse nodes, externs, and each attribute counted -- `@test`, `@gpu`, `@import`,
+`@nocheck`), the build (mode, compiler version, host, target, hot and cold modules --
+those with a function in the lowered program and those loaded and never reached --
+threads, image size), the wall time and every phase's time, and with `run` the
+program's own time and exit code. `--stats-full` adds every pool's capacity beside how
+much of it was used, which is the table D306 sized by hand.
+
+**Nothing that costs anything runs during the build.** Counting lines, parsing every
+module once more for its nodes and attributes, and sorting the module sizes happen in a
+pass after the file is written, so the phase times are the build's own; what the
+driver records as it goes is a clock read per phase, a store per pool allocation and
+the run's status. The table goes to stderr, where `--time` goes, so `run --json`'s
+stream on stdout stays a stream. Numbers are grouped in thousands with an apostrophe.
+
+Two rows read `n/a`: the compiler's own peak working set and the program's. There is
+no `e.os` intrinsic for a process's peak memory, and adding one is D291's procedure --
+the bootstrap's seed, both C runtimes, both assembly runtimes and the checker's seed --
+which is its own decision. `benchmarks/scale/peak.sh` measures it from outside
+meanwhile.
