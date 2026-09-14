@@ -2309,6 +2309,12 @@ $gameViewExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoo
 if ($LASTEXITCODE -ne 0 -or $gameViewExecutableWritten -ne 'executable written') { throw 'game view PE executable emission failed' }
 & $gameViewExecutablePath
 if ($LASTEXITCODE -ne 0) { throw 'e.game.sprite or e.game.camera failed a check in the self-hosted PE executable' }
+# `e.game.ai` and `e.game.input` (D288): steering, behaviour trees, A* and input buffering.
+$gameMindExecutablePath = Join-Path $testBuild 'game-mind-selfhost.exe'
+$gameMindExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures/link/game_mind/src/main.e') $repo 'x64' 'windows' $gameMindExecutablePath
+if ($LASTEXITCODE -ne 0 -or $gameMindExecutableWritten -ne 'executable written') { throw 'game mind PE executable emission failed' }
+& $gameMindExecutablePath
+if ($LASTEXITCODE -ne 0) { throw 'e.game.ai or e.game.input failed a check in the self-hosted PE executable' }
 $moduleExecutablePath = Join-Path $testBuild 'modules-selfhost.exe'
 $moduleExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\modules\src\main.e') $repo 'x64' 'windows' $moduleExecutablePath
 if ($LASTEXITCODE -ne 0 -or $moduleExecutableWritten -ne 'executable written') { throw 'multi-module PE executable emission failed' }
