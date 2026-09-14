@@ -318,6 +318,16 @@ uint32_t neper_os_close(uintptr_t raw) {
     return CloseHandle((HANDLE)raw) ? NP_OK : np_error(GetLastError());
 }
 
+uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_len) {
+    wchar_t *wide = np_wide((NpStr){path, path_len});
+    BOOL made;
+    (void)arena;
+    if (!wide) return NP_OUT_OF_MEMORY;
+    made = CreateDirectoryW(wide, 0);
+    HeapFree(GetProcessHeap(), 0, wide);
+    return made ? NP_OK : np_error(GetLastError());
+}
+
 void neper_os_stdout(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_OUTPUT_HANDLE); }
 void neper_os_stderr(void *result) { *(uintptr_t *)result = (uintptr_t)GetStdHandle(STD_ERROR_HANDLE); }
 
@@ -480,6 +490,7 @@ void neper_os_clock(void *result, unsigned char clock_kind) {
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -536,6 +547,15 @@ void neper_os_write(void *result, uintptr_t raw, const unsigned char *buffer, si
 }
 
 uint32_t neper_os_close(uintptr_t raw) { return close((int)raw) == 0 ? NP_OK : np_error(errno); }
+uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_len) {
+    size_t saved = arena ? arena->off : 0;
+    char *name = np_c_string_arena(arena, (NpStr){path, path_len});
+    int made;
+    if (!name) return NP_OUT_OF_MEMORY;
+    made = mkdir(name, 0777); arena->off = saved;
+    return made == 0 ? NP_OK : np_error(errno);
+}
+
 void neper_os_stdout(void *result) { *(uintptr_t *)result = 1; }
 void neper_os_stderr(void *result) { *(uintptr_t *)result = 2; }
 

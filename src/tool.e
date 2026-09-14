@@ -2216,13 +2216,19 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     let (manifest_path, path_error) = manifest_join(a, mode_dir, "build-manifest.json")
     if path_error != ok { ret path_error }
     let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
-    // The fixed os surface has no mkdir, so `.neper/<mode>/` is the project's to make,
-    // once; until it exists the build has nowhere to put the manifest and writes none --
-    // and hashes nothing, since the open comes first (D267).
-    // ponytail: add os.mkdir to the fixed surface (bootstrap and both runtimes) and make
-    // the directory here when a consumer needs the manifest without that step.
-    let (file, open_error) = os.open(a, manifest_path, flags)
-    if open_error == os.NotFound { ret ok }
+    // `.neper/<mode>/` is made when it is missing (D287): each level once, an `Exists`
+    // answer meaning another build got there first. The open comes before hashing, so a
+    // root that cannot take the directory costs nothing but the error (D267).
+    var (file, open_error) = os.open(a, manifest_path, flags)
+    if open_error == os.NotFound {
+        let dot_made = os.mkdir(a, dot_dir)
+        if dot_made != ok && dot_made != os.Exists { ret dot_made }
+        let mode_made = os.mkdir(a, mode_dir)
+        if mode_made != ok && mode_made != os.Exists { ret mode_made }
+        let (retried, retry_error) = os.open(a, manifest_path, flags)
+        file = retried
+        open_error = retry_error
+    }
     if open_error != ok { ret open_error }
     let (digest, digest_error) = manifest_sha256(a, packed)
     if digest_error != ok { ret digest_error }

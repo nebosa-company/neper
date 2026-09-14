@@ -1814,9 +1814,10 @@ cmp -s "$test_build/conformance-tools-info-version.jsonl" "$conformance_root/too
 ' "an unadvertised language version is not refused as the conformance corpus says" >&2; exit 1; }
 # `emit-executable --json` (D230): the build stream, the executable named as given,
 # a rejected program's diagnostics as records; both byte for byte from test_build.
-# A build writes `.neper/<mode>/build-manifest.json` under the project root when that
-# directory exists (D254); the repo is the corpus's project root, so it is made here.
-mkdir -p "$repo/.neper/debug"
+# A build writes `.neper/<mode>/build-manifest.json` under the project root, making the
+# directory when it is missing (D254, D287); the repo is the corpus's project root, so
+# the mode directory is removed first to prove the build makes it.
+rm -rf "$repo/.neper/debug"
 for build_case in 'tools/build.e build 0' 'reject/scope.e build_reject 1'; do
     set -- $build_case
     build_status=0
@@ -1831,6 +1832,8 @@ chmod +x "$test_build/conformance-tools-build.out"
 # as given with the SHA-256 of the bytes on disk.
 python3 "$repo/scripts/validate_stream.py" "$repo/.neper/debug/build-manifest.json" || { printf '%s
 ' "the build manifest a build writes does not validate against the v1 schema" >&2; exit 1; }
+[ -d "$repo/.neper/debug" ] || { printf '%s
+' "the build did not make .neper/debug/" >&2; exit 1; }
 manifest_artifact=$(sed -n 's/.*"artifacts":\[{"path":"conformance-tools-build.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
 [ "$manifest_artifact" = "$(sha256sum "$test_build/conformance-tools-build.out" | cut -c1-64)" ] || { printf '%s
 ' "the build manifest does not carry the executable's SHA-256" >&2; exit 1; }

@@ -38,6 +38,8 @@ fn main(a: *mem.Arena, startup_args: []str) -> err {
     if directory_error != ok { ret directory_error }
     if entries.len == 0usize { ret os.Failed }
     if entries[0usize].name.len == 0usize { ret os.Failed }
+    // `mkdir` on a directory that exists answers `Exists`, on both hosts (D287).
+    if os.mkdir(a, args[2usize]) != os.Exists { ret os.Failed }
 
     let (page, reserve_error) = os.reserve(4096usize)
     if reserve_error != ok { ret reserve_error }

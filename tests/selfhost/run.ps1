@@ -1678,9 +1678,10 @@ if ($LASTEXITCODE -ne 2) { throw "an unadvertised language version exited $LASTE
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $versionActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/info_version.expected.jsonl')).Hash) { throw 'an unadvertised language version is not refused as the conformance corpus says' }
 # `emit-executable --json` (D230): the build stream, the executable named as given,
 # a rejected program's diagnostics as records; both byte for byte from testBuild.
-# A build writes `.neper/<mode>/build-manifest.json` under the project root when that
-# directory exists (D254); the repo is the corpus's project root, so it is made here.
-[void](New-Item -ItemType Directory -Force -Path (Join-Path $repo '.neper\debug'))
+# A build writes `.neper/<mode>/build-manifest.json` under the project root, making the
+# directory when it is missing (D254, D287); the repo is the corpus's project root, so
+# the mode directory is removed first to prove the build makes it.
+if (Test-Path -LiteralPath (Join-Path $repo '.neper\debug')) { Remove-Item -Recurse -Force -LiteralPath (Join-Path $repo '.neper\debug') }
 foreach ($case in @(@('tools\build.e', 'build', 0), @('reject\scope.e', 'build_reject', 1))) {
     $buildActual = Join-Path $testBuild "conformance-tools-$($case[1]).jsonl"
     cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot $case[0])`" `"$repo`" x64 windows conformance-tools-$($case[1]).out --json > `"$buildActual`""
@@ -1693,6 +1694,7 @@ if ($LASTEXITCODE -ne 0) { throw "the executable of build --json exited $LASTEXI
 # The manifest the build.e build wrote: valid against the schema, naming the executable
 # as given with the SHA-256 of the bytes on disk.
 $manifestPath = Join-Path $repo '.neper\debug\build-manifest.json'
+if (-not (Test-Path -LiteralPath (Join-Path $repo '.neper\debug') -PathType Container)) { throw 'the build did not make .neper/debug/' }
 & python (Join-Path $repo 'scripts/validate_stream.py') $manifestPath
 if ($LASTEXITCODE -ne 0) { throw 'the build manifest a build writes does not validate against the v1 schema' }
 $manifestArtifact = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"conformance-tools-build.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value

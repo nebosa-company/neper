@@ -5625,3 +5625,22 @@ name. A run of consecutive `@` lines at one indent is now sorted in byte order o
 whole line, which is name order first, by a pass over the finished text like the
 `use` block's (D274). Duplicates stay a compile error, not the formatter's business.
 The format fixture pins `@packed` and `@align(8)` written the other way round.
+
+## D287 -- `os.mkdir` joins the fixed surface, as a bootstrap intrinsic only
+
+D254 left `.neper/<mode>/` as the project's to make because the fixed os surface --
+what the C bootstrap seeds, since it ignores per-host variants -- had no `mkdir`, and
+named the fix as an intrinsic through every layer. Half of that was wrong: the
+self-hosted compiler already has `os.mkdir`, as source in `os.windows.e` and
+`os.linux.e`, and a seeded intrinsic of the same name would be `DuplicateName` in every
+program on either host and would lose `last_error_detail` for the call. So `mkdir` is
+added to the bootstrap alone: one line in its intrinsic table and a C body per host,
+`CreateDirectoryW` and `mkdir(2)` mapped through `np_error` like the rest. The
+compiler's source calls `os.mkdir` and gets the C body from the bootstrap and the
+per-host source from itself; nothing in resolve, lower or the runtime prefixes changes.
+
+A build now makes `.neper/` and `.neper/<mode>/` when the manifest's open answers
+`NotFound`, each level once with `Exists` accepted, then opens again. Both suites
+remove `.neper/debug/` before the corpus build and require the build to have made
+it; `tests/neper0/os-intrinsics.e` asks the bootstrap's `mkdir` for `Exists` on a
+directory that is there.
