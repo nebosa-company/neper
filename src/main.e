@@ -958,8 +958,12 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     // `.neper/debug/test/` under the project root, made when missing.
     let is_test = same(command, "test")
     if !(is_build || is_run || is_check || is_fmt || is_index || is_dis || is_manifest || is_test) { ret (args, false, ok) }
-    if args.len < 3usize { ret (args, false, ok) }
-    let file = args[2usize]
+    // `check` and `test` with no operand (D294): the project the current directory is in,
+    // as `check-project` and `test-project`; a `--` flag first is no operand either.
+    let project_form = (is_check || is_test) && (args.len == 2usize || (args[2usize].len >= 2usize && args[2usize][0usize] == 45u8 && args[2usize][1usize] == 45u8))
+    if args.len < 3usize && !project_form { ret (args, false, ok) }
+    var file = ""
+    if !project_form { file = args[2usize] }
     let root = own_directory(args[0usize])
     // Flags after the operand.
     var triple = host_target()
@@ -972,6 +976,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var virtual_path = ""
     var program_args_at = args.len
     var at = 3usize
+    if project_form { at = 2usize }
     while at < args.len {
         if same(args[at], "--") {
             program_args_at = at
@@ -1071,6 +1076,27 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         }
         ret (long_form[0usize..count], true, ok)
     }
+    if project_form {
+        var dir = project_dir
+        if dir.len == 0usize {
+            let (found, found_error) = project_from_cwd(a)
+            if found_error != ok { ret (args, false, found_error) }
+            dir = found
+        }
+        var leaf = "check"
+        if is_test { leaf = "test" }
+        let (project_workdir, project_workdir_error) = workdir_under(a, dir, leaf)
+        if project_workdir_error != ok { ret (args, false, project_workdir_error) }
+        if is_test { long_form[count] = "test-project" } else { long_form[count] = "check-project" }
+        long_form[count + 1usize] = dir
+        long_form[count + 2usize] = root
+        long_form[count + 3usize] = arch
+        long_form[count + 4usize] = os_name
+        long_form[count + 5usize] = project_workdir
+        long_form[count + 6usize] = "--json"
+        count += 7usize
+        ret (long_form[0usize..count], true, ok)
+    }
     if is_test {
         let (workdir, workdir_error) = test_workdir(a, file, project_dir)
         if workdir_error != ok { ret (args, false, workdir_error) }
@@ -1115,6 +1141,24 @@ fn test_workdir(a: *mem.Arena, file: str, project_dir: str) -> (str, err) {
         if discovery_error != ok { ret ("", discovery_error) }
         root = discovered.root
     }
+    let (workdir, workdir_error) = workdir_under(a, root, "test")
+    ret (workdir, workdir_error)
+}
+
+// The project the current directory is in (D294): `project.discover` from a name
+// beside it, so the walk starts at the directory itself.
+fn project_from_cwd(a: *mem.Arena) -> (str, err) {
+    let (dir, dir_error) = os.current_dir(a)
+    if dir_error != ok { ret ("", dir_error) }
+    let (probe, probe_error) = tool.manifest_join(a, dir, "main.e")
+    if probe_error != ok { ret ("", probe_error) }
+    let (discovered, discovery_error) = project.discover(a, probe)
+    if discovery_error != ok { ret ("", discovery_error) }
+    ret (discovered.root, ok)
+}
+
+// `<root>/.neper/debug/<leaf>`, each level made once.
+fn workdir_under(a: *mem.Arena, root: str, leaf: str) -> (str, err) {
     let (dot_dir, dot_error) = tool.manifest_join(a, root, ".neper")
     if dot_error != ok { ret ("", dot_error) }
     let dot_made = ensure_dir(a, dot_dir)
@@ -1123,7 +1167,7 @@ fn test_workdir(a: *mem.Arena, file: str, project_dir: str) -> (str, err) {
     if mode_error != ok { ret ("", mode_error) }
     let mode_made = ensure_dir(a, mode_dir)
     if mode_made != ok { ret ("", mode_made) }
-    let (workdir, workdir_error) = tool.manifest_join(a, mode_dir, "test")
+    let (workdir, workdir_error) = tool.manifest_join(a, mode_dir, leaf)
     if workdir_error != ok { ret ("", workdir_error) }
     let made = ensure_dir(a, workdir)
     if made != ok { ret ("", made) }

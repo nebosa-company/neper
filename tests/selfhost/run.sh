@@ -1887,22 +1887,38 @@ manifest_again=$(sed -n 's/.*"artifacts":\[{"path":"build\/linux\/tests\/selfhos
 ' "the second build's manifest does not carry the first build's artifact hash" >&2; exit 1; }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
-cp "$test_build/neper-self" "$repo/build/linux/neper-self-short"
-chmod +x "$repo/build/linux/neper-self-short"
-(cd "$test_build" && "$repo/build/linux/neper-self-short" build "$conformance_root/tools/build.e" -o conformance-tools-build.out --json > "conformance-tools-build-short.jsonl")
+rm -rf "$repo/build/linux/short"
+mkdir -p "$repo/build/linux/short"
+cp -r "$repo/lib" "$repo/build/linux/short/lib"
+cp "$test_build/neper-self" "$repo/build/linux/short/neper-self-short"
+chmod +x "$repo/build/linux/short/neper-self-short"
+(cd "$test_build" && "$repo/build/linux/short/neper-self-short" build "$conformance_root/tools/build.e" -o conformance-tools-build.out --json > "conformance-tools-build-short.jsonl")
 cmp -s "$test_build/conformance-tools-build-short.jsonl" "$conformance_root/tools/build.expected.jsonl" || { printf '%s
 ' "the short build spelling differs from the positional form" >&2; exit 1; }
 # `neper test FILE` (D292): the short spelling is the test stream, its WORKDIR
 # `.neper/debug/test/` under the operand's project -- the repo here -- made by the command.
 rm -rf "$repo/.neper/debug/test"
 test_short_status=0
-"$repo/build/linux/neper-self-short" test "$conformance_root/tools/test.e" > "$test_build/conformance-tools-test-short.jsonl" || test_short_status=$?
+"$repo/build/linux/short/neper-self-short" test "$conformance_root/tools/test.e" > "$test_build/conformance-tools-test-short.jsonl" || test_short_status=$?
 [ "$test_short_status" -eq 1 ]
 [ -f "$repo/.neper/debug/test/nptest-runner.e" ] || { printf '%s
 ' "the short test spelling did not work under .neper/debug/test/" >&2; exit 1; }
 sed -i -E 's/"duration_ms":[0-9]+/"duration_ms":0/g; s|[^" (]*nptest-runner\.e|nptest-runner.e|g' "$test_build/conformance-tools-test-short.jsonl"
 cmp -s "$test_build/conformance-tools-test-short.jsonl" "$conformance_root/tools/test.expected.jsonl" || { printf '%s
 ' "the short test spelling differs from the positional form" >&2; exit 1; }
+# `neper check` and `neper test` with no operand (D294): the project the current
+# directory is in, as the project forms, working under its `.neper/debug/<command>/`.
+check_short_status=0
+(cd "$conformance_root/tools/check_project" && "$repo/build/linux/short/neper-self-short" check > "$test_build/conformance-tools-check-project-short.jsonl") || check_short_status=$?
+[ "$check_short_status" -eq 1 ]
+cmp -s "$test_build/conformance-tools-check-project-short.jsonl" "$conformance_root/tools/check_project.expected.jsonl" || { printf '%s
+' "the operand-less check differs from check-project" >&2; exit 1; }
+test_short_project_status=0
+(cd "$conformance_root/tools/test_project" && "$repo/build/linux/short/neper-self-short" test > "$test_build/conformance-tools-test-project-short.jsonl") || test_short_project_status=$?
+[ "$test_short_project_status" -eq 1 ]
+sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-project-short.jsonl"
+cmp -s "$test_build/conformance-tools-test-project-short.jsonl" "$conformance_root/tools/test_project.expected.jsonl" || { printf '%s
+' "the operand-less test differs from test-project" >&2; exit 1; }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 run_actual="$test_build/conformance-tools-run.jsonl"

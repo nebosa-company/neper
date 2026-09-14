@@ -1747,7 +1747,11 @@ $manifestAgain = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifac
 if ($manifestAgain -ne $manifestArtifact) { throw "the second build's manifest does not carry the first build's artifact hash" }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
-$shortCompiler = Join-Path $repo 'build\windows\neper-self-short.exe'
+$shortRoot = Join-Path $repo 'build\windows\short'
+if (Test-Path -LiteralPath $shortRoot) { Remove-Item -Recurse -Force -LiteralPath $shortRoot }
+[void](New-Item -ItemType Directory -Force -Path $shortRoot)
+Copy-Item -Recurse -LiteralPath (Join-Path $repo 'lib') -Destination (Join-Path $shortRoot 'lib')
+$shortCompiler = Join-Path $shortRoot 'neper-self-short.exe'
 Copy-Item -LiteralPath $compiler -Destination $shortCompiler -Force
 $buildShortActual = Join-Path $testBuild 'conformance-tools-build-short.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$shortCompiler`" build `"$(Join-Path $conformanceRoot 'tools\build.e')`" -o conformance-tools-build.out --json > `"$buildShortActual`""
@@ -1761,6 +1765,17 @@ if ($LASTEXITCODE -ne 1) { throw "the short test spelling exited $LASTEXITCODE, 
 if (-not (Test-Path -LiteralPath (Join-Path $repo '.neper\debug\test\nptest-runner.e'))) { throw 'the short test spelling did not work under .neper/debug/test/' }
 [IO.File]::WriteAllText($testShortActual, ([IO.File]::ReadAllText($testShortActual) -replace '"duration_ms":\d+', '"duration_ms":0' -replace '[^" (]*nptest-runner\.e', 'nptest-runner.e'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testShortActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\test.expected.jsonl')).Hash) { throw 'the short test spelling differs from the positional form' }
+# `neper check` and `neper test` with no operand (D294): the project the current
+# directory is in, as the project forms, working under its `.neper/debug/<command>/`.
+$checkShortActual = Join-Path $testBuild 'conformance-tools-check-project-short.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\check_project')`" && `"$shortCompiler`" check > `"$checkShortActual`""
+if ($LASTEXITCODE -ne 1) { throw "the operand-less check exited $LASTEXITCODE, expected 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $checkShortActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\check_project.expected.jsonl')).Hash) { throw 'the operand-less check differs from check-project' }
+$testShortProjectActual = Join-Path $testBuild 'conformance-tools-test-project-short.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\test_project')`" && `"$shortCompiler`" test > `"$testShortProjectActual`""
+if ($LASTEXITCODE -ne 1) { throw "the operand-less test exited $LASTEXITCODE, expected 1" }
+[IO.File]::WriteAllText($testShortProjectActual, ([IO.File]::ReadAllText($testShortProjectActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testShortProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\test_project.expected.jsonl')).Hash) { throw 'the operand-less test differs from test-project' }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'

@@ -5764,3 +5764,21 @@ other, the rest is the path with `/` separators. An artifact outside the project
 its absolute spelling: not project-relative, but a spelling that finds it, which is
 more than the bare name was. `.` and `..` segments are kept, as in D290. Both suites
 read the corpus build's artifact from the manifest by its project-relative spelling.
+
+## D294 -- `neper check` and `neper test` with no operand are the project
+
+Spec section 13: without a `FILE.e`, `check` and `test` operate on everything under
+the project's roots. The short form now takes that shape: `check` or `test` with no
+operand, or with a `--` flag first, is the project the current directory is in --
+`project.discover` from a name beside it -- or `--project DIR`, run as
+`check-project` or `test-project` with WORKDIR `.neper/debug/check/` or
+`.neper/debug/test/` under that project, made when missing (D292's helper, given the
+leaf). Both suites run each from inside a corpus project and require the project
+form's golden.
+
+Doing so found the suites' short-form binary standing beside the bootstrap's three-
+file `lib/e` copy under `build/<host>/`, where a project outside the repo has no
+toolchain `e.atomic` for its test runner; the earlier short-form steps passed only
+because their operands lay in the repo, whose own `lib/` served. The suites now give
+that binary a real toolchain layout, `build/<host>/short/` with the whole `lib/`
+copied beside it.
