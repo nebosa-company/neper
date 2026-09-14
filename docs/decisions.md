@@ -5062,3 +5062,33 @@ nothing ran. tests/conformance/tools/test_compile_error.e pins that stream, and
 tests/conformance/tools/stale_map.e with a map whose hash is zeros pins the refusal.
 Section 8 also says the compiler still analyses the generated file under a stale map
 and fails only at the end; this one fails at once, which is the gap the row names.
+
+## D265 -- A manifest's inputs have their real roots, and its dependencies an interface hash
+
+D238's manifest named every module as an `operand` by basename and left `dependencies`
+empty. Two corrections.
+
+An input's source identity is now section 2's: a module under the project's `src` is
+`project-src` with its path under that root, under `lib` it is `project-lib`, a module
+under the toolchain's `lib` is `toolchain-lib` -- `e/atomic.e` -- and only a file
+outside every root is the operand by its basename. The graph already knew both roots;
+the identity is `project.relative_under` asked three times, separators written as `/`.
+
+Every module but the root is a dependency, with two hashes. `body_sha256` is the file.
+`interface_sha256` is the file with every function body left out -- the balanced braces
+after a top-level `fn` header, the `{` and `}` kept -- hashed. That is the property the
+split exists for: an edit inside a body moves `body_sha256` and nothing else, so a
+consumer holding the previous manifest can tell "recompile the dependents" from
+"relink them" without a checker. The cut is a token walk, not a parse: a header ends at
+its first `{` outside brackets or at a newline that does not continue one, so an
+`extern fn` without a body and a function-typed field are passed over.
+tests/conformance/tools/manifest_project pins a two-module project per host, and the
+interface hash was checked against the same cut done by hand.
+
+The first draft of the cut scanned each module into a token array and the self-hosted
+compiler's stable stage failed to build, the D254 symptom again: a token is a hundred
+bytes per source byte, times thirty modules. The cut now streams tokens off the scanner
+one at a time and keeps none, and each module's scratch is released with an arena mark
+once its hashes are written -- a large graph costs one module's worth of arena at a
+time. The compiler's own manifest lists 32 inputs and 31 dependencies, and its stable
+stage is the same bytes as its second.

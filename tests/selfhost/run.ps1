@@ -1747,6 +1747,12 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fmtCheckActual).Hash -ne (Get-
 $manifestActual = Join-Path $testBuild 'conformance-tools-manifest.jsonl'
 cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/manifest.e')`" `"$repo`" x64 windows --json > `"$manifestActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest.x64-windows.expected.jsonl')).Hash) { throw "build-manifest --json differs from the conformance corpus" }
+# On a project (D265): inputs under `project-src`, and the one module beyond the root as a
+# dependency with its interface hash -- the source with function bodies left out -- and its
+# body hash.
+$manifestProjectActual = Join-Path $testBuild 'conformance-tools-manifest-project.jsonl'
+cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/manifest_project/src/main.e')`" `"$repo`" x64 windows --json > `"$manifestProjectActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest_project.x64-windows.expected.jsonl')).Hash) { throw "build-manifest --json on a project differs from the conformance corpus" }
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
 $testActual = Join-Path $testBuild 'conformance-tools-test.jsonl'

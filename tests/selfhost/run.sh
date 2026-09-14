@@ -1889,6 +1889,12 @@ manifest_actual="$test_build/conformance-tools-manifest.jsonl"
 $test_build/neper-self build-manifest-file "$conformance_root/tools/manifest.e" "$repo" x64 linux --json > "$manifest_actual"
 cmp -s "$manifest_actual" "$conformance_root/tools/manifest.x64-linux.expected.jsonl" || { printf '%s
 ' "build-manifest --json differs from the conformance corpus" >&2; exit 1; }
+# On a project (D265): inputs under `project-src`, and the one module beyond the root as a
+# dependency with its interface hash -- the source with function bodies left out -- and its
+# body hash.
+$test_build/neper-self build-manifest-file "$conformance_root/tools/manifest_project/src/main.e" "$repo" x64 linux --json > "$test_build/conformance-tools-manifest-project.jsonl"
+cmp -s "$test_build/conformance-tools-manifest-project.jsonl" "$conformance_root/tools/manifest_project.x64-linux.expected.jsonl" || { printf '%s
+' "build-manifest --json on a project differs from the conformance corpus" >&2; exit 1; }
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
 test_actual="$test_build/conformance-tools-test.jsonl"
