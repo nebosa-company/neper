@@ -5578,3 +5578,45 @@ identity function in a public surface is a promise that something happens.
 link/game_view pins 67 checks with four negative controls, one of them the stable-sort tie
 -- the case a sort that is merely correct would get wrong without ever failing a count.
 The shake is checked as a bound rather than a value, since it draws from the generator.
+
+## D284 -- A* in integers, a tree that names its action, and forgiving input
+
+`e.game.ai` and `e.game.input`, the last pair before `netsync`.
+
+**`e.algo.graph` is deliberately not used.** Its shortest-path answers carry `f64`
+distances, and a float comparison landing differently on two machines sends two agents
+down two different paths -- which desynchronises a lockstep session exactly the way a
+float position would. So `path_grid` is A* with integer costs written against the tilemap
+directly, over a binary heap keyed on `u32`. The duplication is the price of the
+determinism the rest of this core rests on, and the registered dependency was removed
+rather than kept as a fiction. The heuristic is Manhattan, admissible for four-way
+movement at unit cost and therefore optimal; a diagonal grid would need a different one,
+which is why the choice is written down rather than assumed.
+
+**A behaviour tree names its action rather than performing it.** Conditions are answered
+by the caller before the tick as a flat `[]const bool`, and an `Action` node reports its
+id through an out-parameter while `run` returns `Running`. That keeps the tree pure data
+-- a constant table a game can author -- and needs no function pointers. The cost is that
+the caller evaluates every condition whether the tree reaches it or not, which is the
+right trade while conditions are cheap predicates over game state; it is also the same
+shape `e.game.dialog` took for its guards, deliberately, so the two read alike.
+
+**Input buffers, because an action game is unplayable otherwise.** A player who presses
+attack three frames before the animation allows it did not mean "do nothing", and a game
+answering only `pressed` tells them they did. `buffered` remembers a press for a window of
+ticks and `consume` takes it so it fires once -- a caller that asks and acts without
+consuming will act again next tick, which is the usual double-attack bug, so the two are
+separate calls rather than one. A held key the device re-reports each tick does not
+refill the buffer, since `apply` ignores a code that repeats its current state. Opposite
+axis keys cancel rather than the later one winning, which is what a player pressing both
+actually expects.
+
+Both are `partial`. `path_grid` takes caller-owned `Scratch` rather than an arena, like
+every other module here; a push that cannot grow the heap drops the candidate rather than
+failing, so a caller who undersized its scratch gets a possibly-suboptimal path instead of
+none.
+
+link/game_mind pins 74 checks with four negative controls. The path expectations came from
+an independent A* over the same map -- eleven tiles around a gapped wall -- and the fixture
+additionally proves every step is one tile from the last and lands on open ground, so a
+path that were merely the right length would still fail.

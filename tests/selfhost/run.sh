@@ -2533,6 +2533,12 @@ game_view_executable_written=$($test_build/neper-self emit-executable "$repo/tes
 [ "$game_view_executable_written" = 'executable written' ]
 chmod +x "$game_view_executable_path"
 "$game_view_executable_path"
+# `e.game.ai` and `e.game.input` (D284): steering, behaviour trees, A* and input buffering.
+game_mind_executable_path="$test_build/game-mind-selfhost"
+game_mind_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/game_mind/src/main.e" "$repo" x64 linux "$game_mind_executable_path")
+[ "$game_mind_executable_written" = 'executable written' ]
+chmod +x "$game_mind_executable_path"
+"$game_mind_executable_path"
 module_executable_path="$test_build/modules-selfhost"
 module_executable_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/modules/src/main.e" "$repo" x64 linux "$module_executable_path")
 [ "$module_executable_written" = 'executable written' ]

@@ -4064,17 +4064,23 @@ type Steer = struct { x: fixed.Fx, y: fixed.Fx }
 type Kind = enum u8 { Sequence, Selector, Invert, Condition, Action }
 type Behavior = struct { kind: Kind, first_child: u16, child_count: u16, id: u16 }
 type Status = enum u8 { Running, Success, Failure }
-type Path = struct { steps: []u32, count: usize }
+// The search's working memory, sized by the caller: nothing here allocates.
+type Scratch = struct { came_from: []u32, cost: []u32, heap: []u32, heap_f: []u32, heap_count: usize, seen: []u64 }
 error Unreachable
+error Size
+error Bounds
+
+fn steer(x: fixed.Fx, y: fixed.Fx) -> Steer
+fn limit(s: Steer, most: fixed.Fx) -> Steer
 
 fn seek(a: Agent, tx: fixed.Fx, ty: fixed.Fx) -> Steer
 fn flee(a: Agent, tx: fixed.Fx, ty: fixed.Fx) -> Steer
 fn arrive(a: Agent, tx: fixed.Fx, ty: fixed.Fx, slow_radius: fixed.Fx) -> Steer
-fn wander(a: Agent, state: *rand.State, jitter: fixed.Fx) -> Steer
+fn wander(a: Agent, state: *rand.Pcg64, jitter: fixed.Fx) -> Steer
 fn separate(a: Agent, others: []const Agent, radius: fixed.Fx) -> Steer
 fn combine(parts: []const Steer, weights: []const fixed.Fx) -> Steer
-fn run(tree: []const Behavior, at: u16, context: usize) -> Status
-fn path_grid(a: *mem.Arena, m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32) -> (Path, err)
+fn run(tree: []const Behavior, at: u16, conditions: []const bool, action: *u16) -> Status
+fn path_grid(m: tilemap.Map, sx: i32, sy: i32, gx: i32, gy: i32, s: *Scratch, out: []u32) -> (usize, err)
 ```
 
 ### `e.game.dialog`
@@ -4208,6 +4214,12 @@ type Axis = struct { id: u16, negative: u16, positive: u16 }
 type Combo = struct { id: u16, first: u16, count: u16, window: u16 }
 type State = struct { held: []u64, pressed: []u64, released: []u64, buffer: []u16, ages: []u16, head: usize }
 error Unknown
+error Size
+
+const NONE: u16
+
+fn init(s: *State, held_bits: []u64, pressed_bits: []u64, released_bits: []u64, buffer: []u16, ages: []u16) -> err
+fn bound(a: Action, code: u16) -> bool
 
 fn begin(s: *State) -> err
 fn apply(s: *State, code: u16, down: bool) -> err
