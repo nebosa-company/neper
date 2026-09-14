@@ -1268,6 +1268,56 @@ fn test_project_command(a: *mem.Arena, args: []str) -> err {
     ret ok
 }
 
+// `<runner>.map.json`: section 8's document with one mapping, the operand's whole text
+// at its place in the runner. The prefix is the two `use` lines D246 puts first.
+fn write_runner_map(a: *mem.Arena, runner_path: str, runner: []u8, text: str, identity: str) -> err {
+    // The two `use` lines the runner begins with.
+    let prefix_lines = "use e.os as nptest_os\nuse e.atomic as nptest_atomic\n"
+    let prefix = prefix_lines.len
+    let (digest, digest_error) = tool.manifest_sha256(a, runner[0usize..runner.len])
+    if digest_error != ok { ret digest_error }
+    var lines = 1usize
+    var last_line_start = 0usize
+    var at = 0usize
+    while at < text.len {
+        if text[at] == 10u8 {
+            lines += 1usize
+            last_line_start = at + 1usize
+        }
+        at += 1usize
+    }
+    let end_column = text.len - last_line_start + 1usize
+    let (storage, storage_error) = mem.alloc[u8](a, 2048usize + identity.len)
+    if storage_error != ok { ret storage_error }
+    var out = capture_sink(storage)
+    try write_all(&out, "{\"schema\":\"neper-source-map\",\"version\":1,\"generated\":{\"root\":\"operand\",\"path\":\"nptest-runner.e\"},\"generated_sha256\":\"")
+    try write_all(&out, digest)
+    try write_all(&out, "\",\"mappings\":[{\"generated_span\":{\"source\":{\"root\":\"operand\",\"path\":\"nptest-runner.e\"},\"byte_start\":")
+    try write_usize(&out, prefix)
+    try write_all(&out, ",\"byte_end\":")
+    try write_usize(&out, prefix + text.len)
+    try write_all(&out, ",\"line\":3,\"column\":1,\"end_line\":")
+    try write_usize(&out, 2usize + lines)
+    try write_all(&out, ",\"end_column\":")
+    try write_usize(&out, end_column)
+    try write_all(&out, ",\"column_utf16\":1,\"end_column_utf16\":")
+    try write_usize(&out, end_column)
+    try write_all(&out, "},\"original_span\":{\"source\":{\"root\":\"operand\",\"path\":")
+    try write_json_string(&out, identity)
+    try write_all(&out, "},\"byte_start\":0,\"byte_end\":")
+    try write_usize(&out, text.len)
+    try write_all(&out, ",\"line\":1,\"column\":1,\"end_line\":")
+    try write_usize(&out, lines)
+    try write_all(&out, ",\"end_column\":")
+    try write_usize(&out, end_column)
+    try write_all(&out, ",\"column_utf16\":1,\"end_column_utf16\":")
+    try write_usize(&out, end_column)
+    try write_all(&out, "},\"name\":null}]}\n")
+    let (map_path, map_path_error) = with_suffix(a, runner_path, ".map.json")
+    if map_path_error != ok { ret map_path_error }
+    ret save_bytes(a, map_path, out.capture[0usize..out.count])
+}
+
 fn nptest_stem(path: str) -> str {
     var start = 0usize
     var at = 0usize
@@ -1337,10 +1387,13 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     let (runner_exe, runner_exe_error) = nptest_join(a, args[6usize], "nptest-runner.exe")
     if runner_exe_error != ok { ret runner_exe_error }
     try save_bytes(a, runner_path, runner_source)
+    // The runner's source map (section 8, D264): the operand's text sits two `use` lines
+    // down, one mapping, so a diagnostic in it comes back at the operand's own span.
+    try write_runner_map(a, runner_path, runner_source, text, identity)
     // Compile the runner by spawning this compiler again; args[0] is its own path. The
     // runner lives in WORKDIR but is built as part of the operand's project (D263), so
     // the operand's `use` of its sibling modules resolves from there.
-    var build_argv: [9]str = zero
+    var build_argv: [10]str = zero
     build_argv[0usize] = args[0usize]
     build_argv[1usize] = "emit-executable"
     build_argv[2usize] = runner_path
@@ -1348,17 +1401,21 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     build_argv[4usize] = args[4usize]
     build_argv[5usize] = args[5usize]
     build_argv[6usize] = runner_exe
-    var build_argc = 7usize
+    build_argv[7usize] = "--json"
+    var build_argc = 8usize
     let (operand_project, project_error) = project.discover(a, args[2usize])
     if project_error == ok && operand_project.has_sources {
-        build_argv[7usize] = "--project"
-        build_argv[8usize] = operand_project.root
-        build_argc = 9usize
+        build_argv[8usize] = "--project"
+        build_argv[9usize] = operand_project.root
+        build_argc = 10usize
     }
     let (build_status, build_out, build_err, build_spawn_error) = nptest_spawn(a, build_argv[0usize..build_argc], runner_exe)
     if build_spawn_error != ok { ret build_spawn_error }
     if build_status != 0i32 {
         try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+        // The compiler's own diagnostics first, mapped back onto the operand by the map.
+        let (forwarded, forward_error) = forward_diagnostics(&report, build_out, "")
+        if forward_error != ok { ret forward_error }
         try emit_command_diagnostic(&report, "E-CLI-9999", "the tests could not be compiled")
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"tests\":0}}\n")
         os.exit(2i32)
@@ -1607,6 +1664,7 @@ fn forward_diagnostics(report: *Sink, stream: str, rel: str) -> (usize, err) {
 // Whether a diagnostic line's span names `rel` as its operand path, or has no span at
 // all -- a command diagnostic belongs to the module it was raised for.
 fn diagnostic_names(line: str, rel: str) -> bool {
+    if rel.len == 0usize { ret true }
     var scratch: [1024]u8 = zero
     var needle_len = nptest_append(scratch[..], 0usize, "\"path\":\"")
     needle_len = nptest_append(scratch[..], needle_len, rel)
@@ -1949,6 +2007,17 @@ type Sink = struct {
     // basename; a diagnostic in any other module keeps that module's basename.
     operand_source: str,
     operand_path: str,
+    // A generated source map beside the operand (tooling section 8, D264): a diagnostic
+    // inside a mapped range is reported at the original span, the generated one related.
+    // ponytail: eight mappings per map is the cap; raise it when a generator needs more.
+    map_source: str,
+    map_count: usize,
+    map_generated_start: [8]usize,
+    map_generated_end: [8]usize,
+    map_generated_line: [8]usize,
+    map_original_path: [8]str,
+    map_original_start: [8]usize,
+    map_original_line: [8]usize,
 }
 
 // One diagnostic, as the human line `path:line:col: error[CODE]: message` or as the
@@ -1982,16 +2051,39 @@ fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, 
         origin.end_column_utf16 = 1usize
         at = origin
     }
+    // Inside a source map's range, the original span is primary (D264).
+    let mapping = map_index(report, path, at, has_token)
     try write_all(report, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":")
     try write_json_string(report, code)
     try write_all(report, ",\"message\":")
     try write_json_string(report, message)
-    try write_all(report, ",\"span\":{\"source\":{\"root\":\"operand\",\"path\":")
-    if report.operand_path.len != 0usize && same(path, report.operand_source) {
-        try write_json_string(report, report.operand_path)
+    try write_all(report, ",\"span\":")
+    if mapping < report.map_count {
+        var original = at
+        original.start = at.start - report.map_generated_start[mapping] + report.map_original_start[mapping]
+        original.end = at.end - report.map_generated_start[mapping] + report.map_original_start[mapping]
+        original.line = at.line - report.map_generated_line[mapping] + report.map_original_line[mapping]
+        original.end_line = at.end_line - report.map_generated_line[mapping] + report.map_original_line[mapping]
+        try write_span(report, report.map_original_path[mapping], original)
+        try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source\",\"span\":")
+        try write_span(report, basename(path), at)
+        try write_all(report, "}],\"fixes\":[]}")
     } else {
-        try write_json_string(report, basename(path))
+        if report.operand_path.len != 0usize && same(path, report.operand_source) {
+            try write_span(report, report.operand_path, at)
+        } else {
+            try write_span(report, basename(path), at)
+        }
+        try write_all(report, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
     }
+    try write_all(report, "\n")
+    report.count += 1usize
+    ret ok
+}
+
+fn write_span(report: *Sink, identity: str, at: lex.Token) -> err {
+    try write_all(report, "{\"source\":{\"root\":\"operand\",\"path\":")
+    try write_json_string(report, identity)
     try write_all(report, "},\"byte_start\":")
     try write_usize(report, at.start)
     try write_all(report, ",\"byte_end\":")
@@ -2008,11 +2100,93 @@ fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, 
     try write_usize(report, at.column_utf16)
     try write_all(report, ",\"end_column_utf16\":")
     try write_usize(report, at.end_column_utf16)
-    try write_all(report, "},\"parent\":null,\"related\":[],\"fixes\":[]}")
-    try write_all(report, "\n")
-    report.count += 1usize
+    ret write_all(report, "}")
+}
+
+// The mapping a token of `path` falls inside, or `map_count` for none.
+fn map_index(report: *Sink, path: str, at: lex.Token, has_token: bool) -> usize {
+    if !has_token || report.map_count == 0usize || !same(path, report.map_source) { ret report.map_count }
+    var mapping = 0usize
+    while mapping < report.map_count {
+        if at.start >= report.map_generated_start[mapping] && at.end <= report.map_generated_end[mapping] { ret mapping }
+        mapping += 1usize
+    }
+    ret report.map_count
+}
+
+// The string after `key` in a JSON line, up to its closing quote; "" when absent.
+fn json_str_after(line: str, key: str) -> str {
+    var at = 0usize
+    while at + key.len <= line.len {
+        if same(line[at..at + key.len], key) {
+            var end = at + key.len
+            while end < line.len && line[end] != 34u8 { end += 1usize }
+            ret line[at + key.len..end]
+        }
+        at += 1usize
+    }
+    ret ""
+}
+
+// Section 8's source map beside the operand, `<file>.map.json`: absent is no map; present,
+// its hash must be the operand's bytes or the map is stale -- E-TOOL-0001, and the
+// command fails before analysis (D264). ponytail: a key scan over the one document shape
+// this compiler's own generator writes, not a JSON reader; e.fmt.json would cost the
+// bootstrap decls it has no room for.
+fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err {
+    let (map_path, map_path_error) = with_suffix(a, operand, ".map.json")
+    if map_path_error != ok { ret map_path_error }
+    let (document, load_error) = source.load(a, map_path)
+    if load_error != ok { ret ok }
+    var malformed = !same(json_str_after(document, "\"schema\":\""), "neper-source-map")
+    let (digest, digest_error) = tool.manifest_sha256(a, text)
+    if digest_error != ok { ret digest_error }
+    let stale = !same(json_str_after(document, "\"generated_sha256\":\""), digest)
+    if malformed || stale {
+        if !report.json {
+            if stale {
+                try stderr_text("error[E-TOOL-0001]: the generated source map is stale: its hash is not the operand's\n")
+            } else {
+                try stderr_text("error[E-TOOL-0001]: the generated source map is malformed\n")
+            }
+            os.exit(1i32)
+            ret ok
+        }
+        if stale {
+            try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is stale: its hash is not the operand's")
+        } else {
+            try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is malformed")
+        }
+        try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"diagnostics\":1}}\n")
+        os.exit(1i32)
+        ret ok
+    }
+    report.map_source = operand
+    var at = 0usize
+    let generated_key = "\"generated_span\":{"
+    while at + generated_key.len <= document.len && report.map_count < 8usize {
+        if same(document[at..at + generated_key.len], generated_key) {
+            let rest = document[at..document.len]
+            let index = report.map_count
+            report.map_generated_start[index] = json_usize_after(rest, "\"byte_start\":")
+            report.map_generated_end[index] = json_usize_after(rest, "\"byte_end\":")
+            report.map_generated_line[index] = json_usize_after(rest, "\"line\":")
+            var original_at = 0usize
+            let original_key = "\"original_span\":{"
+            while original_at + original_key.len <= rest.len && !same(rest[original_at..original_at + original_key.len], original_key) { original_at += 1usize }
+            let original = rest[original_at..rest.len]
+            report.map_original_path[index] = json_str_after(original, "\"path\":\"")
+            report.map_original_start[index] = json_usize_after(original, "\"byte_start\":")
+            report.map_original_line[index] = json_usize_after(original, "\"line\":")
+            report.map_count += 1usize
+            at += generated_key.len
+        } else {
+            at += 1usize
+        }
+    }
     ret ok
 }
+
 
 // A diagnostic with no location: a command's own, such as an operand that cannot be
 // read (D228).
@@ -3095,6 +3269,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         if load_error != ok {
             // Not a diagnostic of the source but of the command: the operand itself.
             if !report.json { ret load_error }
@@ -3199,6 +3374,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         let load_error = load_graph_in(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize], project_flag(args))
+        if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         if load_error != ok {
             if disassemble {
                 var envelope = json_sink()

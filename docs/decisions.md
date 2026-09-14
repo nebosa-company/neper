@@ -5023,3 +5023,42 @@ tests/conformance/tools/test_project pins three modules: `main.e` with no tests,
 `helper.e` with a passing and a failing test, and `nested/deep.e` whose test uses
 `helper`. What remains is a module that both defines `main` and carries tests, which
 the runner's own `main` still collides with.
+
+## D264 -- Source maps: the test runner writes one, and the compiler reads it back
+
+Tooling section 8 has described generated source maps since it was written, and
+nothing produced or consumed one. This repository has exactly one generator -- `test`
+writes a runner that is the operand's text two `use` lines down (D240) -- and the
+consequence showed every time a test failed to compile: "the tests could not be
+compiled", location-free, with the real diagnostic pointing into a file the user never
+wrote. Both halves of section 8 now exist, and that failure is reported at the test's
+own line.
+
+The generator half. Beside `nptest-runner.e` the driver writes `nptest-runner.e.map.json`:
+`neper-source-map`, version 1, the runner's identity and SHA-256, and one mapping from
+the operand's text at its place in the runner to the operand as a whole, `name` null.
+One mapping is the truth of this generator -- the operand is copied verbatim, so every
+byte of it maps by one constant offset and two lines -- and the document validates
+against the schema, which both suites check.
+
+The consumer half. `emit-executable`, `run`, `dis` and `check-file` look for
+`<operand>.map.json` beside the operand once the graph is loaded. Absent, nothing
+changes. Present, its `generated_sha256` must be the operand's bytes and its `schema`
+the source map's, or it is E-TOOL-0001 -- stale or malformed, the code's two meanings
+-- and the command fails with no artifact written; that is the first use of the code.
+With a matching map, every diagnostic whose span lies inside a mapping is reported at
+the original span as primary, the source identity the map names, and the generated
+span goes into `related` as "in the generated source". The arithmetic is the mapping's
+two offsets: bytes shift by the difference of the two `byte_start`s, lines by the
+difference of the two `line`s, columns are kept -- right for a mapping that begins at a
+line start, which this generator's does and which is recorded as the assumption. The
+map is read by a key scan over the one document shape the generator writes, not a JSON
+reader: `e.fmt.json` would cost bootstrap declarations the compiler has no room for, and
+the schema is ours. Eight mappings per map is the cap.
+
+`test` compiles its runner under `--json` now and forwards the compiler's records --
+mapped -- before its own E-CLI-9999, so the stream says both what was wrong and that
+nothing ran. tests/conformance/tools/test_compile_error.e pins that stream, and
+tests/conformance/tools/stale_map.e with a map whose hash is zeros pins the refusal.
+Section 8 also says the compiler still analyses the generated file under a stale map
+and fails only at the end; this one fails at once, which is the gap the row names.

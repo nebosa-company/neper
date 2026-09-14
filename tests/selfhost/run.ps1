@@ -1770,6 +1770,22 @@ cmd /c "`"$compiler`" test-project `"$(Join-Path $conformanceRoot 'tools/test_pr
 if ($LASTEXITCODE -ne 1) { throw "test-project --json exited $LASTEXITCODE, not 1" }
 [IO.File]::WriteAllText($testProjectActual, ([IO.File]::ReadAllText($testProjectActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_project.expected.jsonl')).Hash) { throw "test-project --json differs from the conformance corpus" }
+# `test --json` on a test that does not compile (D264): the runner's source map brings
+# the compiler's diagnostic back at the operand's own span, the generated one related,
+# before the E-CLI-9999 that says nothing ran; exit 2.
+$compileErrorActual = Join-Path $testBuild 'conformance-tools-test-compile-error.jsonl'
+cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_compile_error.e')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$compileErrorActual`""
+if ($LASTEXITCODE -ne 2) { throw "test --json on a test that does not compile exited $LASTEXITCODE, not 2" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $compileErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_compile_error.expected.jsonl')).Hash) { throw "test --json on a test that does not compile differs from the conformance corpus" }
+& python (Join-Path $repo 'scripts/validate_stream.py') (Join-Path $testBuild 'nptest-runner.e.map.json') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "the runner's source map does not validate against the v1 schema" }
+# A stale source map beside the operand is E-TOOL-0001 and no artifact (D264).
+$staleActual = Join-Path $testBuild 'conformance-tools-stale-map.jsonl'
+Remove-Item -ErrorAction SilentlyContinue -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map.out')
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools/stale_map.e')`" `"$repo`" x64 windows conformance-tools-stale-map.out --json > `"$staleActual`""
+if ($LASTEXITCODE -ne 1) { throw "a stale source map exited $LASTEXITCODE, not 1" }
+if (Test-Path -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map.out')) { throw 'a stale source map still wrote an artifact' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $staleActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/stale_map.expected.jsonl')).Hash) { throw "a stale source map is not refused as the conformance corpus says" }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 $timeoutActual = Join-Path $testBuild 'conformance-tools-test-timeout.jsonl'

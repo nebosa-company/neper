@@ -1917,6 +1917,23 @@ $test_build/neper-self test-project "$conformance_root/tools/test_project" "$rep
 sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-project.jsonl"
 cmp -s "$test_build/conformance-tools-test-project.jsonl" "$conformance_root/tools/test_project.expected.jsonl" || { printf '%s
 ' "test-project --json differs from the conformance corpus" >&2; exit 1; }
+# `test --json` on a test that does not compile (D264): the runner's source map brings
+# the compiler's diagnostic back at the operand's own span, the generated one related,
+# before the E-CLI-9999 that says nothing ran; exit 2.
+compile_error_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test_compile_error.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-test-compile-error.jsonl" || compile_error_status=$?
+[ "$compile_error_status" -eq 2 ]
+cmp -s "$test_build/conformance-tools-test-compile-error.jsonl" "$conformance_root/tools/test_compile_error.expected.jsonl" || { printf '%s
+' "test --json on a test that does not compile differs from the conformance corpus" >&2; exit 1; }
+python3 "$repo/scripts/validate_stream.py" "$test_build/nptest-runner.e.map.json" > /dev/null || { printf '%s
+' "the runner's source map does not validate against the v1 schema" >&2; exit 1; }
+# A stale source map beside the operand is E-TOOL-0001 and no artifact (D264).
+stale_status=0
+(cd "$test_build" && rm -f conformance-tools-stale-map.out && ./neper-self emit-executable "$conformance_root/tools/stale_map.e" "$repo" x64 linux conformance-tools-stale-map.out --json > "conformance-tools-stale-map.jsonl") || stale_status=$?
+[ "$stale_status" -eq 1 ]
+[ ! -e "$test_build/conformance-tools-stale-map.out" ]
+cmp -s "$test_build/conformance-tools-stale-map.jsonl" "$conformance_root/tools/stale_map.expected.jsonl" || { printf '%s
+' "a stale source map is not refused as the conformance corpus says" >&2; exit 1; }
 # `test --json` with a deadline (D246): a test that never returns is ended by the runner's
 # own watchdog thread and reported `timeout`. 400ms keeps the suite quick.
 timeout_actual="$test_build/conformance-tools-test-timeout.jsonl"
