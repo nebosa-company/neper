@@ -5782,6 +5782,22 @@ toolchain `e.atomic` for its test runner; the earlier short-form steps passed on
 because their operands lay in the repo, whose own `lib/` served. The suites now give
 that binary a real toolchain layout, `build/<host>/short/` with the whole `lib/`
 copied beside it.
+
+## D295 -- `fmt FILE` formats in place; `fmt` alone formats the project
+
+Section 6 says `fmt --check` writes nothing, which is only worth saying of a command
+that otherwise writes; and section 13 says `fmt` with no operand covers every `.e`
+under the project's roots. D234 and D255 had the short `fmt FILE` print the canonical
+text, which is `-`'s job. Now `fmt FILE` writes the canonical text back into the file
+when it differs and nothing otherwise -- `fmt-file PATH --write` positionally -- with
+a refusal still the human lines on stderr and exit 1; `fmt -` prints as before, and
+`--json` and `--check` on a file are unchanged. `fmt` with no operand, or `--check`
+first, is `fmt-project DIR --write|--check`: every `.e` under the project's `src/`
+and `lib/` in byte order (D262's walk), formatted in place, or under `--check` each
+non-canonical file named as an E-FORMAT-0001 line on stderr with exit 1. A `--json`
+stream over a project waits for a merged shape like `check-project`'s. Both suites
+format a one-file project and a copied file to the corpus's canonical text.
+
 ## D296 -- Quantised deltas, and guessing ahead of the server
 
 `e.net.snapshot` and `e.game.netsync`, the last pair, and the two that only make sense

@@ -960,7 +960,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     if !(is_build || is_run || is_check || is_fmt || is_index || is_dis || is_manifest || is_test) { ret (args, false, ok) }
     // `check` and `test` with no operand (D294): the project the current directory is in,
     // as `check-project` and `test-project`; a `--` flag first is no operand either.
-    let project_form = (is_check || is_test) && (args.len == 2usize || (args[2usize].len >= 2usize && args[2usize][0usize] == 45u8 && args[2usize][1usize] == 45u8))
+    let project_form = (is_check || is_test || is_fmt) && (args.len == 2usize || (args[2usize].len >= 2usize && args[2usize][0usize] == 45u8 && args[2usize][1usize] == 45u8))
     if args.len < 3usize && !project_form { ret (args, false, ok) }
     var file = ""
     if !project_form { file = args[2usize] }
@@ -1057,31 +1057,22 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         }
         ret (long_form[0usize..count], true, ok)
     }
-    if is_fmt {
-        long_form[count] = "fmt-file"
-        long_form[count + 1usize] = file
-        count += 2usize
-        if check_only {
-            long_form[count] = "--check"
-            count += 1usize
-        }
-        if json || check_only {
-            long_form[count] = "--json"
-            count += 1usize
-        }
-        if virtual_path.len != 0usize {
-            long_form[count] = "--path"
-            long_form[count + 1usize] = virtual_path
-            count += 2usize
-        }
-        ret (long_form[0usize..count], true, ok)
-    }
     if project_form {
         var dir = project_dir
         if dir.len == 0usize {
             let (found, found_error) = project_from_cwd(a)
             if found_error != ok { ret (args, false, found_error) }
             dir = found
+        }
+        // `fmt` over the project (D295): in place, or `--check`; no stream yet.
+        if is_fmt {
+            if json { ret (args, false, ok) }
+            long_form[count] = "fmt-project"
+            long_form[count + 1usize] = dir
+            long_form[count + 2usize] = "--write"
+            if check_only { long_form[count + 2usize] = "--check" }
+            count += 3usize
+            ret (long_form[0usize..count], true, ok)
         }
         var leaf = "check"
         if is_test { leaf = "test" }
@@ -1095,6 +1086,30 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         long_form[count + 5usize] = project_workdir
         long_form[count + 6usize] = "--json"
         count += 7usize
+        ret (long_form[0usize..count], true, ok)
+    }
+    if is_fmt {
+        long_form[count] = "fmt-file"
+        long_form[count + 1usize] = file
+        count += 2usize
+        if check_only {
+            long_form[count] = "--check"
+            count += 1usize
+        }
+        if json || check_only {
+            long_form[count] = "--json"
+            count += 1usize
+        }
+        // Spec section 13: `fmt FILE` formats the file in place; `-` prints (D295).
+        if !json && !check_only && !same(file, "-") {
+            long_form[count] = "--write"
+            count += 1usize
+        }
+        if virtual_path.len != 0usize {
+            long_form[count] = "--path"
+            long_form[count + 1usize] = virtual_path
+            count += 2usize
+        }
         ret (long_form[0usize..count], true, ok)
     }
     if is_test {
@@ -2169,6 +2184,86 @@ fn fmt_plain_command(a: *mem.Arena, args: []str) -> err {
     let (plain_exit, plain_error) = tool.fmt_plain(a, text, path)
     if plain_error != ok { ret plain_error }
     if plain_exit != 0usize { os.exit(i32(plain_exit)) }
+    ret ok
+}
+
+// The file formatted in place (D295): nothing written when it is canonical already,
+// nothing on stdout either way; a refusal is the human lines on stderr and exit 1.
+fn fmt_write_command(a: *mem.Arena, args: []str, file: str) -> err {
+    let exit_code = fmt_write(a, file, fmt_identity(args))
+    if exit_code != 0usize { os.exit(i32(exit_code)) }
+    ret ok
+}
+
+// One file's in-place format: 0 when it is canonical now, 1 when refused, 2 when it
+// could not be read or written (said on stderr).
+fn fmt_write(a: *mem.Arena, file: str, path: str) -> usize {
+    let (text, load_error) = source.load(a, file)
+    if load_error != ok {
+        var report = stderr_sink()
+        let said = emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read")
+        ret 2usize
+    }
+    let (formatted, exit_code, text_error) = tool.fmt_plain_text(a, text, path)
+    if text_error != ok { ret 2usize }
+    if exit_code != 0usize { ret exit_code }
+    if same(formatted, text) { ret 0usize }
+    let (bytes, bytes_error) = mem.alloc[u8](a, formatted.len)
+    if bytes_error != ok { ret 2usize }
+    let count = nptest_append(bytes, 0usize, formatted)
+    if save_bytes(a, file, bytes[0usize..count]) != ok {
+        var report = stderr_sink()
+        let said = emit_command_diagnostic(&report, "E-CLI-9999", "the operand could not be written")
+        ret 2usize
+    }
+    ret 0usize
+}
+
+// Every `.e` under the project's `src/` and `lib/`, in byte order (D295): `--write`
+// formats each in place; `--check` writes nothing and names each file that is not
+// canonical as an E-FORMAT-0001 line on stderr, exiting 1 when any is.
+// ponytail: `--check` here is the human lines only; the `--json` stream over a project
+// waits for a merged-stream shape like check-project's.
+fn fmt_project_command(a: *mem.Arena, args: []str) -> err {
+    let checking = same(args[3usize], "--check")
+    let (paths, paths_error) = mem.alloc[str](a, 4096usize)
+    if paths_error != ok { ret paths_error }
+    let (rels, rels_error) = mem.alloc[str](a, 4096usize)
+    if rels_error != ok { ret rels_error }
+    var count = 0usize
+    var root_at = 0usize
+    while root_at < 2usize {
+        var leaf = "src"
+        if root_at == 1usize { leaf = "lib" }
+        let (dir, dir_error) = nptest_join(a, args[2usize], leaf)
+        if dir_error != ok { ret dir_error }
+        // A root the project does not have is simply empty.
+        let (probe, probe_error) = os.readdir(a, dir)
+        if probe_error == ok { try walk_sources(a, dir, leaf, paths, rels, &count) }
+        root_at += 1usize
+    }
+    var worst = 0usize
+    var at = 0usize
+    while at < count {
+        if checking {
+            let (text, load_error) = source.load(a, paths[at])
+            if load_error != ok { ret load_error }
+            let (formatted, exit_code, text_error) = tool.fmt_plain_text(a, text, rels[at])
+            if text_error != ok { ret text_error }
+            var verdict = exit_code
+            if verdict == 0usize && !same(formatted, text) {
+                try stderr_text(rels[at])
+                try stderr_text(": error[E-FORMAT-0001]: source is not in canonical layout\n")
+                verdict = 1usize
+            }
+            if verdict > worst { worst = verdict }
+        } else {
+            let verdict = fmt_write(a, paths[at], rels[at])
+            if verdict > worst { worst = verdict }
+        }
+        at += 1usize
+    }
+    if worst != 0usize { os.exit(i32(worst)) }
     ret ok
 }
 
@@ -3836,6 +3931,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if fmt_args.len == 5usize && same(fmt_args[1usize], "fmt-file") && same(fmt_args[3usize], "--check") && same(fmt_args[4usize], "--json") { ret fmt_check_command(a, args) }
     if fmt_args.len == 4usize && same(fmt_args[1usize], "fmt-file") && same(fmt_args[3usize], "--json") { ret fmt_command(a, args) }
     if fmt_args.len == 3usize && same(fmt_args[1usize], "fmt-file") { ret fmt_plain_command(a, args) }
+    // `fmt-file PATH --write` (D295): the canonical text back into the file, when it differs.
+    if fmt_args.len == 4usize && same(fmt_args[1usize], "fmt-file") && same(fmt_args[3usize], "--write") { ret fmt_write_command(a, args, args[2usize]) }
+    // `fmt-project DIR --write|--check` (D295): every `.e` under DIR/src and DIR/lib.
+    if args.len == 4usize && same(args[1usize], "fmt-project") && (same(args[3usize], "--write") || same(args[3usize], "--check")) { ret fmt_project_command(a, args) }
     // `check-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR --json` (D262): every module under
     // DIR/src, one stream.
     if args.len == 8usize && same(args[1usize], "check-project") && same(args[7usize], "--json") { ret check_project_command(a, args) }

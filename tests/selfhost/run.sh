@@ -1919,6 +1919,23 @@ test_short_project_status=0
 sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-project-short.jsonl"
 cmp -s "$test_build/conformance-tools-test-project-short.jsonl" "$conformance_root/tools/test_project.expected.jsonl" || { printf '%s
 ' "the operand-less test differs from test-project" >&2; exit 1; }
+# `fmt FILE` formats the file in place, and `fmt` / `fmt --check` with no operand cover
+# every `.e` under the project's src/ and lib/ (D295): a project of one non-canonical
+# file fails the check, is formatted to the corpus's canonical text, then passes.
+rm -rf "$test_build/fmt_project"
+mkdir -p "$test_build/fmt_project/src"
+cp "$conformance_root/format/layout.e" "$test_build/fmt_project/src/layout.e"
+fmt_check_status=0
+(cd "$test_build/fmt_project" && "$repo/build/linux/short/neper-self-short" fmt --check > /dev/null 2>&1) || fmt_check_status=$?
+[ "$fmt_check_status" -eq 1 ]
+(cd "$test_build/fmt_project" && "$repo/build/linux/short/neper-self-short" fmt)
+cmp -s "$test_build/fmt_project/src/layout.e" "$conformance_root/format/layout.expected.e" || { printf '%s
+' "fmt over the project did not write the canonical text" >&2; exit 1; }
+(cd "$test_build/fmt_project" && "$repo/build/linux/short/neper-self-short" fmt --check)
+cp "$conformance_root/format/layout.e" "$test_build/fmt-in-place.e"
+"$repo/build/linux/short/neper-self-short" fmt "$test_build/fmt-in-place.e"
+cmp -s "$test_build/fmt-in-place.e" "$conformance_root/format/layout.expected.e" || { printf '%s
+' "fmt FILE did not format the file in place" >&2; exit 1; }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 run_actual="$test_build/conformance-tools-run.jsonl"

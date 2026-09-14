@@ -1896,16 +1896,25 @@ fn fmt_check_result(out: *Out, canonical: bool) -> err {
 
 // `fmt --json` (D234): one `formatted` record whose `text` is the canonical layout.
 // `fmt-file PATH` without `--json` (D255): the canonical text itself, for a diff or a pipe.
-fn fmt_plain(a: *mem.Arena, source: str, path: str) -> (usize, err) {
-    // A refusal goes to stderr as the human lines of the same diagnostics, exit 1.
+// The canonical text and exit 0, or exit 1 after the refusals went to stderr as human
+// lines (D295: shared by the printing and the in-place forms).
+fn fmt_plain_text(a: *mem.Arena, source: str, path: str) -> (str, usize, err) {
     let (scratch, scratch_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
-    if scratch_error != ok { ret (2usize, scratch_error) }
+    if scratch_error != ok { ret ("", 2usize, scratch_error) }
     var probe = Out { bytes: scratch, count: 0usize, absolute: "" }
     let (refused, refuse_error) = fmt_refuse_plain(a, &probe, source, path)
-    if refuse_error != ok { ret (2usize, refuse_error) }
-    if refused != 0usize { ret (1usize, ok) }
+    if refuse_error != ok { ret ("", 2usize, refuse_error) }
+    if refused != 0usize { ret ("", 1usize, ok) }
     let (formatted, format_error) = format_source(a, source)
-    if format_error != ok { ret (1usize, format_error) }
+    if format_error != ok { ret ("", 1usize, format_error) }
+    ret (formatted, 0usize, ok)
+}
+
+fn fmt_plain(a: *mem.Arena, source: str, path: str) -> (usize, err) {
+    // A refusal goes to stderr as the human lines of the same diagnostics, exit 1.
+    let (formatted, exit_code, text_error) = fmt_plain_text(a, source, path)
+    if text_error != ok { ret (exit_code, text_error) }
+    if exit_code != 0usize { ret (exit_code, ok) }
     let stdout = os.stdout()
     var at = 0usize
     while at < formatted.len {

@@ -1776,6 +1776,24 @@ cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools\test_project')`" && `"$short
 if ($LASTEXITCODE -ne 1) { throw "the operand-less test exited $LASTEXITCODE, expected 1" }
 [IO.File]::WriteAllText($testShortProjectActual, ([IO.File]::ReadAllText($testShortProjectActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $testShortProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\test_project.expected.jsonl')).Hash) { throw 'the operand-less test differs from test-project' }
+# `fmt FILE` formats the file in place, and `fmt` / `fmt --check` with no operand cover
+# every `.e` under the project's src/ and lib/ (D295): a project of one non-canonical
+# file fails the check, is formatted to the corpus's canonical text, then passes.
+$fmtProject = Join-Path $testBuild 'fmt_project'
+if (Test-Path -LiteralPath $fmtProject) { Remove-Item -Recurse -Force -LiteralPath $fmtProject }
+[void](New-Item -ItemType Directory -Force -Path (Join-Path $fmtProject 'src'))
+Copy-Item -LiteralPath (Join-Path $conformanceRoot 'format\layout.e') -Destination (Join-Path $fmtProject 'src\layout.e')
+cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt --check > nul 2> nul"
+if ($LASTEXITCODE -ne 1) { throw "fmt --check over a non-canonical project exited $LASTEXITCODE, not 1" }
+cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt"
+if ($LASTEXITCODE -ne 0) { throw "fmt over the project exited $LASTEXITCODE" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $fmtProject 'src\layout.e')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'format\layout.expected.e')).Hash) { throw 'fmt over the project did not write the canonical text' }
+cmd /c "cd /d `"$fmtProject`" && `"$shortCompiler`" fmt --check"
+if ($LASTEXITCODE -ne 0) { throw "fmt --check over the formatted project exited $LASTEXITCODE" }
+Copy-Item -LiteralPath (Join-Path $conformanceRoot 'format\layout.e') -Destination (Join-Path $testBuild 'fmt-in-place.e') -Force
+cmd /c "`"$shortCompiler`" fmt `"$(Join-Path $testBuild 'fmt-in-place.e')`""
+if ($LASTEXITCODE -ne 0) { throw "fmt FILE exited $LASTEXITCODE" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'fmt-in-place.e')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'format\layout.expected.e')).Hash) { throw 'fmt FILE did not format the file in place' }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'
