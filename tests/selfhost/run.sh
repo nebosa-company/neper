@@ -1832,6 +1832,13 @@ cmp -s "$test_build/conformance-tools-build.out" "$test_build/conformance-tools-
 manifest_again=$(sed -n 's/.*"artifacts":\[{"path":"conformance-tools-build-again.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
 [ "$manifest_again" = "$manifest_artifact" ] || { printf '%s
 ' "the second build's manifest does not carry the first build's artifact hash" >&2; exit 1; }
+# Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
+# has the toolchain's lib/ beside it is the same stream as the positional form.
+cp "$test_build/neper-self" "$repo/build/linux/neper-self-short"
+chmod +x "$repo/build/linux/neper-self-short"
+(cd "$test_build" && "$repo/build/linux/neper-self-short" build "$conformance_root/tools/build.e" -o conformance-tools-build.out --json > "conformance-tools-build-short.jsonl")
+cmp -s "$test_build/conformance-tools-build-short.jsonl" "$conformance_root/tools/build.expected.jsonl" || { printf '%s
+' "the short build spelling differs from the positional form" >&2; exit 1; }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 run_actual="$test_build/conformance-tools-run.jsonl"

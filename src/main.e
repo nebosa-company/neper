@@ -857,6 +857,179 @@ fn tool_usage() -> err {
 // The target this compiler runs on, for `info` (D229).
 // ponytail: probed from the standard-handle value -- a Linux fd is 2, a Windows HANDLE
 // never is -- until the runtime has a host intrinsic.
+// The directory the compiler runs from: spec section 2 puts the toolchain's `lib/`
+// beside the binary, so it is the toolchain root of every short-form command.
+fn own_directory(path: str) -> str {
+    var end = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 47u8 || path[at] == 92u8 { end = at }
+        at += 1usize
+    }
+    if end == 0usize { ret "." }
+    ret path[0usize..end]
+}
+
+// Whether `args` is one of spec section 2's spellings, and its positional form if so:
+//   build FILE [-o OUT] [--target ARCH-OS] [--release] [--json] [--project DIR]
+//   run FILE [--target ARCH-OS] [--release] [-- ARGS...]            (always --json)
+//   check FILE [--json] [--path REL] | fmt FILE [--check] [--json] | index FILE | dis FILE
+//   build-manifest FILE | info
+// The toolchain root is the binary's own directory, the target the host unless
+// `--target` says, and `build`'s output the operand's stem beside it, `.exe` on Windows.
+error NotShortForm
+
+// `main` sits at the bootstrap's local cap, so the rewrite and the second dispatch
+// live here: `NotShortForm` means the arguments were already positional.
+fn dispatch_short_form(a: *mem.Arena, args: []str) -> err {
+    let (long_form, rewritten, rewrite_error) = short_form(a, args)
+    if rewrite_error != ok { ret rewrite_error }
+    if !rewritten { ret NotShortForm }
+    ret main(a, long_form)
+}
+
+fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
+    if args.len < 2usize { ret (args, false, ok) }
+    let command = args[1usize]
+    let is_build = same(command, "build")
+    // The positional `run FILE ROOT ARCH OS OUT ...` has an architecture fourth.
+    let is_run = same(command, "run") && !(args.len >= 7usize && same(args[4usize], "x64"))
+    let is_check = same(command, "check")
+    let is_fmt = same(command, "fmt")
+    let is_index = same(command, "index")
+    let is_dis = same(command, "dis")
+    let is_manifest = same(command, "build-manifest")
+    if !(is_build || is_run || is_check || is_fmt || is_index || is_dis || is_manifest) { ret (args, false, ok) }
+    if args.len < 3usize { ret (args, false, ok) }
+    let file = args[2usize]
+    let root = own_directory(args[0usize])
+    // Flags after the operand.
+    var triple = host_target()
+    var output = ""
+    var has_output = false
+    var release = false
+    var json = false
+    var check_only = false
+    var project_dir = ""
+    var virtual_path = ""
+    var program_args_at = args.len
+    var at = 3usize
+    while at < args.len {
+        if same(args[at], "--") {
+            program_args_at = at
+            at = args.len
+        } else {
+            if same(args[at], "--triple") && at + 1usize < args.len {
+                triple = args[at + 1usize]
+                at += 1usize
+            } else {
+                if same(args[at], "-o") && at + 1usize < args.len {
+                    output = args[at + 1usize]
+                    has_output = true
+                    at += 1usize
+                } else {
+                    if same(args[at], "--project") && at + 1usize < args.len {
+                        project_dir = args[at + 1usize]
+                        at += 1usize
+                    } else {
+                        if same(args[at], "--path") && at + 1usize < args.len {
+                            virtual_path = args[at + 1usize]
+                            at += 1usize
+                        } else {
+                            if same(args[at], "--release") { release = true }
+                            if same(args[at], "--json") { json = true }
+                            if same(args[at], "--check") { check_only = true }
+                        }
+                    }
+                }
+            }
+            at += 1usize
+        }
+    }
+    // `ARCH-OS` splits at its dash.
+    var dash = 0usize
+    while dash < triple.len && triple[dash] != 45u8 { dash += 1usize }
+    if dash == triple.len { ret (args, false, ok) }
+    let arch = triple[0usize..dash]
+    let os_name = triple[dash + 1usize..triple.len]
+    let (long_form, long_error) = mem.alloc[str](a, args.len + 12usize)
+    if long_error != ok { ret (args, false, long_error) }
+    var count = 0usize
+    long_form[count] = args[0usize]
+    count += 1usize
+    if is_build || is_run {
+        if !has_output {
+            var suffix = ""
+            if same(os_name, "windows") { suffix = ".exe" }
+            let (named, named_error) = with_suffix(a, nptest_stem(file), suffix)
+            if named_error != ok { ret (args, false, named_error) }
+            output = named
+        }
+        if is_run { long_form[count] = "run" } else { long_form[count] = "emit-executable" }
+        count += 1usize
+        long_form[count] = file
+        long_form[count + 1usize] = root
+        long_form[count + 2usize] = arch
+        long_form[count + 3usize] = os_name
+        long_form[count + 4usize] = output
+        count += 5usize
+        if release {
+            long_form[count] = "--release"
+            count += 1usize
+        }
+        if json || is_run {
+            long_form[count] = "--json"
+            count += 1usize
+        }
+        if project_dir.len != 0usize {
+            long_form[count] = "--project"
+            long_form[count + 1usize] = project_dir
+            count += 2usize
+        }
+        var program_at = program_args_at
+        while program_at < args.len {
+            long_form[count] = args[program_at]
+            count += 1usize
+            program_at += 1usize
+        }
+        ret (long_form[0usize..count], true, ok)
+    }
+    if is_fmt {
+        long_form[count] = "fmt-file"
+        long_form[count + 1usize] = file
+        count += 2usize
+        if check_only {
+            long_form[count] = "--check"
+            count += 1usize
+        }
+        if json || check_only {
+            long_form[count] = "--json"
+            count += 1usize
+        }
+        ret (long_form[0usize..count], true, ok)
+    }
+    if is_check { long_form[count] = "check-file" }
+    if is_index { long_form[count] = "index-file" }
+    if is_dis { long_form[count] = "dis-file" }
+    if is_manifest { long_form[count] = "build-manifest-file" }
+    count += 1usize
+    long_form[count] = file
+    long_form[count + 1usize] = root
+    long_form[count + 2usize] = arch
+    long_form[count + 3usize] = os_name
+    count += 4usize
+    if json || is_index || is_dis || is_manifest {
+        long_form[count] = "--json"
+        count += 1usize
+    }
+    if is_check && virtual_path.len != 0usize {
+        long_form[count] = "--path"
+        long_form[count + 1usize] = virtual_path
+        count += 2usize
+    }
+    ret (long_form[0usize..count], true, ok)
+}
+
 fn host_target() -> str {
     if os.stderr().raw == 2usize { ret "x64-linux" }
     ret "x64-windows"
@@ -3098,6 +3271,10 @@ fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic
 
 fn main(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
+    // Spec section 2's spellings -- `neper build FILE`, `neper check FILE`, ... -- are
+    // rewritten into the positional forms below and dispatched again (D276).
+    let short_result = dispatch_short_form(a, args)
+    if short_result != NotShortForm { ret short_result }
     if args.len == 2usize && same(args[1usize], "self-test") {
         try self_test()
         try io.print("selfhost lexer ok\n")

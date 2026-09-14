@@ -1696,6 +1696,13 @@ if ($LASTEXITCODE -ne 0) { throw "the second build of build.e exited $LASTEXITCO
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build-again.out')).Hash) { throw 'the same source built twice is not the same executable' }
 $manifestAgain = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"conformance-tools-build-again.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
 if ($manifestAgain -ne $manifestArtifact) { throw "the second build's manifest does not carry the first build's artifact hash" }
+# Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
+# has the toolchain's lib/ beside it is the same stream as the positional form.
+$shortCompiler = Join-Path $repo 'build\windows\neper-self-short.exe'
+Copy-Item -LiteralPath $compiler -Destination $shortCompiler -Force
+$buildShortActual = Join-Path $testBuild 'conformance-tools-build-short.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$shortCompiler`" build `"$(Join-Path $conformanceRoot 'tools\build.e')`" -o conformance-tools-build.out --json > `"$buildShortActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $buildShortActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\build.expected.jsonl')).Hash) { throw 'the short build spelling differs from the positional form' }
 # `run --json` (D231): the build stream plus one `run` record of the program's whole
 # stdout, stderr and exit status, byte for byte.
 $runActual = Join-Path $testBuild 'conformance-tools-run.jsonl'

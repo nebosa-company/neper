@@ -5402,3 +5402,26 @@ E-SYNTAX-0012 with the spec's own wording -- `` `(` opened here is still unclose
 `fn` on line 6 `` -- in the parse stream, the check stream and the human line alike.
 That is the code's first use. tests/conformance/parse pins two_errors and barrier, and
 reject/barrier pins the check stream.
+
+## D276 -- Spec section 2's spellings, as a front door onto the positional forms
+
+The self-hosted compiler answered only to positional forms -- `emit-executable PATH
+TOOLCHAIN_ROOT ARCH OS OUTPUT --json` -- while the spec writes `neper build <file.e>`
+and `neper run <file.e>`, and section 2 says where the missing operands come from: the
+toolchain's `lib/` is beside the binary, so the toolchain root is the binary's own
+directory; the target is the host unless asked otherwise; a program root may be run
+from any directory. Those spellings now exist: `build FILE [-o OUT] [--target ARCH-OS]
+[--release] [--json] [--project DIR]`, `run FILE [--target ..] [-- ARGS]`, `check FILE
+[--json] [--path REL]`, `fmt FILE [--check] [--json]`, `index FILE`, `dis FILE`,
+`build-manifest FILE`. Each is rewritten into its positional form and dispatched
+again through `main` -- the rewrite is a table, not a second implementation, and the
+positional forms stay the ones the suites drive and the goldens pin. `build` names its
+output after the operand's stem, `.exe` on Windows, and `run` is always the stream.
+
+Two details. The positional `run` and the short `run` share a word; they are told
+apart by the positional form's architecture sitting fourth. And `main` sits at the
+bootstrap's local cap, so the rewrite and the second dispatch live in one helper whose
+`NotShortForm` result means the arguments were already positional. The suites copy the
+stage-one compiler beside the toolchain `lib/` and compare the short `build`'s stream
+to the positional golden. A short `test` is not offered: its WORKDIR has no short
+answer until the fixed os surface can make a directory.
