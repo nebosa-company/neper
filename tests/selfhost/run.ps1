@@ -1754,6 +1754,23 @@ cmd /c "`"$compiler`" test-file `"$(Join-Path $conformanceRoot 'tools/test_timeo
 if ($LASTEXITCODE -ne 1) { throw "test --json deadline exited $LASTEXITCODE, expected 1" }
 [IO.File]::WriteAllText($timeoutActual, ([IO.File]::ReadAllText($timeoutActual) -replace '"duration_ms":\d+', '"duration_ms":0'), (New-Object Text.UTF8Encoding($false)))
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $timeoutActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_timeout.expected.jsonl')).Hash) { throw "test --json deadline differs from the conformance corpus" }
+# An operand that cannot be read answers with section 1's envelope on every `--json`
+# command (D260): the header, one location-free E-CLI-9999, the result exiting 2 with the
+# command's zero counts. The expected stream is built here from that shape.
+$noOperand = Join-Path $testBuild 'no-such-operand.e'
+$unreadableActual = Join-Path $testBuild 'conformance-unreadable.jsonl'
+foreach ($case in @(
+    @('tokens', '{"tokens":0,"diagnostics":1}', "tokens --json `"$noOperand`""),
+    @('parse', '{"tokens":0,"diagnostics":1}', "parse --json `"$noOperand`""),
+    @('fmt', '{"diagnostics":1}', "fmt-file `"$noOperand`" --json"),
+    @('fmt', '{"diagnostics":1}', "fmt-file `"$noOperand`" --check --json"),
+    @('dis', '{"functions":0}', "dis-file `"$noOperand`" `"$repo`" x64 windows --json"),
+    @('test', '{"tests":0}', "test-file `"$noOperand`" `"$repo`" x64 windows `"$testBuild`" --json"))) {
+    cmd /c "`"$compiler`" $($case[2]) > `"$unreadableActual`""
+    if ($LASTEXITCODE -ne 2) { throw "$($case[0]) --json on an unreadable operand exited $LASTEXITCODE, not 2" }
+    $unreadableExpected = "{`"schema`":`"neper-stream`",`"version`":1,`"record`":`"header`",`"command`":`"$($case[0])`",`"tool_version`":`"0.1.0`",`"language_version`":`"0.1`",`"grammar_revision`":1}`n{`"record`":`"diagnostic`",`"severity`":`"error`",`"code`":`"E-CLI-9999`",`"message`":`"the operand cannot be read`",`"span`":null,`"parent`":null,`"related`":[],`"fixes`":[]}`n{`"record`":`"result`",`"ok`":false,`"exit_code`":2,`"data`":$($case[1])}`n"
+    if ([IO.File]::ReadAllText($unreadableActual) -ne $unreadableExpected) { throw "$($case[0]) --json on an unreadable operand is not section 1's envelope" }
+}
 # Every record of the corpus against docs/schemas/neper-v1.schema.json (D250). The
 # goldens are what the commands emit, byte for byte, so validating them validates the
 # emitters; the script skips itself where the `jsonschema` package is absent.

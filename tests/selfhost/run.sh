@@ -1900,6 +1900,26 @@ $test_build/neper-self test-file "$conformance_root/tools/test_timeout.e" "$repo
 sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$timeout_actual"
 cmp -s "$timeout_actual" "$conformance_root/tools/test_timeout.expected.jsonl" || { printf '%s
 ' "test --json deadline differs from the conformance corpus" >&2; exit 1; }
+# An operand that cannot be read answers with section 1's envelope on every `--json`
+# command (D260): the header, one location-free E-CLI-9999, the result exiting 2 with the
+# command's zero counts. The expected stream is built here from that shape.
+for unreadable_case in 'tokens {"tokens":0,"diagnostics":1} tokens --json' 'parse {"tokens":0,"diagnostics":1} parse --json' 'fmt {"diagnostics":1} fmt-file' 'fmt {"diagnostics":1} fmt-file --check --json' 'dis {"functions":0} dis-file' 'test {"tests":0} test-file'; do
+    set -- $unreadable_case
+    unreadable_command=$1
+    unreadable_data=$2
+    shift 2
+    unreadable_status=0
+    case "$1" in
+        tokens|parse) "$test_build/neper-self" "$@" "$test_build/no-such-operand.e" > "$test_build/conformance-unreadable.jsonl" || unreadable_status=$? ;;
+        fmt-file) if [ $# -eq 1 ]; then "$test_build/neper-self" fmt-file "$test_build/no-such-operand.e" --json > "$test_build/conformance-unreadable.jsonl" || unreadable_status=$?; else "$test_build/neper-self" fmt-file "$test_build/no-such-operand.e" --check --json > "$test_build/conformance-unreadable.jsonl" || unreadable_status=$?; fi ;;
+        dis-file) "$test_build/neper-self" dis-file "$test_build/no-such-operand.e" "$repo" x64 linux --json > "$test_build/conformance-unreadable.jsonl" || unreadable_status=$? ;;
+        test-file) "$test_build/neper-self" test-file "$test_build/no-such-operand.e" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-unreadable.jsonl" || unreadable_status=$? ;;
+    esac
+    [ "$unreadable_status" -eq 2 ]
+    printf '%s\n' "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"$unreadable_command\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}" '{"record":"diagnostic","severity":"error","code":"E-CLI-9999","message":"the operand cannot be read","span":null,"parent":null,"related":[],"fixes":[]}' "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":$unreadable_data}" > "$test_build/conformance-unreadable.expected.jsonl"
+    cmp -s "$test_build/conformance-unreadable.jsonl" "$test_build/conformance-unreadable.expected.jsonl" || { printf '%s
+' "$unreadable_command --json on an unreadable operand is not section 1's envelope" >&2; exit 1; }
+done
 # Every record of the corpus against docs/schemas/neper-v1.schema.json (D250). The
 # goldens are what the commands emit, byte for byte, so validating them validates the
 # emitters; the script skips itself where the `jsonschema` package is absent.

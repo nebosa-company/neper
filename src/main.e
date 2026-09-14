@@ -1132,7 +1132,7 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     report.json = true
     report.file = os.stdout()
     let (text, load_error) = source.load(a, args[2usize])
-    if load_error != ok { ret load_error }
+    if load_error != ok { ret unreadable_operand(&report, "test", "{\"tests\":0}") }
     let (names, names_error) = mem.alloc[str](a, 256usize)
     if names_error != ok { ret names_error }
     let (lines, lines_error) = mem.alloc[usize](a, 256usize)
@@ -1262,9 +1262,34 @@ fn manifest_command(a: *mem.Arena, args: []str) -> err {
     ret ok
 }
 
+// Section 1's envelope for an operand that cannot be read, on every `--json` command
+// (D260): the header, one location-free E-CLI-9999, and the result exiting 2 with the
+// command's own zero counts -- so a harness sees a stream, never a bare `error:` line.
+fn unreadable_operand(report: *Sink, command: str, data: str) -> err {
+    try write_all(report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"")
+    try write_all(report, command)
+    try write_all(report, "\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+    try emit_command_diagnostic(report, "E-CLI-9999", "the operand cannot be read")
+    try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":")
+    try write_all(report, data)
+    try write_all(report, "}\n")
+    os.exit(2i32)
+    ret ok
+}
+
+fn json_sink() -> Sink {
+    var report = stderr_sink()
+    report.json = true
+    report.file = os.stdout()
+    ret report
+}
+
 fn fmt_command(a: *mem.Arena, args: []str) -> err {
     let (text, load_error) = source.load(a, args[2usize])
-    if load_error != ok { ret load_error }
+    if load_error != ok {
+        var report = json_sink()
+        ret unreadable_operand(&report, "fmt", "{\"diagnostics\":1}")
+    }
     let (fmt_exit, fmt_error) = tool.fmt_json(a, text, basename(args[2usize]))
     if fmt_error != ok { ret fmt_error }
     if fmt_exit != 0usize { os.exit(i32(fmt_exit)) }
@@ -1273,7 +1298,12 @@ fn fmt_command(a: *mem.Arena, args: []str) -> err {
 
 fn fmt_plain_command(a: *mem.Arena, args: []str) -> err {
     let (text, load_error) = source.load(a, args[2usize])
-    if load_error != ok { ret load_error }
+    if load_error != ok {
+        var report = stderr_sink()
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read")
+        os.exit(2i32)
+        ret ok
+    }
     let (plain_exit, plain_error) = tool.fmt_plain(a, text, basename(args[2usize]))
     if plain_error != ok { ret plain_error }
     if plain_exit != 0usize { os.exit(i32(plain_exit)) }
@@ -1282,7 +1312,10 @@ fn fmt_plain_command(a: *mem.Arena, args: []str) -> err {
 
 fn fmt_check_command(a: *mem.Arena, args: []str) -> err {
     let (text, load_error) = source.load(a, args[2usize])
-    if load_error != ok { ret load_error }
+    if load_error != ok {
+        var report = json_sink()
+        ret unreadable_operand(&report, "fmt", "{\"diagnostics\":1}")
+    }
     let (check_exit, check_error) = tool.fmt_check_json(a, text, basename(args[2usize]))
     if check_error != ok { ret check_error }
     if check_exit != 0usize { os.exit(i32(check_exit)) }
@@ -1351,7 +1384,12 @@ fn tool_command(a: *mem.Arena, args: []str) -> err {
     }
     if !has_file || same(file, "-") { ret tool_usage() }
     let (text, load_error) = source.load(a, file)
-    if load_error != ok { ret load_error }
+    if load_error != ok {
+        if !json { ret load_error }
+        var envelope = json_sink()
+        if parsing { ret unreadable_operand(&envelope, "parse", "{\"tokens\":0,\"diagnostics\":1}") }
+        ret unreadable_operand(&envelope, "tokens", "{\"tokens\":0,\"diagnostics\":1}")
+    }
     var path = virtual_path
     if !has_virtual { path = basename(file) }
     if json {
@@ -2795,6 +2833,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try init_cli_graph(a, &loaded)
         let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
         if load_error != ok {
+            if disassemble {
+                var envelope = json_sink()
+                ret unreadable_operand(&envelope, "dis", "{\"functions\":0}")
+            }
             if !report.json { ret load_error }
             try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
             try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")

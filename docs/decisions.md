@@ -4925,3 +4925,22 @@ asking the tool what it can do was told it could not build, run, index, disassem
 format or test. The list is now the ten of section 1's header enum, sorted by UTF-8
 bytes as the section requires. `cpu_levels` stays at `x64-v1`, which is the one level
 code selection actually targets, and `features` stays empty until there is one.
+
+## D260 -- An unreadable operand is the envelope, on every `--json` command
+
+Section 1: a command emits its final `result` record last, including on source or
+option failure, and stderr is empty unless JSON output itself cannot be initialised.
+`check`, `build`, `run` and `index` honoured that for an operand that cannot be read
+(D228-D232); `tokens`, `parse`, `fmt` in both its forms, `dis` and `test` printed
+`error: os.NotFound` to stderr and exited 1 -- an internal error value, no stream, and
+a harness that had been promised JSON Lines got none. All six now answer the way
+`check` does: the header, one location-free E-CLI-9999, and the result exiting 2 with
+the command's own zero counts. One writer produces it from the command name and the
+`data` object, so the shape cannot drift between commands. The plain `fmt-file PATH`
+prints the human line and exits 2, since it never promised a stream.
+
+Both suites pin the six streams byte for byte, building the expected text from the
+shape rather than from six more golden files that would differ only in one name and
+one object. `build-manifest` is left as it was: it emits a document, not a stream, and
+a stream header naming it `build` would be a lie -- what its failure should look like
+is a question for the manifest's own row.
