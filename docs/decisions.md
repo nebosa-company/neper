@@ -4915,3 +4915,13 @@ and put out in token order, or a struct's fields would follow the next declarati
 
 The result's symbol count includes them. tests/conformance/tools/index.e now pins a
 documented field, two enum members and three parameters under their owners.
+
+## D259 -- `info` names every command the stream reaches
+
+The `info` record is section 1's capability query -- "harnesses never scrape
+`--help`" -- and its `commands` list had stopped at the four of D229: `check`, `info`,
+`parse`, `tokens`. Six commands have joined the stream since (D230-D240) and a harness
+asking the tool what it can do was told it could not build, run, index, disassemble,
+format or test. The list is now the ten of section 1's header enum, sorted by UTF-8
+bytes as the section requires. `cpu_levels` stays at `x64-v1`, which is the one level
+code selection actually targets, and `features` stays empty until there is one.

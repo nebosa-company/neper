@@ -174,7 +174,7 @@ fn info_json(a: *mem.Arena, host: str) -> err {
     if storage_error != ok { ret storage_error }
     var out = Out { bytes: storage, count: 0usize }
     try header(&out, "info")
-    try text(&out, "{\"record\":\"info\",\"tool_version\":\"0.1.0\",\"language_profiles\":[{\"language_version\":\"0.1\",\"grammar_revision\":1,\"stream_version\":1,\"experimental\":false}],\"commands\":[\"check\",\"info\",\"parse\",\"tokens\"],\"host_target\":")
+    try text(&out, "{\"record\":\"info\",\"tool_version\":\"0.1.0\",\"language_profiles\":[{\"language_version\":\"0.1\",\"grammar_revision\":1,\"stream_version\":1,\"experimental\":false}],\"commands\":[\"build\",\"check\",\"dis\",\"fmt\",\"index\",\"info\",\"parse\",\"run\",\"test\",\"tokens\"],\"host_target\":")
     try quoted(&out, host)
     // ponytail: the emitter selects nothing above SSE2 and SIMD lowers as lane loops (D148),
     // so x64-v1 is the one level this build honours; list the others when `--cpu` exists.
