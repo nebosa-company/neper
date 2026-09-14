@@ -5092,3 +5092,40 @@ one at a time and keeps none, and each module's scratch is released with an aren
 once its hashes are written -- a large graph costs one module's worth of arena at a
 time. The compiler's own manifest lists 32 inputs and 31 dependencies, and its stable
 stage is the same bytes as its second.
+## D266 -- `e.math.fixed`, and angles measured in turns
+
+The first of D249's game-engine modules, and the one the rest wait on. Q16.16 in `i32`,
+every operation integer: two machines running the same tick agree bit for bit, which is
+what lockstep, rollback and replay need and what `e.math` cannot promise, being floating
+point. Products take a 64-bit intermediate and narrow back, so an overflow traps under
+section 11 rather than wrapping quietly.
+
+**Angles are turns, not radians.** One whole turn is `ONE`, a quarter is `QUARTER`. That
+choice pays three times: reducing an angle is masking off the whole turns rather than a
+division by a transcendental constant, `sin` is therefore defined for every `i32` with no
+range-reduction error, and the quarter turns land exactly, so `sin(QUARTER)` is `ONE` and
+not one off it. `atan2` answers in the same unit, so an angle round-trips.
+
+Nothing here is a lookup table. `sin` is the parabola `8t - 16t|t|` over turns with one
+refinement pass weighted 0.225, worst error 0.0011 of a turn; `atan2` divides the steeper
+axis by the shallower so the ratio never leaves `[0, 1]`, applies the usual minimax bend
+to `z/8`, and folds the quadrant back on, worst error 0.00026 of a turn -- a tenth of a
+degree. Both are exact at the quarter turns. A 257-entry table would read better and
+measure better, and is not used because large literals have bitten this library before;
+the first `atan2` written here was the cruder rational form, at 4 degrees of error, and
+was replaced once measured rather than once trusted.
+
+`sqrt` is bit-by-bit integer square root over `i64` -- no division, no float, no
+iteration count that could differ. `length` squares into Q32 and takes one root, so
+3-4-5 comes back as exactly 5.
+
+The module is `partial`, not `source`: `atan_unit` is a helper the declared surface does
+not name, and section 12 has no visibility, so it sits beyond the fence in the same way
+`e.io` and `e.sync` do. `isqrt64` is declared rather than hidden, being useful on its
+own. `Overflow` was declared when the module was registered and is not implemented,
+because nothing returns it -- `mul` and `from_int` trap instead -- so it was removed from
+the surface rather than left as a promise.
+
+link/math_fixed pins thirty-seven checks whose expected values were computed
+independently rather than read back from this implementation, including a round trip that
+recovers an angle through `sin`, `cos` and `atan2` across the whole circle.
