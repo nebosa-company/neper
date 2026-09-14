@@ -1284,6 +1284,166 @@ fn json_sink() -> Sink {
     ret report
 }
 
+// Every `.e` file under `dir`, depth first, entries in byte order so the stream is the
+// same on every filesystem; `rel` is the path under the source root, with `/`.
+// ponytail: 1024 files per project is the cap; raise it when a project has more.
+fn walk_sources(a: *mem.Arena, dir: str, rel: str, paths: []str, rels: []str, count: *usize) -> err {
+    let (entries, readdir_error) = os.readdir(a, dir)
+    if readdir_error != ok { ret readdir_error }
+    let (names, names_error) = mem.alloc[str](a, entries.len)
+    if names_error != ok { ret names_error }
+    let (kinds, kinds_error) = mem.alloc[os.EntryKind](a, entries.len)
+    if kinds_error != ok { ret kinds_error }
+    var sorted = 0usize
+    for entry in entries {
+        var slot = sorted
+        while slot > 0usize && str_after(names[slot - 1usize], entry.name) {
+            names[slot] = names[slot - 1usize]
+            kinds[slot] = kinds[slot - 1usize]
+            slot = slot - 1usize
+        }
+        names[slot] = entry.name
+        kinds[slot] = entry.kind
+        sorted += 1usize
+    }
+    var at = 0usize
+    while at < sorted {
+        let (full, full_error) = nptest_join(a, dir, names[at])
+        if full_error != ok { ret full_error }
+        var child_rel = names[at]
+        if rel.len != 0usize {
+            let (joined, joined_error) = nptest_join(a, rel, names[at])
+            if joined_error != ok { ret joined_error }
+            child_rel = joined
+        }
+        if kinds[at] == .Dir {
+            try walk_sources(a, full, child_rel, paths, rels, count)
+        } else {
+            let name = names[at]
+            if name.len > 2usize && name[name.len - 2usize] == 46u8 && name[name.len - 1usize] == 101u8 {
+                if *count == paths.len { ret parse.InvalidSyntax }
+                paths[*count] = full
+                rels[*count] = child_rel
+                *count += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// Byte order: whether `a` sorts after `b`.
+fn str_after(a: str, b: str) -> bool {
+    var at = 0usize
+    while at < a.len && at < b.len {
+        if a[at] != b[at] { ret a[at] > b[at] }
+        at += 1usize
+    }
+    ret a.len > b.len
+}
+
+// `check-project` (D262): `check-file --json --path REL` on every module under DIR/src,
+// in byte order of path, each in its own process, their records merged into one stream
+// -- the header once, every diagnostic whose identity is the module being checked, and
+// one result with the total. A diagnostic in an imported module is dropped from that
+// child's stream: it is reported when that module is the one checked, and would
+// otherwise come out twice under two names.
+fn check_project_command(a: *mem.Arena, args: []str) -> err {
+    var report = stderr_sink()
+    report.json = true
+    report.file = os.stdout()
+    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
+    let (paths, paths_error) = mem.alloc[str](a, 1024usize)
+    if paths_error != ok { ret paths_error }
+    let (rels, rels_error) = mem.alloc[str](a, 1024usize)
+    if rels_error != ok { ret rels_error }
+    let (source_dir, source_dir_error) = nptest_join(a, args[2usize], "src")
+    if source_dir_error != ok { ret source_dir_error }
+    var count = 0usize
+    let walk_error = walk_sources(a, source_dir, "", paths, rels, &count)
+    if walk_error != ok {
+        try emit_command_diagnostic(&report, "E-CLI-9999", "the project has no readable src directory")
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1,\"modules\":0}}\n")
+        os.exit(2i32)
+        ret ok
+    }
+    let (child_base, child_base_error) = nptest_join(a, args[6usize], "npcheck-child")
+    if child_base_error != ok { ret child_base_error }
+    var diagnostics = 0usize
+    var at = 0usize
+    while at < count {
+        var argv: [9]str = zero
+        argv[0usize] = args[0usize]
+        argv[1usize] = "check-file"
+        argv[2usize] = paths[at]
+        argv[3usize] = args[3usize]
+        argv[4usize] = args[4usize]
+        argv[5usize] = args[5usize]
+        argv[6usize] = "--json"
+        argv[7usize] = "--path"
+        argv[8usize] = rels[at]
+        let (status, child_out, child_err, spawn_error) = nptest_spawn(a, argv[..], child_base)
+        if spawn_error != ok { ret spawn_error }
+        let (forwarded, forward_error) = forward_diagnostics(&report, child_out, rels[at])
+        if forward_error != ok { ret forward_error }
+        diagnostics += forwarded
+        at += 1usize
+    }
+    if diagnostics == 0usize {
+        try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"diagnostics\":0,\"modules\":")
+    } else {
+        try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"diagnostics\":")
+        try write_usize(&report, diagnostics)
+        try write_all(&report, ",\"modules\":")
+    }
+    try write_usize(&report, count)
+    try write_all(&report, "}}\n")
+    if diagnostics != 0usize { os.exit(1i32) }
+    ret ok
+}
+
+// The diagnostic records of one child's stream whose identity is `rel`, forwarded as
+// they are; the child's header and result are its own and are dropped.
+fn forward_diagnostics(report: *Sink, stream: str, rel: str) -> (usize, err) {
+    var forwarded = 0usize
+    var at = 0usize
+    while at < stream.len {
+        var end = at
+        while end < stream.len && stream[end] != 10u8 { end += 1usize }
+        let line = stream[at..end]
+        if line.len > 22usize && same(line[0usize..22usize], "{\"record\":\"diagnostic\"") && diagnostic_names(line, rel) {
+            let write_error = write_all(report, line)
+            if write_error != ok { ret (0usize, write_error) }
+            let newline_error = write_all(report, "\n")
+            if newline_error != ok { ret (0usize, newline_error) }
+            forwarded += 1usize
+        }
+        at = end + 1usize
+    }
+    ret (forwarded, ok)
+}
+
+// Whether a diagnostic line's span names `rel` as its operand path, or has no span at
+// all -- a command diagnostic belongs to the module it was raised for.
+fn diagnostic_names(line: str, rel: str) -> bool {
+    var scratch: [1024]u8 = zero
+    var needle_len = nptest_append(scratch[..], 0usize, "\"path\":\"")
+    needle_len = nptest_append(scratch[..], needle_len, rel)
+    needle_len = nptest_append(scratch[..], needle_len, "\"}")
+    let needle = scratch[0usize..needle_len]
+    var at = 0usize
+    while at + needle.len <= line.len {
+        if same(line[at..at + needle.len], needle) { ret true }
+        at += 1usize
+    }
+    var span_null = 0usize
+    while span_null + 12usize <= line.len {
+        if same(line[span_null..span_null + 12usize], "\"span\":null,") { ret true }
+        span_null += 1usize
+    }
+    ret false
+}
+
 fn fmt_command(a: *mem.Arena, args: []str) -> err {
     let (text, load_error) = source.load(a, args[2usize])
     if load_error != ok {
@@ -1604,6 +1764,10 @@ type Sink = struct {
     capturing: bool,
     // `--json` (D228): a diagnostic is a record on stdout, not a line on stderr.
     json: bool,
+    // `--path VIRTUAL` (D262): the operand's identity in every span, in place of its
+    // basename; a diagnostic in any other module keeps that module's basename.
+    operand_source: str,
+    operand_path: str,
 }
 
 // One diagnostic, as the human line `path:line:col: error[CODE]: message` or as the
@@ -1642,7 +1806,11 @@ fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, 
     try write_all(report, ",\"message\":")
     try write_json_string(report, message)
     try write_all(report, ",\"span\":{\"source\":{\"root\":\"operand\",\"path\":")
-    try write_json_string(report, basename(path))
+    if report.operand_path.len != 0usize && same(path, report.operand_source) {
+        try write_json_string(report, report.operand_path)
+    } else {
+        try write_json_string(report, basename(path))
+    }
     try write_all(report, "},\"byte_start\":")
     try write_usize(report, at.start)
     try write_all(report, ",\"byte_end\":")
@@ -2729,10 +2897,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md
     // -- header, a diagnostic record each, the result -- on stdout (D228).
-    if (args.len == 6usize || (args.len == 7usize && same(args[6usize], "--json"))) && same(args[1usize], "check-file") {
-        if args.len == 7usize {
+    if (args.len == 6usize || (args.len == 7usize && same(args[6usize], "--json")) || (args.len == 9usize && same(args[6usize], "--json") && same(args[7usize], "--path"))) && same(args[1usize], "check-file") {
+        if args.len >= 7usize {
             report.json = true
             report.file = os.stdout()
+            if args.len == 9usize {
+                report.operand_source = args[2usize]
+                report.operand_path = args[8usize]
+            }
             try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
         }
         var loaded: graph.Graph = zero
@@ -2795,6 +2967,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if args.len == 5usize && same(args[1usize], "fmt-file") && same(args[3usize], "--check") && same(args[4usize], "--json") { ret fmt_check_command(a, args) }
     if args.len == 4usize && same(args[1usize], "fmt-file") && same(args[3usize], "--json") { ret fmt_command(a, args) }
     if args.len == 3usize && same(args[1usize], "fmt-file") { ret fmt_plain_command(a, args) }
+    // `check-project DIR TOOLCHAIN_ROOT ARCH OS WORKDIR --json` (D262): every module under
+    // DIR/src, one stream.
+    if args.len == 8usize && same(args[1usize], "check-project") && same(args[7usize], "--json") { ret check_project_command(a, args) }
     if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
     if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
     if args.len == 9usize && same(args[1usize], "test-file") && same(args[8usize], "--json") { ret test_command(a, args) }

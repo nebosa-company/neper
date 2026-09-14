@@ -1660,6 +1660,13 @@ $infoActual = Join-Path $testBuild 'conformance-tools-info.jsonl'
 cmd /c "`"$compiler`" info --json > `"$infoActual`""
 if ($LASTEXITCODE -ne 0) { throw "info --json exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $infoActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\info.x64-windows.expected.jsonl')).Hash) { throw "info --json differs from the conformance corpus" }
+# `check-project --json` (D262): every module under a project's src in byte order, each
+# checked in its own process under its path relative to src, one stream; two of the
+# fixture's three modules carry an error.
+$checkProjectActual = Join-Path $testBuild 'conformance-tools-check-project.jsonl'
+cmd /c "`"$compiler`" check-project `"$(Join-Path $conformanceRoot 'tools/check_project')`" `"$repo`" x64 windows `"$testBuild`" --json > `"$checkProjectActual`""
+if ($LASTEXITCODE -ne 1) { throw "check-project --json exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $checkProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/check_project.expected.jsonl')).Hash) { throw "check-project --json differs from the conformance corpus" }
 # `emit-executable --json` (D230): the build stream, the executable named as given,
 # a rejected program's diagnostics as records; both byte for byte from testBuild.
 # A build writes `.neper/<mode>/build-manifest.json` under the project root when that

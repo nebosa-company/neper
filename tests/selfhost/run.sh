@@ -1793,6 +1793,14 @@ info_actual="$test_build/conformance-tools-info.jsonl"
 $test_build/neper-self info --json > "$info_actual"
 cmp -s "$info_actual" "$conformance_root/tools/info.x64-linux.expected.jsonl" || { printf '%s
 ' "info --json differs from the conformance corpus" >&2; exit 1; }
+# `check-project --json` (D262): every module under a project's src in byte order, each
+# checked in its own process under its path relative to src, one stream; two of the
+# fixture's three modules carry an error.
+check_project_status=0
+$test_build/neper-self check-project "$conformance_root/tools/check_project" "$repo" x64 linux "$test_build" --json > "$test_build/conformance-tools-check-project.jsonl" || check_project_status=$?
+[ "$check_project_status" -eq 1 ]
+cmp -s "$test_build/conformance-tools-check-project.jsonl" "$conformance_root/tools/check_project.expected.jsonl" || { printf '%s
+' "check-project --json differs from the conformance corpus" >&2; exit 1; }
 # `emit-executable --json` (D230): the build stream, the executable named as given,
 # a rejected program's diagnostics as records; both byte for byte from test_build.
 # A build writes `.neper/<mode>/build-manifest.json` under the project root when that

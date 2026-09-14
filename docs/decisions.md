@@ -4961,3 +4961,35 @@ what make the manifest that witness.
 No source changed; the suites are the deliverable. A Windows and a Linux build of the
 same program differ by design -- different runtime prefix, different image format --
 so reproducibility is claimed per host, and the row says so.
+
+## D262 -- `check-project` checks every module under a project, one stream
+
+`check-file` checks one operand. A project is a tree under `src/`, and checking it
+meant a caller walking the tree and reading one stream per file. `check-project DIR
+TOOLCHAIN_ROOT ARCH OS WORKDIR --json` does the walk and emits one stream.
+
+The shape is a driver, not a refactor of the checker. `check-file`'s pipeline lives
+inline in `main`, which sits at the bootstrap's local cap, so extracting it would have
+been a large edit for the sake of a loop; the driver instead runs `check-file --json`
+on each module in its own process -- the compiler spawning itself, as `test` already
+does (D240) -- and merges the children's records: the header once, every diagnostic,
+one result with the diagnostic and module counts. A process per module costs
+milliseconds and gives isolation for free.
+
+Two things had to be settled for the merged stream to be right. A diagnostic's
+identity was the operand's basename (D228), which cannot tell `a/main.e` from
+`b/main.e`; `check-file` now takes `--path VIRTUAL` after `--json`, the spelling
+`tokens` and `parse` already had (D227), and uses it as the operand's identity in every
+span while a diagnostic in any other module keeps that module's basename. The driver
+passes each module's path relative to `src`, with `/`. And the tree is walked in byte
+order of entry name, not the order `readdir` returns, so the stream is the same on
+every filesystem and the golden holds on both hosts. A diagnostic a child raises for
+an imported module rather than the one it was asked to check is dropped from that
+child's stream -- it is reported when that module is the one checked, and would
+otherwise appear twice under two names; with D224 the case is rare, since an imported
+module's body is not checked.
+
+tests/conformance/tools/check_project pins three modules, one of them in a
+subdirectory, two with an error. `WORKDIR` is where the children's output is captured,
+the same need `test` has and for the same reason: the fixed os surface spawns onto
+files, not pipes.
