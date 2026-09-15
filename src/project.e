@@ -331,25 +331,51 @@ fn source_path(a: *mem.Arena, directory: str, stem: str, suffix: str) -> (str, e
     ret (path, ok)
 }
 
-fn select_source(a: *mem.Arena, root: str, source_root: str, module: str, arch: str, target_os: str) -> (str, err) {
-    if !valid_arch(arch) || !valid_os(target_os) || !valid_target(arch, target_os) { ret ("", InvalidTarget) }
-    let checkpoint = mem.mark(a)
-    let (prefix, stem, parts_error) = module_parts(module)
-    if parts_error != ok {
-        mem.reset(a, checkpoint)
-        ret ("", parts_error)
-    }
-    let (directory, path_error) = source_directory(a, root, source_root, prefix)
-    if path_error != ok {
-        mem.reset(a, checkpoint)
-        ret ("", path_error)
+// The directories a program's imports name, listed once each (D321): every import read
+// its whole directory, so a two-thousand-module program listed its source directory
+// two thousand times -- over a second before a module was parsed. A directory that is
+// not there is remembered as such.
+type Listings = struct {
+    directories: [64]str,
+    entries: [64][]os.DirEntry,
+    missing: [64]bool,
+    count: usize,
+}
+
+fn list_directory(a: *mem.Arena, listings: *Listings, directory: str) -> ([]os.DirEntry, bool, err) {
+    var at = 0usize
+    while at < listings.count {
+        if path_equal(listings.directories[at], directory) { ret (listings.entries[at], listings.missing[at], ok) }
+        at += 1usize
     }
     let (entries, directory_error) = os.readdir(a, directory)
+    var no_entries: [1]os.DirEntry = zero
+    var listed = no_entries[0usize..0usize]
+    var missing = false
     if directory_error != ok {
-        mem.reset(a, checkpoint)
-        if directory_error == os.NotFound { ret ("", ModuleNotFound) }
-        ret ("", directory_error)
+        if directory_error != os.NotFound { ret (listed, false, directory_error) }
+        missing = true
+    } else {
+        listed = entries
     }
+    if listings.count < listings.directories.len {
+        listings.directories[listings.count] = directory
+        listings.entries[listings.count] = listed
+        listings.missing[listings.count] = missing
+        listings.count += 1usize
+    }
+    ret (listed, missing, ok)
+}
+
+fn select_source(a: *mem.Arena, listings: *Listings, root: str, source_root: str, module: str, arch: str, target_os: str) -> (str, err) {
+    if !valid_arch(arch) || !valid_os(target_os) || !valid_target(arch, target_os) { ret ("", InvalidTarget) }
+    let (prefix, stem, parts_error) = module_parts(module)
+    if parts_error != ok { ret ("", parts_error) }
+    let (directory, path_error) = source_directory(a, root, source_root, prefix)
+    if path_error != ok { ret ("", path_error) }
+    let (entries, missing, directory_error) = list_directory(a, listings, directory)
+    if directory_error != ok { ret ("", directory_error) }
+    if missing { ret ("", ModuleNotFound) }
     var has_plain = false
     var has_arch = false
     var has_os = false
@@ -360,7 +386,6 @@ fn select_source(a: *mem.Arena, root: str, source_root: str, module: str, arch: 
             if variant_source(entry.name, stem, target_os) { has_os = true }
         }
     }
-    mem.reset(a, checkpoint)
     if has_arch && has_os { ret ("", AmbiguousVariant) }
     if !has_arch && !has_os && !has_plain { ret ("", ModuleNotFound) }
     let (stable_prefix, stable_stem, stable_parts_error) = module_parts(module)

@@ -6569,3 +6569,41 @@ the front end of the kept modules (4.7 s of lexing and parsing what is then skip
 settle's interface hashes (1.1 s) and artifact loads (1.5 s for 368 MB), and the
 manifest's SHA-256 over the sources; the front end is the next step, an interface
 loaded from the artifact in place of the module's source.
+
+## D321 -- The front end in waves of workers
+
+Loading a two-million-line program took 4.6 s: reading, line tables, lexing and
+parsing, one module after another, on one core, and a warm hot build (D319, D320)
+spent a third of its time there on modules it then skipped. Lexing and parsing a
+module depend on nothing but its text, so they run on threads now.
+
+The loader works in waves. A wave is every module discovered but not yet scanned --
+the root alone first, then what its `use` declarations name, and so on -- and the
+main thread reads the wave's texts, hands the modules to at most eight workers,
+largest first to the least loaded, and waits. A worker has an arena of its own,
+carved from the program's at sixteen bytes per byte of its text, and scratch of its
+own for a module's tokens and tree, grown to the largest module it has seen; it
+writes only its own modules' slots -- the line table, the tokens, the kept tree --
+and allocates only from its own arena, so nothing that is written is shared and no
+lock exists. The main thread then walks the wave's trees for their imports in
+module order, which is the order the one-at-a-time loop discovered modules in, so
+every module index is what it was and every image is byte for byte what it was.
+A worker that runs out of its arena, or meets a module denser than a token per
+two bytes, stops and leaves the rest of its modules to the main thread, which does
+them one at a time out of the pools; a syntax error is reported for the lowest
+module that has one, as before. `select_source` lists a directory once per
+program where it read the whole directory per import -- 1.3 s of the two-million-
+line program's load before any of this.
+
+The bootstrap compiler learns `os.Thread`, `os.thread_create[Ctx]` and
+`os.thread_join`, and runs the entry inline: the stage-one compiler need not be
+fast, only right, and the workers share nothing that would make an inline run
+differ from a threaded one. The entry is a function named as a value, which the
+bootstrap has no type for; the argument is bound to the function's symbol at the
+call. Eight workers is a constant: the fixed host surface has no processor count,
+and a machine with fewer cores loses a little to oversubscription and one with
+more gains nothing past eight. Measured: the two-million-line program loads and
+parses in 1.0 s (was 4.6), the five-hundred-thousand-line one in 0.24 s (was
+0.83), the compiler in 76 ms (was about 100); a wave is bounded by its largest
+module, and the compiler's second wave is `check.e`. What remains is the lexer and
+parser themselves, at about twenty megabytes a second a thread.

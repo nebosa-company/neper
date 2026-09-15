@@ -534,6 +534,17 @@ uint32_t neper_os_commit(unsigned char *p, size_t n) {
     return VirtualAlloc(p, n, MEM_COMMIT, PAGE_READWRITE) ? NP_OK : np_error(GetLastError());
 }
 
+
+/* A thread, run inline (D321): the bootstrap compiler need not be fast, only right, and
+   its parallel front end is written so that the workers share nothing they write. */
+void neper_os_thread_create(void *result, void *entry, void *ctx, size_t stack) {
+    unsigned char *out = (unsigned char *)result;
+    (void)stack;
+    ((void (*)(void *))entry)(ctx);
+    *(uintptr_t *)out = 1; *(uint32_t *)(out + 8) = NP_OK;
+}
+uint32_t neper_os_thread_join(uintptr_t raw) { (void)raw; return NP_OK; }
+
 void neper_os_clock(void *result, unsigned char clock_kind) {
     unsigned char *out = (unsigned char *)result;
     *(int64_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
@@ -737,6 +748,17 @@ void neper_os_reserve(void *result, size_t n) {
 }
 
 uint32_t neper_os_commit(unsigned char *p, size_t n) { return mprotect(p, n, PROT_READ | PROT_WRITE) == 0 ? NP_OK : np_error(errno); }
+
+
+/* A thread, run inline (D321): the bootstrap compiler need not be fast, only right, and
+   its parallel front end is written so that the workers share nothing they write. */
+void neper_os_thread_create(void *result, void *entry, void *ctx, size_t stack) {
+    unsigned char *out = (unsigned char *)result;
+    (void)stack;
+    ((void (*)(void *))entry)(ctx);
+    *(uintptr_t *)out = 1; *(uint32_t *)(out + 8) = NP_OK;
+}
+uint32_t neper_os_thread_join(uintptr_t raw) { (void)raw; return NP_OK; }
 
 void neper_os_clock(void *result, unsigned char clock_kind) {
     unsigned char *out = (unsigned char *)result; struct timespec value; clockid_t id;

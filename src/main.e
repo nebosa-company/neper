@@ -5013,7 +5013,8 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret ok
     }
     if args.len == 8usize && same(args[1usize], "select-file") {
-        let (selected, selection_error) = project.select_source(a, args[2usize], args[3usize], args[4usize], args[5usize], args[6usize])
+        var listings: project.Listings = zero
+        let (selected, selection_error) = project.select_source(a, &listings, args[2usize], args[3usize], args[4usize], args[5usize], args[6usize])
         if selection_error != ok { ret selection_error }
         if !project.path_equal(selected, args[7usize]) { ret project.InvalidPath }
         try io.print("source variant ok\n")

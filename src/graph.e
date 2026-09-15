@@ -1,6 +1,7 @@
 // Transitive source-module loading over the lossless parser's UseDecl nodes.
 
 use e.mem
+use e.os
 use lex
 use parse
 use project
@@ -74,6 +75,8 @@ type Graph = struct {
     // What the program measures (D306): every pool after loading is sized from these.
     total_bytes: usize,
     largest_bytes: usize,
+    // The source directories listed once (D321).
+    listings: project.Listings,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -228,19 +231,18 @@ fn has_module(g: *Graph, name: str) -> bool {
     ret found
 }
 
-fn extract_import(a: *mem.Arena, text: str, node: syntax.Node) -> (Import, err) {
-    var scanner = lex.init(text)
-    var token = lex.next(&scanner)
-    var token_index = 0usize
-    while token_index < usize(node.token_start) {
-        token = lex.next(&scanner)
-        token_index += 1usize
-    }
-    if token.kind != .KwUse { ret (Import { name: "", qualifier: "", target: 0usize }, parse.InvalidSyntax) }
+// A `use` from the module's own tokens (D316, D321): it lexed the text from its start
+// up to the node, per import.
+fn extract_import(a: *mem.Arena, text: str, tokens: []const lex.Token, node: syntax.Node) -> (Import, err) {
+    let none = Import { name: "", qualifier: "", target: 0usize }
+    if usize(node.token_start) >= usize(node.token_end) || usize(node.token_end) > tokens.len { ret (none, parse.InvalidSyntax) }
+    if tokens[usize(node.token_start)].kind != .KwUse { ret (none, parse.InvalidSyntax) }
     var module_length = 0usize
     var qualifier = ""
     var after_as = false
-    while token_index < usize(node.token_end) {
+    var at = usize(node.token_start)
+    while at < usize(node.token_end) {
+        let token = tokens[at]
         if token.kind == .KwAs {
             after_as = true
         } else {
@@ -255,22 +257,16 @@ fn extract_import(a: *mem.Arena, text: str, node: syntax.Node) -> (Import, err) 
                 if token.kind == .PunctDot && !after_as { module_length += 1usize }
             }
         }
-        token = lex.next(&scanner)
-        token_index += 1usize
+        at += 1usize
     }
-    if module_length == 0usize || qualifier.len == 0usize { ret (Import { name: "", qualifier: "", target: 0usize }, parse.InvalidSyntax) }
+    if module_length == 0usize || qualifier.len == 0usize { ret (none, parse.InvalidSyntax) }
     let (name, allocation_error) = mem.alloc[u8](a, module_length)
-    if allocation_error != ok { ret (Import { name: "", qualifier: "", target: 0usize }, allocation_error) }
-    scanner = lex.init(text)
-    token = lex.next(&scanner)
-    token_index = 0usize
-    while token_index < usize(node.token_start) {
-        token = lex.next(&scanner)
-        token_index += 1usize
-    }
+    if allocation_error != ok { ret (none, allocation_error) }
     var written = 0usize
     after_as = false
-    while token_index < usize(node.token_end) {
+    at = usize(node.token_start)
+    while at < usize(node.token_end) {
+        let token = tokens[at]
         if token.kind == .KwAs {
             after_as = true
         } else {
@@ -288,14 +284,15 @@ fn extract_import(a: *mem.Arena, text: str, node: syntax.Node) -> (Import, err) 
                 }
             }
         }
-        token = lex.next(&scanner)
-        token_index += 1usize
+        at += 1usize
     }
-    if written != module_length { ret (Import { name: "", qualifier: "", target: 0usize }, parse.InvalidSyntax) }
+    if written != module_length { ret (none, parse.InvalidSyntax) }
     ret (Import { name: name, qualifier: qualifier, target: 0usize }, ok)
 }
 
-fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
+// The module parsed into the pool and kept, on the main thread: what a worker does in
+// its own arena (D321), for the modules a wave's workers did not finish.
+fn parse_into_pool(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     var tree: parse.Tree = zero
     try ensure_tree_pool(a, g, g.modules[module_index].text.len)
     g.has_parsed = false
@@ -305,23 +302,32 @@ fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     if parse_error != ok {
         // Every module is parsed here first, so this is where a syntax error is
         // seen with the module still in hand to name it.
-        if !g.has_failure && tree.has_failure {
-            g.failure_module = module_index
-            g.failure_token = tree.failure_token
-            g.failure_reserved_name = tree.failure_reserved_name
-            g.failure_barrier = tree.failure_count != 0usize && tree.failure_barriers[0usize]
-            if g.failure_barrier { g.failure_keyword = tree.failure_keywords[0usize] }
-            g.has_failure = true
-        }
+        record_failure(g, module_index, &tree)
         ret parse_error
     }
+    ret ok
+}
+
+fn record_failure(g: *Graph, module_index: usize, tree: *parse.Tree) {
+    if g.has_failure || !tree.has_failure { ret }
+    g.failure_module = module_index
+    g.failure_token = tree.failure_token
+    g.failure_reserved_name = tree.failure_reserved_name
+    g.failure_barrier = tree.failure_count != 0usize && tree.failure_barriers[0usize]
+    if g.failure_barrier { g.failure_keyword = tree.failure_keywords[0usize] }
+    g.has_failure = true
+}
+
+fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
+    if !g.modules[module_index].has_tree { ret parse.InvalidSyntax }
+    let tree = g.modules[module_index].tree
     let first_import = g.import_count
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
         if node.top_level && node.kind == .UseDecl {
             if g.import_count == g.imports.len { ret Capacity }
-            let (item, import_error) = extract_import(a, g.modules[module_index].text, node)
+            let (item, import_error) = extract_import(a, g.modules[module_index].text, g.modules[module_index].tokens, node)
             if import_error != ok { ret import_error }
             var prior = first_import
             while prior < g.import_count {
@@ -344,14 +350,14 @@ fn resolve_source(a: *mem.Arena, g: *Graph, name: str) -> (str, err) {
     var has_lib = false
     var has_src = false
     if g.project.has_sources {
-        let (candidate_lib, lib_error) = project.select_source(a, g.project.root, "lib", name, g.arch, g.os)
+        let (candidate_lib, lib_error) = project.select_source(a, &g.listings, g.project.root, "lib", name, g.arch, g.os)
         if lib_error == ok {
             lib_path = candidate_lib
             has_lib = true
         } else {
             if lib_error != project.ModuleNotFound { ret ("", lib_error) }
         }
-        let (candidate_src, src_error) = project.select_source(a, g.project.root, "src", name, g.arch, g.os)
+        let (candidate_src, src_error) = project.select_source(a, &g.listings, g.project.root, "src", name, g.arch, g.os)
         if src_error == ok {
             src_path = candidate_src
             has_src = true
@@ -362,27 +368,269 @@ fn resolve_source(a: *mem.Arena, g: *Graph, name: str) -> (str, err) {
     if has_lib && has_src { ret ("", DuplicateModule) }
     if has_lib { ret (lib_path, ok) }
     if has_src { ret (src_path, ok) }
-    let (toolchain_path, toolchain_error) = project.select_source(a, g.toolchain_root, "lib", name, g.arch, g.os)
+    let (toolchain_path, toolchain_error) = project.select_source(a, &g.listings, g.toolchain_root, "lib", name, g.arch, g.os)
     if toolchain_error != ok { ret ("", toolchain_error) }
     ret (toolchain_path, ok)
 }
 
+// A module by name and path; its text, line table, tokens and tree come with the
+// wave that scans it (D321).
 fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     if g.count == g.modules.len { ret (0usize, Capacity) }
-    let (text, load_error) = source.load(a, path)
-    if load_error != ok { ret (0usize, load_error) }
     let index = g.count
-    let (lines, lines_error) = lex.line_starts(a, text)
-    if lines_error != ok { ret (0usize, lines_error) }
     var no_tokens: [1]lex.Token = zero
+    var no_lines: [1]usize = zero
     var no_tree: parse.Tree = zero
-    g.modules[index] = Module { name: name, path: path, text: text, lines: lines, tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8 }
+    g.modules[index] = Module { name: name, path: path, text: "", lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8 }
     g.count += 1usize
-    let scan_error = scan_module(a, g, index)
-    if scan_error != ok { ret (0usize, scan_error) }
-    g.total_bytes += text.len
-    if text.len > g.largest_bytes { g.largest_bytes = text.len }
     ret (index, ok)
+}
+
+// The front end of one module on the main thread, out of the pools: what a worker
+// does, for the modules a wave's workers did not finish.
+fn scan_and_parse(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
+    let (lines, lines_error) = lex.line_starts(a, g.modules[module_index].text)
+    if lines_error != ok { ret lines_error }
+    g.modules[module_index].lines = lines
+    try scan_module(a, g, module_index)
+    ret parse_into_pool(a, g, module_index)
+}
+
+// The front end in waves (D321): every module a wave discovered is scanned and parsed by
+// one of a few workers, each into an arena of its own carved from the program's, while
+// the main thread does nothing but wait. A worker writes only its own modules' slots and
+// allocates only from its own arena, so nothing is shared that is written, and no lock
+// exists. The wave's imports are then walked on the main thread, in module order -- the
+// order the one-at-a-time loop discovered modules in, so the indices are the same --
+// and what they name is the next wave. A worker that ran out of its arena or found a
+// module too dense for its scratch leaves the rest of its modules to the main thread,
+// which does them one at a time out of the pools; a syntax error is the lowest module's.
+const FRONT_WORKERS: usize = 8usize
+
+type Worker = struct {
+    g: *Graph,
+    arena: mem.Arena,
+    modules: []usize,
+    count: usize,
+    token_scratch: []lex.Token,
+    nodes: []syntax.Node,
+    children: []u32,
+    // Where the worker stopped, if it did: the module and why. A syntax failure keeps
+    // the tree's account of it for the graph to name.
+    stopped: bool,
+    stopped_at: usize,
+    failure: err,
+    syntax_failure: bool,
+    failure_tree: parse.Tree,
+}
+
+fn worker_module(w: *Worker, module_index: usize) -> err {
+    let text = w.g.modules[module_index].text
+    let (lines, lines_error) = lex.line_starts(&w.arena, text)
+    if lines_error != ok { ret lines_error }
+    w.g.modules[module_index].lines = lines
+    var scanner = lex.init(text)
+    var count = 0usize
+    var invalid = false
+    while true {
+        if count == w.token_scratch.len { ret Capacity }
+        let token = lex.next(&scanner)
+        if token.kind == .Invalid { invalid = true }
+        w.token_scratch[count] = token
+        count += 1usize
+        if token.kind == .Eof { break }
+    }
+    let (tokens, tokens_error) = mem.alloc[lex.Token](&w.arena, count)
+    if tokens_error != ok { ret tokens_error }
+    var at = 0usize
+    while at < count {
+        tokens[at] = w.token_scratch[at]
+        at += 1usize
+    }
+    w.g.modules[module_index].tokens = tokens
+    w.g.modules[module_index].has_invalid = invalid
+    var tree: parse.Tree = zero
+    try parse.init_tree(&tree, w.nodes, w.children)
+    let parse_error = parse.parse_tokens(&tree, text, tokens)
+    if parse_error != ok {
+        if tree.has_failure {
+            w.syntax_failure = true
+            w.failure_tree = tree
+        }
+        ret parse_error
+    }
+    ret keep_tree(&w.arena, w.g, module_index, &tree)
+}
+
+fn worker_entry(w: *Worker) {
+    var at = 0usize
+    while at < w.count {
+        let module_index = w.modules[at]
+        let module_error = worker_module(w, module_index)
+        if module_error != ok {
+            w.stopped = true
+            w.stopped_at = at
+            w.failure = module_error
+            ret
+        }
+        at += 1usize
+    }
+}
+
+// The kept token, line and tree bytes per text byte, measured with room: a token per
+// five bytes, a node per four and a child per two. A denser module exhausts the
+// worker's arena and falls back to the main thread.
+fn worker_arena_bytes(text_bytes: usize) -> usize {
+    ret text_bytes * 16usize + 65536usize
+}
+
+fn front_wave(a: *mem.Arena, g: *Graph, workers: []Worker, wave_start: usize, wave_end: usize, assignment: []usize) -> err {
+    let wave_count = wave_end - wave_start
+    var worker_count = wave_count
+    if worker_count > workers.len { worker_count = workers.len }
+    // Each module goes to the worker with the least text so far, largest first, so the
+    // wave takes about as long as its share and not as long as its largest few
+    // modules together. The assignment array holds each worker's modules in module
+    // order, in worker-major runs, then the wave's modules by size, then each module's
+    // worker.
+    let capacity = g.modules.len
+    let order = assignment[capacity..capacity + wave_count]
+    let owner = assignment[capacity * 2usize..capacity * 2usize + wave_count]
+    var loads: [64]usize = zero
+    var worker_at = 0usize
+    while worker_at < worker_count {
+        loads[worker_at] = 0usize
+        worker_at += 1usize
+    }
+    var order_at = 0usize
+    while order_at < wave_count {
+        order[order_at] = wave_start + order_at
+        order_at += 1usize
+    }
+    order_at = 0usize
+    while order_at < wave_count {
+        var best = order_at
+        var scan = order_at + 1usize
+        while scan < wave_count {
+            if g.modules[order[scan]].text.len > g.modules[order[best]].text.len { best = scan }
+            scan += 1usize
+        }
+        let swap = order[order_at]
+        order[order_at] = order[best]
+        order[best] = swap
+        var lightest = 0usize
+        worker_at = 1usize
+        while worker_at < worker_count {
+            if loads[worker_at] < loads[lightest] { lightest = worker_at }
+            worker_at += 1usize
+        }
+        loads[lightest] += g.modules[order[order_at]].text.len
+        owner[order[order_at] - wave_start] = lightest
+        order_at += 1usize
+    }
+    worker_at = 0usize
+    var filled = 0usize
+    while worker_at < worker_count {
+        var bytes = 0usize
+        var largest = 0usize
+        let first = filled
+        var module_at = wave_start
+        while module_at < wave_end {
+            if owner[module_at - wave_start] == worker_at {
+                assignment[filled] = module_at
+                filled += 1usize
+                bytes += g.modules[module_at].text.len
+                if g.modules[module_at].text.len > largest { largest = g.modules[module_at].text.len }
+            }
+            module_at += 1usize
+        }
+        workers[worker_at].g = g
+        workers[worker_at].modules = assignment[first..filled]
+        workers[worker_at].count = filled - first
+        workers[worker_at].stopped = false
+        workers[worker_at].syntax_failure = false
+        workers[worker_at].failure = ok
+        let (storage, storage_error) = mem.alloc[u8](a, worker_arena_bytes(bytes))
+        if storage_error != ok { ret storage_error }
+        workers[worker_at].arena = mem.arena_from(storage)
+        // The scratch grows to the largest module the worker has seen, out of the
+        // program's arena; a token per two bytes is the densest text it handles.
+        let tokens_needed = largest / 2usize + 64usize
+        if workers[worker_at].token_scratch.len < tokens_needed {
+            let (scratch, scratch_error) = mem.alloc[lex.Token](a, tokens_needed)
+            if scratch_error != ok { ret scratch_error }
+            workers[worker_at].token_scratch = scratch
+        }
+        let nodes_needed = largest / 2usize + 4096usize
+        if workers[worker_at].nodes.len < nodes_needed {
+            let (nodes, nodes_error) = mem.alloc[syntax.Node](a, nodes_needed)
+            if nodes_error != ok { ret nodes_error }
+            workers[worker_at].nodes = nodes
+        }
+        let children_needed = largest + 8192usize
+        if workers[worker_at].children.len < children_needed {
+            let (children, children_error) = mem.alloc[u32](a, children_needed)
+            if children_error != ok { ret children_error }
+            workers[worker_at].children = children
+        }
+        worker_at += 1usize
+    }
+    // The workers after the first run on threads of their own; the first runs here. A
+    // thread that cannot be started runs here too, after the others.
+    var threads: [64]os.Thread = zero
+    var started: [64]bool = zero
+    worker_at = 1usize
+    while worker_at < worker_count {
+        started[worker_at] = false
+        let (thread, spawn_error) = os.thread_create[Worker](worker_entry, &workers[worker_at], 4194304usize)
+        if spawn_error == ok {
+            threads[worker_at] = thread
+            started[worker_at] = true
+        }
+        worker_at += 1usize
+    }
+    worker_entry(&workers[0usize])
+    worker_at = 1usize
+    while worker_at < worker_count {
+        if started[worker_at] {
+            try os.thread_join(threads[worker_at])
+        } else {
+            worker_entry(&workers[worker_at])
+        }
+        worker_at += 1usize
+    }
+    // What the workers left: a syntax failure is the lowest such module's, reported as
+    // the one-at-a-time loop would have; any other stop hands the worker's remaining
+    // modules to the main thread.
+    var lowest_failure = g.count
+    var lowest_worker = 0usize
+    worker_at = 0usize
+    while worker_at < worker_count {
+        if workers[worker_at].stopped && workers[worker_at].syntax_failure {
+            let failed = workers[worker_at].modules[workers[worker_at].stopped_at]
+            if failed < lowest_failure {
+                lowest_failure = failed
+                lowest_worker = worker_at
+            }
+        }
+        worker_at += 1usize
+    }
+    if lowest_failure < g.count {
+        record_failure(g, lowest_failure, &workers[lowest_worker].failure_tree)
+        ret workers[lowest_worker].failure
+    }
+    worker_at = 0usize
+    while worker_at < worker_count {
+        if workers[worker_at].stopped {
+            var remaining = workers[worker_at].stopped_at
+            while remaining < workers[worker_at].count {
+                try scan_and_parse(a, g, workers[worker_at].modules[remaining])
+                remaining += 1usize
+            }
+        }
+        worker_at += 1usize
+    }
+    ret ok
 }
 
 fn visit(g: *Graph, module_index: usize) -> err {
@@ -414,8 +662,8 @@ fn visit(g: *Graph, module_index: usize) -> err {
 // `project_root` names the project explicitly; empty, it is discovered from the operand
 // (spec section 2). A file outside the project -- a generated test runner -- is built
 // as part of it that way (D263).
-fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, os: str, project_root: str) -> err {
-    if !project.valid_arch(arch) || !project.valid_os(os) || !project.valid_target(arch, os) { ret project.InvalidTarget }
+fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, host_os: str, project_root: str) -> err {
+    if !project.valid_arch(arch) || !project.valid_os(host_os) || !project.valid_target(arch, host_os) { ret project.InvalidTarget }
     var discovered = project.explicit(project_root)
     if project_root.len == 0usize {
         let (found, discovery_error) = project.discover(a, root_path)
@@ -427,35 +675,60 @@ fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str
     g.project = discovered
     g.toolchain_root = toolchain_root
     g.arch = arch
-    g.os = os
+    g.os = host_os
     g.count = 0usize
     g.import_count = 0usize
     let (root_index, root_error) = add_module(a, g, root_name, root_path)
     if root_error != ok { ret root_error }
-    var module_index = 0usize
-    while module_index < g.count {
-        try collect_imports(a, g, module_index)
-        let end = g.modules[module_index].first_import + g.modules[module_index].import_count
-        var import_index = g.modules[module_index].first_import
-        while import_index < end {
-            let (existing, found) = find_module(g, g.imports[import_index].name)
-            if found {
-                g.imports[import_index].target = existing
-            } else {
-                let (path, resolve_error) = resolve_source(a, g, g.imports[import_index].name)
-                if resolve_error != ok {
-                    g.failure_module = module_index
-                    g.failure_import = g.imports[import_index].name
-                    g.has_import_failure = true
-                    ret resolve_error
-                }
-                let (added_module, add_error) = add_module(a, g, g.imports[import_index].name, path)
-                if add_error != ok { ret add_error }
-                g.imports[import_index].target = added_module
-            }
-            import_index += 1usize
+    let (workers, workers_error) = mem.alloc[Worker](a, FRONT_WORKERS)
+    if workers_error != ok { ret workers_error }
+    var clear_at = 0usize
+    while clear_at < workers.len {
+        var blank: Worker = zero
+        workers[clear_at] = blank
+        clear_at += 1usize
+    }
+    let (assignment, assignment_error) = mem.alloc[usize](a, g.modules.len * 3usize)
+    if assignment_error != ok { ret assignment_error }
+    var wave_start = 0usize
+    while wave_start < g.count {
+        let wave_end = g.count
+        var module_index = wave_start
+        while module_index < wave_end {
+            let (text, load_error) = source.load(a, g.modules[module_index].path)
+            if load_error != ok { ret load_error }
+            g.modules[module_index].text = text
+            g.total_bytes += text.len
+            if text.len > g.largest_bytes { g.largest_bytes = text.len }
+            module_index += 1usize
         }
-        module_index += 1usize
+        try front_wave(a, g, workers, wave_start, wave_end, assignment)
+        module_index = wave_start
+        while module_index < wave_end {
+            try collect_imports(a, g, module_index)
+            let end = g.modules[module_index].first_import + g.modules[module_index].import_count
+            var import_index = g.modules[module_index].first_import
+            while import_index < end {
+                let (existing, found) = find_module(g, g.imports[import_index].name)
+                if found {
+                    g.imports[import_index].target = existing
+                } else {
+                    let (path, resolve_error) = resolve_source(a, g, g.imports[import_index].name)
+                    if resolve_error != ok {
+                        g.failure_module = module_index
+                        g.failure_import = g.imports[import_index].name
+                        g.has_import_failure = true
+                        ret resolve_error
+                    }
+                    let (added_module, add_error) = add_module(a, g, g.imports[import_index].name, path)
+                    if add_error != ok { ret add_error }
+                    g.imports[import_index].target = added_module
+                }
+                import_index += 1usize
+            }
+            module_index += 1usize
+        }
+        wave_start = wave_end
     }
     var i = 0usize
     while i < g.count {

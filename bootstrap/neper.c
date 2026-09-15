@@ -219,6 +219,8 @@ struct Expr {
     int place_mutable;
     int is_len;
     int is_cast;
+    /* A function named as `os.thread_create`'s entry (D321): `name` holds its symbol. */
+    int is_function_ref;
     Type place_type;
     union {
         int64_t integer;
@@ -1055,6 +1057,8 @@ static void install_os_intrinsics(Compiler *c) {
     intrinsic_field(decl, token, "raw", usize, 1, 0);
     decl = intrinsic_type(c, token, "os.Proc", ND_STRUCT, type_make(TY_VOID, "void"));
     intrinsic_field(decl, token, "raw", usize, 1, 0);
+    decl = intrinsic_type(c, token, "os.Thread", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "raw", usize, 1, 0);
     decl = intrinsic_type(c, token, "os.ProcUsage", ND_STRUCT, type_make(TY_VOID, "void"));
     intrinsic_field(decl, token, "exit_code", i32, 1, 0);
     intrinsic_field(decl, token, "peak_memory", usize, 1, 0);
@@ -1104,6 +1108,22 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.reserve", "neper_os_reserve"); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 2, byte_pointer, error);
     OS_FN("os.commit", "neper_os_commit"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.clock", "neper_os_clock"); intrinsic_param(fn, token, "c", clock); intrinsic_returns(fn, 2, i64, error);
+    /* `os.thread_create[Ctx](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)` (D321).
+       The entry is a function named as a value, which the bootstrap has no type for: the
+       parameter is a byte pointer and `check_declared_call` binds the name to its symbol.
+       The runtime runs the entry inline and `thread_join` answers ok: the stage-one
+       compiler runs its parallel front end one worker after another. */
+    OS_FN("os.thread_create", "neper_os_thread_create");
+    fn->is_template = 1;
+    strcpy(fn->comptime_params[0].name, "T");
+    fn->comptime_params[0].token = token;
+    fn->comptime_params[0].is_type = 1;
+    fn->comptime_param_count = 1;
+    intrinsic_param(fn, token, "entry", byte_pointer);
+    intrinsic_param(fn, token, "ctx", intrinsic_pointer(type_make(TY_NAMED, "T"), 0));
+    intrinsic_param(fn, token, "stack", usize);
+    intrinsic_returns(fn, 2, type_make(TY_NAMED, "os.Thread"), error);
+    OS_FN("os.thread_join", "neper_os_thread_join"); intrinsic_param(fn, token, "t", type_make(TY_NAMED, "os.Thread")); intrinsic_returns(fn, 1, error, error);
 #undef OS_FN
 }
 
@@ -3428,6 +3448,18 @@ static Function *check_declared_call(Compiler *c, Function *fn, Expr *e) {
         diagnostic_at(c, &e->token, "E-TYPE-0003", "argument count does not match function");
     for (i = 0; i < e->as.call.arg_count && i < callee->param_count; ++i) {
         Type actual;
+        if (i == 0 && strcmp(callee->symbol, "neper_os_thread_create") == 0 &&
+            e->as.call.args[0]->kind == EX_NAME) {
+            Function *entry = find_function_scoped(c, fn->module, e->as.call.args[0]->as.name);
+            if (!entry || entry->is_template) {
+                diagnostic_at(c, &e->as.call.args[0]->token, "E-NAME-9999", "thread entry is not a declared function");
+                continue;
+            }
+            e->as.call.args[0]->is_function_ref = 1;
+            e->as.call.args[0]->type = callee->params[0].type;
+            copy_text(e->as.call.args[0]->as.name, sizeof(e->as.call.args[0]->as.name), entry->symbol, strlen(entry->symbol));
+            continue;
+        }
         if (e->as.call.args[i]->kind == EX_ZERO || e->as.call.args[i]->kind == EX_UNDEF)
             e->as.call.args[i]->type = callee->params[i].type;
         if (e->as.call.args[i]->kind == EX_ENUM_MEMBER)
@@ -5586,6 +5618,11 @@ static void emit_expr(Emitter *e, Expr *x) {
             else fprintf(e->out, "    lea rax, np_str_%d[rip]\n", x->as.string.label);
             fprintf(e->out, "    mov rdx, %llu\n", (unsigned long long)x->as.string.length); break;
         case EX_NAME: {
+            if (x->is_function_ref) {
+                if (e->windows) fprintf(e->out, "    lea rax, %s\n", x->as.name);
+                else fprintf(e->out, "    lea rax, %s[rip]\n", x->as.name);
+                break;
+            }
             if (strcmp(x->as.name, "ok") == 0) { fputs("    xor eax, eax\n", e->out); break; }
             if (x->error_code) { fprintf(e->out, "    mov eax, %d\n", x->error_code); break; }
             if (x->is_constant) {
@@ -7272,6 +7309,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
+        "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"
         "np_stack_probe PROC\n"
