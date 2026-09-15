@@ -261,20 +261,17 @@ fn register_binary(opcode: nir.Opcode) -> bool {
     ret opcode == .Add || opcode == .Subtract || opcode == .Multiply || opcode == .AddWrap || opcode == .SubtractWrap || opcode == .MultiplyWrap || opcode == .BitAnd || opcode == .BitXor || opcode == .BitOr || comparison(opcode)
 }
 
+// By the name's shape (D330), as `check.integer_width` decides: asked per instruction.
 fn integer_width(ty: check.Type) -> usize {
-    if ty.kind != .Integer { ret 0usize }
-    if check.same(ty.name, "i8") || check.same(ty.name, "u8") { ret 8usize }
-    if check.same(ty.name, "i16") || check.same(ty.name, "u16") { ret 16usize }
-    if check.same(ty.name, "i32") || check.same(ty.name, "u32") { ret 32usize }
-    ret 64usize
+    ret check.integer_width(ty)
 }
 
 // f16 and bf16 are in the type system but not in this emitter, so they answer zero
 // here and reach the caller as `Unsupported` rather than as the wrong width.
 fn float_width(ty: check.Type) -> usize {
-    if ty.kind != .Float { ret 0usize }
-    if check.same(ty.name, "f32") { ret 32usize }
-    if check.same(ty.name, "f64") { ret 64usize }
+    if ty.kind != .Float || ty.name.len != 3usize { ret 0usize }
+    if ty.name[1usize] == 51u8 { ret 32usize }
+    if ty.name[1usize] == 54u8 { ret 64usize }
     ret 0usize
 }
 

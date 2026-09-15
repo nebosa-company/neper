@@ -9200,16 +9200,20 @@ fn memo_module(c: *Checker, module_index: usize, node_count: usize) -> err {
 
 fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (Type, err) {
     if memo_wanted(c, module_index, node_index) {
-        let entry = c.memo_tables[module_index][node_index]
-        if entry != 0usize {
-            let (expected_id, expected_known) = memo_intern(c, expected)
-            if expected_known && (entry >> 32usize) == expected_id + 1usize { ret (c.memo_types[(entry & 4294967295usize) - 1usize], ok) }
+        // No expectation, the common case, is id 1 without a lookup (D330).
+        var expected_key = 1usize
+        var expected_known = true
+        if expected.kind != .Invalid {
+            let (expected_id, interned) = memo_intern(c, expected)
+            expected_key = expected_id + 2usize
+            expected_known = interned
         }
+        let entry = c.memo_tables[module_index][node_index]
+        if entry != 0usize && expected_known && (entry >> 32usize) == expected_key { ret (c.memo_types[(entry & 4294967295usize) - 1usize], ok) }
         let (fresh, fresh_error) = check_expr_uncached(c, g, tree, module_index, node_index, expected)
-        if fresh_error == ok {
-            let (expected_id, expected_known) = memo_intern(c, expected)
+        if fresh_error == ok && expected_known {
             let (result_id, result_known) = memo_intern(c, fresh)
-            if expected_known && result_known { c.memo_tables[module_index][node_index] = ((expected_id + 1usize) << 32usize) | (result_id + 1usize) }
+            if result_known { c.memo_tables[module_index][node_index] = (expected_key << 32usize) | (result_id + 1usize) }
         }
         ret (fresh, fresh_error)
     }

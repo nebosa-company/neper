@@ -2546,6 +2546,15 @@ ring_executable_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$ring_executable_path"
 ring_output=$("$ring_executable_path")
 [ "$ring_output" = 'data ring ok' ]
+# D330: a promoted local copied from a later-declared local and reassigned in the same block.
+for promote_mode in '' '--release'; do
+    promote_path="$test_build/promote-copy-selfhost$promote_mode"
+    promote_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/promote_copy/src/main.e" "$repo" x64 linux "$promote_path" $promote_mode)
+    [ "$promote_written" = 'executable written' ]
+    chmod +x "$promote_path"
+    promote_output=$("$promote_path")
+    [ "$promote_output" = 'promote copy ok' ]
+done
 deque_surface=$(sed -nE 's/^(type|fn|error|const|var) ([A-Za-z_][A-Za-z0-9_]*).*/\2/p' "$repo/lib/e/data/deque.e")
 expected_deque_surface='Deque
 Iter

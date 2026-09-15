@@ -6895,3 +6895,50 @@ report happened to agree.
 Images are no longer byte for byte the D325 compiler's -- the runtime prefix grew a
 function -- so the reference for `build/same.sh` moves to this compiler; every hot
 build is still byte for byte its cold build, in both modes.
+
+## D330 -- The last three leaves, a Linux arena past two gibibytes, and a promotion bug found by measuring
+
+What the workers' profile still showed after D329, taken one at a time, and a
+million-line fixture (`benchmarks/scale/generate.py`, 1000 modules, 920k lines) to
+measure every combination on.
+
+The register allocator's local promotion (D236) scanned the whole function's
+instructions and operands once per local, then again to rewrite the local's
+accesses, then again for its loads: a fifth of a function's allocation time and
+quadratic in its locals. Each value's uses are listed once now (`promote_locals`,
+counting sort into the allocator's scratch), and each local reads its own list; the
+locals are processed in the same order. The walk it replaced is kept for a function
+whose uses outgrow the scratch. Measuring the new against the old, the images were
+not the same, and the difference was the old one's bug: with two promoted locals
+where the later-declared is copied into the earlier and the earlier then reassigned
+in the same block, the old redirect took the rewritten copy for a load of the source
+and sent the copy's later reads to the source -- `m = l; m = 5; m + l` read `l`
+twice. Every compiler since D236 had it, in both modes; link/promote_copy pins it.
+
+SHA-256 over every module's text (the manifest's digest, D323) kept a 64-word
+schedule, zeroed per block, and called a rotation nine times a round; a rolling
+sixteen-word window and rotations written out took a sixth off the artifact
+writer. The lexer's identifier scan asked five comparisons per byte; a 256-byte
+class table as a string literal asks one load. `line_starts` made two passes over
+the text to count and then fill; one pass into a guess of a line per eight bytes,
+with the two passes kept for a denser file. Codegen's integer and float widths came
+from string compares per instruction; by the name's shape now, as the checker's
+(D326). The body-sweep memo (D327) interned the expected type on every lookup; no
+expectation, the common case, is a fixed key.
+
+The Linux startup stub carried the arena's size in four 32-bit immediates, so
+`--arena` past two gibibytes was refused there while Windows took fourteen; the
+stub is reassembled with `movabs` (`scratchpad` assembler script, checked by
+disassembly) and maps with `MAP_NORESERVE`, so a Linux compiler reserves twelve
+gibibytes on a machine with eight, committing what it touches, as Windows does.
+
+Measured on the million-line fixture, wall clock, cold and warm (nothing changed):
+
+| | debug cold | debug warm | release cold | release warm |
+|---|---|---|---|---|
+| Windows | 3.0 s | 0.57 s | 3.2 s | 0.46 s |
+| Linux (WSL2, native filesystem) | 3.4 s | 0.50 s | 3.4 s | 0.39 s |
+
+The Linux figures are on the Linux filesystem: the same build from `/mnt/d` spends
+two seconds reading a thousand files through 9P. Images are the D329 compiler's for
+every program that the promotion bug did not touch, and both suites pass.

@@ -136,6 +136,15 @@ type Token = struct {
 // An empty table stands for "not built": the search then counts newlines from the
 // start, which a diagnostic can afford.
 fn line_starts(a: *mem.Arena, source: str) -> ([]usize, err) {
+    // One pass when the lines are no denser than one per eight bytes (D330), which
+    // is every source file there is; the count is exact only for one denser, which
+    // gets the two passes it always got.
+    let mark = mem.mark(a)
+    let (guess, guess_error) = mem.alloc[usize](a, source.len / 8usize + 16usize)
+    if guess_error != ok { ret (guess, guess_error) }
+    let (filled_in_one, in_one) = line_starts_into(source, guess)
+    if in_one { ret (guess[0usize..filled_in_one], ok) }
+    mem.reset(a, mark)
     var count = 1usize
     var at = 0usize
     while at < source.len {
@@ -145,19 +154,28 @@ fn line_starts(a: *mem.Arena, source: str) -> ([]usize, err) {
     }
     let (lines, lines_error) = mem.alloc[usize](a, count)
     if lines_error != ok { ret (lines, lines_error) }
+    let (filled, fits) = line_starts_into(source, lines)
+    if !fits { ret (lines, InvalidSource) }
+    ret (lines[0usize..filled], ok)
+}
+
+// The line starts into `lines`, and whether they fit.
+fn line_starts_into(source: str, lines: []usize) -> (usize, bool) {
+    if lines.len == 0usize { ret (0usize, false) }
     lines[0usize] = 0usize
     var filled = 1usize
-    at = 0usize
+    var at = 0usize
     while at < source.len {
         let c = source[at]
         at += 1usize
         if c == 13u8 && at < source.len && source[at] == 10u8 { at += 1usize }
         if c == 10u8 || c == 13u8 {
+            if filled == lines.len { ret (filled, false) }
             lines[filled] = at
             filled += 1usize
         }
     }
-    ret (lines, ok)
+    ret (filled, true)
 }
 
 // The 1-based line `offset` is on.
@@ -361,6 +379,12 @@ fn is_base_digit(c: u8, base: u8) -> bool {
 
 fn is_alnum(c: u8) -> bool {
     ret is_alpha(c) || is_digit(c)
+}
+
+// The identifier bytes as a table (D330): one load per byte of an identifier, where
+// the scan asked five comparisons. A string literal, so nothing is built or copied.
+fn identifier_bytes() -> str {
+    ret "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x01\x00\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 }
 
 fn is_continuation(c: u8) -> bool {
@@ -838,8 +862,11 @@ fn next(s: *Scanner) -> Token {
     }
 
     if is_alpha(c) {
-        take(s, 1usize)
-        while s.off < s.source.len && is_alnum(s.source[s.off]) { take(s, 1usize) }
+        let classes = identifier_bytes()
+        var off = s.off + 1usize
+        let source = s.source
+        while off < source.len && classes[usize(source[off])] != 0u8 { off += 1usize }
+        s.off = off
         ret token(s, keyword(s.source, start, s.off), start)
     }
 

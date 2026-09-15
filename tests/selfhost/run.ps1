@@ -2332,6 +2332,14 @@ $ringExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $ringExecutableWritten -ne 'executable written') { throw 'e.data.ring did not compile into a PE executable' }
 $ringOutput = & $ringExecutablePath
 if ($LASTEXITCODE -ne 0 -or $ringOutput -ne 'data ring ok') { throw 'e.data.ring FIFO, overwrite, iteration, or empty-capacity behavior failed' }
+# D330: a promoted local copied from a later-declared local and reassigned in the same block.
+foreach ($promoteMode in @(@(), @('--release'))) {
+    $promotePath = Join-Path $testBuild ('promote-copy-selfhost' + $promoteMode.Count + '.exe')
+    $promoteWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\promote_copy\src\main.e') $repo 'x64' 'windows' $promotePath @promoteMode
+    if ($LASTEXITCODE -ne 0 -or $promoteWritten -ne 'executable written') { throw 'link/promote_copy did not compile' }
+    $promoteOutput = & $promotePath
+    if ($LASTEXITCODE -ne 0 -or $promoteOutput -ne 'promote copy ok') { throw "link/promote_copy read the wrong local: $promoteOutput" }
+}
 $dequeSurface = Get-Content (Join-Path $repo 'lib\e\data\deque.e') |
     Where-Object { $_ -match '^(?:type|fn|error|const|var) ' } |
     ForEach-Object {

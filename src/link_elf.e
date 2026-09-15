@@ -28,22 +28,21 @@ fn append_blob(output: *emit_x64.Buffer, bytes: str) -> err {
     ret ok
 }
 
-// `--arena` (D225): the startup stub carries the root arena's size as four 32-bit
-// immediates -- the mapping's length, two bounds and the arena's capacity -- at these
-// offsets from its start; a size past what a signed 32-bit immediate holds is refused.
+// `--arena` (D225): the startup stub carries the root arena's size as four 64-bit
+// immediates (D330; they were 32-bit, and so was the largest arena) -- the mapping's
+// length, two bounds and the arena's capacity -- at these offsets from its start.
 fn patch_arena(output: *emit_x64.Buffer, startup: usize, arena_bytes: usize) -> err {
     if arena_bytes == 0usize { ret ok }
-    if arena_bytes >= 2147483648usize { ret InvalidExecutable }
-    try emit_x64.patch_little_u32(output, startup + 6usize, arena_bytes)
-    try emit_x64.patch_little_u32(output, startup + 64usize, arena_bytes)
-    try emit_x64.patch_little_u32(output, startup + 111usize, arena_bytes)
-    ret emit_x64.patch_little_u32(output, startup + 171usize, arena_bytes)
+    try patch_little_u64(output, startup + 7usize, arena_bytes)
+    try patch_little_u64(output, startup + 68usize, arena_bytes)
+    try patch_little_u64(output, startup + 126usize, arena_bytes)
+    ret patch_little_u64(output, startup + 194usize, arena_bytes)
 }
 
 fn append_startup(output: *emit_x64.Buffer) -> err {
-    try append_blob(output, "\x49\x89\xe4\x31\xff\xbe\x00\x00\x00\x40\xba\x03\x00\x00\x00\x41\xba\x22\x00\x00\x00\x49\xc7\xc0\xff\xff\xff\xff\x45\x31\xc9\xb8\x09\x00\x00\x00\x0f\x05\x48\x85\xc0\x0f\x88\xae\x00\x00\x00\x49\x89\xc5\x4d\x8b\x34\x24\x4c\x89\xf3\x48\xc1\xe3\x04\x48\x81\xfb\x00\x00\x00\x40\x0f\x87\x93\x00\x00\x00\x45\x31\xff\x4d\x39\xf7\x73\x4c\x4f\x8b\x44\xfc\x08\x31\xc9\x41\x80\x3c\x08\x00\x74\x05")
-    try append_blob(output, "\x48\xff\xc1\xeb\xf4\x48\x89\xd8\x48\x01\xc8\x72\x70\x48\x3d\x00\x00\x00\x40\x77\x68\x4d\x8d\x4c\x1d\x00\x4d\x89\xfa\x49\xc1\xe2\x04\x4f\x89\x4c\x15\x00\x4b\x89\x4c\x15\x08\x48\x89\xca\x4c\x89\xc6\x4c\x89\xcf\xf3\xa4\x48\x01\xd3\x49\xff\xc7\xeb\xaf\x48\x83\xec\x30\x4c\x89\x2c\x24\x48\xc7\x44\x24\x08\x00\x00\x00\x40\x48\x89\x5c\x24\x10\x4c\x89\x6c\x24\x18\x4c\x89\x74\x24\x20\x48\x8d")
-    ret append_blob(output, "\x3c\x24\x48\x8d\x74\x24\x18\xe8\x00\x00\x00\x00\x85\xc0\x40\x0f\x95\xc7\x40\x0f\xb6\xff\xb8\x3c\x00\x00\x00\x0f\x05\xbf\x6f\x00\x00\x00\xb8\x3c\x00\x00\x00\x0f\x05\x0f\x0b")
+    try append_blob(output, "\x49\x89\xe4\x31\xff\x48\xbe\x00\x00\x00\x40\x00\x00\x00\x00\xba\x03\x00\x00\x00\x41\xba\x22\x40\x00\x00\x49\xc7\xc0\xff\xff\xff\xff\x45\x31\xc9\xb8\x09\x00\x00\x00\x0f\x05\x48\x85\xc0\x0f\x88\xc9\x00\x00\x00\x49\x89\xc5\x4d\x8b\x34\x24\x4c\x89\xf3\x48\xc1\xe3\x04\x48\xb8\x00\x00\x00\x40\x00\x00\x00\x00\x48\x39\xc3\x0f\x87\xa8\x00\x00\x00\x45\x31\xff")
+    try append_blob(output, "\x4d\x39\xf7\x73\x5b\x4f\x8b\x44\xfc\x08\x31\xc9\x41\x80\x3c\x08\x00\x74\x05\x48\xff\xc1\xeb\xf4\x48\x89\xd8\x48\x01\xc8\x0f\x82\x81\x00\x00\x00\x49\xbb\x00\x00\x00\x40\x00\x00\x00\x00\x4c\x39\xd8\x0f\x87\x6e\x00\x00\x00\x4d\x8d\x4c\x1d\x00\x4d\x89\xfa\x49\xc1\xe2\x04\x4f\x89\x4c\x15\x00\x4b\x89\x4c\x15\x08\x48\x89\xca\x4c\x89\xc6\x4c\x89\xcf\xf3\xa4\x48")
+    ret append_blob(output, "\x01\xd3\x49\xff\xc7\xeb\xa0\x48\x83\xec\x30\x4c\x89\x2c\x24\x48\xb8\x00\x00\x00\x40\x00\x00\x00\x00\x48\x89\x44\x24\x08\x48\x89\x5c\x24\x10\x4c\x89\x6c\x24\x18\x4c\x89\x74\x24\x20\x48\x8d\x3c\x24\x48\x8d\x74\x24\x18\xe8\x00\x00\x00\x00\x85\xc0\x40\x0f\x95\xc7\x40\x0f\xb6\xff\xb8\x3c\x00\x00\x00\x0f\x05\xbf\x6f\x00\x00\x00\xb8\x3c\x00\x00\x00\x0f\x05\x0f\x0b")
 }
 
 // How much of the runtime a program needs: up to the end of the last function it reaches.
@@ -311,7 +310,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     if main_error != ok { ret main_error }
     let base = 4194304usize
     let code_offset = 4096usize
-    let startup_size = 235usize
+    let startup_size = 267usize
     let symbols = nir.import_symbol_total(builder)
 
     let phdr_offset = 64usize
@@ -457,7 +456,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try patch_dynamic_relocations(builder, output, rela_offset, got_address)
 
     let main_offset = machine_start + function_offsets[main_index]
-    try emit_x64.patch_relative32(output, code_offset + 200usize, main_offset)
+    try emit_x64.patch_relative32(output, code_offset + 232usize, main_offset)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         // A module-scope `var`, whose address is known once the writable segment is placed.
@@ -536,7 +535,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     // code out to 4096 cost an empty program half its size for nothing (D149). The address is
     // still the base plus the file offset, so every relocation below stays a file offset.
     let code_offset = 64usize + 56usize * segments
-    let startup_size = 235usize
+    let startup_size = 267usize
     try emit_x64.byte(output, 127usize)
     try emit_x64.byte(output, 69usize)
     try emit_x64.byte(output, 76usize)
@@ -591,7 +590,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     if runtime_limit_error != ok { ret runtime_limit_error }
     try runtime_elf_x64.append(output, runtime_limit)
     let main_offset = machine_start + function_offsets[main_index]
-    try emit_x64.patch_relative32(output, code_offset + 200usize, main_offset)
+    try emit_x64.patch_relative32(output, code_offset + 232usize, main_offset)
     var relocation_at = 0usize
     while relocation_at < relocation_count {
         // A module-scope `var`'s address depends on where the data segment lands, which is
@@ -685,13 +684,13 @@ fn self_test() -> err {
     // gets none of it (D150, D151): the image is the headers, the startup and the code.
     // Checking the total and the segment size keeps this test honest, and the machine code
     // is checked where `write` puts it rather than at a literal offset.
-    let machine_start = 120usize + 235usize
+    let machine_start = 120usize + 267usize
     let total = machine_start + machine.count
     if executable.count != total { ret InvalidExecutable }
     if executable.bytes[0usize] != 127u8 || executable.bytes[16usize] != 2u8 || executable.bytes[18usize] != 62u8 || executable.bytes[24usize] != 120u8 || executable.bytes[25usize] != 0u8 || executable.bytes[26usize] != 64u8 { ret InvalidExecutable }
     if executable.bytes[64usize] != 1u8 || executable.bytes[68usize] != 5u8 { ret InvalidExecutable }
     if executable.bytes[96usize] != u8(total % 256usize) || executable.bytes[97usize] != u8((total / 256usize) % 256usize) { ret InvalidExecutable }
-    if executable.bytes[120usize] != 73u8 || executable.bytes[319usize] != 232u8 { ret InvalidExecutable }
+    if executable.bytes[120usize] != 73u8 || executable.bytes[351usize] != 232u8 { ret InvalidExecutable }
     if executable.bytes[machine_start] != 195u8 { ret InvalidExecutable }
     ret ok
 }

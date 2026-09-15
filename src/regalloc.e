@@ -88,7 +88,158 @@ fn register_kind(ty: check.Type) -> bool {
 // again, a `Zero` of it the zero value, and every `Load` a `Bitcast` reading it. The
 // number is defined more than once, which is what the ranges below allow: one range from
 // its first definition to its last use, the way a variable has always had one register.
-fn promote_locals(builder: *nir.Builder, function: nir.Function) -> err {
+fn promote_locals(builder: *nir.Builder, function: nir.Function, scratch: []usize) -> err {
+    let end = function.first_instruction + function.instruction_count
+    if end > builder.instruction_count { ret InvalidIR }
+    // Every value's uses, listed once (D330): which instructions name it as an
+    // operand, in instruction order. Each local's scans below read its own list
+    // instead of walking the function's instructions and operands -- a scan per local
+    // was the allocator's largest cost -- and process the locals in the same order,
+    // so the rewriting is the one the walks did.
+    let values = function.value_count
+    if scratch.len < values * 2usize + 2usize { ret promote_locals_walked(builder, function) }
+    var counts = scratch[0usize..values + 1usize]
+    var clear_at = 0usize
+    while clear_at < counts.len {
+        counts[clear_at] = 0usize
+        clear_at += 1usize
+    }
+    var total = 0usize
+    var at = function.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        if instruction.first_operand + instruction.operand_count > builder.operand_count { ret InvalidIR }
+        var operand_at = 0usize
+        while operand_at < instruction.operand_count {
+            let value = builder.operands[instruction.first_operand + operand_at]
+            if value >= values { ret InvalidIR }
+            counts[value] += 1usize
+            total += 1usize
+            operand_at += 1usize
+        }
+        at += 1usize
+    }
+    if scratch.len < values * 2usize + 2usize + total { ret promote_locals_walked(builder, function) }
+    // Offsets: `starts[v]` is where v's uses begin; `fill[v]` walks it while filling.
+    var starts = scratch[values + 1usize..values * 2usize + 2usize]
+    var uses = scratch[values * 2usize + 2usize..values * 2usize + 2usize + total]
+    var running = 0usize
+    var value_at = 0usize
+    while value_at < values {
+        starts[value_at] = running
+        running += counts[value_at]
+        counts[value_at] = starts[value_at]
+        value_at += 1usize
+    }
+    starts[values] = running
+    at = function.first_instruction
+    while at < end {
+        let instruction = builder.instructions[at]
+        var operand_at = 0usize
+        while operand_at < instruction.operand_count {
+            let value = builder.operands[instruction.first_operand + operand_at]
+            uses[counts[value]] = at
+            counts[value] += 1usize
+            operand_at += 1usize
+        }
+        at += 1usize
+    }
+    at = function.first_instruction
+    while at < end {
+        let stack = builder.instructions[at]
+        if stack.opcode == .Stack && stack.has_result && stack.immediate <= 1usize && register_kind(stack.ty) {
+            var promotable = true
+            var width = 0usize
+            var use_at = starts[stack.result]
+            let use_end = starts[stack.result + 1usize]
+            while use_at < use_end && promotable {
+                let instruction = builder.instructions[uses[use_at]]
+                var operand_at = 0usize
+                while operand_at < instruction.operand_count {
+                    if builder.operands[instruction.first_operand + operand_at] == stack.result {
+                        let load = instruction.opcode == .Load && instruction.operand_count == 1usize
+                        let store = instruction.opcode == .Store && instruction.operand_count == 2usize
+                        let clear = instruction.opcode == .Zero && !instruction.has_result && instruction.operand_count == 1usize
+                        if operand_at != 0usize || !(load || store || clear) || !register_kind(instruction.ty) || instruction.immediate == 0usize || instruction.immediate > 8usize {
+                            promotable = false
+                        } else {
+                            if width == 0usize { width = instruction.immediate }
+                            if width != instruction.immediate { promotable = false }
+                        }
+                    }
+                    operand_at += 1usize
+                }
+                use_at += 1usize
+            }
+            if promotable && width != 0usize {
+                // First the accesses themselves, while the address still tells them
+                // apart from a store through a pointer the local holds.
+                builder.instructions[at].opcode = .Zero
+                builder.instructions[at].immediate = 0usize
+                use_at = starts[stack.result]
+                while use_at < use_end {
+                    let scan = uses[use_at]
+                    let instruction = builder.instructions[scan]
+                    if instruction.operand_count != 0usize && builder.operands[instruction.first_operand] == stack.result {
+                        if instruction.opcode == .Load {
+                            builder.instructions[scan].opcode = .Bitcast
+                            builder.instructions[scan].immediate = 0usize
+                        }
+                        if instruction.opcode == .Store {
+                            builder.instructions[scan].opcode = .Bitcast
+                            builder.instructions[scan].immediate = 0usize
+                            builder.instructions[scan].has_result = true
+                            builder.instructions[scan].result = stack.result
+                            builder.instructions[scan].first_operand = instruction.first_operand + 1usize
+                            builder.instructions[scan].operand_count = 1usize
+                        }
+                        if instruction.opcode == .Zero {
+                            builder.instructions[scan].has_result = true
+                            builder.instructions[scan].result = stack.result
+                            builder.instructions[scan].immediate = 0usize
+                            builder.instructions[scan].operand_count = 0usize
+                        }
+                    }
+                    use_at += 1usize
+                }
+                // Then a use of what a load read, in the load's own block and before the
+                // next definition of the local, reads the local itself; a use elsewhere
+                // keeps the load's copy, since a store may lie on the way to it. A load
+                // whose every use was redirected is a bitcast nothing reads, and
+                // selection leaves that out. The uses are listed by the operand they
+                // were recorded with: a store rewritten above no longer names the local
+                // in its operands and is passed over, as the walk passed it over.
+                use_at = starts[stack.result]
+                while use_at < use_end {
+                    let scan = uses[use_at]
+                    let loaded = builder.instructions[scan]
+                    if loaded.opcode == .Bitcast && loaded.has_result && loaded.result != stack.result && loaded.operand_count == 1usize && builder.operands[loaded.first_operand] == stack.result {
+                        let (block_end, block_error) = block_end_of(builder, function, scan)
+                        if block_error != ok { ret block_error }
+                        var redirect_at = scan + 1usize
+                        var redefined = false
+                        while redirect_at < block_end && !redefined {
+                            let user = builder.instructions[redirect_at]
+                            var operand_index = 0usize
+                            while operand_index < user.operand_count {
+                                if builder.operands[user.first_operand + operand_index] == loaded.result { builder.operands[user.first_operand + operand_index] = stack.result }
+                                operand_index += 1usize
+                            }
+                            if user.has_result && user.result == stack.result { redefined = true }
+                            redirect_at += 1usize
+                        }
+                    }
+                    use_at += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// The walk the use lists replaced, kept for a function whose uses outgrow the scratch.
+fn promote_locals_walked(builder: *nir.Builder, function: nir.Function) -> err {
     let end = function.first_instruction + function.instruction_count
     if end > builder.instruction_count { ret InvalidIR }
     var at = function.first_instruction
@@ -316,7 +467,7 @@ fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize,
 }
 
 fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: usize, ranges: []LiveRange, allocations: []Allocation, heaps: []usize, capacity: usize) -> (usize, err) {
-    let promotion_error = promote_locals(builder, function)
+    let promotion_error = promote_locals(builder, function, heaps)
     if promotion_error != ok { ret (0usize, promotion_error) }
     let ranges_error = build_ranges(builder, function, ranges)
     if ranges_error != ok { ret (0usize, ranges_error) }

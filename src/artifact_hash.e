@@ -240,17 +240,16 @@ fn sha_table() -> [64]usize {
 // it per block, and a slot per byte filled before each, were most of a manifest's
 // time, and the manifest hashes every source and the image on every build.
 fn sha_compress(state: []usize, bytes: []const u8, at: usize, k: []const usize) {
-    var w: [64]usize = zero
+    // The message schedule as a rolling window of sixteen words (D330): `w[t]` needs
+    // `w[t-2]`, `w[t-7]`, `w[t-15]` and `w[t-16]` alone, so a word overwrites the one
+    // sixteen rounds older and the sixty-four-word block, zeroed per compression, is
+    // gone. The rotations are spelled out: a call per rotation is what a debug build
+    // paid, nine times a round.
+    var w: [16]usize = zero
     var t = 0usize
     while t < 16usize {
         let p = at + t * 4usize
         w[t] = (usize(bytes[p]) << 24usize) | (usize(bytes[p + 1usize]) << 16usize) | (usize(bytes[p + 2usize]) << 8usize) | usize(bytes[p + 3usize])
-        t += 1usize
-    }
-    while t < 64usize {
-        let s0 = sha_rotr(w[t - 15usize], 7usize) ^ sha_rotr(w[t - 15usize], 18usize) ^ (w[t - 15usize] >> 3usize)
-        let s1 = sha_rotr(w[t - 2usize], 17usize) ^ sha_rotr(w[t - 2usize], 19usize) ^ (w[t - 2usize] >> 10usize)
-        w[t] = (w[t - 16usize] + s0 + w[t - 7usize] + s1) & mask32()
         t += 1usize
     }
     var a = state[0usize]
@@ -263,30 +262,39 @@ fn sha_compress(state: []usize, bytes: []const u8, at: usize, k: []const usize) 
     var h = state[7usize]
     t = 0usize
     while t < 64usize {
-        let big1 = sha_rotr(e, 6usize) ^ sha_rotr(e, 11usize) ^ sha_rotr(e, 25usize)
-        let choose = (e & f) ^ ((e ^ mask32()) & g)
-        let t1 = (h + big1 + choose + k[t] + w[t]) & mask32()
-        let big0 = sha_rotr(a, 2usize) ^ sha_rotr(a, 13usize) ^ sha_rotr(a, 22usize)
+        var word = w[t & 15usize]
+        if t >= 16usize {
+            let w15 = w[(t + 1usize) & 15usize]
+            let w2 = w[(t + 14usize) & 15usize]
+            let s0 = (((w15 >> 7usize) | (w15 << 25usize)) ^ ((w15 >> 18usize) | (w15 << 14usize)) ^ (w15 >> 3usize)) & 4294967295usize
+            let s1 = (((w2 >> 17usize) | (w2 << 15usize)) ^ ((w2 >> 19usize) | (w2 << 13usize)) ^ (w2 >> 10usize)) & 4294967295usize
+            word = (word + s0 + w[(t + 9usize) & 15usize] + s1) & 4294967295usize
+            w[t & 15usize] = word
+        }
+        let big1 = (((e >> 6usize) | (e << 26usize)) ^ ((e >> 11usize) | (e << 21usize)) ^ ((e >> 25usize) | (e << 7usize))) & 4294967295usize
+        let choose = (e & f) ^ ((e ^ 4294967295usize) & g)
+        let t1 = (h + big1 + choose + k[t] + word) & 4294967295usize
+        let big0 = (((a >> 2usize) | (a << 30usize)) ^ ((a >> 13usize) | (a << 19usize)) ^ ((a >> 22usize) | (a << 10usize))) & 4294967295usize
         let majority = (a & b) ^ (a & c) ^ (b & c)
-        let t2 = (big0 + majority) & mask32()
+        let t2 = (big0 + majority) & 4294967295usize
         h = g
         g = f
         f = e
-        e = (d + t1) & mask32()
+        e = (d + t1) & 4294967295usize
         d = c
         c = b
         b = a
-        a = (t1 + t2) & mask32()
+        a = (t1 + t2) & 4294967295usize
         t += 1usize
     }
-    state[0usize] = (state[0usize] + a) & mask32()
-    state[1usize] = (state[1usize] + b) & mask32()
-    state[2usize] = (state[2usize] + c) & mask32()
-    state[3usize] = (state[3usize] + d) & mask32()
-    state[4usize] = (state[4usize] + e) & mask32()
-    state[5usize] = (state[5usize] + f) & mask32()
-    state[6usize] = (state[6usize] + g) & mask32()
-    state[7usize] = (state[7usize] + h) & mask32()
+    state[0usize] = (state[0usize] + a) & 4294967295usize
+    state[1usize] = (state[1usize] + b) & 4294967295usize
+    state[2usize] = (state[2usize] + c) & 4294967295usize
+    state[3usize] = (state[3usize] + d) & 4294967295usize
+    state[4usize] = (state[4usize] + e) & 4294967295usize
+    state[5usize] = (state[5usize] + f) & 4294967295usize
+    state[6usize] = (state[6usize] + g) & 4294967295usize
+    state[7usize] = (state[7usize] + h) & 4294967295usize
 }
 
 fn sha_hex_digit(value: usize) -> u8 {
