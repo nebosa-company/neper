@@ -305,6 +305,12 @@ type Builder = struct {
     definers: []usize,
     definers_first: usize,
     definers_valid: bool,
+    // The verifier's scratch (D342): words for every value and block of the largest
+    // function; empty, and nothing is verified beyond the terminators.
+    verify_scratch: []usize,
+    // What the verifier refused, for the diagnostic: the instruction and the operand.
+    verify_instruction: usize,
+    verify_operand: usize,
     // The writer's edge marks (D320), valid with the used marks: which used references
     // record a dependency edge, which inlined entries stand for a body edge, and the
     // index that dedupes both -- the walks they replace were quadratic per module.
@@ -1038,6 +1044,261 @@ fn validate_function(builder: *Builder, function: Function) -> err {
     ret ok
 }
 
+// The verifier at the lowering boundary (D342, H10): beyond the terminators and
+// targets `validate_function` checks, every value is defined once, by the instruction
+// that carries it, before any use in program order and in a block that dominates the
+// use's; every operand is a value of the function; a `BranchIf` tests a bool and has
+// one operand; the two-operand arithmetic and comparisons have two. A function that fails is refused as `Unverified`, and a
+// build that reaches the refusal writes nothing. The dominators come from the
+// iterative algorithm over a reverse postorder, with predecessors listed once.
+error Unverified
+
+fn verify_function(builder: *Builder, function: Function) -> err {
+    let block_count = function.block_count
+    let value_count = function.value_count
+    let scratch = builder.verify_scratch
+    // The scratch, in slices: definer block and instruction per value; per block its
+    // reverse-postorder index, its idom, its predecessor start and count, and a seen;
+    // then the predecessor list (two per block at most) and a stack.
+    let need = value_count * 2usize + block_count * 8usize + 16usize
+    if need > scratch.len { ret ok }
+    let definer_block = scratch[0usize..value_count]
+    let definer_index = scratch[value_count..value_count * 2usize]
+    var at = value_count * 2usize
+    let order = scratch[at..at + block_count]
+    at += block_count
+    let idom = scratch[at..at + block_count]
+    at += block_count
+    let pred_start = scratch[at..at + block_count]
+    at += block_count
+    let pred_count = scratch[at..at + block_count]
+    at += block_count
+    let seen = scratch[at..at + block_count]
+    at += block_count
+    let preds = scratch[at..at + block_count * 2usize]
+    at += block_count * 2usize
+    let stack = scratch[at..at + block_count]
+    let none = block_count + 1usize
+    var value = 0usize
+    while value < value_count {
+        definer_block[value] = none
+        definer_index[value] = 0usize
+        value += 1usize
+    }
+    var block_at = 0usize
+    while block_at < block_count {
+        pred_count[block_at] = 0usize
+        seen[block_at] = 0usize
+        idom[block_at] = none
+        order[block_at] = none
+        block_at += 1usize
+    }
+    // Definers, and the predecessor counts from the terminators.
+    block_at = 0usize
+    while block_at < block_count {
+        let block = builder.blocks[function.first_block + block_at]
+        var i = block.first_instruction
+        let end = block.first_instruction + block.instruction_count
+        while i < end {
+            let instruction = builder.instructions[i]
+            if instruction.has_result {
+                if instruction.result >= value_count || definer_block[instruction.result] != none { ret refuse(builder, i, 0usize) }
+                definer_block[instruction.result] = block_at
+                definer_index[instruction.result] = i
+            }
+            i += 1usize
+        }
+        let terminator = builder.instructions[end - 1usize]
+        if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
+            pred_count[terminator.target - function.first_block] += 1usize
+            if terminator.opcode == .BranchIf { pred_count[terminator.target2 - function.first_block] += 1usize }
+        }
+        block_at += 1usize
+    }
+    var filled = 0usize
+    block_at = 0usize
+    while block_at < block_count {
+        pred_start[block_at] = filled
+        filled += pred_count[block_at]
+        pred_count[block_at] = 0usize
+        block_at += 1usize
+    }
+    block_at = 0usize
+    while block_at < block_count {
+        let block = builder.blocks[function.first_block + block_at]
+        let terminator = builder.instructions[block.first_instruction + block.instruction_count - 1usize]
+        if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
+            let t1 = terminator.target - function.first_block
+            preds[pred_start[t1] + pred_count[t1]] = block_at
+            pred_count[t1] += 1usize
+            if terminator.opcode == .BranchIf {
+                let t2 = terminator.target2 - function.first_block
+                preds[pred_start[t2] + pred_count[t2]] = block_at
+                pred_count[t2] += 1usize
+            }
+        }
+        block_at += 1usize
+    }
+    // Reverse postorder by an explicit stack: a block is numbered when its
+    // successors have been; `seen` is 0 unseen, 1 on the stack, 2 numbered.
+    var numbered = block_count
+    var top = 0usize
+    stack[0usize] = 0usize
+    seen[0usize] = 1usize
+    top = 1usize
+    while top > 0usize {
+        let b = stack[top - 1usize]
+        let block = builder.blocks[function.first_block + b]
+        let terminator = builder.instructions[block.first_instruction + block.instruction_count - 1usize]
+        var pushed = false
+        if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
+            let s1 = terminator.target - function.first_block
+            if seen[s1] == 0usize {
+                seen[s1] = 1usize
+                stack[top] = s1
+                top += 1usize
+                pushed = true
+            } else {
+                if terminator.opcode == .BranchIf {
+                    let s2 = terminator.target2 - function.first_block
+                    if seen[s2] == 0usize {
+                        seen[s2] = 1usize
+                        stack[top] = s2
+                        top += 1usize
+                        pushed = true
+                    }
+                }
+            }
+        }
+        if !pushed {
+            top = top - 1usize
+            seen[b] = 2usize
+            numbered = numbered - 1usize
+            order[b] = numbered
+        }
+    }
+    // The blocks by rank, in the stack's words, which the search is done with.
+    let by_rank = stack
+    block_at = 0usize
+    while block_at < block_count {
+        by_rank[block_at] = none
+        block_at += 1usize
+    }
+    block_at = 0usize
+    while block_at < block_count {
+        if seen[block_at] == 2usize { by_rank[order[block_at]] = block_at }
+        block_at += 1usize
+    }
+    // Dominators, iterated to a fixed point over the reachable blocks in reverse
+    // postorder; an unreachable block has no dominator and its values dominate nothing.
+    idom[0usize] = 0usize
+    var changed = true
+    while changed {
+        changed = false
+        var rank = 0usize
+        while rank < block_count {
+            let b = by_rank[rank]
+            if b != none && b != 0usize {
+                var candidate = none
+                var p = 0usize
+                while p < pred_count[b] {
+                    let pred = preds[pred_start[b] + p]
+                    if idom[pred] != none {
+                        if candidate == none {
+                            candidate = pred
+                        } else {
+                            candidate = intersect(order, idom, candidate, pred)
+                        }
+                    }
+                    p += 1usize
+                }
+                if candidate != none && idom[b] != candidate {
+                    idom[b] = candidate
+                    changed = true
+                }
+            }
+            rank += 1usize
+        }
+    }
+    // Every use.
+    block_at = 0usize
+    while block_at < block_count {
+        let block = builder.blocks[function.first_block + block_at]
+        var i = block.first_instruction
+        let end = block.first_instruction + block.instruction_count
+        while i < end {
+            let instruction = builder.instructions[i]
+            var o = 0usize
+            while o < instruction.operand_count {
+                let operand = builder.operands[instruction.first_operand + o]
+                if operand >= value_count || definer_block[operand] == none { ret refuse(builder, i, o) }
+                let d = definer_block[operand]
+                if d == block_at {
+                    if definer_index[operand] >= i { ret refuse(builder, i, o) }
+                } else {
+                    if !dominates(idom, d, block_at, none) {
+                        ret refuse(builder, i, o)
+                    }
+                }
+                o += 1usize
+            }
+            if instruction.opcode == .BranchIf {
+                if instruction.operand_count != 1usize { ret refuse(builder, i, 0usize) }
+                let condition = builder.instructions[definer_index[builder.operands[instruction.first_operand]]]
+                if condition.ty.kind != .Bool { ret refuse(builder, i, 0usize) }
+            }
+            if is_binary(instruction.opcode) && instruction.operand_count != 2usize { ret refuse(builder, i, 0usize) }
+            i += 1usize
+        }
+        block_at += 1usize
+    }
+    ret ok
+}
+
+
+fn refuse(builder: *Builder, instruction: usize, operand: usize) -> err {
+    builder.verify_instruction = instruction
+    builder.verify_operand = operand
+    ret Unverified
+}
+
+fn is_binary(opcode: Opcode) -> bool {
+    ret opcode == .Add || opcode == .Subtract || opcode == .Multiply || opcode == .Divide || opcode == .Remainder || opcode == .AddWrap || opcode == .SubtractWrap || opcode == .MultiplyWrap || opcode == .ShiftLeft || opcode == .ShiftRight || opcode == .BitAnd || opcode == .BitXor || opcode == .BitOr || opcode == .Equal || opcode == .NotEqual || opcode == .Less || opcode == .LessEqual || opcode == .Greater || opcode == .GreaterEqual
+}
+
+// The nearest common dominator of two blocks, by their reverse-postorder ranks.
+fn intersect(order: []usize, idom: []usize, a: usize, b: usize) -> usize {
+    var x = a
+    var y = b
+    var steps = 0usize
+    while x != y {
+        while order[x] > order[y] {
+            x = idom[x]
+            steps += 1usize
+            if steps > order.len * 2usize { ret x }
+        }
+        while order[y] > order[x] {
+            y = idom[y]
+            steps += 1usize
+            if steps > order.len * 2usize { ret y }
+        }
+    }
+    ret x
+}
+
+// Whether `d` dominates `b`: `d` is on `b`'s idom chain.
+fn dominates(idom: []usize, d: usize, b: usize, none: usize) -> bool {
+    var at = b
+    var steps = 0usize
+    while steps <= idom.len {
+        if at == d { ret true }
+        if at == 0usize || idom[at] == none { ret false }
+        at = idom[at]
+        steps += 1usize
+    }
+    ret false
+}
+
 // Where the builder stands, and back to it (D310): what an oracle lowered and cannot
 // inline is discarded rather than kept. References and strings interned meanwhile
 // stay -- they are names, and the indexes over them would otherwise point past the
@@ -1117,6 +1378,7 @@ fn end_function(builder: *Builder) -> err {
     if !builder.function_active || !builder.block_active || !builder.blocks[builder.current_block].terminated { ret InvalidControlFlow }
     builder.functions[builder.current_function].value_count = builder.next_value
     try validate_function(builder, builder.functions[builder.current_function])
+    if builder.verify_scratch.len != 0usize { try verify_function(builder, builder.functions[builder.current_function]) }
     builder.function_active = false
     builder.block_active = false
     ret ok
@@ -1162,6 +1424,70 @@ fn self_test() -> err {
     if builder.functions[0usize].value_count != 3usize || builder.blocks[0usize].instruction_count != 4usize || !builder.blocks[0usize].terminated { ret InvalidValue }
     let (invalid_instruction, invalid_result, invalid_error) = emit(&builder, .ConstInteger, integer, true, 0usize, zero)
     if invalid_error != InvalidControlFlow { ret InvalidControlFlow }
+    ret ok
+}
+
+// The verifier refuses a use no definition dominates (D342): block 0 branches on a
+// bool to block 1, which defines a value and falls to block 2, or straight to block
+// 2, which returns the value; and passes the same function with the value defined
+// in block 0.
+fn verify_self_test() -> err {
+    var functions: [2]Function = zero
+    var blocks: [8]Block = zero
+    var instructions: [16]Instruction = zero
+    var operands: [16]usize = zero
+    var function_refs: [1]FunctionRef = zero
+    var strings: [1]StringConstant = zero
+    var scratch: [128]usize = zero
+    var builder: Builder = zero
+    try init(&builder, functions[..], blocks[..], instructions[..], operands[..], function_refs[..], strings[..])
+    builder.verify_scratch = scratch[..]
+    var integer: check.Type = zero
+    integer.kind = .Integer
+    integer.name = "i64"
+    var boolean: check.Type = zero
+    boolean.kind = .Bool
+    boolean.name = "bool"
+    var shape = 0usize
+    while shape < 2usize {
+        let (function_index, function_error) = begin_function(&builder, 0usize, "probe", 0usize)
+        if function_error != ok { ret function_error }
+        let (entry, entry_error) = begin_block(&builder)
+        if entry_error != ok { ret entry_error }
+        var early = 0usize
+        if shape == 1usize {
+            let (early_instruction, early_value, early_error) = emit(&builder, .ConstInteger, integer, true, 7usize, zero)
+            if early_error != ok { ret early_error }
+            early = early_value
+        }
+        let (condition_instruction, condition, condition_error) = emit(&builder, .ConstBool, boolean, true, 1usize, zero)
+        if condition_error != ok { ret condition_error }
+        let (branch_instruction, ignored_branch, branch_error) = emit(&builder, .BranchIf, zero, false, 0usize, zero)
+        if branch_error != ok { ret branch_error }
+        try add_operand(&builder, branch_instruction, condition)
+        let (defining, defining_error) = begin_block(&builder)
+        if defining_error != ok { ret defining_error }
+        let (late_instruction, late, late_error) = emit(&builder, .ConstInteger, integer, true, 9usize, zero)
+        if late_error != ok { ret late_error }
+        let (jump_instruction, ignored_jump, jump_error) = emit(&builder, .Branch, zero, false, 0usize, zero)
+        if jump_error != ok { ret jump_error }
+        let (merge, merge_error) = begin_block(&builder)
+        if merge_error != ok { ret merge_error }
+        let (return_instruction, ignored_return, return_error) = emit(&builder, .Return, integer, false, 0usize, zero)
+        if return_error != ok { ret return_error }
+        if shape == 0usize { try add_operand(&builder, return_instruction, late) } else { try add_operand(&builder, return_instruction, early) }
+        try set_branch_targets(&builder, branch_instruction, defining, merge)
+        try set_branch_targets(&builder, jump_instruction, merge, merge)
+        let ended = end_function(&builder)
+        if shape == 0usize {
+            if ended != Unverified || builder.verify_instruction != return_instruction { ret InvalidValue }
+            builder.function_active = false
+            builder.block_active = false
+        } else {
+            if ended != ok { ret ended }
+        }
+        shape += 1usize
+    }
     ret ok
 }
 

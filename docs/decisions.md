@@ -7328,3 +7328,33 @@ the runtime, and the content hash's input -- the code, then seventeen bytes and 
 strings per relocation -- was bounded by the artifact's length, which such a
 function outgrows since the artifact interns each name once. The scratch is sized
 from the functions' own inputs now.
+
+## D342 -- The NIR verifier at the lowering boundary
+
+H10 asks for verifiers at the typed IR and lowering boundaries, and that a verifier
+failure never yield a runnable artifact. `nir.end_function` checked terminators and
+branch targets (`validate_function`); `verify_function` now runs after it on every
+function the compiler lowers, in every mode: every value is defined once by the
+instruction that carries it; every operand is a value of the function, defined
+before the use in program order when in the same block, and otherwise in a block
+that dominates the use's; a `BranchIf` has one operand and it is a bool; the
+two-operand arithmetic and comparisons have two. The dominators are the iterative
+fixed point over a reverse postorder with the predecessors listed once; the scratch
+is two words per value and eight per block of the largest function the builder's
+pools hold, allocated with them. A refusal is `nir.Unverified`, reported as
+"lowering failed: the NIR verifier refused instruction N at operand M" -- a compiler
+bug by construction, never the program's -- and the build writes nothing.
+`nir.verify_self_test` builds a function whose merge block returns a value defined
+on one arm and requires the refusal, and the same function with the value defined
+in the entry block and requires the pass.
+
+The first draft refused the compiler's own `arena_size` at `ret (0usize, false)`: a
+`Return` carries every returned value as an operand, which the verifier had assumed
+was at most one; the assumption went, the compiler and every fixture pass. What the
+verifier does not check: types beyond the branch condition -- the instruction's
+`ty` is the checker's answer and the lowering does not cross-check operands against
+it -- resource states and cleanup, which wait on H01, and ABI shapes, which the
+selector checks where it emits. Cost: the lowering component of a worker's time on
+the million-line program is 510 to 595 ms, five per cent of the phase and under
+three of the cold build; kept on in release, since a release build is what is
+shipped and the budget holds.

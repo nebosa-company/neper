@@ -756,6 +756,7 @@ fn self_test() -> err {
     try decimal.self_test()
     try check.format_self_test()
     try nir.self_test()
+    try nir.verify_self_test()
     try nir.signature_self_test()
     try regalloc.self_test()
     try emit_x64.self_test()
@@ -2927,6 +2928,11 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let (operands, operands_error) = mem.alloc[usize](a, operand_capacity)
     if operands_error != ok { ret operands_error }
     report.build.pools[stats.POOL_NIR_OPERANDS] = operands.len
+    // The verifier's scratch (D342): two words per value and eight per block of the
+    // largest function the pools hold, committed as it is touched.
+    let (verify_scratch, verify_scratch_error) = mem.alloc[usize](a, instruction_capacity * 2usize + block_capacity * 8usize + 16usize)
+    if verify_scratch_error != ok { ret verify_scratch_error }
+    builder.verify_scratch = verify_scratch
     let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize / scale, total, 128usize))
     if function_refs_error != ok { ret function_refs_error }
     report.build.pools[stats.POOL_NIR_REFS] = function_refs.len
@@ -4643,6 +4649,14 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     if lower_error == check.Unsupported {
         try write_all(&message, "construct is not implemented in self-hosted lowering")
     } else {
+        if lower_error == nir.Unverified {
+            // The verifier's refusal (D342): the instruction and operand, for whoever
+            // reads the NIR; a compiler bug, never the program's.
+            try write_all(&message, "lowering failed: the NIR verifier refused instruction ")
+            try write_usize(&message, builder.verify_instruction)
+            try write_all(&message, " at operand ")
+            try write_usize(&message, builder.verify_operand)
+        }
         if lower_error == nir.InvalidControlFlow {
             try write_all(&message, "lowering failed: invalid NIR control flow")
         } else {
