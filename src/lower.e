@@ -753,6 +753,7 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "write") { ret ("neper_os_write", ok) }
     if check.same(name, "close") { ret ("neper_os_close", ok) }
     if check.same(name, "seek") { ret ("neper_os_seek", ok) }
+    if check.same(name, "copy_bytes") { ret ("neper_os_copy_bytes", ok) }
     if check.same(name, "thread_create") { ret ("neper_os_thread_create", ok) }
     if check.same(name, "thread_join") { ret ("neper_os_thread_join", ok) }
     if check.same(name, "thread_detach") { ret ("neper_os_thread_detach", ok) }
@@ -6073,15 +6074,41 @@ fn synthesize_failure_report(c: *check.Checker, g: *graph.Graph, builder: *nir.B
     if write_ref_error != ok { ret write_ref_error }
     try emit_report_write(builder, module_index, write_ref, file_slot, quoted_text(c, "error: "), token)
     var decisions: [1024]usize = zero
-    var count = 0usize
+    // The errors in value order (D329), as the merged error table holds them: the
+    // resolver's order is the order the modules were declared in, which a hot build
+    // that parses late what it must rebuild does not share with a cold one.
+    var ordered: [1024]usize = zero
+    var ordered_values: [1024]usize = zero
+    var ordered_count = 0usize
     var symbol_index = 0usize
     while symbol_index < c.resolver.count {
         let symbol = c.resolver.symbols[symbol_index]
         if symbol.kind == .Error && symbol.module_index < g.count {
+            if ordered_count == ordered.len { ret check.Capacity }
+            let (error_value, error_value_error) = artifact_hash.qualified_error_value(g.modules[symbol.module_index].name, symbol.name)
+            if error_value_error != ok { ret error_value_error }
+            var sort_at = ordered_count
+            while sort_at > 0usize && ordered_values[sort_at - 1usize] > error_value {
+                ordered_values[sort_at] = ordered_values[sort_at - 1usize]
+                ordered[sort_at] = ordered[sort_at - 1usize]
+                sort_at = sort_at - 1usize
+            }
+            ordered_values[sort_at] = error_value
+            ordered[sort_at] = symbol_index
+            ordered_count += 1usize
+        }
+        symbol_index += 1usize
+    }
+    var count = 0usize
+    var ordered_at = 0usize
+    while ordered_at < ordered_count {
+        symbol_index = ordered[ordered_at]
+        ordered_at += 1usize
+        let symbol = c.resolver.symbols[symbol_index]
+        if true {
             if count == decisions.len { ret check.Capacity }
             let module_name = g.modules[symbol.module_index].name
-            let (qualified, qualified_error) = artifact_hash.qualified_error_value(module_name, symbol.name)
-            if qualified_error != ok { ret qualified_error }
+            let qualified = ordered_values[ordered_at - 1usize]
             let (constant_instruction, constant, constant_error) = nir.emit(builder, .ConstError, error_type, true, qualified, token)
             if constant_error != ok { ret constant_error }
             let (matches, matches_error) = emit_supplied_compare(builder, .Equal, boolean, value, constant, token)

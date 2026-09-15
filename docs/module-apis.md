@@ -1547,6 +1547,7 @@ fn create_new(a: *mem.Arena, path: str) -> (File, err)
 fn read(f: File, buf: []u8) -> (usize, err)
 fn write(f: File, buf: []const u8) -> (usize, err)
 fn seek(f: File, off: i64, whence: SeekWhence) -> (u64, err)
+fn copy_bytes(dst: []u8, src: []const u8)
 fn close(f: File) -> err
 fn stdin() -> File
 fn stdout() -> File

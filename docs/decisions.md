@@ -6867,3 +6867,31 @@ modules before it validate. Resolve is 0.24 s.
 
 Measured, cold: the two-million-line program 7.3 s debug; images byte for byte the
 D325 compiler's; the hot-build checks and both suites unchanged.
+
+## D329 -- `os.copy_bytes`: one runtime copy where a byte loop stood, and the failure report in value order
+
+The artifact writer copies every module's machine code twice -- into the hash's input
+and into the artifact -- and packs the whole artifact once, all through `binary.copy`
+and `binary.pack`, which were loops storing one byte at a time: with `read_u64` gone
+from the hash they were the two largest leaves of the writer, a twentieth of a cold
+build's cycles. There is no word-sized load or store to write them with in the
+language the compiler is written in, so the copy is the host's: `os.copy_bytes(dst:
+[]u8, src: []const u8)` joins the fixed `e.os` surface, the shorter length's worth of
+bytes forwards, one `rep movsb` in both runtimes right after `write` (a program that
+copies carries little more of the prefix), a loop in the bootstrap's C runtime. The
+writer's phase is thirty percent shorter on every worker: the five-hundred-thousand-
+line program's lowering phase 1.42 s to 0.97 s.
+
+Found on the way, because the runtime prefix changed and every image with it: the
+hot-build check with a body edit in `binary.e` came out unequal to the cold build in
+release mode, in `neper_report_failure` alone. That function listed the program's
+errors in the resolver's order, which is the order the modules were declared in --
+and a hot build declares late what it must rebuild (D322), so its order is not a cold
+build's. The merged error table had been sorted by value since D199 for exactly this
+reason; the report now walks the errors in value order too. The edit exposed it by
+giving `binary` an import, which moved it in the late-declared set; before, the
+report happened to agree.
+
+Images are no longer byte for byte the D325 compiler's -- the runtime prefix grew a
+function -- so the reference for `build/same.sh` moves to this compiler; every hot
+build is still byte for byte its cold build, in both modes.

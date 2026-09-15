@@ -576,6 +576,24 @@ write_done:
     ret
 neper_os_write ENDP
 
+; os.copy_bytes(dst: []u8, src: []const u8) (D329): the shorter length's worth of
+; bytes, forwards. rcx = &dst, rdx = &src.
+neper_os_copy_bytes PROC
+    push rsi
+    push rdi
+    mov r8, [rcx+8]
+    mov r9, [rdx+8]
+    cmp r9, r8
+    cmovb r8, r9
+    mov rdi, [rcx]
+    mov rsi, [rdx]
+    mov rcx, r8
+    rep movsb
+    pop rdi
+    pop rsi
+    ret
+neper_os_copy_bytes ENDP
+
 ; A failed check (spec section 11): the record text, then the two operands wherever the
 ; text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
 ; newline, then the symbolised backtrace from the table r10 points at, all to stderr,

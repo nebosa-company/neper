@@ -1,5 +1,7 @@
 // Target-independent bounded binary encoding for artifacts and object formats.
 
+use e.os
+
 error Capacity
 error InvalidByte
 error InvalidEncoding
@@ -41,14 +43,12 @@ fn zeroes(buffer: *Buffer, count: usize) -> err {
     ret ok
 }
 
+// One runtime copy (D329) where a byte loop stood: the artifact writer copies every
+// module's code twice and packs the whole artifact once.
 fn copy(buffer: *Buffer, bytes: []const u8) -> err {
     if bytes.len > buffer.bytes.len - buffer.count { ret Capacity }
     let start = buffer.count
-    var at = 0usize
-    while at < bytes.len {
-        buffer.bytes[start + at] = bytes[at]
-        at += 1usize
-    }
+    os.copy_bytes(buffer.bytes[start..start + bytes.len], bytes)
     buffer.count = start + bytes.len
     ret ok
 }
@@ -169,11 +169,7 @@ fn read_u64(bytes: []const u8, offset: usize) -> (usize, err) {
 
 fn pack(buffer: *Buffer, destination: []u8) -> err {
     if buffer.count > destination.len { ret Capacity }
-    var at = 0usize
-    while at < buffer.count {
-        destination[at] = buffer.bytes[at]
-        at += 1usize
-    }
+    os.copy_bytes(destination[0usize..buffer.count], buffer.bytes[0usize..buffer.count])
     ret ok
 }
 

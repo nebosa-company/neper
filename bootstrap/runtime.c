@@ -21,6 +21,11 @@ enum {
     NP_EXHAUSTED = 11
 };
 
+/* `os.copy_bytes` (D329): as many bytes as the shorter slice holds, forwards. */
+void neper_os_copy_bytes(unsigned char *dst, size_t dst_len, const unsigned char *src, size_t src_len) {
+    size_t count = dst_len < src_len ? dst_len : src_len, at;
+    for (at = 0; at < count; at++) dst[at] = src[at];
+}
 static const NpStr *np_args_ptr;
 static size_t np_args_len;
 

@@ -3327,6 +3327,13 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     if const_strings_error != ok { ret const_strings_error }
     let (byte_pointer, byte_pointer_error) = seeded_composite_type(c, .Pointer, u8_type, false, os_module)
     if byte_pointer_error != ok { ret byte_pointer_error }
+    let (const_bytes, const_bytes_error) = seeded_composite_type(c, .Slice, u8_type, true, os_module)
+    if const_bytes_error != ok { ret const_bytes_error }
+    // `os.copy_bytes(dst: []u8, src: []const u8)` (D329): the shorter length's worth.
+    let (copy_index, copy_error) = add_seeded_function(c, os_module, "copy_bytes", make_type(.Void, "void", os_module), false)
+    if copy_error != ok { ret copy_error }
+    try add_seeded_parameter(c, copy_index, "dst", bytes)
+    try add_seeded_parameter(c, copy_index, "src", const_bytes)
 
     let (read_index, read_error) = add_seeded_function(c, os_module, "read", usize_type, true)
     if read_error != ok { ret read_error }

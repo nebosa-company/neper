@@ -234,6 +234,19 @@ neper_os_write:
     pop rbx
     ret
 
+# os.copy_bytes(dst: []u8, src: []const u8) (D329): the shorter length's worth of
+# bytes, forwards. rdi = &dst, rsi = &src.
+.global neper_os_copy_bytes
+neper_os_copy_bytes:
+    mov rcx,QWORD PTR [rdi+0x8]
+    mov rdx,QWORD PTR [rsi+0x8]
+    cmp rdx,rcx
+    cmovb rcx,rdx
+    mov rdi,QWORD PTR [rdi]
+    mov rsi,QWORD PTR [rsi]
+    rep movsb
+    ret
+
 # A failed check (spec section 11): the record text, then the two operands wherever the
 # text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
 # newline, then the symbolised backtrace from the table r10 points at, all to stderr,
