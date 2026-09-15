@@ -325,6 +325,7 @@ fn seed_intrinsics(r: *Resolver, g: *graph.Graph) -> err {
     try seed(r, g, "e.os", "write", .Value, .Intrinsic)
     try seed(r, g, "e.os", "close", .Value, .Intrinsic)
     try seed(r, g, "e.os", "seek", .Value, .Intrinsic)
+    try seed(r, g, "e.os", "copy_bytes", .Value, .Intrinsic)
     try seed(r, g, "e.os", "thread_create", .Value, .Intrinsic)
     try seed(r, g, "e.os", "thread_join", .Value, .Intrinsic)
     try seed(r, g, "e.os", "thread_detach", .Value, .Intrinsic)
