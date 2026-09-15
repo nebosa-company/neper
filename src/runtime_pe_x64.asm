@@ -30,7 +30,7 @@ EXTERN __imp_SetFilePointerEx:QWORD
 ; The root arena is reserved rather than committed, and grows a chunk at a time as it is
 ; allocated from. Committing it whole would charge the whole of it against the commit limit
 ; before `main` runs, for every process, however little it goes on to allocate.
-NP_ARENA_BYTES EQU 20000000h
+NP_ARENA_BYTES EQU 40000000h
 NP_ARENA_CHUNK EQU 100000h
 
 .code

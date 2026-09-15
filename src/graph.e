@@ -38,6 +38,9 @@ type Module = struct {
     first_import: usize,
     import_count: usize,
     visit_state: u8,
+    // The manifest's digests (D323), hex, once computed or read from the artifact.
+    sha256: str,
+    interface_sha256: str,
 }
 
 type Graph = struct {
@@ -387,7 +390,7 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     var no_tokens: [1]lex.Token = zero
     var no_lines: [1]usize = zero
     var no_tree: parse.Tree = zero
-    g.modules[index] = Module { name: name, path: path, text: "", lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8 }
+    g.modules[index] = Module { name: name, path: path, text: "", lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "" }
     g.count += 1usize
     ret (index, ok)
 }

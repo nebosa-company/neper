@@ -2764,7 +2764,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '6' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '7' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '8' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]

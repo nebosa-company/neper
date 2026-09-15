@@ -1,7 +1,9 @@
 // Deterministic hashes used by .em serialization and content folding.
 use e.mem
+use lex
 
 error InvalidByte
+error Capacity
 
 fn prime1() -> usize { ret 11400714785074694791usize }
 fn prime2() -> usize { ret 14029467366897019727usize }
@@ -239,12 +241,16 @@ fn sha_table() -> [64]usize {
         1955562222usize, 2024104815usize, 2227730452usize, 2361852424usize, 2428436474usize, 2756734187usize, 3204031479usize, 3329325298usize }
 }
 
-// Compress one 64-byte block (given as 64 usize byte-slots) into the eight-word state.
-fn sha_compress(state: []usize, block: []const usize) {
+// Compress one 64-byte block, read from the bytes at `at`, into the eight-word state.
+// The round table comes in from the caller, built once per digest (D323): a copy of
+// it per block, and a slot per byte filled before each, were most of a manifest's
+// time, and the manifest hashes every source and the image on every build.
+fn sha_compress(state: []usize, bytes: []const u8, at: usize, k: []const usize) {
     var w: [64]usize = zero
     var t = 0usize
     while t < 16usize {
-        w[t] = ((block[t * 4usize] & 255usize) << 24usize) | ((block[t * 4usize + 1usize] & 255usize) << 16usize) | ((block[t * 4usize + 2usize] & 255usize) << 8usize) | (block[t * 4usize + 3usize] & 255usize)
+        let p = at + t * 4usize
+        w[t] = (usize(bytes[p]) << 24usize) | (usize(bytes[p + 1usize]) << 16usize) | (usize(bytes[p + 2usize]) << 8usize) | usize(bytes[p + 3usize])
         t += 1usize
     }
     while t < 64usize {
@@ -262,7 +268,6 @@ fn sha_compress(state: []usize, block: []const usize) {
     var g = state[6usize]
     var h = state[7usize]
     t = 0usize
-    let k = sha_table()
     while t < 64usize {
         let big1 = sha_rotr(e, 6usize) ^ sha_rotr(e, 11usize) ^ sha_rotr(e, 25usize)
         let choose = (e & f) ^ ((e ^ mask32()) & g)
@@ -301,46 +306,37 @@ fn sha_hex_digit(value: usize) -> u8 {
 // self-hosted compiler ran out of arena on (D254).
 fn sha256_hex(a: *mem.Arena, bytes: []const u8) -> (str, err) {
     var state = [8]usize{ 1779033703usize, 3144134277usize, 1013904242usize, 2773480762usize, 1359893119usize, 2600822924usize, 528734635usize, 1541459225usize }
-    var block: [64]usize = zero
+    let k = sha_table()
+    var block: [128]u8 = zero
     let total = bytes.len
     var at = 0usize
     while at + 64usize <= total {
-        var fill = 0usize
-        while fill < 64usize {
-            block[fill] = usize(bytes[at + fill])
-            fill += 1usize
-        }
-        sha_compress(state[..], block[..])
+        sha_compress(state[..], bytes, at, k[..])
         at += 64usize
     }
     // The tail: what remains, the 0x80 byte, zeros to 56 mod 64, and the bit length --
     // one block when the tail fits before the length, two otherwise.
     var fill = 0usize
     while at + fill < total {
-        block[fill] = usize(bytes[at + fill])
+        block[fill] = bytes[at + fill]
         fill += 1usize
     }
-    block[fill] = 128usize
+    block[fill] = 128u8
     fill += 1usize
-    if fill > 56usize {
-        while fill < 64usize {
-            block[fill] = 0usize
-            fill += 1usize
-        }
-        sha_compress(state[..], block[..])
-        fill = 0usize
-    }
-    while fill < 56usize {
-        block[fill] = 0usize
+    var padded = 64usize
+    if fill > 56usize { padded = 128usize }
+    while fill < padded {
+        block[fill] = 0u8
         fill += 1usize
     }
     let bits = total * 8usize
     var byte_index = 0usize
     while byte_index < 8usize {
-        block[63usize - byte_index] = (bits >> (byte_index * 8usize)) & 255usize
+        block[padded - 1usize - byte_index] = u8((bits >> (byte_index * 8usize)) & 255usize)
         byte_index += 1usize
     }
-    sha_compress(state[..], block[..])
+    sha_compress(state[..], block[..], 0usize, k[..])
+    if padded == 128usize { sha_compress(state[..], block[..], 64usize, k[..]) }
     let (hex, hex_error) = mem.alloc[u8](a, 64usize)
     if hex_error != ok { ret ("", hex_error) }
     var word = 0usize
@@ -370,4 +366,97 @@ fn self_test() -> err {
     let (qualified, qualified_error) = qualified_error_value("e.os", "NotFound")
     if qualified_error != ok || qualified == 0usize { ret InvalidByte }
     ret ok
+}
+
+// A module's interface as the manifest hashes it (D265, D323): the source with every
+// function body removed, so an edit inside a body moves `body_sha256` alone. Over
+// the module's tokens (D316): it lexed the text again, for every module, on every
+// build. The scanner-driven form stays for a text that has no tokens.
+fn interface_cut(a: *mem.Arena, source: str, tokens: []const lex.Token) -> (str, err) {
+    let (kept, kept_error) = mem.alloc[u8](a, source.len)
+    if kept_error != ok { ret ("", kept_error) }
+    var written = 0usize
+    var copied_to = 0usize
+    var braces = 0usize
+    // 0: outside; 1: in a header, `brackets` deep; 2: in a body, `body_depth` braces deep.
+    var state = 0usize
+    var brackets = 0usize
+    var body_depth = 0usize
+    var previous = lex.Kind.Newline
+    var at = 0usize
+    while at < tokens.len {
+        let token = tokens[at]
+        at += 1usize
+        if token.kind == .Eof { break }
+        if state == 0usize {
+            if token.kind == .PunctLBrace { braces += 1usize }
+            if token.kind == .PunctRBrace && braces != 0usize { braces = braces - 1usize }
+            if token.kind == .KwFn && braces == 0usize {
+                state = 1usize
+                brackets = 0usize
+            }
+        } else {
+            if state == 1usize {
+                if token.kind == .PunctLParen || token.kind == .PunctLBracket { brackets += 1usize }
+                if (token.kind == .PunctRParen || token.kind == .PunctRBracket) && brackets != 0usize { brackets = brackets - 1usize }
+                if token.kind == .PunctLBrace && brackets == 0usize {
+                    // Keep through the `{`; the body starts after it.
+                    var from = copied_to
+                    while from < token.end {
+                        kept[written] = source[from]
+                        written += 1usize
+                        from += 1usize
+                    }
+                    copied_to = token.end
+                    state = 2usize
+                    body_depth = 1usize
+                } else {
+                    // A header ends at a newline that does not continue one: `extern fn`
+                    // has no body, and a function-typed field is not a declaration.
+                    if token.kind == .Newline && brackets == 0usize && previous != .PunctArrow && previous != .PunctComma { state = 0usize }
+                }
+            } else {
+                if token.kind == .PunctLBrace { body_depth += 1usize }
+                if token.kind == .PunctRBrace {
+                    body_depth = body_depth - 1usize
+                    if body_depth == 0usize {
+                        // The body is dropped; the `}` and what follows are kept.
+                        copied_to = token.start
+                        state = 0usize
+                    }
+                }
+            }
+        }
+        previous = token.kind
+    }
+    while copied_to < source.len {
+        kept[written] = source[copied_to]
+        written += 1usize
+        copied_to += 1usize
+    }
+    ret (kept[0usize..written], ok)
+}
+
+fn interface_sha256_hex(a: *mem.Arena, source: str, tokens: []const lex.Token) -> (str, err) {
+    let (kept, cut_error) = interface_cut(a, source, tokens)
+    if cut_error != ok { ret ("", cut_error) }
+    let (digest, digest_error) = sha256_hex(a, kept)
+    ret (digest, digest_error)
+}
+
+// The same over a text with no token stream: scanned into a buffer of its own.
+fn interface_sha256_hex_scanned(a: *mem.Arena, source: str) -> (str, err) {
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, source.len + 16usize)
+    if tokens_error != ok { ret ("", tokens_error) }
+    var scanner = lex.init(source)
+    var count = 0usize
+    while true {
+        if count == tokens.len { ret ("", Capacity) }
+        let token = lex.next(&scanner)
+        tokens[count] = token
+        count += 1usize
+        if token.kind == .Eof { break }
+    }
+    let (digest, digest_error) = interface_sha256_hex(a, source, tokens[0usize..count])
+    ret (digest, digest_error)
 }

@@ -6658,3 +6658,40 @@ comment, body, inlined-body and signature edits in both modes -- the suite's hot
 block runs the last two now. What remains at two million lines is the artifacts'
 validation (2 s, in the load phase), the link from artifacts (1.1 s) and the
 manifest's SHA-256 over the sources.
+
+## D323 -- The manifest's digests ride the artifact, and the root arena is a gibibyte
+
+With the front end and the edge rule out of the way (D321, D322), a warm build of the
+compiler by a release-built compiler took 730 ms, of which the phases the `--time`
+report named summed to 200: the rest was the build manifest, which hashed every
+source twice over -- SHA-256 of the text, then a re-lex of the text to cut the
+function bodies out for the interface digest -- and the image once, after every build.
+`--time` reports `write executable` and `manifest` now.
+
+The interface cut walks the module's tokens (D316) where it lexed the text again,
+and both digests are computed once and carried on the module. The artifact's Debug
+section carries them (format 7), so a module a hot build did not parse writes its
+manifest line from its artifact; a module with neither tokens nor artifact is
+scanned as before. SHA-256 builds its round table once per digest and reads the
+message words straight from the bytes, where it copied the table and a slot per byte
+into each block. The image's own digest remains: sixty milliseconds for the
+compiler's ten megabytes.
+
+The root arena's default is 1 GiB, from 512 MiB. The parallel front end carves each
+worker an arena of its own and the hot build holds every artifact for the link, and
+the compiler's own hot build by a compiler emitted without `--arena` -- the
+`neper-own` shape -- ran out of the half gigabyte at the 24th module and reported
+`e.mem.Exhausted`; the D133 arena is reserved and committed a chunk at a time as it
+is allocated from, so the ceiling is address space, not memory, and a gibibyte of it
+costs nothing a process notices. The ELF startup stub's four immediates and the PE
+runtime's constant both say so, and `--arena` still sets whatever is asked.
+
+Also on the way: the bootstrap's DWARF string table was full at 8192 entries and
+returned index zero for what did not fit, which surfaced as "internal debug string
+was not prepared" for a field named `soft_openers` two compilers later; the tables
+are four times the size and running out is an error that says so.
+
+Measured, warm and nothing changed, by a release-built compiler: the compiler
+242 ms (manifest 99 of it), a five-hundred-thousand-line program 0.97 s, a
+two-million-line program 4.0 s (load and validate the artifacts 2.0, link from them
+1.1, link 0.4, manifest 0.27). Every image is the cold build's byte for byte.

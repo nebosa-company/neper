@@ -2520,7 +2520,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 6 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 7 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 8) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'

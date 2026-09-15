@@ -107,7 +107,7 @@ type CodeRelocation = struct {
     symbol_index: usize,
 }
 
-fn format_version() -> usize { ret 6usize }
+fn format_version() -> usize { ret 7usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -2138,7 +2138,7 @@ fn source_text_hash(text: str, scratch: *binary.Buffer) -> (usize, err) {
     ret (source_hash, source_hash_error)
 }
 
-fn write_debug(g: *graph.Graph, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     if module_index >= g.count { ret InvalidArtifact }
     let (source_hash, source_hash_error) = source_text_hash(g.modules[module_index].text, scratch)
     if source_hash_error != ok { ret source_hash_error }
@@ -2147,7 +2147,37 @@ fn write_debug(g: *graph.Graph, module_index: usize, table: *StringTable, scratc
     try binary.little_u32(output, path_index)
     try binary.little_u64(output, source_hash)
     try binary.little_u32(output, 0usize)
-    ret binary.little_u32(output, 0usize)
+    try binary.little_u32(output, 0usize)
+    // The manifest's digests (D323, format 7): the source's SHA-256 and its
+    // interface's, as hex, so a build that does not parse this module still writes
+    // its manifest line. Computed here when the module does not carry them yet.
+    var sha = g.modules[module_index].sha256
+    if sha.len != 64usize {
+        let (computed, computed_error) = artifact_hash.sha256_hex(c.arena, g.modules[module_index].text)
+        if computed_error != ok { ret computed_error }
+        sha = computed
+        g.modules[module_index].sha256 = sha
+    }
+    var interface_sha = g.modules[module_index].interface_sha256
+    if interface_sha.len != 64usize {
+        let (computed, computed_error) = artifact_hash.interface_sha256_hex(c.arena, g.modules[module_index].text, g.modules[module_index].tokens)
+        if computed_error != ok { ret computed_error }
+        interface_sha = computed
+        g.modules[module_index].interface_sha256 = interface_sha
+    }
+    try binary.text(output, sha)
+    ret binary.text(output, interface_sha)
+}
+
+// The manifest's digests an artifact carries (D323), as views; empty when it has none.
+fn artifact_manifest_digests(bytes: []const u8) -> (str, str, err) {
+    let validation_error = check_layout(bytes)
+    if validation_error != ok { ret ("", "", validation_error) }
+    let (debug, found_debug, section_error) = find_section_unchecked(bytes, debug_kind())
+    if section_error != ok || !found_debug { ret ("", "", InvalidArtifact) }
+    if debug.length < 148usize { ret ("", "", ok) }
+    let start = debug.offset + 20usize
+    ret (bytes[start..start + 64usize], bytes[start + 64usize..start + 128usize], ok)
 }
 
 // The Interface a module's artifact would carry, as an artifact of its Strings and
@@ -2197,7 +2227,7 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     if code_error != ok { ret code_error }
     try end_section(&writer)
     try begin_section(&writer, debug_kind(), required_flag())
-    try write_debug(g, module_index, strings, scratch, output)
+    try write_debug(c, g, module_index, strings, scratch, output)
     try end_section(&writer)
     try begin_section(&writer, globals_kind(), required_flag())
     try write_globals(builder, c, module_index, strings, output)

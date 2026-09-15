@@ -6499,8 +6499,8 @@ static void emit_bytes(FILE *out, const unsigned char *bytes, size_t n, int wind
     if (n == 0) fputs(windows ? "    DB 0\n" : "    .byte 0\n", out);
 }
 
-#define MAX_DEBUG_TYPES 2048
-#define MAX_DEBUG_STRINGS 8192
+#define MAX_DEBUG_TYPES 4096
+#define MAX_DEBUG_STRINGS 32768
 
 typedef struct DebugTypeEntry {
     Type type;
@@ -6531,7 +6531,9 @@ static int debug_string(DebugContext *debug, const char *text) {
     int i;
     for (i = 0; i < debug->string_count; ++i)
         if (strcmp(debug->strings[i].text, text) == 0) return i;
-    if (debug->string_count >= MAX_DEBUG_STRINGS) return 0;
+    /* Full is an error, not a silent zero (D323): a string that did not fit was found
+       missing at emission, with nothing to say which table had run out. */
+    if (debug->string_count >= MAX_DEBUG_STRINGS) { fputs("neper: too many debug strings\n", stderr); exit(2); }
     copy_text(debug->strings[debug->string_count].text,
               sizeof(debug->strings[debug->string_count].text), text, strlen(text));
     return debug->string_count++;
@@ -6707,7 +6709,7 @@ static void emit_dwarf_abbrev(FILE *out) {
 
 static void emit_dwarf_string_ref(FILE *out, DebugContext *debug, const char *text) {
     int id = debug_find_string(debug, text);
-    if (id < 0) { fputs("neper: internal debug string was not prepared\n", stderr); exit(2); }
+    if (id < 0) { fprintf(stderr, "neper: internal debug string was not prepared: %s\n", text); exit(2); }
     fprintf(out, ".long np_dw_str_%d\n", id);
 }
 

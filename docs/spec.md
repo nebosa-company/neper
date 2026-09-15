@@ -1932,8 +1932,10 @@ fn process(input: str, out: *mem.Arena) -> err {
 ```
 
 `mark`/`reset` give you scoped deallocation without per-object bookkeeping. A
-program's root arena is a block reserved from the OS at startup; its size is **64
-MiB** unless the link option `--arena SIZE` (§13) raises or lowers it. The startup
+program's root arena is a block reserved from the OS at startup; its size is **1
+GiB** unless the link option `--arena SIZE` (§13) raises or lowers it (D323: the
+block is reserved, and committed a chunk at a time as it is allocated from, so the
+size is a ceiling rather than a cost). The startup
 code obtains it through `e.os` (§5) before `main` runs —
 `os.reserve` for the address range, then `os.commit` for the whole of it, free
 under Linux overcommit, charged against the pagefile on Windows, which is why the
@@ -3722,7 +3724,7 @@ source root is module `<filename>`,
 and `e.*` comes from the toolchain's own `lib/` (§2), so `neper run
 examples/hello.e` builds and runs module `hello` from any working directory, with
 no package around it. `--arena SIZE` sizes the root arena (§8; the default is
-64 MiB) — `SIZE` is an integer with an optional `K`, `M` or `G` suffix, in binary
+1 GiB) — `SIZE` is an integer with an optional `K`, `M` or `G` suffix, in binary
 units — `--target` defaults to the full host triple, `--linker` selects the linker
 (Linking, below), and `-j N` the worker count (§15). `--cpu LEVEL` selects the
 instruction level (Target CPU levels, below) and is given **at most once per target

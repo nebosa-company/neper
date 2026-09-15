@@ -2079,68 +2079,22 @@ fn manifest_identity(out: *Out, root: str, relative: str) -> err {
 // a top-level `fn` header -- left out, hashed. The tokens are streamed off the scanner
 // one at a time, never held: a token array is ~100 bytes per source byte, and the
 // self-hosted compiler ran out of arena hashing its own thirty modules that way (D265).
-fn manifest_interface_sha256(a: *mem.Arena, source: str) -> (str, err) {
-    let (kept, kept_error) = mem.alloc[u8](a, source.len)
-    if kept_error != ok { ret ("", kept_error) }
-    var written = 0usize
-    var copied_to = 0usize
-    var scanner = lex.init(source)
-    var braces = 0usize
-    // 0: outside; 1: in a header, `brackets` deep; 2: in a body, `body_depth` braces deep.
-    var state = 0usize
-    var brackets = 0usize
-    var body_depth = 0usize
-    var previous = lex.Kind.Newline
-    while true {
-        let token = lex.next(&scanner)
-        if token.kind == .Eof { break }
-        if state == 0usize {
-            if token.kind == .PunctLBrace { braces += 1usize }
-            if token.kind == .PunctRBrace && braces != 0usize { braces = braces - 1usize }
-            if token.kind == .KwFn && braces == 0usize {
-                state = 1usize
-                brackets = 0usize
-            }
-        } else {
-            if state == 1usize {
-                if token.kind == .PunctLParen || token.kind == .PunctLBracket { brackets += 1usize }
-                if (token.kind == .PunctRParen || token.kind == .PunctRBracket) && brackets != 0usize { brackets = brackets - 1usize }
-                if token.kind == .PunctLBrace && brackets == 0usize {
-                    // Keep through the `{`; the body starts after it.
-                    var from = copied_to
-                    while from < token.end {
-                        kept[written] = source[from]
-                        written += 1usize
-                        from += 1usize
-                    }
-                    copied_to = token.end
-                    state = 2usize
-                    body_depth = 1usize
-                } else {
-                    // A header ends at a newline that does not continue one: `extern fn`
-                    // has no body, and a function-typed field is not a declaration.
-                    if token.kind == .Newline && brackets == 0usize && previous != .PunctArrow && previous != .PunctComma { state = 0usize }
-                }
-            } else {
-                if token.kind == .PunctLBrace { body_depth += 1usize }
-                if token.kind == .PunctRBrace {
-                    body_depth = body_depth - 1usize
-                    if body_depth == 0usize {
-                        // The body is dropped; the `}` and what follows are kept.
-                        copied_to = token.start
-                        state = 0usize
-                    }
-                }
-            }
-        }
-        previous = token.kind
+// A module's interface digest (D265): from its tokens when it has them, else scanned;
+// and a module that already carries its digests -- computed once, or read from its
+// artifact (D323) -- answers from them.
+fn manifest_interface_sha256(a: *mem.Arena, g: *graph.Graph, module_index: usize) -> (str, err) {
+    if g.modules[module_index].interface_sha256.len != 0usize { ret (g.modules[module_index].interface_sha256, ok) }
+    if g.modules[module_index].tokens.len != 0usize {
+        let (digest, digest_error) = artifact_hash.interface_sha256_hex(a, g.modules[module_index].text, g.modules[module_index].tokens)
+        ret (digest, digest_error)
     }
-    while copied_to < source.len {
-        kept[written] = source[copied_to]
-        written += 1usize
-        copied_to += 1usize
-    }
-    let (digest, digest_error) = manifest_sha256(a, kept[0usize..written])
+    let (scanned, scanned_error) = artifact_hash.interface_sha256_hex_scanned(a, g.modules[module_index].text)
+    ret (scanned, scanned_error)
+}
+
+fn manifest_source_sha256(a: *mem.Arena, g: *graph.Graph, module_index: usize) -> (str, err) {
+    if g.modules[module_index].sha256.len != 0usize { ret (g.modules[module_index].sha256, ok) }
+    let (digest, digest_error) = manifest_sha256(a, g.modules[module_index].text)
     ret (digest, digest_error)
 }
 
@@ -2204,7 +2158,7 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try text(out, "{\"source\":")
         try manifest_source(out, g, g.modules[at].path)
         try text(out, ",\"sha256\":")
-        let (digest, digest_error) = manifest_sha256(a, g.modules[at].text)
+        let (digest, digest_error) = manifest_source_sha256(a, g, at)
         if digest_error != ok { ret digest_error }
         digests[at] = digest
         try quoted(out, digest)
@@ -2223,7 +2177,7 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         // Each module's scratch -- the interface cut and two digests -- is released once
         // written, so a large graph costs one module's worth of arena at a time.
         let checkpoint = mem.mark(a)
-        let (interface_digest, interface_error) = manifest_interface_sha256(a, g.modules[at].text)
+        let (interface_digest, interface_error) = manifest_interface_sha256(a, g, at)
         if interface_error != ok { ret interface_error }
         try quoted(out, interface_digest)
         try text(out, ",\"body_sha256\":")

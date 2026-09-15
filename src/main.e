@@ -4192,6 +4192,37 @@ fn clear_held(held: [][]const u8) {
     }
 }
 
+// Every module's manifest digests (D323), before the manifest is written: a parsed
+// module's from its text and tokens, an unparsed one's from its artifact, which
+// carries them since format 7; a module with neither is scanned for them.
+fn fill_manifest_digests(a: *mem.Arena, loaded: *graph.Graph, held: [][]const u8) -> err {
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if loaded.modules[module_at].sha256.len == 0usize {
+            var carried = false
+            if !loaded.modules[module_at].has_tree && module_at < held.len && held[module_at].len != 0usize {
+                let (sha, interface_sha, digests_error) = em.artifact_manifest_digests(held[module_at])
+                if digests_error != ok { ret digests_error }
+                if sha.len == 64usize && interface_sha.len == 64usize {
+                    loaded.modules[module_at].sha256 = sha
+                    loaded.modules[module_at].interface_sha256 = interface_sha
+                    carried = true
+                }
+            }
+            if !carried {
+                let (sha, sha_error) = artifact_hash.sha256_hex(a, loaded.modules[module_at].text)
+                if sha_error != ok { ret sha_error }
+                loaded.modules[module_at].sha256 = sha
+                let (interface_sha, interface_error) = tool.manifest_interface_sha256(a, loaded, module_at)
+                if interface_error != ok { ret interface_error }
+                loaded.modules[module_at].interface_sha256 = interface_sha
+            }
+        }
+        module_at += 1usize
+    }
+    ret ok
+}
+
 fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLoad, held: [][]const u8, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
     var no_lines: [1]usize = zero
     var load_error = ok
@@ -5926,9 +5957,12 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     os.exit(2i32)
                     ret ok
                 }
+                try report_phase(&report, "write executable")
                 // Every build writes `.neper/<mode>/build-manifest.json` under the project root
                 // (section 7, D254), with the executable it just wrote as the one artifact.
+                try fill_manifest_digests(a, &loaded, held)
                 try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, args[6usize], packed)
+                try report_phase(&report, "manifest")
                 report.build.wall_ms = (nptest_now() - report.build.started) / 1000000usize
                 report.build.image_bytes = packed.len
                 if running {
