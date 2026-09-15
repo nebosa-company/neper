@@ -2832,7 +2832,7 @@ fn body_bytes_of(loaded: *graph.Graph, per_module: bool) -> usize {
     ret loaded.total_bytes
 }
 
-fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph, report: *Sink, body_bytes: usize) -> err {
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph, report: *Sink, body_bytes: usize, scale: usize) -> err {
     // Every module carries its own copy of the generic instances it uses, so the
     // NIR function count scales with instantiation sites, not with declarations.
     //
@@ -2843,11 +2843,15 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     // gate saved address space, not memory.
     // ponytail: fixed pools, sized for the compiler itself; growable pools when a
     // program past half a million instructions exists.
+    // The bases divided by `scale` (D325): one for the whole-program builders, four
+    // for a lowering worker's, which holds one module's bodies at a time and sits
+    // beside seven others, and sixty-four for the executable path's own, which lowers
+    // nothing and is replaced by the assembled program.
     let total = loaded.total_bytes
-    let function_capacity = sized(16384usize, total, 128usize)
-    let block_capacity = sized(65536usize, body_bytes, 16usize)
-    let instruction_capacity = sized(262144usize, body_bytes, 4usize)
-    let operand_capacity = sized(1048576usize, body_bytes, 4usize)
+    let function_capacity = sized(16384usize / scale, total, 128usize)
+    let block_capacity = sized(65536usize / scale, body_bytes, 16usize)
+    let instruction_capacity = sized(262144usize / scale, body_bytes, 4usize)
+    let operand_capacity = sized(1048576usize / scale, body_bytes, 4usize)
     let (functions, functions_error) = mem.alloc[nir.Function](a, function_capacity)
     if functions_error != ok { ret functions_error }
     report.build.pools[stats.POOL_NIR_FUNCTIONS] = functions.len
@@ -2860,10 +2864,10 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let (operands, operands_error) = mem.alloc[usize](a, operand_capacity)
     if operands_error != ok { ret operands_error }
     report.build.pools[stats.POOL_NIR_OPERANDS] = operands.len
-    let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize, total, 128usize))
+    let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize / scale, total, 128usize))
     if function_refs_error != ok { ret function_refs_error }
     report.build.pools[stats.POOL_NIR_REFS] = function_refs.len
-    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, sized(8192usize, total, 256usize))
+    let (strings, strings_error) = mem.alloc[nir.StringConstant](a, sized(8192usize / scale, total, 256usize))
     if strings_error != ok { ret strings_error }
     report.build.pools[stats.POOL_NIR_STRINGS] = strings.len
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
@@ -4891,85 +4895,6 @@ fn emit_whole_program(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
     ret ok
 }
 
-// A module's code as it left selection (D314): exact copies of its bytes and of the
-// relocations and line rows over them, kept until every module is known and what
-// `main` reaches is assembled. The NIR it came from is gone by then.
-type ModuleCode = struct {
-    bytes: []u8,
-    relocations: []codegen_x64.Relocation,
-    lines: []codegen_x64.LineEntry,
-    offsets: []usize,
-    first_function: usize,
-    function_count: usize,
-}
-
-// One module lowered and selected (D314): its functions go on the builder's table and
-// its bodies into the pools, its code into the staging buffer, and then exact copies
-// are taken and the bodies discarded, so the pools hold one module at a time.
-fn codegen_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild, held: [][]const u8, code: *ModuleCode) -> err {
-    let mark = nir.mark(builder)
-    let first = builder.function_count
-    let lower_error = lower.module(checker, loaded, module_index, builder, signatures, bindings)
-    if lower_error != ok {
-        try print_lower_diagnostic(report, loaded, checker, builder, lower_error)
-        try finish_report(report)
-        os.exit(1i32)
-        ret ok
-    }
-    context.output.count = 0usize
-    *context.relocation_count = 0usize
-    *context.line_count = 0usize
-    var no_fold: Fold = zero
-    try codegen_functions(a, report, loaded, builder, context, first, stage_offsets, true, &no_fold)
-    if hot.on { try write_hot_artifact(a, checker, loaded, builder, module_index, context, stage_offsets, hot, held) }
-    let count = builder.function_count - first
-    let (bytes, bytes_error) = mem.alloc[u8](a, context.output.count + 1usize)
-    if bytes_error != ok { ret bytes_error }
-    var at = 0usize
-    while at < context.output.count {
-        bytes[at] = context.output.bytes[at]
-        at += 1usize
-    }
-    code.bytes = bytes[0usize..context.output.count]
-    let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, *context.relocation_count + 1usize)
-    if relocations_error != ok { ret relocations_error }
-    at = 0usize
-    while at < *context.relocation_count {
-        relocations[at] = context.relocations[at]
-        at += 1usize
-    }
-    code.relocations = relocations[0usize..*context.relocation_count]
-    let (lines, lines_error) = mem.alloc[codegen_x64.LineEntry](a, *context.line_count + 1usize)
-    if lines_error != ok { ret lines_error }
-    at = 0usize
-    while at < *context.line_count {
-        lines[at] = context.lines[at]
-        at += 1usize
-    }
-    code.lines = lines[0usize..*context.line_count]
-    let (offsets, offsets_error) = mem.alloc[usize](a, count + 1usize)
-    if offsets_error != ok { ret offsets_error }
-    at = 0usize
-    while at < count {
-        offsets[at] = stage_offsets[first + at]
-        at += 1usize
-    }
-    code.offsets = offsets[0usize..count]
-    code.first_function = first
-    code.function_count = count
-    nir.discard_bodies(builder, mark)
-    ret ok
-}
-
-// Where a function's code lies in its module's copy: from its own offset to the next
-// function's, or to the end for the last.
-fn function_span(code: ModuleCode, function_at: usize) -> (usize, usize) {
-    let local = function_at - code.first_function
-    let start = code.offsets[local]
-    if local + 1usize < code.function_count { ret (start, code.offsets[local + 1usize]) }
-    ret (start, code.bytes.len)
-}
-
 // The executable path (D314): each module is lowered and selected as it is discovered,
 // in the order `lower.reachable_modules` walks, and its bodies discarded before the
 // next, so the arena holds one module's NIR rather than the program's. What `main`
@@ -4988,7 +4913,6 @@ type HotBuild = struct {
     sections: []em.Section,
     scratch: binary.Buffer,
     artifact: binary.Buffer,
-    packed: []u8,
 }
 
 // `.neper/<mode>/em/` under the project root, made when it is missing.
@@ -5010,7 +4934,7 @@ fn artifact_directory(a: *mem.Arena, loaded: *graph.Graph, release: bool) -> (st
     ret (em_dir, ok)
 }
 
-fn init_hot_writer(a: *mem.Arena, hot: *HotBuild) -> err {
+fn init_hot_writer(a: *mem.Arena, hot: *HotBuild, largest_bytes: usize) -> err {
     let (string_values, string_values_error) = mem.alloc[str](a, 32768usize)
     if string_values_error != ok { ret string_values_error }
     let (string_slots, string_slots_error) = mem.alloc[usize](a, 131072usize)
@@ -5022,12 +4946,10 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild) -> err {
     let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
     if scratch_storage_error != ok { ret scratch_storage_error }
     try binary.init(&hot.scratch, scratch_storage)
-    let (artifact_storage, artifact_storage_error) = mem.alloc[u8](a, 8388608usize)
+    // Sized by the largest module (D325): its artifact is some bytes per byte of text.
+    let (artifact_storage, artifact_storage_error) = mem.alloc[u8](a, largest_bytes * 8usize + 4194304usize)
     if artifact_storage_error != ok { ret artifact_storage_error }
     try binary.init(&hot.artifact, artifact_storage)
-    let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
-    if packed_error != ok { ret packed_error }
-    hot.packed = packed
     ret ok
 }
 
@@ -5042,6 +4964,8 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if held_error != ok { ret held_error }
     try binary.pack(&hot.artifact, held)
     held_all[module_index] = held
+    // A cold build holds its artifacts for the link alone (D325); a hot one keeps them.
+    if !hot.on { ret ok }
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
     if artifact_path_error != ok { ret artifact_path_error }
     ret save_bytes(a, artifact_path, held)
@@ -5101,25 +5025,131 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
     ret ok
 }
 
-fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, code: *Code) -> err {
-    try lower.declare_globals(checker, builder)
-    if hot.on { try init_hot_writer(a, hot) }
-    var clear_at = 0usize
-    while clear_at < loaded.count {
-        lowered[clear_at] = false
-        clear_at += 1usize
+// The modules lowered, selected and written as artifacts on worker threads (D325), and
+// the image linked from the artifacts, kept and fresh alike: the hot build's link
+// (D319), which every executable takes now. Lowering reads the checker's declarations
+// and adds only types and function signatures, so a worker's checker is a copy that
+// shares the declaration tables and owns those two, its locals, its caches and its
+// diagnostics; its builder, staging and artifact writer are its own. A worker writes
+// only its own modules' artifact slots. The modules go to the workers largest first
+// to the least loaded, and a worker that cannot go on -- a lowering error, or an
+// arena run dry -- stops where it is: the lowest failing module's error is the
+// build's, reported as the one-at-a-time loop reported it, and the modules a dry
+// worker left are lowered on the main thread out of the program's arena.
+type LowerWorker = struct {
+    arena: mem.Arena,
+    checker: check.Checker,
+    builder: nir.Builder,
+    signatures: nir.Signatures,
+    bindings: []lower.Binding,
+    context: codegen_x64.FunctionContext,
+    stage: emit_x64.Buffer,
+    relocation_count: usize,
+    line_count: usize,
+    stage_offsets: []usize,
+    hot: HotBuild,
+    report: Sink,
+    modules: []usize,
+    count: usize,
+    loaded: *graph.Graph,
+    held: [][]const u8,
+    stopped: bool,
+    stopped_at: usize,
+    failure: err,
+    scale: usize,
+}
+
+fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, loaded: *graph.Graph, report: *Sink, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, bindings: []lower.Binding, program: *nir.Builder) -> err {
+    w.loaded = loaded
+    w.held = held
+    w.report = *report
+    w.report.regalloc_ns = 0usize
+    w.report.codegen_ns = 0usize
+    w.report.fold_ns = 0usize
+    // The checker: the declarations shared, what lowering appends its own.
+    w.checker = *checker
+    let (types, types_error) = mem.alloc[check.Type](a, checker.type_count + sized(4096usize, loaded.largest_bytes, 16usize))
+    if types_error != ok { ret types_error }
+    var copy_at = 0usize
+    while copy_at < checker.type_count {
+        types[copy_at] = checker.types[copy_at]
+        copy_at += 1usize
     }
-    // Staging, sized by the pools a module's bodies fit in.
-    let body_capacity = builder.instructions.len
+    w.checker.types = types
+    let (signatures, signatures_error) = mem.alloc[check.FunctionSignature](a, checker.function_signature_count + sized(1024usize, loaded.largest_bytes, 64usize))
+    if signatures_error != ok { ret signatures_error }
+    copy_at = 0usize
+    while copy_at < checker.function_signature_count {
+        signatures[copy_at] = checker.function_signatures[copy_at]
+        copy_at += 1usize
+    }
+    w.checker.function_signatures = signatures
+    let (locals, locals_error) = mem.alloc[check.Local](a, checker.locals.len)
+    if locals_error != ok { ret locals_error }
+    w.checker.locals = locals
+    w.checker.local_count = 0usize
+    let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, checker.diagnostics.len)
+    if diagnostics_error != ok { ret diagnostics_error }
+    w.checker.diagnostics = diagnostics
+    w.checker.diagnostic_count = 0usize
+    let (call_cache, call_cache_error) = mem.alloc[check.CallCacheEntry](a, checker.call_cache.len)
+    if call_cache_error != ok { ret call_cache_error }
+    w.checker.call_cache = call_cache
+    let (expr_cache, expr_cache_error) = mem.alloc[check.ExprCacheEntry](a, checker.expr_cache.len)
+    if expr_cache_error != ok { ret expr_cache_error }
+    w.checker.expr_cache = expr_cache
+    var clear_cache = 0usize
+    while clear_cache < call_cache.len {
+        var blank_call: check.CallCacheEntry = zero
+        call_cache[clear_cache] = blank_call
+        clear_cache += 1usize
+    }
+    clear_cache = 0usize
+    while clear_cache < expr_cache.len {
+        var blank_expr: check.ExprCacheEntry = zero
+        expr_cache[clear_cache] = blank_expr
+        clear_cache += 1usize
+    }
+    w.checker.call_generation = checker.call_generation + 1usize
+    let (spans, spans_error) = mem.alloc[usize](a, checker.writer_spans.len)
+    if spans_error != ok { ret spans_error }
+    copy_at = 0usize
+    while copy_at < checker.writer_spans.len {
+        spans[copy_at] = checker.writer_spans[copy_at]
+        copy_at += 1usize
+    }
+    w.checker.writer_spans = spans
+    w.checker.interp_ready = false
+    w.checker.arena = &w.arena
+    // The builder and its staging, sized as the one-at-a-time path sized its own.
+    try init_cli_nir(a, &w.builder, &w.signatures, checker.parameter_count + checker.return_type_count + 1usize, loaded, &w.report, loaded.largest_bytes, w.scale)
+    // What the program's builder carries of the build: the mode, the arena, the oracle.
+    w.builder.release = program.release
+    w.builder.nocheck = program.nocheck
+    w.builder.arena_bytes = program.arena_bytes
+    w.builder.has_oracle = program.has_oracle
+    w.builder.oracle = program.oracle
+    w.builder.oracle_signatures = program.oracle_signatures
+    w.builder.inline_entries = program.inline_entries
+    w.builder.inline_entry_count = program.inline_entry_count
+    let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.largest_bytes, 16usize))
+    if inlined_error != ok { ret inlined_error }
+    w.builder.inlined = inlined
+    w.builder.inlined_count = 0usize
+    let (inlined_marks, inlined_marks_error) = mem.alloc[u8](a, inlined.len)
+    if inlined_marks_error != ok { ret inlined_marks_error }
+    w.builder.inlined_marks = inlined_marks
+    w.bindings = bindings
+    try lower.declare_globals(&w.checker, &w.builder)
+    let body_capacity = w.builder.instructions.len
     let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, body_capacity + 4096usize)
     if ranges_error != ok { ret ranges_error }
     let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, body_capacity + 4096usize)
     if allocations_error != ok { ret allocations_error }
     let (stage_storage, stage_storage_error) = mem.alloc[u8](a, body_capacity * 24usize + 65536usize)
     if stage_storage_error != ok { ret stage_storage_error }
-    var stage: emit_x64.Buffer = zero
-    try emit_x64.init(&stage, stage_storage)
-    let (block_offsets, block_offsets_error) = mem.alloc[usize](a, builder.blocks.len + 1usize)
+    try emit_x64.init(&w.stage, stage_storage)
+    let (block_offsets, block_offsets_error) = mem.alloc[usize](a, w.builder.blocks.len + 1usize)
     if block_offsets_error != ok { ret block_offsets_error }
     let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, body_capacity + 16usize)
     if fixups_error != ok { ret fixups_error }
@@ -5127,49 +5157,252 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
     if stage_relocations_error != ok { ret stage_relocations_error }
     let (stage_lines, stage_lines_error) = mem.alloc[codegen_x64.LineEntry](a, body_capacity + 16usize)
     if stage_lines_error != ok { ret stage_lines_error }
-    let (stage_offsets, stage_offsets_error) = mem.alloc[usize](a, builder.functions.len + 1usize)
+    let (stage_offsets, stage_offsets_error) = mem.alloc[usize](a, w.builder.functions.len + 1usize)
     if stage_offsets_error != ok { ret stage_offsets_error }
-    var relocation_count = 0usize
-    var line_count = 0usize
-    var context: codegen_x64.FunctionContext = zero
-    context.allocations = allocations
-    context.arena = a
-    context.has_arena = true
-    context.ranges = ranges
-    context.abi = abi
-    context.block_offsets = block_offsets
-    context.fixups = fixups
-    context.relocations = stage_relocations
-    context.relocation_count = &relocation_count
-    context.output = &stage
-    context.lines = stage_lines
-    context.line_count = &line_count
-    let (codes, codes_error) = mem.alloc[ModuleCode](a, loaded.count + 1usize)
-    if codes_error != ok { ret codes_error }
-    let (chunk_of, chunk_of_error) = mem.alloc[usize](a, builder.functions.len + 1usize)
-    if chunk_of_error != ok { ret chunk_of_error }
-    var chunk_count = 0usize
-    // Every module in module order (D319), whether or not anything reaches it -- the
-    // link drops what `main` does not reach either way -- so the layout is the one the
-    // artifact link produces from artifacts named in that order, and a hot build's
-    // image is a cold one's byte for byte. A kept module's code is its artifact's.
-    var next = 0usize
-    while next < loaded.count {
-        if hot.on && hot.keep[next] {
-            next += 1usize
-            continue
+    w.stage_offsets = stage_offsets
+    w.relocation_count = 0usize
+    w.line_count = 0usize
+    w.context.allocations = allocations
+    w.context.arena = &w.arena
+    w.context.has_arena = true
+    w.context.ranges = ranges
+    w.context.abi = abi
+    w.context.block_offsets = block_offsets
+    w.context.fixups = fixups
+    w.context.relocations = stage_relocations
+    w.context.relocation_count = &w.relocation_count
+    w.context.output = &w.stage
+    w.context.lines = stage_lines
+    w.context.line_count = &w.line_count
+    w.hot = *hot
+    try init_hot_writer(a, &w.hot, loaded.largest_bytes)
+    ret ok
+}
+
+// One module through the worker's builder, staging and writer, as the one-at-a-time
+// path did it (D314): lowered, selected, its artifact written, its bodies discarded.
+fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> err {
+    w.checker.arena = a
+    w.context.arena = a
+    let mark = nir.mark(&w.builder)
+    let first = w.builder.function_count
+    try lower.module(&w.checker, w.loaded, module_index, &w.builder, &w.signatures, w.bindings)
+    w.stage.count = 0usize
+    w.relocation_count = 0usize
+    w.line_count = 0usize
+    var no_fold: Fold = zero
+    try codegen_functions(a, &w.report, w.loaded, &w.builder, &w.context, first, w.stage_offsets, true, &no_fold)
+    try write_hot_artifact(a, &w.checker, w.loaded, &w.builder, module_index, &w.context, w.stage_offsets, &w.hot, w.held)
+    nir.discard_bodies(&w.builder, mark)
+    ret ok
+}
+
+fn lower_worker_entry(w: *LowerWorker) {
+    var at = 0usize
+    while at < w.count {
+        let module_error = lower_worker_module(w, &w.arena, w.modules[at])
+        if module_error != ok {
+            w.stopped = true
+            w.stopped_at = at
+            w.failure = module_error
+            ret
         }
-        var made: ModuleCode = zero
-        try codegen_module(a, report, loaded, checker, builder, signatures, bindings, next, &context, stage_offsets, hot, held, &made)
-        codes[chunk_count] = made
-        lowered[next] = true
-        var fill = made.first_function
-        while fill < builder.function_count {
-            chunk_of[fill] = chunk_count
-            fill += 1usize
+        at += 1usize
+    }
+}
+
+fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, code: *Code) -> err {
+    var clear_at = 0usize
+    while clear_at < loaded.count {
+        lowered[clear_at] = false
+        clear_at += 1usize
+    }
+    // The modules to lower, largest first to the least loaded worker.
+    let (list, list_error) = mem.alloc[usize](a, loaded.count + 1usize)
+    if list_error != ok { ret list_error }
+    let (owner, owner_error) = mem.alloc[usize](a, loaded.count + 1usize)
+    if owner_error != ok { ret owner_error }
+    var pending = 0usize
+    var module_at = 0usize
+    while module_at < loaded.count {
+        if !(hot.on && hot.keep[module_at]) {
+            list[pending] = module_at
+            pending += 1usize
         }
-        chunk_count += 1usize
-        next += 1usize
+        module_at += 1usize
+    }
+    var worker_count = pending
+    if worker_count > 8usize { worker_count = 8usize }
+    var order_at = 0usize
+    while order_at < pending {
+        var best = order_at
+        var scan = order_at + 1usize
+        while scan < pending {
+            if loaded.modules[list[scan]].text.len > loaded.modules[list[best]].text.len { best = scan }
+            scan += 1usize
+        }
+        let swap = list[order_at]
+        list[order_at] = list[best]
+        list[best] = swap
+        order_at += 1usize
+    }
+    var loads: [8]usize = zero
+    order_at = 0usize
+    while order_at < pending {
+        var lightest = 0usize
+        var worker_at = 1usize
+        while worker_at < worker_count {
+            if loads[worker_at] < loads[lightest] { lightest = worker_at }
+            worker_at += 1usize
+        }
+        loads[lightest] += loaded.modules[list[order_at]].text.len + 4096usize
+        owner[list[order_at]] = lightest
+        order_at += 1usize
+    }
+    // Each worker's modules in module order, in worker-major runs of `runs`.
+    let (runs, runs_error) = mem.alloc[usize](a, loaded.count + 1usize)
+    if runs_error != ok { ret runs_error }
+    let (workers, workers_error) = mem.alloc[LowerWorker](a, 9usize)
+    if workers_error != ok { ret workers_error }
+    // As many workers as the arena has room for (D325): the first is set up and
+    // measured, and each further one is added while what it cost fits in what is
+    // left with a quarter gibibyte kept back for the link and a generous fallback.
+    var worker_at = 0usize
+    var worker_cost = 0usize
+    while worker_at < worker_count {
+        if worker_at != 0usize {
+            let stats_now = mem.stats(a)
+            if stats_now.used + worker_cost + 268435456usize > stats_now.capacity {
+                // The modules of the workers not made go to the ones that are.
+                var reassign = 0usize
+                while reassign < loaded.count {
+                    if owner[reassign] >= worker_at { owner[reassign] = owner[reassign] % worker_at }
+                    reassign += 1usize
+                }
+                worker_count = worker_at
+                break
+            }
+        }
+        let cost_before = mem.stats(a).used
+        var blank: LowerWorker = zero
+        workers[worker_at] = blank
+        let (worker_bindings, bindings_error) = mem.alloc[lower.Binding](a, bindings.len)
+        if bindings_error != ok { ret bindings_error }
+        workers[worker_at].scale = 4usize
+        try init_lower_worker(a, &workers[worker_at], checker, loaded, report, abi, hot, held, worker_bindings, builder)
+        worker_cost = mem.stats(a).used - cost_before
+        worker_at += 1usize
+    }
+    // Each worker's modules in module order, in worker-major runs, and its arena: the
+    // artifacts held, at some bytes per byte of text, and the symbols lowering makes.
+    var filled = 0usize
+    worker_at = 0usize
+    while worker_at < worker_count {
+        let first = filled
+        var bytes = 0usize
+        module_at = 0usize
+        while module_at < loaded.count {
+            if !(hot.on && hot.keep[module_at]) && owner[module_at] == worker_at {
+                runs[filled] = module_at
+                bytes += loaded.modules[module_at].text.len
+                filled += 1usize
+            }
+            module_at += 1usize
+        }
+        workers[worker_at].modules = runs[first..filled]
+        workers[worker_at].count = filled - first
+        let (storage, storage_error) = mem.alloc[u8](a, bytes * 12usize + 4194304usize)
+        if storage_error != ok { ret storage_error }
+        workers[worker_at].arena = mem.arena_from(storage)
+        worker_at += 1usize
+    }
+    var threads: [8]os.Thread = zero
+    var started: [8]bool = zero
+    worker_at = 1usize
+    while worker_at < worker_count {
+        started[worker_at] = false
+        let (thread, spawn_error) = os.thread_create[LowerWorker](lower_worker_entry, &workers[worker_at], 16777216usize)
+        if spawn_error == ok {
+            threads[worker_at] = thread
+            started[worker_at] = true
+        }
+        worker_at += 1usize
+    }
+    if worker_count != 0usize { lower_worker_entry(&workers[0usize]) }
+    worker_at = 1usize
+    while worker_at < worker_count {
+        if started[worker_at] {
+            try os.thread_join(threads[worker_at])
+        } else {
+            lower_worker_entry(&workers[worker_at])
+        }
+        worker_at += 1usize
+    }
+    // What the workers left: a lowering error is the lowest failing module's; a worker
+    // whose arena ran dry has its remaining modules lowered here.
+    var lowest_failure = loaded.count
+    var lowest_worker = 0usize
+    worker_at = 0usize
+    while worker_at < worker_count {
+        if workers[worker_at].stopped && workers[worker_at].failure != mem.Exhausted && workers[worker_at].failure != nir.Capacity {
+            let failed = workers[worker_at].modules[workers[worker_at].stopped_at]
+            if failed < lowest_failure {
+                lowest_failure = failed
+                lowest_worker = worker_at
+            }
+        }
+        worker_at += 1usize
+    }
+    if lowest_failure < loaded.count {
+        try print_lower_diagnostic(report, loaded, &workers[lowest_worker].checker, &workers[lowest_worker].builder, workers[lowest_worker].failure)
+        try finish_report(report)
+        os.exit(1i32)
+        ret ok
+    }
+    // A worker that stopped for want of room -- its arena, or a pool a quarter the
+    // whole-program size -- leaves the rest of its modules to a ninth worker with the
+    // whole-program pools, made only now, out of the program's arena.
+    var generous_made = false
+    worker_at = 0usize
+    while worker_at < worker_count {
+        if workers[worker_at].stopped {
+            if !generous_made {
+                var blank: LowerWorker = zero
+                workers[8usize] = blank
+                let (generous_bindings, generous_bindings_error) = mem.alloc[lower.Binding](a, bindings.len)
+                if generous_bindings_error != ok { ret generous_bindings_error }
+                workers[8usize].scale = 1usize
+                try init_lower_worker(a, &workers[8usize], checker, loaded, report, abi, hot, held, generous_bindings, builder)
+                generous_made = true
+            }
+            var remaining = workers[worker_at].stopped_at
+            while remaining < workers[worker_at].count {
+                let module_error = lower_worker_module(&workers[8usize], a, workers[worker_at].modules[remaining])
+                if module_error != ok {
+                    try print_lower_diagnostic(report, loaded, &workers[8usize].checker, &workers[8usize].builder, module_error)
+                    try finish_report(report)
+                    os.exit(1i32)
+                    ret ok
+                }
+                remaining += 1usize
+            }
+        }
+        report.regalloc_ns = report.regalloc_ns +% workers[worker_at].report.regalloc_ns
+        report.codegen_ns = report.codegen_ns +% workers[worker_at].report.codegen_ns
+        builder.instruction_total += workers[worker_at].builder.instruction_total
+        if workers[worker_at].builder.instruction_peak > builder.instruction_peak { builder.instruction_peak = workers[worker_at].builder.instruction_peak }
+        var done = 0usize
+        while done < workers[worker_at].count {
+            lowered[workers[worker_at].modules[done]] = true
+            done += 1usize
+        }
+        worker_at += 1usize
+    }
+    if generous_made {
+        report.regalloc_ns = report.regalloc_ns +% workers[8usize].report.regalloc_ns
+        report.codegen_ns = report.codegen_ns +% workers[8usize].report.codegen_ns
+        builder.instruction_total += workers[8usize].builder.instruction_total
+        if workers[8usize].builder.instruction_peak > builder.instruction_peak { builder.instruction_peak = workers[8usize].builder.instruction_peak }
     }
     report.arena_used = mem.stats(a).used
     try report_phase(report, "lower and codegen")
@@ -5181,173 +5414,9 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
         try report_count("nir instructions in all", builder.instruction_total)
         try report_count("nir instructions, largest module", builder.instruction_peak)
     }
-    if hot.on {
-        try link_hot_artifacts(a, report, loaded, builder, hot, held, code)
-        report.arena_used = mem.stats(a).used
-        try report_phase(report, "link from artifacts")
-        ret ok
-    }
-    try assemble_reached(a, report, loaded, builder, codes[0usize..chunk_count], chunk_of, code)
+    try link_hot_artifacts(a, report, loaded, builder, hot, held, code)
     report.arena_used = mem.stats(a).used
-    try report_phase(report, "assemble")
-    ret ok
-}
-
-// What `main` reaches, over the relocations, then the kept functions copied in order
-// into the image's buffer with the fold; the function table and the references are
-// compacted to what was kept, as the pruner did.
-fn assemble_reached(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, codes: []ModuleCode, chunk_of: []usize, code: *Code) -> err {
-    nir.resolve_reference_targets(builder)
-    let (kept, kept_error) = mem.alloc[bool](a, builder.function_count + 1usize)
-    if kept_error != ok { ret kept_error }
-    let (queue, queue_error) = mem.alloc[usize](a, builder.function_count + 1usize)
-    if queue_error != ok { ret queue_error }
-    var at = 0usize
-    while at < builder.function_count {
-        kept[at] = false
-        at += 1usize
-    }
-    // No entry point is the linker's to report, with a better message than a program of
-    // no functions would produce: everything is kept then, as the pruner kept it.
-    var rooted = false
-    at = 0usize
-    while at < builder.function_count {
-        if check.same(builder.functions[at].name, "main") {
-            rooted = true
-            break
-        }
-        at += 1usize
-    }
-    var tail = 0usize
-    if rooted {
-        kept[at] = true
-        queue[0usize] = at
-        tail = 1usize
-    } else {
-        at = 0usize
-        while at < builder.function_count {
-            kept[at] = true
-            at += 1usize
-        }
-    }
-    var head = 0usize
-    while head < tail {
-        let function_at = queue[head]
-        head += 1usize
-        let chunk = codes[chunk_of[function_at]]
-        let (start, end) = function_span(chunk, function_at)
-        var relocation_at = em.first_relocation_from(chunk.relocations, chunk.relocations.len, start)
-        while relocation_at < chunk.relocations.len {
-            let relocation = chunk.relocations[relocation_at]
-            if relocation.displacement_at >= end { break }
-            if !relocation.global && relocation.function_ref < builder.function_ref_count {
-                let reference = builder.function_refs[relocation.function_ref]
-                if reference.has_target && !kept[reference.target] {
-                    kept[reference.target] = true
-                    queue[tail] = reference.target
-                    tail += 1usize
-                }
-            }
-            relocation_at += 1usize
-        }
-    }
-    // Sized from what is kept: the code, and the symbol table the driver appends after
-    // it (D206, D209) -- a header and a name per function, sixteen bytes per line row.
-    var code_total = 0usize
-    var names_total = 0usize
-    var relocation_total = 0usize
-    var line_total = 0usize
-    var chunk_at = 0usize
-    while chunk_at < codes.len {
-        let chunk = codes[chunk_at]
-        relocation_total += chunk.relocations.len
-        line_total += chunk.lines.len
-        var function_at = chunk.first_function
-        while function_at < chunk.first_function + chunk.function_count {
-            if kept[function_at] {
-                let (start, end) = function_span(chunk, function_at)
-                code_total += end - start
-                names_total += builder.functions[function_at].module_name.len + 1usize + builder.functions[function_at].name.len
-            }
-            function_at += 1usize
-        }
-        chunk_at += 1usize
-    }
-    let (machine_storage, machine_storage_error) = mem.alloc[u8](a, code_total + builder.function_count * 24usize + names_total + line_total * 16usize + 65536usize)
-    if machine_storage_error != ok { ret machine_storage_error }
-    report.build.pools[stats.POOL_MACHINE] = machine_storage.len
-    var machine: emit_x64.Buffer = zero
-    try emit_x64.init(&machine, machine_storage)
-    let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.function_count + 1usize)
-    if function_offsets_error != ok { ret function_offsets_error }
-    let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, relocation_total + 1usize)
-    if relocations_error != ok { ret relocations_error }
-    report.build.pools[stats.POOL_RELOCATIONS] = relocations.len
-    let (lines, lines_error) = mem.alloc[codegen_x64.LineEntry](a, line_total + 1usize)
-    if lines_error != ok { ret lines_error }
-    report.build.pools[stats.POOL_LINE_ENTRIES] = lines.len
-    var fold: Fold = zero
-    try init_fold(a, &fold, builder.function_count)
-    var relocation_count = 0usize
-    var line_count = 0usize
-    var written = 0usize
-    chunk_at = 0usize
-    while chunk_at < codes.len {
-        let chunk = codes[chunk_at]
-        var view: emit_x64.Buffer = zero
-        view.bytes = chunk.bytes
-        view.count = chunk.bytes.len
-        var relocation_at = 0usize
-        var line_at = 0usize
-        var function_at = chunk.first_function
-        while function_at < chunk.first_function + chunk.function_count {
-            let (start, end) = function_span(chunk, function_at)
-            // The rows and relocations of a function that is dropped, or folded, are
-            // passed over; both lists are in code order.
-            while relocation_at < chunk.relocations.len && chunk.relocations[relocation_at].displacement_at < start { relocation_at += 1usize }
-            while line_at < chunk.lines.len && chunk.lines[line_at].offset < start { line_at += 1usize }
-            if kept[function_at] {
-                let placed = machine.count
-                if report.timing { report.fold_ns = report.fold_ns -% nptest_now() }
-                let (folded_at, folded) = fold_function(loaded, builder, &view, start, end, chunk.relocations, chunk.relocations.len, placed, &fold)
-                if report.timing { report.fold_ns = report.fold_ns +% nptest_now() }
-                builder.functions[written] = builder.functions[function_at]
-                if folded {
-                    function_offsets[written] = folded_at
-                } else {
-                    function_offsets[written] = placed
-                    try emit_x64.append_bytes(&machine, chunk.bytes[start..end])
-                    while relocation_at < chunk.relocations.len && chunk.relocations[relocation_at].displacement_at < end {
-                        var relocation = chunk.relocations[relocation_at]
-                        relocation.displacement_at = relocation.displacement_at - start + placed
-                        if relocation_count == relocations.len { ret check.Capacity }
-                        relocations[relocation_count] = relocation
-                        relocation_count += 1usize
-                        relocation_at += 1usize
-                    }
-                    while line_at < chunk.lines.len && chunk.lines[line_at].offset < end {
-                        var line = chunk.lines[line_at]
-                        line.offset = line.offset - start + placed
-                        if line_count == lines.len { ret check.Capacity }
-                        lines[line_count] = line
-                        line_count += 1usize
-                        line_at += 1usize
-                    }
-                }
-                written += 1usize
-            }
-            function_at += 1usize
-        }
-        chunk_at += 1usize
-    }
-    builder.function_count = written
-    try codegen_x64.prune_references(builder, relocations, relocation_count)
-    code.machine = machine
-    code.function_offsets = function_offsets
-    code.relocations = relocations
-    code.relocation_count = relocation_count
-    code.lines = lines
-    code.line_count = line_count
+    try report_phase(report, "link from artifacts")
     ret ok
 }
 
@@ -5880,7 +5949,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var signatures: nir.Signatures = zero
         // One more parameter type than the declarations need: `neper_report_failure`,
         // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, writes_executable))
+        var builder_scale = 1usize
+        if writes_executable { builder_scale = 64usize }
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, writes_executable), builder_scale)
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, loaded.count + 1usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, builder.functions.len + 1usize)
@@ -5991,11 +6062,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
             hot.keep = keep
             hot.directory = artifact_dir
             hot.release = release_build
-            if hot_build {
-                let (hot_triple, hot_triple_error) = target_triple(a, args[4usize], args[5usize])
-                if hot_triple_error != ok { ret hot_triple_error }
-                hot.triple = hot_triple
-            }
+            let (hot_triple, hot_triple_error) = target_triple(a, args[4usize], args[5usize])
+            if hot_triple_error != ok { ret hot_triple_error }
+            hot.triple = hot_triple
             try emit_per_module(a, &report, &loaded, &checker, &builder, &signatures, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code)
         } else {
             try emit_whole_program(a, &report, &loaded, &builder, emit_machine_code, writes_executable, machine_abi_of(args), &code)

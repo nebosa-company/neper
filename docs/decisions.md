@@ -6721,3 +6721,41 @@ Measured, warm and nothing changed: the compiler 189 ms by a release-built compi
 a five-hundred-thousand-line program 0.36 s (was 0.97), a two-million-line program
 1.6 s (was 4.0: load 0.5, link from artifacts 0.35, link 0.4, manifest 0.28). Every
 image is byte for byte what it was.
+
+## D325 -- The modules lowered on worker threads, and every executable linked from artifacts
+
+A cold build of the two-million-line program spent twenty-two of its twenty-nine
+seconds lowering, selecting and writing the modules one after another on one core.
+Lowering a module reads the checker's declarations and adds only types and function
+signatures -- measured by counting every table before and after each module -- so a
+worker can lower with a checker of its own that shares the declaration tables and owns
+those two, its locals, its caches and its diagnostics.
+
+`emit_per_module` hands the modules to be lowered to at most eight `LowerWorker`s,
+largest first to the least loaded. Each has a copy of the checker with its own type
+and signature tails, a builder and staging of its own with pools a quarter of the
+whole-program bases, an artifact writer of its own, and an arena of its own for what
+lowering allocates; it lowers, selects and writes each module's artifact into the
+program's held slots, writing only its own modules', and discards the bodies as the
+one-at-a-time path did. The workers are added while what the first one cost fits in
+the arena with a quarter gibibyte kept back, so a compiler emitted without `--arena`
+runs four; a worker that runs out of its arena or a pool leaves the rest of its modules
+to a ninth worker with the whole-program pools, made only then. A lowering error is the
+lowest failing module's, reported as before. Every executable is then linked from the
+artifacts, kept and fresh, as a hot build was (D319); a cold build holds them in memory
+and a hot build keeps them. The executable path's own builder lowers nothing now and
+has next to no pools; the source-side assembly (`assemble_reached`) is gone.
+
+Found on the way: the worker builders lowered every module in debug mode until they
+carried the program builder's mode, arena and oracle, which the release image showed
+by being the debug image; every image is compared against the previous compiler's.
+And the artifact writer refused a module declaring a `[LABEL: str]` generic -- the
+section 9 comptime kinds that arrived after it, a string, a field, a member, an array,
+had no id -- which no build had noticed while only `emit-em` wrote artifacts; they
+have ids, and an array parameter carries its type as an integer one does.
+
+Measured, cold: the two-million-line program 10.4 s debug (was 29) and 13.1 s release
+(was 26), where the body sweep -- sequential, with the oracle -- is now the largest
+phase; the five-hundred-thousand-line program 2.3 s (was 6.7); the compiler 1.1 s (was
+1.8). Warm builds are as they were, and every image is byte for byte the D324
+compiler's, in both modes.
