@@ -1610,6 +1610,19 @@ foreach ($hotMode in @('--release', '--time')) {
     $hotWarm = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotWarm -ne 'executable written') { throw "the warm hot build failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build is not the clean build ($hotMode)" }
+    # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
+    # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
+    # or ignored, and the build is the clean build; the `.tmp` is never read.
+    $hotArtifact = Get-ChildItem -LiteralPath (Join-Path $hotScratch '.neper') -Recurse -Filter 'dep.*.em' | Select-Object -First 1
+    if (-not $hotArtifact) { throw "the hot build left no artifact for dep ($hotMode)" }
+    foreach ($damage in @('truncate', 'flip')) {
+        & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') $damage $hotArtifact.FullName
+        [IO.File]::WriteAllText(($hotArtifact.FullName + '.tmp'), 'a write that died')
+        $hotDamaged = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+        if ($LASTEXITCODE -ne 0 -or $hotDamaged -ne 'executable written') { throw "the hot build over a $damage artifact failed ($hotMode)" }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the hot build over a $damage artifact is not the clean build ($hotMode)" }
+        if ((Get-Item -LiteralPath $hotArtifact.FullName).Length -lt 64) { throw "the $damage artifact was not rebuilt ($hotMode)" }
+    }
     Copy-Item (Join-Path $hotFixture 'edits\dep_body.e') (Join-Path $hotSource 'dep.e')
     $hotEdited = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotEdited -ne 'executable written') { throw "the hot build after a body edit failed ($hotMode)" }

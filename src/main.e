@@ -3303,7 +3303,18 @@ fn save_executable(a: *mem.Arena, path: str, bytes: []u8, os_name: str) -> err {
     ret ok
 }
 
+// Published, not written in place (D343, H24): the bytes go to `<path>.tmp` and the
+// name is taken by one atomic replace, so no reader -- a concurrent build, the next
+// build after a crash -- ever sees a file that is part of one; a write that dies
+// leaves its `.tmp`, which nothing reads, and the previous file, which is whole.
 fn save_bytes(a: *mem.Arena, path: str, bytes: []u8) -> err {
+    let (staged, staged_error) = with_suffix(a, path, ".tmp")
+    if staged_error != ok { ret staged_error }
+    try write_file(a, staged, bytes)
+    ret os.replace(a, staged, path, true, false)
+}
+
+fn write_file(a: *mem.Arena, path: str, bytes: []u8) -> err {
     let flags = os.OpenFlags { read: false, write: true, create: true, truncate: true, append: false }
     let (file, open_error) = os.open(a, path, flags)
     if open_error != ok { ret open_error }

@@ -361,6 +361,22 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     return made ? NP_OK : np_error(GetLastError());
 }
 
+/* `os.replace` (D343): MoveFileExW, replacing when asked and written through when asked. */
+uint32_t neper_os_replace(NpArena *arena, const unsigned char *src, size_t src_len, const unsigned char *dst, size_t dst_len, uint8_t overwrite, uint8_t durable) {
+    wchar_t *from = np_wide((NpStr){src, src_len});
+    wchar_t *to = np_wide((NpStr){dst, dst_len});
+    BOOL moved;
+    DWORD flags = 0;
+    (void)arena;
+    if (!from || !to) { if (from) HeapFree(GetProcessHeap(), 0, from); if (to) HeapFree(GetProcessHeap(), 0, to); return NP_OUT_OF_MEMORY; }
+    if (overwrite) flags |= MOVEFILE_REPLACE_EXISTING;
+    if (durable) flags |= MOVEFILE_WRITE_THROUGH;
+    moved = MoveFileExW(from, to, flags);
+    HeapFree(GetProcessHeap(), 0, from);
+    HeapFree(GetProcessHeap(), 0, to);
+    return moved ? NP_OK : np_error(GetLastError());
+}
+
 /* Windows keeps one bit of a mode: a file no one may write is read-only. */
 uint32_t neper_os_set_mode(NpArena *arena, const unsigned char *path, size_t path_len, uint32_t mode) {
     wchar_t *wide = np_wide((NpStr){path, path_len});
@@ -677,6 +693,30 @@ uint32_t neper_os_mkdir(NpArena *arena, const unsigned char *path, size_t path_l
     if (!name) return NP_OUT_OF_MEMORY;
     made = mkdir(name, 0777); arena->off = saved;
     return made == 0 ? NP_OK : np_error(errno);
+}
+
+/* `os.replace` (D343): rename(2), which replaces; without `overwrite` a link-then-unlink
+   that refuses an existing destination; `durable` syncs the destination's directory. */
+uint32_t neper_os_replace(NpArena *arena, const unsigned char *src, size_t src_len, const unsigned char *dst, size_t dst_len, uint8_t overwrite, uint8_t durable) {
+    size_t saved = arena ? arena->off : 0;
+    char *from = np_c_string_arena(arena, (NpStr){src, src_len});
+    char *to = from ? np_c_string_arena(arena, (NpStr){dst, dst_len}) : 0;
+    int result;
+    if (!from || !to) { if (arena) arena->off = saved; return NP_OUT_OF_MEMORY; }
+    if (overwrite) {
+        result = rename(from, to);
+    } else {
+        result = link(from, to);
+        if (result == 0) result = unlink(from);
+    }
+    if (result == 0 && durable) {
+        char *slash = strrchr(to, '/');
+        int dir;
+        if (slash) { *slash = 0; dir = open(to, O_RDONLY); } else { dir = open(".", O_RDONLY); }
+        if (dir >= 0) { fsync(dir); close(dir); }
+    }
+    arena->off = saved;
+    return result == 0 ? NP_OK : np_error(errno);
 }
 
 uint32_t neper_os_set_mode(NpArena *arena, const unsigned char *path, size_t path_len, uint32_t mode) {

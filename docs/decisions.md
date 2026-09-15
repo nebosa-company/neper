@@ -7358,3 +7358,28 @@ selector checks where it emits. Cost: the lowering component of a worker's time 
 the million-line program is 510 to 595 ms, five per cent of the phase and under
 three of the cold build; kept on in release, since a release build is what is
 shipped and the budget holds.
+
+## D343 -- An artifact is published by one atomic replace, and a damaged cache is rebuilt
+
+H24: a cache entry is published only after a complete write, and neither a
+concurrent writer, a crash nor a storage fault can leave an accepted partial record.
+`save_bytes` -- every artifact, the manifest, the source map, the executable --
+wrote the file in place, so a build that died mid-write left a truncated artifact
+under its real name for the next build to read, and two builds of one project
+writing the same artifact could interleave.
+
+`save_bytes` writes `<path>.tmp` and takes the name with `os.replace(a, staged,
+path, true, false)`: one atomic rename on both hosts (`MoveFileExW` with
+`MOVEFILE_REPLACE_EXISTING`, `rename(2)`), so a reader sees the old file or the
+new one and never a part of either; a write that dies leaves its `.tmp`, which
+nothing reads, and the file that was there. `os.replace` was the library's already
+(`e.os` per host); the bootstrap seeds it now as a fixed-surface intrinsic with a C
+body on both hosts, so the compiler's own source can call it.
+
+What the readers do with damage was measured rather than assumed, on the hot
+build's fixture: a truncated artifact fails its checksum and the module is rebuilt;
+an artifact with a byte flipped every four kibibytes behind a recomputed checksum
+fails the validation past it and the module is rebuilt; a stray `.tmp` is never
+opened. In every case the image is the clean build's, byte for byte, in both modes,
+which both suites now require (`benchmarks/fuzz/corrupt.py` makes the damage). A
+corrupt disposable cache is quarantined by rebuilding, never linked.

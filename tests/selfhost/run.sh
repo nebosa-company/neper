@@ -1730,6 +1730,18 @@ for hot_mode in --release --time; do
     hot_warm=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
     [ "$hot_warm" = 'executable written' ]
     cmp "$hot_exe" "$hot_clean"
+    # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
+    # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
+    # or ignored, and the build is the clean build; the `.tmp` is never read.
+    hot_artifact=$(find "$hot_scratch/.neper" -name 'dep.*.em' | head -1)
+    [ -n "$hot_artifact" ]
+    for damage in truncate flip; do
+        python3 "$repo/benchmarks/fuzz/corrupt.py" $damage "$hot_artifact"
+        printf 'a write that died' > "$hot_artifact.tmp"
+        hot_damaged=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
+        [ "$hot_damaged" = 'executable written' ]
+        cmp "$hot_exe" "$hot_clean"
+    done
     cp "$hot_fixture/edits/dep_body.e" "$hot_source/dep.e"
     hot_edited=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
     [ "$hot_edited" = 'executable written' ]
