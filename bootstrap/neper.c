@@ -5748,7 +5748,9 @@ static void emit_expr(Emitter *e, Expr *x) {
             break;
         }
         case EX_ARRAY_LITERAL: case EX_STRUCT_LITERAL: case EX_ZERO: case EX_UNDEF:
-            fputs("    xor eax, eax\n", e->out);
+            /* A slice or str value is (rax, rdx): `zero` clears both (D322). It cleared
+               rax alone, and a zero slice's length was whatever rdx last held. */
+            fputs("    xor eax, eax\n    xor edx, edx\n", e->out);
             break;
         case EX_UNARY:
             if (x->as.unary.op == TK_AMP) {

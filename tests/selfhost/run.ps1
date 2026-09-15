@@ -1618,6 +1618,26 @@ foreach ($hotMode in @('--release', '--time')) {
     $hotCleanEdited = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotClean $hotMode 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotCleanEdited -ne 'executable written') { throw "the clean build of the edited fixture failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a hot build after a body edit is not the clean build ($hotMode)" }
+    # An edit to the body `main` inlines (D322): a body edge, so the unchanged `main` is
+    # parsed and rebuilt only now; then a signature edit, which rebuilds both.
+    Copy-Item (Join-Path $hotFixture 'edits\dep_inlined.e') (Join-Path $hotSource 'dep.e')
+    $hotInlined = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotInlined -ne 'executable written') { throw "the hot build after an inlined-body edit failed ($hotMode)" }
+    & $hotExe
+    if ($LASTEXITCODE -ne 9) { throw "the hot build did not carry the inlined edit: exit $LASTEXITCODE ($hotMode)" }
+    $hotCleanInlined = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotCleanInlined -ne 'executable written') { throw "the clean build of the inlined edit failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a hot build after an inlined-body edit is not the clean build ($hotMode)" }
+    Copy-Item (Join-Path $hotFixture 'edits\dep_signature.e') (Join-Path $hotSource 'dep.e')
+    Copy-Item (Join-Path $hotFixture 'edits\main_signature.e') (Join-Path $hotSource 'main.e')
+    $hotSigned = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotSigned -ne 'executable written') { throw "the hot build after a signature edit failed ($hotMode)" }
+    & $hotExe
+    if ($LASTEXITCODE -ne 10) { throw "the hot build did not carry the signature edit: exit $LASTEXITCODE ($hotMode)" }
+    $hotCleanSigned = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotCleanSigned -ne 'executable written') { throw "the clean build of the signature edit failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a hot build after a signature edit is not the clean build ($hotMode)" }
+    Copy-Item (Join-Path $hotFixture 'src\main.e') (Join-Path $hotSource 'main.e')
 }
 # Nested inlining (D212): a release build copies `leaf.add` into `mid.twice` and that
 # into `main`, the trap record names leaf.e through both copies with one frame in
@@ -2500,8 +2520,8 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 5 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
-if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 7) { throw 'compiled-module section count is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 6 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 8) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'
 $interfaceArtifactWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\em\interface\src\main.e') $repo 'x64' 'windows' $interfaceArtifactPath

@@ -3263,72 +3263,148 @@ fn widen_artifact(a: *mem.Arena, packed: []const u8) -> ([]usize, err) {
 // recorded still matches the declaration it names in the target's fresh Interface --
 // which the checker alone can write. A kept module is then not lowered, selected or
 // written at all; that is the saving.
-fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: str, triple: str, mode: em.BuildMode, strings: *em.StringTable, scratch: *binary.Buffer, keep: []bool, held: [][]const u8) -> err {
-    let (fresh, fresh_error) = mem.alloc[[]u8](a, g.count)
-    if fresh_error != ok { ret fresh_error }
+// Settle's state (D320, D322): every module's interface bytes -- fresh from the
+// checker for a parsed module, the artifact's for a stable one -- the modules by
+// name, and their declarations by (module, name).
+// `fresh`, every module's interface bytes, travels beside it.
+type Settle = struct {
+    modules: lookup.Index,
+    declarations: lookup.Index,
+    sections: []em.Section,
+    interface_buffer: binary.Buffer,
+    triple: str,
+    mode: em.BuildMode,
+    strings: *em.StringTable,
+    scratch: *binary.Buffer,
+}
+
+fn settle_init(a: *mem.Arena, s: *Settle, c: *check.Checker, g: *graph.Graph, held: [][]const u8, triple: str, mode: em.BuildMode, strings: *em.StringTable, scratch: *binary.Buffer) -> err {
     // The modules by name (D320): an edge's target was a walk over every module. An
     // index grows by doubling into the region after itself, so its entries are eight
     // times the keys: the regions sum to under twice the last, which is under four.
     let (module_entries, module_entries_error) = mem.alloc[lookup.Entry](a, g.count * 8usize + 256usize)
     if module_entries_error != ok { ret module_entries_error }
-    var modules: lookup.Index = zero
-    try lookup.attach(&modules, module_entries)
+    try lookup.attach(&s.modules, module_entries)
     var name_at = 0usize
     while name_at < g.count {
-        try lookup.insert(&modules, 0usize, 0usize, g.modules[name_at].name, name_at)
+        try lookup.insert(&s.modules, 0usize, 0usize, g.modules[name_at].name, name_at)
         name_at += 1usize
     }
+    // The declarations by (module, name) (D320): an edge's target declaration was a
+    // scan of the target's interface, per edge. Sized by the resolver's symbols, which
+    // cover every parsed module's declarations, plus what the artifacts hold (D322).
+    var declaration_total = c.resolver.count + c.function_count + 256usize
+    var held_at = 0usize
+    while held_at < g.count {
+        if held_at < held.len && held[held_at].len != 0usize {
+            let (declared, first_declared, declared_end, declared_error) = em.interface_declarations(held[held_at])
+            if declared_error != ok { ret declared_error }
+            declaration_total += declared
+        }
+        held_at += 1usize
+    }
+    let (declaration_entries, declaration_entries_error) = mem.alloc[lookup.Entry](a, declaration_total * 8usize + 256usize)
+    if declaration_entries_error != ok { ret declaration_entries_error }
+    try lookup.attach(&s.declarations, declaration_entries)
     let (sections, sections_error) = mem.alloc[em.Section](a, 2usize)
     if sections_error != ok { ret sections_error }
+    s.sections = sections
     let (interface_storage, interface_storage_error) = mem.alloc[u8](a, 1048576usize)
     if interface_storage_error != ok { ret interface_storage_error }
-    var interface_buffer: binary.Buffer = zero
-    try binary.init(&interface_buffer, interface_storage)
+    try binary.init(&s.interface_buffer, interface_storage)
+    s.triple = triple
+    s.mode = mode
+    s.strings = strings
+    s.scratch = scratch
+    ret ok
+}
+
+// A parsed module's fresh Interface, from the checker, held for the walk.
+fn settle_interface(a: *mem.Arena, s: *Settle, fresh: [][]const u8, c: *check.Checker, g: *graph.Graph, module_index: usize) -> err {
+    s.interface_buffer.count = 0usize
+    try em.write_interface_artifact(c, g, module_index, s.triple, s.mode, s.strings, s.sections, s.scratch, &s.interface_buffer)
+    let (interface_copy, interface_copy_error) = mem.alloc[u8](a, s.interface_buffer.count)
+    if interface_copy_error != ok { ret interface_copy_error }
+    var copy_at = 0usize
+    while copy_at < s.interface_buffer.count {
+        interface_copy[copy_at] = s.interface_buffer.bytes[copy_at]
+        copy_at += 1usize
+    }
+    fresh[module_index] = interface_copy
+    ret ok
+}
+
+// A module's interface bytes indexed by declaration name: once, when they are final.
+fn settle_index(a: *mem.Arena, s: *Settle, fresh: [][]const u8, module_index: usize) -> err {
+    let (count, first, end, open_error) = em.interface_declarations(fresh[module_index])
+    if open_error != ok { ret open_error }
+    var cursor = first
+    var declaration_at = 0usize
+    while declaration_at < count {
+        let (declaration, next, read_error) = em.declaration_from(fresh[module_index], cursor, end)
+        if read_error != ok { ret read_error }
+        let (declaration_name, declaration_name_error) = artifact_string(a, fresh[module_index], declaration.name_index)
+        if declaration_name_error != ok { ret declaration_name_error }
+        try lookup.insert(&s.declarations, module_index, 0usize, declaration_name, cursor)
+        cursor = next
+        declaration_at += 1usize
+    }
+    ret ok
+}
+
+// Whether every edge an artifact recorded still holds against the target's interface.
+fn settle_edges(a: *mem.Arena, s: *Settle, fresh: [][]const u8, old: []const u8) -> (bool, err) {
+    let (edge_count, count_error) = em.artifact_dependency_count(old)
+    if count_error != ok { ret (false, count_error) }
+    var edge_at = 0usize
+    while edge_at < edge_count {
+        let (dependency, dependency_error) = em.dependency_at(old, edge_at)
+        if dependency_error != ok { ret (false, dependency_error) }
+        let (target_name, target_name_error) = artifact_string(a, old, dependency.module_index)
+        if target_name_error != ok { ret (false, target_name_error) }
+        let (target_at, found_target) = lookup.find(&s.modules, 0usize, 0usize, target_name)
+        if !found_target { ret (false, ok) }
+        let (edge_name, edge_name_error) = artifact_string(a, old, dependency.name_index)
+        if edge_name_error != ok { ret (false, edge_name_error) }
+        let (cursor, found_declaration) = lookup.find(&s.declarations, target_at, 0usize, edge_name)
+        var declaration: em.Declaration = zero
+        if found_declaration {
+            let (found, next, read_error) = em.declaration_from(fresh[target_at], cursor, fresh[target_at].len)
+            if read_error != ok { ret (false, read_error) }
+            declaration = found
+        }
+        let (matches, match_error) = em.dependency_holds(dependency, declaration, found_declaration)
+        if match_error != ok { ret (false, match_error) }
+        if !matches { ret (false, ok) }
+        edge_at += 1usize
+    }
+    ret (true, ok)
+}
+
+// Section 12's edge rule over a directory of artifacts (`emit-em-all --incremental`,
+// D205, D214): every module's fresh Interface from the checker, then each module's
+// artifact on disk is kept when its source and build mode are unchanged and every edge
+// it recorded still matches, and replaced otherwise.
+fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: str, triple: str, mode: em.BuildMode, strings: *em.StringTable, scratch: *binary.Buffer, keep: []bool, held: [][]const u8, hot: *HotLoad) -> err {
+    if hot.on { ret settle_hot(a, c, g, triple, mode, strings, scratch, keep, held, hot) }
+    var s: Settle = zero
+    try settle_init(a, &s, c, g, held, triple, mode, strings, scratch)
+    let (fresh, fresh_error) = mem.alloc[[]const u8](a, g.count)
+    if fresh_error != ok { ret fresh_error }
     var mode_id = 0usize
     if mode == .Release { mode_id = 1usize }
-    // Every module's fresh Interface first: small, and held for the whole walk.
     var module_at = 0usize
     while module_at < g.count {
         keep[module_at] = false
-        interface_buffer.count = 0usize
-        try em.write_interface_artifact(c, g, module_at, triple, mode, strings, sections, scratch, &interface_buffer)
-        let (interface_copy, interface_copy_error) = mem.alloc[u8](a, interface_buffer.count)
-        if interface_copy_error != ok { ret interface_copy_error }
-        var copy_at = 0usize
-        while copy_at < interface_buffer.count {
-            interface_copy[copy_at] = interface_buffer.bytes[copy_at]
-            copy_at += 1usize
-        }
-        fresh[module_at] = interface_copy
+        try settle_interface(a, &s, fresh, c, g, module_at)
+        try settle_index(a, &s, fresh, module_at)
         module_at += 1usize
     }
-    // The fresh declarations by (module, name) (D320): an edge's target declaration was
-    // a scan of the target's interface, per edge.
-    let declaration_total = c.function_count + c.aggregate_count + c.alias_count + c.constant_count + c.resolver.count
-    let (declaration_entries, declaration_entries_error) = mem.alloc[lookup.Entry](a, declaration_total * 8usize + 256usize)
-    if declaration_entries_error != ok { ret declaration_entries_error }
-    var declarations: lookup.Index = zero
-    try lookup.attach(&declarations, declaration_entries)
-    module_at = 0usize
-    while module_at < g.count {
-        let (count, first, end, open_error) = em.interface_declarations(fresh[module_at])
-        if open_error != ok { ret open_error }
-        var cursor = first
-        var declaration_at = 0usize
-        while declaration_at < count {
-            let (declaration, next, read_error) = em.declaration_from(fresh[module_at], cursor, end)
-            if read_error != ok { ret read_error }
-            let (declaration_name, declaration_name_error) = artifact_string(a, fresh[module_at], declaration.name_index)
-            if declaration_name_error != ok { ret declaration_name_error }
-            try lookup.insert(&declarations, module_at, 0usize, declaration_name, cursor)
-            cursor = next
-            declaration_at += 1usize
-        }
-        module_at += 1usize
-    }
+    var no_bytes: []const u8 = zero
     module_at = 0usize
     while module_at < g.count {
         let checkpoint = mem.mark(a)
+        held[module_at] = no_bytes
         let (artifact_path, path_error) = compiled_module_path(a, directory, g.modules[module_at].name, triple)
         if path_error != ok { ret path_error }
         let (old, old_error) = load_artifact(a, artifact_path)
@@ -3337,40 +3413,119 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
             let (new_hash, new_hash_error) = em.source_text_hash(g.modules[module_at].text, scratch)
             let (old_mode, old_mode_error) = em.artifact_mode(old)
             if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
-                keep[module_at] = true
-                let (edge_count, count_error) = em.artifact_dependency_count(old)
-                if count_error != ok { ret count_error }
-                var edge_at = 0usize
-                while edge_at < edge_count && keep[module_at] {
-                    let (dependency, dependency_error) = em.dependency_at(old, edge_at)
-                    if dependency_error != ok { ret dependency_error }
-                    let (target_name, target_name_error) = artifact_string(a, old, dependency.module_index)
-                    if target_name_error != ok { ret target_name_error }
-                    let (target_at, found_target) = lookup.find(&modules, 0usize, 0usize, target_name)
-                    if !found_target {
-                        keep[module_at] = false
-                    } else {
-                        let (edge_name, edge_name_error) = artifact_string(a, old, dependency.name_index)
-                        if edge_name_error != ok { ret edge_name_error }
-                        let (cursor, found_declaration) = lookup.find(&declarations, target_at, 0usize, edge_name)
-                        var declaration: em.Declaration = zero
-                        if found_declaration {
-                            let (found, next, read_error) = em.declaration_from(fresh[target_at], cursor, fresh[target_at].len)
-                            if read_error != ok { ret read_error }
-                            declaration = found
-                        }
-                        let (matches, match_error) = em.dependency_holds(dependency, declaration, found_declaration)
-                        if match_error != ok { ret match_error }
-                        if !matches { keep[module_at] = false }
-                    }
-                    edge_at += 1usize
-                }
+                let (holds, edges_error) = settle_edges(a, &s, fresh, old)
+                if edges_error != ok { ret edges_error }
+                keep[module_at] = holds
             }
         }
         // A kept module's artifact is held for the link (D320), validated once here;
         // a rebuilt module's goes with the checkpoint.
         if keep[module_at] { held[module_at] = old } else { mem.reset(a, checkpoint) }
         module_at += 1usize
+    }
+    ret ok
+}
+
+// The unparsed modules a rebuilt module needs -- itself and what it imports, through
+// modules not yet parsed -- parsed, resolved and declared, in dependency order (D322).
+// The declarations sweep is reopened for them: signatures are not ready while a module
+// is declared, and `finish_declarations` evaluates its constants.
+fn declare_late(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_index: usize, list: []usize, listed: []bool) -> err {
+    var count = 0usize
+    if !g.modules[module_index].has_tree {
+        list[count] = module_index
+        listed[module_index] = true
+        count += 1usize
+    }
+    var queue_at = 0usize
+    while queue_at < count {
+        let from = list[queue_at]
+        let end = g.modules[from].first_import + g.modules[from].import_count
+        var import_at = g.modules[from].first_import
+        while import_at < end {
+            let imported = g.imports[import_at].target
+            if !g.modules[imported].has_tree && !listed[imported] {
+                list[count] = imported
+                listed[imported] = true
+                count += 1usize
+            }
+            import_at += 1usize
+        }
+        queue_at += 1usize
+    }
+    if count == 0usize { ret ok }
+    try graph.front_modules(a, g, list[0usize..count])
+    c.signatures_ready = false
+    var order_at = 0usize
+    while order_at < g.order_count {
+        let ordered = g.order[order_at]
+        if listed[ordered] {
+            try resolve.module(c.resolver, g, ordered)
+            try check.declarations_module(c, c.resolver, g, ordered)
+        }
+        order_at += 1usize
+    }
+    var clear_at = 0usize
+    while clear_at < count {
+        listed[list[clear_at]] = false
+        clear_at += 1usize
+    }
+    ret check.finish_declarations(c)
+}
+
+// The edge rule of a hot build (D322), in dependency order, so a module's targets are
+// decided and their interfaces final before its edges are read. A stable module is
+// kept as it stands; a changed one is rebuilt; an unchanged one whose every edge holds
+// is kept, and one with an edge that does not is rebuilt -- parsed and declared only
+// now, with whatever it imports that was not, so its fresh Interface can stand for
+// the modules that depend on it in turn.
+fn settle_hot(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, triple: str, mode: em.BuildMode, strings: *em.StringTable, scratch: *binary.Buffer, keep: []bool, held: [][]const u8, hot: *HotLoad) -> err {
+    var s: Settle = zero
+    try settle_init(a, &s, c, g, held, triple, mode, strings, scratch)
+    let (fresh, fresh_error) = mem.alloc[[]const u8](a, g.count)
+    if fresh_error != ok { ret fresh_error }
+    var no_bytes: []const u8 = zero
+    var stable_at = 0usize
+    while stable_at < g.count {
+        keep[stable_at] = false
+        fresh[stable_at] = no_bytes
+        // A stable module's interface is its artifact's.
+        if hot.stable[stable_at] { fresh[stable_at] = held[stable_at] }
+        stable_at += 1usize
+    }
+    let (list, list_error) = mem.alloc[usize](a, g.count + 1usize)
+    if list_error != ok { ret list_error }
+    let (listed, listed_error) = mem.alloc[bool](a, g.count + 1usize)
+    if listed_error != ok { ret listed_error }
+    var clear_at = 0usize
+    while clear_at < g.count {
+        listed[clear_at] = false
+        clear_at += 1usize
+    }
+    var order_at = 0usize
+    while order_at < g.order_count {
+        let module_index = g.order[order_at]
+        order_at += 1usize
+        if hot.stable[module_index] {
+            keep[module_index] = true
+            try settle_index(a, &s, fresh, module_index)
+            continue
+        }
+        if hot.unchanged[module_index] {
+            let (holds, edges_error) = settle_edges(a, &s, fresh, held[module_index])
+            if edges_error != ok { ret edges_error }
+            if holds {
+                keep[module_index] = true
+                fresh[module_index] = held[module_index]
+                try settle_index(a, &s, fresh, module_index)
+                continue
+            }
+            held[module_index] = no_bytes
+            try declare_late(a, c, g, module_index, list, listed)
+        }
+        // Rebuilt: its fresh interface stands for what depends on it.
+        try settle_interface(a, &s, fresh, c, g, module_index)
+        try settle_index(a, &s, fresh, module_index)
     }
     ret ok
 }
@@ -3830,12 +3985,221 @@ fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, re
 // Every module is parsed while the graph is loaded, so a syntax error anywhere in
 // the program surfaces here with the module that holds it.
 fn load_graph(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, root: str, arch: str, target_os: str) -> err {
-    ret load_graph_in(a, report, loaded, path, root, arch, target_os, "")
+    var no_hot: HotLoad = zero
+    var no_held: [1][]const u8 = zero
+    ret load_graph_in(a, report, loaded, &no_hot, no_held[0usize..0usize], path, root, arch, target_os, "")
 }
 
-fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
+// A hot build's loader (D322). The one-at-a-time loader parsed every module to find its
+// imports and then declared every module so the edge rule could compare; a warm build of
+// a two-million-line program spent six seconds there on modules it then kept. Here a
+// module whose text hashes as its artifact says, in the artifact's build mode, is
+// `unchanged`: its imports come from the artifact's Imports section and it is not
+// parsed. Once the graph is complete, a module is `stable` when it is unchanged and
+// every edge its artifact recorded names a stable module -- its fresh interface would
+// be its artifact's, since the same source declares the same things -- and a stable
+// module is kept as it stands. Everything else, and everything it imports, is parsed,
+// resolved and declared as before, and the edge rule decides the unchanged among them
+// against the interfaces of their targets, fresh or held.
+type HotLoad = struct {
+    on: bool,
+    release: bool,
+    triple: str,
+    directory: str,
+    scratch: *binary.Buffer,
+    // Per module, sized to the graph's capacity: whether the source is unchanged
+    // since its artifact, and whether the module is stable. The artifacts themselves
+    // travel beside it as `held`, which the link reads.
+    unchanged: []bool,
+    stable: []bool,
+}
+
+fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]const u8, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
+    try graph.begin(a, loaded, path, root, arch, target_os, project_root)
+    let (directory, directory_error) = artifact_directory(a, loaded, hot.release)
+    if directory_error != ok { ret directory_error }
+    hot.directory = directory
+    var mode_id = 0usize
+    if hot.release { mode_id = 1usize }
+    let (list, list_error) = mem.alloc[usize](a, loaded.modules.len)
+    if list_error != ok { ret list_error }
+    var module_at = 0usize
+    while loaded.scanned < loaded.count {
+        let wave_start = loaded.scanned
+        let wave_end = loaded.count
+        try graph.wave_texts(a, loaded, wave_start, wave_end)
+        var to_parse = 0usize
+        module_at = wave_start
+        while module_at < wave_end {
+            hot.unchanged[module_at] = false
+            let checkpoint = mem.mark(a)
+            let (artifact_path, path_error) = compiled_module_path(a, directory, loaded.modules[module_at].name, hot.triple)
+            if path_error != ok { ret path_error }
+            let (old, old_error) = load_artifact(a, artifact_path)
+            if old_error == ok {
+                let (old_hash, old_hash_error) = em.artifact_source_hash(old)
+                let (new_hash, new_hash_error) = em.source_text_hash(loaded.modules[module_at].text, hot.scratch)
+                let (old_mode, old_mode_error) = em.artifact_mode(old)
+                if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
+                    let (import_count, import_count_error) = em.artifact_import_count(old)
+                    if import_count_error != ok { ret import_count_error }
+                    var import_at = 0usize
+                    while import_at < import_count {
+                        let (name_index, qualifier_index, import_error) = em.artifact_import_at(old, import_at)
+                        if import_error != ok { ret import_error }
+                        let (name, name_error) = artifact_string(a, old, name_index)
+                        if name_error != ok { ret name_error }
+                        let (qualifier, qualifier_error) = artifact_string(a, old, qualifier_index)
+                        if qualifier_error != ok { ret qualifier_error }
+                        try graph.add_import(loaded, module_at, name, qualifier)
+                        import_at += 1usize
+                    }
+                    hot.unchanged[module_at] = true
+                    held[module_at] = old
+                }
+            }
+            if !hot.unchanged[module_at] {
+                mem.reset(a, checkpoint)
+                list[to_parse] = module_at
+                to_parse += 1usize
+            }
+            module_at += 1usize
+        }
+        try graph.front_modules(a, loaded, list[0usize..to_parse])
+        try graph.wave_imports(a, loaded, wave_start, wave_end)
+    }
+    try graph.finish(loaded)
+    // Stability, to a fixed point over the artifacts' edges: the import graph has no
+    // cycle, so a few rounds settle it.
+    let (module_entries, module_entries_error) = mem.alloc[lookup.Entry](a, loaded.count * 8usize + 256usize)
+    if module_entries_error != ok { ret module_entries_error }
+    var modules: lookup.Index = zero
+    try lookup.attach(&modules, module_entries)
+    var name_at = 0usize
+    while name_at < loaded.count {
+        try lookup.insert(&modules, 0usize, 0usize, loaded.modules[name_at].name, name_at)
+        hot.stable[name_at] = hot.unchanged[name_at]
+        name_at += 1usize
+    }
+    var settled = false
+    while !settled {
+        settled = true
+        module_at = 0usize
+        while module_at < loaded.count {
+            if hot.stable[module_at] {
+                let old = held[module_at]
+                let (edge_count, count_error) = em.artifact_dependency_count(old)
+                if count_error != ok { ret count_error }
+                var edge_at = 0usize
+                while edge_at < edge_count && hot.stable[module_at] {
+                    let (dependency, dependency_error) = em.dependency_at(old, edge_at)
+                    if dependency_error != ok { ret dependency_error }
+                    let (target_name, target_name_error) = artifact_string(a, old, dependency.module_index)
+                    if target_name_error != ok { ret target_name_error }
+                    let (target_at, found_target) = lookup.find(&modules, 0usize, 0usize, target_name)
+                    if !found_target || !hot.stable[target_at] {
+                        hot.stable[module_at] = false
+                        settled = false
+                    }
+                    edge_at += 1usize
+                }
+            }
+            module_at += 1usize
+        }
+    }
+    // What the front end must still cover now: every changed module and everything it
+    // imports, since declaring one needs its imports declared. An unchanged module
+    // that is not stable waits for settle, which parses it only if it must be rebuilt.
+    var needed = 0usize
+    module_at = 0usize
+    while module_at < loaded.count {
+        if !hot.unchanged[module_at] {
+            list[needed] = module_at
+            needed += 1usize
+        }
+        module_at += 1usize
+    }
+    var queue_at = 0usize
+    while queue_at < needed {
+        let module_index = list[queue_at]
+        let end = loaded.modules[module_index].first_import + loaded.modules[module_index].import_count
+        var import_at = loaded.modules[module_index].first_import
+        while import_at < end {
+            let imported = loaded.imports[import_at].target
+            var listed = false
+            var scan = 0usize
+            while scan < needed {
+                if list[scan] == imported {
+                    listed = true
+                    break
+                }
+                scan += 1usize
+            }
+            if !listed {
+                list[needed] = imported
+                needed += 1usize
+            }
+            import_at += 1usize
+        }
+        queue_at += 1usize
+    }
+    var unparsed = 0usize
+    queue_at = 0usize
+    while queue_at < needed {
+        if !loaded.modules[list[queue_at]].has_tree {
+            list[unparsed] = list[queue_at]
+            unparsed += 1usize
+        }
+        queue_at += 1usize
+    }
+    ret graph.front_modules(a, loaded, list[0usize..unparsed])
+}
+
+fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: *graph.Graph, args: []str, on: bool, release: bool) -> err {
+    hot.on = on
+    hot.release = release
+    hot.scratch = scratch
+    if !on { ret ok }
+    let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
+    if triple_error != ok { ret triple_error }
+    hot.triple = triple
+    let (scratch_storage, scratch_error) = mem.alloc[u8](a, 4194304usize)
+    if scratch_error != ok { ret scratch_error }
+    try binary.init(scratch, scratch_storage)
+    let (unchanged, unchanged_error) = mem.alloc[bool](a, loaded.modules.len)
+    if unchanged_error != ok { ret unchanged_error }
+    let (stable, stable_error) = mem.alloc[bool](a, loaded.modules.len)
+    if stable_error != ok { ret stable_error }
+    var at = 0usize
+    while at < loaded.modules.len {
+        unchanged[at] = false
+        stable[at] = false
+        at += 1usize
+    }
+    hot.unchanged = unchanged
+    hot.stable = stable
+    ret ok
+}
+
+// Every module's artifact bytes for the link, empty until the hot loader or settle
+// fills them.
+fn clear_held(held: [][]const u8) {
+    var no_bytes: []const u8 = zero
+    var at = 0usize
+    while at < held.len {
+        held[at] = no_bytes
+        at += 1usize
+    }
+}
+
+fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLoad, held: [][]const u8, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
     var no_lines: [1]usize = zero
-    let load_error = graph.load(a, loaded, path, root, arch, target_os, project_root)
+    var load_error = ok
+    if hot.on {
+        load_error = load_graph_hot(a, loaded, hot, held, path, root, arch, target_os, project_root)
+    } else {
+        load_error = graph.load(a, loaded, path, root, arch, target_os, project_root)
+    }
     if load_error != ok && loaded.has_failure && loaded.failure_module < loaded.count {
         let module = loaded.modules[loaded.failure_module]
         if loaded.failure_barrier {
@@ -4091,7 +4455,8 @@ fn resolve_per_module(resolver: *resolve.Resolver, loaded: *graph.Graph) -> err 
     try resolve.begin(resolver, loaded)
     var order_at = 0usize
     while order_at < loaded.order_count {
-        try resolve.module(resolver, loaded, loaded.order[order_at])
+        // An unparsed module (D322) declares nothing the program refers to.
+        if loaded.modules[loaded.order[order_at]].has_tree { try resolve.module(resolver, loaded, loaded.order[order_at]) }
         order_at += 1usize
     }
     ret ok
@@ -4101,7 +4466,7 @@ fn declarations_per_module(checker: *check.Checker, resolver: *resolve.Resolver,
     try check.begin_declarations(checker, resolver, loaded)
     var order_at = 0usize
     while order_at < loaded.order_count {
-        try check.declarations_module(checker, resolver, loaded, loaded.order[order_at])
+        if loaded.modules[loaded.order[order_at]].has_tree { try check.declarations_module(checker, resolver, loaded, loaded.order[order_at]) }
         order_at += 1usize
     }
     ret check.finish_declarations(checker)
@@ -4119,7 +4484,7 @@ fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loade
     while order_at < loaded.order_count {
         // A kept module's bodies are not checked (D319): its code is its artifact's, and
         // an instance of one of its generics is checked from its tree when it is made.
-        if loaded.order[order_at] < skip.len && skip[loaded.order[order_at]] {
+        if (loaded.order[order_at] < skip.len && skip[loaded.order[order_at]]) || !loaded.modules[loaded.order[order_at]].has_tree {
             order_at += 1usize
             continue
         }
@@ -4361,7 +4726,7 @@ type ModuleCode = struct {
 // One module lowered and selected (D314): its functions go on the builder's table and
 // its bodies into the pools, its code into the staging buffer, and then exact copies
 // are taken and the bodies discarded, so the pools hold one module at a time.
-fn codegen_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild, code: *ModuleCode) -> err {
+fn codegen_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild, held: [][]const u8, code: *ModuleCode) -> err {
     let mark = nir.mark(builder)
     let first = builder.function_count
     let lower_error = lower.module(checker, loaded, module_index, builder, signatures, bindings)
@@ -4376,7 +4741,7 @@ fn codegen_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *
     *context.line_count = 0usize
     var no_fold: Fold = zero
     try codegen_functions(a, report, loaded, builder, context, first, stage_offsets, true, &no_fold)
-    if hot.on { try write_hot_artifact(a, checker, loaded, builder, module_index, context, stage_offsets, hot) }
+    if hot.on { try write_hot_artifact(a, checker, loaded, builder, module_index, context, stage_offsets, hot, held) }
     let count = builder.function_count - first
     let (bytes, bytes_error) = mem.alloc[u8](a, context.output.count + 1usize)
     if bytes_error != ok { ret bytes_error }
@@ -4436,9 +4801,6 @@ fn function_span(code: ModuleCode, function_at: usize) -> (usize, usize) {
 type HotBuild = struct {
     on: bool,
     keep: []bool,
-    // Every module's artifact bytes (D320): a kept one as settle loaded and validated
-    // it, a fresh one as written, so the link reads nothing back from disk.
-    held: [][]const u8,
     directory: str,
     triple: str,
     release: bool,
@@ -4474,7 +4836,7 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild) -> err {
     let (string_slots, string_slots_error) = mem.alloc[usize](a, 131072usize)
     if string_slots_error != ok { ret string_slots_error }
     try em.init_strings(&hot.strings, string_values, string_slots)
-    let (sections, sections_error) = mem.alloc[em.Section](a, 7usize)
+    let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
     if sections_error != ok { ret sections_error }
     hot.sections = sections
     let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
@@ -4491,7 +4853,7 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild) -> err {
 
 // A module's artifact from the staging buffers, written before its bodies go: the
 // artifact's NIR section reads them.
-fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild) -> err {
+fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild, held_all: [][]const u8) -> err {
     var mode: em.BuildMode = .Debug
     if hot.release { mode = .Release }
     hot.artifact.count = 0usize
@@ -4499,7 +4861,7 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     let (held, held_error) = mem.alloc[u8](a, hot.artifact.count)
     if held_error != ok { ret held_error }
     try binary.pack(&hot.artifact, held)
-    hot.held[module_index] = held
+    held_all[module_index] = held
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
     if artifact_path_error != ok { ret artifact_path_error }
     ret save_bytes(a, artifact_path, held)
@@ -4509,13 +4871,13 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
 // the root first: what `link-em` does with the artifacts named in that order, which
 // is the order the source path lays functions out in, so a hot build's image is a
 // cold one's byte for byte (D214).
-fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, hot: *HotBuild, code: *Code) -> err {
+fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, hot: *HotBuild, held: [][]const u8, code: *Code) -> err {
     let (artifacts, artifacts_error) = mem.alloc[em_link.Artifact](a, loaded.count)
     if artifacts_error != ok { ret artifacts_error }
     var module_index = 0usize
     while module_index < loaded.count {
-        if hot.held[module_index].len != 0usize {
-            artifacts[module_index].bytes = hot.held[module_index]
+        if held[module_index].len != 0usize {
+            artifacts[module_index].bytes = held[module_index]
         } else {
             let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
             if artifact_path_error != ok { ret artifact_path_error }
@@ -4559,7 +4921,7 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
     ret ok
 }
 
-fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, hot: *HotBuild, code: *Code) -> err {
+fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, code: *Code) -> err {
     try lower.declare_globals(checker, builder)
     if hot.on { try init_hot_writer(a, hot) }
     var clear_at = 0usize
@@ -4618,7 +4980,7 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
             continue
         }
         var made: ModuleCode = zero
-        try codegen_module(a, report, loaded, checker, builder, signatures, bindings, next, &context, stage_offsets, hot, &made)
+        try codegen_module(a, report, loaded, checker, builder, signatures, bindings, next, &context, stage_offsets, hot, held, &made)
         codes[chunk_count] = made
         lowered[next] = true
         var fill = made.first_function
@@ -4640,7 +5002,7 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
         try report_count("nir instructions, largest module", builder.instruction_peak)
     }
     if hot.on {
-        try link_hot_artifacts(a, report, loaded, builder, hot, code)
+        try link_hot_artifacts(a, report, loaded, builder, hot, held, code)
         report.arena_used = mem.stats(a).used
         try report_phase(report, "link from artifacts")
         ret ok
@@ -5177,7 +5539,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
         report.build.target_os = args[5usize]
         report.phase_started = nptest_now()
         report.build.started = report.phase_started
-        let load_error = load_graph_in(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize], project_flag(args))
+        // A hot build's loader (D322): the artifacts decide what is parsed. Set up in a
+        // helper: `main` is at the bootstrap's cap of locals.
+        var hot_load: HotLoad = zero
+        var hot_scratch: binary.Buffer = zero
+        try init_hot_load(a, &hot_load, &hot_scratch, &loaded, args, hot_build, release_build)
+        let (held_all, held_all_error) = mem.alloc[[]const u8](a, loaded.modules.len)
+        if held_all_error != ok { ret held_all_error }
+        clear_held(held_all)
+        let load_error = load_graph_in(a, &report, &loaded, &hot_load, held_all, args[2usize], args[3usize], args[4usize], args[5usize], project_flag(args))
         report.arena_used = mem.stats(a).used
         try report_phase(&report, "load and parse")
         if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
@@ -5219,14 +5589,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // (D224). `keep` is what lowering skips below.
         let (keep, keep_error) = mem.alloc[bool](a, loaded.count)
         if keep_error != ok { ret keep_error }
-        let (held, held_error) = mem.alloc[[]const u8](a, loaded.count)
-        if held_error != ok { ret held_error }
-        var no_bytes: []const u8 = zero
-        var held_at = 0usize
-        while held_at < loaded.count {
-            held[held_at] = no_bytes
-            held_at += 1usize
-        }
+        let held = held_all[0usize..loaded.count]
         var keep_at = 0usize
         while keep_at < loaded.count {
             keep[keep_at] = false
@@ -5262,7 +5625,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if settle_triple_error != ok { ret settle_triple_error }
             var settle_mode: em.BuildMode = .Debug
             if release_build { settle_mode = .Release }
-            try settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep, held)
+            try settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep, held, &hot_load)
             report.arena_used = mem.stats(a).used
             try report_phase(&report, "settle")
         }
@@ -5446,7 +5809,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var hot: HotBuild = zero
             hot.on = hot_build
             hot.keep = keep
-            hot.held = held
             hot.directory = artifact_dir
             hot.release = release_build
             if hot_build {
@@ -5454,7 +5816,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if hot_triple_error != ok { ret hot_triple_error }
                 hot.triple = hot_triple
             }
-            try emit_per_module(a, &report, &loaded, &checker, &builder, &signatures, bindings, lowered_modules, machine_abi_of(args), &hot, &code)
+            try emit_per_module(a, &report, &loaded, &checker, &builder, &signatures, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code)
         } else {
             try emit_whole_program(a, &report, &loaded, &builder, emit_machine_code, writes_executable, machine_abi_of(args), &code)
         }
@@ -5477,7 +5839,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if string_slots_error != ok { ret string_slots_error }
                 var strings: em.StringTable = zero
                 try em.init_strings(&strings, string_values, string_slots)
-                let (sections, sections_error) = mem.alloc[em.Section](a, 7usize)
+                let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
                 if triple_error != ok { ret triple_error }

@@ -6607,3 +6607,54 @@ parses in 1.0 s (was 4.6), the five-hundred-thousand-line one in 0.24 s (was
 0.83), the compiler in 76 ms (was about 100); a wave is bounded by its largest
 module, and the compiler's second wave is `check.e`. What remains is the lexer and
 parser themselves, at about twenty megabytes a second a thread.
+
+## D322 -- A hot build parses what changed, and what it must
+
+A warm hot build (D319, D320) still lexed, parsed, resolved and declared every
+module, and wrote every module's fresh Interface, to decide that nothing had
+changed: six of a two-million-line program's twelve seconds. A module whose text
+hashes as its artifact says need not be parsed to be known.
+
+The artifact carries an Imports section (format 6): the module's `use`
+declarations in order, name and qualifier. The loader (`graph.begin`,
+`wave_texts`, `front_modules`, `add_import`, `wave_imports`, `finish`) is driven
+by the hot build in steps: a wave's texts are read, and a module whose artifact
+is there, validates, and records the text's hash and the build mode is
+`unchanged` -- its imports come from the artifact and it is not parsed. The graph
+is discovered in the order the one-at-a-time loader discovered it, so every
+module index is what it was. A module is then `stable` when it is unchanged and
+every edge its artifact recorded names a stable module, to a fixed point: its
+fresh Interface would be its artifact's, since the same source declares the same
+things, and it is kept as it stands. The first front end covers the changed
+modules and everything they import, and the resolver and the declaration sweep
+cover what was parsed.
+
+Settle walks the modules in dependency order, so a module's targets are decided
+and their interfaces final before its edges are read: a stable module is kept and
+its artifact's Interface indexed; a changed one is rebuilt and its fresh Interface
+written; an unchanged one has its edges checked against the interfaces so far --
+an artifact's or a fresh one -- and is kept if they hold, or else parsed, resolved
+and declared only now, with whatever it imports that was not, and rebuilt. The
+declaration sweep is reopened for a late module: signatures are not ready while it
+is declared, and `finish_declarations` evaluates its constants. Every sweep after
+settle skips a module with no tree; there is nothing in it the program refers to.
+
+Two things the walk depends on. A body hash covers the line the declaration
+starts on: a copy inlined into another module, or an instance made by one,
+carries this module's line numbers in its line table, so a function that moved
+down the file has a different body for them though its tokens are the same --
+without this, an edit above an inlined function left the importer's line table
+stale, in a hot build as in the incremental artifact build before it. And the
+format version is the compiler's promise that an artifact's hashes are what it
+would write: a change to any hash bumps it. Also found on the way: the bootstrap
+compiler cleared only the pointer of a `zero` slice, and a zero slice's length
+was whatever `rdx` last held -- every slice of slices it compiled carried that.
+
+Measured, warm and nothing changed: the compiler 0.86 s debug and 0.64 s release
+(was 1.1 and 1.0), a five-hundred-thousand-line program 1.5 s (was 3.1), a
+two-million-line program 6.1 s (was 12.6); an edit to a leaf module costs the
+warm build plus the module. Every image is the cold build's byte for byte, over
+comment, body, inlined-body and signature edits in both modes -- the suite's hot
+block runs the last two now. What remains at two million lines is the artifacts'
+validation (2 s, in the load phase), the link from artifacts (1.1 s) and the
+manifest's SHA-256 over the sources.

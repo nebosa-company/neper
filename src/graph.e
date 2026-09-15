@@ -77,6 +77,12 @@ type Graph = struct {
     largest_bytes: usize,
     // The source directories listed once (D321).
     listings: project.Listings,
+    // The front end's workers and their assignment scratch (D321), and how many modules
+    // have had their wave (D322): `begin` sets them up, `wave_imports` advances.
+    workers: []Worker,
+    assignment: []usize,
+    list: []usize,
+    scanned: usize,
 }
 
 fn same(a: str, b: str) -> bool {
@@ -484,15 +490,20 @@ fn worker_arena_bytes(text_bytes: usize) -> usize {
     ret text_bytes * 16usize + 65536usize
 }
 
-fn front_wave(a: *mem.Arena, g: *Graph, workers: []Worker, wave_start: usize, wave_end: usize, assignment: []usize) -> err {
-    let wave_count = wave_end - wave_start
+// The front end over a list of modules (D322): a wave's modules, or the unchanged
+// modules a hot build finds it needs after all.
+fn front_modules(a: *mem.Arena, g: *Graph, modules: []const usize) -> err {
+    let wave_count = modules.len
+    if wave_count == 0usize { ret ok }
+    let workers = g.workers
+    let assignment = g.assignment
     var worker_count = wave_count
     if worker_count > workers.len { worker_count = workers.len }
     // Each module goes to the worker with the least text so far, largest first, so the
     // wave takes about as long as its share and not as long as its largest few
-    // modules together. The assignment array holds each worker's modules in module
-    // order, in worker-major runs, then the wave's modules by size, then each module's
-    // worker.
+    // modules together. The assignment array holds each worker's modules in list
+    // order, in worker-major runs, then the list's modules by size, then each list
+    // position's worker.
     let capacity = g.modules.len
     let order = assignment[capacity..capacity + wave_count]
     let owner = assignment[capacity * 2usize..capacity * 2usize + wave_count]
@@ -504,7 +515,7 @@ fn front_wave(a: *mem.Arena, g: *Graph, workers: []Worker, wave_start: usize, wa
     }
     var order_at = 0usize
     while order_at < wave_count {
-        order[order_at] = wave_start + order_at
+        order[order_at] = order_at
         order_at += 1usize
     }
     order_at = 0usize
@@ -512,7 +523,7 @@ fn front_wave(a: *mem.Arena, g: *Graph, workers: []Worker, wave_start: usize, wa
         var best = order_at
         var scan = order_at + 1usize
         while scan < wave_count {
-            if g.modules[order[scan]].text.len > g.modules[order[best]].text.len { best = scan }
+            if g.modules[modules[order[scan]]].text.len > g.modules[modules[order[best]]].text.len { best = scan }
             scan += 1usize
         }
         let swap = order[order_at]
@@ -524,8 +535,8 @@ fn front_wave(a: *mem.Arena, g: *Graph, workers: []Worker, wave_start: usize, wa
             if loads[worker_at] < loads[lightest] { lightest = worker_at }
             worker_at += 1usize
         }
-        loads[lightest] += g.modules[order[order_at]].text.len
-        owner[order[order_at] - wave_start] = lightest
+        loads[lightest] += g.modules[modules[order[order_at]]].text.len
+        owner[order[order_at]] = lightest
         order_at += 1usize
     }
     worker_at = 0usize
@@ -534,15 +545,16 @@ fn front_wave(a: *mem.Arena, g: *Graph, workers: []Worker, wave_start: usize, wa
         var bytes = 0usize
         var largest = 0usize
         let first = filled
-        var module_at = wave_start
-        while module_at < wave_end {
-            if owner[module_at - wave_start] == worker_at {
+        var list_at = 0usize
+        while list_at < wave_count {
+            if owner[list_at] == worker_at {
+                let module_at = modules[list_at]
                 assignment[filled] = module_at
                 filled += 1usize
                 bytes += g.modules[module_at].text.len
                 if g.modules[module_at].text.len > largest { largest = g.modules[module_at].text.len }
             }
-            module_at += 1usize
+            list_at += 1usize
         }
         workers[worker_at].g = g
         workers[worker_at].modules = assignment[first..filled]
@@ -662,7 +674,10 @@ fn visit(g: *Graph, module_index: usize) -> err {
 // `project_root` names the project explicitly; empty, it is discovered from the operand
 // (spec section 2). A file outside the project -- a generated test runner -- is built
 // as part of it that way (D263).
-fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, host_os: str, project_root: str) -> err {
+// The loader in steps (D322), so a hot build can put its artifacts between them: a
+// module unchanged since its artifact takes its imports from the artifact and is not
+// parsed unless something that changed imports it.
+fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, host_os: str, project_root: str) -> err {
     if !project.valid_arch(arch) || !project.valid_os(host_os) || !project.valid_target(arch, host_os) { ret project.InvalidTarget }
     var discovered = project.explicit(project_root)
     if project_root.len == 0usize {
@@ -678,6 +693,7 @@ fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str
     g.os = host_os
     g.count = 0usize
     g.import_count = 0usize
+    g.scanned = 0usize
     let (root_index, root_error) = add_module(a, g, root_name, root_path)
     if root_error != ok { ret root_error }
     let (workers, workers_error) = mem.alloc[Worker](a, FRONT_WORKERS)
@@ -688,48 +704,79 @@ fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str
         workers[clear_at] = blank
         clear_at += 1usize
     }
+    g.workers = workers
     let (assignment, assignment_error) = mem.alloc[usize](a, g.modules.len * 3usize)
     if assignment_error != ok { ret assignment_error }
-    var wave_start = 0usize
-    while wave_start < g.count {
-        let wave_end = g.count
-        var module_index = wave_start
-        while module_index < wave_end {
-            let (text, load_error) = source.load(a, g.modules[module_index].path)
-            if load_error != ok { ret load_error }
-            g.modules[module_index].text = text
-            g.total_bytes += text.len
-            if text.len > g.largest_bytes { g.largest_bytes = text.len }
-            module_index += 1usize
-        }
-        try front_wave(a, g, workers, wave_start, wave_end, assignment)
-        module_index = wave_start
-        while module_index < wave_end {
-            try collect_imports(a, g, module_index)
-            let end = g.modules[module_index].first_import + g.modules[module_index].import_count
-            var import_index = g.modules[module_index].first_import
-            while import_index < end {
-                let (existing, found) = find_module(g, g.imports[import_index].name)
-                if found {
-                    g.imports[import_index].target = existing
-                } else {
-                    let (path, resolve_error) = resolve_source(a, g, g.imports[import_index].name)
-                    if resolve_error != ok {
-                        g.failure_module = module_index
-                        g.failure_import = g.imports[import_index].name
-                        g.has_import_failure = true
-                        ret resolve_error
-                    }
-                    let (added_module, add_error) = add_module(a, g, g.imports[import_index].name, path)
-                    if add_error != ok { ret add_error }
-                    g.imports[import_index].target = added_module
-                }
-                import_index += 1usize
-            }
-            module_index += 1usize
-        }
-        wave_start = wave_end
+    g.assignment = assignment
+    let (list, list_error) = mem.alloc[usize](a, g.modules.len)
+    if list_error != ok { ret list_error }
+    g.list = list
+    ret ok
+}
+
+// The texts of the modules discovered since the last wave.
+fn wave_texts(a: *mem.Arena, g: *Graph, wave_start: usize, wave_end: usize) -> err {
+    var module_index = wave_start
+    while module_index < wave_end {
+        let (text, load_error) = source.load(a, g.modules[module_index].path)
+        if load_error != ok { ret load_error }
+        g.modules[module_index].text = text
+        g.total_bytes += text.len
+        if text.len > g.largest_bytes { g.largest_bytes = text.len }
+        module_index += 1usize
     }
+    ret ok
+}
+
+// An import a module's artifact recorded (D322), in place of parsing it: a module's
+// imports are added together, before any other module's.
+fn add_import(g: *Graph, module_index: usize, name: str, qualifier: str) -> err {
+    if g.import_count == g.imports.len { ret Capacity }
+    if g.modules[module_index].import_count == 0usize {
+        g.modules[module_index].first_import = g.import_count
+    } else {
+        if g.modules[module_index].first_import + g.modules[module_index].import_count != g.import_count { ret Capacity }
+    }
+    g.imports[g.import_count] = Import { name: name, qualifier: qualifier, target: 0usize }
+    g.import_count += 1usize
+    g.modules[module_index].import_count += 1usize
+    ret ok
+}
+
+// The wave's imports, in module order -- the order the one-at-a-time loop discovered
+// modules in, so the indices are the same -- and what they name is the next wave. A
+// parsed module's come from its tree; an unparsed one's were added already.
+fn wave_imports(a: *mem.Arena, g: *Graph, wave_start: usize, wave_end: usize) -> err {
+    var module_index = wave_start
+    while module_index < wave_end {
+        if g.modules[module_index].has_tree { try collect_imports(a, g, module_index) }
+        let end = g.modules[module_index].first_import + g.modules[module_index].import_count
+        var import_index = g.modules[module_index].first_import
+        while import_index < end {
+            let (existing, found) = find_module(g, g.imports[import_index].name)
+            if found {
+                g.imports[import_index].target = existing
+            } else {
+                let (path, resolve_error) = resolve_source(a, g, g.imports[import_index].name)
+                if resolve_error != ok {
+                    g.failure_module = module_index
+                    g.failure_import = g.imports[import_index].name
+                    g.has_import_failure = true
+                    ret resolve_error
+                }
+                let (added_module, add_error) = add_module(a, g, g.imports[import_index].name, path)
+                if add_error != ok { ret add_error }
+                g.imports[import_index].target = added_module
+            }
+            import_index += 1usize
+        }
+        module_index += 1usize
+    }
+    g.scanned = wave_end
+    ret ok
+}
+
+fn finish(g: *Graph) -> err {
     var i = 0usize
     while i < g.count {
         if g.modules[i].visit_state == 0u8 {
@@ -739,4 +786,21 @@ fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str
         i += 1usize
     }
     ret ok
+}
+
+fn load(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: str, host_os: str, project_root: str) -> err {
+    try begin(a, g, root_path, toolchain_root, arch, host_os, project_root)
+    while g.scanned < g.count {
+        let wave_start = g.scanned
+        let wave_end = g.count
+        try wave_texts(a, g, wave_start, wave_end)
+        var module_index = wave_start
+        while module_index < wave_end {
+            g.list[module_index - wave_start] = module_index
+            module_index += 1usize
+        }
+        try front_modules(a, g, g.list[0usize..wave_end - wave_start])
+        try wave_imports(a, g, wave_start, wave_end)
+    }
+    ret finish(g)
 }

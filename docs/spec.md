@@ -3575,6 +3575,7 @@ both as a module and as the Windows variant of `thing`.
 | NIR | typed IR for exported and inline-eligible functions and for every generic template, each with its **body hash**; kind 4 is reserved and the section is not written until a reader exists (D320) -- nothing read it, and at two million lines it was most of the artifact bytes |
 | Code | machine code (or SPIR-V/PTX) with relocations: the module's own functions, plus the monomorphised instances and device-compiled helpers it emitted under module-local linkage; a relocation names its target by module, name and instance, or the library and symbol an `@import` binds |
 | Debug | the standard-format debug sections of §13 — line tables, and the locals-and-types subset in DWARF or CodeView — plus the source hash; from M4, the neper-format side table beside them |
+| Imports | the module's `use` declarations in order, each a module name and a qualifier (format 6, D322): a hot build discovers the program's graph from an unchanged module's artifact without parsing it |
 
 The file is little-endian regardless of target. Its fixed 32-byte header is: bytes
 `0..3` magic `NEPM`; `u16` format version; `u16` header size; `u32` target-triple
@@ -3584,7 +3585,7 @@ field zeroed. The directory has one 24-byte entry per section: `u32` kind, `u32`
 flags, `u64` offset, `u64` length. Sections are ordered by kind, eight-byte aligned,
 non-overlapping and contained in the file; unknown optional kinds are skipped and an
 unknown required kind rejects the file. The Strings section opens with a `u32`
-count and one `u32` offset per string from the section's start (format 5), so a
+count and one `u32` offset per string from the section's start (format 5; format 6 adds the Imports section), so a
 string is found in one read; each string is UTF-8 encoded as `u32` byte length
 followed by bytes, with no terminator. Integers in Interface, Deps and NIR use
 fixed-width little-endian fields; lists begin with `u32` counts. Every NIR opcode has

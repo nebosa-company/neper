@@ -1740,6 +1740,30 @@ for hot_mode in --release --time; do
     hot_clean_edited=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_clean" $hot_mode 2>/dev/null)
     [ "$hot_clean_edited" = 'executable written' ]
     cmp "$hot_exe" "$hot_clean"
+    # An edit to the body `main` inlines (D322): a body edge, so the unchanged `main` is
+    # parsed and rebuilt only now; then a signature edit, which rebuilds both.
+    cp "$hot_fixture/edits/dep_inlined.e" "$hot_source/dep.e"
+    hot_inlined=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
+    [ "$hot_inlined" = 'executable written' ]
+    chmod +x "$hot_exe"
+    hot_status=0
+    "$hot_exe" || hot_status=$?
+    [ "$hot_status" -eq 9 ]
+    hot_clean_inlined=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_clean" $hot_mode 2>/dev/null)
+    [ "$hot_clean_inlined" = 'executable written' ]
+    cmp "$hot_exe" "$hot_clean"
+    cp "$hot_fixture/edits/dep_signature.e" "$hot_source/dep.e"
+    cp "$hot_fixture/edits/main_signature.e" "$hot_source/main.e"
+    hot_signed=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
+    [ "$hot_signed" = 'executable written' ]
+    chmod +x "$hot_exe"
+    hot_status=0
+    "$hot_exe" || hot_status=$?
+    [ "$hot_status" -eq 10 ]
+    hot_clean_signed=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_clean" $hot_mode 2>/dev/null)
+    [ "$hot_clean_signed" = 'executable written' ]
+    cmp "$hot_exe" "$hot_clean"
+    cp "$hot_fixture/src/main.e" "$hot_source/main.e"
 done
 # Nested inlining (D212): a release build copies `leaf.add` into `mid.twice` and that
 # into `main`, the trap record names leaf.e through both copies with one frame in
@@ -2740,9 +2764,9 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '5' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '6' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
-[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '7' ]
+[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '8' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
 interface_artifact_path="$test_build/interface.x64-linux.em"
 interface_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/em/interface/src/main.e" "$repo" x64 linux "$interface_artifact_path")

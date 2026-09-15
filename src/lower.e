@@ -2052,6 +2052,8 @@ fn begin_inline_oracle(c: *check.Checker, oracle: *nir.Builder, entry_count: *us
 // bodies are checked, which is the parse the module already had. The cursor and the
 // defer stack are the walk's, carried between calls.
 fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, entries: []nir.InlineEntry, entry_count: *usize, module_index: usize, cursor: *usize, oracle_defers: *DeferState) -> err {
+    // An unparsed module (D322) has nothing the program lowers; both oracles skip it.
+    if !g.modules[module_index].has_tree { ret ok }
     // The second oracle visits the first's entries alone (D310), and a module with
     // none of them is not even parsed (D313): with one candidate in a thousand
     // functions kept, the second pass was a parse of the whole program for nothing.

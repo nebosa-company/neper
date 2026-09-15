@@ -107,7 +107,7 @@ type CodeRelocation = struct {
     symbol_index: usize,
 }
 
-fn format_version() -> usize { ret 5usize }
+fn format_version() -> usize { ret 6usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -121,6 +121,9 @@ fn globals_kind() -> usize { ret 7usize }
 // Section 13's line table per code function (D209): rows of a code offset within the
 // function, a line, and the path as a string index.
 fn lines_kind() -> usize { ret 8usize }
+// The module's `use` declarations in order, name and qualifier (D322, format 6): a hot
+// build discovers the graph from an unchanged module's artifact without parsing it.
+fn imports_kind() -> usize { ret 9usize }
 
 fn declaration_function_kind() -> usize { ret 1usize }
 fn declaration_aggregate_kind() -> usize { ret 2usize }
@@ -138,7 +141,7 @@ fn mode_id(mode: BuildMode) -> usize {
 }
 
 fn known_kind(kind: usize) -> bool {
-    ret kind >= strings_kind() && kind <= lines_kind()
+    ret kind >= strings_kind() && kind <= imports_kind()
 }
 
 // One row of a code function's line table as an artifact carries it.
@@ -712,6 +715,10 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_wait_u32") { ret ("wait_u32", true) }
     if same(name, "neper_os_wake_one_u32") { ret ("wake_one_u32", true) }
     if same(name, "neper_os_wake_all_u32") { ret ("wake_all_u32", true) }
+    // `thread_create` is generic and intercepted at the call (D321): no declaration.
+    if same(name, "neper_os_thread_create") { ret ("", false) }
+    if same(name, "neper_os_thread_join") { ret ("thread_join", true) }
+    if same(name, "neper_os_thread_detach") { ret ("thread_detach", true) }
     ret (name, true)
 }
 
@@ -859,6 +866,13 @@ fn body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_
     if function.source_end > function.source_start && function.module_index < g.count {
         let marker_error = binary.byte(scratch, 2usize)
         if marker_error != ok { ret (0usize, marker_error) }
+        // The line the declaration starts on is part of the hash (D322): a copy of the
+        // body inlined into another module, or an instance made by one, carries this
+        // module's line numbers in its line table, so a function that moved down the
+        // file has a different body for them even when its tokens are the same.
+        let line = lex.line_of(g.modules[function.module_index].text, g.modules[function.module_index].lines, function.source_start)
+        let line_error = binary.little_u32(scratch, line)
+        if line_error != ok { ret (0usize, line_error) }
         let tokens_error = write_declaration_tokens_canonical(g.modules[function.module_index].text, g.modules[function.module_index].tokens, function.source_start, function.source_end, scratch)
         if tokens_error != ok { ret (0usize, tokens_error) }
     } else {
@@ -996,6 +1010,14 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
     if module_name_error != ok { ret module_name_error }
     let (source_path, source_path_error) = intern(table, g.modules[module_index].path)
     if source_path_error != ok { ret source_path_error }
+    var import_at = g.modules[module_index].first_import
+    while import_at < g.modules[module_index].first_import + g.modules[module_index].import_count {
+        let (import_name, import_name_error) = intern(table, g.imports[import_at].name)
+        if import_name_error != ok { ret import_name_error }
+        let (import_qualifier, import_qualifier_error) = intern(table, g.imports[import_at].qualifier)
+        if import_qualifier_error != ok { ret import_qualifier_error }
+        import_at += 1usize
+    }
     let (function_first, function_end) = span_of(c, span_functions(), module_index)
     var function_at = function_first
     while function_at < function_end {
@@ -2152,7 +2174,7 @@ fn write_interface_artifact(c: *check.Checker, g: *graph.Graph, module_index: us
 }
 
 fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, target_triple: str, mode: BuildMode, machine: *emit_x64.Buffer, function_offsets: []usize, relocations: []codegen_x64.Relocation, relocation_count: usize, lines: []codegen_x64.LineEntry, line_count: usize, strings: *StringTable, section_values: []Section, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
-    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 7usize || output.count != 0usize { ret InvalidArtifact }
+    if module_index >= g.count || target_triple.len == 0usize || section_values.len != 8usize || output.count != 0usize { ret InvalidArtifact }
     try reset_strings(strings)
     let (target_index, target_error) = intern(strings, target_triple)
     if target_error != ok { ret target_error }
@@ -2183,7 +2205,53 @@ fn write_module(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, modul
     try begin_section(&writer, lines_kind(), required_flag())
     try write_lines(builder, c, module_index, strings, machine, function_offsets, lines, line_count, output)
     try end_section(&writer)
+    try begin_section(&writer, imports_kind(), required_flag())
+    try write_imports(g, module_index, strings, output)
+    try end_section(&writer)
     ret finish(&writer)
+}
+
+fn write_imports(g: *graph.Graph, module_index: usize, table: *StringTable, output: *binary.Buffer) -> err {
+    let first = g.modules[module_index].first_import
+    let count = g.modules[module_index].import_count
+    try binary.little_u32(output, count)
+    var at = first
+    while at < first + count {
+        let (name_index, name_error) = string_index(table, g.imports[at].name)
+        if name_error != ok { ret name_error }
+        let (qualifier_index, qualifier_error) = string_index(table, g.imports[at].qualifier)
+        if qualifier_error != ok { ret qualifier_error }
+        try binary.little_u32(output, name_index)
+        try binary.little_u32(output, qualifier_index)
+        at += 1usize
+    }
+    ret ok
+}
+
+// The Imports section read: the count, then each import's name and qualifier string
+// indexes. An artifact without the section has no imports.
+fn artifact_import_count(bytes: []const u8) -> (usize, err) {
+    let validation_error = check_layout(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (section, found, section_error) = find_section_unchecked(bytes, imports_kind())
+    if section_error != ok { ret (0usize, section_error) }
+    if !found { ret (0usize, ok) }
+    if section.length < 4usize { ret (0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, section.offset)
+    if count_error != ok || count > (section.length - 4usize) / 8usize { ret (0usize, InvalidArtifact) }
+    ret (count, ok)
+}
+
+fn artifact_import_at(bytes: []const u8, index: usize) -> (usize, usize, err) {
+    let (count, count_error) = artifact_import_count(bytes)
+    if count_error != ok { ret (0usize, 0usize, count_error) }
+    if index >= count { ret (0usize, 0usize, InvalidArtifact) }
+    let (section, found, section_error) = find_section_unchecked(bytes, imports_kind())
+    if section_error != ok || !found { ret (0usize, 0usize, InvalidArtifact) }
+    let (name_index, name_error) = binary.read_u32(bytes, section.offset + 4usize + index * 8usize)
+    let (qualifier_index, qualifier_error) = binary.read_u32(bytes, section.offset + 8usize + index * 8usize)
+    if name_error != ok || qualifier_error != ok { ret (0usize, 0usize, InvalidArtifact) }
+    ret (name_index, qualifier_index, ok)
 }
 
 fn begin(writer: *Writer, output: *binary.Buffer, sections: []Section, target_triple_index: usize, flags: usize, mode: BuildMode) -> err {
