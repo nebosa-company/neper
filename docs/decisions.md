@@ -6391,3 +6391,29 @@ cap's worth per entry and drops the rest (D310), so sized like the builder they 
 two thirds of the release build's arena. Two-million lines: the oracles 21 s to 5 s,
 the arena 10.0 GB to 5.8 GB; the compiler's own release image byte-identical, its
 oracles 356 ms to 149 ms. The incremental sweep keeps the separate first oracle.
+
+## D314 -- An executable is lowered and selected one module at a time
+
+The NIR of a two-million-line program is nine million instructions, and D306 held all
+of them at once: the body pools were sized from the whole program and the pruner, the
+register allocator and the selector ran after the last module was lowered. Now the
+executable path takes a module as `lower.reachable_modules` discovered it -- the same
+order, one step at a time -- lowers it, selects every function of it into a staging
+buffer, keeps an exact copy of the code, the relocations and the line rows, and
+discards the bodies before the next module; the body pools are sized from the largest
+module. What `main` reaches is then found over the relocations, the edges the pruner
+walked over instructions and the walk `em_link` already makes over artifacts, and the
+kept functions are copied into the image's buffer in order with the fold, the function
+table and the references compacted to what was kept. The artifact, object and
+disassembly paths keep the whole-program lowering, since they keep every function.
+
+Debug and release images of the compiler are byte-identical to the whole-program
+path's. Measured with a release-built compiler on the two-million-line program:
+release 46 s wall and a 710 MB peak working set (68 s and 2.1 GB before D313),
+debug 44 s and 815 MB; the largest module lowers to 81 thousand instructions against
+a pool of 373 thousand. The cost is selecting code the pruner would have dropped: that
+program reaches 7 thousand of its 165 thousand functions, and selecting the rest is
+seven seconds of the wall -- the price of not holding the program to find out which.
+The `--stats` rows for the compiler's peak had read 2.1 GB for the debug-built
+compiler whatever the pools held: its debug build fills every allocation (section 11),
+so the row measured the arena; a release-built compiler measures the program.

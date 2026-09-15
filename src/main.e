@@ -1560,9 +1560,9 @@ fn report_counts(loaded: *graph.Graph, resolver: *resolve.Resolver, checker: *ch
     try report_count("globals", checker.global_count)
     try report_count("generic arguments", checker.generic_argument_count)
     try report_count("nir functions", builder.function_count)
-    try report_count("nir blocks", builder.block_count)
-    try report_count("nir instructions", builder.instruction_count)
-    try report_count("nir operands", builder.operand_count)
+    try report_count("nir blocks", builder.block_count + builder.block_total)
+    try report_count("nir instructions", builder.instruction_count + builder.instruction_total)
+    try report_count("nir operands", builder.operand_count + builder.operand_total)
     try report_count("nir function refs", builder.function_ref_count)
     try report_count("nir strings", builder.string_count)
     ret ok
@@ -2791,7 +2791,14 @@ fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signat
     ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
-fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph, report: *Sink) -> err {
+// What the body pools are sized from (D314): the largest module when they hold one
+// module at a time, the program when they hold it whole.
+fn body_bytes_of(loaded: *graph.Graph, per_module: bool) -> usize {
+    if per_module { ret loaded.largest_bytes }
+    ret loaded.total_bytes
+}
+
+fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph, report: *Sink, body_bytes: usize) -> err {
     // Every module carries its own copy of the generic instances it uses, so the
     // NIR function count scales with instantiation sites, not with declarations.
     //
@@ -2804,9 +2811,9 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     // program past half a million instructions exists.
     let total = loaded.total_bytes
     let function_capacity = sized(16384usize, total, 128usize)
-    let block_capacity = sized(65536usize, total, 16usize)
-    let instruction_capacity = sized(262144usize, total, 4usize)
-    let operand_capacity = sized(1048576usize, total, 4usize)
+    let block_capacity = sized(65536usize, body_bytes, 16usize)
+    let instruction_capacity = sized(262144usize, body_bytes, 4usize)
+    let operand_capacity = sized(1048576usize, body_bytes, 4usize)
     let (functions, functions_error) = mem.alloc[nir.Function](a, function_capacity)
     if functions_error != ok { ret functions_error }
     report.build.pools[stats.POOL_NIR_FUNCTIONS] = functions.len
@@ -4045,6 +4052,526 @@ fn init_first_oracle(a: *mem.Arena, oracle: *nir.Builder, signatures: *nir.Signa
 }
 
 
+// What the code emission leaves for the link (D314): the machine code, where each kept
+// function starts in it, and the relocations and line rows over it.
+type Code = struct {
+    machine: emit_x64.Buffer,
+    function_offsets: []usize,
+    relocations: []codegen_x64.Relocation,
+    relocation_count: usize,
+    lines: []codegen_x64.LineEntry,
+    line_count: usize,
+}
+
+// The fold (D130, D157): two functions that compile to the same bytes share one copy,
+// keyed by the content hash the `.em` carries and folded in the same order, so an
+// executable linked from artifacts and one compiled from source come out identical.
+type Fold = struct {
+    wanted: bool,
+    hashes: []usize,
+    offsets: []usize,
+    count: usize,
+    scratch: binary.Buffer,
+}
+
+fn init_fold(a: *mem.Arena, fold: *Fold, function_count: usize) -> err {
+    fold.wanted = true
+    let (hashes, hashes_error) = mem.alloc[usize](a, function_count + 1usize)
+    if hashes_error != ok { ret hashes_error }
+    fold.hashes = hashes
+    let (offsets, offsets_error) = mem.alloc[usize](a, function_count + 1usize)
+    if offsets_error != ok { ret offsets_error }
+    fold.offsets = offsets
+    let (scratch, scratch_error) = mem.alloc[usize](a, 2097152usize)
+    if scratch_error != ok { ret scratch_error }
+    try binary.init(&fold.scratch, scratch)
+    ret ok
+}
+
+// Whether the function at `start..end` of `output` duplicates one already folded, and
+// where that one is. A function too large for the scratch is simply not folded: the
+// hash cannot be formed, so it is left unique, which is always safe.
+fn fold_function(loaded: *graph.Graph, builder: *nir.Builder, output: *emit_x64.Buffer, start: usize, end: usize, relocations: []codegen_x64.Relocation, relocation_count: usize, record_as: usize, fold: *Fold) -> (usize, bool) {
+    fold.scratch.count = 0usize
+    let hash_input_error = em.write_code_hash_input(loaded, builder, output, start, end, relocations, relocation_count, &fold.scratch)
+    if hash_input_error != ok { ret (0usize, false) }
+    let (content, content_error) = artifact_hash.xxhash64(fold.scratch.bytes[0usize..fold.scratch.count])
+    if content_error != ok { ret (0usize, false) }
+    var fold_at = 0usize
+    while fold_at < fold.count {
+        if fold.hashes[fold_at] == content { ret (fold.offsets[fold_at], true) }
+        fold_at += 1usize
+    }
+    if fold.count < fold.hashes.len {
+        fold.hashes[fold.count] = content
+        fold.offsets[fold.count] = record_as
+        fold.count += 1usize
+    }
+    ret (0usize, false)
+}
+
+// Section 13's per-function pass for the functions from `first` on: live ranges and
+// registers, then the machine code into the context's output, with the fold when an
+// executable is being made. A selection failure is printed and ends the build here.
+fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, context: *codegen_x64.FunctionContext, first: usize, function_offsets: []usize, emit: bool, fold: *Fold) -> err {
+    var function_at = first
+    while function_at < builder.function_count {
+        if report.timing { report.regalloc_ns = report.regalloc_ns -% nptest_now() }
+        let (stack_slots, allocation_error) = regalloc.allocate(builder, function_at, codegen_x64.register_pool_count(), context.ranges, context.allocations, a)
+        if report.timing { report.regalloc_ns = report.regalloc_ns +% nptest_now() }
+        if allocation_error != ok { ret allocation_error }
+        if emit {
+            let function_start = context.output.count
+            function_offsets[function_at] = function_start
+            let relocation_start = *context.relocation_count
+            let line_start = *context.line_count
+            if report.timing { report.codegen_ns = report.codegen_ns -% nptest_now() }
+            let codegen_error = codegen_x64.function(builder, function_at, stack_slots, context)
+            if report.timing { report.codegen_ns = report.codegen_ns +% nptest_now() }
+            if codegen_error != ok {
+                try print_codegen_diagnostic(report, loaded, builder.functions[function_at], context)
+                try finish_report(report)
+                os.exit(1i32)
+                ret ok
+            }
+            if fold.wanted {
+                if report.timing { report.fold_ns = report.fold_ns -% nptest_now() }
+                let (folded_at, folded) = fold_function(loaded, builder, context.output, function_start, context.output.count, context.relocations, *context.relocation_count, function_start, fold)
+                if folded {
+                    context.output.count = function_start
+                    *context.relocation_count = relocation_start
+                    *context.line_count = line_start
+                    function_offsets[function_at] = folded_at
+                }
+                if report.timing { report.fold_ns = report.fold_ns +% nptest_now() }
+            }
+        }
+        function_at += 1usize
+    }
+    ret ok
+}
+
+fn machine_abi_of(args: []str) -> codegen_x64.Abi {
+    if same(args[5usize], "windows") { ret .Windows }
+    ret .SystemV
+}
+
+// The whole lowered program selected in one pass, for the artifact, object and
+// disassembly paths that keep every function (D314 moved the executable path out).
+fn emit_whole_program(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, emit_machine_code: bool, want_fold: bool, abi: codegen_x64.Abi, code: *Code) -> err {
+    let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, builder.instruction_count + 4096usize)
+    if ranges_error != ok { ret ranges_error }
+    let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, builder.instruction_count + 4096usize)
+    if allocations_error != ok { ret allocations_error }
+    if allocations_error != ok { ret allocations_error }
+    var machine_capacity = 1usize
+    if emit_machine_code {
+        // One entry per emitted byte, so this allocation is eight times the
+        // code it will hold and it dominates the arena. Selecting the compiler
+        // itself needs between 16 and 32 bytes per NIR instruction, measured by
+        // bisecting the multiplier until emission reports `emit_x64.Capacity`;
+        // 96 kept three to six times that; 56 -- twice the 28 the checks of
+        // D194-D202 brought it to -- is what leaves room for the inlining oracle
+        // (D207) in the default arena, and the line rows (D209), at most one per
+        // instruction and sixteen bytes each, are the eight on top. Overrunning it
+        // is a clean `Capacity` error, never a wrong instruction.
+        // ... plus the symbol table appended after the code (D206), a header and a
+        // name per function.
+        var names_total = 0usize
+        var named_at = 0usize
+        while named_at < builder.function_count {
+            names_total += builder.functions[named_at].module_name.len + 1usize + builder.functions[named_at].name.len
+            named_at += 1usize
+        }
+        machine_capacity = builder.instruction_count * 24usize + builder.function_count * 24usize + names_total + 65536usize
+    }
+    let (machine_storage, machine_storage_error) = mem.alloc[u8](a, machine_capacity)
+    if machine_storage_error != ok { ret machine_storage_error }
+    report.build.pools[stats.POOL_MACHINE] = machine_storage.len
+    var machine: emit_x64.Buffer = zero
+    try emit_x64.init(&machine, machine_storage)
+    let (block_offsets, block_offsets_error) = mem.alloc[usize](a, builder.block_count + 1usize)
+    if block_offsets_error != ok { ret block_offsets_error }
+    let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, builder.instruction_count + 16usize)
+    if fixups_error != ok { ret fixups_error }
+    // Two per trap site -- the call and the symbol table (D206) -- and one per call,
+    // so the count follows the instructions rather than a constant.
+    let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, builder.instruction_count + 4096usize)
+    if relocations_error != ok { ret relocations_error }
+    report.build.pools[stats.POOL_RELOCATIONS] = relocations.len
+    // Indexed by NIR function index, like the signature table above: sized to the
+    // function count and not to a constant of its own.
+    let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.function_count + 1usize)
+    if function_offsets_error != ok { ret function_offsets_error }
+    // Two functions that compile to the same bytes -- a duplicate generic instance, or two
+    // distinct functions that happen to agree -- share one copy in the image, keyed by the
+    // same content hash the `.em` carries and folded in the same order, so an executable
+    // linked from artifacts and one compiled from source come out identical (D130, D157).
+    // Only when producing an executable: an `.em` or `.o` keeps every function so the fold
+    // can happen once, at the link that consumes it.
+    var fold: Fold = zero
+    if want_fold { try init_fold(a, &fold, builder.function_count) }
+    var relocation_count = 0usize
+    report.arena_used = mem.stats(a).used
+    try report_phase(report, "codegen setup")
+    var codegen_context: codegen_x64.FunctionContext = zero
+    codegen_context.allocations = allocations
+    codegen_context.arena = a
+    codegen_context.has_arena = true
+    codegen_context.ranges = ranges
+    codegen_context.abi = abi
+    codegen_context.block_offsets = block_offsets
+    codegen_context.fixups = fixups
+    codegen_context.relocations = relocations
+    codegen_context.relocation_count = &relocation_count
+    codegen_context.output = &machine
+    // Section 13's line table (D209): a row per line change, so at most one per instruction.
+    let (line_entries, line_entries_error) = mem.alloc[codegen_x64.LineEntry](a, builder.instruction_count + 16usize)
+    if line_entries_error != ok { ret line_entries_error }
+    report.build.pools[stats.POOL_LINE_ENTRIES] = line_entries.len
+    var line_count = 0usize
+    codegen_context.lines = line_entries
+    codegen_context.line_count = &line_count
+    try codegen_functions(a, report, loaded, builder, &codegen_context, 0usize, function_offsets, emit_machine_code, &fold)
+    code.machine = machine
+    code.function_offsets = function_offsets
+    code.relocations = relocations
+    code.relocation_count = relocation_count
+    code.lines = line_entries
+    code.line_count = line_count
+    ret ok
+}
+
+// A module's code as it left selection (D314): exact copies of its bytes and of the
+// relocations and line rows over them, kept until every module is known and what
+// `main` reaches is assembled. The NIR it came from is gone by then.
+type ModuleCode = struct {
+    bytes: []u8,
+    relocations: []codegen_x64.Relocation,
+    lines: []codegen_x64.LineEntry,
+    offsets: []usize,
+    first_function: usize,
+    function_count: usize,
+}
+
+// One module lowered and selected (D314): its functions go on the builder's table and
+// its bodies into the pools, its code into the staging buffer, and then exact copies
+// are taken and the bodies discarded, so the pools hold one module at a time.
+fn codegen_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, code: *ModuleCode) -> err {
+    let mark = nir.mark(builder)
+    let first = builder.function_count
+    let lower_error = lower.module(checker, loaded, module_index, builder, signatures, bindings)
+    if lower_error != ok {
+        try print_lower_diagnostic(report, loaded, checker, builder, lower_error)
+        try finish_report(report)
+        os.exit(1i32)
+        ret ok
+    }
+    context.output.count = 0usize
+    *context.relocation_count = 0usize
+    *context.line_count = 0usize
+    var no_fold: Fold = zero
+    try codegen_functions(a, report, loaded, builder, context, first, stage_offsets, true, &no_fold)
+    let count = builder.function_count - first
+    let (bytes, bytes_error) = mem.alloc[u8](a, context.output.count + 1usize)
+    if bytes_error != ok { ret bytes_error }
+    var at = 0usize
+    while at < context.output.count {
+        bytes[at] = context.output.bytes[at]
+        at += 1usize
+    }
+    code.bytes = bytes[0usize..context.output.count]
+    let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, *context.relocation_count + 1usize)
+    if relocations_error != ok { ret relocations_error }
+    at = 0usize
+    while at < *context.relocation_count {
+        relocations[at] = context.relocations[at]
+        at += 1usize
+    }
+    code.relocations = relocations[0usize..*context.relocation_count]
+    let (lines, lines_error) = mem.alloc[codegen_x64.LineEntry](a, *context.line_count + 1usize)
+    if lines_error != ok { ret lines_error }
+    at = 0usize
+    while at < *context.line_count {
+        lines[at] = context.lines[at]
+        at += 1usize
+    }
+    code.lines = lines[0usize..*context.line_count]
+    let (offsets, offsets_error) = mem.alloc[usize](a, count + 1usize)
+    if offsets_error != ok { ret offsets_error }
+    at = 0usize
+    while at < count {
+        offsets[at] = stage_offsets[first + at]
+        at += 1usize
+    }
+    code.offsets = offsets[0usize..count]
+    code.first_function = first
+    code.function_count = count
+    nir.discard_bodies(builder, mark)
+    ret ok
+}
+
+// Where a function's code lies in its module's copy: from its own offset to the next
+// function's, or to the end for the last.
+fn function_span(code: ModuleCode, function_at: usize) -> (usize, usize) {
+    let local = function_at - code.first_function
+    let start = code.offsets[local]
+    if local + 1usize < code.function_count { ret (start, code.offsets[local + 1usize]) }
+    ret (start, code.bytes.len)
+}
+
+// The executable path (D314): each module is lowered and selected as it is discovered,
+// in the order `lower.reachable_modules` walks, and its bodies discarded before the
+// next, so the arena holds one module's NIR rather than the program's. What `main`
+// reaches is then found over the relocations -- the same edges the pruner walked over
+// instructions, and the same walk `em_link` makes over artifacts -- and the kept
+// functions are copied into the image's buffer in order, folded as before.
+fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, code: *Code) -> err {
+    try lower.declare_globals(checker, builder)
+    var clear_at = 0usize
+    while clear_at < loaded.count {
+        lowered[clear_at] = false
+        clear_at += 1usize
+    }
+    // Staging, sized by the pools a module's bodies fit in.
+    let body_capacity = builder.instructions.len
+    let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, body_capacity + 4096usize)
+    if ranges_error != ok { ret ranges_error }
+    let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, body_capacity + 4096usize)
+    if allocations_error != ok { ret allocations_error }
+    let (stage_storage, stage_storage_error) = mem.alloc[u8](a, body_capacity * 24usize + 65536usize)
+    if stage_storage_error != ok { ret stage_storage_error }
+    var stage: emit_x64.Buffer = zero
+    try emit_x64.init(&stage, stage_storage)
+    let (block_offsets, block_offsets_error) = mem.alloc[usize](a, builder.blocks.len + 1usize)
+    if block_offsets_error != ok { ret block_offsets_error }
+    let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, body_capacity + 16usize)
+    if fixups_error != ok { ret fixups_error }
+    let (stage_relocations, stage_relocations_error) = mem.alloc[codegen_x64.Relocation](a, body_capacity + 4096usize)
+    if stage_relocations_error != ok { ret stage_relocations_error }
+    let (stage_lines, stage_lines_error) = mem.alloc[codegen_x64.LineEntry](a, body_capacity + 16usize)
+    if stage_lines_error != ok { ret stage_lines_error }
+    let (stage_offsets, stage_offsets_error) = mem.alloc[usize](a, builder.functions.len + 1usize)
+    if stage_offsets_error != ok { ret stage_offsets_error }
+    var relocation_count = 0usize
+    var line_count = 0usize
+    var context: codegen_x64.FunctionContext = zero
+    context.allocations = allocations
+    context.arena = a
+    context.has_arena = true
+    context.ranges = ranges
+    context.abi = abi
+    context.block_offsets = block_offsets
+    context.fixups = fixups
+    context.relocations = stage_relocations
+    context.relocation_count = &relocation_count
+    context.output = &stage
+    context.lines = stage_lines
+    context.line_count = &line_count
+    let (codes, codes_error) = mem.alloc[ModuleCode](a, loaded.count + 1usize)
+    if codes_error != ok { ret codes_error }
+    let (chunk_of, chunk_of_error) = mem.alloc[usize](a, builder.functions.len + 1usize)
+    if chunk_of_error != ok { ret chunk_of_error }
+    var chunk_count = 0usize
+    var reference_cursor = 0usize
+    var inlined_cursor = 0usize
+    var next = 0usize
+    var have = loaded.count > 0usize
+    while have {
+        var made: ModuleCode = zero
+        try codegen_module(a, report, loaded, checker, builder, signatures, bindings, next, &context, stage_offsets, &made)
+        codes[chunk_count] = made
+        lowered[next] = true
+        var fill = made.first_function
+        while fill < builder.function_count {
+            chunk_of[fill] = chunk_count
+            fill += 1usize
+        }
+        chunk_count += 1usize
+        let (found, found_next, next_error) = lower.next_unlowered(loaded, builder, lowered, &reference_cursor, &inlined_cursor)
+        if next_error != ok {
+            try print_lower_diagnostic(report, loaded, checker, builder, next_error)
+            try finish_report(report)
+            os.exit(1i32)
+            ret ok
+        }
+        next = found
+        have = found_next
+    }
+    report.arena_used = mem.stats(a).used
+    try report_phase(report, "lower and codegen")
+    if report.timing {
+        try stderr_text("  of which regalloc: ")
+        try report_ms(report.regalloc_ns)
+        try stderr_text("  of which codegen: ")
+        try report_ms(report.codegen_ns)
+        try report_count("nir instructions in all", builder.instruction_total)
+        try report_count("nir instructions, largest module", builder.instruction_peak)
+    }
+    try assemble_reached(a, report, loaded, builder, codes[0usize..chunk_count], chunk_of, code)
+    report.arena_used = mem.stats(a).used
+    try report_phase(report, "assemble")
+    ret ok
+}
+
+// What `main` reaches, over the relocations, then the kept functions copied in order
+// into the image's buffer with the fold; the function table and the references are
+// compacted to what was kept, as the pruner did.
+fn assemble_reached(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, codes: []ModuleCode, chunk_of: []usize, code: *Code) -> err {
+    nir.resolve_reference_targets(builder)
+    let (kept, kept_error) = mem.alloc[bool](a, builder.function_count + 1usize)
+    if kept_error != ok { ret kept_error }
+    let (queue, queue_error) = mem.alloc[usize](a, builder.function_count + 1usize)
+    if queue_error != ok { ret queue_error }
+    var at = 0usize
+    while at < builder.function_count {
+        kept[at] = false
+        at += 1usize
+    }
+    // No entry point is the linker's to report, with a better message than a program of
+    // no functions would produce: everything is kept then, as the pruner kept it.
+    var rooted = false
+    at = 0usize
+    while at < builder.function_count {
+        if check.same(builder.functions[at].name, "main") {
+            rooted = true
+            break
+        }
+        at += 1usize
+    }
+    var tail = 0usize
+    if rooted {
+        kept[at] = true
+        queue[0usize] = at
+        tail = 1usize
+    } else {
+        at = 0usize
+        while at < builder.function_count {
+            kept[at] = true
+            at += 1usize
+        }
+    }
+    var head = 0usize
+    while head < tail {
+        let function_at = queue[head]
+        head += 1usize
+        let chunk = codes[chunk_of[function_at]]
+        let (start, end) = function_span(chunk, function_at)
+        var relocation_at = em.first_relocation_from(chunk.relocations, chunk.relocations.len, start)
+        while relocation_at < chunk.relocations.len {
+            let relocation = chunk.relocations[relocation_at]
+            if relocation.displacement_at >= end { break }
+            if !relocation.global && relocation.function_ref < builder.function_ref_count {
+                let reference = builder.function_refs[relocation.function_ref]
+                if reference.has_target && !kept[reference.target] {
+                    kept[reference.target] = true
+                    queue[tail] = reference.target
+                    tail += 1usize
+                }
+            }
+            relocation_at += 1usize
+        }
+    }
+    // Sized from what is kept: the code, and the symbol table the driver appends after
+    // it (D206, D209) -- a header and a name per function, sixteen bytes per line row.
+    var code_total = 0usize
+    var names_total = 0usize
+    var relocation_total = 0usize
+    var line_total = 0usize
+    var chunk_at = 0usize
+    while chunk_at < codes.len {
+        let chunk = codes[chunk_at]
+        relocation_total += chunk.relocations.len
+        line_total += chunk.lines.len
+        var function_at = chunk.first_function
+        while function_at < chunk.first_function + chunk.function_count {
+            if kept[function_at] {
+                let (start, end) = function_span(chunk, function_at)
+                code_total += end - start
+                names_total += builder.functions[function_at].module_name.len + 1usize + builder.functions[function_at].name.len
+            }
+            function_at += 1usize
+        }
+        chunk_at += 1usize
+    }
+    let (machine_storage, machine_storage_error) = mem.alloc[u8](a, code_total + builder.function_count * 24usize + names_total + line_total * 16usize + 65536usize)
+    if machine_storage_error != ok { ret machine_storage_error }
+    report.build.pools[stats.POOL_MACHINE] = machine_storage.len
+    var machine: emit_x64.Buffer = zero
+    try emit_x64.init(&machine, machine_storage)
+    let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.function_count + 1usize)
+    if function_offsets_error != ok { ret function_offsets_error }
+    let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, relocation_total + 1usize)
+    if relocations_error != ok { ret relocations_error }
+    report.build.pools[stats.POOL_RELOCATIONS] = relocations.len
+    let (lines, lines_error) = mem.alloc[codegen_x64.LineEntry](a, line_total + 1usize)
+    if lines_error != ok { ret lines_error }
+    report.build.pools[stats.POOL_LINE_ENTRIES] = lines.len
+    var fold: Fold = zero
+    try init_fold(a, &fold, builder.function_count)
+    var relocation_count = 0usize
+    var line_count = 0usize
+    var written = 0usize
+    chunk_at = 0usize
+    while chunk_at < codes.len {
+        let chunk = codes[chunk_at]
+        var view: emit_x64.Buffer = zero
+        view.bytes = chunk.bytes
+        view.count = chunk.bytes.len
+        var relocation_at = 0usize
+        var line_at = 0usize
+        var function_at = chunk.first_function
+        while function_at < chunk.first_function + chunk.function_count {
+            let (start, end) = function_span(chunk, function_at)
+            // The rows and relocations of a function that is dropped, or folded, are
+            // passed over; both lists are in code order.
+            while relocation_at < chunk.relocations.len && chunk.relocations[relocation_at].displacement_at < start { relocation_at += 1usize }
+            while line_at < chunk.lines.len && chunk.lines[line_at].offset < start { line_at += 1usize }
+            if kept[function_at] {
+                let placed = machine.count
+                if report.timing { report.fold_ns = report.fold_ns -% nptest_now() }
+                let (folded_at, folded) = fold_function(loaded, builder, &view, start, end, chunk.relocations, chunk.relocations.len, placed, &fold)
+                if report.timing { report.fold_ns = report.fold_ns +% nptest_now() }
+                builder.functions[written] = builder.functions[function_at]
+                if folded {
+                    function_offsets[written] = folded_at
+                } else {
+                    function_offsets[written] = placed
+                    try emit_x64.append_bytes(&machine, chunk.bytes[start..end])
+                    while relocation_at < chunk.relocations.len && chunk.relocations[relocation_at].displacement_at < end {
+                        var relocation = chunk.relocations[relocation_at]
+                        relocation.displacement_at = relocation.displacement_at - start + placed
+                        if relocation_count == relocations.len { ret check.Capacity }
+                        relocations[relocation_count] = relocation
+                        relocation_count += 1usize
+                        relocation_at += 1usize
+                    }
+                    while line_at < chunk.lines.len && chunk.lines[line_at].offset < end {
+                        var line = chunk.lines[line_at]
+                        line.offset = line.offset - start + placed
+                        if line_count == lines.len { ret check.Capacity }
+                        lines[line_count] = line
+                        line_count += 1usize
+                        line_at += 1usize
+                    }
+                }
+                written += 1usize
+            }
+            function_at += 1usize
+        }
+        chunk_at += 1usize
+    }
+    builder.function_count = written
+    try codegen_x64.prune_references(builder, relocations, relocation_count)
+    code.machine = machine
+    code.function_offsets = function_offsets
+    code.relocations = relocations
+    code.relocation_count = relocation_count
+    code.lines = lines
+    code.line_count = line_count
+    ret ok
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     // Spec section 2's spellings -- `neper build FILE`, `neper check FILE`, ... -- are
@@ -4541,7 +5068,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         var signatures: nir.Signatures = zero
         // One more parameter type than the declarations need: `neper_report_failure`,
         // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
-        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report)
+        try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report, body_bytes_of(&loaded, writes_executable))
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, loaded.count + 1usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, builder.functions.len + 1usize)
@@ -4606,20 +5133,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var artifact_mode: em.BuildMode = .Debug
         if release_build { artifact_mode = .Release }
+        // The executable path lowers and selects a module at a time (D314); the rest
+        // lower the program whole, since an artifact or an object keeps every function.
+        let per_module = writes_executable
         var lower_error = ok
-        if writes_all_em {
-            lower_error = lower.all_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules, keep)
-        } else {
-            lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
-        report.arena_used = mem.stats(a).used
-        try report_phase(&report, "lower")
+        if !per_module {
+            if writes_all_em {
+                lower_error = lower.all_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules, keep)
+            } else {
+                lower_error = lower.reachable_modules(&checker, &loaded, &builder, &signatures, bindings, lowered_modules)
+                report.arena_used = mem.stats(a).used
+                try report_phase(&report, "lower")
+            }
         }
         if lower_error == ok {
             // Everything was lowered so that the order is the one the artifacts also use; what
             // nothing reaches is dropped now, which both link paths do identically.
             // An artifact holds the whole module (D214): the linker that consumes it
             // prunes, as the executable path does here.
-            if !(writes_em || writes_all_em) {
+            if !(writes_em || writes_all_em || per_module) {
                 let prune_error = nir.prune_unreachable(&builder, kept_functions, false)
                 report.arena_used = mem.stats(a).used
                 try report_phase(&report, "prune")
@@ -4637,148 +5169,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
             os.exit(1i32)
             ret ok
         }
-        let (ranges, ranges_error) = mem.alloc[regalloc.LiveRange](a, builder.instruction_count + 4096usize)
-        if ranges_error != ok { ret ranges_error }
-        let (allocations, allocations_error) = mem.alloc[regalloc.Allocation](a, builder.instruction_count + 4096usize)
-        if allocations_error != ok { ret allocations_error }
-        if allocations_error != ok { ret allocations_error }
-        var machine_capacity = 1usize
-        if emit_machine_code {
-            // One entry per emitted byte, so this allocation is eight times the
-            // code it will hold and it dominates the arena. Selecting the compiler
-            // itself needs between 16 and 32 bytes per NIR instruction, measured by
-            // bisecting the multiplier until emission reports `emit_x64.Capacity`;
-            // 96 kept three to six times that; 56 -- twice the 28 the checks of
-            // D194-D202 brought it to -- is what leaves room for the inlining oracle
-            // (D207) in the default arena, and the line rows (D209), at most one per
-            // instruction and sixteen bytes each, are the eight on top. Overrunning it
-            // is a clean `Capacity` error, never a wrong instruction.
-            // ... plus the symbol table appended after the code (D206), a header and a
-            // name per function.
-            var names_total = 0usize
-            var named_at = 0usize
-            while named_at < builder.function_count {
-                names_total += builder.functions[named_at].module_name.len + 1usize + builder.functions[named_at].name.len
-                named_at += 1usize
-            }
-            machine_capacity = builder.instruction_count * 24usize + builder.function_count * 24usize + names_total + 65536usize
-        }
-        let (machine_storage, machine_storage_error) = mem.alloc[u8](a, machine_capacity)
-        if machine_storage_error != ok { ret machine_storage_error }
-        report.build.pools[stats.POOL_MACHINE] = machine_storage.len
-        var machine: emit_x64.Buffer = zero
-        try emit_x64.init(&machine, machine_storage)
-        let (block_offsets, block_offsets_error) = mem.alloc[usize](a, builder.block_count + 1usize)
-        if block_offsets_error != ok { ret block_offsets_error }
-        let (fixups, fixups_error) = mem.alloc[codegen_x64.Fixup](a, builder.instruction_count + 16usize)
-        if fixups_error != ok { ret fixups_error }
-        // Two per trap site -- the call and the symbol table (D206) -- and one per call,
-        // so the count follows the instructions rather than a constant.
-        let (relocations, relocations_error) = mem.alloc[codegen_x64.Relocation](a, builder.instruction_count + 4096usize)
-        if relocations_error != ok { ret relocations_error }
-        report.build.pools[stats.POOL_RELOCATIONS] = relocations.len
-        // Indexed by NIR function index, like the signature table above: sized to the
-        // function count and not to a constant of its own.
-        let (function_offsets, function_offsets_error) = mem.alloc[usize](a, builder.function_count + 1usize)
-        if function_offsets_error != ok { ret function_offsets_error }
-        // Two functions that compile to the same bytes -- a duplicate generic instance, or two
-        // distinct functions that happen to agree -- share one copy in the image, keyed by the
-        // same content hash the `.em` carries and folded in the same order, so an executable
-        // linked from artifacts and one compiled from source come out identical (D130, D157).
-        // Only when producing an executable: an `.em` or `.o` keeps every function so the fold
-        // can happen once, at the link that consumes it.
-        let want_fold = writes_executable
-        var fold_hashes = function_offsets
-        var fold_offsets = function_offsets
-        var fold_count = 0usize
-        var fold_scratch: binary.Buffer = zero
-        if want_fold {
-            let (fh, fh_error) = mem.alloc[usize](a, builder.function_count + 1usize)
-            if fh_error != ok { ret fh_error }
-            fold_hashes = fh
-            let (fo, fo_error) = mem.alloc[usize](a, builder.function_count + 1usize)
-            if fo_error != ok { ret fo_error }
-            fold_offsets = fo
-            let (fs, fs_error) = mem.alloc[usize](a, 2097152usize)
-            if fs_error != ok { ret fs_error }
-            try binary.init(&fold_scratch, fs)
-        }
-        var relocation_count = 0usize
-        report.arena_used = mem.stats(a).used
-        try report_phase(&report, "codegen setup")
-        var function_at = 0usize
-        var machine_abi: codegen_x64.Abi = .SystemV
-        if same(args[5usize], "windows") { machine_abi = .Windows }
-        var codegen_context: codegen_x64.FunctionContext = zero
-        codegen_context.allocations = allocations
-        codegen_context.arena = a
-        codegen_context.has_arena = true
-        codegen_context.ranges = ranges
-        codegen_context.abi = machine_abi
-        codegen_context.block_offsets = block_offsets
-        codegen_context.fixups = fixups
-        codegen_context.relocations = relocations
-        codegen_context.relocation_count = &relocation_count
-        codegen_context.output = &machine
-        // Section 13's line table (D209): a row per line change, so at most one per instruction.
-        let (line_entries, line_entries_error) = mem.alloc[codegen_x64.LineEntry](a, builder.instruction_count + 16usize)
-        if line_entries_error != ok { ret line_entries_error }
-        report.build.pools[stats.POOL_LINE_ENTRIES] = line_entries.len
-        var line_count = 0usize
-        codegen_context.lines = line_entries
-        codegen_context.line_count = &line_count
-        while function_at < builder.function_count {
-            if report.timing { report.regalloc_ns = report.regalloc_ns -% nptest_now() }
-            let (stack_slots, allocation_error) = regalloc.allocate(&builder, function_at, codegen_x64.register_pool_count(), ranges, allocations, a)
-            if report.timing { report.regalloc_ns = report.regalloc_ns +% nptest_now() }
-            if allocation_error != ok { ret allocation_error }
-            if emit_machine_code {
-                let function_start = machine.count
-                function_offsets[function_at] = function_start
-                let relocation_start = relocation_count
-                let line_start = line_count
-                if report.timing { report.codegen_ns = report.codegen_ns -% nptest_now() }
-                let codegen_error = codegen_x64.function(&builder, function_at, stack_slots, &codegen_context)
-                if report.timing { report.codegen_ns = report.codegen_ns +% nptest_now() }
-                if codegen_error != ok {
-                    try print_codegen_diagnostic(&report, &loaded, builder.functions[function_at], &codegen_context)
-                    try finish_report(&report)
-                    os.exit(1i32)
-                    ret ok
-                }
-                if want_fold {
-                    if report.timing { report.fold_ns = report.fold_ns -% nptest_now() }
-                    fold_scratch.count = 0usize
-                    let hash_input_error = em.write_code_hash_input(&loaded, &builder, &machine, function_start, machine.count, relocations, relocation_count, &fold_scratch)
-                    // A function too large for the scratch is simply not folded: the hash cannot be
-                    // formed, so it is left unique, which is always safe.
-                    if hash_input_error == ok {
-                        let (content, content_error) = artifact_hash.xxhash64(fold_scratch.bytes[0usize..fold_scratch.count])
-                        if content_error == ok {
-                            var fold_at = 0usize
-                            var duplicate = false
-                            while fold_at < fold_count {
-                                if fold_hashes[fold_at] == content {
-                                    machine.count = function_start
-                                    relocation_count = relocation_start
-                                    line_count = line_start
-                                    function_offsets[function_at] = fold_offsets[fold_at]
-                                    duplicate = true
-                                    break
-                                }
-                                fold_at += 1usize
-                            }
-                            if !duplicate {
-                                fold_hashes[fold_count] = content
-                                fold_offsets[fold_count] = function_start
-                                fold_count += 1usize
-                            }
-                        }
-                    }
-                    if report.timing { report.fold_ns = report.fold_ns +% nptest_now() }
-                }
-            }
-            function_at += 1usize
+        var code: Code = zero
+        if per_module {
+            try emit_per_module(a, &report, &loaded, &checker, &builder, &signatures, bindings, lowered_modules, machine_abi_of(args), &code)
+        } else {
+            try emit_whole_program(a, &report, &loaded, &builder, emit_machine_code, writes_executable, machine_abi_of(args), &code)
         }
         if emit_machine_code {
             if writes_em || writes_all_em {
@@ -4806,7 +5201,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
                 if packed_error != ok { ret packed_error }
                 if writes_em {
-                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, &strings, sections, &scratch, &artifact)
+                    try em.write_module(&checker, &loaded, &builder, 0usize, triple, artifact_mode, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count, &strings, sections, &scratch, &artifact)
                     try binary.pack(&artifact, packed)
                     try save_bytes(a, args[6usize], packed[..artifact.count])
                     try io.print("compiled module written\n")
@@ -4818,7 +5213,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 while module_at < loaded.count {
                     if !keep[module_at] {
                         artifact.count = 0usize
-                        try em.write_module(&checker, &loaded, &builder, module_at, triple, artifact_mode, &machine, function_offsets, relocations, relocation_count, line_entries, line_count, &strings, sections, &scratch, &artifact)
+                        try em.write_module(&checker, &loaded, &builder, module_at, triple, artifact_mode, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count, &strings, sections, &scratch, &artifact)
                         try binary.pack(&artifact, packed)
                         let (artifact_path, artifact_path_error) = compiled_module_path(a, args[6usize], loaded.modules[module_at].name, triple)
                         if artifact_path_error != ok { ret artifact_path_error }
@@ -4834,13 +5229,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 try io.print("compiled modules written\n")
                 ret ok
             }
-            try codegen_x64.resolve_calls(&builder, function_offsets, relocations, relocation_count, &machine)
+            try codegen_x64.resolve_calls(&builder, code.function_offsets, code.relocations, code.relocation_count, &code.machine)
             if disassemble {
                 if report.map_stale {
                     try finish_report(&report)
                     os.exit(1i32)
                 }
-                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, function_offsets, machine.bytes, machine.count, relocations, relocation_count)
+                try tool.disassembly_json(a, args[4usize], args[5usize], &builder, code.function_offsets, code.machine.bytes, code.machine.count, code.relocations, code.relocation_count)
                 ret ok
             }
             if writes_executable {
@@ -4849,30 +5244,28 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     try finish_report(&report)
                     os.exit(1i32)
                 }
-                report.arena_used = mem.stats(a).used
-                try report_phase(&report, "regalloc and codegen")
+                if !per_module {
+                    report.arena_used = mem.stats(a).used
+                    try report_phase(&report, "regalloc and codegen")
+                }
                 if report.timing {
-                    try stderr_text("  of which regalloc: ")
-                    try report_ms(report.regalloc_ns)
-                    try stderr_text("  of which codegen: ")
-                    try report_ms(report.codegen_ns)
                     try stderr_text("  of which folding: ")
                     try report_ms(report.fold_ns)
                 }
                 // The symbol table first, then the image buffer sized from the code with it
                 // (D306): sized before it, a mebibyte of slack covered the table of a small
                 // program and not the twenty of a large one.
-                try codegen_x64.append_symbol_table(&builder, &machine, function_offsets, relocations, relocation_count, line_entries, line_count)
-                let executable_capacity = machine.count + 1048576usize
+                try codegen_x64.append_symbol_table(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, code.lines, code.line_count)
+                let executable_capacity = code.machine.count + 1048576usize
                 let (executable_storage, executable_storage_error) = mem.alloc[u8](a, executable_capacity)
                 if executable_storage_error != ok { ret executable_storage_error }
                 report.build.pools[stats.POOL_IMAGE] = executable_storage.len
                 var executable: emit_x64.Buffer = zero
                 try emit_x64.init(&executable, executable_storage)
-                if machine_abi == .Windows {
-                    try link_pe.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
+                if machine_abi_of(args) == .Windows {
+                    try link_pe.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, &executable)
                 } else {
-                    try link_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, &executable)
+                    try link_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, &executable)
                 }
                 report.arena_used = mem.stats(a).used
                 try report_phase(&report, "link")
@@ -4928,19 +5321,19 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 ret ok
             }
             if emit_object {
-                let object_capacity = machine.count + builder.function_count * 256usize + relocation_count * 32usize + 65536usize
+                let object_capacity = code.machine.count + builder.function_count * 256usize + code.relocation_count * 32usize + 65536usize
                 let (object_storage, object_storage_error) = mem.alloc[u8](a, object_capacity)
                 if object_storage_error != ok { ret object_storage_error }
                 var object: emit_x64.Buffer = zero
                 try emit_x64.init(&object, object_storage)
-                if machine_abi == .Windows {
+                if machine_abi_of(args) == .Windows {
                     let (symbols, symbols_error) = mem.alloc[object_coff.Symbol](a, sized(16384usize, loaded.total_bytes, 64usize))
                     if symbols_error != ok { ret symbols_error }
-                    try object_coff.write(&builder, &machine, function_offsets, relocations, relocation_count, symbols, &object)
+                    try object_coff.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, symbols, &object)
                 } else {
                     let (symbols, symbols_error) = mem.alloc[object_elf.Symbol](a, sized(16384usize, loaded.total_bytes, 64usize))
                     if symbols_error != ok { ret symbols_error }
-                    try object_elf.write(&builder, &machine, function_offsets, relocations, relocation_count, symbols, &object)
+                    try object_elf.write(&builder, &code.machine, code.function_offsets, code.relocations, code.relocation_count, symbols, &object)
                 }
                 if writes_object {
                     let (packed, packed_error) = mem.alloc[u8](a, object.count)

@@ -281,6 +281,12 @@ type Builder = struct {
     // no cap (D310).
     instruction_limit: usize,
     limit_base: usize,
+    // What `discard_bodies` has let go of (D314): the instructions lowered in all, and
+    // the most one module held at once, for `--stats` and for sizing the body pools.
+    instruction_total: usize,
+    instruction_peak: usize,
+    block_total: usize,
+    operand_total: usize,
     function_count: usize,
     block_count: usize,
     instruction_count: usize,
@@ -510,16 +516,7 @@ fn prune_references(builder: *Builder) -> err {
         }
         function_at += 1usize
     }
-    // Where each surviving reference will end up, recorded in the slot it still occupies.
-    var written = 0usize
-    reference_at = 0usize
-    while reference_at < builder.function_ref_count {
-        if builder.function_refs[reference_at].live {
-            builder.function_refs[reference_at].renumbered = written
-            written += 1usize
-        }
-        reference_at += 1usize
-    }
+    assign_reference_numbers(builder)
     // The instructions are renumbered before anything moves. Doing it the other way round reads a
     // mapping out of a slot a later reference has already been moved into, which points a call --
     // or a callback, since taking an address is the same edge -- at the wrong function.
@@ -538,8 +535,27 @@ fn prune_references(builder: *Builder) -> err {
         function_at += 1usize
     }
     // Only now is the array compacted, which cannot disturb a mapping that has already been used.
+    ret compact_references(builder)
+}
+
+// Where each surviving reference will end up, recorded in the slot it still occupies.
+fn assign_reference_numbers(builder: *Builder) {
+    var written = 0usize
+    var reference_at = 0usize
+    while reference_at < builder.function_ref_count {
+        if builder.function_refs[reference_at].live {
+            builder.function_refs[reference_at].renumbered = written
+            written += 1usize
+        }
+        reference_at += 1usize
+    }
+}
+
+// The live references moved down over the dead ones, after every carrier of a reference
+// index has been renumbered.
+fn compact_references(builder: *Builder) -> err {
     var moved_to = 0usize
-    reference_at = 0usize
+    var reference_at = 0usize
     while reference_at < builder.function_ref_count {
         if builder.function_refs[reference_at].live {
             builder.function_refs[moved_to] = builder.function_refs[reference_at]
@@ -547,7 +563,7 @@ fn prune_references(builder: *Builder) -> err {
         }
         reference_at += 1usize
     }
-    builder.function_ref_count = written
+    builder.function_ref_count = moved_to
     // The references moved, so the name index over them is rebuilt from nothing the
     // next time one is asked for (D306).
     if lookup.attached(&builder.ref_names) { try lookup.attach(&builder.ref_names, builder.ref_names.entries) }
@@ -950,6 +966,23 @@ fn reset(builder: *Builder, at: Mark) {
     builder.instruction_count = at.instruction_count
     builder.operand_count = at.operand_count
     builder.inlined_count = at.inlined_count
+    builder.function_active = false
+    builder.block_active = false
+}
+
+// A module's bodies, once its code is emitted, are not needed again (D314): the blocks,
+// instructions and operands since the mark go, and the functions, references, strings
+// and globals stay, since the link reads those. The function headers left behind
+// point into space the next module reuses, and nothing reads them.
+fn discard_bodies(builder: *Builder, at: Mark) {
+    let held = builder.instruction_count - at.instruction_count
+    builder.instruction_total += held
+    if held > builder.instruction_peak { builder.instruction_peak = held }
+    builder.block_total += builder.block_count - at.block_count
+    builder.operand_total += builder.operand_count - at.operand_count
+    builder.block_count = at.block_count
+    builder.instruction_count = at.instruction_count
+    builder.operand_count = at.operand_count
     builder.function_active = false
     builder.block_active = false
 }

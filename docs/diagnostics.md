@@ -49,10 +49,14 @@ change accepted programs.
 
 ## Implementation limits
 
-The self-hosted compiler lowers every program into fixed pools sized once per program
-(D302): 524288 NIR instructions, 131072 blocks, 2097152 operands and 16384 functions --
-the sizes the compiler itself needs. A program that fills one is rejected under
-`E-TYPE-9999` with a message naming the pool, its size and the program's counts so far;
-the function named is where the pool filled, not the cause. Machine-code selection and
-register allocation size their per-function tables from the lowered program and have no
-separate ceiling.
+The self-hosted compiler lowers into pools sized from the program's source (D306):
+the function, reference and string tables from the whole program, and the body pools
+-- blocks, instructions, operands -- from the largest module when it builds an
+executable, since it lowers and selects one module at a time and discards the bodies
+before the next (D314), or from the whole program for an artifact or an object, which
+keep every function. A body pool holds 262144 instructions plus one per four bytes of
+the source it is sized from, five times what the compiler's own largest module lowers
+to. A program that fills a pool is rejected under `E-TYPE-9999` with a message naming
+the pool, its size and the program's counts so far; the function named is where the
+pool filled, not the cause. Machine-code selection and register allocation size their
+per-function tables from the pools and have no separate ceiling.

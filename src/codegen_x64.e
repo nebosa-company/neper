@@ -95,6 +95,37 @@ fn add_global_relocation(relocations: []Relocation, count: *usize, displacement_
     ret ok
 }
 
+// `nir.prune_references` for a program whose bodies are gone (D314): a reference is
+// live if a relocation of the kept code names it -- the same edges, since every
+// instruction that names a function emits one -- and the relocations are the carriers
+// renumbered before the references move.
+fn prune_references(builder: *nir.Builder, relocations: []Relocation, relocation_count: usize) -> err {
+    if relocation_count > relocations.len { ret Unsupported }
+    var reference_at = 0usize
+    while reference_at < builder.function_ref_count {
+        builder.function_refs[reference_at].live = false
+        reference_at += 1usize
+    }
+    var relocation_at = 0usize
+    while relocation_at < relocation_count {
+        let relocation = relocations[relocation_at]
+        if !relocation.global {
+            if relocation.function_ref >= builder.function_ref_count { ret Unsupported }
+            builder.function_refs[relocation.function_ref].live = true
+        }
+        relocation_at += 1usize
+    }
+    nir.assign_reference_numbers(builder)
+    relocation_at = 0usize
+    while relocation_at < relocation_count {
+        if !relocations[relocation_at].global {
+            relocations[relocation_at].function_ref = builder.function_refs[relocations[relocation_at].function_ref].renumbered
+        }
+        relocation_at += 1usize
+    }
+    ret nir.compact_references(builder)
+}
+
 fn resolve_calls(builder: *nir.Builder, function_offsets: []usize, relocations: []Relocation, relocation_count: usize, output: *emit_x64.Buffer) -> err {
     if builder.function_count > function_offsets.len || relocation_count > relocations.len { ret Unsupported }
     nir.resolve_reference_targets(builder)

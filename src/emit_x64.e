@@ -520,6 +520,19 @@ fn store_memory(buffer: *Buffer, address: usize, source: usize, width: usize) ->
 // tail (D306). They ran a byte per iteration, five instructions each, and every
 // struct read out of a table -- a token, a node, an instruction -- is a copy: the
 // compiler spent more of its time in these two loops than in any pass.
+// A byte slice appended whole (D314): a function's code moving from a module's
+// staging buffer to the image's.
+fn append_bytes(buffer: *Buffer, bytes: []const u8) -> err {
+    if buffer.count + bytes.len > buffer.bytes.len { ret Capacity }
+    var at = 0usize
+    while at < bytes.len {
+        buffer.bytes[buffer.count + at] = bytes[at]
+        at += 1usize
+    }
+    buffer.count += bytes.len
+    ret ok
+}
+
 fn emit_bytes(buffer: *Buffer, bytes: []const usize) -> err {
     var at = 0usize
     while at < bytes.len {

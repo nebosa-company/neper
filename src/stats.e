@@ -403,9 +403,12 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try pool_row("checker locals", b.pools[POOL_CHECKER_LOCALS], 0usize)
     try pool_row("checker declaration index entries", b.pools[POOL_CHECKER_INDEX], c.names.count)
     try pool_row("nir functions", b.pools[POOL_NIR_FUNCTIONS], builder.function_count)
-    try pool_row("nir blocks", b.pools[POOL_NIR_BLOCKS], builder.block_count)
-    try pool_row("nir instructions", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_count)
-    try pool_row("nir operands", b.pools[POOL_NIR_OPERANDS], builder.operand_count)
+    // The body pools hold one module at a time on the executable path (D314): the
+    // capacity is per module, the used column is the whole program's.
+    try pool_row("nir blocks", b.pools[POOL_NIR_BLOCKS], builder.block_count + builder.block_total)
+    try pool_row("nir instructions", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_count + builder.instruction_total)
+    try pool_row("nir instructions, largest module", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_peak)
+    try pool_row("nir operands", b.pools[POOL_NIR_OPERANDS], builder.operand_count + builder.operand_total)
     try pool_row("nir function refs", b.pools[POOL_NIR_REFS], builder.function_ref_count)
     try pool_row("nir strings", b.pools[POOL_NIR_STRINGS], builder.string_count)
     try pool_row("nir globals", b.pools[POOL_NIR_GLOBALS], builder.global_count)
