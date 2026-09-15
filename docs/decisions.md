@@ -7185,3 +7185,32 @@ Both suites copy the inlining fixture to two places and build it from inside eac
 root-relative trap; the `run --json` golden's stderr changed from the operand's
 `../../../../tests/conformance/tools/run_trap.e` to `run_trap.e`, its identity's
 path, and nothing else in it moved.
+
+## D338 -- The M2 baseline: the compiler preserved and measured before M2.5 touches it
+
+M2.5's stage A (`post-m2-llm-hardening.md` section 29): before any of the H01-H29
+changes alter the language or the compiler, the M2 compiler is preserved and its
+build-time numbers frozen, so that every later revision is compared against fixed
+figures and a budget breach is a recorded decision.
+
+The tag `m2-baseline` marks the revision; `docs/m2-baseline.md` records the stage-3
+image's SHA-256 on both hosts, the environment, the workloads (the compiler itself
+and the three generated programs, 500k, 1M and 2M lines, regenerated from a fixed
+seed), the measurement (`benchmarks/baseline/measure.py`: cold and warm, debug and
+release, five runs per cell after a discarded first, p50 and p95, phase split, peak
+resident set, arena high-water mark, image size; the raw JSON under
+`benchmarks/baseline/results/`, the tables rendered from it by `render.py`) and the
+budgets: cold p50 +10%, warm p50 +15%, peak RSS +10%, image +5%, arena high-water
+not above the baseline, the self-build fixed point a gate.
+
+What the measurement found while being taken: the arena's high-water mark is five
+to eight times the peak resident set -- pools sized from the program (D306) and a
+Windows runtime that commits to the allocation offset -- so the two-million-line
+release build exceeds a 16 GB machine's commit charge at eight workers and is
+recorded as the first H25 debt, with a four-worker run beside it; Linux, mapping
+`MAP_NORESERVE` (D330), completes the cell at 11.4 GB high-water. The Linux
+`compiler` warm figure is 9P (the sources on the Windows volume); the scale
+fixtures were measured from the Linux filesystem.
+
+Not in this baseline, and said so: the H12 model-family evaluation, whose task set
+is pre-registered separately, and the H25 workflows beyond cold and no-op builds.
