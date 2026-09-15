@@ -2751,15 +2751,17 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph
 
 // The inlining oracle's builder (D207): the short functions of every module, which the
 // source filter keeps to a few instructions each, so a tenth of the program's tables.
+// An oracle lowers every candidate function before it knows which are short enough to
+// inline (D207), so its pools are the main builder's sizes (D308).
 fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph) -> err {
     let total = loaded.total_bytes
-    let (functions, functions_error) = mem.alloc[nir.Function](a, sized(4096usize, total, 64usize))
+    let (functions, functions_error) = mem.alloc[nir.Function](a, sized(16384usize, total, 128usize))
     if functions_error != ok { ret functions_error }
-    let (blocks, blocks_error) = mem.alloc[nir.Block](a, sized(32768usize, total, 64usize))
+    let (blocks, blocks_error) = mem.alloc[nir.Block](a, sized(65536usize, total, 16usize))
     if blocks_error != ok { ret blocks_error }
-    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, sized(131072usize, total, 16usize))
+    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, sized(262144usize, total, 4usize))
     if instructions_error != ok { ret instructions_error }
-    let (operands, operands_error) = mem.alloc[usize](a, sized(524288usize, total, 16usize))
+    let (operands, operands_error) = mem.alloc[usize](a, sized(1048576usize, total, 4usize))
     if operands_error != ok { ret operands_error }
     let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize, total, 128usize))
     if function_refs_error != ok { ret function_refs_error }
@@ -2769,7 +2771,9 @@ fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signat
     let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, 256usize)
     if global_data_error != ok { ret global_data_error }
     try nir.init_globals(builder, global_data)
-    let (signature_entries, signature_entries_error) = mem.alloc[nir.Signature](a, 4096usize)
+    // One per oracle function, as the main builder sizes its own (D308): a table smaller
+    // than the function table fails every function past its end as invalid control flow.
+    let (signature_entries, signature_entries_error) = mem.alloc[nir.Signature](a, functions.len)
     if signature_entries_error != ok { ret signature_entries_error }
     var type_capacity = signature_type_capacity
     if type_capacity == 0usize { type_capacity = 1usize }
@@ -4322,7 +4326,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // check left out and the release results in their place (D204), and the inliner
     // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
     let trailing_flags = args.len >= 8usize && (args.len <= 12usize || has_dashdash(args)) && flags_known(args)
-    let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all")) && has_flag(args, "--release")
+    let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all") || same(args[1usize], "run")) && has_flag(args, "--release")
     // `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then
     // the program's whole output as one `run` record before the result.
     let running = trailing_flags && same(args[1usize], "run") && has_flag(args, "--json") && !has_flag(args, "--incremental")

@@ -6268,3 +6268,44 @@ no `e.os` intrinsic for a process's peak memory, and adding one is D291's proced
 the bootstrap's seed, both C runtimes, both assembly runtimes and the checker's seed --
 which is its own decision. `benchmarks/scale/peak.sh` measures it from outside
 meanwhile.
+
+## D309 -- `run --release` means it, and the oracles are sized like the builder
+
+Producing D308's table for the two million lines in both modes found three things.
+
+**`run --release` was silently ignored.** The release gate knew `emit-executable` and
+`emit-em-all`; the usage line listed the flag for `run` too, and `run` took it and built
+in debug. The table's `compile mode` row read DEBUG under a command that said release,
+which is what caught it. `run` is in the gate.
+
+**The inlining oracles' pools were not sized with the rest.** Their signature table was
+a flat 4096, and past it every function failed as invalid control flow -- exactly what
+the comment on `init_cli_nir` had warned of for the main builder in D-era terms -- and
+their instruction pool was a quarter of the main one. An oracle lowers every candidate
+function before it knows which are short enough to inline (D207), so it needs the main
+builder's sizes, and has them.
+
+**The finding those fixes exposed.** A release build lowers the program three times:
+once per oracle, over everything, then for real. On the 2M-line program that is 61 of
+101 seconds and 3.3 GB of the 5.4 GB peak, for an image 28% smaller and a run 2%
+faster. An oracle only needs bodies of forty instructions or fewer; lowering eight
+million instructions to find the short ones is the next thing to remove. Until then a
+release build costs twice a debug build, which is the wrong way round.
+
+D308's `hot modules` and `cold modules` rows are `reached modules` and `unreached
+modules`: they count modules with a function in the lowered program against those
+loaded and never called, and "hot" and "cold" are builds, not modules. There is no hot
+build on this path: `emit-executable` and `run` compile everything from source every
+time; the artifact path's edge rule is where incremental lives, and a checker that
+reads an imported module's interface from its artifact is the step that would make a
+one-module edit cost one module.
+
+The 2M-line program, release-built compiler, warm file cache, both modes:
+
+| | DEBUG | RELEASE |
+|---|---|---|
+| wall | 47.1 s | 101.4 s |
+| of which inline oracles | -- | 60.8 s |
+| compiler peak (external) | 2.1 GB | 5.4 GB |
+| image | 12.7 MB | 9.1 MB |
+| run | 3.19 s | 3.14 s |

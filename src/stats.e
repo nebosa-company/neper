@@ -263,7 +263,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
         module_index += 1usize
     }
     insertion_sort(sizes[0usize..g.count])
-    // Hot modules have a function in the lowered program; cold ones were loaded and never reached.
+    // A reached module has a function in the lowered program; an unreached one was loaded and never called.
     let (hot, hot_error) = mem.alloc[bool](a, g.count + 1usize)
     if hot_error != ok { ret hot_error }
     module_index = 0usize
@@ -334,8 +334,8 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try out(" ")
     try out(b.target_os)
     try out("\n")
-    try row_number("hot modules", hot_count)
-    try row_number("cold modules", g.count - hot_count)
+    try row_number("reached modules", hot_count)
+    try row_number("unreached modules", g.count - hot_count)
     try row_number("compile threads", 1usize)
     try row("executable size")
     try number(b.image_bytes)
