@@ -353,7 +353,19 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row("unreached code")
     try number(b.unreached_bytes)
     try out(" bytes\n")
-    try row_number("compile threads", 1usize)
+    // The worker arenas' high-water marks summed (D339): every phase's workers, what
+    // each allocated, rounded to the runtime's chunk -- what the pools were sized to,
+    // not what was committed, which is the pages touched and the peak below; the
+    // front end's workers are still held by the graph.
+    var worker_bytes = g.worker_bytes
+    var worker_at = 0usize
+    while worker_at < g.workers.len {
+        worker_bytes += graph.arena_touched(&g.workers[worker_at].arena)
+        worker_at += 1usize
+    }
+    try row("worker arenas reached")
+    try number(worker_bytes / 1048576usize)
+    try out(" MB\n")
     try row("executable size")
     try number(b.image_bytes)
     try out(" bytes\n")

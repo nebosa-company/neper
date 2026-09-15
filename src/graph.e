@@ -146,6 +146,41 @@ type Graph = struct {
     // whether the image depends on it.
     jobs: usize,
     perturb: bool,
+    // What every worker arena of every phase committed, summed (D339).
+    worker_bytes: usize,
+}
+
+// A worker's arena (D339): a reservation of its own, committed as it is touched --
+// on Windows by the runtime's commit-on-touch handler, on Linux by the mapping -- so
+// a worker charges what it uses, where a carve-out of the root arena charged its
+// whole estimate (the root commits to its allocation offset, D306) and the
+// two-million-line release build asked for more than a 16 GB machine holds (D338).
+// What a worker allocated is added to `g.worker_bytes` when its phase ends, for
+// `--stats`.
+fn reserved_arena(a: *mem.Arena) -> (mem.Arena, err) {
+    var none: mem.Arena = zero
+    // One page short of the root's capacity: the mark by which the runtime tells a
+    // reservation from the root, which it still commits to its offset.
+    let capacity = mem.stats(a).capacity - 4096usize
+    let (base, reserve_error) = os.reserve(capacity)
+    if reserve_error != ok { ret (none, reserve_error) }
+    // The host by its stderr handle, as `host_target` tells it (2 on Linux): the
+    // bootstrap has no `when` in a body.
+    if os.stderr().raw == 2usize {
+        let commit_error = os.commit(base, capacity)
+        if commit_error != ok { ret (none, commit_error) }
+    }
+    var arena: mem.Arena = zero
+    arena.base = base
+    arena.cap = capacity
+    ret (arena, ok)
+}
+
+// The bytes a worker's arena reached, rounded up to the runtime's chunk: what it
+// committed (D339).
+fn arena_touched(arena: *mem.Arena) -> usize {
+    let chunks = (mem.stats(arena).used + 1048575usize) / 1048576usize
+    ret chunks * 1048576usize
 }
 
 // A phase's worker count under `-j N`.
@@ -633,9 +668,12 @@ fn front_modules(a: *mem.Arena, g: *Graph, modules: []const usize) -> err {
         workers[worker_at].stopped = false
         workers[worker_at].syntax_failure = false
         workers[worker_at].failure = ok
-        let (storage, storage_error) = mem.alloc[u8](a, worker_arena_bytes(bytes))
-        if storage_error != ok { ret storage_error }
-        workers[worker_at].arena = mem.arena_from(storage)
+        // One reservation per worker for every wave (D339): what a wave parsed stays.
+        if workers[worker_at].arena.cap == 0usize {
+            let (arena, arena_error) = reserved_arena(a)
+            if arena_error != ok { ret arena_error }
+            workers[worker_at].arena = arena
+        }
         // The scratch grows to the largest module the worker has seen, out of the
         // program's arena; a token per two bytes is the densest text it handles.
         let tokens_needed = largest / 2usize + 64usize

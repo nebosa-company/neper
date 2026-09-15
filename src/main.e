@@ -4197,9 +4197,9 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
             }
             list_at += 1usize
         }
-        let (storage, storage_error) = mem.alloc[u8](a, bytes * 8usize + 65536usize)
-        if storage_error != ok { ret storage_error }
-        workers[worker_at].arena = mem.arena_from(storage)
+        let (arena, arena_error) = graph.reserved_arena(a)
+        if arena_error != ok { ret arena_error }
+        workers[worker_at].arena = arena
         workers[worker_at].modules = list[first..filled]
         workers[worker_at].count = filled - first
         workers[worker_at].paths = paths[first..filled]
@@ -4234,6 +4234,7 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
     // What a worker left, out of the program's arena.
     worker_at = 0usize
     while worker_at < worker_count {
+        loaded.worker_bytes += graph.arena_touched(&workers[worker_at].arena)
         if workers[worker_at].stopped {
             var remaining = workers[worker_at].stopped_at
             while remaining < workers[worker_at].count {
@@ -5254,6 +5255,7 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
     if assemble_error != ok { ret assemble_error }
     report.build.unreached_functions = program.unreached_functions
     report.build.unreached_bytes = program.unreached_bytes
+    loaded.worker_bytes += program.worker_bytes
     // The assembled builder replaces the program's: what the image carries of the
     // build itself -- the arena size (D225) and the mode -- comes across.
     let arena_bytes = builder.arena_bytes
@@ -5961,27 +5963,24 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         let cost_before = mem.stats(a).used
         var blank: LowerWorker = zero
         workers[worker_at] = blank
-        let (worker_bindings, bindings_error) = mem.alloc[lower.Binding](a, bindings.len)
+        // The worker's arena first (D339): a reservation of its own, committed as it
+        // is touched, and every pool of the worker -- its builder, its stages, its
+        // bindings, its oracles and its forked checker -- is taken from it, where they
+        // were taken from the program's arena, sized from the program and charged whole.
+        let (arena, arena_error) = graph.reserved_arena(a)
+        if arena_error != ok { ret arena_error }
+        workers[worker_at].arena = arena
+        let (worker_bindings, bindings_error) = mem.alloc[lower.Binding](&workers[worker_at].arena, bindings.len)
         if bindings_error != ok { ret bindings_error }
         workers[worker_at].scale = 4usize
         workers[worker_at].share = largest_share
         workers[worker_at].fork_id = worker_at + 1usize
-        try init_lower_worker(a, &workers[worker_at], checker, loaded, resolver, report, abi, hot, held, worker_bindings, builder, release, body_skip)
-        // The first worker's checker is forked here, out of the program's arena, and
-        // measured: every fork copies the same declarations into tails of the same
-        // size, so the others' arenas are given that much, and they fork on their
-        // own threads.
-        var arena_bytes = largest_share * 12usize + 4194304usize
+        try init_lower_worker(&workers[worker_at].arena, &workers[worker_at], checker, loaded, resolver, report, abi, hot, held, worker_bindings, builder, release, body_skip)
+        // The first worker's checker is forked here, on the main thread; the others
+        // fork on their own threads.
         if worker_at == 0usize {
-            let fork_before = mem.stats(a).used
-            try worker_forked(&workers[0usize], a, checker)
-            fork_cost = mem.stats(a).used - fork_before
-        } else {
-            arena_bytes += fork_cost + fork_cost / 8usize
+            try worker_forked(&workers[0usize], &workers[0usize].arena, checker)
         }
-        let (storage, storage_error) = mem.alloc[u8](a, arena_bytes)
-        if storage_error != ok { ret storage_error }
-        workers[worker_at].arena = mem.arena_from(storage)
         worker_cost = mem.stats(a).used - cost_before
         worker_at += 1usize
     }
@@ -6419,6 +6418,12 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     try link_hot_artifacts(a, report, loaded, builder, hot, held, code)
     report.arena_used = mem.stats(a).used
     try report_phase(report, "link from artifacts")
+    // What the crew's arenas committed (D339), for `--stats`.
+    var touched_at = 0usize
+    while touched_at < crew.count {
+        loaded.worker_bytes += graph.arena_touched(&crew.workers[touched_at].arena)
+        touched_at += 1usize
+    }
     ret ok
 }
 

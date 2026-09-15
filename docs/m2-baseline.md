@@ -146,6 +146,10 @@ Cold phase split, p50 over the runs (ms):
   (`baseline-windows-sc2m-j4.json`: 7.9 s cold at four workers, 9.3 GB high-water,
   with one 15.7 s outlier in three runs). Linux maps with
   `MAP_NORESERVE` (D330) and completes the same cell at 11.4 GB high-water.
+  Closed by D339: worker arenas are reservations committed as they are touched, and
+  the cell builds at eight workers with a 4.8 GB peak commit; from D339 on, `arena
+  high-water` in the tables is the root arena alone and `worker arenas reached` is
+  reported beside it.
 
 ## The budgets
 

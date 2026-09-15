@@ -3,6 +3,7 @@
 use e.mem
 use e.os
 use binary
+use graph
 use check
 use codegen_x64
 use em
@@ -33,6 +34,8 @@ type Program = struct {
     line_count: usize,
     // The reference no artifact defines, when the link fails with `MissingSymbol`.
     missing_symbol: str,
+    // What the link's worker arenas committed (D339).
+    worker_bytes: usize,
     // What `reachable_from_main` dropped, for `--stats` (D334): functions and their code bytes.
     unreached_functions: usize,
     unreached_bytes: usize,
@@ -604,9 +607,9 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     while worker_at < worker_count {
         var blank: LinkWorker = zero
         workers[worker_at] = blank
-        let (storage, storage_error) = mem.alloc[u8](a, need_total / worker_count + need_largest + 65536usize)
-        if storage_error != ok { ret storage_error }
-        workers[worker_at].arena = mem.arena_from(storage)
+        let (arena, arena_error) = graph.reserved_arena(a)
+        if arena_error != ok { ret arena_error }
+        workers[worker_at].arena = arena
         let (hash_storage, hash_storage_error) = mem.alloc[u8](a, capacity(largest_artifact))
         if hash_storage_error != ok { ret hash_storage_error }
         try binary.init(&workers[worker_at].hash_scratch, hash_storage)
@@ -845,6 +848,11 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     }
     let copy_error = link_run(a, workers, worker_count, copy_weights[0usize..artifacts.len], 2usize)
     if copy_error != ok { ret copy_error }
+    worker_at = 0usize
+    while worker_at < worker_count {
+        program.worker_bytes += graph.arena_touched(&workers[worker_at].arena)
+        worker_at += 1usize
+    }
     // The references in relocation order, compacted past the globals' empty slots, and
     // the rows in table order: what the one-at-a-time loop appended as it went.
     let (remap, remap_error) = mem.alloc[usize](a, capacity(reloc_cursor))

@@ -140,6 +140,12 @@ void neper_mem_root(unsigned char *base, size_t size, size_t committed) {
     np_root_committed = committed;
 }
 
+#ifdef _WIN32
+static int np_reserved_grow(NpArena *a, size_t need);
+#else
+#define np_reserved_grow(a, need) 1
+#endif
+
 static void *np_arena_alloc(NpArena *a, size_t n, size_t alignment) {
     size_t at;
     if (!a || !alignment || (alignment & (alignment - 1))) return 0;
@@ -148,6 +154,11 @@ static void *np_arena_alloc(NpArena *a, size_t n, size_t alignment) {
     if (at > a->cap || n > a->cap - at) return 0;
     if (np_root_base && a->base == np_root_base && a->cap == np_root_size &&
         at + n > np_root_committed && !np_root_grow(at + n)) return 0;
+    /* A worker's reservation, one page short of the root's capacity (D339): this runtime
+       has no commit-on-touch, so it commits as the root does, a chunk at a time, with no
+       watermark -- what was committed is the old offset rounded up. */
+    if (np_root_base && a->base != np_root_base && a->cap == np_root_size - 4096 &&
+        !np_reserved_grow(a, at + n)) return 0;
     a->off = at + n;
     return a->base ? a->base + at : 0;
 }
@@ -550,6 +561,16 @@ uint32_t neper_os_commit(unsigned char *p, size_t n) {
     return VirtualAlloc(p, n, MEM_COMMIT, PAGE_READWRITE) ? NP_OK : np_error(GetLastError());
 }
 
+/* A reserved arena of the root's capacity (D339): committed a chunk at a time as the root
+ * is, with no watermark -- what was committed is the old offset rounded up to a chunk. */
+static int np_reserved_grow(NpArena *a, size_t need) {
+    size_t have = (a->off + NP_ROOT_CHUNK - 1) & ~(NP_ROOT_CHUNK - 1);
+    size_t want = (need + NP_ROOT_CHUNK - 1) & ~(NP_ROOT_CHUNK - 1);
+    if (want > a->cap) want = a->cap;
+    if (want <= have) return 1;
+    return VirtualAlloc(a->base + have, want - have, MEM_COMMIT, PAGE_READWRITE) != 0;
+}
+
 
 /* A thread, run inline (D321): the bootstrap compiler need not be fast, only right, and
    its parallel front end is written so that the workers share nothing they write. */
@@ -769,7 +790,7 @@ void neper_os_peak_memory(void *result) {
 void neper_os_exit(int32_t code) { _exit(code); }
 
 void neper_os_reserve(void *result, size_t n) {
-    unsigned char *out = (unsigned char *)result; void *p = mmap(0, n, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    unsigned char *out = (unsigned char *)result; void *p = mmap(0, n, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);
     *(void **)out = p == MAP_FAILED ? 0 : p; *(uint32_t *)(out + 8) = p == MAP_FAILED ? np_error(errno) : NP_OK;
 }
 

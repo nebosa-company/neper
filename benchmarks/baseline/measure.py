@@ -128,6 +128,7 @@ for name in args.workloads.split(','):
         cell['peak_mb'] = stat_row(text, 'compiler peak working set')
         cell['image_bytes'] = stat_row(text, 'executable size')
         cell['functions'] = stat_row(text, 'functions')
+        cell['worker_reached_mb'] = stat_row(text, 'worker arenas reached')
         cell['cold'] = percentiles(cell['cold_ms'])
         cell['warm'] = percentiles(cell['warm_ms'])
         cell['cold_phase_p50'] = {k: statistics.median(ph.get(k, 0) for ph in cell['cold_phases']) for k in cell['cold_phases'][0]}

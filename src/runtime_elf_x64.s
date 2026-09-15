@@ -979,7 +979,7 @@ neper_os_reserve:
     mov rsi, rdi
     xor edi, edi
     xor edx, edx
-    mov r10d, 0x22
+    mov r10d, 0x4022
     mov r8, -1
     xor r9d, r9d
     mov eax, 9

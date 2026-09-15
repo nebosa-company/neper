@@ -23,13 +23,16 @@ EXTERN __imp_SetHandleInformation:QWORD
 EXTERN __imp_WaitForSingleObject:QWORD
 EXTERN __imp_ReadFile:QWORD
 EXTERN __imp_VirtualAlloc:QWORD
+EXTERN __imp_AddVectoredExceptionHandler:QWORD
 EXTERN __imp_WideCharToMultiByte:QWORD
 EXTERN __imp_WriteFile:QWORD
 EXTERN __imp_SetFilePointerEx:QWORD
 
 ; The root arena is reserved rather than committed, and grows a chunk at a time as it is
 ; allocated from. Committing it whole would charge the whole of it against the commit limit
-; before `main` runs, for every process, however little it goes on to allocate.
+; before `main` runs, for every process, however little it goes on to allocate. A worker's
+; reservation (D339) is committed as it is touched instead, by the handler the entry
+; registers.
 NP_ARENA_BYTES EQU 40000000h
 NP_ARENA_CHUNK EQU 100000h
 
@@ -67,6 +70,15 @@ neper_entry PROC
     mov r8d, 1000h
     mov r9d, 4
     call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jz entry_fail
+
+; Reserved memory is committed as it is touched (D339): a handler on the access
+; violation commits the chunk around the address and resumes, so an arena -- the root
+; or a worker's reservation -- charges the pages it uses, as a Linux mapping does.
+    mov ecx, 1
+    lea rdx, np_commit_on_touch
+    call qword ptr [__imp_AddVectoredExceptionHandler]
     test rax, rax
     jz entry_fail
 
@@ -246,11 +258,16 @@ np_arena_alloc PROC
     ja arena_fail
     lea r9, [r10+rdx]
 
-; The reserved arena grows here, because this is the one place its offset moves. What was
+; The root arena grows here, because this is the one place its offset moves. What was
 ; committed is whatever the old offset reached rounded up to a chunk, so no watermark has to
 ; be kept anywhere -- which matters, since the runtime is embedded as bare text with nowhere
 ; writable to keep one. A reset moves the offset back and the next growth re-commits pages
-; that are already committed, which Windows allows and answers immediately.
+; that are already committed, which Windows allows and answers immediately. The root alone
+; (D339): a worker's reservation is one page short of the root's capacity, so it is not
+; grown here and is committed as it is touched by np_commit_on_touch instead, charging
+; what it uses rather than what its pools were sized to; the root keeps committing to its
+; offset, since memory the program hands to the kernel -- a read's buffer, a foreign
+; call's -- has to be committed before the call, and the root is what programs use.
     mov rax, qword ptr neper_arena_size
     cmp [rcx+8], rax
     jne arena_store
@@ -292,6 +309,43 @@ arena_fail:
     xor eax, eax
     ret
 np_arena_alloc ENDP
+
+; The commit-on-touch handler (D339): an access violation at an address that can be
+; committed -- one inside a reservation -- is committed, a chunk when the chunk lies
+; within the reservation and a page otherwise, and the instruction resumes; any other
+; fault goes on to the next handler and the crash it was. rcx = EXCEPTION_POINTERS.
+np_commit_on_touch PROC
+    sub rsp, 40
+    mov rax, [rcx]
+    cmp dword ptr [rax], 0C0000005h
+    jne np_touch_search
+    mov rax, [rax+40]
+    mov [rsp+32], rax
+    mov rcx, rax
+    and rcx, -NP_ARENA_CHUNK
+    mov edx, NP_ARENA_CHUNK
+    mov r8d, 1000h
+    mov r9d, 4
+    call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jnz np_touch_done
+    mov rcx, [rsp+32]
+    and rcx, -4096
+    mov edx, 4096
+    mov r8d, 1000h
+    mov r9d, 4
+    call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jz np_touch_search
+np_touch_done:
+    mov eax, -1
+    add rsp, 40
+    ret
+np_touch_search:
+    xor eax, eax
+    add rsp, 40
+    ret
+np_commit_on_touch ENDP
 
 np_utf16_to_utf8 PROC
     push r12
@@ -1118,7 +1172,23 @@ neper_os_read PROC
     push rbx
     sub rsp, 48
     mov dword ptr [rsp+40], 0
-    mov rcx, [rcx]
+    mov rbx, rcx
+; The buffer committed first (D339): the kernel cannot take the commit-on-touch fault
+; on the program's behalf, and a buffer in a worker's reservation may be untouched.
+; Idempotent on committed pages; a failure is left to ReadFile to report.
+    mov r11, rdx
+    mov rcx, [rdx]
+    mov rdx, [rdx+8]
+    test rdx, rdx
+    jz read_committed
+    mov r8d, 1000h
+    mov r9d, 4
+    mov [rsp+32], r11
+    call qword ptr [__imp_VirtualAlloc]
+    mov r11, [rsp+32]
+read_committed:
+    mov rdx, r11
+    mov rcx, [rbx]
     mov r8, [rdx+8]
     cmp r8, 0ffffffffh
     jbe read_size_ready

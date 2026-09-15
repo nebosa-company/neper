@@ -7214,3 +7214,48 @@ fixtures were measured from the Linux filesystem.
 
 Not in this baseline, and said so: the H12 model-family evaluation, whose task set
 is pre-registered separately, and the H25 workflows beyond cold and no-op builds.
+
+## D339 -- A worker's arena is a reservation committed as it is touched
+
+The first H25 debt (D338): the arena's high-water mark was five to eight times the
+peak resident set, and a two-million-line release build asked for more commit than
+a 16 GB machine holds. The cause was where the workers' memory came from. Every
+phase's workers -- the front end's (D321), the artifact loads' (D324), the crew's
+(D325, D326) and the link's (D336) -- took their arenas as carve-outs of the root
+arena, sized from the program with a margin, and the crew's pools (builders, stages,
+oracles, the forked checker) came out of the root as well; and the Windows runtime
+commits the root to its allocation offset (D306), so every such estimate was charged
+whole, filled or not. `--stats-full`'s pool table, which lists the program's pools
+only, could not show it: those are oversized by count but small in bytes.
+
+A worker's arena is now a reservation of its own (`graph.reserved_arena`): the
+root's capacity less one page -- the mark by which the runtime tells it from the
+root -- reserved through `os.reserve` and never committed ahead. On Linux the
+reservation is made writable whole and the mapping charges pages as they are
+touched, as the root's does; `neper_os_reserve` maps `MAP_NORESERVE` now, as the
+stub does (D330), so a reservation the size of the root is not refused by the
+overcommit heuristic. On Windows the runtime's entry registers a vectored exception
+handler, `np_commit_on_touch`: an access violation at an address that can be
+committed -- one inside a reservation -- commits the chunk around it (a page, when
+the chunk would cross the reservation's end) and resumes the instruction; any other
+fault goes on to the crash it was. The root keeps committing to its offset, because
+memory a program hands to the kernel must be committed before the call and the
+root is what programs use; `neper_os_read` commits its buffer first, since the
+compiler's workers read artifacts into their reservations and the kernel cannot
+take the fault on the program's behalf. The C bootstrap runtime has no handler and
+commits a reservation to its offset as it does the root -- a bootstrap-built
+compiler pays the old charge, and nothing else. The crew's pools are taken from the
+worker's own arena, allocated first.
+
+`--stats` gains `worker arenas reached`, the workers' high-water marks summed --
+what their pools were sized to; what was committed is what was touched, which the
+peak resident set shows. Measured on the million-line program on Windows, the
+root's high-water mark went from 5.3 GB to 1.7 GB (debug) and 6.1 to 1.3 (release),
+with the workers' 3.4 and 4.5 GB now only reached, not charged; the peak resident
+set is unchanged at 1.2 GB. The two-million-line release build, which failed at
+eight workers on the baseline machine, builds in 7.0 s at a peak commit of 4.8 GB.
+Images are the same, hot builds are the cold builds, and both suites pass.
+
+What remains charged is the root's own high-water mark -- the program's tables,
+the held artifacts and the link's -- which the same pool table now describes; the
+Windows `sc2m` release cell of the baseline is no longer a debt.
