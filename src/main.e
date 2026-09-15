@@ -3421,11 +3421,13 @@ fn settle_index(a: *mem.Arena, s: *Settle, fresh: [][]const u8, module_index: us
 fn settle_edges(a: *mem.Arena, s: *Settle, fresh: [][]const u8, c: *check.Checker, g: *graph.Graph, old: []const u8) -> (bool, err) {
     let (edge_count, count_error) = em.artifact_dependency_count(old)
     if count_error != ok { ret (false, count_error) }
+    let (deps, strings, open_error) = em.dependencies_open(old)
+    if open_error != ok { ret (false, open_error) }
     var edge_at = 0usize
     while edge_at < edge_count {
-        let (dependency, dependency_error) = em.dependency_at(old, edge_at)
+        let (dependency, dependency_error) = em.dependency_in(old, deps, strings, edge_at)
         if dependency_error != ok { ret (false, dependency_error) }
-        let (target_name, target_name_error) = artifact_string(a, old, dependency.module_index)
+        let (target_name, target_name_error) = artifact_string_in(old, strings, dependency.module_index)
         if target_name_error != ok { ret (false, target_name_error) }
         let (target_at, found_target) = lookup.find(&s.modules, 0usize, 0usize, target_name)
         if !found_target { ret (false, ok) }
@@ -3437,7 +3439,7 @@ fn settle_edges(a: *mem.Arena, s: *Settle, fresh: [][]const u8, c: *check.Checke
             let index_error = settle_index(a, s, fresh, target_at)
             if index_error != ok { ret (false, index_error) }
         }
-        let (edge_name, edge_name_error) = artifact_string(a, old, dependency.name_index)
+        let (edge_name, edge_name_error) = artifact_string_in(old, strings, dependency.name_index)
         if edge_name_error != ok { ret (false, edge_name_error) }
         let (cursor, found_declaration) = lookup.find(&s.declarations, target_at, 0usize, edge_name)
         var declaration: em.Declaration = zero
@@ -3619,6 +3621,13 @@ fn load_artifact(a: *mem.Arena, path: str) -> ([]const u8, err) {
 // A view of the artifact's string (D320): the bytes are bytes, so nothing is copied.
 fn artifact_string(a: *mem.Arena, bytes: []const u8, index: usize) -> (str, err) {
     let (start, length, bounds_error) = em.string_bounds(bytes, index)
+    if bounds_error != ok { ret ("", bounds_error) }
+    ret (bytes[start..start + length], ok)
+}
+
+// A string of an artifact whose string section is known (D332).
+fn artifact_string_in(bytes: []const u8, strings: em.Section, index: usize) -> (str, err) {
+    let (start, length, bounds_error) = em.string_bounds_in(bytes, strings, index)
     if bounds_error != ok { ret ("", bounds_error) }
     ret (bytes[start..start + length], ok)
 }
@@ -4313,11 +4322,13 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
                 let old = held[module_at]
                 let (edge_count, count_error) = em.artifact_dependency_count(old)
                 if count_error != ok { ret count_error }
+                let (deps, strings, open_error) = em.dependencies_open(old)
+                if open_error != ok { ret open_error }
                 var edge_at = 0usize
                 while edge_at < edge_count && hot.stable[module_at] {
-                    let (dependency, dependency_error) = em.dependency_at(old, edge_at)
+                    let (dependency, dependency_error) = em.dependency_in(old, deps, strings, edge_at)
                     if dependency_error != ok { ret dependency_error }
-                    let (target_name, target_name_error) = artifact_string(a, old, dependency.module_index)
+                    let (target_name, target_name_error) = artifact_string_in(old, strings, dependency.module_index)
                     if target_name_error != ok { ret target_name_error }
                     let (target_at, found_target) = lookup.find(&modules, 0usize, 0usize, target_name)
                     if !found_target || !hot.stable[target_at] {
@@ -5231,7 +5242,7 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
         ret ok
     }
     var program: em_link.Program = zero
-    let assemble_error = em_link.assemble(a, artifacts, &program)
+    let assemble_error = em_link.assemble(a, artifacts, &program, loaded.jobs)
     if assemble_error == em_link.MissingSymbol && program.missing_symbol.len != 0usize {
         try stderr_text("error: no artifact defines `")
         try stderr_text(program.missing_symbol)
@@ -6504,7 +6515,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var program: em_link.Program = zero
-        let assemble_error = em_link.assemble(a, artifacts, &program)
+        let assemble_error = em_link.assemble(a, artifacts, &program, 0usize)
         if assemble_error == em_link.MissingSymbol && program.missing_symbol.len != 0usize {
             try stderr_text("error: no artifact defines `")
             try stderr_text(program.missing_symbol)

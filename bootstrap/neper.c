@@ -1114,6 +1114,10 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.clock", "neper_os_clock"); intrinsic_param(fn, token, "c", clock); intrinsic_returns(fn, 2, i64, error);
     /* `os.copy_bytes(dst, src)` (D329): the shorter length's worth of bytes, one `rep movsb`. */
     OS_FN("os.copy_bytes", "neper_os_copy_bytes"); intrinsic_param(fn, token, "dst", bytes); intrinsic_param(fn, token, "src", const_bytes); intrinsic_returns(fn, 0, error, error);
+    /* `os.sha256_blocks(state, bytes)` (D332): the whole blocks compressed with the SHA extensions, or none. */
+    OS_FN("os.sha256_blocks", "neper_os_sha256_blocks"); intrinsic_param(fn, token, "state", intrinsic_slice(usize, 0)); intrinsic_param(fn, token, "bytes", const_bytes); intrinsic_returns(fn, 1, usize, error);
+    /* `os.crc32c_bytes(crc, bytes)` (D332): the bytes folded with the CRC32 instruction, or none. */
+    OS_FN("os.crc32c_bytes", "neper_os_crc32c_bytes"); intrinsic_param(fn, token, "crc", intrinsic_slice(usize, 0)); intrinsic_param(fn, token, "bytes", const_bytes); intrinsic_returns(fn, 1, usize, error);
     /* `os.seek(f, off, whence) -> (u64, err)` (D324): so a file's size is one call. */
     OS_FN("os.seek", "neper_os_seek"); intrinsic_param(fn, token, "f", file); intrinsic_param(fn, token, "off", i64); intrinsic_param(fn, token, "whence", type_make(TY_NAMED, "os.SeekWhence")); intrinsic_returns(fn, 2, type_make(TY_INT, "u64"), error);
     /* `os.thread_create[Ctx](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)` (D321).
@@ -7321,7 +7325,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
-        "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\nEXTERN neper_os_copy_bytes:PROC\n"
+        "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\nEXTERN neper_os_copy_bytes:PROC\nEXTERN neper_os_sha256_blocks:PROC\nEXTERN neper_os_crc32c_bytes:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"
         "np_stack_probe PROC\n"

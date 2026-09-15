@@ -3334,6 +3334,20 @@ fn seed_os_signatures(c: *Checker, os_module: usize, mem_module: usize, has_memo
     if copy_error != ok { ret copy_error }
     try add_seeded_parameter(c, copy_index, "dst", bytes)
     try add_seeded_parameter(c, copy_index, "src", const_bytes)
+    // `os.sha256_blocks(state: []usize, bytes: []const u8) -> usize` (D332): the whole
+    // blocks compressed with the SHA extensions, or none when the CPU has none.
+    let (usizes, usizes_error) = seeded_composite_type(c, .Slice, usize_type, false, os_module)
+    if usizes_error != ok { ret usizes_error }
+    let (sha_index, sha_error) = add_seeded_function(c, os_module, "sha256_blocks", usize_type, false)
+    if sha_error != ok { ret sha_error }
+    try add_seeded_parameter(c, sha_index, "state", usizes)
+    try add_seeded_parameter(c, sha_index, "bytes", const_bytes)
+    // `os.crc32c_bytes(crc: []usize, bytes: []const u8) -> usize` (D332): the bytes
+    // folded with the CRC32 instruction, or none when the CPU has none.
+    let (crc_index, crc_error) = add_seeded_function(c, os_module, "crc32c_bytes", usize_type, false)
+    if crc_error != ok { ret crc_error }
+    try add_seeded_parameter(c, crc_index, "crc", usizes)
+    try add_seeded_parameter(c, crc_index, "bytes", const_bytes)
 
     let (read_index, read_error) = add_seeded_function(c, os_module, "read", usize_type, true)
     if read_error != ok { ret read_error }

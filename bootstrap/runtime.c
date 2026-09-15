@@ -26,6 +26,17 @@ void neper_os_copy_bytes(unsigned char *dst, size_t dst_len, const unsigned char
     size_t count = dst_len < src_len ? dst_len : src_len, at;
     for (at = 0; at < count; at++) dst[at] = src[at];
 }
+/* `os.sha256_blocks` (D332): the C runtime has no SHA extensions, so none are done and
+   the caller runs its own rounds. */
+size_t neper_os_sha256_blocks(size_t *state, size_t state_len, const unsigned char *bytes, size_t len) {
+    (void)state; (void)state_len; (void)bytes; (void)len;
+    return 0;
+}
+/* `os.crc32c_bytes` (D332): likewise none; the caller keeps its tables. */
+size_t neper_os_crc32c_bytes(size_t *crc, size_t crc_len, const unsigned char *bytes, size_t len) {
+    (void)crc; (void)crc_len; (void)bytes; (void)len;
+    return 0;
+}
 static const NpStr *np_args_ptr;
 static size_t np_args_len;
 

@@ -1,5 +1,6 @@
 // Deterministic hashes used by .em serialization and content folding.
 use e.mem
+use e.os
 use lex
 
 error InvalidByte
@@ -158,6 +159,12 @@ fn crc32c(bytes: []const u8, zero_at: usize, zero_count: usize) -> (usize, err) 
         crc = table[(crc ^ value) & 255usize] ^ (crc >> 8usize)
         at += 1usize
     }
+    // The rest with the CRC32 instruction when the CPU has it (D332); the loops below
+    // then see nothing left, and do every byte on a CPU without.
+    var crc_slot: [1]usize = zero
+    crc_slot[0usize] = crc
+    at += os.crc32c_bytes(crc_slot[..], bytes[at..bytes.len])
+    crc = crc_slot[0usize]
     while at + 8usize <= bytes.len {
         let low = crc ^ (usize(bytes[at]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize))
         crc = table[1792usize + (low & 255usize)] ^ table[1536usize + ((low >> 8usize) & 255usize)] ^ table[1280usize + ((low >> 16usize) & 255usize)] ^ table[1024usize + ((low >> 24usize) & 255usize)] ^ table[768usize + usize(bytes[at + 4usize])] ^ table[512usize + usize(bytes[at + 5usize])] ^ table[256usize + usize(bytes[at + 6usize])] ^ table[usize(bytes[at + 7usize])]
@@ -311,7 +318,9 @@ fn sha256_hex(a: *mem.Arena, bytes: []const u8) -> (str, err) {
     let k = sha_table()
     var block: [128]u8 = zero
     let total = bytes.len
-    var at = 0usize
+    // The whole blocks with the SHA extensions when the CPU has them (D332), the rest
+    // -- every block, on one without -- a round at a time here.
+    var at = os.sha256_blocks(state[..], bytes) * 64usize
     while at + 64usize <= total {
         sha_compress(state[..], bytes, at, k[..])
         at += 64usize

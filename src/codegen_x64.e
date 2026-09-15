@@ -1112,15 +1112,22 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     // The distinct paths, at most one per module, laid out after the names.
     var paths: [8192]str = zero
     var path_offsets: [8192]usize = zero
+    // The paths by hash bucket, chained (D332): a head is a path's index plus one,
+    // zero being the end.
+    var path_heads: [4096]usize = zero
+    var path_next: [8192]usize = zero
     var path_count = 0usize
     var paths_total = 0usize
     var row = 0usize
     var last_path = 0usize
     while row < line_count {
-        let (path_index, found) = path_position(paths[..path_count], lines[row].path, &last_path)
+        let (path_index, found) = path_position(paths[..path_count], lines[row].path, &last_path, path_heads[..], path_next[..])
         if !found {
             if path_count == paths.len { ret Unsupported }
             paths[path_count] = lines[row].path
+            let bucket = path_bucket(lines[row].path)
+            path_next[path_count] = path_heads[bucket]
+            path_heads[bucket] = path_count + 1usize
             path_offsets[path_count] = names_at + names_total + paths_total
             paths_total += lines[row].path.len
             path_count += 1usize
@@ -1183,7 +1190,7 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
             var row_at = first_row
             while row_at < first_row + row_total {
                 let entry = lines[row_at]
-                let (path_index, found) = path_position(paths[..path_count], entry.path, &last_path)
+                let (path_index, found) = path_position(paths[..path_count], entry.path, &last_path, path_heads[..], path_next[..])
                 if !found { ret Unsupported }
                 try emit_x64.little_u32(machine, entry.offset - start)
                 try emit_x64.little_u32(machine, entry.line)
@@ -1209,17 +1216,30 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
 // The rows come function by function and the functions module by module, so the path
 // is nearly always the one the last row had (D320): checked first, since a scan of the
 // two thousand paths of a two-million-line program per row was the whole symbol table.
-fn path_position(paths: []const str, path: str, last: *usize) -> (usize, bool) {
+// A miss on the last one goes through a chain per hash bucket (D332): the scan was
+// the whole symbol table again once an image linked from a thousand artifacts kept
+// a few functions of each.
+fn path_position(paths: []const str, path: str, last: *usize, heads: []const usize, next: []const usize) -> (usize, bool) {
     if *last < paths.len && check.same(paths[*last], path) { ret (*last, true) }
-    var at = 0usize
-    while at < paths.len {
-        if check.same(paths[at], path) {
-            *last = at
-            ret (at, true)
+    var at = heads[path_bucket(path)]
+    while at != 0usize {
+        if check.same(paths[at - 1usize], path) {
+            *last = at - 1usize
+            ret (at - 1usize, true)
         }
-        at += 1usize
+        at = next[at - 1usize]
     }
     ret (0usize, false)
+}
+
+fn path_bucket(path: str) -> usize {
+    var hash = 2166136261usize
+    var at = 0usize
+    while at < path.len {
+        hash = ((hash ^ usize(path[at])) *% 16777619usize) & 4294967295usize
+        at += 1usize
+    }
+    ret hash & 4095usize
 }
 
 // The line rows within one function's code, which are contiguous since the rows are

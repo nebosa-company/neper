@@ -247,6 +247,305 @@ neper_os_copy_bytes:
     rep movsb
     ret
 
+# os.sha256_blocks(state: []usize, bytes: []const u8) -> usize (D332): the whole
+# 64-byte blocks of `bytes` compressed into the eight 32-bit words `state` holds one
+# per slot, with the SHA extensions; how many blocks were done, none when the CPU has
+# no SHA extensions and the caller keeps its own rounds. rdi = &state, rsi = &bytes.
+.global neper_os_sha256_blocks
+neper_os_sha256_blocks:
+    push rbx
+    sub rsp, 40
+    mov r10, rdi
+    mov r11, rsi
+    mov eax, 7
+    xor ecx, ecx
+    cpuid
+    xor eax, eax
+    bt ebx, 29
+    jnc .Lsha_done
+    mov r8, qword ptr [r11+8]
+    shr r8, 6
+    mov rax, r8
+    test r8, r8
+    jz .Lsha_done
+    mov rcx, qword ptr [r10]
+    mov edx, dword ptr [rcx+0]
+    mov dword ptr [rsp+0], edx
+    mov edx, dword ptr [rcx+8]
+    mov dword ptr [rsp+4], edx
+    mov edx, dword ptr [rcx+16]
+    mov dword ptr [rsp+8], edx
+    mov edx, dword ptr [rcx+24]
+    mov dword ptr [rsp+12], edx
+    mov edx, dword ptr [rcx+32]
+    mov dword ptr [rsp+16], edx
+    mov edx, dword ptr [rcx+40]
+    mov dword ptr [rsp+20], edx
+    mov edx, dword ptr [rcx+48]
+    mov dword ptr [rsp+24], edx
+    mov edx, dword ptr [rcx+56]
+    mov dword ptr [rsp+28], edx
+    movdqu xmm1, xmmword ptr [rsp]
+    movdqu xmm2, xmmword ptr [rsp+16]
+    pshufd xmm1, xmm1, 0xB1
+    pshufd xmm2, xmm2, 0x1B
+    movdqa xmm7, xmm1
+    palignr xmm1, xmm2, 8
+    pblendw xmm2, xmm7, 0xF0
+    lea r9, [rip + .Lsha_k]
+    movdqu xmm8, xmmword ptr [rip + .Lsha_flip]
+    mov rdx, qword ptr [r11]
+.Lsha_loop:
+    movdqa xmm9, xmm1
+    movdqa xmm10, xmm2
+    movdqu xmm0, xmmword ptr [rdx+0]
+    pshufb xmm0, xmm8
+    movdqa xmm3, xmm0
+    movdqu xmm7, xmmword ptr [r9+0]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    movdqu xmm0, xmmword ptr [rdx+16]
+    pshufb xmm0, xmm8
+    movdqa xmm4, xmm0
+    movdqu xmm7, xmmword ptr [r9+16]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm3, xmm4
+    movdqu xmm0, xmmword ptr [rdx+32]
+    pshufb xmm0, xmm8
+    movdqa xmm5, xmm0
+    movdqu xmm7, xmmword ptr [r9+32]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm4, xmm5
+    movdqu xmm0, xmmword ptr [rdx+48]
+    pshufb xmm0, xmm8
+    movdqa xmm6, xmm0
+    movdqu xmm7, xmmword ptr [r9+48]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm6
+    palignr xmm7, xmm5, 4
+    paddd xmm3, xmm7
+    sha256msg2 xmm3, xmm6
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm5, xmm6
+    movdqa xmm0, xmm3
+    movdqu xmm7, xmmword ptr [r9+64]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm3
+    palignr xmm7, xmm6, 4
+    paddd xmm4, xmm7
+    sha256msg2 xmm4, xmm3
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm6, xmm3
+    movdqa xmm0, xmm4
+    movdqu xmm7, xmmword ptr [r9+80]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm4
+    palignr xmm7, xmm3, 4
+    paddd xmm5, xmm7
+    sha256msg2 xmm5, xmm4
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm3, xmm4
+    movdqa xmm0, xmm5
+    movdqu xmm7, xmmword ptr [r9+96]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm5
+    palignr xmm7, xmm4, 4
+    paddd xmm6, xmm7
+    sha256msg2 xmm6, xmm5
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm4, xmm5
+    movdqa xmm0, xmm6
+    movdqu xmm7, xmmword ptr [r9+112]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm6
+    palignr xmm7, xmm5, 4
+    paddd xmm3, xmm7
+    sha256msg2 xmm3, xmm6
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm5, xmm6
+    movdqa xmm0, xmm3
+    movdqu xmm7, xmmword ptr [r9+128]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm3
+    palignr xmm7, xmm6, 4
+    paddd xmm4, xmm7
+    sha256msg2 xmm4, xmm3
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm6, xmm3
+    movdqa xmm0, xmm4
+    movdqu xmm7, xmmword ptr [r9+144]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm4
+    palignr xmm7, xmm3, 4
+    paddd xmm5, xmm7
+    sha256msg2 xmm5, xmm4
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm3, xmm4
+    movdqa xmm0, xmm5
+    movdqu xmm7, xmmword ptr [r9+160]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm5
+    palignr xmm7, xmm4, 4
+    paddd xmm6, xmm7
+    sha256msg2 xmm6, xmm5
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm4, xmm5
+    movdqa xmm0, xmm6
+    movdqu xmm7, xmmword ptr [r9+176]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm6
+    palignr xmm7, xmm5, 4
+    paddd xmm3, xmm7
+    sha256msg2 xmm3, xmm6
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm5, xmm6
+    movdqa xmm0, xmm3
+    movdqu xmm7, xmmword ptr [r9+192]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm3
+    palignr xmm7, xmm6, 4
+    paddd xmm4, xmm7
+    sha256msg2 xmm4, xmm3
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    sha256msg1 xmm6, xmm3
+    movdqa xmm0, xmm4
+    movdqu xmm7, xmmword ptr [r9+208]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm4
+    palignr xmm7, xmm3, 4
+    paddd xmm5, xmm7
+    sha256msg2 xmm5, xmm4
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    movdqa xmm0, xmm5
+    movdqu xmm7, xmmword ptr [r9+224]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    movdqa xmm7, xmm5
+    palignr xmm7, xmm4, 4
+    paddd xmm6, xmm7
+    sha256msg2 xmm6, xmm5
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    movdqa xmm0, xmm6
+    movdqu xmm7, xmmword ptr [r9+240]
+    paddd xmm0, xmm7
+    sha256rnds2 xmm2, xmm1
+    pshufd xmm0, xmm0, 0x0E
+    sha256rnds2 xmm1, xmm2
+    paddd xmm1, xmm9
+    paddd xmm2, xmm10
+    add rdx, 64
+    dec r8
+    jnz .Lsha_loop
+    pshufd xmm1, xmm1, 0x1B
+    pshufd xmm2, xmm2, 0xB1
+    movdqa xmm7, xmm1
+    pblendw xmm1, xmm2, 0xF0
+    palignr xmm2, xmm7, 8
+    movdqu xmmword ptr [rsp], xmm1
+    movdqu xmmword ptr [rsp+16], xmm2
+    mov edx, dword ptr [rsp+0]
+    mov qword ptr [rcx+0], rdx
+    mov edx, dword ptr [rsp+4]
+    mov qword ptr [rcx+8], rdx
+    mov edx, dword ptr [rsp+8]
+    mov qword ptr [rcx+16], rdx
+    mov edx, dword ptr [rsp+12]
+    mov qword ptr [rcx+24], rdx
+    mov edx, dword ptr [rsp+16]
+    mov qword ptr [rcx+32], rdx
+    mov edx, dword ptr [rsp+20]
+    mov qword ptr [rcx+40], rdx
+    mov edx, dword ptr [rsp+24]
+    mov qword ptr [rcx+48], rdx
+    mov edx, dword ptr [rsp+28]
+    mov qword ptr [rcx+56], rdx
+.Lsha_done:
+    add rsp, 40
+    pop rbx
+    ret
+.Lsha_flip: .byte 3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12
+.Lsha_k:
+    .long 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5
+    .long 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174
+    .long 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da
+    .long 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967
+    .long 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85
+    .long 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070
+    .long 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3
+    .long 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+
+# os.crc32c_bytes(crc: []usize, bytes: []const u8) -> usize (D332): the bytes folded
+# into the CRC-32C in `crc`'s first slot with the CRC32 instruction, eight at a time;
+# how many bytes were folded, none when the CPU has no SSE4.2 and the caller keeps its
+# own tables. rdi = &crc, rsi = &bytes.
+.global neper_os_crc32c_bytes
+neper_os_crc32c_bytes:
+    push rbx
+    mov r10, rdi
+    mov r11, rsi
+    mov eax, 1
+    cpuid
+    xor eax, eax
+    bt ecx, 20
+    jnc .Lcrc_done
+    mov r8, qword ptr [r11+8]
+    mov rax, r8
+    mov rdx, qword ptr [r11]
+    mov rcx, qword ptr [r10]
+    mov r9d, dword ptr [rcx]
+    mov r10, r8
+    shr r10, 3
+    jz .Lcrc_tail
+.Lcrc_words:
+    crc32 r9, qword ptr [rdx]
+    add rdx, 8
+    dec r10
+    jnz .Lcrc_words
+.Lcrc_tail:
+    and r8, 7
+    jz .Lcrc_store
+.Lcrc_bytes:
+    crc32 r9d, byte ptr [rdx]
+    inc rdx
+    dec r8
+    jnz .Lcrc_bytes
+.Lcrc_store:
+    mov qword ptr [rcx], r9
+.Lcrc_done:
+    pop rbx
+    ret
+
 # A failed check (spec section 11): the record text, then the two operands wherever the
 # text holds a byte below 2 -- 0 prints the operand unsigned, 1 signed -- then a
 # newline, then the symbolised backtrace from the table r10 points at, all to stderr,

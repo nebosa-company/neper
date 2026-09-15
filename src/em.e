@@ -707,6 +707,8 @@ fn dependency_reference_name(name: str) -> (str, bool) {
     if same(name, "neper_os_open") { ret ("open", true) }
     if same(name, "neper_os_seek") { ret ("seek", true) }
     if same(name, "neper_os_copy_bytes") { ret ("copy_bytes", true) }
+    if same(name, "neper_os_sha256_blocks") { ret ("sha256_blocks", true) }
+    if same(name, "neper_os_crc32c_bytes") { ret ("crc32c_bytes", true) }
     if same(name, "neper_os_read") { ret ("read", true) }
     if same(name, "neper_os_write") { ret ("write", true) }
     if same(name, "neper_os_close") { ret ("close", true) }
@@ -2457,7 +2459,7 @@ fn read_string_starts(bytes: []const u8, starts: []usize) -> (usize, err) {
     if count > starts.len { ret (0usize, Capacity) }
     var at = 0usize
     while at < count {
-        let (start, length, bounds_error) = string_bounds(bytes, at)
+        let (start, length, bounds_error) = string_bounds_in(bytes, strings, at)
         if bounds_error != ok { ret (0usize, bounds_error) }
         starts[at] = start
         at += 1usize
@@ -2476,6 +2478,19 @@ fn string_length_at(bytes: []const u8, start: usize) -> (usize, err) {
 fn string_bounds(bytes: []const u8, index: usize) -> (usize, usize, err) {
     let (strings, found_strings, section_error) = find_section_unchecked(bytes, strings_kind())
     if section_error != ok || !found_strings || strings.length < 4usize { ret (0usize, 0usize, InvalidArtifact) }
+    let (start, length, bounds_error) = string_bounds_in(bytes, strings, index)
+    ret (start, length, bounds_error)
+}
+
+// The string section, for a reader that asks for many strings of one artifact (D332):
+// `string_bounds` found it again per string.
+fn strings_section(bytes: []const u8) -> (Section, err) {
+    let (strings, found_strings, section_error) = find_section_unchecked(bytes, strings_kind())
+    if section_error != ok || !found_strings || strings.length < 4usize { ret (strings, InvalidArtifact) }
+    ret (strings, ok)
+}
+
+fn string_bounds_in(bytes: []const u8, strings: Section, index: usize) -> (usize, usize, err) {
     let (count, count_error) = binary.read_u32(bytes, strings.offset)
     if count_error != ok || index >= count || strings.length < 4usize + count * 4usize { ret (0usize, 0usize, InvalidArtifact) }
     let (offset, offset_error) = binary.read_u32(bytes, strings.offset + 4usize + index * 4usize)
@@ -2500,7 +2515,7 @@ fn string_table_bounds(a: *mem.Arena, bytes: []const u8) -> ([]usize, []usize, e
     if lengths_error != ok { ret (none[0usize..0usize], none[0usize..0usize], lengths_error) }
     var at = 0usize
     while at < count {
-        let (start, length, bounds_error) = string_bounds(bytes, at)
+        let (start, length, bounds_error) = string_bounds_in(bytes, strings, at)
         if bounds_error != ok { ret (none[0usize..0usize], none[0usize..0usize], bounds_error) }
         starts[at] = start
         lengths[at] = length
@@ -3022,10 +3037,28 @@ fn find_declaration(bytes: []const u8, name: str) -> (Declaration, bool, err) {
 
 fn dependency_at(bytes: []const u8, index: usize) -> (Dependency, err) {
     let empty = Dependency { kind: 0usize, module_index: 0usize, name_index: 0usize, hash: 0usize }
+    let (deps, strings, open_error) = dependencies_open(bytes)
+    if open_error != ok { ret (empty, open_error) }
+    let (dependency, read_error) = dependency_in(bytes, deps, strings, index)
+    ret (dependency, read_error)
+}
+
+// The Deps and string sections of a validated artifact, found once for a walk over
+// its edges (D332): `dependency_at` validated the layout and found both per edge, and
+// the hot build walks every edge of every kept module to a fixed point.
+fn dependencies_open(bytes: []const u8) -> (Section, Section, err) {
+    let empty = Section { kind: 0usize, flags: 0usize, offset: 0usize, length: 0usize }
     let validation_error = check_layout(bytes)
-    if validation_error != ok { ret (empty, validation_error) }
+    if validation_error != ok { ret (empty, empty, validation_error) }
     let (deps, found_deps, section_error) = find_section_unchecked(bytes, deps_kind())
-    if section_error != ok || !found_deps || deps.length < 4usize { ret (empty, InvalidArtifact) }
+    if section_error != ok || !found_deps || deps.length < 4usize { ret (empty, empty, InvalidArtifact) }
+    let (strings, strings_error) = strings_section(bytes)
+    if strings_error != ok { ret (empty, empty, strings_error) }
+    ret (deps, strings, ok)
+}
+
+fn dependency_in(bytes: []const u8, deps: Section, strings: Section, index: usize) -> (Dependency, err) {
+    let empty = Dependency { kind: 0usize, module_index: 0usize, name_index: 0usize, hash: 0usize }
     let (count, count_error) = binary.read_u32(bytes, deps.offset)
     if count_error != ok || index >= count || count > (deps.length - 4usize) / 20usize { ret (empty, InvalidArtifact) }
     let offset = deps.offset + 4usize + index * 20usize
@@ -3036,8 +3069,8 @@ fn dependency_at(bytes: []const u8, index: usize) -> (Dependency, err) {
     let (name_index, name_error) = binary.read_u32(bytes, offset + 8usize)
     let (hash, hash_error) = binary.read_u64(bytes, offset + 12usize)
     if module_error != ok || name_error != ok || hash_error != ok { ret (empty, InvalidArtifact) }
-    let (module_start, module_length, module_bounds_error) = string_bounds(bytes, module_index)
-    let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
+    let (module_start, module_length, module_bounds_error) = string_bounds_in(bytes, strings, module_index)
+    let (name_start, name_length, name_bounds_error) = string_bounds_in(bytes, strings, name_index)
     if module_bounds_error != ok || name_bounds_error != ok || module_length == 0usize || name_length == 0usize { ret (empty, InvalidArtifact) }
     ret (Dependency { kind: kind, module_index: module_index, name_index: name_index, hash: hash }, ok)
 }

@@ -156,15 +156,11 @@ fn read_u32(bytes: []const u8, offset: usize) -> (usize, err) {
 
 fn read_u64(bytes: []const u8, offset: usize) -> (usize, err) {
     if offset + 8usize > bytes.len { ret (0usize, InvalidEncoding) }
-    var result = 0usize
-    var multiplier = 1usize
-    var at = 0usize
-    while at < 8usize {
-        result = result +% usize(bytes[offset + at]) *% multiplier
-        multiplier = multiplier *% 256usize
-        at += 1usize
-    }
-    ret (result, ok)
+    // Written out (D332): the loop with its multiplier was the artifact readers' most
+    // called function.
+    let low = usize(bytes[offset]) | (usize(bytes[offset + 1usize]) << 8usize) | (usize(bytes[offset + 2usize]) << 16usize) | (usize(bytes[offset + 3usize]) << 24usize)
+    let high = usize(bytes[offset + 4usize]) | (usize(bytes[offset + 5usize]) << 8usize) | (usize(bytes[offset + 6usize]) << 16usize) | (usize(bytes[offset + 7usize]) << 24usize)
+    ret (low | (high << 32usize), ok)
 }
 
 fn pack(buffer: *Buffer, destination: []u8) -> err {

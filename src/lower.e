@@ -754,6 +754,8 @@ fn intrinsic_symbol(name: str) -> (str, err) {
     if check.same(name, "close") { ret ("neper_os_close", ok) }
     if check.same(name, "seek") { ret ("neper_os_seek", ok) }
     if check.same(name, "copy_bytes") { ret ("neper_os_copy_bytes", ok) }
+    if check.same(name, "sha256_blocks") { ret ("neper_os_sha256_blocks", ok) }
+    if check.same(name, "crc32c_bytes") { ret ("neper_os_crc32c_bytes", ok) }
     if check.same(name, "thread_create") { ret ("neper_os_thread_create", ok) }
     if check.same(name, "thread_join") { ret ("neper_os_thread_join", ok) }
     if check.same(name, "thread_detach") { ret ("neper_os_thread_detach", ok) }
