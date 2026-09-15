@@ -6468,3 +6468,21 @@ same tree instead of parsing its own. A site's column is counted from the cached
 line start rather than found again. Two-million lines: 46 s to 33 s release, 40 s to
 28 s debug, with resolve 2.6 s to 1.0 s, the declaration sweep 2.2 s to 1.1 s and
 the body sweep 3.9 s to 2.0 s; the trees cost 300 MB. Images byte-identical.
+
+## D318 -- The node is read in place, and a call or expression is checked once per scope
+
+D317's accessor was a tenth of a build on its own: a 40-byte `syntax.Node` comes back
+through a hidden slot, which the inlining oracle does not copy (D310), so every read
+of a node was a call and a copy. `syntax.Node` is now the dense record itself -- kind,
+two flag bytes, four 32-bit indexes -- read straight out of the tree, and a reader
+widens an index as it reads it; the accessors that remain are the child's, which is
+one word and returns in registers. And lowering asked the checker again for every
+expression it lowered: a call's `check_call` re-checks its arguments, and the argument
+was then lowered and asked about again, so over the two-million-line program lowering
+made a million `check_call`s for 168 thousand calls and twenty million `check_expr`s
+for seven. Both keep a small cache keyed by the node's token range and, for an
+expression, by the type it was expected to have (an untyped literal takes its type
+from that); the cache belongs to one function or instance and starts over at each,
+and at every comptime binding, since a name means something else there. Two-million
+lines: 33 s to 26 s release, 28 s to 25 s debug; the compiler's own declaration sweep
+19 ms to 7 ms. Images byte-identical.

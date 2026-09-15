@@ -43,7 +43,7 @@ type Graph = struct {
     modules: []Module,
     imports: []Import,
     token_scratch: []lex.Token,
-    nodes: []syntax.Packed,
+    nodes: []syntax.Node,
     children: []u32,
     project: project.Project,
     toolchain_root: str,
@@ -98,7 +98,7 @@ fn ensure_tree_pool(a: *mem.Arena, g: *Graph, bytes: usize) -> err {
     if node_count < nodes_needed { node_count = nodes_needed }
     var child_count = g.children.len * 2usize
     if child_count < children_needed { child_count = children_needed }
-    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, node_count)
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, node_count)
     if nodes_error != ok { ret nodes_error }
     let (children, children_error) = mem.alloc[u32](a, child_count)
     if children_error != ok { ret children_error }
@@ -111,9 +111,9 @@ fn ensure_tree_pool(a: *mem.Arena, g: *Graph, bytes: usize) -> err {
 // The parsed tree copied out of the pool at its own size, and the module marked as
 // holding it (D317).
 fn keep_tree(a: *mem.Arena, g: *Graph, module_index: usize, tree: *parse.Tree) -> err {
-    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, tree.count + 1usize)
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, tree.count + 1usize)
     if nodes_error != ok { ret nodes_error }
-    let (children, children_error) = mem.alloc[u32](a, tree.child_count + 1usize)
+    let (children, children_error) = mem.alloc[u32](a, usize(tree.child_count) + 1usize)
     if children_error != ok { ret children_error }
     var at = 0usize
     while at < tree.count {
@@ -121,7 +121,7 @@ fn keep_tree(a: *mem.Arena, g: *Graph, module_index: usize, tree: *parse.Tree) -
         at += 1usize
     }
     at = 0usize
-    while at < tree.child_count {
+    while at < usize(tree.child_count) {
         children[at] = tree.children[at]
         at += 1usize
     }
@@ -173,7 +173,7 @@ fn scan_module(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     ret ok
 }
 
-fn init(g: *Graph, modules: []Module, imports: []Import, nodes: []syntax.Packed, children: []u32) -> err {
+fn init(g: *Graph, modules: []Module, imports: []Import, nodes: []syntax.Node, children: []u32) -> err {
     if modules.len == 0usize || imports.len == 0usize || nodes.len == 0usize || children.len == 0usize { ret Capacity }
     g.modules = modules
     g.imports = imports
@@ -232,7 +232,7 @@ fn extract_import(a: *mem.Arena, text: str, node: syntax.Node) -> (Import, err) 
     var scanner = lex.init(text)
     var token = lex.next(&scanner)
     var token_index = 0usize
-    while token_index < node.token_start {
+    while token_index < usize(node.token_start) {
         token = lex.next(&scanner)
         token_index += 1usize
     }
@@ -240,7 +240,7 @@ fn extract_import(a: *mem.Arena, text: str, node: syntax.Node) -> (Import, err) 
     var module_length = 0usize
     var qualifier = ""
     var after_as = false
-    while token_index < node.token_end {
+    while token_index < usize(node.token_end) {
         if token.kind == .KwAs {
             after_as = true
         } else {
@@ -264,13 +264,13 @@ fn extract_import(a: *mem.Arena, text: str, node: syntax.Node) -> (Import, err) 
     scanner = lex.init(text)
     token = lex.next(&scanner)
     token_index = 0usize
-    while token_index < node.token_start {
+    while token_index < usize(node.token_start) {
         token = lex.next(&scanner)
         token_index += 1usize
     }
     var written = 0usize
     after_as = false
-    while token_index < node.token_end {
+    while token_index < usize(node.token_end) {
         if token.kind == .KwAs {
             after_as = true
         } else {
@@ -318,7 +318,7 @@ fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     let first_import = g.import_count
     var node_index = 1usize
     while node_index < tree.count {
-        let node = parse.node_at(&tree, node_index)
+        let node = tree.nodes[node_index]
         if node.top_level && node.kind == .UseDecl {
             if g.import_count == g.imports.len { ret Capacity }
             let (item, import_error) = extract_import(a, g.modules[module_index].text, node)

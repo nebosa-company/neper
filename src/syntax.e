@@ -57,42 +57,23 @@ type Kind = enum u8 {
     ErrorNode,
 }
 
+// A node as the tree stores it and as every reader takes it (D318): a kind, two flag
+// bytes and four 32-bit indexes, 20 bytes, the way Zig and Carbon keep a node as a tag
+// and offsets. A reader widens an index as it reads it; a child is one 32-bit word
+// whose high bit says node.
 type Node = struct {
     kind: Kind,
     top_level: bool,
     parented: bool,
-    token_start: usize,
-    token_end: usize,
-    first_child: usize,
-    child_count: usize,
-}
-
-type Child = struct {
-    node: bool,
-    index: usize,
-}
-
-// A node as the tree stores it (D317): 20 bytes, the way Zig and Carbon keep a node as
-// a tag and 32-bit indexes, against the 40 of `Node`. `Node` is what every reader is
-// handed, unpacked at the access; a child is one word, its high bit saying node.
-type Packed = struct {
-    kind: Kind,
-    flags: u8,
     token_start: u32,
     token_end: u32,
     first_child: u32,
     child_count: u32,
 }
 
-fn pack(n: Node) -> Packed {
-    var flags = 0u8
-    if n.top_level { flags = flags | 1u8 }
-    if n.parented { flags = flags | 2u8 }
-    ret Packed { kind: n.kind, flags: flags, token_start: u32(n.token_start), token_end: u32(n.token_end), first_child: u32(n.first_child), child_count: u32(n.child_count) }
-}
-
-fn unpack(p: Packed) -> Node {
-    ret Node { kind: p.kind, top_level: (p.flags & 1u8) != 0u8, parented: (p.flags & 2u8) != 0u8, token_start: usize(p.token_start), token_end: usize(p.token_end), first_child: usize(p.first_child), child_count: usize(p.child_count) }
+type Child = struct {
+    node: bool,
+    index: usize,
 }
 
 fn pack_child(c: Child) -> u32 {
@@ -101,11 +82,12 @@ fn pack_child(c: Child) -> u32 {
 }
 
 fn unpack_child(w: u32) -> Child {
-    ret Child { node: (w & 2147483648u32) != 0u32, index: usize(w & 2147483647u32) }
+    let flagged = w & 2147483648u32
+    ret Child { node: flagged != 0u32, index: usize(w & 2147483647u32) }
 }
 
 fn node(kind: Kind, token_start: usize, token_end: usize, first_child: usize, child_count: usize) -> Node {
-    ret Node { kind: kind, top_level: false, parented: false, token_start: token_start, token_end: token_end, first_child: first_child, child_count: child_count }
+    ret Node { kind: kind, top_level: false, parented: false, token_start: u32(token_start), token_end: u32(token_end), first_child: u32(first_child), child_count: u32(child_count) }
 }
 
 fn token_child(index: usize) -> Child {

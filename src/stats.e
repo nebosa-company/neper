@@ -234,7 +234,7 @@ fn count_nodes(r: *resolve.Resolver, g: *graph.Graph) -> (Counts, err) {
         counts.nodes += tree.count
         var node_index = 1usize
         while node_index < tree.count {
-            let node = parse.node_at(&tree, node_index)
+            let node = tree.nodes[node_index]
             if node.kind == .ExternDecl { counts.externs += 1usize }
             if node.kind == .Attribute {
                 let name = resolve.attribute_name(r, g, module_index, node)

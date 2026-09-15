@@ -590,7 +590,7 @@ fn index_signature(out: *Out, source: str, tokens: []const lex.Token, opener: us
 fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str, module_index: usize, symbols: []const resolve.Symbol, count: usize, absolute: str) -> (usize, err) {
     let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
     if scan_error != ok { ret (2usize, scan_error) }
-    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, source.len + 1024usize)
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, source.len + 1024usize)
     if nodes_error != ok { ret (2usize, nodes_error) }
     let (children, children_error) = mem.alloc[u32](a, source.len + 1024usize)
     if children_error != ok { ret (2usize, children_error) }
@@ -633,7 +633,7 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
             known += 1usize
             running += 1usize
             // The ids a declaration's nested symbols will take (D258).
-            if known_symbol.kind == .Function || known_symbol.kind == .Type || known_symbol.kind == .Extern { running += index_nested_count(&tree, known_symbol.token_start, known_symbol.token_end - 1usize) }
+            if known_symbol.kind == .Function || known_symbol.kind == .Type || known_symbol.kind == .Extern { running += index_nested_count(&tree, usize(known_symbol.token_start), usize(known_symbol.token_end) - 1usize) }
         }
         known_pass += 1usize
     }
@@ -650,14 +650,14 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     while at < count {
         let symbol = symbols[at]
         if symbol.module_index == module_index && symbol.kind != .Qualifier && symbol.kind != .Intrinsic {
-            let interleave_error = index_emit_references(&refs, &out, root, path, source, module_name, &tree, tokens[0usize..token_count], tokens[symbol.token_start].start)
+            let interleave_error = index_emit_references(&refs, &out, root, path, source, module_name, &tree, tokens[0usize..token_count], tokens[usize(symbol.token_start)].start)
             if interleave_error != ok { ret (2usize, interleave_error) }
             if known_ids[known] != emitted { ret (2usize, parse.InvalidSyntax) }
             known += 1usize
-            var name_index = symbol.token_start + 1usize
+            var name_index = usize(symbol.token_start) + 1usize
             if symbol.kind == .Extern { name_index += 1usize }
-            if symbol.token_end == 0usize || symbol.token_end > token_count || name_index >= token_count { ret (2usize, parse.InvalidSyntax) }
-            let record_error = index_symbol_record(&out, root, path, source, module_name, emitted, symbol, tokens[0usize..token_count], symbol.token_start, symbol.token_end - 1usize, name_index)
+            if usize(symbol.token_end) == 0usize || usize(symbol.token_end) > token_count || name_index >= token_count { ret (2usize, parse.InvalidSyntax) }
+            let record_error = index_symbol_record(&out, root, path, source, module_name, emitted, symbol, tokens[0usize..token_count], usize(symbol.token_start), usize(symbol.token_end) - 1usize, name_index)
             if record_error != ok { ret (2usize, record_error) }
             emitted += 1usize
             if symbol.kind == .Function || symbol.kind == .Type || symbol.kind == .Extern {
@@ -676,7 +676,7 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
                     owner_at += 1usize
                     name_at += 1usize
                 }
-                let (nested, nested_error) = index_nested(a, &out, root, path, source, module_name, owner_storage[0usize..owner_at], &tree, tokens[0usize..token_count], symbol.token_start, symbol.token_end - 1usize, emitted - 1usize, emitted, &refs)
+                let (nested, nested_error) = index_nested(a, &out, root, path, source, module_name, owner_storage[0usize..owner_at], &tree, tokens[0usize..token_count], usize(symbol.token_start), usize(symbol.token_end) - 1usize, emitted - 1usize, emitted, &refs)
                 if nested_error != ok { ret (2usize, nested_error) }
                 emitted += nested
             }
@@ -743,8 +743,8 @@ fn index_nested_count(tree: *parse.Tree, first: usize, last: usize) -> usize {
     var found = 0usize
     var node_index = 1usize
     while node_index < tree.count && found < 256usize {
-        let node = parse.node_at(tree, node_index)
-        if !node.top_level && node.token_start >= first && node.token_start <= last && node.token_end > node.token_start && index_nested_kind(node.kind).len != 0usize { found += 1usize }
+        let node = tree.nodes[node_index]
+        if !node.top_level && usize(node.token_start) >= first && usize(node.token_start) <= last && usize(node.token_end) > usize(node.token_start) && index_nested_kind(node.kind).len != 0usize { found += 1usize }
         node_index += 1usize
     }
     ret found
@@ -769,11 +769,11 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
     var picked_count = 0usize
     var node_index = 1usize
     while node_index < tree.count {
-        let node = parse.node_at(tree, node_index)
-        if !node.top_level && node.token_start >= first && node.token_start <= last && node.token_end > node.token_start && index_nested_kind(node.kind).len != 0usize && picked_count < 256usize {
+        let node = tree.nodes[node_index]
+        if !node.top_level && usize(node.token_start) >= first && usize(node.token_start) <= last && usize(node.token_end) > usize(node.token_start) && index_nested_kind(node.kind).len != 0usize && picked_count < 256usize {
             // Insertion by token position keeps the list ordered as it grows.
             var slot = picked_count
-            while slot > 0usize && parse.node_at(tree, picked[slot - 1usize]).token_start > node.token_start {
+            while slot > 0usize && usize(tree.nodes[picked[slot - 1usize]].token_start) > usize(node.token_start) {
                 picked[slot] = picked[slot - 1usize]
                 slot = slot - 1usize
             }
@@ -784,12 +784,12 @@ fn index_nested(a: *mem.Arena, out: *Out, root: str, path: str, source: str, mod
     }
     var written = 0usize
     while written < picked_count {
-        let node = parse.node_at(tree, picked[written])
-        let name_token = tokens[node.token_start]
+        let node = tree.nodes[picked[written]]
+        let name_token = tokens[usize(node.token_start)]
         // References inside the signature so far come before this symbol (D280).
         let interleave_error = index_emit_references(refs, out, root, path, source, module_name, tree, tokens, name_token.start)
         if interleave_error != ok { ret (0usize, interleave_error) }
-        let nested_error = index_record(out, root, path, source, module_name, next_id + written, index_nested_kind(node.kind), source[name_token.start..name_token.end], owner, tokens, node.token_start, node.token_end - 1usize, node.token_start, container_id)
+        let nested_error = index_record(out, root, path, source, module_name, next_id + written, index_nested_kind(node.kind), source[name_token.start..name_token.end], owner, tokens, usize(node.token_start), usize(node.token_end) - 1usize, usize(node.token_start), container_id)
         if nested_error != ok { ret (0usize, nested_error) }
         written += 1usize
     }
@@ -835,31 +835,31 @@ fn index_collect_references(a: *mem.Arena, source: str, tree: *parse.Tree, token
     var picked = 0usize
     var node_index = 1usize
     while node_index < tree.count {
-        let node = parse.node_at(tree, node_index)
+        let node = tree.nodes[node_index]
         var role = 99usize
         if node.kind == .UseDecl {
             role = 0usize
             if imports < 256usize {
                 // `use a.b.c [as q]`: the qualifier is the alias or the last segment.
-                var last = node.token_start + 1usize
+                var last = usize(node.token_start) + 1usize
                 var path_end = last
-                while path_end + 1usize < node.token_end && (tokens[path_end + 1usize].kind == .PunctDot || tokens[path_end + 1usize].kind == .Identifier) && tokens[path_end + 1usize].kind != .KwAs {
+                while path_end + 1usize < usize(node.token_end) && (tokens[path_end + 1usize].kind == .PunctDot || tokens[path_end + 1usize].kind == .Identifier) && tokens[path_end + 1usize].kind != .KwAs {
                     path_end += 1usize
                     if tokens[path_end].kind == .Identifier { last = path_end }
                 }
                 var qualifier = tokens[last]
-                if path_end + 2usize < node.token_end && tokens[path_end + 1usize].kind == .KwAs { qualifier = tokens[path_end + 2usize] }
+                if path_end + 2usize < usize(node.token_end) && tokens[path_end + 1usize].kind == .KwAs { qualifier = tokens[path_end + 2usize] }
                 qualifiers[imports] = source[qualifier.start..qualifier.end]
-                paths[imports] = source[tokens[node.token_start + 1usize].start..tokens[path_end].end]
+                paths[imports] = source[tokens[usize(node.token_start) + 1usize].start..tokens[path_end].end]
                 imports += 1usize
             }
         }
         if node.kind == .NameExpr || node.kind == .NamedType { role = 1usize }
         var wanted = role == 0usize
-        if role == 1usize && node.token_end > node.token_start && tokens[node.token_start].kind == .Identifier { wanted = true }
+        if role == 1usize && usize(node.token_end) > usize(node.token_start) && tokens[usize(node.token_start)].kind == .Identifier { wanted = true }
         if wanted && picked < 4096usize {
             var slot = picked
-            while slot > 0usize && parse.node_at(tree, nodes[slot - 1usize]).token_start > node.token_start {
+            while slot > 0usize && usize(tree.nodes[nodes[slot - 1usize]].token_start) > usize(node.token_start) {
                 nodes[slot] = nodes[slot - 1usize]
                 roles[slot] = roles[slot - 1usize]
                 slot = slot - 1usize
@@ -892,19 +892,19 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
     let nodes = state.nodes
     let roles = state.roles
     var at = state.next
-    while at < state.picked && tokens[parse.node_at(tree, nodes[at]).token_start].start < before {
-        let node = parse.node_at(tree, nodes[at])
+    while at < state.picked && tokens[usize(tree.nodes[nodes[at]].token_start)].start < before {
+        let node = tree.nodes[nodes[at]]
         if roles[at] == 0usize {
             // The import: spelled as the path, its found the module.
-            let path_start = tokens[node.token_start + 1usize]
-            var path_end = node.token_start + 1usize
-            while path_end + 1usize < node.token_end && tokens[path_end + 1usize].kind != .KwAs { path_end += 1usize }
+            let path_start = tokens[usize(node.token_start) + 1usize]
+            var path_end = usize(node.token_start) + 1usize
+            while path_end + 1usize < usize(node.token_end) && tokens[path_end + 1usize].kind != .KwAs { path_end += 1usize }
             let spelling = source[path_start.start..tokens[path_end].end]
             let import_error = reference_record(out, root, path, source, path_start, tokens[path_end], "import", spelling, 0usize, false, spelling)
             if import_error != ok { ret import_error }
             state.written += 1usize
         } else {
-            let first = node.token_start
+            let first = usize(node.token_start)
             let name_token = tokens[first]
             let name = source[name_token.start..name_token.end]
             var qualified_import = 256usize
@@ -2768,31 +2768,31 @@ fn node_kind_name(kind: syntax.Kind) -> str {
 // its last token's end, its token range, and its children in order.
 fn syntax_node(out: *Out, tree: *parse.Tree, source: str, tokens: []const lex.Token, node_index: usize, root: str, path: str, depth: usize) -> err {
     if depth > 512usize { ret Capacity }
-    let node = parse.node_at(tree, node_index)
+    let node = tree.nodes[node_index]
     try text(out, "{\"kind\":")
     try quoted(out, node_kind_name(node.kind))
     try text(out, ",\"span\":")
-    if node.token_end > node.token_start && node.token_end <= tokens.len {
-        let first = tokens[node.token_start]
-        let last = tokens[node.token_end - 1usize]
+    if usize(node.token_end) > usize(node.token_start) && usize(node.token_end) <= tokens.len {
+        let first = tokens[usize(node.token_start)]
+        let last = tokens[usize(node.token_end) - 1usize]
         try token_span(out, root, path, source, first, last)
     } else {
-        var at_token = node.token_start
+        var at_token = usize(node.token_start)
         if at_token >= tokens.len { at_token = tokens.len - 1usize }
         let here = tokens[at_token]
         try point_span(out, root, path, source, here)
     }
     try text(out, ",\"token_start\":")
-    try decimal(out, node.token_start)
+    try decimal(out, usize(node.token_start))
     try text(out, ",\"token_end\":")
-    try decimal(out, node.token_end)
+    try decimal(out, usize(node.token_end))
     try text(out, ",\"children\":[")
     var first_child = true
     if node.kind == .File && node_index == 0usize {
         // The root lists no children of its own: the top-level nodes are its, in order.
         var top = 1usize
         while top < tree.count {
-            if parse.node_at(tree, top).top_level {
+            if tree.nodes[top].top_level {
                 if !first_child { try byte(out, 44u8) }
                 first_child = false
                 try text(out, "{\"node\":")
@@ -2802,8 +2802,8 @@ fn syntax_node(out: *Out, tree: *parse.Tree, source: str, tokens: []const lex.To
             top += 1usize
         }
     } else {
-        let end = node.first_child + node.child_count
-        var at = node.first_child
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
         while at < end {
             if !first_child { try byte(out, 44u8) }
             first_child = false
@@ -2841,7 +2841,7 @@ fn parse_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -
     var diagnostics = invalid
     let (token_exit, token_records_error) = token_records(&out, root, path, source, tokens[..count])
     if token_records_error != ok { ret (2usize, token_records_error) }
-    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, count + 16usize)
+    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, count + 16usize)
     if nodes_error != ok { ret (2usize, nodes_error) }
     let (children, children_error) = mem.alloc[u32](a, count * 2usize + 16usize)
     if children_error != ok { ret (2usize, children_error) }
@@ -2892,7 +2892,7 @@ fn parse_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -
         }
     }
     // The tree can outgrow the record buffer the tokens used: one sized to it.
-    let (tree_storage, tree_storage_error) = mem.alloc[u8](a, tree.count * 512usize + tree.child_count * 32usize + 4096usize)
+    let (tree_storage, tree_storage_error) = mem.alloc[u8](a, tree.count * 512usize + usize(tree.child_count) * 32usize + 4096usize)
     if tree_storage_error != ok { ret (2usize, tree_storage_error) }
     var tree_out: Out = zero
     let (tree_out_lines, tree_out_lines_error) = lex.line_starts(a, source)
