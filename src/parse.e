@@ -15,6 +15,9 @@ type Tree = struct {
     errors: usize,
     failure_token: lex.Token,
     failure_reserved_name: bool,
+    // The failure is section 3's nesting bound (D341): the token is where the
+    // 128th level opened.
+    failure_too_deep: bool,
     has_failure: bool,
     // Every failure the parser recovered past, in order (D275): the token, whether it
     // was a soft delimiter still open at a column-0 declaration (E-SYNTAX-0012, at the
@@ -54,6 +57,7 @@ fn init_tree(tree: *Tree, nodes: []syntax.Node, children: []u32) -> err {
     var no_token: lex.Token = zero
     tree.failure_token = no_token
     tree.failure_reserved_name = false
+    tree.failure_too_deep = false
     tree.has_failure = false
     ret ok
 }
@@ -71,6 +75,11 @@ type Parser = struct {
     error_soft_checkpoint: usize,
     soft_depth: usize,
     soft_top_barrier: bool,
+    // How deep the tree being built is here (D341): every expression, block and
+    // operator of a chain is a level, and past 128 the declaration is refused rather
+    // than parsed, since every later pass recurses over the tree the parser builds
+    // and a thousand levels overflow their stacks. Reset per top-level declaration.
+    depth: usize,
     block_expression: bool,
     block_expression_soft_depth: usize,
     failure_frozen: bool,
@@ -108,6 +117,17 @@ fn record_failure(p: *Parser, token: lex.Token, reserved_name: bool) {
     p.barrier_pending = false
 }
 
+// One level deeper (D341), or the failure that refuses the declaration.
+fn enter(p: *Parser) -> err {
+    if p.depth >= 128usize {
+        if !p.failure_frozen && !p.tree.has_failure { p.tree.failure_too_deep = true }
+        record_failure(p, p.current, false)
+        ret InvalidSyntax
+    }
+    p.depth += 1usize
+    ret ok
+}
+
 fn init(tree: *Tree, source: str) -> Parser {
     var p: Parser = zero
     var scanner = lex.init(source)
@@ -120,6 +140,7 @@ fn init(tree: *Tree, source: str) -> Parser {
     var no_token: lex.Token = zero
     p.tree.failure_token = no_token
     p.tree.failure_reserved_name = false
+    p.tree.failure_too_deep = false
     p.tree.has_failure = false
     p.tree.failure_count = 0usize
     p.tree.nodes[0usize] = syntax.node(.File, 0usize, 0usize, 1usize, 0usize)
@@ -722,7 +743,9 @@ fn parse_prefix_node(p: *Parser) -> err {
         var nested: [1]usize = zero
         try advance(p)
         try skip_soft(p)
+        try enter(p)
         try parse_prefix_node(p)
+        if p.depth > 0usize { p.depth = p.depth - 1usize }
         nested[0usize] = p.last_node
         try add_parent_node(p, .UnaryExpr, token_start, usize(p.tree.nodes[p.last_node].token_end), nested[..])
         ret ok
@@ -731,11 +754,23 @@ fn parse_prefix_node(p: *Parser) -> err {
 }
 
 fn parse_binary_node(p: *Parser, minimum: usize) -> err {
+    try enter(p)
+    let inner_error = parse_binary_inner(p, minimum)
+    if p.depth > 0usize { p.depth = p.depth - 1usize }
+    ret inner_error
+}
+
+fn parse_binary_inner(p: *Parser, minimum: usize) -> err {
     try skip_soft(p)
     try parse_prefix_node(p)
     var left = p.last_node
     try skip_soft(p)
+    // A chain `a + b + c` nests its tree one level per operator, so each is a level
+    // here too (D341), given back together when the chain ends.
+    var chain = 0usize
     while binary_precedence(p.current.kind) >= minimum {
+        try enter(p)
+        chain += 1usize
         let precedence = binary_precedence(p.current.kind)
         var nested: [2]usize = zero
         nested[0usize] = left
@@ -748,6 +783,7 @@ fn parse_binary_node(p: *Parser, minimum: usize) -> err {
         left = p.last_node
         if precedence == 3usize && binary_precedence(p.current.kind) == 3usize { ret InvalidSyntax }
     }
+    if p.depth >= chain { p.depth = p.depth - chain } else { p.depth = 0usize }
     ret ok
 }
 
@@ -1510,6 +1546,13 @@ fn recover_statement(p: *Parser) -> err {
 }
 
 fn parse_block_node(p: *Parser) -> err {
+    try enter(p)
+    let inner_error = parse_block_inner(p)
+    if p.depth > 0usize { p.depth = p.depth - 1usize }
+    ret inner_error
+}
+
+fn parse_block_inner(p: *Parser) -> err {
     let token_start = p.token_index
     let node_start = p.tree.count
     try require(p, .PunctLBrace)
@@ -1887,6 +1930,7 @@ fn parse_file(p: *Parser) -> err {
         p.error_errors_checkpoint = p.tree.errors
         p.error_declarations_checkpoint = p.declarations
         p.error_soft_checkpoint = p.soft_depth
+        p.depth = 0usize
         if !p.failure_frozen { p.tree.has_failure = false }
         let item_error = parse_one(p)
         if item_error != ok {

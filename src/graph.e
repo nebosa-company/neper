@@ -113,6 +113,7 @@ type Graph = struct {
     failure_module: usize,
     failure_token: lex.Token,
     failure_reserved_name: bool,
+    failure_too_deep: bool,
     failure_barrier: bool,
     failure_keyword: lex.Token,
     has_failure: bool,
@@ -423,6 +424,7 @@ fn record_failure(g: *Graph, module_index: usize, tree: *parse.Tree) {
     g.failure_module = module_index
     g.failure_token = tree.failure_token
     g.failure_reserved_name = tree.failure_reserved_name
+    g.failure_too_deep = tree.failure_too_deep
     g.failure_barrier = tree.failure_count != 0usize && tree.failure_barriers[0usize]
     if g.failure_barrier { g.failure_keyword = tree.failure_keywords[0usize] }
     g.has_failure = true

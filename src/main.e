@@ -2705,7 +2705,7 @@ fn validate_cli_parse(a: *mem.Arena, report: *Sink, path: str, text: str) -> err
     try parse.init_tree(&tree, nodes, children)
     let parse_error = parse.parse(&tree, text)
     if parse_error != ok && tree.has_failure {
-        try print_parse_failure(report, path, text, tree.failure_token, tree.failure_reserved_name)
+        try print_parse_failure(report, path, text, tree.failure_token, tree.failure_reserved_name, tree.failure_too_deep)
         os.exit(1i32)
     }
     ret parse_error
@@ -4033,11 +4033,15 @@ fn print_barrier_failure(report: *Sink, path: str, text: str, opener: lex.Token,
     ret emit_diagnostic(report, path, text, no_lines[0usize..0usize], opener, true, "E-SYNTAX-0012", message.capture[0usize..message.count])
 }
 
-fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, reserved_name: bool) -> err {
+fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, reserved_name: bool, too_deep: bool) -> err {
     var no_lines: [1]usize = zero
     var message_storage: [1024]u8 = zero
     var message = capture_sink(message_storage[..])
     var code = "E-SYNTAX-9999"
+    if too_deep {
+        try write_all(&message, "nesting deeper than 128 levels of expressions, blocks and operators")
+        ret emit_diagnostic(report, path, text, no_lines[0usize..0usize], token, true, code, message_storage[..message.count])
+    }
     if reserved_name {
         code = "E-NAME-0003"
         try write_all(&message, "`")
@@ -4473,7 +4477,7 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
         if loaded.failure_barrier {
             try print_barrier_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_keyword)
         } else {
-            try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name)
+            try print_parse_failure(report, module.path, module.text, loaded.failure_token, loaded.failure_reserved_name, loaded.failure_too_deep)
         }
         try finish_report(report)
         os.exit(1i32)

@@ -579,7 +579,6 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     if workers_error != ok { ret workers_error }
     var function_count = 0usize
     var global_count = 0usize
-    var largest_artifact = 0usize
     var need_total = 0usize
     var need_largest = 0usize
     // What phase 1 allocates per artifact -- its string bounds and its index -- is the
@@ -599,7 +598,6 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         needs[artifact_at] = (strings_here + 2usize) * 16usize + (count * 8usize + 64usize) * 64usize + 256usize
         need_total += needs[artifact_at]
         if needs[artifact_at] > need_largest { need_largest = needs[artifact_at] }
-        if artifacts[artifact_at].bytes.len > largest_artifact { largest_artifact = artifacts[artifact_at].bytes.len }
         artifact_at += 1usize
     }
     if function_count == 0usize { ret InvalidInput }
@@ -610,9 +608,6 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         let (arena, arena_error) = graph.reserved_arena(a)
         if arena_error != ok { ret arena_error }
         workers[worker_at].arena = arena
-        let (hash_storage, hash_storage_error) = mem.alloc[u8](a, capacity(largest_artifact))
-        if hash_storage_error != ok { ret hash_storage_error }
-        try binary.init(&workers[worker_at].hash_scratch, hash_storage)
         let (row_scratch, row_scratch_error) = mem.alloc[em.LineRow](a, 16384usize)
         if row_scratch_error != ok { ret row_scratch_error }
         workers[worker_at].row_scratch = row_scratch
@@ -624,6 +619,36 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     var (table, table_error) = build_function_table(a, artifacts, function_count, workers, worker_count, needs[0usize..artifacts.len])
     if table_error != ok { ret table_error }
     try validate_set(a, artifacts)
+    // The content hash's input is a function's code and, per relocation, seventeen
+    // bytes and two of the artifact's strings (D341): its scratch is sized to the
+    // largest such input, where the artifact's own length was taken as the bound
+    // and a debug build of one long expression -- a trap site per operator, each a
+    // relocation naming the runtime -- outgrew it and failed to link.
+    var hash_need = 64usize
+    var need_at = 0usize
+    while need_at < artifacts.len {
+        var longest_string = 0usize
+        var string_at = 0usize
+        while string_at < artifacts[need_at].string_lengths.len {
+            if artifacts[need_at].string_lengths[string_at] > longest_string { longest_string = artifacts[need_at].string_lengths[string_at] }
+            string_at += 1usize
+        }
+        var function_at = table.base[need_at]
+        while function_at < table.base[need_at + 1usize] {
+            let function = table.funcs[function_at]
+            let need = function.code_length + function.relocation_count * (17usize + 2usize * longest_string) + 64usize
+            if need > hash_need { hash_need = need }
+            function_at += 1usize
+        }
+        need_at += 1usize
+    }
+    worker_at = 0usize
+    while worker_at < worker_count {
+        let (hash_storage, hash_storage_error) = mem.alloc[u8](a, hash_need)
+        if hash_storage_error != ok { ret hash_storage_error }
+        try binary.init(&workers[worker_at].hash_scratch, hash_storage)
+        worker_at += 1usize
+    }
     var relocation_count = 0usize
     var code_size = 0usize
     var table_at = 0usize

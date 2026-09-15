@@ -7291,3 +7291,40 @@ handler, its touch and its writer sit with the entry and its callees, the first
 seven procedures. The first draft had the handler treat the race between two
 threads faulting on one chunk as a genuine fault, and died once in three builds;
 that is the committed-and-writable case above.
+
+## D341 -- Bounded malformed input: the fuzzer, the nesting bound, and the link's hash scratch
+
+H10 asks that bounded malformed input never hang or crash the compiler, and H24
+that the artifact readers be hardened; both want evidence rather than a reading of
+the code. `benchmarks/fuzz/fuzz.py` is that evidence's generator: every fixture and
+conformance source is a seed, mutated by byte flips, deletions, duplications,
+insertions of arbitrary bytes, splices from another seed and truncation, and checked
+with `check-file`; every artifact of a built fixture and of the compiler is mutated
+the same way, its checksum recomputed three times in four so the readers past the
+checksum see the bytes, and validated and then linked in the place of the artifact
+it came from; a run that exits above 2, dies of a signal or outruns its timeout is
+a finding kept with its input and command. Thirty-three thousand mutations found
+nothing: the readers bound every read.
+
+What mutation does not make is depth, and depth was where the compiler crashed:
+twenty thousand nested parentheses, calls or blocks, a twenty-thousand-term sum, or
+twenty thousand prefix operators overflowed the stack (`0xC00000FD`) in the checker
+or the lowering, which recurse over the tree the parser builds -- calls from about
+three hundred levels, a chain from under a thousand. Section 3's bound is 128
+levels of expressions, blocks and operators together, counted by the parser as it
+builds: each expression, block and prefix operator is a level, each operator of a
+chain is one (its tree nests one deeper per operator), the count resets per
+top-level declaration, and the 129th level is refused with E-SYNTAX-9999 "nesting
+deeper than 128 levels of expressions, blocks and operators" at the token that
+opened it, pinned by `tests/conformance/reject/nesting.e`. Deeper than any source
+has a reason to be, and a tenth of what the stacks hold. The fuzzer's `deep` mode
+keeps the six constructs at twenty thousand levels as a guard, checked and built in
+both modes.
+
+The probing also found a link failure with no crash in it: a debug build of an
+expression of more than about 130 terms failed with `em_link.InvalidInput`. Every
+operator of a debug build is a trap site and every trap site a relocation naming
+the runtime, and the content hash's input -- the code, then seventeen bytes and two
+strings per relocation -- was bounded by the artifact's length, which such a
+function outgrows since the artifact interns each name once. The scratch is sized
+from the functions' own inputs now.
