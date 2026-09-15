@@ -2759,20 +2759,25 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph
 // inline (D207), so its pools are the main builder's sizes (D308).
 fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph) -> err {
     let total = loaded.total_bytes
-    let (functions, functions_error) = mem.alloc[nir.Function](a, sized(16384usize, total, 128usize))
+    // An oracle keeps a body of at most the cap per entry and drops the rest as it
+    // goes (D310), so its pools follow the entry table, not the program (D313): sized
+    // like the builder's, the two oracles were two thirds of a two-million-line
+    // release build's arena. The function table is the entries plus the one being
+    // lowered; the rest is the cap's worth per entry, with room to spare.
+    let (functions, functions_error) = mem.alloc[nir.Function](a, sized(4096usize, total, 128usize) + 1usize)
     if functions_error != ok { ret functions_error }
-    let (blocks, blocks_error) = mem.alloc[nir.Block](a, sized(65536usize, total, 16usize))
+    let (blocks, blocks_error) = mem.alloc[nir.Block](a, sized(16384usize, total, 256usize))
     if blocks_error != ok { ret blocks_error }
-    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, sized(262144usize, total, 4usize))
+    let (instructions, instructions_error) = mem.alloc[nir.Instruction](a, sized(65536usize, total, 64usize))
     if instructions_error != ok { ret instructions_error }
-    let (operands, operands_error) = mem.alloc[usize](a, sized(1048576usize, total, 4usize))
+    let (operands, operands_error) = mem.alloc[usize](a, sized(262144usize, total, 16usize))
     if operands_error != ok { ret operands_error }
     let (function_refs, function_refs_error) = mem.alloc[nir.FunctionRef](a, sized(8192usize, total, 128usize))
     if function_refs_error != ok { ret function_refs_error }
     let (strings, strings_error) = mem.alloc[nir.StringConstant](a, sized(8192usize, total, 256usize))
     if strings_error != ok { ret strings_error }
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
-    let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, 256usize)
+    let (global_data, global_data_error) = mem.alloc[nir.GlobalData](a, sized(256usize, total, 1024usize))
     if global_data_error != ok { ret global_data_error }
     try nir.init_globals(builder, global_data)
     // One per oracle function, as the main builder sizes its own (D308): a table smaller
@@ -4000,14 +4005,45 @@ fn declarations_per_module(checker: *check.Checker, resolver: *resolve.Resolver,
     ret check.finish_declarations(checker)
 }
 
-fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+// The body sweep, and the first inlining oracle inside it (D313): a module's bodies
+// are checked and its short functions lowered into the oracle on the one parse, in
+// graph order, which is the order both oracles walk. An oracle error is a lowering
+// diagnostic, printed here where the builder that has its site still is.
+fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph, report: *Sink, oracle: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, entries: []nir.InlineEntry, entry_count: *usize, with_oracle: bool) -> err {
+    var defers: lower.DeferState = zero
+    var cursor = 0usize
+    if with_oracle { try lower.begin_inline_oracle(checker, oracle, entry_count) }
     var order_at = 0usize
     while order_at < loaded.order_count {
         try check.bodies_module(checker, resolver, loaded, loaded.order[order_at])
+        if with_oracle {
+            let oracle_error = lower.oracle_module(checker, loaded, oracle, signatures, bindings, entries, entry_count, loaded.order[order_at], &cursor, &defers)
+            if oracle_error != ok {
+                try print_lower_diagnostic(report, loaded, checker, oracle, oracle_error)
+                try finish_report(report)
+                os.exit(1i32)
+                ret ok
+            }
+        }
         order_at += 1usize
     }
     ret check.finish_bodies(checker, resolver, loaded)
 }
+
+// The first oracle's builder (D212): no copies in its bodies, `nocheck` like every
+// release lowering, and its own record of what it inlined, which is nothing.
+fn init_first_oracle(a: *mem.Arena, oracle: *nir.Builder, signatures: *nir.Signatures, checker: *check.Checker, loaded: *graph.Graph) -> err {
+    // Built before the bodies are checked (D313), so the signature types are sized by
+    // the checker's pools rather than by what the bodies will have added to them.
+    try init_oracle_nir(a, oracle, signatures, checker.parameters.len + checker.return_types.len + 1usize, loaded)
+    oracle.nocheck = true
+    oracle.release = true
+    let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
+    if inlined_error != ok { ret inlined_error }
+    oracle.inlined = inlined
+    ret ok
+}
+
 
 fn main(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
@@ -4438,8 +4474,26 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if release_build { settle_mode = .Release }
             try settle_early(a, &checker, &loaded, args[6usize], settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
         }
-        if check_error == ok && !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
-            check_error = bodies_per_module(&checker, &resolver, &loaded)
+        // Section 12's inlining (D207): the small functions are lowered first into the
+        // oracle, in module order on every path, and the program's own lowering copies
+        // them in at their calls. A debug build does not inline (D211): every frame
+        // in its backtrace is a real call, so the oracle is not even built. The first
+        // oracle rides the body sweep (D313); the entry table is one slot when it is not.
+        var first_oracle: nir.Builder = zero
+        var first_signatures: nir.Signatures = zero
+        var first_entry_count = 0usize
+        var first_capacity = 1usize
+        if release_build { first_capacity = sized(4096usize, loaded.total_bytes, 128usize) }
+        let (first_entries, first_entries_error) = mem.alloc[nir.InlineEntry](a, first_capacity)
+        if first_entries_error != ok { ret first_entries_error }
+        let (bindings, bindings_error) = mem.alloc[lower.Binding](a, sized(16384usize, loaded.total_bytes, 64usize))
+        if bindings_error != ok { ret bindings_error }
+        report.build.pools[stats.POOL_BINDINGS] = bindings.len
+        checker.arena = a
+        if release_build { try init_first_oracle(a, &first_oracle, &first_signatures, &checker, &loaded) }
+        let fused = check_error == ok && !(writes_all_em && incremental_build) && loaded.order_count == loaded.count
+        if fused {
+            check_error = bodies_per_module(&checker, &resolver, &loaded, &report, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count, release_build)
         } else {
             if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
         }
@@ -4488,9 +4542,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // One more parameter type than the declarations need: `neper_report_failure`,
         // which lowering synthesizes for `main`'s failure line (D199), has no declaration.
         try init_cli_nir(a, &builder, &signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded, &report)
-        let (bindings, bindings_error) = mem.alloc[lower.Binding](a, sized(16384usize, loaded.total_bytes, 64usize))
-        if bindings_error != ok { ret bindings_error }
-        report.build.pools[stats.POOL_BINDINGS] = bindings.len
         let (lowered_modules, lowered_modules_error) = mem.alloc[bool](a, loaded.count + 1usize)
         if lowered_modules_error != ok { ret lowered_modules_error }
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, builder.functions.len + 1usize)
@@ -4498,10 +4549,6 @@ fn main(a: *mem.Arena, args: []str) -> err {
         builder.nocheck = release_build
         builder.release = release_build
         builder.arena_bytes = arena_flag(args)
-        // Section 12's inlining (D207): the small functions are lowered first into the
-        // oracle, in module order on every path, and the program's own lowering copies
-        // them in at their calls. A debug build does not inline (D211): every frame
-        // in its backtrace is a real call, so the oracle is not even built.
         var oracle: nir.Builder = zero
         var oracle_signatures: nir.Signatures = zero
         let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
@@ -4509,28 +4556,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
         builder.inlined = inlined
         builder.inlined_count = 0usize
         builder.has_oracle = false
-        var first_oracle: nir.Builder = zero
-        var first_signatures: nir.Signatures = zero
         if release_build {
             // Twice (D212): the first oracle's bodies hold no copies; the second is
             // lowered against it, so its bodies hold one level of copies, and a call
             // the program inlines from it is two levels deep. Each pass records, per
-            // function, the callees it copied, for the body edges.
-            try init_oracle_nir(a, &first_oracle, &first_signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded)
-            first_oracle.nocheck = true
-            first_oracle.release = true
-            let (first_entries, first_entries_error) = mem.alloc[nir.InlineEntry](a, sized(4096usize, loaded.total_bytes, 128usize))
-            if first_entries_error != ok { ret first_entries_error }
-            let (first_inlined, first_inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
-            if first_inlined_error != ok { ret first_inlined_error }
-            first_oracle.inlined = first_inlined
-            var first_entry_count = 0usize
-            let first_error = lower.build_inline_oracle(&checker, &loaded, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count)
-            if first_error != ok {
-                try print_lower_diagnostic(&report, &loaded, &checker, &first_oracle, first_error)
-                try finish_report(&report)
-            os.exit(1i32)
-                ret ok
+            // function, the callees it copied, for the body edges. The first was built
+            // in the body sweep unless that sweep was the incremental one (D313).
+            if !fused {
+                let first_error = lower.build_inline_oracle(&checker, &loaded, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count)
+                if first_error != ok {
+                    try print_lower_diagnostic(&report, &loaded, &checker, &first_oracle, first_error)
+                    try finish_report(&report)
+                    os.exit(1i32)
+                    ret ok
+                }
             }
             try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded)
             oracle.nocheck = true
@@ -4549,6 +4588,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
             let oracle_error = lower.build_inline_oracle(&checker, &loaded, &oracle, &oracle_signatures, bindings, inline_entries, &inline_entry_count)
             report.arena_used = mem.stats(a).used
             try report_phase(&report, "inline oracles")
+            if report.timing {
+                try report_count("first oracle entries", first_entry_count)
+                try report_count("second oracle entries", inline_entry_count)
+            }
             if oracle_error != ok {
                 try print_lower_diagnostic(&report, &loaded, &checker, &oracle, oracle_error)
                 try finish_report(&report)

@@ -6366,3 +6366,28 @@ had. The `try` lowering now calls the reporter on its error path when the functi
 module 0's `main`; the value is known to be an error there, so there is no comparison.
 The call and the note that the reporter must be synthesized after the module are one
 helper both paths use. `failure_line` gains a `try` case.
+
+## D313 -- The first oracle rides the body sweep, the second parses only where it has entries
+
+Measured on the two-million-line program in release: the two inlining oracles took
+21 s of a 68 s build, and stopping every body at the cap (D310) had not touched it --
+with the cap at two instructions the phase still took 18 s. The oracle's cost was
+never the lowering. It was the parse: each oracle walks every module, and the parse
+tree is kept for one module at a time (D304), so each walk re-lexed and re-parsed the
+whole program, as the declaration sweep, the body sweep and the lowering each do. The
+token pre-filter is not the lever either: 165,248 of the program's functions pass it
+and 61 come out under the cap, but among the compiler's own accepted bodies the
+longest is 100 tokens exactly, so a tighter filter loses inlines.
+
+Three changes. The first oracle is built inside the body sweep: a module's bodies are
+checked and its short functions lowered into the oracle on the one parse, in graph
+order, which is the order both oracles now walk (the second's cursor over the first's
+entries needs the two to agree). The second oracle visits only the first's entries
+(D310) and now parses only a module with an entry recorded under it -- an entry
+carries the module it was walked in, since a per-target variant's function is owned
+by the module it merges into and the walk does not see that module. And the oracles'
+pools follow the entry table rather than the program: an oracle keeps at most the
+cap's worth per entry and drops the rest (D310), so sized like the builder they were
+two thirds of the release build's arena. Two-million lines: the oracles 21 s to 5 s,
+the arena 10.0 GB to 5.8 GB; the compiler's own release image byte-identical, its
+oracles 356 ms to 149 ms. The incremental sweep keeps the separate first oracle.

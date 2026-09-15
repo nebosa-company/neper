@@ -221,6 +221,10 @@ type InlineEntry = struct {
     name: str,
     instance: usize,
     function_index: usize,
+    // The module whose tree the declaration was walked in (D313), which is not always
+    // the owner: a per-target variant's function is owned by the module it merges into.
+    // The second oracle skips a module with no entry recorded under it.
+    walked_in: usize,
 }
 
 // A callee inlined into a module: what section 12 calls a body edge, recorded so the

@@ -2026,99 +2026,127 @@ fn find_inline_entry(builder: *nir.Builder, module_index: usize, name: str, inst
 // is the same, since instances it creates are the ones the program's own lowering
 // would create at the same call. The order is the module order, on both link paths.
 fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, entries: []nir.InlineEntry, entry_count: *usize) -> err {
-    try declare_globals(c, oracle)
-    *entry_count = 0usize
+    try begin_inline_oracle(c, oracle, entry_count)
     var oracle_defers: DeferState = zero
     var entry_cursor = 0usize
-    var module_index = 0usize
-    while module_index < g.count {
-        var tree: parse.Tree = zero
-        try graph.parse_module(g, module_index, &tree)
-        try check.tokenize_module(c, g, module_index)
-        var node_index = 1usize
-        while node_index < tree.count {
-            let node = tree.nodes[node_index]
-            if node.top_level && node.kind == .FnDecl && node.token_end - node.token_start <= 100usize {
-                let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
-                if name_error != ok { ret name_error }
-                let (function_index, found) = check.find_function(c, module_index, name)
-                if found {
-                    let function = c.functions[function_index]
-                    // The second oracle (D212) is built against the first, and inlining into a
-                    // body only lengthens it, so a body the first oracle rejected stays
-                    // rejected: the second visits the first's entries alone (D310). The
-                    // entries were recorded in this same walk order, so a cursor finds them.
-                    var wanted = true
-                    if oracle.has_oracle {
-                        wanted = false
-                        if entry_cursor < oracle.inline_entry_count {
-                            let previous = oracle.inline_entries[entry_cursor]
-                            if previous.module_index == function.owner_module_index && previous.instance == function.instance_id && check.same(previous.name, name) {
-                                wanted = true
-                                entry_cursor += 1usize
-                            }
-                        }
-                    }
-                    if wanted && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
-                        // A result that comes back through a slot is decided before any lowering.
-                        var hidden = false
-                        if function.return_count == 1usize {
-                            var function_call: check.CallInfo = zero
-                            function_call.function = function
-                            var return_layout: ReturnLayout = zero
-                            try call_return_layout(c, function_call, &return_layout)
-                            hidden = return_layout.via_slot
-                        }
-                        if hidden {
-                            node_index += 1usize
-                            continue
-                        }
-                        let before = oracle.function_count
-                        let checkpoint = nir.mark(oracle)
-                        let local_checkpoint = c.local_count
-                        oracle.limit_base = oracle.instruction_count
-                        oracle.instruction_limit = inline_cap() + 1usize
-                        let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, &oracle_defers)
-                        oracle.instruction_limit = 0usize
-                        if lower_error == nir.TooLong {
-                            // Past the cap: what was lowered so far goes, and so does the function.
-                            nir.reset(oracle, checkpoint)
-                            c.local_count = local_checkpoint
-                            node_index += 1usize
-                            continue
-                        }
-                        if lower_error != ok { ret lower_error }
-                        let lowered = oracle.functions[before]
-                        // A body that calls a generic instance stays out: an instance is the
-                        // instantiating module's own copy, not the target of anyone's edge,
-                        // and a copy of the call in another module would name it anyway.
-                        var calls_instance = false
-                        var scan_at = lowered.first_instruction
-                        while scan_at < lowered.first_instruction + lowered.instruction_count {
-                            let scanned = oracle.instructions[scan_at]
-                            if (scanned.opcode == .Call || scanned.opcode == .FunctionAddress) && scanned.immediate < oracle.function_ref_count && oracle.function_refs[scanned.immediate].instance != 0usize { calls_instance = true }
-                            scan_at += 1usize
-                        }
-                        if lowered.instruction_count <= inline_cap() && !calls_instance {
-                            let entry_at = *entry_count
-                            if entry_at == entries.len { ret check.Capacity }
-                            var entry: nir.InlineEntry = zero
-                            entry.module_index = function.owner_module_index
-                            entry.name = name
-                            entry.instance = function.instance_id
-                            entry.function_index = before
-                            entries[entry_at] = entry
-                            *entry_count = entry_at + 1usize
-                        } else {
-                            nir.reset(oracle, checkpoint)
+    // The graph order when there is one (D313): the driver's body sweep walks it, and
+    // the second oracle's cursor over the first's entries needs the two to agree.
+    var order_at = 0usize
+    while order_at < g.count {
+        var module_index = order_at
+        if g.order_count == g.count { module_index = g.order[order_at] }
+        try oracle_module(c, g, oracle, signatures, bindings, entries, entry_count, module_index, &entry_cursor, &oracle_defers)
+        order_at += 1usize
+    }
+    ret ok
+}
+
+fn begin_inline_oracle(c: *check.Checker, oracle: *nir.Builder, entry_count: *usize) -> err {
+    try declare_globals(c, oracle)
+    *entry_count = 0usize
+    ret ok
+}
+
+// One module's share of the oracle (D313): called per module in module order, either
+// by `build_inline_oracle` or by the driver's body sweep right after the module's
+// bodies are checked, which is the parse the module already had. The cursor and the
+// defer stack are the walk's, carried between calls.
+fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, entries: []nir.InlineEntry, entry_count: *usize, module_index: usize, cursor: *usize, oracle_defers: *DeferState) -> err {
+    // The second oracle visits the first's entries alone (D310), and a module with
+    // none of them is not even parsed (D313): with one candidate in a thousand
+    // functions kept, the second pass was a parse of the whole program for nothing.
+    if oracle.has_oracle {
+        if *cursor >= oracle.inline_entry_count { ret ok }
+        if oracle.inline_entries[*cursor].walked_in != module_index { ret ok }
+    }
+    var entry_cursor = *cursor
+    var tree: parse.Tree = zero
+    try graph.parse_module(g, module_index, &tree)
+    try check.tokenize_module(c, g, module_index)
+    var node_index = 1usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        if node.top_level && node.kind == .FnDecl && node.token_end - node.token_start <= 100usize {
+            let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
+            if name_error != ok { ret name_error }
+            let (function_index, found) = check.find_function(c, module_index, name)
+            if found {
+                let function = c.functions[function_index]
+                // The second oracle (D212) is built against the first, and inlining into a
+                // body only lengthens it, so a body the first oracle rejected stays
+                // rejected: the second visits the first's entries alone (D310). The
+                // entries were recorded in this same walk order, so a cursor finds them.
+                var wanted = true
+                if oracle.has_oracle {
+                    wanted = false
+                    if entry_cursor < oracle.inline_entry_count {
+                        let previous = oracle.inline_entries[entry_cursor]
+                        if previous.module_index == function.owner_module_index && previous.instance == function.instance_id && check.same(previous.name, name) {
+                            wanted = true
+                            entry_cursor += 1usize
                         }
                     }
                 }
+                if wanted && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
+                    // A result that comes back through a slot is decided before any lowering.
+                    var hidden = false
+                    if function.return_count == 1usize {
+                        var function_call: check.CallInfo = zero
+                        function_call.function = function
+                        var return_layout: ReturnLayout = zero
+                        try call_return_layout(c, function_call, &return_layout)
+                        hidden = return_layout.via_slot
+                    }
+                    if hidden {
+                        node_index += 1usize
+                        continue
+                    }
+                    let before = oracle.function_count
+                    let checkpoint = nir.mark(oracle)
+                    let local_checkpoint = c.local_count
+                    oracle.limit_base = oracle.instruction_count
+                    oracle.instruction_limit = inline_cap() + 1usize
+                    let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
+                    oracle.instruction_limit = 0usize
+                    if lower_error == nir.TooLong {
+                        // Past the cap: what was lowered so far goes, and so does the function.
+                        nir.reset(oracle, checkpoint)
+                        c.local_count = local_checkpoint
+                        node_index += 1usize
+                        continue
+                    }
+                    if lower_error != ok { ret lower_error }
+                    let lowered = oracle.functions[before]
+                    // A body that calls a generic instance stays out: an instance is the
+                    // instantiating module's own copy, not the target of anyone's edge,
+                    // and a copy of the call in another module would name it anyway.
+                    var calls_instance = false
+                    var scan_at = lowered.first_instruction
+                    while scan_at < lowered.first_instruction + lowered.instruction_count {
+                        let scanned = oracle.instructions[scan_at]
+                        if (scanned.opcode == .Call || scanned.opcode == .FunctionAddress) && scanned.immediate < oracle.function_ref_count && oracle.function_refs[scanned.immediate].instance != 0usize { calls_instance = true }
+                        scan_at += 1usize
+                    }
+                    if lowered.instruction_count <= inline_cap() && !calls_instance {
+                        let entry_at = *entry_count
+                        if entry_at == entries.len { ret check.Capacity }
+                        var entry: nir.InlineEntry = zero
+                        entry.module_index = function.owner_module_index
+                        entry.name = name
+                        entry.instance = function.instance_id
+                        entry.function_index = before
+                        entry.walked_in = module_index
+                        entries[entry_at] = entry
+                        *entry_count = entry_at + 1usize
+                    } else {
+                        nir.reset(oracle, checkpoint)
+                    }
+                }
             }
-            node_index += 1usize
         }
-        module_index += 1usize
+        node_index += 1usize
     }
+    *cursor = entry_cursor
     ret ok
 }
 
