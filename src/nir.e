@@ -289,6 +289,15 @@ type Builder = struct {
     // no cap (D310).
     instruction_limit: usize,
     limit_base: usize,
+    // Which references one module's instructions name (D319): marked in one walk when
+    // its artifact's edges are written, where each edge used to walk every instruction.
+    used_marks: []u8,
+    used_marks_module: usize,
+    used_marks_valid: bool,
+    // The imports in name order (D319), built when the linker first asks.
+    import_order: [1024]usize,
+    import_order_count: usize,
+    imports_ordered: bool,
     // What `discard_bodies` has let go of (D314): the instructions lowered in all, and
     // the most one module held at once, for `--stats` and for sizing the body pools.
     instruction_total: usize,
@@ -572,6 +581,7 @@ fn compact_references(builder: *Builder) -> err {
         reference_at += 1usize
     }
     builder.function_ref_count = moved_to
+    builder.imports_ordered = false
     // The references moved, so the name index over them is rebuilt from nothing the
     // next time one is asked for (D306).
     if lookup.attached(&builder.ref_names) { try lookup.attach(&builder.ref_names, builder.ref_names.entries) }
@@ -660,6 +670,7 @@ fn intern_function(builder: *Builder, module_index: usize, name: str, instance: 
 // The same reference, bound to an imported symbol. Interning is by neper-side name, so
 // the library and symbol are attached to whichever entry that name resolves to.
 fn intern_import(builder: *Builder, module_index: usize, name: str, library: str, symbol: str) -> (usize, err) {
+    builder.imports_ordered = false
     let (index, intern_error) = intern_function(builder, module_index, name, 0usize)
     if intern_error != ok { ret (0usize, intern_error) }
     builder.function_refs[index].library = library
@@ -696,22 +707,74 @@ fn first_reference_for_symbol(builder: *Builder, index: usize) -> bool {
     ret true
 }
 
-fn import_library_count(builder: *Builder) -> usize {
+// The imports in name order (D319): each distinct library, and each distinct symbol
+// within it, ordered by their bytes rather than by which reference came first. The
+// source path interns an `@import` when it lowers the declaration and an artifact
+// records it at its first call, so first-appearance order made an image linked from
+// artifacts differ from the same program built from source by its import table alone.
+// Insertion sorted: an image imports dozens of symbols, not thousands.
+fn bytes_less(a: str, b: str) -> bool {
+    var at = 0usize
+    while at < a.len && at < b.len {
+        if a[at] != b[at] { ret a[at] < b[at] }
+        at += 1usize
+    }
+    ret a.len < b.len
+}
+
+fn import_before(builder: *Builder, left: usize, right: usize) -> bool {
+    let a = builder.function_refs[left]
+    let b = builder.function_refs[right]
+    if !check.same(a.library, b.library) { ret bytes_less(a.library, b.library) }
+    ret bytes_less(a.symbol, b.symbol)
+}
+
+fn order_imports(builder: *Builder) -> err {
     var count = 0usize
     var at = 0usize
     while at < builder.function_ref_count {
-        if first_reference_for_library(builder, at) { count += 1usize }
+        if first_reference_for_symbol(builder, at) {
+            if count == builder.import_order.len { ret Capacity }
+            var slot = count
+            while slot > 0usize && import_before(builder, at, builder.import_order[slot - 1usize]) {
+                builder.import_order[slot] = builder.import_order[slot - 1usize]
+                slot = slot - 1usize
+            }
+            builder.import_order[slot] = at
+            count += 1usize
+        }
+        at += 1usize
+    }
+    builder.import_order_count = count
+    builder.imports_ordered = true
+    ret ok
+}
+
+// The ordered list is built the first time it is asked for.
+fn ensure_import_order(builder: *Builder) {
+    if !builder.imports_ordered { let ignored = order_imports(builder) }
+}
+
+fn import_library_count(builder: *Builder) -> usize {
+    ensure_import_order(builder)
+    var count = 0usize
+    var at = 0usize
+    while at < builder.import_order_count {
+        let reference = builder.function_refs[builder.import_order[at]]
+        if at == 0usize || !check.same(builder.function_refs[builder.import_order[at - 1usize]].library, reference.library) { count += 1usize }
         at += 1usize
     }
     ret count
 }
 
 fn import_library_name(builder: *Builder, library: usize) -> str {
+    ensure_import_order(builder)
     var remaining = library
     var at = 0usize
-    while at < builder.function_ref_count {
-        if first_reference_for_library(builder, at) {
-            if remaining == 0usize { ret builder.function_refs[at].library }
+    while at < builder.import_order_count {
+        let reference = builder.function_refs[builder.import_order[at]]
+        if at == 0usize || !check.same(builder.function_refs[builder.import_order[at - 1usize]].library, reference.library) {
+            if remaining == 0usize { ret reference.library }
             remaining = remaining - 1usize
         }
         at += 1usize
@@ -723,8 +786,8 @@ fn import_symbol_count(builder: *Builder, library: usize) -> usize {
     let wanted = import_library_name(builder, library)
     var count = 0usize
     var at = 0usize
-    while at < builder.function_ref_count {
-        if first_reference_for_symbol(builder, at) && check.same(builder.function_refs[at].library, wanted) { count += 1usize }
+    while at < builder.import_order_count {
+        if check.same(builder.function_refs[builder.import_order[at]].library, wanted) { count += 1usize }
         at += 1usize
     }
     ret count
@@ -734,9 +797,10 @@ fn import_symbol_name(builder: *Builder, library: usize, entry: usize) -> str {
     let wanted = import_library_name(builder, library)
     var remaining = entry
     var at = 0usize
-    while at < builder.function_ref_count {
-        if first_reference_for_symbol(builder, at) && check.same(builder.function_refs[at].library, wanted) {
-            if remaining == 0usize { ret builder.function_refs[at].symbol }
+    while at < builder.import_order_count {
+        let reference = builder.function_refs[builder.import_order[at]]
+        if check.same(reference.library, wanted) {
+            if remaining == 0usize { ret reference.symbol }
             remaining = remaining - 1usize
         }
         at += 1usize

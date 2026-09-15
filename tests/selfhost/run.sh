@@ -1708,6 +1708,39 @@ incremental_signature=$($test_build/neper-self emit-em-all "$incremental_main" "
 case "$incremental_signature" in *'rebuilt main'*) ;; *) printf %s "a signature edit did not rebuild the dependent: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'rebuilt dep'*) ;; *) printf %s "a signature edit did not rebuild its module: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
 case "$incremental_signature" in *'kept e.os'*) ;; *) printf %s "an untouched module was rebuilt: $incremental_signature" >&2; echo >&2; exit 1 ;; esac
+# A hot build (D319): `emit-executable --incremental` settles the keep set, writes each
+# fresh module's artifact under `.neper/<mode>/em/` and links the image from every
+# artifact; a warm one and one after a body edit are each the clean build's image.
+hot_fixture="$repo/tests/selfhost/fixtures/link/incremental"
+hot_scratch="$test_build/hot-scratch"
+hot_source="$hot_scratch/src"
+rm -rf "$hot_scratch"
+mkdir -p "$hot_source"
+cp "$hot_fixture"/src/*.e "$hot_source/"
+hot_main="$hot_source/main.e"
+for hot_mode in --release --time; do
+    hot_exe="$test_build/hot-built$hot_mode"
+    hot_clean="$test_build/hot-clean$hot_mode"
+    cp "$hot_fixture/src/dep.e" "$hot_source/dep.e"
+    hot_first=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
+    [ "$hot_first" = 'executable written' ]
+    hot_clean_written=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_clean" $hot_mode 2>/dev/null)
+    [ "$hot_clean_written" = 'executable written' ]
+    cmp "$hot_exe" "$hot_clean"
+    hot_warm=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
+    [ "$hot_warm" = 'executable written' ]
+    cmp "$hot_exe" "$hot_clean"
+    cp "$hot_fixture/edits/dep_body.e" "$hot_source/dep.e"
+    hot_edited=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
+    [ "$hot_edited" = 'executable written' ]
+    chmod +x "$hot_exe"
+    hot_status=0
+    "$hot_exe" || hot_status=$?
+    [ "$hot_status" -eq 8 ]
+    hot_clean_edited=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_clean" $hot_mode 2>/dev/null)
+    [ "$hot_clean_edited" = 'executable written' ]
+    cmp "$hot_exe" "$hot_clean"
+done
 # Nested inlining (D212): a release build copies `leaf.add` into `mid.twice` and that
 # into `main`, the trap record names leaf.e through both copies with one frame in
 # release and three in debug, and an edit to the leaf's body rebuilds all three.
@@ -2315,7 +2348,7 @@ em_code_field() {
     while [ "$em_index" -lt "$2" ]; do
         em_length=$(od -An -tu4 -j$((em_cursor + 16)) -N4 "$1" | tr -d ' ')
         em_relocations=$(od -An -tu4 -j$((em_cursor + 20)) -N4 "$1" | tr -d ' ')
-        em_cursor=$((em_cursor + 24 + em_length + em_relocations * 20))
+        em_cursor=$((em_cursor + 24 + em_length + em_relocations * 28))
         em_index=$((em_index + 1))
     done
     if [ "$3" = 'instance' ]; then
@@ -2707,7 +2740,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '4' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '5' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '8' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]

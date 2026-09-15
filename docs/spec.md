@@ -3573,7 +3573,7 @@ both as a module and as the Windows variant of `thing`.
 | Interface | exported declarations — every module-scope declaration, the language having no visibility mechanism (§5) — in a compact binary form, each with its **signature hash**; for a `@gpu` kernel, its workgroup size, `shared` byte total and inferred capability set (§10); the module's error table — value to qualified name (§7); and the interface hash over the whole section |
 | Deps | fine-grained edges (Incremental rebuilds, below): signature edges for foreign declarations, value edges for foreign constants, body edges for functions inlined, instantiated, comptime-executed or device-compiled, and lookup edges for every protocol name (§9) examined |
 | NIR | typed IR for exported and inline-eligible functions and for every generic template, each with its **body hash** |
-| Code | machine code (or SPIR-V/PTX) with relocations: the module's own functions, plus the monomorphised instances and device-compiled helpers it emitted under module-local linkage |
+| Code | machine code (or SPIR-V/PTX) with relocations: the module's own functions, plus the monomorphised instances and device-compiled helpers it emitted under module-local linkage; a relocation names its target by module, name and instance, or the library and symbol an `@import` binds |
 | Debug | the standard-format debug sections of §13 — line tables, and the locals-and-types subset in DWARF or CodeView — plus the source hash; from M4, the neper-format side table beside them |
 
 The file is little-endian regardless of target. Its fixed 32-byte header is: bytes
@@ -3583,8 +3583,10 @@ section count; `u32` section-directory offset; and `u32` whole-file CRC32C with 
 field zeroed. The directory has one 24-byte entry per section: `u32` kind, `u32`
 flags, `u64` offset, `u64` length. Sections are ordered by kind, eight-byte aligned,
 non-overlapping and contained in the file; unknown optional kinds are skipped and an
-unknown required kind rejects the file. Strings are UTF-8 encoded as `u32` byte
-length followed by bytes, with no terminator. Integers in Interface, Deps and NIR use
+unknown required kind rejects the file. The Strings section opens with a `u32`
+count and one `u32` offset per string from the section's start (format 5), so a
+string is found in one read; each string is UTF-8 encoded as `u32` byte length
+followed by bytes, with no terminator. Integers in Interface, Deps and NIR use
 fixed-width little-endian fields; lists begin with `u32` counts. Every NIR opcode has
 a versioned numeric ID and length-prefixed operands, so an unknown opcode rejects the
 module rather than being misparsed. The compiler validates all counts, offsets,

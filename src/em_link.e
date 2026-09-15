@@ -6,6 +6,7 @@ use check
 use codegen_x64
 use em
 use emit_x64
+use lookup
 use nir
 
 error InvalidInput
@@ -15,6 +16,9 @@ error MissingSymbol
 
 type Artifact = struct {
     bytes: []usize,
+    // The string table's bounds, walked once when the artifact is taken up (D319).
+    string_starts: []usize,
+    string_lengths: []usize,
 }
 
 type Program = struct {
@@ -26,6 +30,8 @@ type Program = struct {
     // Section 13's line table, re-based to the assembled code (D209).
     lines: []codegen_x64.LineEntry,
     line_count: usize,
+    // The reference no artifact defines, when the link fails with `MissingSymbol`.
+    missing_symbol: str,
 }
 
 fn capacity(value: usize) -> usize {
@@ -50,15 +56,27 @@ fn copy_string_bytes(a: *mem.Arena, bytes: []const usize, start: usize, length: 
 fn copy_string(a: *mem.Arena, bytes: []const usize, index: usize) -> (str, err) {
     let (start, length, bounds_error) = em.string_bounds(bytes, index)
     if bounds_error != ok || length == 0usize { ret ("", InvalidInput) }
-    let (storage, storage_error) = mem.alloc[u8](a, length)
-    if storage_error != ok { ret ("", storage_error) }
+    let (text, copy_error) = copy_string_bytes(a, bytes, start, length)
+    ret (text, copy_error)
+}
+
+// A string of an artifact whose bounds are known (D319).
+fn artifact_text(a: *mem.Arena, artifact: Artifact, index: usize) -> (str, err) {
+    if index >= artifact.string_starts.len { ret ("", InvalidInput) }
+    let (text, copy_error) = copy_string_bytes(a, artifact.bytes, artifact.string_starts[index], artifact.string_lengths[index])
+    ret (text, copy_error)
+}
+
+fn artifact_strings_equal(left: Artifact, left_index: usize, right: Artifact, right_index: usize) -> bool {
+    if left_index >= left.string_starts.len || right_index >= right.string_starts.len { ret false }
+    let length = left.string_lengths[left_index]
+    if length != right.string_lengths[right_index] { ret false }
     var at = 0usize
     while at < length {
-        if bytes[start + at] > 255usize { ret ("", InvalidInput) }
-        storage[at] = u8(bytes[start + at])
+        if left.bytes[left.string_starts[left_index] + at] != right.bytes[right.string_starts[right_index] + at] { ret false }
         at += 1usize
     }
-    ret (storage[..], ok)
+    ret true
 }
 
 fn validate_set(artifacts: []Artifact) -> err {
@@ -104,12 +122,10 @@ fn module_index_cache(a: *mem.Arena, artifacts: []Artifact) -> ([]usize, err) {
     ret (indices, ok)
 }
 
-fn target_module(artifacts: []Artifact, module_indices: []usize, source: []const usize, target_module_index: usize) -> (usize, err) {
+fn target_module(artifacts: []Artifact, module_indices: []usize, source: Artifact, target_module_index: usize) -> (usize, err) {
     var at = 0usize
     while at < artifacts.len {
-        let (matches, match_error) = em.strings_equal(source, target_module_index, artifacts[at].bytes, module_indices[at])
-        if match_error != ok { ret (0usize, match_error) }
-        if matches { ret (at, ok) }
+        if artifact_strings_equal(source, target_module_index, artifacts[at], module_indices[at]) { ret (at, ok) }
         at += 1usize
     }
     ret (0usize, MissingSymbol)
@@ -244,9 +260,9 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, module_indices: []u
             let (stored, stored_error) = em.artifact_code_relocation_at(artifacts[owner].bytes, function, relocation_at)
             if stored_error != ok { ret stored_error }
             if !stored.global {
-                let (module_index, module_error) = target_module(artifacts, module_indices, artifacts[owner].bytes, stored.module_index)
+                let (module_index, module_error) = target_module(artifacts, module_indices, artifacts[owner], stored.module_index)
                 if module_error != ok { ret module_error }
-                let (callee_name, callee_error) = copy_string(a, artifacts[owner].bytes, stored.name_index)
+                let (callee_name, callee_error) = artifact_text(a, artifacts[owner], stored.name_index)
                 if callee_error != ok { ret callee_error }
                 let (callee, found) = table_position(table, module_index, callee_name, stored.instance)
                 if found && !kept[callee] {
@@ -263,6 +279,14 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, module_indices: []u
 
 fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     try validate_set(artifacts)
+    var bounds_at = 0usize
+    while bounds_at < artifacts.len {
+        let (starts, lengths, bounds_error) = em.string_table_bounds(a, artifacts[bounds_at].bytes)
+        if bounds_error != ok { ret bounds_error }
+        artifacts[bounds_at].string_starts = starts
+        artifacts[bounds_at].string_lengths = lengths
+        bounds_at += 1usize
+    }
     var function_count = 0usize
     var global_count = 0usize
     var artifact_at = 0usize
@@ -335,6 +359,13 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     let (strings, strings_error) = mem.alloc[nir.StringConstant](a, 1usize)
     if strings_error != ok { ret strings_error }
     try nir.init(&program.builder, functions, blocks, instructions, operands, references, strings)
+    // The reference index (D303): resolving targets by name over a program's worth of
+    // references was a walk of all of them per reference.
+    let (reference_entries, reference_entries_error) = mem.alloc[lookup.Entry](a, capacity(relocation_count) * 4usize + 64usize)
+    if reference_entries_error != ok { ret reference_entries_error }
+    let (string_entries, string_entries_error) = mem.alloc[lookup.Entry](a, 64usize)
+    if string_entries_error != ok { ret string_entries_error }
+    try nir.attach_indexes(&program.builder, reference_entries, string_entries)
     // Every module's `var`s, in artifact order and each artifact's own order: the linker lays
     // them out from the builder exactly as the source path does, and a relocation finds its
     // global by the module and name the artifact recorded.
@@ -460,7 +491,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             var row_at = 0usize
             while row_at < row_count {
                 if program.line_count == program.lines.len { ret InvalidInput }
-                let (row_path, row_path_error) = copy_string(a, artifacts[owner_at].bytes, row_scratch[row_at].path_index)
+                let (row_path, row_path_error) = artifact_text(a, artifacts[owner_at], row_scratch[row_at].path_index)
                 if row_path_error != ok { ret row_path_error }
                 var entry: codegen_x64.LineEntry = zero
                 entry.offset = program.function_offsets[global_function] + row_scratch[row_at].offset
@@ -474,9 +505,9 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             while relocation_at < function.relocation_count {
                 let (stored, stored_error) = em.artifact_code_relocation_at(artifacts[owner_at].bytes, function, relocation_at)
                 if stored_error != ok { ret stored_error }
-                let (module_index, module_error) = target_module(artifacts, module_indices, artifacts[owner_at].bytes, stored.module_index)
+                let (module_index, module_error) = target_module(artifacts, module_indices, artifacts[owner_at], stored.module_index)
                 if module_error != ok { ret module_error }
-                let (target_name, target_name_error) = copy_string(a, artifacts[owner_at].bytes, stored.name_index)
+                let (target_name, target_name_error) = artifact_text(a, artifacts[owner_at], stored.name_index)
                 if target_name_error != ok { ret target_name_error }
                 if stored.global {
                     let (global_index, found_global) = find_global(&program.builder, module_index, target_name)
@@ -490,6 +521,16 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
                 assembled_reference.module_index = module_index
                 assembled_reference.name = target_name
                 assembled_reference.instance = stored.instance
+                // An `@import` (D319): the reference carries its library and symbol, and
+                // the linker resolves it through the image's import table.
+                if stored.imported {
+                    let (library_name, library_error) = artifact_text(a, artifacts[owner_at], stored.library_index)
+                    if library_error != ok { ret library_error }
+                    let (symbol_name, symbol_error) = artifact_text(a, artifacts[owner_at], stored.symbol_index)
+                    if symbol_error != ok { ret symbol_error }
+                    assembled_reference.library = library_name
+                    assembled_reference.symbol = symbol_name
+                }
                 references[reference_index] = assembled_reference
                 program.builder.function_ref_count += 1usize
                 var assembled_relocation: codegen_x64.Relocation = zero
@@ -508,7 +549,10 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
         if !program.relocations[relocation_at].resolved && !program.relocations[relocation_at].global {
             let reference_index = program.relocations[relocation_at].function_ref
             if reference_index >= program.builder.function_ref_count { ret InvalidInput }
-            if !host_runtime_symbol(program.builder.function_refs[reference_index].name) { ret MissingSymbol }
+            if !host_runtime_symbol(program.builder.function_refs[reference_index].name) && program.builder.function_refs[reference_index].library.len == 0usize {
+                program.missing_symbol = program.builder.function_refs[reference_index].name
+                ret MissingSymbol
+            }
         }
         relocation_at += 1usize
     }

@@ -1215,22 +1215,20 @@ fn path_position(paths: []const str, path: str) -> (usize, bool) {
 
 // The line rows within one function's code, which are contiguous since the rows are
 // appended as the code is.
+// Line rows are appended as code is emitted, so their offsets ascend: the first row
+// at or past `start` is a binary search and a function's rows are the run from there
+// (D319). Every function used to scan every row of the program, which made an
+// artifact of a five-hundred-module program a fifteen-second affair per module.
 fn line_rows_of(lines: []LineEntry, line_count: usize, start: usize, end: usize) -> (usize, usize) {
-    var first = 0usize
-    var found_first = false
-    var total = 0usize
-    var at = 0usize
-    while at < line_count {
-        if lines[at].offset >= start && lines[at].offset < end {
-            if !found_first {
-                first = at
-                found_first = true
-            }
-            total += 1usize
-        }
-        at += 1usize
+    var low = 0usize
+    var high = line_count
+    while low < high {
+        let mid = (low + high) / 2usize
+        if lines[mid].offset < start { low = mid + 1usize } else { high = mid }
     }
-    ret (first, total)
+    var total = 0usize
+    while low + total < line_count && lines[low + total].offset < end { total += 1usize }
+    ret (low, total)
 }
 
 // Whether a function has its own code: a folded duplicate shares an offset with an

@@ -2,6 +2,7 @@
 
 use artifact_hash
 use binary
+use e.mem
 use check
 use codegen_x64
 use emit_x64
@@ -98,9 +99,14 @@ type CodeRelocation = struct {
     // variable, and `instance` is 0.
     global: bool,
     instance: usize,
+    // An `extern fn` bound by `@import` (D319): the library and the symbol it binds, as
+    // string indexes, so the linker that consumes the artifact can import it.
+    imported: bool,
+    library_index: usize,
+    symbol_index: usize,
 }
 
-fn format_version() -> usize { ret 4usize }
+fn format_version() -> usize { ret 5usize }
 fn header_size() -> usize { ret 32usize }
 fn directory_entry_size() -> usize { ret 24usize }
 fn required_flag() -> usize { ret 1usize }
@@ -423,9 +429,20 @@ fn string_index(table: *StringTable, value: str) -> (usize, err) {
     ret (0usize, InvalidArtifact)
 }
 
+// The Strings section (format 5, D319): the count, then each string's offset from the
+// section's start, then the strings as a length and its bytes. The offsets are what
+// make `string_bounds` one read: every reader of the artifact walked the table from
+// its first entry, per relocation, per row.
 fn write_strings(table: *StringTable, output: *binary.Buffer) -> err {
     try binary.little_u32(output, table.count)
+    var offset = 4usize + table.count * 4usize
     var at = 0usize
+    while at < table.count {
+        try binary.little_u32(output, offset)
+        offset += 4usize + table.values[at].len
+        at += 1usize
+    }
+    at = 0usize
     while at < table.count {
         try binary.little_u32(output, table.values[at].len)
         try binary.text(output, table.values[at])
@@ -1011,6 +1028,13 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
             let (trap_name, trap_name_error) = intern(table, reference.name)
             if trap_name_error != ok { ret trap_name_error }
         }
+        // An import's library and symbol ride its relocations (D319).
+        if reference.library.len != 0usize {
+            let (library_index, library_error) = intern(table, reference.library)
+            if library_error != ok { ret library_error }
+            let (symbol_index, symbol_error) = intern(table, reference.symbol)
+            if symbol_error != ok { ret symbol_error }
+        }
         reference_at += 1usize
     }
     function_at = 0usize
@@ -1360,7 +1384,33 @@ fn write_interface(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, mo
     ret binary.patch_little_u64(output, section_start, interface_hash)
 }
 
+// The module's references marked in one pass (D319), when the builder has the marks.
+fn mark_module_references(builder: *nir.Builder, module_index: usize) {
+    if builder.used_marks.len < builder.function_ref_count { ret }
+    var clear_at = 0usize
+    while clear_at < builder.function_ref_count {
+        builder.used_marks[clear_at] = 0u8
+        clear_at += 1usize
+    }
+    var function_at = 0usize
+    while function_at < builder.function_count {
+        let function = builder.functions[function_at]
+        if function.module_index == module_index {
+            var instruction_at = function.first_instruction
+            while instruction_at < function.first_instruction + function.instruction_count {
+                let instruction = builder.instructions[instruction_at]
+                if (instruction.opcode == .Call || instruction.opcode == .FunctionAddress) && instruction.immediate < builder.function_ref_count { builder.used_marks[instruction.immediate] = 1u8 }
+                instruction_at += 1usize
+            }
+        }
+        function_at += 1usize
+    }
+    builder.used_marks_module = module_index
+    builder.used_marks_valid = true
+}
+
 fn reference_used_by_module(builder: *nir.Builder, module_index: usize, reference_index: usize) -> bool {
+    if builder.used_marks_valid && builder.used_marks_module == module_index && reference_index < builder.used_marks.len { ret builder.used_marks[reference_index] != 0u8 }
     var function_at = 0usize
     while function_at < builder.function_count {
         let function = builder.functions[function_at]
@@ -1510,6 +1560,7 @@ fn value_dependency_count(c: *check.Checker, module_index: usize) -> (usize, err
 }
 
 fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
+    mark_module_references(builder, module_index)
     let (value_count, value_count_error) = value_dependency_count(c, module_index)
     if value_count_error != ok { ret value_count_error }
     try binary.little_u32(output, dependency_count(builder, module_index) + template_dependency_count(c, module_index) + value_count)
@@ -1744,6 +1795,8 @@ fn write_code(g: *graph.Graph, builder: *nir.Builder, module_index: usize, table
                     var target_symbol = ""
                     var instance = 0usize
                     var kind = 0usize
+                    var library_index = 0usize
+                    var symbol_index = 0usize
                     if relocation.global {
                         if relocation.function_ref >= builder.global_count { ret InvalidArtifact }
                         target_module_index = builder.globals[relocation.function_ref].module_index
@@ -1755,6 +1808,15 @@ fn write_code(g: *graph.Graph, builder: *nir.Builder, module_index: usize, table
                         target_module_index = reference.module_index
                         target_symbol = reference.name
                         instance = reference.instance
+                        if reference.library.len != 0usize {
+                            kind = 2usize
+                            let (stored_library, stored_library_error) = string_index(table, reference.library)
+                            if stored_library_error != ok { ret stored_library_error }
+                            let (stored_symbol, stored_symbol_error) = string_index(table, reference.symbol)
+                            if stored_symbol_error != ok { ret stored_symbol_error }
+                            library_index = stored_library
+                            symbol_index = stored_symbol
+                        }
                     }
                     if target_module_index >= g.count { ret InvalidArtifact }
                     let (target_module, target_module_error) = string_index(table, g.modules[target_module_index].name)
@@ -1766,6 +1828,8 @@ fn write_code(g: *graph.Graph, builder: *nir.Builder, module_index: usize, table
                     try binary.little_u32(output, target_name)
                     try binary.little_u32(output, instance)
                     try binary.little_u32(output, kind)
+                    try binary.little_u32(output, library_index)
+                    try binary.little_u32(output, symbol_index)
                 }
                 relocation_at += 1usize
             }
@@ -2098,9 +2162,12 @@ fn validate_strings(bytes: []const usize, section: Section, target_index: usize)
     if section.length < 4usize { ret InvalidArtifact }
     let (count, count_error) = binary.read_u32(bytes, section.offset)
     if count_error != ok || count == 0usize || target_index >= count { ret InvalidArtifact }
-    var at = section.offset + 4usize
+    if section.length < 4usize + count * 4usize { ret InvalidArtifact }
+    var at = section.offset + 4usize + count * 4usize
     var index = 0usize
     while index < count {
+        let (offset, offset_error) = binary.read_u32(bytes, section.offset + 4usize + index * 4usize)
+        if offset_error != ok || section.offset + offset != at { ret InvalidArtifact }
         let (length, length_error) = binary.read_u32(bytes, at)
         if length_error != ok { ret InvalidArtifact }
         at += 4usize
@@ -2151,16 +2218,11 @@ fn read_string_starts(bytes: []const usize, starts: []usize) -> (usize, err) {
     let (count, count_error) = binary.read_u32(bytes, strings.offset)
     if count_error != ok { ret (0usize, InvalidArtifact) }
     if count > starts.len { ret (0usize, Capacity) }
-    let end = strings.offset + strings.length
-    var cursor = strings.offset + 4usize
     var at = 0usize
     while at < count {
-        let (length, length_error) = binary.read_u32(bytes, cursor)
-        if length_error != ok { ret (0usize, InvalidArtifact) }
-        cursor += 4usize
-        if cursor > end || length > end - cursor { ret (0usize, InvalidArtifact) }
-        starts[at] = cursor
-        cursor += length
+        let (start, length, bounds_error) = string_bounds(bytes, at)
+        if bounds_error != ok { ret (0usize, bounds_error) }
+        starts[at] = start
         at += 1usize
     }
     ret (count, ok)
@@ -2178,20 +2240,36 @@ fn string_bounds(bytes: []const usize, index: usize) -> (usize, usize, err) {
     let (strings, found_strings, section_error) = find_section_unchecked(bytes, strings_kind())
     if section_error != ok || !found_strings || strings.length < 4usize { ret (0usize, 0usize, InvalidArtifact) }
     let (count, count_error) = binary.read_u32(bytes, strings.offset)
-    if count_error != ok || index >= count { ret (0usize, 0usize, InvalidArtifact) }
-    let end = strings.offset + strings.length
-    var cursor = strings.offset + 4usize
+    if count_error != ok || index >= count || strings.length < 4usize + count * 4usize { ret (0usize, 0usize, InvalidArtifact) }
+    let (offset, offset_error) = binary.read_u32(bytes, strings.offset + 4usize + index * 4usize)
+    if offset_error != ok || offset + 4usize > strings.length { ret (0usize, 0usize, InvalidArtifact) }
+    let cursor = strings.offset + offset
+    let (length, length_error) = binary.read_u32(bytes, cursor)
+    if length_error != ok || length > strings.length - offset - 4usize { ret (0usize, 0usize, InvalidArtifact) }
+    ret (cursor + 4usize, length, ok)
+}
+
+// Every string's start and length, walked once (D319): a link reads strings per
+// relocation, and each read walked the table from its first entry.
+fn string_table_bounds(a: *mem.Arena, bytes: []const usize) -> ([]usize, []usize, err) {
+    var none: [1]usize = zero
+    let (strings, found_strings, section_error) = find_section_unchecked(bytes, strings_kind())
+    if section_error != ok || !found_strings || strings.length < 4usize { ret (none[0usize..0usize], none[0usize..0usize], InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, strings.offset)
+    if count_error != ok { ret (none[0usize..0usize], none[0usize..0usize], InvalidArtifact) }
+    let (starts, starts_error) = mem.alloc[usize](a, count + 1usize)
+    if starts_error != ok { ret (none[0usize..0usize], none[0usize..0usize], starts_error) }
+    let (lengths, lengths_error) = mem.alloc[usize](a, count + 1usize)
+    if lengths_error != ok { ret (none[0usize..0usize], none[0usize..0usize], lengths_error) }
     var at = 0usize
     while at < count {
-        let (length, length_error) = binary.read_u32(bytes, cursor)
-        if length_error != ok { ret (0usize, 0usize, InvalidArtifact) }
-        cursor += 4usize
-        if cursor > end || length > end - cursor { ret (0usize, 0usize, InvalidArtifact) }
-        if at == index { ret (cursor, length, ok) }
-        cursor += length
+        let (start, length, bounds_error) = string_bounds(bytes, at)
+        if bounds_error != ok { ret (none[0usize..0usize], none[0usize..0usize], bounds_error) }
+        starts[at] = start
+        lengths[at] = length
         at += 1usize
     }
-    ret (0usize, 0usize, InvalidArtifact)
+    ret (starts[0usize..count], lengths[0usize..count], ok)
 }
 
 fn string_matches(bytes: []const usize, index: usize, expected: str) -> (bool, err) {
@@ -2338,7 +2416,10 @@ fn artifact_error_at(bytes: []const usize, index: usize) -> (ErrorValue, err) {
 
 // A code relocation: displacement, target module, target name, instance, and the kind --
 // 0 a function, 1 a module-scope `var`.
-fn relocation_record_size() -> usize { ret 20usize }
+// A relocation record: displacement, target module, name, instance, kind, and since
+// format 5 (D319) the library and symbol an `@import` binds -- 0 and 0 for a
+// reference to a function or a `var`. A kind of 2 says import.
+fn relocation_record_size() -> usize { ret 28usize }
 
 fn code_function_at_unchecked(bytes: []const usize, query: usize) -> (CodeFunction, usize, err) {
     let empty = CodeFunction { name_index: 0usize, instance: 0usize, content_hash: 0usize, code_start: 0usize, code_length: 0usize, relocations: 0usize, relocation_count: 0usize }
@@ -2369,7 +2450,7 @@ fn code_function_at_unchecked(bytes: []const usize, query: usize) -> (CodeFuncti
             let (target_name, target_name_error) = binary.read_u32(bytes, relocation + 8usize)
             let (target_instance, target_instance_error) = binary.read_u32(bytes, relocation + 12usize)
             let (target_kind, target_kind_error) = binary.read_u32(bytes, relocation + 16usize)
-            if displacement_error != ok || target_module_error != ok || target_name_error != ok || target_instance_error != ok || target_kind_error != ok || target_kind > 1usize || displacement > code_length || 4usize > code_length - displacement { ret (empty, count, InvalidArtifact) }
+            if displacement_error != ok || target_module_error != ok || target_name_error != ok || target_instance_error != ok || target_kind_error != ok || target_kind > 2usize || displacement > code_length || 4usize > code_length - displacement { ret (empty, count, InvalidArtifact) }
             let (module_start, module_length, module_bounds_error) = string_bounds(bytes, target_module)
             let (target_start, target_length, target_bounds_error) = string_bounds(bytes, target_name)
             if module_bounds_error != ok || target_bounds_error != ok || module_length == 0usize || target_length == 0usize || module_start >= bytes.len || target_start >= bytes.len { ret (empty, count, InvalidArtifact) }
@@ -2448,7 +2529,7 @@ fn artifact_code_function_at(bytes: []const usize, index: usize) -> (CodeFunctio
 }
 
 fn artifact_code_relocation_at(bytes: []const usize, function: CodeFunction, index: usize) -> (CodeRelocation, err) {
-    let empty = CodeRelocation { displacement_at: 0usize, module_index: 0usize, name_index: 0usize, global: false, instance: 0usize }
+    var empty: CodeRelocation = zero
     if index >= function.relocation_count { ret (empty, InvalidArtifact) }
     let relocation = function.relocations + index * relocation_record_size()
     if relocation > bytes.len || relocation_record_size() > bytes.len - relocation { ret (empty, InvalidArtifact) }
@@ -2457,11 +2538,27 @@ fn artifact_code_relocation_at(bytes: []const usize, function: CodeFunction, ind
     let (name_index, name_error) = binary.read_u32(bytes, relocation + 8usize)
     let (instance, instance_error) = binary.read_u32(bytes, relocation + 12usize)
     let (kind, kind_error) = binary.read_u32(bytes, relocation + 16usize)
-    if displacement_error != ok || module_error != ok || name_error != ok || instance_error != ok || kind_error != ok || kind > 1usize || displacement > function.code_length || 4usize > function.code_length - displacement { ret (empty, InvalidArtifact) }
+    let (library_index, library_error) = binary.read_u32(bytes, relocation + 20usize)
+    let (symbol_index, symbol_error) = binary.read_u32(bytes, relocation + 24usize)
+    if displacement_error != ok || module_error != ok || name_error != ok || instance_error != ok || kind_error != ok || library_error != ok || symbol_error != ok || kind > 2usize || displacement > function.code_length || 4usize > function.code_length - displacement { ret (empty, InvalidArtifact) }
     let (module_start, module_length, module_bounds_error) = string_bounds(bytes, module_index)
     let (name_start, name_length, name_bounds_error) = string_bounds(bytes, name_index)
     if module_bounds_error != ok || name_bounds_error != ok || module_length == 0usize || name_length == 0usize || module_start >= bytes.len || name_start >= bytes.len { ret (empty, InvalidArtifact) }
-    ret (CodeRelocation { displacement_at: displacement, module_index: module_index, name_index: name_index, global: kind == 1usize, instance: instance }, ok)
+    if kind == 2usize {
+        let (library_start, library_length, library_bounds_error) = string_bounds(bytes, library_index)
+        let (symbol_start, symbol_length, symbol_bounds_error) = string_bounds(bytes, symbol_index)
+        if library_bounds_error != ok || symbol_bounds_error != ok || library_length == 0usize || symbol_length == 0usize { ret (empty, InvalidArtifact) }
+    }
+    var record: CodeRelocation = zero
+    record.displacement_at = displacement
+    record.module_index = module_index
+    record.name_index = name_index
+    record.global = kind == 1usize
+    record.instance = instance
+    record.imported = kind == 2usize
+    record.library_index = library_index
+    record.symbol_index = symbol_index
+    ret (record, ok)
 }
 
 // The module's `var`s, from the globals section: how many, and each by index. An artifact

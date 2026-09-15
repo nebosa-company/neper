@@ -262,7 +262,7 @@ if ($LASTEXITCODE -ne 0) { throw 'generic compiled-module executable failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericArtifactExecutablePath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $genericExecutablePath).Hash) { throw 'generic compiled-module and source links differ' }
 # Walk a compiled module's code section. The section directory is fixed, so the
 # code section offset is at byte 136; each record is a 24-byte header followed by
-# its machine code and its relocations.
+# its machine code and its relocations of 28 bytes each (format 5, D319).
 function Get-EmCodeRecords([string]$path) {
     $bytes = [IO.File]::ReadAllBytes($path)
     $code = [int][BitConverter]::ToUInt64($bytes, 136)
@@ -276,7 +276,7 @@ function Get-EmCodeRecords([string]$path) {
             Instance = [BitConverter]::ToUInt32($bytes, $cursor + 4)
             ContentHash = [BitConverter]::ToUInt64($bytes, $cursor + 8)
         }
-        $cursor += 24 + $length + $relocations * 20
+        $cursor += 24 + $length + $relocations * 28
     }
     return ,$records
 }
@@ -1587,6 +1587,38 @@ Copy-Item (Join-Path $incrementalFixture 'edits\dep_signature.e') (Join-Path $in
 Copy-Item (Join-Path $incrementalFixture 'edits\main_signature.e') $incrementalMain
 $incrementalSignature = (& $compiler emit-em-all $incrementalMain $repo 'x64' 'windows' $incrementalArtifacts --release --incremental) -join "`n"
 if ($LASTEXITCODE -ne 0 -or $incrementalSignature -notmatch 'rebuilt main' -or $incrementalSignature -notmatch 'rebuilt dep' -or $incrementalSignature -notmatch 'kept e.os') { throw "a signature edit did not rebuild the dependent: $incrementalSignature" }
+# A hot build (D319): `emit-executable --incremental` settles the keep set, writes each
+# fresh module's artifact under `.neper/<mode>/em/` and links the image from every
+# artifact; a warm one with nothing changed and one after a body edit are each the clean
+# build's image byte for byte, in both modes.
+$hotFixture = Join-Path $PSScriptRoot 'fixtures\link\incremental'
+$hotScratch = Join-Path $testBuild 'hot-scratch'
+$hotSource = Join-Path $hotScratch 'src'
+if (Test-Path -LiteralPath $hotScratch) { Remove-Item -LiteralPath $hotScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $hotSource | Out-Null
+Copy-Item (Join-Path $hotFixture 'src\*.e') $hotSource
+$hotMain = Join-Path $hotSource 'main.e'
+foreach ($hotMode in @('--release', '--time')) {
+    $hotExe = Join-Path $testBuild "hot-built$hotMode.exe"
+    $hotClean = Join-Path $testBuild "hot-clean$hotMode.exe"
+    Copy-Item (Join-Path $hotFixture 'src\dep.e') (Join-Path $hotSource 'dep.e')
+    $hotFirst = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotFirst -ne 'executable written') { throw "the hot build did not write an executable ($hotMode)" }
+    $hotCleanWritten = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotCleanWritten -ne 'executable written') { throw "the clean build failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a cold hot build is not the clean build ($hotMode)" }
+    $hotWarm = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotWarm -ne 'executable written') { throw "the warm hot build failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build is not the clean build ($hotMode)" }
+    Copy-Item (Join-Path $hotFixture 'edits\dep_body.e') (Join-Path $hotSource 'dep.e')
+    $hotEdited = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotEdited -ne 'executable written') { throw "the hot build after a body edit failed ($hotMode)" }
+    & $hotExe
+    if ($LASTEXITCODE -ne 8) { throw "the hot build did not carry the edited body: exit $LASTEXITCODE ($hotMode)" }
+    $hotCleanEdited = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotCleanEdited -ne 'executable written') { throw "the clean build of the edited fixture failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a hot build after a body edit is not the clean build ($hotMode)" }
+}
 # Nested inlining (D212): a release build copies `leaf.add` into `mid.twice` and that
 # into `main`, the trap record names leaf.e through both copies with one frame in
 # release and three in debug, and an edit to the leaf's body rebuilds all three.
@@ -2468,7 +2500,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 4 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 5 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 8) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'

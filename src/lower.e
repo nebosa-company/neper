@@ -6019,26 +6019,6 @@ fn all_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signat
     ret ok
 }
 
-// The next module the lowered program names and nothing has lowered yet (D314): the
-// discovery `reachable_modules` makes, one step at a time, for a driver that emits
-// each module's code before lowering the next. The cursors only advance: a reference
-// once passed had its module lowered, and both lists are append-only.
-fn next_unlowered(g: *graph.Graph, builder: *nir.Builder, lowered: []bool, reference_cursor: *usize, inlined_cursor: *usize) -> (usize, bool, err) {
-    while *reference_cursor < builder.function_ref_count {
-        let target_module = builder.function_refs[*reference_cursor].module_index
-        if target_module >= g.count { ret (0usize, false, FunctionNotFound) }
-        if !lowered[target_module] { ret (target_module, true, ok) }
-        *reference_cursor += 1usize
-    }
-    while *inlined_cursor < builder.inlined_count {
-        let target_module = builder.inlined[*inlined_cursor].callee_module
-        if target_module >= g.count { ret (0usize, false, FunctionNotFound) }
-        if !lowered[target_module] { ret (target_module, true, ok) }
-        *inlined_cursor += 1usize
-    }
-    ret (0usize, false, ok)
-}
-
 fn reachable_modules(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []Binding, lowered: []bool) -> err {
     if g.count == 0usize || g.count > lowered.len { ret FunctionNotFound }
     try declare_globals(c, builder)

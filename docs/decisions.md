@@ -6486,3 +6486,33 @@ from that); the cache belongs to one function or instance and starts over at eac
 and at every comptime binding, since a name means something else there. Two-million
 lines: 33 s to 26 s release, 28 s to 25 s debug; the compiler's own declaration sweep
 19 ms to 7 ms. Images byte-identical.
+
+## D319 -- A hot build: `emit-executable --incremental`, the image from artifacts
+
+`--incremental` was the artifact build's alone: `emit-em-all` settled the edge rule
+(D214) and skipped the kept modules, and an executable needed a `link-em` after it.
+`emit-executable` and `run` take the flag now. The build settles the keep set after
+the declaration sweep from the artifacts under `.neper/<mode>/em/`, skips the kept
+modules' body check and the oracle, lowers and selects the rest one module at a time
+(D314) and writes each one's artifact from the staging buffers before its bodies go,
+and then links every module's artifact, kept and fresh, exactly as `link-em` does.
+For that to be the same image as a cold build: the executable path now lowers every
+module in module order rather than the reached ones in discovery order, since the
+artifact link lays functions out in that order and the fold's first copy of two
+identical bodies took its name from whichever came first; an image's imports are
+enumerated in name order rather than first-appearance order, since the source path
+interned an `@import` at its declaration and an artifact records it at its first
+call; and an artifact's relocation carries the library and symbol an `@import`
+binds, which no artifact had, so a program with one never linked from artifacts.
+
+The artifact machinery had never been run at scale and was quadratic in four places:
+`line_rows_of` scanned every row of the program per function (fifteen seconds per
+module of a five-hundred-module program), an edge check walked every instruction of
+the module per reference and per prior reference, the assembled builder resolved
+references without an index, and every string read walked the table from its first
+entry. The rows are a binary search, the module's references are marked in one pass,
+the assembled builder carries an index, and the Strings section (format 5) opens with
+an offset table so a string is one read. Compiling the compiler: a cold hot build
+1.9 s of lowering, selection and artifacts against 0.9 s without them; a warm one --
+nothing changed -- settles in 0.6 s and links from artifacts in 1.0 s, and its image
+is the cold build's byte for byte.

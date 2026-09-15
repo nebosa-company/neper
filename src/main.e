@@ -2857,6 +2857,9 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     if strings_error != ok { ret strings_error }
     report.build.pools[stats.POOL_NIR_STRINGS] = strings.len
     try nir.init(builder, functions, blocks, instructions, operands, function_refs, strings)
+    let (used_marks, used_marks_error) = mem.alloc[u8](a, function_refs.len)
+    if used_marks_error != ok { ret used_marks_error }
+    builder.used_marks = used_marks
     let (ref_entries, ref_entries_error) = mem.alloc[lookup.Entry](a, function_refs.len * 4usize)
     if ref_entries_error != ok { ret ref_entries_error }
     report.build.pools[stats.POOL_NIR_INDEX] = ref_entries.len
@@ -3983,7 +3986,7 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     ret emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, "E-TYPE-9999", message_storage[..message.count])
 }
 
-fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, function: nir.Function, context: *codegen_x64.FunctionContext) -> err {
+fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, function: nir.Function, context: *codegen_x64.FunctionContext, codegen_error: err) -> err {
     var path = "<unknown>"
     if function.module_index < g.count { path = g.modules[function.module_index].path }
     var message_storage: [512]u8 = zero
@@ -3991,6 +3994,10 @@ fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, function: nir.Functi
     try write_all(&message, "cannot select machine code for `")
     try write_all(&message, function.name)
     try write_all(&message, "`")
+    // Which table filled, when one did: the selector's own errors are capacities.
+    if codegen_error == codegen_x64.Unsupported { try write_all(&message, " (a fixup, relocation or line table is full)") }
+    if codegen_error == emit_x64.Capacity { try write_all(&message, " (the machine code buffer is full)") }
+    if codegen_error == regalloc.Capacity { try write_all(&message, " (the register allocator's tables are full)") }
     ret emit_diagnostic(report, path, module_text(g, function.module_index), module_lines(g, function.module_index), context.failure_token, true, "E-CODEGEN-9999", message_storage[..message.count])
 }
 
@@ -4058,12 +4065,18 @@ fn declarations_per_module(checker: *check.Checker, resolver: *resolve.Resolver,
 // are checked and its short functions lowered into the oracle on the one parse, in
 // graph order, which is the order both oracles walk. An oracle error is a lowering
 // diagnostic, printed here where the builder that has its site still is.
-fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph, report: *Sink, oracle: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, entries: []nir.InlineEntry, entry_count: *usize, with_oracle: bool) -> err {
+fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph, report: *Sink, oracle: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, entries: []nir.InlineEntry, entry_count: *usize, with_oracle: bool, skip: []bool) -> err {
     var defers: lower.DeferState = zero
     var cursor = 0usize
     if with_oracle { try lower.begin_inline_oracle(checker, oracle, entry_count) }
     var order_at = 0usize
     while order_at < loaded.order_count {
+        // A kept module's bodies are not checked (D319): its code is its artifact's, and
+        // an instance of one of its generics is checked from its tree when it is made.
+        if loaded.order[order_at] < skip.len && skip[loaded.order[order_at]] {
+            order_at += 1usize
+            continue
+        }
         try check.bodies_module(checker, resolver, loaded, loaded.order[order_at])
         if with_oracle {
             let oracle_error = lower.oracle_module(checker, loaded, oracle, signatures, bindings, entries, entry_count, loaded.order[order_at], &cursor, &defers)
@@ -4171,7 +4184,7 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
             let codegen_error = codegen_x64.function(builder, function_at, stack_slots, context)
             if report.timing { report.codegen_ns = report.codegen_ns +% nptest_now() }
             if codegen_error != ok {
-                try print_codegen_diagnostic(report, loaded, builder.functions[function_at], context)
+                try print_codegen_diagnostic(report, loaded, builder.functions[function_at], context, codegen_error)
                 try finish_report(report)
                 os.exit(1i32)
                 ret ok
@@ -4225,7 +4238,10 @@ fn emit_whole_program(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
             names_total += builder.functions[named_at].module_name.len + 1usize + builder.functions[named_at].name.len
             named_at += 1usize
         }
-        machine_capacity = builder.instruction_count * 24usize + builder.function_count * 24usize + names_total + 65536usize
+        // Forty-eight a NIR instruction, not twenty-four (D319): a debug build's trap site
+        // carries its path and message in the code, and a program of short arithmetic
+        // functions -- the scale benchmark -- filled the buffer at twenty-four.
+        machine_capacity = builder.instruction_count * 48usize + builder.function_count * 24usize + names_total + 65536usize
     }
     let (machine_storage, machine_storage_error) = mem.alloc[u8](a, machine_capacity)
     if machine_storage_error != ok { ret machine_storage_error }
@@ -4299,7 +4315,7 @@ type ModuleCode = struct {
 // One module lowered and selected (D314): its functions go on the builder's table and
 // its bodies into the pools, its code into the staging buffer, and then exact copies
 // are taken and the bodies discarded, so the pools hold one module at a time.
-fn codegen_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, code: *ModuleCode) -> err {
+fn codegen_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild, code: *ModuleCode) -> err {
     let mark = nir.mark(builder)
     let first = builder.function_count
     let lower_error = lower.module(checker, loaded, module_index, builder, signatures, bindings)
@@ -4314,6 +4330,7 @@ fn codegen_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *
     *context.line_count = 0usize
     var no_fold: Fold = zero
     try codegen_functions(a, report, loaded, builder, context, first, stage_offsets, true, &no_fold)
+    if hot.on { try write_hot_artifact(a, checker, loaded, builder, module_index, context, stage_offsets, hot) }
     let count = builder.function_count - first
     let (bytes, bytes_error) = mem.alloc[u8](a, context.output.count + 1usize)
     if bytes_error != ok { ret bytes_error }
@@ -4368,8 +4385,127 @@ fn function_span(code: ModuleCode, function_at: usize) -> (usize, usize) {
 // reaches is then found over the relocations -- the same edges the pruner walked over
 // instructions, and the same walk `em_link` makes over artifacts -- and the kept
 // functions are copied into the image's buffer in order, folded as before.
-fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, code: *Code) -> err {
+// The hot build's state (D319): whether it is one, which modules are kept, and where
+// the artifacts are, with the writer's tables once they are made.
+type HotBuild = struct {
+    on: bool,
+    keep: []bool,
+    directory: str,
+    triple: str,
+    release: bool,
+    strings: em.StringTable,
+    sections: []em.Section,
+    scratch: binary.Buffer,
+    artifact: binary.Buffer,
+    packed: []u8,
+}
+
+// `.neper/<mode>/em/` under the project root, made when it is missing.
+fn artifact_directory(a: *mem.Arena, loaded: *graph.Graph, release: bool) -> (str, err) {
+    var mode = "debug"
+    if release { mode = "release" }
+    let (dot_dir, dot_error) = tool.manifest_join(a, loaded.project.root, ".neper")
+    if dot_error != ok { ret ("", dot_error) }
+    let (mode_dir, mode_error) = tool.manifest_join(a, dot_dir, mode)
+    if mode_error != ok { ret ("", mode_error) }
+    let (em_dir, em_error) = tool.manifest_join(a, mode_dir, "em")
+    if em_error != ok { ret ("", em_error) }
+    let dot_made = ensure_dir(a, dot_dir)
+    if dot_made != ok { ret ("", dot_made) }
+    let mode_made = ensure_dir(a, mode_dir)
+    if mode_made != ok { ret ("", mode_made) }
+    let em_made = ensure_dir(a, em_dir)
+    if em_made != ok { ret ("", em_made) }
+    ret (em_dir, ok)
+}
+
+fn init_hot_writer(a: *mem.Arena, hot: *HotBuild) -> err {
+    let (string_values, string_values_error) = mem.alloc[str](a, 32768usize)
+    if string_values_error != ok { ret string_values_error }
+    let (string_slots, string_slots_error) = mem.alloc[usize](a, 131072usize)
+    if string_slots_error != ok { ret string_slots_error }
+    try em.init_strings(&hot.strings, string_values, string_slots)
+    let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
+    if sections_error != ok { ret sections_error }
+    hot.sections = sections
+    let (scratch_storage, scratch_storage_error) = mem.alloc[usize](a, 4194304usize)
+    if scratch_storage_error != ok { ret scratch_storage_error }
+    try binary.init(&hot.scratch, scratch_storage)
+    let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 8388608usize)
+    if artifact_storage_error != ok { ret artifact_storage_error }
+    try binary.init(&hot.artifact, artifact_storage)
+    let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
+    if packed_error != ok { ret packed_error }
+    hot.packed = packed
+    ret ok
+}
+
+// A module's artifact from the staging buffers, written before its bodies go: the
+// artifact's NIR section reads them.
+fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild) -> err {
+    var mode: em.BuildMode = .Debug
+    if hot.release { mode = .Release }
+    hot.artifact.count = 0usize
+    try em.write_module(checker, loaded, builder, module_index, hot.triple, mode, context.output, stage_offsets, context.relocations, *context.relocation_count, context.lines, *context.line_count, &hot.strings, hot.sections, &hot.scratch, &hot.artifact)
+    try binary.pack(&hot.artifact, hot.packed)
+    let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
+    if artifact_path_error != ok { ret artifact_path_error }
+    ret save_bytes(a, artifact_path, hot.packed[..hot.artifact.count])
+}
+
+// The link over every module's artifact, kept and fresh alike, in module order with
+// the root first: what `link-em` does with the artifacts named in that order, which
+// is the order the source path lays functions out in, so a hot build's image is a
+// cold one's byte for byte (D214).
+fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder: *nir.Builder, hot: *HotBuild, code: *Code) -> err {
+    let (artifacts, artifacts_error) = mem.alloc[em_link.Artifact](a, loaded.count)
+    if artifacts_error != ok { ret artifacts_error }
+    var module_index = 0usize
+    while module_index < loaded.count {
+        let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
+        if artifact_path_error != ok { ret artifact_path_error }
+        let (bytes, load_error) = load_artifact(a, artifact_path)
+        if load_error != ok { ret load_error }
+        artifacts[module_index].bytes = bytes
+        module_index += 1usize
+    }
+    let (errors_valid, errors_error) = merge_artifact_error_tables(a, artifacts)
+    if errors_error != ok { ret errors_error }
+    if !errors_valid {
+        try finish_report(report)
+        os.exit(1i32)
+        ret ok
+    }
+    var program: em_link.Program = zero
+    let assemble_error = em_link.assemble(a, artifacts, &program)
+    if assemble_error == em_link.MissingSymbol && program.missing_symbol.len != 0usize {
+        try stderr_text("error: no artifact defines `")
+        try stderr_text(program.missing_symbol)
+        try stderr_text("`\n")
+        os.exit(1i32)
+    }
+    if assemble_error != ok { ret assemble_error }
+    // The assembled builder replaces the program's: what the image carries of the
+    // build itself -- the arena size (D225) and the mode -- comes across.
+    let arena_bytes = builder.arena_bytes
+    let release = builder.release
+    let nocheck = builder.nocheck
+    *builder = program.builder
+    builder.arena_bytes = arena_bytes
+    builder.release = release
+    builder.nocheck = nocheck
+    code.machine = program.machine
+    code.function_offsets = program.function_offsets
+    code.relocations = program.relocations
+    code.relocation_count = program.relocation_count
+    code.lines = program.lines
+    code.line_count = program.line_count
+    ret ok
+}
+
+fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, hot: *HotBuild, code: *Code) -> err {
     try lower.declare_globals(checker, builder)
+    if hot.on { try init_hot_writer(a, hot) }
     var clear_at = 0usize
     while clear_at < loaded.count {
         lowered[clear_at] = false
@@ -4415,13 +4551,18 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
     let (chunk_of, chunk_of_error) = mem.alloc[usize](a, builder.functions.len + 1usize)
     if chunk_of_error != ok { ret chunk_of_error }
     var chunk_count = 0usize
-    var reference_cursor = 0usize
-    var inlined_cursor = 0usize
+    // Every module in module order (D319), whether or not anything reaches it -- the
+    // link drops what `main` does not reach either way -- so the layout is the one the
+    // artifact link produces from artifacts named in that order, and a hot build's
+    // image is a cold one's byte for byte. A kept module's code is its artifact's.
     var next = 0usize
-    var have = loaded.count > 0usize
-    while have {
+    while next < loaded.count {
+        if hot.on && hot.keep[next] {
+            next += 1usize
+            continue
+        }
         var made: ModuleCode = zero
-        try codegen_module(a, report, loaded, checker, builder, signatures, bindings, next, &context, stage_offsets, &made)
+        try codegen_module(a, report, loaded, checker, builder, signatures, bindings, next, &context, stage_offsets, hot, &made)
         codes[chunk_count] = made
         lowered[next] = true
         var fill = made.first_function
@@ -4430,15 +4571,7 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
             fill += 1usize
         }
         chunk_count += 1usize
-        let (found, found_next, next_error) = lower.next_unlowered(loaded, builder, lowered, &reference_cursor, &inlined_cursor)
-        if next_error != ok {
-            try print_lower_diagnostic(report, loaded, checker, builder, next_error)
-            try finish_report(report)
-            os.exit(1i32)
-            ret ok
-        }
-        next = found
-        have = found_next
+        next += 1usize
     }
     report.arena_used = mem.stats(a).used
     try report_phase(report, "lower and codegen")
@@ -4449,6 +4582,12 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
         try report_ms(report.codegen_ns)
         try report_count("nir instructions in all", builder.instruction_total)
         try report_count("nir instructions, largest module", builder.instruction_peak)
+    }
+    if hot.on {
+        try link_hot_artifacts(a, report, loaded, builder, hot, code)
+        report.arena_used = mem.stats(a).used
+        try report_phase(report, "link from artifacts")
+        ret ok
     }
     try assemble_reached(a, report, loaded, builder, codes[0usize..chunk_count], chunk_of, code)
     report.arena_used = mem.stats(a).used
@@ -4693,7 +4832,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         var program: em_link.Program = zero
-        try em_link.assemble(a, artifacts, &program)
+        let assemble_error = em_link.assemble(a, artifacts, &program)
+        if assemble_error == em_link.MissingSymbol && program.missing_symbol.len != 0usize {
+            try stderr_text("error: no artifact defines `")
+            try stderr_text(program.missing_symbol)
+            try stderr_text("`\n")
+            os.exit(1i32)
+        }
+        if assemble_error != ok { ret assemble_error }
         let (target_index, target_error) = em.artifact_target_index(artifacts[0usize].bytes)
         if target_error != ok { ret target_error }
         let (is_windows, windows_error) = em.string_matches(artifacts[0usize].bytes, target_index, "x64-windows")
@@ -4938,8 +5084,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all") || same(args[1usize], "run")) && has_flag(args, "--release")
     // `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then
     // the program's whole output as one `run` record before the result.
-    let running = trailing_flags && same(args[1usize], "run") && has_flag(args, "--json") && !has_flag(args, "--incremental")
-    let writes_executable = ((args.len == 7usize || (trailing_flags && !has_flag(args, "--incremental"))) && same(args[1usize], "emit-executable")) || running
+    let running = trailing_flags && same(args[1usize], "run") && has_flag(args, "--json")
+    let writes_executable = ((args.len == 7usize || trailing_flags) && same(args[1usize], "emit-executable")) || running
+    // A hot build (D319): the executable from artifacts under `.neper/<mode>/em/`, a
+    // module's kept when its source and every interface it depends on are unchanged.
+    let hot_build = writes_executable && trailing_flags && has_flag(args, "--incremental")
     let writes_em = args.len == 7usize && same(args[1usize], "emit-em")
     // `emit-em-all ... --incremental`: section 12's edge rule decides which of the
     // artifacts already in the directory are kept and which are replaced (D205).
@@ -5026,7 +5175,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         report.arena_used = mem.stats(a).used
         try report_phase(&report, "check declarations")
-        if check_error == ok && writes_all_em && incremental_build {
+        var artifact_dir = ""
+        if args.len > 6usize { artifact_dir = args[6usize] }
+        if hot_build {
+            let (hot_dir, hot_dir_error) = artifact_directory(a, &loaded, release_build)
+            if hot_dir_error != ok { ret hot_dir_error }
+            artifact_dir = hot_dir
+        }
+        if check_error == ok && ((writes_all_em && incremental_build) || hot_build) {
             let (settle_strings, settle_strings_error) = mem.alloc[str](a, 32768usize)
             if settle_strings_error != ok { ret settle_strings_error }
             let (settle_slots, settle_slots_error) = mem.alloc[usize](a, 131072usize)
@@ -5041,7 +5197,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if settle_triple_error != ok { ret settle_triple_error }
             var settle_mode: em.BuildMode = .Debug
             if release_build { settle_mode = .Release }
-            try settle_early(a, &checker, &loaded, args[6usize], settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
+            try settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
+            report.arena_used = mem.stats(a).used
+            try report_phase(&report, "settle")
         }
         // Section 12's inlining (D207): the small functions are lowered first into the
         // oracle, in module order on every path, and the program's own lowering copies
@@ -5062,7 +5220,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if release_build { try init_first_oracle(a, &first_oracle, &first_signatures, &checker, &loaded) }
         let fused = check_error == ok && !(writes_all_em && incremental_build) && loaded.order_count == loaded.count
         if fused {
-            check_error = bodies_per_module(&checker, &resolver, &loaded, &report, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count, release_build)
+            // A release build checks every body, kept or not: the oracle inlines from
+            // all of them, and a hot release image is then the cold one's (D319).
+            var body_skip = keep
+            if release_build { body_skip = keep[0usize..0usize] }
+            check_error = bodies_per_module(&checker, &resolver, &loaded, &report, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count, release_build, body_skip)
         } else {
             if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
         }
@@ -5213,7 +5375,17 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var code: Code = zero
         if per_module {
-            try emit_per_module(a, &report, &loaded, &checker, &builder, &signatures, bindings, lowered_modules, machine_abi_of(args), &code)
+            var hot: HotBuild = zero
+            hot.on = hot_build
+            hot.keep = keep
+            hot.directory = artifact_dir
+            hot.release = release_build
+            if hot_build {
+                let (hot_triple, hot_triple_error) = target_triple(a, args[4usize], args[5usize])
+                if hot_triple_error != ok { ret hot_triple_error }
+                hot.triple = hot_triple
+            }
+            try emit_per_module(a, &report, &loaded, &checker, &builder, &signatures, bindings, lowered_modules, machine_abi_of(args), &hot, &code)
         } else {
             try emit_whole_program(a, &report, &loaded, &builder, emit_machine_code, writes_executable, machine_abi_of(args), &code)
         }
