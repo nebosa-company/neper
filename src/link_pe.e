@@ -404,11 +404,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
         }
     }
     let machine_file = output.count
-    var machine_at = 0usize
-    while machine_at < machine.count {
-        try emit_x64.byte(output, usize(machine.bytes[machine_at]))
-        machine_at += 1usize
-    }
+    try emit_x64.append_bytes(output, machine.bytes[0usize..machine.count])
     let main_file = machine_file + function_offsets[main_index]
     try runtime_pe_x64.patch(output, runtime_file, text_address, main_file, import_address_address, runtime_size)
     var relocation_at = 0usize

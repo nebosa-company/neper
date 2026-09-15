@@ -3410,7 +3410,7 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
         let (old, old_error) = load_artifact(a, artifact_path)
         if old_error == ok {
             let (old_hash, old_hash_error) = em.artifact_source_hash(old)
-            let (new_hash, new_hash_error) = em.source_text_hash(g.modules[module_at].text, scratch)
+            let (new_hash, new_hash_error) = em.source_text_hash(g.modules[module_at].text)
             let (old_mode, old_mode_error) = em.artifact_mode(old)
             if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
                 let (holds, edges_error) = settle_edges(a, &s, fresh, old)
@@ -4014,6 +4014,164 @@ type HotLoad = struct {
     stable: []bool,
 }
 
+// A wave's artifacts on worker threads (D324): each worker reads its modules' artifacts
+// into an arena of its own, validates them and compares the text's hash and the build
+// mode, writing only its own modules' slots. Reading and checksumming a two-million-
+// line program's artifacts -- hundreds of megabytes -- was two seconds of a warm build
+// on one core. A worker's arena is sized by its texts, eight bytes of artifact per byte
+// of text with a margin; a worker that runs out leaves the rest of its modules to the
+// main thread, which does them out of the program's arena.
+type ArtifactWorker = struct {
+    arena: mem.Arena,
+    modules: []usize,
+    count: usize,
+    paths: []str,
+    texts: []str,
+    held: [][]const u8,
+    unchanged: []bool,
+    mode_id: usize,
+    stopped: bool,
+    stopped_at: usize,
+}
+
+fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
+    let module_index = w.modules[at]
+    w.unchanged[module_index] = false
+    let (old, old_error) = load_artifact(&w.arena, w.paths[at])
+    if old_error == mem.Exhausted { ret old_error }
+    if old_error != ok { ret ok }
+    let (old_hash, old_hash_error) = em.artifact_source_hash(old)
+    let (new_hash, new_hash_error) = em.source_text_hash(w.texts[at])
+    let (old_mode, old_mode_error) = em.artifact_mode(old)
+    if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == w.mode_id {
+        w.unchanged[module_index] = true
+        w.held[module_index] = old
+    }
+    ret ok
+}
+
+fn artifact_worker_entry(w: *ArtifactWorker) {
+    var at = 0usize
+    while at < w.count {
+        let module_error = artifact_worker_module(w, at)
+        if module_error != ok {
+            w.stopped = true
+            w.stopped_at = at
+            ret
+        }
+        at += 1usize
+    }
+}
+
+fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]const u8, directory: str, mode_id: usize, wave_start: usize, wave_end: usize, list: []usize) -> err {
+    let wave_count = wave_end - wave_start
+    if wave_count == 0usize { ret ok }
+    var worker_count = wave_count
+    if worker_count > 8usize { worker_count = 8usize }
+    let (workers, workers_error) = mem.alloc[ArtifactWorker](a, worker_count)
+    if workers_error != ok { ret workers_error }
+    let (paths, paths_error) = mem.alloc[str](a, wave_count)
+    if paths_error != ok { ret paths_error }
+    let (texts, texts_error) = mem.alloc[str](a, wave_count)
+    if texts_error != ok { ret texts_error }
+    // Module i of the wave goes to worker i mod count, largest first would be better
+    // but the sizes are alike enough; each worker's modules are gathered into a run.
+    let (owner, owner_error) = mem.alloc[usize](a, wave_count)
+    if owner_error != ok { ret owner_error }
+    var loads: [8]usize = zero
+    var order_at = 0usize
+    while order_at < wave_count {
+        var lightest = 0usize
+        var worker_at = 1usize
+        while worker_at < worker_count {
+            if loads[worker_at] < loads[lightest] { lightest = worker_at }
+            worker_at += 1usize
+        }
+        loads[lightest] += loaded.modules[wave_start + order_at].text.len + 4096usize
+        owner[order_at] = lightest
+        order_at += 1usize
+    }
+    var filled = 0usize
+    var worker_at = 0usize
+    while worker_at < worker_count {
+        var blank: ArtifactWorker = zero
+        workers[worker_at] = blank
+        let first = filled
+        var bytes = 0usize
+        var list_at = 0usize
+        while list_at < wave_count {
+            if owner[list_at] == worker_at {
+                let module_index = wave_start + list_at
+                list[filled] = module_index
+                let (artifact_path, path_error) = compiled_module_path(a, directory, loaded.modules[module_index].name, hot.triple)
+                if path_error != ok { ret path_error }
+                paths[filled] = artifact_path
+                texts[filled] = loaded.modules[module_index].text
+                bytes += loaded.modules[module_index].text.len
+                filled += 1usize
+            }
+            list_at += 1usize
+        }
+        let (storage, storage_error) = mem.alloc[u8](a, bytes * 8usize + 65536usize)
+        if storage_error != ok { ret storage_error }
+        workers[worker_at].arena = mem.arena_from(storage)
+        workers[worker_at].modules = list[first..filled]
+        workers[worker_at].count = filled - first
+        workers[worker_at].paths = paths[first..filled]
+        workers[worker_at].texts = texts[first..filled]
+        workers[worker_at].held = held
+        workers[worker_at].unchanged = hot.unchanged
+        workers[worker_at].mode_id = mode_id
+        worker_at += 1usize
+    }
+    var threads: [8]os.Thread = zero
+    var started: [8]bool = zero
+    worker_at = 1usize
+    while worker_at < worker_count {
+        started[worker_at] = false
+        let (thread, spawn_error) = os.thread_create[ArtifactWorker](artifact_worker_entry, &workers[worker_at], 4194304usize)
+        if spawn_error == ok {
+            threads[worker_at] = thread
+            started[worker_at] = true
+        }
+        worker_at += 1usize
+    }
+    artifact_worker_entry(&workers[0usize])
+    worker_at = 1usize
+    while worker_at < worker_count {
+        if started[worker_at] {
+            try os.thread_join(threads[worker_at])
+        } else {
+            artifact_worker_entry(&workers[worker_at])
+        }
+        worker_at += 1usize
+    }
+    // What a worker left, out of the program's arena.
+    worker_at = 0usize
+    while worker_at < worker_count {
+        if workers[worker_at].stopped {
+            var remaining = workers[worker_at].stopped_at
+            while remaining < workers[worker_at].count {
+                let module_index = workers[worker_at].modules[remaining]
+                hot.unchanged[module_index] = false
+                let (old, old_error) = load_artifact(a, workers[worker_at].paths[remaining])
+                if old_error == ok {
+                    let (old_hash, old_hash_error) = em.artifact_source_hash(old)
+                    let (new_hash, new_hash_error) = em.source_text_hash(loaded.modules[module_index].text)
+                    let (old_mode, old_mode_error) = em.artifact_mode(old)
+                    if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
+                        hot.unchanged[module_index] = true
+                        held[module_index] = old
+                    }
+                }
+                remaining += 1usize
+            }
+        }
+        worker_at += 1usize
+    }
+    ret ok
+}
+
 fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]const u8, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
     try graph.begin(a, loaded, path, root, arch, target_os, project_root)
     let (directory, directory_error) = artifact_directory(a, loaded, hot.release)
@@ -4029,18 +4187,12 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
         let wave_end = loaded.count
         try graph.wave_texts(a, loaded, wave_start, wave_end)
         var to_parse = 0usize
+        try load_wave_artifacts(a, loaded, hot, held, directory, mode_id, wave_start, wave_end, list)
         module_at = wave_start
         while module_at < wave_end {
-            hot.unchanged[module_at] = false
-            let checkpoint = mem.mark(a)
-            let (artifact_path, path_error) = compiled_module_path(a, directory, loaded.modules[module_at].name, hot.triple)
-            if path_error != ok { ret path_error }
-            let (old, old_error) = load_artifact(a, artifact_path)
-            if old_error == ok {
-                let (old_hash, old_hash_error) = em.artifact_source_hash(old)
-                let (new_hash, new_hash_error) = em.source_text_hash(loaded.modules[module_at].text, hot.scratch)
-                let (old_mode, old_mode_error) = em.artifact_mode(old)
-                if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
+            if hot.unchanged[module_at] {
+                let old = held[module_at]
+                if true {
                     let (import_count, import_count_error) = em.artifact_import_count(old)
                     if import_count_error != ok { ret import_count_error }
                     var import_at = 0usize
@@ -4054,12 +4206,9 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
                         try graph.add_import(loaded, module_at, name, qualifier)
                         import_at += 1usize
                     }
-                    hot.unchanged[module_at] = true
-                    held[module_at] = old
                 }
             }
             if !hot.unchanged[module_at] {
-                mem.reset(a, checkpoint)
                 list[to_parse] = module_at
                 to_parse += 1usize
             }

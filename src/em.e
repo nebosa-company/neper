@@ -2130,17 +2130,16 @@ fn write_globals(builder: *nir.Builder, c: *check.Checker, module_index: usize, 
     ret ok
 }
 
-fn source_text_hash(text: str, scratch: *binary.Buffer) -> (usize, err) {
-    scratch.count = 0usize
-    let text_error = binary.text(scratch, text)
-    if text_error != ok { ret (0usize, text_error) }
-    let (source_hash, source_hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+// The text's hash, straight over its bytes (D324): it was copied into a scratch
+// buffer first, which a worker thread has none of.
+fn source_text_hash(text: str) -> (usize, err) {
+    let (source_hash, source_hash_error) = artifact_hash.xxhash64(text)
     ret (source_hash, source_hash_error)
 }
 
 fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     if module_index >= g.count { ret InvalidArtifact }
-    let (source_hash, source_hash_error) = source_text_hash(g.modules[module_index].text, scratch)
+    let (source_hash, source_hash_error) = source_text_hash(g.modules[module_index].text)
     if source_hash_error != ok { ret source_hash_error }
     let (path_index, path_error) = string_index(table, g.modules[module_index].path)
     if path_error != ok { ret path_error }
@@ -2746,6 +2745,27 @@ fn artifact_code_function_at(bytes: []const u8, index: usize) -> (CodeFunction, 
     ret (function, ok)
 }
 
+// The relocation's words alone (D324): the linker holds every artifact's string bounds
+// and checks the indexes against them, so the two table walks per relocation this
+// reader's checked form makes are not made twice.
+fn code_relocation_raw(bytes: []const u8, function: CodeFunction, index: usize) -> (CodeRelocation, err) {
+    var empty: CodeRelocation = zero
+    if index >= function.relocation_count { ret (empty, InvalidArtifact) }
+    let relocation = function.relocations + index * relocation_record_size()
+    if relocation > bytes.len || relocation_record_size() > bytes.len - relocation { ret (empty, InvalidArtifact) }
+    var record: CodeRelocation = zero
+    record.displacement_at = binary.read_u32_at(bytes, relocation)
+    record.module_index = binary.read_u32_at(bytes, relocation + 4usize)
+    record.name_index = binary.read_u32_at(bytes, relocation + 8usize)
+    record.instance = binary.read_u32_at(bytes, relocation + 12usize)
+    let kind = binary.read_u32_at(bytes, relocation + 16usize)
+    record.global = kind == 1usize
+    record.imported = kind == 2usize
+    record.library_index = binary.read_u32_at(bytes, relocation + 20usize)
+    record.symbol_index = binary.read_u32_at(bytes, relocation + 24usize)
+    ret (record, ok)
+}
+
 fn artifact_code_relocation_at(bytes: []const u8, function: CodeFunction, index: usize) -> (CodeRelocation, err) {
     var empty: CodeRelocation = zero
     if index >= function.relocation_count { ret (empty, InvalidArtifact) }
@@ -2835,6 +2855,60 @@ fn write_indexed_canonical_text(bytes: []const u8, index: usize, output: *binary
     if bounds_error != ok { ret bounds_error }
     try binary.little_u32(output, length)
     ret binary.copy(output, bytes[start..start + length])
+}
+
+// The content hash over the function's code and relocations, with the string table's
+// bounds in hand (D324): the checked form below read every relocation twice, each
+// through two walks of the string table, and the link verifies every function it emits.
+fn code_content_hash_bounded(bytes: []const u8, function: CodeFunction, starts: []const usize, lengths: []const usize, scratch: *binary.Buffer) -> (usize, err) {
+    if function.code_start > bytes.len || function.code_length > bytes.len - function.code_start { ret (0usize, InvalidArtifact) }
+    scratch.count = 0usize
+    let e1 = binary.little_u32(scratch, function.code_length)
+    if e1 != ok { ret (0usize, e1) }
+    let e2 = binary.copy(scratch, bytes[function.code_start..function.code_start + function.code_length])
+    if e2 != ok { ret (0usize, e2) }
+    let e3 = binary.little_u32(scratch, function.relocation_count)
+    if e3 != ok { ret (0usize, e3) }
+    var relocation_at = 0usize
+    while relocation_at < function.relocation_count {
+        let (relocation, relocation_error) = code_relocation_raw(bytes, function, relocation_at)
+        if relocation_error != ok { ret (0usize, relocation_error) }
+        if relocation.module_index >= starts.len || relocation.name_index >= starts.len { ret (0usize, InvalidArtifact) }
+        let r1 = binary.little_u32(scratch, relocation.displacement_at)
+        if r1 != ok { ret (0usize, r1) }
+        var kind = 0usize
+        if relocation.global { kind = 1usize }
+        let r2 = binary.byte(scratch, kind)
+        if r2 != ok { ret (0usize, r2) }
+        let module_start = starts[relocation.module_index]
+        let module_length = lengths[relocation.module_index]
+        let name_start = starts[relocation.name_index]
+        let name_length = lengths[relocation.name_index]
+        if module_length == 0usize || name_length == 0usize || module_start + module_length > bytes.len || name_start + name_length > bytes.len { ret (0usize, InvalidArtifact) }
+        let r3 = binary.little_u32(scratch, module_length)
+        if r3 != ok { ret (0usize, r3) }
+        let r4 = binary.copy(scratch, bytes[module_start..module_start + module_length])
+        if r4 != ok { ret (0usize, r4) }
+        let r5 = binary.little_u32(scratch, name_length)
+        if r5 != ok { ret (0usize, r5) }
+        let r6 = binary.copy(scratch, bytes[name_start..name_start + name_length])
+        if r6 != ok { ret (0usize, r6) }
+        let r7 = binary.little_u32(scratch, relocation.instance)
+        if r7 != ok { ret (0usize, r7) }
+        relocation_at += 1usize
+    }
+    let (hash, hash_error) = artifact_hash.xxhash64(scratch.bytes[0usize..scratch.count])
+    ret (hash, hash_error)
+}
+
+// The Code section's count in one read (D324), for a caller that reads every record
+// after and checks what it uses; `artifact_code_count` walks and checks them all.
+fn artifact_code_count_light(bytes: []const u8) -> (usize, err) {
+    let (code, found_code, section_error) = find_section_unchecked(bytes, code_kind())
+    if section_error != ok || !found_code || code.length < 4usize { ret (0usize, InvalidArtifact) }
+    let (count, count_error) = binary.read_u32(bytes, code.offset)
+    if count_error != ok || count > (code.length - 4usize) / 24usize { ret (0usize, InvalidArtifact) }
+    ret (count, ok)
 }
 
 fn artifact_code_content_hash(bytes: []const u8, function: CodeFunction, scratch: *binary.Buffer) -> (usize, err) {

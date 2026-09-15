@@ -1067,6 +1067,10 @@ static void install_os_intrinsics(Compiler *c) {
     decl = intrinsic_type(c, token, "os.Clock", ND_ENUM, u8);
     intrinsic_field(decl, token, "Wall", type_make(TY_VOID, "void"), 0, 0);
     intrinsic_field(decl, token, "Monotonic", type_make(TY_VOID, "void"), 0, 1);
+    decl = intrinsic_type(c, token, "os.SeekWhence", ND_ENUM, u8);
+    intrinsic_field(decl, token, "Start", type_make(TY_VOID, "void"), 0, 0);
+    intrinsic_field(decl, token, "Current", type_make(TY_VOID, "void"), 0, 1);
+    intrinsic_field(decl, token, "End", type_make(TY_VOID, "void"), 0, 2);
     decl = intrinsic_type(c, token, "os.EntryKind", ND_ENUM, u8);
     intrinsic_field(decl, token, "File", type_make(TY_VOID, "void"), 0, 0);
     intrinsic_field(decl, token, "Dir", type_make(TY_VOID, "void"), 0, 1);
@@ -1108,6 +1112,8 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.reserve", "neper_os_reserve"); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 2, byte_pointer, error);
     OS_FN("os.commit", "neper_os_commit"); intrinsic_param(fn, token, "p", byte_pointer); intrinsic_param(fn, token, "n", usize); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.clock", "neper_os_clock"); intrinsic_param(fn, token, "c", clock); intrinsic_returns(fn, 2, i64, error);
+    /* `os.seek(f, off, whence) -> (u64, err)` (D324): so a file's size is one call. */
+    OS_FN("os.seek", "neper_os_seek"); intrinsic_param(fn, token, "f", file); intrinsic_param(fn, token, "off", i64); intrinsic_param(fn, token, "whence", type_make(TY_NAMED, "os.SeekWhence")); intrinsic_returns(fn, 2, type_make(TY_INT, "u64"), error);
     /* `os.thread_create[Ctx](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)` (D321).
        The entry is a function named as a value, which the bootstrap has no type for: the
        parameter is a byte pointer and `check_declared_call` binds the name to its symbol.
@@ -7313,7 +7319,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\n"
         "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
-        "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\n"
+        "EXTERN neper_os_thread_create:PROC\nEXTERN neper_os_thread_join:PROC\nEXTERN neper_os_seek:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"
         "np_stack_probe PROC\n"

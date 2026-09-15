@@ -268,8 +268,9 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.In
         let owner = table.owner[position]
         var relocation_at = 0usize
         while relocation_at < function.relocation_count {
-            let (stored, stored_error) = em.artifact_code_relocation_at(artifacts[owner].bytes, function, relocation_at)
+            let (stored, stored_error) = em.code_relocation_raw(artifacts[owner].bytes, function, relocation_at)
             if stored_error != ok { ret stored_error }
+            if stored.module_index >= artifacts[owner].string_starts.len || stored.name_index >= artifacts[owner].string_starts.len { ret InvalidInput }
             if !stored.global {
                 let (module_index, module_error) = target_module(a, modules, artifacts[owner], stored.module_index)
                 if module_error != ok { ret module_error }
@@ -302,7 +303,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     var global_count = 0usize
     var artifact_at = 0usize
     while artifact_at < artifacts.len {
-        let (count, count_error) = em.artifact_code_count(artifacts[artifact_at].bytes)
+        let (count, count_error) = em.artifact_code_count_light(artifacts[artifact_at].bytes)
         if count_error != ok { ret count_error }
         function_count += count
         let (globals_here, globals_error) = em.artifact_global_count(artifacts[artifact_at].bytes)
@@ -469,7 +470,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             let function = table.funcs[position]
             // The content hash is the artifact's own integrity check, verified for what is
             // emitted -- after the keep test, so a dropped function is not hashed for nothing.
-            let (content_hash, content_hash_error) = em.artifact_code_content_hash(artifacts[owner_at].bytes, function, &hash_scratch)
+            let (content_hash, content_hash_error) = em.code_content_hash_bounded(artifacts[owner_at].bytes, function, artifacts[owner_at].string_starts, artifacts[owner_at].string_lengths, &hash_scratch)
             if content_hash_error != ok || content_hash != function.content_hash { ret InvalidInput }
             let name = table.names[position]
             let global_function = program.builder.function_count
@@ -508,8 +509,10 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             }
             var relocation_at = 0usize
             while relocation_at < function.relocation_count {
-                let (stored, stored_error) = em.artifact_code_relocation_at(artifacts[owner_at].bytes, function, relocation_at)
+                let (stored, stored_error) = em.code_relocation_raw(artifacts[owner_at].bytes, function, relocation_at)
                 if stored_error != ok { ret stored_error }
+                if stored.module_index >= artifacts[owner_at].string_starts.len || stored.name_index >= artifacts[owner_at].string_starts.len { ret InvalidInput }
+                if stored.imported && (stored.library_index >= artifacts[owner_at].string_starts.len || stored.symbol_index >= artifacts[owner_at].string_starts.len) { ret InvalidInput }
                 let (module_index, module_error) = target_module(a, &modules, artifacts[owner_at], stored.module_index)
                 if module_error != ok { ret module_error }
                 let (target_name, target_name_error) = artifact_text(a, artifacts[owner_at], stored.name_index)

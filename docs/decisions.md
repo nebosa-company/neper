@@ -6695,3 +6695,29 @@ Measured, warm and nothing changed, by a release-built compiler: the compiler
 242 ms (manifest 99 of it), a five-hundred-thousand-line program 0.97 s, a
 two-million-line program 4.0 s (load and validate the artifacts 2.0, link from them
 1.1, link 0.4, manifest 0.27). Every image is the cold build's byte for byte.
+
+## D324 -- A wave's artifacts on worker threads, and the link reads what it holds
+
+A warm build of the two-million-line program spent two of its four seconds reading
+and checksumming 368 MB of artifacts on one core, and one more in the link from
+them, most of it reading every emitted relocation twice through two walks of the
+string table apiece to verify the function's content hash.
+
+The hot loader's wave hands its modules to eight artifact workers (`ArtifactWorker`
+in `main`): each reads its modules' artifacts into an arena of its own, sized at
+eight bytes of artifact per byte of text, validates them and compares the text's
+hash -- taken straight over the text now, not through a scratch copy -- and the
+build mode, writing only its own modules' slots; a worker that runs out leaves the
+rest to the main thread. `source.load` seeks to the file's end and allocates its
+buffer once, where it grew from four kibibytes by doubling and allocated and copied
+twice the file; the bootstrap learns `os.seek` for it. The link verifies a function's
+content hash through the string bounds it already holds (`code_content_hash_bounded`)
+and reads relocations raw (`code_relocation_raw`), checking name indexes against the
+bounds; the function count is one read where a walk validated every relocation's
+strings. `emit_x64.little_u32` is one capacity check and four stores, and the two
+linkers copy the code in a run.
+
+Measured, warm and nothing changed: the compiler 189 ms by a release-built compiler,
+a five-hundred-thousand-line program 0.36 s (was 0.97), a two-million-line program
+1.6 s (was 4.0: load 0.5, link from artifacts 0.35, link 0.4, manifest 0.28). Every
+image is byte for byte what it was.

@@ -423,11 +423,7 @@ fn write_dynamic(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offs
     try append_startup(output)
     try patch_arena(output, code_offset, builder.arena_bytes)
     let machine_start = output.count
-    var at = 0usize
-    while at < machine.count {
-        try emit_x64.byte(output, usize(machine.bytes[at]))
-        at += 1usize
-    }
+    try emit_x64.append_bytes(output, machine.bytes[0usize..machine.count])
     let runtime_start = output.count
     let (runtime_limit, runtime_limit_error) = runtime_prefix(builder, relocations, relocation_count)
     if runtime_limit_error != ok { ret runtime_limit_error }
@@ -589,11 +585,7 @@ fn write(builder: *nir.Builder, machine: *emit_x64.Buffer, function_offsets: []u
     try append_startup(output)
     try patch_arena(output, code_offset, builder.arena_bytes)
     let machine_start = output.count
-    var at = 0usize
-    while at < machine.count {
-        try emit_x64.byte(output, usize(machine.bytes[at]))
-        at += 1usize
-    }
+    try emit_x64.append_bytes(output, machine.bytes[0usize..machine.count])
     let runtime_start = output.count
     let (runtime_limit, runtime_limit_error) = runtime_prefix(builder, relocations, relocation_count)
     if runtime_limit_error != ok { ret runtime_limit_error }

@@ -544,6 +544,16 @@ void neper_os_thread_create(void *result, void *entry, void *ctx, size_t stack) 
     *(uintptr_t *)out = 1; *(uint32_t *)(out + 8) = NP_OK;
 }
 uint32_t neper_os_thread_join(uintptr_t raw) { (void)raw; return NP_OK; }
+/* `os.seek` (D324): the new position, or the error. */
+void neper_os_seek(void *result, uintptr_t raw, int64_t off, unsigned char whence) {
+    unsigned char *out = (unsigned char *)result; LARGE_INTEGER move, position;
+    *(uint64_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    move.QuadPart = off;
+    if (whence > 2 || !SetFilePointerEx((HANDLE)raw, move, &position, whence == 0 ? FILE_BEGIN : whence == 1 ? FILE_CURRENT : FILE_END)) {
+        *(uint32_t *)(out + 8) = whence > 2 ? NP_UNSUPPORTED : np_error(GetLastError()); return;
+    }
+    *(uint64_t *)out = (uint64_t)position.QuadPart;
+}
 
 void neper_os_clock(void *result, unsigned char clock_kind) {
     unsigned char *out = (unsigned char *)result;
@@ -759,6 +769,15 @@ void neper_os_thread_create(void *result, void *entry, void *ctx, size_t stack) 
     *(uintptr_t *)out = 1; *(uint32_t *)(out + 8) = NP_OK;
 }
 uint32_t neper_os_thread_join(uintptr_t raw) { (void)raw; return NP_OK; }
+/* `os.seek` (D324): the new position, or the error. */
+void neper_os_seek(void *result, uintptr_t raw, int64_t off, unsigned char whence) {
+    unsigned char *out = (unsigned char *)result; off_t position;
+    *(uint64_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (whence > 2) { *(uint32_t *)(out + 8) = NP_UNSUPPORTED; return; }
+    position = lseek((int)raw, (off_t)off, whence == 0 ? SEEK_SET : whence == 1 ? SEEK_CUR : SEEK_END);
+    if (position < 0) { *(uint32_t *)(out + 8) = np_error(errno); return; }
+    *(uint64_t *)out = (uint64_t)position;
+}
 
 void neper_os_clock(void *result, unsigned char clock_kind) {
     unsigned char *out = (unsigned char *)result; struct timespec value; clockid_t id;

@@ -48,14 +48,17 @@ fn little_u64(buffer: *Buffer, value: usize) -> err {
     ret ok
 }
 
+// One capacity check and four stores (D324): a byte at a time through `byte`, the
+// symbol table's rows -- two million of them at two million lines -- were a call and
+// a check each.
 fn little_u32(buffer: *Buffer, value: usize) -> err {
-    var remaining = value
-    var count = 0usize
-    while count < 4usize {
-        try byte(buffer, remaining % 256usize)
-        remaining = remaining / 256usize
-        count += 1usize
-    }
+    if 4usize > buffer.bytes.len - buffer.count { ret Capacity }
+    let at = buffer.count
+    buffer.bytes[at] = u8(value & 255usize)
+    buffer.bytes[at + 1usize] = u8((value >> 8usize) & 255usize)
+    buffer.bytes[at + 2usize] = u8((value >> 16usize) & 255usize)
+    buffer.bytes[at + 3usize] = u8((value >> 24usize) & 255usize)
+    buffer.count = at + 4usize
     ret ok
 }
 
