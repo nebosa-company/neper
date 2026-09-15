@@ -1933,14 +1933,19 @@ fn process(input: str, out: *mem.Arena) -> err {
 
 `mark`/`reset` give you scoped deallocation without per-object bookkeeping. A
 program's root arena is a block reserved from the OS at startup; its size is **1
-GiB** unless the link option `--arena SIZE` (§13) raises or lowers it (D323: the
-block is reserved, and committed a chunk at a time as it is allocated from, so the
-size is a ceiling rather than a cost). The startup
-code obtains it through `e.os` (§5) before `main` runs —
-`os.reserve` for the address range, then `os.commit` for the whole of it, free
-under Linux overcommit, charged against the pagefile on Windows, which is why the
-size is a link option rather than a large default — and passes it to `main` as its
-first parameter (§13). That parameter is the only way to reach it.
+GiB** unless the link option `--arena SIZE` (§13) raises or lowers it (D323, D340:
+the block is reserved, and committed a chunk at a time as it is **touched**, so the
+size is a ceiling rather than a cost, and an allocation that is never written costs
+nothing on either host). The startup code obtains it through `e.os` (§5) before
+`main` runs -- `os.reserve` for the address range; on Linux `os.commit` for the whole
+of it, free under overcommit; on Windows a fault handler that commits the chunk
+around the first access to any reserved private page -- and passes it to `main` as
+its first parameter (§13). That parameter is the only way to reach it. One
+consequence of committing on touch: memory the kernel writes on the program's
+behalf must be committed already, so an allocation under four mebibytes is touched
+by the runtime as it is made, and `os.read` and `os.write` touch their buffers;
+a buffer of four mebibytes or more handed to an imported kernel call (`recv`,
+`ReadDirectoryChangesW`) must have been written by the program first.
 
 An `Arena` is a cursor, not an independently copyable owner. Copying an `Arena`
 value is legal only to transfer it to a new binding after the old binding is no

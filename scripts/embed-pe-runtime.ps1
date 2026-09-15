@@ -72,7 +72,7 @@ for ($index = 0; $index -lt $symbolCount;) {
     $index += 1 + $auxiliaryCount
 }
 
-$imports = @('AddVectoredExceptionHandler','CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile','GetSystemTimeAsFileTime','QueryPerformanceCounter','QueryPerformanceFrequency','CreateProcessW','SetHandleInformation','WaitForSingleObject','GetExitCodeProcess','SetFilePointerEx','CreateThread','GetModuleHandleW','GetProcAddress')
+$imports = @('AddVectoredExceptionHandler','VirtualQuery','CloseHandle','CreateFileW','ExitProcess','FindClose','FindFirstFileW','FindNextFileW','GetCommandLineW','GetLastError','GetStdHandle','MultiByteToWideChar','ReadFile','VirtualAlloc','WideCharToMultiByte','WriteFile','GetSystemTimeAsFileTime','QueryPerformanceCounter','QueryPerformanceFrequency','CreateProcessW','SetHandleInformation','WaitForSingleObject','GetExitCodeProcess','SetFilePointerEx','CreateThread','GetModuleHandleW','GetProcAddress')
 $relocations = @()
 for ($index = 0; $index -lt $text.RelocationCount; $index++) {
     $offset = $text.Relocations + $index * 10
@@ -154,9 +154,9 @@ foreach ($line in [IO.File]::ReadAllLines($source)) {
     if ($line -match '^(\w+)\s+PROC') { $procedures += $matches[1] }
 }
 [void]$builder.AppendLine('// Where a procedure ends: the start of the next in source order, or the end of the')
-[void]$builder.AppendLine('// runtime for the last. The entry, its arena size word, its allocator, the commit-on-touch handler and')
-[void]$builder.AppendLine('// the command-line decoder are the first five, so their end is the least any program carries.')
-[void]$builder.AppendLine(("fn floor() -> usize {{ ret {0}usize }}" -f $textSymbols[$procedures[5]]))
+[void]$builder.AppendLine('// runtime for the last. The entry, its arena size word, its fault handler with its touch and its writer, and its')
+[void]$builder.AppendLine('// callees are the first seven, so their end is the least any program carries.')
+[void]$builder.AppendLine(("fn floor() -> usize {{ ret {0}usize }}" -f $textSymbols[$procedures[7]]))
 [void]$builder.AppendLine()
 [void]$builder.AppendLine('fn symbol_end(name: str) -> (usize, bool) {')
 for ($index = 0; $index -lt $procedures.Count; $index++) {

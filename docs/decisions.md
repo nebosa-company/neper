@@ -7259,3 +7259,35 @@ Images are the same, hot builds are the cold builds, and both suites pass.
 What remains charged is the root's own high-water mark -- the program's tables,
 the held artifacts and the link's -- which the same pool table now describes; the
 Windows `sc2m` release cell of the baseline is no longer a debt.
+## D340 -- The whole arena is committed as it is touched
+
+D339 took the workers' arenas out of the root and committed them as they are
+touched; the root itself still committed to its allocation offset, so the program's
+own pools -- sized from the program (D306), used to a fraction -- and everything
+the crew allocates from the root were still charged in full. This takes the rest:
+the root commits nothing on growth either, and the handler D339 registered decides
+by asking, not by trying.
+
+The handler: an
+access violation whose address `VirtualQuery` reports as reserved, uncommitted and
+private commits the mebibyte chunk around it and resumes; one reported as committed
+and writable -- another thread committed the chunk between the fault and the query
+-- resumes without more; anything else is fatal, reported as `fatal: access
+violation at 0x...` before the process dies with 139, since a checked program never
+expects one. `np_arena_alloc` commits nothing on growth any more. What the kernel
+writes cannot fault its way to a commit, so an allocation under four mebibytes is
+touched a byte per page as it is made -- the small buffers a socket receive or a
+directory watch are given -- and `os.read` and `os.write` touch their buffers
+before the call; a buffer of four mebibytes or more given to an imported kernel
+call must have been written first, which the spec now says. The debug fill (D217)
+touches everything, so a debug build charges what it always did.
+
+Measured on the million lines (release-built compiler, Windows): peak commit
+5360 MB to 1781 MB debug, 5639 MB to 1854 MB release, with the wall clock within
+noise (3.3 s / 3.5 s) and the resident set up a quarter, since a chunk is committed
+whole; the two-million-line release build, which the baseline could not run at
+eight workers, builds in 8.3 s at 2985 MB committed. The runtime's floor moved: the
+handler, its touch and its writer sit with the entry and its callees, the first
+seven procedures. The first draft had the handler treat the race between two
+threads faulting on one chunk as a genuine fault, and died once in three builds;
+that is the committed-and-writable case above.

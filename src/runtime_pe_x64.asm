@@ -1,6 +1,7 @@
 option casemap:none
 
 EXTERN main:PROC
+EXTERN __imp_AddVectoredExceptionHandler:QWORD
 EXTERN __imp_CloseHandle:QWORD
 EXTERN __imp_CreateFileW:QWORD
 EXTERN __imp_CreateThread:QWORD
@@ -23,18 +24,17 @@ EXTERN __imp_SetHandleInformation:QWORD
 EXTERN __imp_WaitForSingleObject:QWORD
 EXTERN __imp_ReadFile:QWORD
 EXTERN __imp_VirtualAlloc:QWORD
-EXTERN __imp_AddVectoredExceptionHandler:QWORD
+EXTERN __imp_VirtualQuery:QWORD
 EXTERN __imp_WideCharToMultiByte:QWORD
 EXTERN __imp_WriteFile:QWORD
 EXTERN __imp_SetFilePointerEx:QWORD
 
-; The root arena is reserved rather than committed, and grows a chunk at a time as it is
-; allocated from. Committing it whole would charge the whole of it against the commit limit
-; before `main` runs, for every process, however little it goes on to allocate. A worker's
-; reservation (D339) is committed as it is touched instead, by the handler the entry
-; registers.
+; The root arena is reserved rather than committed, and committed a chunk at a time as it
+; is touched (D339). Committing it whole would charge the whole of it against the commit
+; limit before `main` runs, for every process, however little it goes on to allocate.
 NP_ARENA_BYTES EQU 40000000h
 NP_ARENA_CHUNK EQU 100000h
+NP_ARENA_SMALL EQU 400000h
 
 .code
 
@@ -65,19 +65,11 @@ neper_entry PROC
     jz entry_fail
     mov r12, rax
 
-    mov rcx, r12
-    mov edx, NP_ARENA_CHUNK
-    mov r8d, 1000h
-    mov r9d, 4
-    call qword ptr [__imp_VirtualAlloc]
-    test rax, rax
-    jz entry_fail
-
-; Reserved memory is committed as it is touched (D339): a handler on the access
-; violation commits the chunk around the address and resumes, so an arena -- the root
-; or a worker's reservation -- charges the pages it uses, as a Linux mapping does.
+; The arena is committed as it is touched (D339): a vectored handler commits the chunk
+; around any access into reserved private memory, so what a build charges against the
+; commit limit is what it wrote, as Linux charges, and not every pool it sized.
     mov ecx, 1
-    lea rdx, np_commit_on_touch
+    lea rdx, np_fault_handler
     call qword ptr [__imp_AddVectoredExceptionHandler]
     test rax, rax
     jz entry_fail
@@ -236,6 +228,127 @@ neper_arena_size PROC
     dq NP_ARENA_BYTES
 neper_arena_size ENDP
 
+; A byte of every page of a buffer read (D339), so the pages are committed before a
+; kernel call reads or writes them. rdx = the buffer, r8 = its length; rax, r10, r11.
+np_touch_range PROC
+    test r8, r8
+    jz touch_done
+    mov r10, rdx
+    lea r11, [rdx+r8-1]
+touch_page:
+    movzx eax, byte ptr [r10]
+    add r10, 1000h
+    cmp r10, r11
+    jbe touch_page
+    movzx eax, byte ptr [r11]
+touch_done:
+    ret
+np_touch_range ENDP
+
+; rsi = the handle, rdx = the bytes, r8 = the count; the stack is the handler's.
+np_fault_write PROC
+    sub rsp, 56
+    mov rcx, rsi
+    lea r9, [rsp+48]
+    mov qword ptr [rsp+32], 0
+    call qword ptr [__imp_WriteFile]
+    add rsp, 56
+    ret
+np_fault_write ENDP
+
+; The commit-on-touch handler (D339). rcx = EXCEPTION_POINTERS. An access violation
+; whose address lies in reserved, uncommitted, private memory -- the arena, or a
+; thread's stack past its guard -- commits the chunk around it and resumes; anything
+; else is left to the next handler, which is the process's death as before. A wild
+; write into memory nobody reserved still dies here.
+np_fault_handler PROC
+    push rbx
+    push rsi
+    push rdi
+    sub rsp, 112
+    mov rbx, qword ptr [rcx]
+    cmp dword ptr [rbx], 0C0000005h
+    jne np_fault_search
+    mov rcx, qword ptr [rbx+40]
+    lea rdx, [rsp+32]
+    mov r8d, 48
+    call qword ptr [__imp_VirtualQuery]
+    test rax, rax
+    jz np_fault_report
+; Committed and writable by the time the query answers: another thread committed the
+; chunk between this thread's fault and now, and the access is simply retried.
+    cmp dword ptr [rsp+64], 1000h
+    jne np_fault_reserved
+    cmp dword ptr [rsp+68], 4
+    jne np_fault_report
+    mov eax, 0FFFFFFFFh
+    jmp np_fault_done
+np_fault_reserved:
+    cmp dword ptr [rsp+64], 2000h
+    jne np_fault_report
+    cmp dword ptr [rsp+72], 20000h
+    jne np_fault_report
+    mov rcx, qword ptr [rbx+40]
+    and rcx, -NP_ARENA_CHUNK
+    mov rax, qword ptr [rsp+32]
+    cmp rcx, rax
+    cmovb rcx, rax
+    lea rdx, [rcx+NP_ARENA_CHUNK]
+    add rax, qword ptr [rsp+56]
+    cmp rdx, rax
+    cmova rdx, rax
+    sub rdx, rcx
+    mov r8d, 1000h
+    mov r9d, 4
+    call qword ptr [__imp_VirtualAlloc]
+    test rax, rax
+    jz np_fault_report
+    mov eax, 0FFFFFFFFh
+    jmp np_fault_done
+; An access violation the handler does not resume -- outside reserved memory, or a
+; commit the system refused -- is fatal, and says where before the process dies with
+; 139, since a checked program never expects one: every dereference is checked.
+np_fault_report:
+    mov ecx, -12
+    call qword ptr [__imp_GetStdHandle]
+    mov rsi, rax
+    lea rdx, np_fault_text
+    mov r8d, 29
+    call np_fault_write
+    mov rax, qword ptr [rbx+40]
+    lea rdi, [rsp+80]
+    mov ecx, 16
+np_fault_hex:
+    rol rax, 4
+    mov edx, eax
+    and edx, 15
+    add edx, 48
+    cmp edx, 57
+    jbe np_fault_digit
+    add edx, 39
+np_fault_digit:
+    mov byte ptr [rdi], dl
+    inc rdi
+    dec ecx
+    jnz np_fault_hex
+    mov byte ptr [rdi], 10
+    lea rdx, [rsp+80]
+    mov r8d, 17
+    call np_fault_write
+    mov ecx, 139
+    call qword ptr [__imp_ExitProcess]
+np_fault_search:
+    xor eax, eax
+np_fault_done:
+    add rsp, 112
+    pop rdi
+    pop rsi
+    pop rbx
+    ret
+np_fault_text db "fatal: access violation at 0x"
+np_fault_handler ENDP
+
+
 np_arena_alloc PROC
     test rcx, rcx
     jz arena_fail
@@ -258,46 +371,29 @@ np_arena_alloc PROC
     ja arena_fail
     lea r9, [r10+rdx]
 
-; The root arena grows here, because this is the one place its offset moves. What was
-; committed is whatever the old offset reached rounded up to a chunk, so no watermark has to
-; be kept anywhere -- which matters, since the runtime is embedded as bare text with nowhere
-; writable to keep one. A reset moves the offset back and the next growth re-commits pages
-; that are already committed, which Windows allows and answers immediately. The root alone
-; (D339): a worker's reservation is one page short of the root's capacity, so it is not
-; grown here and is committed as it is touched by np_commit_on_touch instead, charging
-; what it uses rather than what its pools were sized to; the root keeps committing to its
-; offset, since memory the program hands to the kernel -- a read's buffer, a foreign
-; call's -- has to be committed before the call, and the root is what programs use.
-    mov rax, qword ptr neper_arena_size
-    cmp [rcx+8], rax
-    jne arena_store
-    mov rax, [rcx+16]
-    add rax, NP_ARENA_CHUNK-1
-    and rax, -NP_ARENA_CHUNK
-    mov r11, r9
-    add r11, NP_ARENA_CHUNK-1
-    and r11, -NP_ARENA_CHUNK
-    cmp r11, rax
-    jbe arena_store
-    push rcx
-    push r9
-    push r10
-    push r11
-    sub rsp, 40
-    mov rdx, r11
-    sub rdx, rax
-    mov rcx, [rcx]
-    add rcx, rax
-    mov r8d, 1000h
-    mov r9d, 4
-    call qword ptr [__imp_VirtualAlloc]
-    add rsp, 40
-    pop r11
-    pop r10
-    pop r9
-    pop rcx
+; An allocation under four mebibytes is touched here (D339), a byte per page, so its
+; pages are committed by the handler above before the caller writes them -- and before
+; a kernel call does, which cannot fault its way to a commit: a socket receive, a
+; directory watch. A larger one -- a pool sized for a bigger program, a worker's arena
+; -- is committed as it is touched, and `read` and `write` touch their buffers before
+; the kernel sees them. Touching, not committing: an arena over a stack array or a
+; global is touched the same way and nothing is asked of the system for it.
+    cmp rdx, NP_ARENA_SMALL
+    jae arena_store
+    mov rax, [rcx]
     test rax, rax
     jz arena_fail
+    push rcx
+    push rdx
+    push r8
+    push r10
+    mov r8, rdx
+    lea rdx, [rax+r10]
+    call np_touch_range
+    pop r10
+    pop r8
+    pop rdx
+    pop rcx
 arena_store:
     mov [rcx+16], r9
     mov rax, [rcx]
@@ -309,43 +405,6 @@ arena_fail:
     xor eax, eax
     ret
 np_arena_alloc ENDP
-
-; The commit-on-touch handler (D339): an access violation at an address that can be
-; committed -- one inside a reservation -- is committed, a chunk when the chunk lies
-; within the reservation and a page otherwise, and the instruction resumes; any other
-; fault goes on to the next handler and the crash it was. rcx = EXCEPTION_POINTERS.
-np_commit_on_touch PROC
-    sub rsp, 40
-    mov rax, [rcx]
-    cmp dword ptr [rax], 0C0000005h
-    jne np_touch_search
-    mov rax, [rax+40]
-    mov [rsp+32], rax
-    mov rcx, rax
-    and rcx, -NP_ARENA_CHUNK
-    mov edx, NP_ARENA_CHUNK
-    mov r8d, 1000h
-    mov r9d, 4
-    call qword ptr [__imp_VirtualAlloc]
-    test rax, rax
-    jnz np_touch_done
-    mov rcx, [rsp+32]
-    and rcx, -4096
-    mov edx, 4096
-    mov r8d, 1000h
-    mov r9d, 4
-    call qword ptr [__imp_VirtualAlloc]
-    test rax, rax
-    jz np_touch_search
-np_touch_done:
-    mov eax, -1
-    add rsp, 40
-    ret
-np_touch_search:
-    xor eax, eax
-    add rsp, 40
-    ret
-np_commit_on_touch ENDP
 
 np_utf16_to_utf8 PROC
     push r12
@@ -599,6 +658,7 @@ neper_os_exit PROC
     int 3
 neper_os_exit ENDP
 
+
 neper_os_write PROC
     push rbx
     sub rsp, 48
@@ -610,6 +670,7 @@ neper_os_write PROC
     mov r8d, 0ffffffffh
 write_size_ready:
     mov rdx, [rdx]
+    call np_touch_range
     lea r9, [rsp+40]
     mov qword ptr [rsp+32], 0
     call qword ptr [__imp_WriteFile]
@@ -1172,29 +1233,14 @@ neper_os_read PROC
     push rbx
     sub rsp, 48
     mov dword ptr [rsp+40], 0
-    mov rbx, rcx
-; The buffer committed first (D339): the kernel cannot take the commit-on-touch fault
-; on the program's behalf, and a buffer in a worker's reservation may be untouched.
-; Idempotent on committed pages; a failure is left to ReadFile to report.
-    mov r11, rdx
-    mov rcx, [rdx]
-    mov rdx, [rdx+8]
-    test rdx, rdx
-    jz read_committed
-    mov r8d, 1000h
-    mov r9d, 4
-    mov [rsp+32], r11
-    call qword ptr [__imp_VirtualAlloc]
-    mov r11, [rsp+32]
-read_committed:
-    mov rdx, r11
-    mov rcx, [rbx]
+    mov rcx, [rcx]
     mov r8, [rdx+8]
     cmp r8, 0ffffffffh
     jbe read_size_ready
     mov r8d, 0ffffffffh
 read_size_ready:
     mov rdx, [rdx]
+    call np_touch_range
     lea r9, [rsp+40]
     mov qword ptr [rsp+32], 0
     call qword ptr [__imp_ReadFile]
