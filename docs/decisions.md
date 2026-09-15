@@ -6845,3 +6845,25 @@ D325 compiler's in both modes: the two-million-line program 7.6 s debug and 7.4 
 release (were 9.7 and 10.3), its settle 1.15 s to 0 and its lowering phase 5.1 s to
 4.2 s and 3.6 s; the five-hundred-thousand-line program 1.8 s in both modes (was
 2.6).
+
+## D328 -- Names validated on the workers; the declaration tables stay copied
+
+Sharing the workers' declaration tables instead of copying them (proposed after
+D327) was measured before it was built: the copy is a tenth or two of a second of
+the two-million-line build, run on eight threads at once, and a gibibyte and a half
+of commit, against a change to every scan that walks a table past its declarations
+-- a dozen sites in three files, any one missed a data race. Not built; the
+sequential resolve was the better target at the same size.
+
+The resolve ran per module in dependency order, collecting a module's declarations
+and then validating every name in its bodies against them: 0.63 s of the
+two-million-line build, four fifths of it the validation walk. Every module is now
+collected first, in order, the index filled, and the validation walks run on the
+workers (`ResolveWorker`), each with a resolver that shares the symbols read-only and
+owns its locals, token view and failure. The failure at the module earliest in
+dependency order is the build's, copied back to the program's resolver for the
+diagnostic; a collection failure is reported as the sweep reported it, after the
+modules before it validate. Resolve is 0.24 s.
+
+Measured, cold: the two-million-line program 7.3 s debug; images byte for byte the
+D325 compiler's; the hot-build checks and both suites unchanged.

@@ -954,6 +954,18 @@ fn module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
     ret validate_module(r, g, module_index)
 }
 
+// A resolver for a validation worker (D328): the symbols and their index shared and
+// read only -- every module is collected first, and the index filled -- with a
+// token view, locals and failure state of its own.
+fn fork(into: *Resolver, from: *Resolver, locals: []Local) {
+    *into = *from
+    into.locals = locals
+    into.local_count = 0usize
+    into.has_tokens_module = false
+    into.failure_has_token = false
+    into.failure_has_context = false
+}
+
 fn collect(r: *Resolver, g: *graph.Graph) -> err {
     r.count = 0usize
     r.failure_has_token = false

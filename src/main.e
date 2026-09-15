@@ -4655,15 +4655,177 @@ fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic
 
 // The per-module front end (D304), each sweep in dependency order. Helpers rather than
 // loops in `main`, which is at the bootstrap's local limit.
-fn resolve_per_module(resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
+// Every module's declarations collected in dependency order, then every module's
+// names validated against them on worker threads (D328): validation reads the
+// symbols and writes only its own locals and failure. A collection failure at some
+// module is reported as the one-module-at-a-time sweep reported it -- after the
+// modules before it validated -- so the diagnostic is the same one.
+fn resolve_per_module(a: *mem.Arena, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
     try resolve.begin(resolver, loaded)
+    var collected = 0usize
+    var collect_error = ok
+    while collected < loaded.order_count {
+        // An unparsed module (D322) declares nothing the program refers to.
+        if loaded.modules[loaded.order[collected]].has_tree {
+            collect_error = resolve.collect_module(resolver, loaded, loaded.order[collected])
+            if collect_error != ok { break }
+        }
+        collected += 1usize
+    }
+    if collect_error != ok {
+        var order_at = 0usize
+        while order_at < collected {
+            if loaded.modules[loaded.order[order_at]].has_tree { try resolve.validate_module(resolver, loaded, loaded.order[order_at]) }
+            order_at += 1usize
+        }
+        ret collect_error
+    }
+    resolve.fill_index(resolver)
+    // The modules to the workers, largest first to the least loaded, each worker's
+    // in dependency order.
+    let (workers, workers_error) = mem.alloc[ResolveWorker](a, LOWER_WORKERS)
+    if workers_error != ok { ret workers_error }
+    let (list, list_error) = mem.alloc[usize](a, loaded.order_count + 1usize)
+    if list_error != ok { ret list_error }
+    let (owner, owner_error) = mem.alloc[usize](a, loaded.count + 1usize)
+    if owner_error != ok { ret owner_error }
+    var pending = 0usize
     var order_at = 0usize
     while order_at < loaded.order_count {
-        // An unparsed module (D322) declares nothing the program refers to.
-        if loaded.modules[loaded.order[order_at]].has_tree { try resolve.module(resolver, loaded, loaded.order[order_at]) }
+        owner[loaded.order[order_at]] = LOWER_WORKERS
+        if loaded.modules[loaded.order[order_at]].has_tree {
+            list[pending] = loaded.order[order_at]
+            pending += 1usize
+        }
         order_at += 1usize
     }
+    var worker_count = pending
+    let most_workers = LOWER_WORKERS
+    if worker_count > most_workers { worker_count = most_workers }
+    var sort_at = 0usize
+    while sort_at < pending {
+        var best = sort_at
+        var scan = sort_at + 1usize
+        while scan < pending {
+            if loaded.modules[list[scan]].text.len > loaded.modules[list[best]].text.len { best = scan }
+            scan += 1usize
+        }
+        let swap = list[sort_at]
+        list[sort_at] = list[best]
+        list[best] = swap
+        sort_at += 1usize
+    }
+    var loads: [LOWER_WORKERS]usize = zero
+    sort_at = 0usize
+    while sort_at < pending {
+        var lightest = 0usize
+        var worker_at = 1usize
+        while worker_at < worker_count {
+            if loads[worker_at] < loads[lightest] { lightest = worker_at }
+            worker_at += 1usize
+        }
+        loads[lightest] += loaded.modules[list[sort_at]].text.len + 4096usize
+        owner[list[sort_at]] = lightest
+        sort_at += 1usize
+    }
+    let (runs, runs_error) = mem.alloc[usize](a, loaded.order_count + 1usize)
+    if runs_error != ok { ret runs_error }
+    var filled = 0usize
+    var worker_at = 0usize
+    while worker_at < worker_count {
+        var blank: ResolveWorker = zero
+        workers[worker_at] = blank
+        let first = filled
+        order_at = 0usize
+        while order_at < loaded.order_count {
+            if owner[loaded.order[order_at]] == worker_at {
+                runs[filled] = loaded.order[order_at]
+                filled += 1usize
+            }
+            order_at += 1usize
+        }
+        workers[worker_at].modules = runs[first..filled]
+        workers[worker_at].count = filled - first
+        workers[worker_at].loaded = loaded
+        let (locals, locals_error) = mem.alloc[resolve.Local](a, resolver.locals.len)
+        if locals_error != ok { ret locals_error }
+        resolve.fork(&workers[worker_at].resolver, resolver, locals)
+        worker_at += 1usize
+    }
+    var threads: [LOWER_WORKERS]os.Thread = zero
+    var started: [LOWER_WORKERS]bool = zero
+    worker_at = 1usize
+    while worker_at < worker_count {
+        started[worker_at] = false
+        let (thread, spawn_error) = os.thread_create[ResolveWorker](resolve_worker_entry, &workers[worker_at], 16777216usize)
+        if spawn_error == ok {
+            threads[worker_at] = thread
+            started[worker_at] = true
+        }
+        worker_at += 1usize
+    }
+    if worker_count != 0usize { resolve_worker_entry(&workers[0usize]) }
+    worker_at = 1usize
+    while worker_at < worker_count {
+        if started[worker_at] {
+            try os.thread_join(threads[worker_at])
+        } else {
+            resolve_worker_entry(&workers[worker_at])
+        }
+        worker_at += 1usize
+    }
+    // The failure at the module earliest in dependency order is the build's.
+    var lowest_order = loaded.order_count
+    var lowest_worker = 0usize
+    worker_at = 0usize
+    while worker_at < worker_count {
+        if workers[worker_at].stopped {
+            let failed = workers[worker_at].modules[workers[worker_at].stopped_at]
+            var position = 0usize
+            while position < loaded.order_count && loaded.order[position] != failed { position += 1usize }
+            if position < lowest_order {
+                lowest_order = position
+                lowest_worker = worker_at
+            }
+        }
+        worker_at += 1usize
+    }
+    if lowest_order < loaded.order_count {
+        let failing = &workers[lowest_worker].resolver
+        resolver.failure_module = failing.failure_module
+        resolver.failure_token = failing.failure_token
+        resolver.failure_has_token = failing.failure_has_token
+        resolver.failure_context_token = failing.failure_context_token
+        resolver.failure_has_context = failing.failure_has_context
+        resolver.failure_name = failing.failure_name
+        resolver.failure_owner = failing.failure_owner
+        ret workers[lowest_worker].failure
+    }
     ret ok
+}
+
+type ResolveWorker = struct {
+    resolver: resolve.Resolver,
+    modules: []usize,
+    count: usize,
+    loaded: *graph.Graph,
+    stopped: bool,
+    stopped_at: usize,
+    failure: err,
+}
+
+fn resolve_worker_entry(w: *ResolveWorker) {
+    var at = 0usize
+    while at < w.count {
+        let validate_error = resolve.validate_module(&w.resolver, w.loaded, w.modules[at])
+        if validate_error != ok {
+            w.stopped = true
+            w.stopped_at = at
+            w.failure = validate_error
+            ret
+        }
+        at += 1usize
+    }
 }
 
 fn declarations_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loaded: *graph.Graph) -> err {
@@ -6583,7 +6745,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // whose `keep` mask it decides between declarations and bodies.
         var resolve_error = ok
         if !(writes_all_em && incremental_build) && loaded.order_count == loaded.count {
-            resolve_error = resolve_per_module(&resolver, &loaded)
+            resolve_error = resolve_per_module(a, &resolver, &loaded)
         } else {
             resolve_error = resolve.collect(&resolver, &loaded)
         }
