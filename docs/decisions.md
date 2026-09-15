@@ -6417,3 +6417,35 @@ seven seconds of the wall -- the price of not holding the program to find out wh
 The `--stats` rows for the compiler's peak had read 2.1 GB for the debug-built
 compiler whatever the pools held: its debug build fills every allocation (section 11),
 so the row measured the arena; a release-built compiler measures the program.
+
+## D315 -- A token is its kind and its bytes; every position is derived
+
+`lex.Token` was 120 bytes: the token's start line and column, its end line and
+column, both UTF-16 columns, and where its leading trivia began, with its line,
+column and UTF-16 column too. Every pass carried all of that for every token, and
+the scanner computed it byte by byte, when the readers of anything past the byte
+range are diagnostics, trap records, the line table and the tooling records. The
+token is now 24 bytes -- kind, whether its trivia continues a comment, start, end
+-- and the rest is looked up when asked for, the way Zig and Carbon keep a token as
+a tag and an offset. Each module keeps a line-start table, built as it is loaded;
+`lex.line_of` is a binary search over it, `column_of` a scan from the line's start,
+`span_of` the full record a diagnostic or a tooling span writes, and the trivia
+scanner starts from the previous token's end. A lowered instruction's site takes
+its line and column as it is emitted, from the module being lowered, with the last
+line's byte range cached since consecutive instructions share a line; an inlined
+copy keeps the callee's site (`nir.emit_at`). The parser's column-0 test reads the
+byte before the token. The scanner no longer tracks columns at all. Images are
+byte-identical, debug and release.
+
+## D316 -- A module is scanned once, and every pass reads the list
+
+With the token small enough to keep, each module's tokens are scanned once when it
+is loaded and kept at their own size; the parser reads them through a scanner that
+replays a list, so a copy of the scanner is still a lookahead and the parser did not
+change; the resolver's and the checker's token tables are slices of the module's
+list rather than a scan per pass. Two-million lines: resolve 6.6 s to 2.6 s, the
+declaration sweep 4.9 s to 2.2 s, the body sweep 9.1 s to 3.9 s in debug; the
+compiler's own resolve 173 ms to 55 ms and its declaration sweep 156 ms to 35 ms.
+The tokens of the two-million-line program are 340 MB, which the peak working set
+shows (710 MB to 1.07 GB); what still re-parses on each pass is the tree, which the
+next step keeps the same way.

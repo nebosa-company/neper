@@ -120,26 +120,14 @@ fn last_segment(name: str) -> str {
     ret name
 }
 
+// The resolver's token table is the module's own list (D316): no scan, a slice.
 fn tokenize_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
     if r.has_tokens_module && r.tokens_module == module_index { ret ok }
-    try tokenize(r, g.modules[module_index].text)
+    if g.modules[module_index].has_invalid { ret lex.InvalidSource }
+    r.tokens = g.modules[module_index].tokens
+    r.token_count = r.tokens.len
     r.tokens_module = module_index
     r.has_tokens_module = true
-    ret ok
-}
-
-fn tokenize(r: *Resolver, text: str) -> err {
-    var scanner = lex.init(text)
-    r.has_tokens_module = false
-    r.token_count = 0usize
-    while true {
-        if r.token_count == r.tokens.len { ret Capacity }
-        let token = lex.next(&scanner)
-        if token.kind == .Invalid { ret lex.InvalidSource }
-        r.tokens[r.token_count] = token
-        r.token_count += 1usize
-        if token.kind == .Eof { break }
-    }
     ret ok
 }
 

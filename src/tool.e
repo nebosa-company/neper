@@ -22,6 +22,9 @@ error InvalidSource
 type Out = struct {
     bytes: []u8,
     count: usize,
+    // The operand's line table (D315), built once per command for the spans its
+    // records carry; empty means a span counts lines from the start of the source.
+    lines: []usize,
     // `--absolute-paths` (section 2, D290): the operand's absolute spelling, written as
     // `absolute_path` beside every source identity when it is not empty.
     absolute: str,
@@ -131,6 +134,19 @@ fn base64_object(out: *Out, value: str) -> err {
     ret text(out, "\"}")
 }
 
+// A span from `first`'s start to `last`'s end, the positions derived from the source
+// (D315), and one that is a point at `here`'s start.
+fn token_span(out: *Out, root: str, path: str, source: str, first: lex.Token, last: lex.Token) -> err {
+    let head = lex.span_of(source, out.lines, first)
+    let tail = lex.span_of(source, out.lines, last)
+    ret span(out, root, path, head.start, tail.end, head.line, head.column, tail.end_line, tail.end_column, head.column_utf16, tail.end_column_utf16)
+}
+
+fn point_span(out: *Out, root: str, path: str, source: str, here: lex.Token) -> err {
+    let at = lex.span_of(source, out.lines, here)
+    ret span(out, root, path, at.start, at.start, at.line, at.column, at.line, at.column, at.column_utf16, at.column_utf16)
+}
+
 fn span(out: *Out, root: str, path: str, byte_start: usize, byte_end: usize, line: usize, column: usize, end_line: usize, end_column: usize, column_utf16: usize, end_column_utf16: usize) -> err {
     try text(out, "{\"source\":{\"root\":")
     try quoted(out, root)
@@ -182,7 +198,8 @@ fn result(out: *Out, succeeded: bool, exit_code: usize, tokens: usize, diagnosti
 fn info_json(a: *mem.Arena, host: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, 4096usize)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize, absolute: "" }
+    var out: Out = zero
+    out.bytes = storage
     try header(&out, "info")
     try text(&out, "{\"record\":\"info\",\"tool_version\":\"0.1.0\",\"language_profiles\":[{\"language_version\":\"0.1\",\"grammar_revision\":1,\"stream_version\":1,\"experimental\":false}],\"commands\":[\"build\",\"check\",\"dis\",\"fmt\",\"index\",\"info\",\"parse\",\"run\",\"test\",\"tokens\"],\"host_target\":")
     try quoted(&out, host)
@@ -407,7 +424,8 @@ fn test_error_name(out: *Out, stderr_bytes: str, module_name: str, spelled: str)
 fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, (stdout_bytes.len + stderr_bytes.len) * 6usize + 256usize)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize, absolute: "" }
+    var out: Out = zero
+    out.bytes = storage
     try text(&out, "{\"record\":\"run\",\"process_exit_code\":")
     if status < 0i32 {
         try byte(&out, 45u8)
@@ -450,8 +468,9 @@ fn index_qualified(out: *Out, module_name: str, name: str) -> err {
 // Where a comment line's text begins. A comment is the leading trivia of the `Newline`
 // token that ends its line, and that trivia runs to the newline byte itself, so the
 // line is the trivia with its indentation skipped.
-fn index_comment_start(source: str, token: lex.Token) -> usize {
-    var at = token.leading_start
+fn index_comment_start(source: str, tokens: []const lex.Token, index: usize) -> usize {
+    let token = tokens[index]
+    var at = lex.leading_start(tokens, index)
     while at < token.start && (source[at] == 32u8 || source[at] == 9u8) { at += 1usize }
     ret at
 }
@@ -463,7 +482,7 @@ fn index_is_doc_line(source: str, tokens: []const lex.Token, at: usize) -> bool 
     let token = tokens[at]
     if token.kind != .Newline { ret false }
     if at != 0usize && tokens[at - 1usize].kind != .Newline { ret false }
-    let start = index_comment_start(source, token)
+    let start = index_comment_start(source, tokens, at)
     if token.start < start + 3usize { ret false }
     if source[start] != 47u8 { ret false }
     if source[start + 1usize] != 47u8 { ret false }
@@ -536,7 +555,7 @@ fn index_documentation(out: *Out, source: str, tokens: []const lex.Token, from: 
     var at = first
     while at < from {
         if at != first { try text(out, "\\n") }
-        var start = index_comment_start(source, tokens[at]) + 3usize
+        var start = index_comment_start(source, tokens, at) + 3usize
         if start < tokens[at].start && source[start] == 32u8 { start += 1usize }
         try quoted_body(out, source[start..tokens[at].start])
         at += 1usize
@@ -582,7 +601,12 @@ fn index_json(a: *mem.Arena, root: str, path: str, source: str, module_name: str
     if parse_error != ok { ret (2usize, parse_error) }
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize, absolute: absolute }
+    var out: Out = zero
+    let (out_lines, out_lines_error) = lex.line_starts(a, source)
+    if out_lines_error != ok { ret (0usize, out_lines_error) }
+    out.lines = out_lines
+    out.bytes = storage
+    out.absolute = absolute
     let header_error = header(&out, "index")
     if header_error != ok { ret (2usize, header_error) }
     // The module itself is the first symbol, so every declaration's container is id 0.
@@ -701,9 +725,9 @@ fn index_record(out: *Out, root: str, path: str, source: str, module_name: str, 
     try text(out, ",\"signature\":")
     try index_signature(out, source, tokens, first, last)
     try text(out, ",\"span\":")
-    try span(out, root, path, opener.start, closer.end, opener.line, opener.column, closer.end_line, closer.end_column, opener.column_utf16, closer.end_column_utf16)
+    try token_span(out, root, path, source, opener, closer)
     try text(out, ",\"selection_span\":")
-    try span(out, root, path, name_token.start, name_token.end, name_token.line, name_token.column, name_token.end_line, name_token.end_column, name_token.column_utf16, name_token.end_column_utf16)
+    try token_span(out, root, path, source, name_token, name_token)
     try text(out, ",\"container_id\":")
     try decimal(out, container_id)
     try text(out, ",\"attributes\":")
@@ -876,7 +900,7 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
             var path_end = node.token_start + 1usize
             while path_end + 1usize < node.token_end && tokens[path_end + 1usize].kind != .KwAs { path_end += 1usize }
             let spelling = source[path_start.start..tokens[path_end].end]
-            let import_error = reference_record(out, root, path, path_start, tokens[path_end], "import", spelling, 0usize, false, spelling)
+            let import_error = reference_record(out, root, path, source, path_start, tokens[path_end], "import", spelling, 0usize, false, spelling)
             if import_error != ok { ret import_error }
             state.written += 1usize
         } else {
@@ -929,14 +953,14 @@ fn index_emit_references(state: *IndexRefs, out: *Out, root: str, path: str, sou
                     scratch_at += 1usize
                     scratch_at = nptest_copy(scratch[..], scratch_at, source[tokens[first + 2usize].start..tokens[first + 2usize].end])
                     qualified_name = scratch[0usize..scratch_at]
-                    let record_error = reference_record(out, root, path, name_token, tokens[last_index], role_name, spelling, 0usize, false, qualified_name)
+                    let record_error = reference_record(out, root, path, source, name_token, tokens[last_index], role_name, spelling, 0usize, false, qualified_name)
                     if record_error != ok { ret record_error }
                 } else {
                     var scratch_at = nptest_copy(scratch[..], 0usize, module_name)
                     scratch[scratch_at] = 46u8
                     scratch_at += 1usize
                     scratch_at = nptest_copy(scratch[..], scratch_at, name)
-                    let record_error = reference_record(out, root, path, name_token, tokens[last_index], role_name, spelling, known_ids[found], true, scratch[0usize..scratch_at])
+                    let record_error = reference_record(out, root, path, source, name_token, tokens[last_index], role_name, spelling, known_ids[found], true, scratch[0usize..scratch_at])
                     if record_error != ok { ret record_error }
                 }
                 state.written += 1usize
@@ -961,9 +985,9 @@ fn nptest_copy(dst: []u8, at: usize, src: str) -> usize {
     ret to
 }
 
-fn reference_record(out: *Out, root: str, path: str, first: lex.Token, last: lex.Token, role: str, spelling: str, target_id: usize, has_target: bool, qualified: str) -> err {
+fn reference_record(out: *Out, root: str, path: str, source: str, first: lex.Token, last: lex.Token, role: str, spelling: str, target_id: usize, has_target: bool, qualified: str) -> err {
     try text(out, "{\"record\":\"reference\",\"source_span\":")
-    try span(out, root, path, first.start, last.end, first.line, first.column, last.end_line, last.end_column, first.column_utf16, last.end_column_utf16)
+    try token_span(out, root, path, source, first, last)
     try text(out, ",\"role\":")
     try quoted(out, role)
     try text(out, ",\"spelling\":")
@@ -1081,7 +1105,8 @@ fn quoted_listing(out: *Out, listing: []const u8, start: usize, builder: *nir.Bu
 fn disassembly_json(a: *mem.Arena, arch: str, os_name: str, builder: *nir.Builder, offsets: []const usize, machine: []const u8, machine_count: usize, relocations: []const codegen_x64.Relocation, relocation_count: usize) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, machine_count * 64usize + 8192usize)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize, absolute: "" }
+    var out: Out = zero
+    out.bytes = storage
     try header(&out, "dis")
     var at = 0usize
     while at < builder.function_count {
@@ -1295,7 +1320,9 @@ fn format_source(a: *mem.Arena, source: str) -> (str, err) {
     if lex.validate(source) != ok { ret ("", InvalidSource) }
     let (raw_storage, raw_error) = mem.alloc[u8](a, source.len * 2usize + 4096usize)
     if raw_error != ok { ret ("", raw_error) }
-    var raw = Out { bytes: raw_storage, count: 0usize, absolute: "" }
+    var raw: Out = zero
+    raw.bytes = raw_storage
+    raw.absolute = ""
     let (tokens, token_count, invalid, scan_error) = scan_all(a, source)
     if scan_error != ok { ret ("", scan_error) }
     let (lists, lists_error) = fmt_list_plan(a, source, tokens[0usize..token_count])
@@ -1552,7 +1579,7 @@ fn fmt_has_comment(source: str, tokens: []const lex.Token, from: usize, to: usiz
     var at = from
     while at <= to {
         if tokens[at].kind == .Newline {
-            var trivia = lex.trivia_init(source, tokens[at])
+            var trivia = lex.trivia_kinds_of(source, tokens, at)
             while true {
                 let item = lex.next_trivia(&trivia)
                 if item.kind == .End { break }
@@ -1603,7 +1630,7 @@ fn format_into(raw: *Out, source: str, tokens: []const lex.Token, plan: []const 
         if token.kind == .Newline {
             // A comment in this newline's leading trivia is a trailing comment when the line
             // already has content, otherwise a standalone comment line at the current indent.
-            var trivia = lex.trivia_init(source, token)
+            var trivia = lex.trivia_kinds_of(source, tokens, at)
             var comment_start = 0usize
             var comment_end = 0usize
             var has_comment = false
@@ -1754,7 +1781,7 @@ fn invalid_token_diagnostic(out: *Out, root: str, path: str, source: str, token:
     try text(out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":")
     try quoted(out, lex.invalid_code(source, token))
     try text(out, ",\"message\":\"invalid token\",\"span\":")
-    try span(out, root, path, token.start, token.end, token.line, token.column, token.end_line, token.end_column, token.column_utf16, token.end_column_utf16)
+    try token_span(out, root, path, source, token, token)
     try text(out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
     ret flush(out)
 }
@@ -1779,18 +1806,22 @@ fn fmt_refuse(a: *mem.Arena, out: *Out, source: str, path: str) -> (usize, err) 
         }
         if token.kind == .Newline {
             // A newline whose line holds only a comment, right after an attribute line.
-            if after_attribute && line_first && token.leading_start < token.start {
-                let comment_start = index_comment_start(source, token)
+            let leading = lex.leading_start(tokens, at)
+            if after_attribute && line_first && leading < token.start {
+                let comment_start = index_comment_start(source, tokens, at)
                 if comment_start + 1usize < token.start && source[comment_start] == 47u8 && source[comment_start + 1usize] == 47u8 {
-                    var comment: lex.Token = token
+                    // The comment's line is where the previous token ended; the bytes before
+                    // it on that line are indentation, one column each.
+                    var comment: lex.Span = zero
                     comment.start = comment_start
                     comment.end = token.start
-                    comment.column = token.leading_column + (comment_start - token.leading_start)
-                    comment.column_utf16 = token.leading_column_utf16 + (comment_start - token.leading_start)
-                    comment.line = token.leading_line
-                    comment.end_line = token.line
-                    comment.end_column = token.column
-                    comment.end_column_utf16 = token.column_utf16
+                    comment.line = lex.line_of(source, out.lines, comment_start)
+                    comment.column = lex.column_of(source, out.lines, comment_start)
+                    comment.column_utf16 = comment.column
+                    let ending = lex.span_of(source, out.lines, token)
+                    comment.end_line = ending.line
+                    comment.end_column = ending.column
+                    comment.end_column_utf16 = ending.column_utf16
                     let contract_error = text(out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-FORMAT-9999\",\"message\":\"a comment may not separate an attribute from its declaration\",\"span\":")
                     if contract_error != ok { ret (0usize, contract_error) }
                     let span_error = span(out, "operand", path, comment.start, comment.end, comment.line, comment.column, comment.end_line, comment.end_column, comment.column_utf16, comment.end_column_utf16)
@@ -1823,7 +1854,11 @@ fn fmt_refused_result(out: *Out, diagnostics: usize) -> err {
 fn fmt_check_json(a: *mem.Arena, source: str, path: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize, absolute: "" }
+    var out: Out = zero
+    let (out_lines, out_lines_error) = lex.line_starts(a, source)
+    if out_lines_error != ok { ret (0usize, out_lines_error) }
+    out.lines = out_lines
+    out.bytes = storage
     let header_error = header(&out, "fmt")
     if header_error != ok { ret (2usize, header_error) }
     let (refused, refuse_error) = fmt_refuse(a, &out, source, path)
@@ -1909,7 +1944,9 @@ fn fmt_check_result(out: *Out, canonical: bool) -> err {
 fn fmt_plain_text(a: *mem.Arena, source: str, path: str) -> (str, usize, err) {
     let (scratch, scratch_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
     if scratch_error != ok { ret ("", 2usize, scratch_error) }
-    var probe = Out { bytes: scratch, count: 0usize, absolute: "" }
+    var probe: Out = zero
+    probe.bytes = scratch
+    probe.absolute = ""
     let (refused, refuse_error) = fmt_refuse_plain(a, &probe, source, path)
     if refuse_error != ok { ret ("", 2usize, refuse_error) }
     if refused != 0usize { ret ("", 1usize, ok) }
@@ -1938,9 +1975,9 @@ fn fmt_plain(a: *mem.Arena, source: str, path: str) -> (usize, err) {
 fn fmt_plain_line(out: *Out, path: str, source: str, token: lex.Token) -> err {
     try text(out, path)
     try byte(out, 58u8)
-    try decimal(out, token.line)
+    try decimal(out, lex.line_of(source, out.lines, token.start))
     try byte(out, 58u8)
-    try decimal(out, token.column)
+    try decimal(out, lex.column_of(source, out.lines, token.start))
     try text(out, ": error[")
     try text(out, lex.invalid_code(source, token))
     try text(out, "]: invalid token\n")
@@ -1975,7 +2012,11 @@ fn fmt_refuse_plain(a: *mem.Arena, out: *Out, source: str, path: str) -> (usize,
 fn fmt_json(a: *mem.Arena, source: str, path: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 3usize + 8192usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize, absolute: "" }
+    var out: Out = zero
+    let (out_lines, out_lines_error) = lex.line_starts(a, source)
+    if out_lines_error != ok { ret (0usize, out_lines_error) }
+    out.lines = out_lines
+    out.bytes = storage
     let header_error = header(&out, "fmt")
     if header_error != ok { ret (2usize, header_error) }
     let (refused, refuse_error) = fmt_refuse(a, &out, source, path)
@@ -2128,7 +2169,8 @@ fn manifest_sha256(a: *mem.Arena, content: str) -> (str, err) {
 fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize, absolute: "" }
+    var out: Out = zero
+    out.bytes = storage
     let build_error = manifest_write(a, &out, arch, os_name, g, "debug", "", "")
     if build_error != ok { ret (2usize, build_error) }
     let flush_error = flush(&out)
@@ -2316,7 +2358,8 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     if digest_error != ok { ret digest_error }
     let (storage, storage_error) = mem.alloc[u8](a, 65536usize + g.count * 512usize)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize, absolute: "" }
+    var out: Out = zero
+    out.bytes = storage
     let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
     if relative_error != ok { ret relative_error }
     try manifest_write(a, &out, arch, os_name, g, mode, relative_path, digest)
@@ -2354,7 +2397,11 @@ fn test_json(a: *mem.Arena, module_name: str, root: str, path: str, source: str,
     }
     let (storage, storage_error) = mem.alloc[u8](a, capacity)
     if storage_error != ok { ret storage_error }
-    var out = Out { bytes: storage, count: 0usize, absolute: "" }
+    var out: Out = zero
+    let (out_lines, out_lines_error) = lex.line_starts(a, source)
+    if out_lines_error != ok { ret out_lines_error }
+    out.lines = out_lines
+    out.bytes = storage
     try header(&out, "test")
     var passed = 0usize
     var failed = 0usize
@@ -2571,7 +2618,7 @@ fn token_records(out: *Out, root: str, path: str, source: str, tokens: []const l
             if d2 != ok { ret (2usize, d2) }
             let d3 = text(out, ",\"message\":\"invalid token\",\"span\":")
             if d3 != ok { ret (2usize, d3) }
-            let d4 = span(out, root, path, token.start, token.end, token.line, token.column, token.end_line, token.end_column, token.column_utf16, token.end_column_utf16)
+            let d4 = token_span(out, root, path, source, token, token)
             if d4 != ok { ret (2usize, d4) }
             let d5 = text(out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
             if d5 != ok { ret (2usize, d5) }
@@ -2579,7 +2626,7 @@ fn token_records(out: *Out, root: str, path: str, source: str, tokens: []const l
             if d6 != ok { ret (2usize, d6) }
             diagnostics += 1usize
         }
-        let record_error = token_record(out, root, path, source, token, index)
+        let record_error = token_record(out, root, path, source, tokens, token, index)
         if record_error != ok { ret (2usize, record_error) }
         index += 1usize
     }
@@ -2587,7 +2634,7 @@ fn token_records(out: *Out, root: str, path: str, source: str, tokens: []const l
     ret (0usize, ok)
 }
 
-fn token_record(out: *Out, root: str, path: str, source: str, token: lex.Token, index: usize) -> err {
+fn token_record(out: *Out, root: str, path: str, source: str, tokens: []const lex.Token, token: lex.Token, index: usize) -> err {
     try text(out, "{\"record\":\"token\",\"index\":")
     try decimal(out, index)
     try text(out, ",\"kind\":")
@@ -2599,9 +2646,9 @@ fn token_record(out: *Out, root: str, path: str, source: str, token: lex.Token, 
         try quoted(out, source[token.start..token.end])
     }
     try text(out, ",\"span\":")
-    try span(out, root, path, token.start, token.end, token.line, token.column, token.end_line, token.end_column, token.column_utf16, token.end_column_utf16)
+    try token_span(out, root, path, source, token, token)
     try text(out, ",\"leading_trivia\":[")
-    var trivia_scanner = lex.trivia_init(source, token)
+    var trivia_scanner = lex.trivia_init(source, out.lines, lex.leading_start(tokens, index), token)
     var first_trivia = true
     while true {
         let item = lex.next_trivia(&trivia_scanner)
@@ -2642,7 +2689,12 @@ fn scan_all(a: *mem.Arena, source: str) -> ([]lex.Token, usize, usize, err) {
 fn tokens_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 4096usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize, absolute: absolute }
+    var out: Out = zero
+    let (out_lines, out_lines_error) = lex.line_starts(a, source)
+    if out_lines_error != ok { ret (0usize, out_lines_error) }
+    out.lines = out_lines
+    out.bytes = storage
+    out.absolute = absolute
     let header_error = header(&out, "tokens")
     if header_error != ok { ret (2usize, header_error) }
     let (tokens, count, invalid, scan_error) = scan_all(a, source)
@@ -2714,7 +2766,7 @@ fn node_kind_name(kind: syntax.Kind) -> str {
 
 // One node of the syntax record: its kind, its span from its first token's start to
 // its last token's end, its token range, and its children in order.
-fn syntax_node(out: *Out, tree: *parse.Tree, tokens: []const lex.Token, node_index: usize, root: str, path: str, depth: usize) -> err {
+fn syntax_node(out: *Out, tree: *parse.Tree, source: str, tokens: []const lex.Token, node_index: usize, root: str, path: str, depth: usize) -> err {
     if depth > 512usize { ret Capacity }
     let node = tree.nodes[node_index]
     try text(out, "{\"kind\":")
@@ -2723,12 +2775,12 @@ fn syntax_node(out: *Out, tree: *parse.Tree, tokens: []const lex.Token, node_ind
     if node.token_end > node.token_start && node.token_end <= tokens.len {
         let first = tokens[node.token_start]
         let last = tokens[node.token_end - 1usize]
-        try span(out, root, path, first.start, last.end, first.line, first.column, last.end_line, last.end_column, first.column_utf16, last.end_column_utf16)
+        try token_span(out, root, path, source, first, last)
     } else {
         var at_token = node.token_start
         if at_token >= tokens.len { at_token = tokens.len - 1usize }
         let here = tokens[at_token]
-        try span(out, root, path, here.start, here.start, here.line, here.column, here.line, here.column, here.column_utf16, here.column_utf16)
+        try point_span(out, root, path, source, here)
     }
     try text(out, ",\"token_start\":")
     try decimal(out, node.token_start)
@@ -2744,7 +2796,7 @@ fn syntax_node(out: *Out, tree: *parse.Tree, tokens: []const lex.Token, node_ind
                 if !first_child { try byte(out, 44u8) }
                 first_child = false
                 try text(out, "{\"node\":")
-                try syntax_node(out, tree, tokens, top, root, path, depth + 1usize)
+                try syntax_node(out, tree, source, tokens, top, root, path, depth + 1usize)
                 try byte(out, 125u8)
             }
             top += 1usize
@@ -2758,7 +2810,7 @@ fn syntax_node(out: *Out, tree: *parse.Tree, tokens: []const lex.Token, node_ind
             let child = tree.children[at]
             if child.node {
                 try text(out, "{\"node\":")
-                try syntax_node(out, tree, tokens, child.index, root, path, depth + 1usize)
+                try syntax_node(out, tree, source, tokens, child.index, root, path, depth + 1usize)
                 try byte(out, 125u8)
             } else {
                 try text(out, "{\"token\":")
@@ -2776,7 +2828,12 @@ fn syntax_node(out: *Out, tree: *parse.Tree, tokens: []const lex.Token, node_ind
 fn parse_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -> (usize, err) {
     let (storage, storage_error) = mem.alloc[u8](a, source.len * 8usize + 4096usize)
     if storage_error != ok { ret (2usize, storage_error) }
-    var out = Out { bytes: storage, count: 0usize, absolute: absolute }
+    var out: Out = zero
+    let (out_lines, out_lines_error) = lex.line_starts(a, source)
+    if out_lines_error != ok { ret (0usize, out_lines_error) }
+    out.lines = out_lines
+    out.bytes = storage
+    out.absolute = absolute
     let header_error = header(&out, "parse")
     if header_error != ok { ret (2usize, header_error) }
     let (tokens, count, invalid, scan_error) = scan_all(a, source)
@@ -2817,7 +2874,7 @@ fn parse_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -
                 if b4 != ok { ret (2usize, b4) }
                 let b5 = text(&out, "` on line ")
                 if b5 != ok { ret (2usize, b5) }
-                let b6 = decimal(&out, keyword.line)
+                let b6 = decimal(&out, lex.line_of(source, out.lines, keyword.start))
                 if b6 != ok { ret (2usize, b6) }
                 let b7 = text(&out, "\",\"span\":")
                 if b7 != ok { ret (2usize, b7) }
@@ -2825,7 +2882,7 @@ fn parse_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -
                 let d1 = text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-SYNTAX-9999\",\"message\":\"unexpected token\",\"span\":")
                 if d1 != ok { ret (2usize, d1) }
             }
-            let d2 = span(&out, root, path, at.start, at.end, at.line, at.column, at.end_line, at.end_column, at.column_utf16, at.end_column_utf16)
+            let d2 = token_span(&out, root, path, source, at, at)
             if d2 != ok { ret (2usize, d2) }
             let d3 = text(&out, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
             if d3 != ok { ret (2usize, d3) }
@@ -2837,10 +2894,15 @@ fn parse_json(a: *mem.Arena, root: str, path: str, source: str, absolute: str) -
     // The tree can outgrow the record buffer the tokens used: one sized to it.
     let (tree_storage, tree_storage_error) = mem.alloc[u8](a, tree.count * 512usize + tree.child_count * 32usize + 4096usize)
     if tree_storage_error != ok { ret (2usize, tree_storage_error) }
-    var tree_out = Out { bytes: tree_storage, count: 0usize, absolute: absolute }
+    var tree_out: Out = zero
+    let (tree_out_lines, tree_out_lines_error) = lex.line_starts(a, source)
+    if tree_out_lines_error != ok { ret (0usize, tree_out_lines_error) }
+    tree_out.lines = tree_out_lines
+    tree_out.bytes = tree_storage
+    tree_out.absolute = absolute
     let s1 = text(&tree_out, "{\"record\":\"syntax\",\"root\":")
     if s1 != ok { ret (2usize, s1) }
-    let s2 = syntax_node(&tree_out, &tree, tokens[..count], 0usize, root, path, 0usize)
+    let s2 = syntax_node(&tree_out, &tree, source, tokens[..count], 0usize, root, path, 0usize)
     if s2 != ok { ret (2usize, s2) }
     let s3 = text(&tree_out, "}")
     if s3 != ok { ret (2usize, s3) }

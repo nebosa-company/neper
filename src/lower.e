@@ -2247,13 +2247,13 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                         if return_sites == 1usize {
                             single_result = returned
                         } else {
-                            let (store_instruction, store_ignored, store_error) = nir.emit(builder, .Store, result_type, false, slot_size, nir.site_token(instruction.site))
+                            let (store_instruction, store_ignored, store_error) = nir.emit_at(builder, .Store, result_type, false, slot_size, instruction.site)
                             if store_error != ok { ret store_error }
                             try nir.add_operand(builder, store_instruction, slot)
                             try nir.add_operand(builder, store_instruction, returned)
                         }
                     }
-                    let (leave, leave_error) = emit_branch(builder, nir.site_token(instruction.site))
+                    let (leave, leave_error) = emit_branch_at(builder, instruction.site)
                     if leave_error != ok { ret leave_error }
                     try nir.set_branch_targets(builder, leave, continuation, 0usize)
                 } else {
@@ -2287,7 +2287,7 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                     }
                     let was_nocheck = builder.nocheck
                     builder.nocheck = was_nocheck || instruction.nocheck
-                    let (copied, result, copy_error) = nir.emit(builder, instruction.opcode, instruction.ty, instruction.has_result, immediate, nir.site_token(instruction.site))
+                    let (copied, result, copy_error) = nir.emit_at(builder, instruction.opcode, instruction.ty, instruction.has_result, immediate, instruction.site)
                     builder.nocheck = was_nocheck
                     if copy_error != ok { ret copy_error }
                     if instruction.path.len != 0usize { builder.instructions[copied].path = instruction.path }
@@ -3777,6 +3777,11 @@ fn emit_branch(builder: *nir.Builder, token: lex.Token) -> (usize, err) {
     ret (instruction, emit_error)
 }
 
+fn emit_branch_at(builder: *nir.Builder, site: nir.Site) -> (usize, err) {
+    let (instruction, ignored, emit_error) = nir.emit_at(builder, .Branch, zero, false, 0usize, site)
+    ret (instruction, emit_error)
+}
+
 // Section 6's `when`: the checker settled the condition and checked both blocks; the
 // taken one is the only code here (D216).
 fn lower_when(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, control: *LoopControl, defers: *DeferState) -> err {
@@ -5001,6 +5006,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     builder.functions[nir_function].path = g.modules[function.module_index].path
     builder.functions[nir_function].module_name = g.modules[function.owner_module_index].name
     builder.current_path = g.modules[function.module_index].path
+    builder.current_text = g.modules[function.module_index].text
+    builder.current_lines = g.modules[function.module_index].lines
+    builder.site_line = 0usize
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_parameter_at = 0usize
     while signature_parameter_at < function.parameter_count {
@@ -5748,6 +5756,9 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
     builder.functions[nir_function].path = g.modules[instance.module_index].path
     builder.functions[nir_function].module_name = g.modules[instance.owner_module_index].name
     builder.current_path = g.modules[instance.module_index].path
+    builder.current_text = g.modules[instance.module_index].text
+    builder.current_lines = g.modules[instance.module_index].lines
+    builder.site_line = 0usize
     try nir.begin_signature(builder, nir_function, signatures)
     var signature_at = 0usize
     while signature_at < instance.parameter_count {
@@ -5915,6 +5926,9 @@ fn synthesize_failure_report(c: *check.Checker, g: *graph.Graph, builder: *nir.B
     builder.functions[nir_function].path = g.modules[module_index].path
     builder.functions[nir_function].module_name = g.modules[module_index].name
     builder.current_path = g.modules[module_index].path
+    builder.current_text = g.modules[module_index].text
+    builder.current_lines = g.modules[module_index].lines
+    builder.site_line = 0usize
     try nir.begin_signature(builder, nir_function, signatures)
     try nir.add_parameter_type(builder, nir_function, signatures, error_type)
     let (entry, entry_error) = nir.begin_block(builder)

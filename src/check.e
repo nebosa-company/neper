@@ -890,26 +890,14 @@ fn apply_context(c: *Checker, actual: Type, expected: Type) -> (Type, err) {
 
 // The module whose tokens `tokens` holds (D304): a phase that asks for the same
 // module again pays nothing. Any other tokenize invalidates it.
+// The checker's token table is the module's own list (D316): no scan, a slice.
 fn tokenize_module(c: *Checker, g: *graph.Graph, module_index: usize) -> err {
     if c.has_tokens_module && c.tokens_module == module_index { ret ok }
-    try tokenize(c, g.modules[module_index].text)
+    if g.modules[module_index].has_invalid { ret lex.InvalidSource }
+    c.tokens = g.modules[module_index].tokens
+    c.token_count = c.tokens.len
     c.tokens_module = module_index
     c.has_tokens_module = true
-    ret ok
-}
-
-fn tokenize(c: *Checker, text: str) -> err {
-    var scanner = lex.init(text)
-    c.has_tokens_module = false
-    c.token_count = 0usize
-    while true {
-        if c.token_count == c.tokens.len { ret Capacity }
-        let token = lex.next(&scanner)
-        if token.kind == .Invalid { ret lex.InvalidSource }
-        c.tokens[c.token_count] = token
-        c.token_count += 1usize
-        if token.kind == .Eof { break }
-    }
     ret ok
 }
 
@@ -4402,7 +4390,7 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
     var tree: parse.Tree = zero
     let init_error = parse.init_tree(&tree, scratch_nodes, scratch_children)
     if init_error != ok { ret (0usize, init_error) }
-    let parse_error = parse.parse(&tree, g.modules[module_index].text)
+    let parse_error = parse.parse_tokens(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
     if parse_error != ok { ret (0usize, parse_error) }
     let (nodes, nodes_error) = mem.alloc[syntax.Node](c.arena, tree.count)
     if nodes_error != ok { ret (0usize, nodes_error) }

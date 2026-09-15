@@ -120,8 +120,6 @@ fn site_token(site: Site) -> lex.Token {
     var token: lex.Token = zero
     token.start = site.start
     token.end = site.end
-    token.line = site.line
-    token.column = site.column
     ret token
 }
 
@@ -268,6 +266,16 @@ type Builder = struct {
     // The path every instruction emitted is stamped with: the function's, or the
     // callee's while its body is being copied in.
     current_path: str,
+    // The text and line table of the module being lowered (D315): a site's line and
+    // column are looked up from the token's offset as the instruction is emitted.
+    current_text: str,
+    current_lines: []usize,
+    // The line the last site fell on and its byte range (D315): consecutive
+    // instructions come from the same line far more often than not, so the binary
+    // search runs once per line rather than once per instruction.
+    site_line: usize,
+    site_line_start: usize,
+    site_line_end: usize,
     // The inlining oracle (D207): small functions lowered ahead of the program into
     // their own builder, and the sites that took a body from it.
     oracle: *Builder,
@@ -888,7 +896,7 @@ fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, imm
         immediate: immediate,
         target: 0usize,
         target2: 0usize,
-        site: Site { start: token.start, end: token.end, line: token.line, column: token.column },
+        site: site_of(builder, token),
         nocheck: builder.nocheck,
         path: builder.current_path,
     }
@@ -985,6 +993,38 @@ fn discard_bodies(builder: *Builder, at: Mark) {
     builder.operand_count = at.operand_count
     builder.function_active = false
     builder.block_active = false
+}
+
+// Where a token lies in the module being lowered, as the trap record and the line table
+// name it. A copied instruction keeps its own site (`emit_at`): it came from another
+// module's text.
+fn site_of(builder: *Builder, token: lex.Token) -> Site {
+    var site: Site = zero
+    site.start = token.start
+    site.end = token.end
+    // A zero token is no token: the synthesized functions emit with one, and their
+    // instructions have no line -- a real token ends past byte 0.
+    if token.end != 0usize && token.start <= builder.current_text.len {
+        if builder.site_line == 0usize || token.start < builder.site_line_start || token.start >= builder.site_line_end {
+            let line = lex.line_of(builder.current_text, builder.current_lines, token.start)
+            builder.site_line = line
+            builder.site_line_start = 0usize
+            builder.site_line_end = builder.current_text.len + 1usize
+            if line - 1usize < builder.current_lines.len { builder.site_line_start = builder.current_lines[line - 1usize] }
+            if line < builder.current_lines.len { builder.site_line_end = builder.current_lines[line] }
+        }
+        site.line = builder.site_line
+        site.column = lex.column_of(builder.current_text, builder.current_lines, token.start)
+    }
+    ret site
+}
+
+// `emit` with a site already known: the inliner's copies keep the callee's positions.
+fn emit_at(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, immediate: usize, site: Site) -> (usize, usize, err) {
+    let (instruction, result, emit_error) = emit(builder, opcode, ty, has_result, immediate, site_token(site))
+    if emit_error != ok { ret (instruction, result, emit_error) }
+    builder.instructions[instruction].site = site
+    ret (instruction, result, ok)
 }
 
 fn end_function(builder: *Builder) -> err {

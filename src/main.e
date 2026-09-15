@@ -32,7 +32,10 @@ error DiagnosticWrite
 
 fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize, column: usize) -> err {
     let current = lex.next(s)
-    if current.kind != kind || current.start != start || current.end != end || current.line != line || current.column != column {
+    if current.kind != kind || current.start != start || current.end != end { ret lex.InvalidSource }
+    // The line and column are derived from the offset (D315), here without a table.
+    var no_lines: [1]usize = zero
+    if lex.line_of(s.source, no_lines[0usize..0usize], current.start) != line || lex.column_of(s.source, no_lines[0usize..0usize], current.start) != column {
         ret lex.InvalidSource
     }
     ret ok
@@ -49,9 +52,13 @@ fn validate_test_parse(text: str) -> err {
 fn self_test() -> err {
     var basic = lex.init("use e.io\r\nfn main() -> err { // note\n    ret ok\n}\n")
     let basic_use = lex.next(&basic)
-    if basic_use.kind != .KwUse || basic_use.leading_start != 0usize || basic_use.start != 0usize || basic_use.end != 3usize { ret lex.InvalidSource }
+    if basic_use.kind != .KwUse || basic_use.start != 0usize || basic_use.end != 3usize { ret lex.InvalidSource }
     let basic_e = lex.next(&basic)
-    if basic_e.kind != .Identifier || basic_e.leading_start != 3usize || basic_e.start != 4usize || basic_e.end != 5usize { ret lex.InvalidSource }
+    if basic_e.kind != .Identifier || basic_e.start != 4usize || basic_e.end != 5usize { ret lex.InvalidSource }
+    var basic_pair: [2]lex.Token = zero
+    basic_pair[0usize] = basic_use
+    basic_pair[1usize] = basic_e
+    if lex.leading_start(basic_pair[..], 0usize) != 0usize || lex.leading_start(basic_pair[..], 1usize) != 3usize { ret lex.InvalidSource }
     try expect(&basic, .PunctDot, 5usize, 6usize, 1usize, 6usize)
     try expect(&basic, .Identifier, 6usize, 8usize, 1usize, 7usize)
     try expect(&basic, .Newline, 8usize, 10usize, 1usize, 9usize)
@@ -115,35 +122,42 @@ fn self_test() -> err {
     var unicode = lex.init("\"é\" name")
     try expect(&unicode, .String, 0usize, 4usize, 1usize, 1usize)
     try expect(&unicode, .Identifier, 5usize, 9usize, 1usize, 5usize)
+    var no_lines: [1]usize = zero
     var positioned = lex.init("\xEF\xBB\xBF\"😀é\"\r\nx")
     let positioned_string = lex.next(&positioned)
-    if positioned_string.kind != .String || positioned_string.leading_start != 0usize || positioned_string.start != 3usize || positioned_string.end != 11usize { ret lex.InvalidSource }
-    if positioned_string.line != 1usize || positioned_string.column != 1usize || positioned_string.end_line != 1usize || positioned_string.end_column != 5usize { ret lex.InvalidSource }
-    if positioned_string.column_utf16 != 1usize || positioned_string.end_column_utf16 != 6usize { ret lex.InvalidSource }
+    if positioned_string.kind != .String || positioned_string.start != 3usize || positioned_string.end != 11usize { ret lex.InvalidSource }
+    // The end position and the UTF-16 columns are derived from the source (D315).
+    let positioned_string_span = lex.span_of(positioned.source, no_lines[0usize..0usize], positioned_string)
+    if positioned_string_span.line != 1usize || positioned_string_span.column != 1usize || positioned_string_span.end_line != 1usize || positioned_string_span.end_column != 5usize { ret lex.InvalidSource }
+    if positioned_string_span.column_utf16 != 1usize || positioned_string_span.end_column_utf16 != 6usize { ret lex.InvalidSource }
     let positioned_newline = lex.next(&positioned)
     if positioned_newline.kind != .Newline || positioned_newline.start != 11usize || positioned_newline.end != 13usize { ret lex.InvalidSource }
-    if positioned_newline.line != 1usize || positioned_newline.column != 5usize || positioned_newline.end_line != 2usize || positioned_newline.end_column != 1usize { ret lex.InvalidSource }
-    if positioned_newline.column_utf16 != 6usize || positioned_newline.end_column_utf16 != 1usize { ret lex.InvalidSource }
+    let positioned_newline_span = lex.span_of(positioned.source, no_lines[0usize..0usize], positioned_newline)
+    if positioned_newline_span.line != 1usize || positioned_newline_span.column != 5usize || positioned_newline_span.end_line != 2usize || positioned_newline_span.end_column != 1usize { ret lex.InvalidSource }
+    if positioned_newline_span.column_utf16 != 6usize || positioned_newline_span.end_column_utf16 != 1usize { ret lex.InvalidSource }
     let positioned_name = lex.next(&positioned)
     if positioned_name.kind != .Identifier || positioned_name.start != 13usize || positioned_name.end != 14usize { ret lex.InvalidSource }
-    if positioned_name.line != 2usize || positioned_name.column != 1usize || positioned_name.end_line != 2usize || positioned_name.end_column != 2usize { ret lex.InvalidSource }
-    if positioned_name.column_utf16 != 1usize || positioned_name.end_column_utf16 != 2usize { ret lex.InvalidSource }
+    let positioned_name_span = lex.span_of(positioned.source, no_lines[0usize..0usize], positioned_name)
+    if positioned_name_span.line != 2usize || positioned_name_span.column != 1usize || positioned_name_span.end_line != 2usize || positioned_name_span.end_column != 2usize { ret lex.InvalidSource }
+    if positioned_name_span.column_utf16 != 1usize || positioned_name_span.end_column_utf16 != 2usize { ret lex.InvalidSource }
     var invalid_scalar = lex.init("😀x")
     let invalid_scalar_token = lex.next(&invalid_scalar)
     if invalid_scalar_token.kind != .Invalid || invalid_scalar_token.start != 0usize || invalid_scalar_token.end != 4usize { ret lex.InvalidSource }
-    if invalid_scalar_token.column != 1usize || invalid_scalar_token.end_column != 2usize || invalid_scalar_token.column_utf16 != 1usize || invalid_scalar_token.end_column_utf16 != 3usize { ret lex.InvalidSource }
+    let invalid_scalar_span = lex.span_of(invalid_scalar.source, no_lines[0usize..0usize], invalid_scalar_token)
+    if invalid_scalar_span.column != 1usize || invalid_scalar_span.end_column != 2usize || invalid_scalar_span.column_utf16 != 1usize || invalid_scalar_span.end_column_utf16 != 3usize { ret lex.InvalidSource }
     let after_invalid_scalar = lex.next(&invalid_scalar)
-    if after_invalid_scalar.kind != .Identifier || after_invalid_scalar.start != 4usize || after_invalid_scalar.column != 2usize || after_invalid_scalar.column_utf16 != 3usize { ret lex.InvalidSource }
+    if after_invalid_scalar.kind != .Identifier || after_invalid_scalar.start != 4usize || lex.column_of(invalid_scalar.source, no_lines[0usize..0usize], after_invalid_scalar.start) != 2usize || lex.span_of(invalid_scalar.source, no_lines[0usize..0usize], after_invalid_scalar).column_utf16 != 3usize { ret lex.InvalidSource }
     var invalid_sequence = lex.init("\xF0\x9F\x92x")
     let invalid_sequence_token = lex.next(&invalid_sequence)
     if invalid_sequence_token.kind != .Invalid || invalid_sequence_token.start != 0usize || invalid_sequence_token.end != 3usize { ret lex.InvalidSource }
-    if invalid_sequence_token.end_column != 2usize || invalid_sequence_token.end_column_utf16 != 2usize { ret lex.InvalidSource }
+    let invalid_sequence_span = lex.span_of(invalid_sequence.source, no_lines[0usize..0usize], invalid_sequence_token)
+    if invalid_sequence_span.end_column != 2usize || invalid_sequence_span.end_column_utf16 != 2usize { ret lex.InvalidSource }
     let after_invalid_sequence = lex.next(&invalid_sequence)
-    if after_invalid_sequence.kind != .Identifier || after_invalid_sequence.start != 3usize || after_invalid_sequence.column != 2usize || after_invalid_sequence.column_utf16 != 2usize { ret lex.InvalidSource }
+    if after_invalid_sequence.kind != .Identifier || after_invalid_sequence.start != 3usize || lex.column_of(invalid_sequence.source, no_lines[0usize..0usize], after_invalid_sequence.start) != 2usize || lex.span_of(invalid_sequence.source, no_lines[0usize..0usize], after_invalid_sequence).column_utf16 != 2usize { ret lex.InvalidSource }
     var trivia = lex.init("\xEF\xBB\xBF // c\r\nx ")
     let trivia_newline = lex.next(&trivia)
-    if trivia_newline.kind != .Newline || trivia_newline.leading_start != 0usize || trivia_newline.start != 8usize || trivia_newline.end != 10usize { ret lex.InvalidSource }
-    var leading = lex.trivia_init(trivia.source, trivia_newline)
+    if trivia_newline.kind != .Newline || trivia_newline.start != 8usize || trivia_newline.end != 10usize { ret lex.InvalidSource }
+    var leading = lex.trivia_init(trivia.source, no_lines[0usize..0usize], 0usize, trivia_newline)
     let leading_bom = lex.next_trivia(&leading)
     if leading_bom.kind != .Bom || leading_bom.start != 0usize || leading_bom.end != 3usize || leading_bom.column != 1usize || leading_bom.end_column != 1usize { ret lex.InvalidSource }
     let leading_space = lex.next_trivia(&leading)
@@ -152,26 +166,26 @@ fn self_test() -> err {
     if leading_comment.kind != .Comment || leading_comment.start != 4usize || leading_comment.end != 8usize || leading_comment.column != 2usize || leading_comment.end_column != 6usize { ret lex.InvalidSource }
     if lex.next_trivia(&leading).kind != .End { ret lex.InvalidSource }
     let trivia_name = lex.next(&trivia)
-    if trivia_name.kind != .Identifier || trivia_name.leading_start != 10usize || trivia_name.start != 10usize || trivia_name.end != 11usize { ret lex.InvalidSource }
+    if trivia_name.kind != .Identifier || trivia_name.start != 10usize || trivia_name.end != 11usize { ret lex.InvalidSource }
     let trivia_eof = lex.next(&trivia)
-    if trivia_eof.kind != .Eof || trivia_eof.leading_start != 11usize || trivia_eof.start != 12usize || trivia_eof.end != 12usize { ret lex.InvalidSource }
-    var trailing = lex.trivia_init(trivia.source, trivia_eof)
+    if trivia_eof.kind != .Eof || trivia_eof.start != 12usize || trivia_eof.end != 12usize { ret lex.InvalidSource }
+    var trailing = lex.trivia_init(trivia.source, no_lines[0usize..0usize], trivia_name.end, trivia_eof)
     let trailing_space = lex.next_trivia(&trailing)
     if trailing_space.kind != .Space || trailing_space.start != 11usize || trailing_space.end != 12usize || trailing_space.column != 2usize || trailing_space.end_column != 3usize { ret lex.InvalidSource }
     var unicode_trivia = lex.init("// 😀\nx")
     let unicode_newline = lex.next(&unicode_trivia)
-    var unicode_leading = lex.trivia_init(unicode_trivia.source, unicode_newline)
+    var unicode_leading = lex.trivia_init(unicode_trivia.source, no_lines[0usize..0usize], 0usize, unicode_newline)
     let unicode_comment = lex.next_trivia(&unicode_leading)
     if unicode_comment.kind != .Comment || unicode_comment.start != 0usize || unicode_comment.end != 7usize || unicode_comment.end_column != 5usize || unicode_comment.end_column_utf16 != 6usize { ret lex.InvalidSource }
     var broken_comment = lex.init("// a\xF0\x9F\x92 rest\nerror Good")
     let broken_comment_byte = lex.next(&broken_comment)
     if broken_comment_byte.kind != .Invalid || broken_comment_byte.start != 4usize || broken_comment_byte.end != 7usize { ret lex.InvalidSource }
-    var broken_prefix = lex.trivia_init(broken_comment.source, broken_comment_byte)
+    var broken_prefix = lex.trivia_init(broken_comment.source, no_lines[0usize..0usize], 0usize, broken_comment_byte)
     let broken_prefix_comment = lex.next_trivia(&broken_prefix)
     if broken_prefix_comment.kind != .Comment || broken_prefix_comment.start != 0usize || broken_prefix_comment.end != 4usize { ret lex.InvalidSource }
     let after_broken_comment = lex.next(&broken_comment)
-    if after_broken_comment.kind != .Newline || after_broken_comment.leading_start != 7usize || after_broken_comment.start != 12usize { ret lex.InvalidSource }
-    var broken_suffix = lex.trivia_init(broken_comment.source, after_broken_comment)
+    if after_broken_comment.kind != .Newline || after_broken_comment.start != 12usize { ret lex.InvalidSource }
+    var broken_suffix = lex.trivia_init(broken_comment.source, no_lines[0usize..0usize], broken_comment_byte.end, after_broken_comment)
     let broken_suffix_comment = lex.next_trivia(&broken_suffix)
     if broken_suffix_comment.kind != .Comment || broken_suffix_comment.start != 7usize || broken_suffix_comment.end != 12usize { ret lex.InvalidSource }
     let after_broken_line = lex.next(&broken_comment)
@@ -1364,6 +1378,7 @@ fn nptest_signature_ok(tokens: []const lex.Token, text: str, first: usize, count
 // `main_name` is the name token of a top-level `fn main` when the operand has one, so the
 // runner can rename it out of the way of its own (D281).
 fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *lex.Token, bad_kind: *usize, main_name: *lex.Token, has_main: *bool) -> (usize, err) {
+    var no_lines: [1]usize = zero
     let (tokens, token_count, invalid, scan_error) = tool.scan_all(a, text)
     if scan_error != ok { ret (0usize, scan_error) }
     let (nodes, nodes_error) = mem.alloc[syntax.Node](a, text.len + 1024usize)
@@ -1397,7 +1412,7 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *
                         *bad_kind = 2usize
                     }
                     names[count] = text[fn_name.start..fn_name.end]
-                    lines[count] = tokens[node.token_start].line
+                    lines[count] = lex.line_of(text, no_lines[0usize..0usize], tokens[node.token_start].start)
                     count += 1usize
                     pending = false
                 } else {
@@ -1788,6 +1803,7 @@ fn runner_mapping(out: *Sink, identity: str, generated_start: usize, from: usize
 }
 
 fn write_runner_map(a: *mem.Arena, runner_path: str, runner: []u8, text: str, identity: str, main_name: lex.Token, has_main: bool) -> err {
+    var no_lines: [1]usize = zero
     // The two `use` lines the runner begins with.
     let prefix_lines = "use e.os as nptest_os\nuse e.atomic as nptest_atomic\n"
     let prefix = prefix_lines.len
@@ -1810,12 +1826,13 @@ fn write_runner_map(a: *mem.Arena, runner_path: str, runner: []u8, text: str, id
     try write_all(&out, "{\"schema\":\"neper-source-map\",\"version\":1,\"generated\":{\"root\":\"operand\",\"path\":\"nptest-runner.e\"},\"generated_sha256\":\"")
     try write_all(&out, digest)
     try write_all(&out, "\",\"mappings\":[")
+    let main_span = lex.span_of(text, no_lines[0usize..0usize], main_name)
     if has_main {
         // Up to the renamed `main`, then after it: the runner's name is 15 bytes longer.
-        try runner_mapping(&out, identity, prefix, 0usize, main_name.start, 1usize, 1usize, main_name.line, main_name.column, 3usize, 1usize)
+        try runner_mapping(&out, identity, prefix, 0usize, main_name.start, 1usize, 1usize, main_span.line, main_span.column, 3usize, 1usize)
         try write_all(&out, ",")
         let shifted = prefix + main_name.end + 15usize
-        try runner_mapping(&out, identity, shifted, main_name.end, text.len, main_name.line, main_name.end_column, lines, end_column, main_name.line + 2usize, main_name.end_column + 15usize)
+        try runner_mapping(&out, identity, shifted, main_name.end, text.len, main_span.end_line, main_span.end_column, lines, end_column, main_span.end_line + 2usize, main_span.end_column + 15usize)
     } else {
         try runner_mapping(&out, identity, prefix, 0usize, text.len, 1usize, 1usize, lines, end_column, 3usize, 1usize)
     }
@@ -1840,6 +1857,7 @@ fn nptest_stem(path: str) -> str {
 // `test-file PATH ROOT ARCH OS WORKDIR --json` (D240): compile a runner that carries the
 // operand's @test functions, run each in its own process, and report section 7's stream.
 fn test_command(a: *mem.Arena, args: []str) -> err {
+    var no_lines: [1]usize = zero
     var report = stderr_sink()
     report.json = true
     report.file = os.stdout()
@@ -1864,9 +1882,9 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if bad_kind != 0usize {
         try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":1}\n")
         if bad_kind == 1usize {
-            try emit_diagnostic(&report, args[2usize], bad, true, "E-TEST-9999", "`@test` marks a function, and this declaration is not one")
+            try emit_diagnostic(&report, args[2usize], text, no_lines[0usize..0usize], bad, true, "E-TEST-9999", "`@test` marks a function, and this declaration is not one")
         } else {
-            try emit_diagnostic(&report, args[2usize], bad, true, "E-TEST-9999", "a test takes one arena and returns `err`: `fn name(a: *mem.Arena) -> err`")
+            try emit_diagnostic(&report, args[2usize], text, no_lines[0usize..0usize], bad, true, "E-TEST-9999", "a test takes one arena and returns `err`: `fn name(a: *mem.Arena) -> err`")
         }
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"tests\":0}}\n")
         os.exit(2i32)
@@ -2904,14 +2922,17 @@ type Sink = struct {
 // One diagnostic, as the human line `path:line:col: error[CODE]: message` or as the
 // record of docs/tooling.md section 3 -- the span from the token, the source as an
 // operand named by the file's basename.
-fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, code: str, message: str) -> err {
+fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, token: lex.Token, has_token: bool, code: str, message: str) -> err {
+    // The span is derived from the source only here (D315): the token carries its
+    // bytes, and the line, the column and the UTF-16 columns are looked up when reported.
+    var at = lex.span_of(text, lines, token)
     if !report.json {
         try write_all(report, path)
         try write_all(report, ":")
         if has_token {
-            try write_usize(report, token.line)
+            try write_usize(report, at.line)
             try write_all(report, ":")
-            try write_usize(report, token.column)
+            try write_usize(report, at.column)
         } else {
             try write_all(report, "1:1")
         }
@@ -2921,9 +2942,8 @@ fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, 
         try write_all(report, message)
         ret write_all(report, "\n")
     }
-    var at = token
     if !has_token {
-        var origin: lex.Token = zero
+        var origin: lex.Span = zero
         origin.line = 1usize
         origin.column = 1usize
         origin.end_line = 1usize
@@ -2963,7 +2983,7 @@ fn emit_diagnostic(report: *Sink, path: str, token: lex.Token, has_token: bool, 
     ret ok
 }
 
-fn write_span(report: *Sink, identity: str, at: lex.Token, operand: bool) -> err {
+fn write_span(report: *Sink, identity: str, at: lex.Span, operand: bool) -> err {
     try write_all(report, "{\"source\":{\"root\":\"operand\",\"path\":")
     try write_json_string(report, identity)
     if operand && report.absolute_path.len != 0usize {
@@ -2990,7 +3010,7 @@ fn write_span(report: *Sink, identity: str, at: lex.Token, operand: bool) -> err
 }
 
 // The mapping a token of `path` falls inside, or `map_count` for none.
-fn map_index(report: *Sink, path: str, at: lex.Token, has_token: bool) -> usize {
+fn map_index(report: *Sink, path: str, at: lex.Span, has_token: bool) -> usize {
     if !has_token || report.map_count == 0usize || !same(path, report.map_source) { ret report.map_count }
     var mapping = 0usize
     while mapping < report.map_count {
@@ -3680,13 +3700,25 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     var message_storage: [4096]u8 = zero
     var message = capture_sink(message_storage[..])
     try write_check_message(&message, checker, check_error)
-    ret emit_diagnostic(report, path, checker.failure_token, checker.failure_has_token, check.diagnostic_code(checker.failure_kind), message_storage[..message.count])
+    ret emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, check.diagnostic_code(checker.failure_kind), message_storage[..message.count])
+}
+
+// A module's text, and none for an index past the graph (a diagnostic with no token).
+fn module_text(g: *graph.Graph, module_index: usize) -> str {
+    if module_index < g.count { ret g.modules[module_index].text }
+    ret ""
+}
+
+fn module_lines(g: *graph.Graph, module_index: usize) -> []usize {
+    var none: [1]usize = zero
+    if module_index < g.count { ret g.modules[module_index].lines }
+    ret none[0usize..0usize]
 }
 
 fn print_token_diagnostic(report: *Sink, g: *graph.Graph, module_index: usize, token: lex.Token, code: str, message: str) -> err {
     var path = "<unknown>"
     if module_index < g.count { path = g.modules[module_index].path }
-    ret emit_diagnostic(report, path, token, true, code, message)
+    ret emit_diagnostic(report, path, module_text(g, module_index), module_lines(g, module_index), token, true, code, message)
 }
 
 // A syntax error names its position and, where the parser knows why, its reason.
@@ -3695,6 +3727,7 @@ fn print_token_diagnostic(report: *Sink, g: *graph.Graph, module_index: usize, t
 // Spec section 3: a soft delimiter still open at a column-0 declaration keyword is
 // E-SYNTAX-0012, reported at the opener and naming the keyword that ended it (D275).
 fn print_barrier_failure(report: *Sink, path: str, text: str, opener: lex.Token, keyword: lex.Token) -> err {
+    var no_lines: [1]usize = zero
     var message_storage: [256]u8 = zero
     var message = capture_sink(message_storage[..])
     try write_all(&message, "`")
@@ -3702,11 +3735,12 @@ fn print_barrier_failure(report: *Sink, path: str, text: str, opener: lex.Token,
     try write_all(&message, "` opened here is still unclosed at `")
     try write_all(&message, text[keyword.start..keyword.end])
     try write_all(&message, "` on line ")
-    try write_usize(&message, keyword.line)
-    ret emit_diagnostic(report, path, opener, true, "E-SYNTAX-0012", message.capture[0usize..message.count])
+    try write_usize(&message, lex.line_of(text, no_lines[0usize..0usize], keyword.start))
+    ret emit_diagnostic(report, path, text, no_lines[0usize..0usize], opener, true, "E-SYNTAX-0012", message.capture[0usize..message.count])
 }
 
 fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, reserved_name: bool) -> err {
+    var no_lines: [1]usize = zero
     var message_storage: [1024]u8 = zero
     var message = capture_sink(message_storage[..])
     var code = "E-SYNTAX-9999"
@@ -3735,7 +3769,7 @@ fn print_parse_failure(report: *Sink, path: str, text: str, token: lex.Token, re
             }
         }
     }
-    ret emit_diagnostic(report, path, token, true, code, message_storage[..message.count])
+    ret emit_diagnostic(report, path, text, no_lines[0usize..0usize], token, true, code, message_storage[..message.count])
 }
 
 // Every module is parsed while the graph is loaded, so a syntax error anywhere in
@@ -3745,6 +3779,7 @@ fn load_graph(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, roo
 }
 
 fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, root: str, arch: str, target_os: str, project_root: str) -> err {
+    var no_lines: [1]usize = zero
     let load_error = graph.load(a, loaded, path, root, arch, target_os, project_root)
     if load_error != ok && loaded.has_failure && loaded.failure_module < loaded.count {
         let module = loaded.modules[loaded.failure_module]
@@ -3784,7 +3819,7 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, 
             }
         }
         var no_token: lex.Token = zero
-        try emit_diagnostic(report, loaded.modules[loaded.failure_module].path, no_token, false, code, message_storage[..message.count])
+        try emit_diagnostic(report, loaded.modules[loaded.failure_module].path, "", no_lines[0usize..0usize], no_token, false, code, message_storage[..message.count])
         try finish_report(report)
         os.exit(1i32)
     }
@@ -3828,7 +3863,7 @@ fn print_resolve_name_diagnostic(report: *Sink, g: *graph.Graph, resolver: *reso
     try write_all(&message, resolver.failure_name)
     try write_all(&message, "` ")
     try write_resolve_name_message(&message, resolver, resolve_error)
-    ret emit_diagnostic(report, path, resolver.failure_token, true, resolve_name_code(resolve_error), message_storage[..message.count])
+    ret emit_diagnostic(report, path, module_text(g, resolver.failure_module), module_lines(g, resolver.failure_module), resolver.failure_token, true, resolve_name_code(resolve_error), message_storage[..message.count])
 }
 
 fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.Resolver, resolve_error: err) -> err {
@@ -3909,7 +3944,7 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     var message = capture_sink(message_storage[..])
     if lower_error == nir.Capacity {
         try write_capacity_diagnostic(&message, builder, checker.failure_name)
-        ret emit_diagnostic(report, path, checker.failure_token, checker.failure_has_token, "E-TYPE-9999", message_storage[..message.count])
+        ret emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, "E-TYPE-9999", message_storage[..message.count])
     }
     try write_all(&message, "cannot lower `")
     try write_all(&message, checker.failure_name)
@@ -3939,7 +3974,7 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
             }
         }
     }
-    ret emit_diagnostic(report, path, checker.failure_token, checker.failure_has_token, "E-TYPE-9999", message_storage[..message.count])
+    ret emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, "E-TYPE-9999", message_storage[..message.count])
 }
 
 fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, function: nir.Function, context: *codegen_x64.FunctionContext) -> err {
@@ -3950,7 +3985,7 @@ fn print_codegen_diagnostic(report: *Sink, g: *graph.Graph, function: nir.Functi
     try write_all(&message, "cannot select machine code for `")
     try write_all(&message, function.name)
     try write_all(&message, "`")
-    ret emit_diagnostic(report, path, context.failure_token, true, "E-CODEGEN-9999", message_storage[..message.count])
+    ret emit_diagnostic(report, path, module_text(g, function.module_index), module_lines(g, function.module_index), context.failure_token, true, "E-CODEGEN-9999", message_storage[..message.count])
 }
 
 fn write_qualified_error(file: *Sink, module_name: str, error_name: str) -> err {
@@ -3960,6 +3995,7 @@ fn write_qualified_error(file: *Sink, module_name: str, error_name: str) -> err 
 }
 
 fn print_error_table_diagnostic(report: *Sink, g: *graph.Graph, conflict: *error_table.Conflict, validation_error: err) -> err {
+    var no_lines: [1]usize = zero
     var message_storage: [1024]u8 = zero
     var message = capture_sink(message_storage[..])
     var code = "E-LINK-9999"
@@ -3978,7 +4014,7 @@ fn print_error_table_diagnostic(report: *Sink, g: *graph.Graph, conflict: *error
     var origin: lex.Token = zero
     var path = "<unknown>"
     if g.count > 0usize { path = g.modules[0usize].path }
-    ret emit_diagnostic(report, path, origin, false, code, message_storage[..message.count])
+    ret emit_diagnostic(report, path, "", no_lines[0usize..0usize], origin, false, code, message_storage[..message.count])
 }
 
 fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic) {

@@ -1,5 +1,7 @@
 // First self-hosted compiler component. Token names mirror grammar revision 1.
 
+use e.mem
+
 type Kind = enum u8 {
     Invalid,
     Eof,
@@ -116,13 +118,106 @@ type Trivia = struct {
     end_column_utf16: usize,
 }
 
+// What every pass reads of a token (D315): its kind, bytes and where it starts. It
+// was 120 bytes with the end position, both UTF-16 columns and where its leading
+// trivia began -- read by diagnostics and tooling alone, so those are derived by
+// `span_of` and `leading_start` when asked for, from the source the token came from.
 type Token = struct {
     kind: Kind,
-    leading_start: usize,
-    leading_line: usize,
-    leading_column: usize,
-    leading_column_utf16: usize,
+    // Whether the trivia before this token continues a comment: what the formatter's
+    // trivia scanner starts from, and one byte.
     leading_comment: bool,
+    start: usize,
+    end: usize,
+}
+
+// Where each line of a source begins (D315): line 1 at byte 0, the rest after each
+// newline, so a line and a column are a binary search and a short scan from an offset.
+// An empty table stands for "not built": the search then counts newlines from the
+// start, which a diagnostic can afford.
+fn line_starts(a: *mem.Arena, source: str) -> ([]usize, err) {
+    var count = 1usize
+    var at = 0usize
+    while at < source.len {
+        if source[at] == 10u8 { count += 1usize }
+        if source[at] == 13u8 && !(at + 1usize < source.len && source[at + 1usize] == 10u8) { count += 1usize }
+        at += 1usize
+    }
+    let (lines, lines_error) = mem.alloc[usize](a, count)
+    if lines_error != ok { ret (lines, lines_error) }
+    lines[0usize] = 0usize
+    var filled = 1usize
+    at = 0usize
+    while at < source.len {
+        let c = source[at]
+        at += 1usize
+        if c == 13u8 && at < source.len && source[at] == 10u8 { at += 1usize }
+        if c == 10u8 || c == 13u8 {
+            lines[filled] = at
+            filled += 1usize
+        }
+    }
+    ret (lines, ok)
+}
+
+// The 1-based line `offset` is on.
+fn line_of(source: str, lines: []const usize, offset: usize) -> usize {
+    if lines.len == 0usize {
+        var line = 1usize
+        var at = 0usize
+        while at < offset && at < source.len {
+            let c = source[at]
+            at += 1usize
+            if c == 13u8 && at < source.len && source[at] == 10u8 { at += 1usize }
+            if c == 10u8 || c == 13u8 { line += 1usize }
+        }
+        ret line
+    }
+    var low = 0usize
+    var high = lines.len
+    while low + 1usize < high {
+        let mid = (low + high) / 2usize
+        if lines[mid] <= offset { low = mid } else { high = mid }
+    }
+    ret low + 1usize
+}
+
+// The first byte of the line `offset` is on.
+fn line_start_of(source: str, lines: []const usize, offset: usize) -> usize {
+    if lines.len != 0usize { ret lines[line_of(source, lines, offset) - 1usize] }
+    var at = offset
+    while at > 0usize && source[at - 1usize] != 10u8 && source[at - 1usize] != 13u8 { at = at - 1usize }
+    ret at
+}
+
+// The 1-based column of `offset`: scalars from the line's start, the byte-order mark
+// none of them.
+fn column_of(source: str, lines: []const usize, offset: usize) -> usize {
+    var at = line_start_of(source, lines, offset)
+    if at == 0usize && offset >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 { at = 3usize }
+    var column = 1usize
+    while at < offset {
+        if source[at] >= 128u8 {
+            let width = utf8_width(source, at)
+            if width == 0usize { at += invalid_utf8_width(source, at) } else { at += width }
+        } else {
+            at += 1usize
+        }
+        column += 1usize
+    }
+    ret column
+}
+
+// Whether `offset` begins a line: the parser's column-0 test for a declaration keyword.
+fn at_line_start(source: str, offset: usize) -> bool {
+    if offset == 0usize { ret true }
+    if offset == 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 { ret true }
+    ret source[offset - 1usize] == 10u8 || source[offset - 1usize] == 13u8
+}
+
+// A token's full position, for a diagnostic or a tooling record: the end of the token
+// and the UTF-16 columns, derived from the source.
+type Span = struct {
     start: usize,
     end: usize,
     line: usize,
@@ -131,6 +226,55 @@ type Token = struct {
     end_column: usize,
     column_utf16: usize,
     end_column_utf16: usize,
+}
+
+// UTF-16 units from the start of the line `offset` is on up to it: the scan back to
+// the line's first byte, then forward over the scalars.
+fn column_utf16_at(source: str, lines: []const usize, offset: usize) -> usize {
+    var units = 1usize
+    var at = line_start_of(source, lines, offset)
+    // The byte-order mark is not a column: the scanner starts past it.
+    if at == 0usize && offset >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 { at = 3usize }
+    while at < offset {
+        if source[at] >= 128u8 {
+            let width = utf8_width(source, at)
+            if width == 0usize {
+                at += invalid_utf8_width(source, at)
+                units += 1usize
+            } else {
+                at += width
+                if width == 4usize { units += 2usize } else { units += 1usize }
+            }
+        } else {
+            at += 1usize
+            units += 1usize
+        }
+    }
+    ret units
+}
+
+fn span_of(source: str, lines: []const usize, of: Token) -> Span {
+    var span: Span = zero
+    span.start = of.start
+    span.end = of.end
+    if of.start <= source.len {
+        span.line = line_of(source, lines, of.start)
+        span.column = column_of(source, lines, of.start)
+        span.column_utf16 = column_utf16_at(source, lines, of.start)
+    }
+    if of.end <= source.len {
+        span.end_line = line_of(source, lines, of.end)
+        span.end_column = column_of(source, lines, of.end)
+        span.end_column_utf16 = column_utf16_at(source, lines, of.end)
+    }
+    ret span
+}
+
+// Where the token at `at` of `tokens`'s leading trivia begins: the previous token's
+// end, or the file's first byte -- the byte-order mark is trivia of the first token.
+fn leading_start(tokens: []const Token, at: usize) -> usize {
+    if at == 0usize { ret 0usize }
+    ret tokens[at - 1usize].end
 }
 
 // Which of docs/diagnostics.md's lexical codes an `Invalid` token is: by the byte it
@@ -147,15 +291,21 @@ fn invalid_code(source: str, invalid: Token) -> str {
 type Scanner = struct {
     source: str,
     off: usize,
-    leading_start: usize,
-    leading_line: usize,
-    leading_column: usize,
-    leading_column_utf16: usize,
     leading_comment: bool,
     in_comment: bool,
-    line: usize,
-    column: usize,
-    column_utf16: usize,
+    // A scanner over tokens already scanned (D316): `next` hands them out in order,
+    // and a copy of the scanner is a lookahead, as before. The lexer runs once per
+    // module and every pass reads the list.
+    replay: bool,
+    tokens: []const Token,
+    at: usize,
+}
+
+fn init_tokens(source: str, tokens: []const Token) -> Scanner {
+    var s = init(source)
+    s.replay = true
+    s.tokens = tokens
+    ret s
 }
 
 type TriviaScanner = struct {
@@ -175,19 +325,10 @@ fn init(source: str) -> Scanner {
     if source.len >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 {
         off = 3usize
     }
-    ret Scanner{
-        source: source,
-        off: off,
-        leading_start: 0usize,
-        leading_line: 1usize,
-        leading_column: 1usize,
-        leading_column_utf16: 1usize,
-        leading_comment: false,
-        in_comment: false,
-        line: 1usize,
-        column: 1usize,
-        column_utf16: 1usize,
-    }
+    var s: Scanner = zero
+    s.source = source
+    s.off = off
+    ret s
 }
 
 fn is_alpha(c: u8) -> bool {
@@ -441,27 +582,13 @@ fn is_keyword(source: str, span: Token) -> bool {
     ret kind != .Identifier && kind != .PunctUnderscore
 }
 
-fn token(s: *Scanner, kind: Kind, start: usize, line: usize, column: usize, column_utf16: usize) -> Token {
+fn token(s: *Scanner, kind: Kind, start: usize) -> Token {
     let result = Token{
         kind: kind,
-        leading_start: s.leading_start,
-        leading_line: s.leading_line,
-        leading_column: s.leading_column,
-        leading_column_utf16: s.leading_column_utf16,
         leading_comment: s.leading_comment,
         start: start,
         end: s.off,
-        line: line,
-        column: column,
-        end_line: s.line,
-        end_column: s.column,
-        column_utf16: column_utf16,
-        end_column_utf16: s.column_utf16,
     }
-    s.leading_start = s.off
-    s.leading_line = s.line
-    s.leading_column = s.column
-    s.leading_column_utf16 = s.column_utf16
     s.leading_comment = s.in_comment
     ret result
 }
@@ -476,34 +603,45 @@ fn has3(s: *Scanner, a: u8, b: u8, c: u8) -> bool {
 
 fn take(s: *Scanner, n: usize) {
     s.off += n
-    s.column += n
-    s.column_utf16 += n
 }
 
 fn take_scalar(s: *Scanner, width: usize) {
     s.off += width
-    s.column += 1usize
-    if width == 4usize {
-        s.column_utf16 += 2usize
-    } else {
-        s.column_utf16 += 1usize
-    }
 }
 
 fn take_invalid_utf8(s: *Scanner) {
     s.off += invalid_utf8_width(s.source, s.off)
-    s.column += 1usize
-    s.column_utf16 += 1usize
 }
 
-fn trivia_init(source: str, owner: Token) -> TriviaScanner {
+// The trivia before `owner`, from the previous token's end (D315): its position is
+// where that token ended, and the file's first line and column when there is none.
+fn trivia_of(source: str, lines: []const usize, tokens: []const Token, at: usize) -> TriviaScanner {
+    ret trivia_init(source, lines, leading_start(tokens, at), tokens[at])
+}
+
+// The trivia before a token for a reader of kinds and bytes alone: no positions, so
+// no line lookup per token, which the formatter's passes over every newline need.
+fn trivia_kinds_of(source: str, tokens: []const Token, at: usize) -> TriviaScanner {
+    let owner = tokens[at]
     ret TriviaScanner{
         source: source,
-        off: owner.leading_start,
+        off: leading_start(tokens, at),
         end: owner.start,
-        line: owner.leading_line,
-        column: owner.leading_column,
-        column_utf16: owner.leading_column_utf16,
+        line: 0usize,
+        column: 0usize,
+        column_utf16: 0usize,
+        comment_continuation: owner.leading_comment,
+    }
+}
+
+fn trivia_init(source: str, lines: []const usize, leading: usize, owner: Token) -> TriviaScanner {
+    ret TriviaScanner{
+        source: source,
+        off: leading,
+        end: owner.start,
+        line: line_of(source, lines, leading),
+        column: column_of(source, lines, leading),
+        column_utf16: column_utf16_at(source, lines, leading),
         comment_continuation: owner.leading_comment,
     }
 }
@@ -565,6 +703,18 @@ fn next_trivia(t: *TriviaScanner) -> Trivia {
 }
 
 fn next(s: *Scanner) -> Token {
+    if s.replay {
+        if s.at < s.tokens.len {
+            let replayed = s.tokens[s.at]
+            s.at += 1usize
+            ret replayed
+        }
+        var eof: Token = zero
+        eof.kind = .Eof
+        eof.start = s.source.len
+        eof.end = s.source.len
+        ret eof
+    }
     while s.off < s.source.len {
         if !s.in_comment {
             let c = s.source[s.off]
@@ -580,21 +730,15 @@ fn next(s: *Scanner) -> Token {
             let comment_byte = s.source[s.off]
             if comment_byte == 0u8 || (comment_byte < 32u8 && comment_byte != 9u8) {
                 let invalid_start = s.off
-                let invalid_line = s.line
-                let invalid_column = s.column
-                let invalid_column_utf16 = s.column_utf16
                 take(s, 1usize)
-                ret token(s, .Invalid, invalid_start, invalid_line, invalid_column, invalid_column_utf16)
+                ret token(s, .Invalid, invalid_start)
             }
             if comment_byte >= 128u8 {
                 let width = utf8_width(s.source, s.off)
                 if width == 0usize {
                     let invalid_start = s.off
-                    let invalid_line = s.line
-                    let invalid_column = s.column
-                    let invalid_column_utf16 = s.column_utf16
-                    take_invalid_utf8(s)
-                    ret token(s, .Invalid, invalid_start, invalid_line, invalid_column, invalid_column_utf16)
+                        take_invalid_utf8(s)
+                    ret token(s, .Invalid, invalid_start)
                 }
                 take_scalar(s, width)
             } else {
@@ -612,10 +756,7 @@ fn next(s: *Scanner) -> Token {
     }
 
     let start = s.off
-    let line = s.line
-    let column = s.column
-    let column_utf16 = s.column_utf16
-    if s.off == s.source.len { ret token(s, .Eof, start, line, column, column_utf16) }
+    if s.off == s.source.len { ret token(s, .Eof, start) }
     let c = s.source[s.off]
 
     if c == 10u8 || c == 13u8 {
@@ -624,10 +765,7 @@ fn next(s: *Scanner) -> Token {
         } else {
             s.off += 1usize
         }
-        s.line += 1usize
-        s.column = 1usize
-        s.column_utf16 = 1usize
-        ret token(s, .Newline, start, line, column, column_utf16)
+        ret token(s, .Newline, start)
     }
 
     if c >= 128u8 {
@@ -637,7 +775,7 @@ fn next(s: *Scanner) -> Token {
         } else {
             take_scalar(s, width)
         }
-        ret token(s, .Invalid, start, line, column, column_utf16)
+        ret token(s, .Invalid, start)
     }
 
     if c == 114u8 && s.off + 1usize < s.source.len && (s.source[s.off + 1usize] == 34u8 || s.source[s.off + 1usize] == 35u8) {
@@ -660,8 +798,8 @@ fn next(s: *Scanner) -> Token {
                     }
                     if closes {
                         take(s, 1usize + hashes)
-                        if !valid { ret token(s, .Invalid, start, line, column, column_utf16) }
-                        ret token(s, .RawString, start, line, column, column_utf16)
+                        if !valid { ret token(s, .Invalid, start) }
+                        ret token(s, .RawString, start)
                     }
                 }
                 if s.source[s.off] == 10u8 || s.source[s.off] == 13u8 {
@@ -670,10 +808,7 @@ fn next(s: *Scanner) -> Token {
                     } else {
                         s.off += 1usize
                     }
-                    s.line += 1usize
-                    s.column = 1usize
-                    s.column_utf16 = 1usize
-                } else {
+                            } else {
                     let raw_byte = s.source[s.off]
                     if raw_byte == 0u8 || (raw_byte < 32u8 && raw_byte != 9u8) {
                         valid = false
@@ -693,14 +828,14 @@ fn next(s: *Scanner) -> Token {
                     }
                 }
             }
-            ret token(s, .Invalid, start, line, column, column_utf16)
+            ret token(s, .Invalid, start)
         }
     }
 
     if is_alpha(c) {
         take(s, 1usize)
         while s.off < s.source.len && is_alnum(s.source[s.off]) { take(s, 1usize) }
-        ret token(s, keyword(s.source, start, s.off), start, line, column, column_utf16)
+        ret token(s, keyword(s.source, start, s.off), start)
     }
 
     if is_digit(c) {
@@ -721,9 +856,9 @@ fn next(s: *Scanner) -> Token {
                 take(s, 1usize)
             }
             if !digits_are_valid(s.source, digits_start, digits_end, base) || !integer_suffix_is_valid(s.source, digits_end, s.off) {
-                ret token(s, .Invalid, start, line, column, column_utf16)
+                ret token(s, .Invalid, start)
             }
-            ret token(s, kind, start, line, column, column_utf16)
+            ret token(s, kind, start)
         }
         let integer_start = start
         while s.off < s.source.len && (is_digit(s.source[s.off]) || s.source[s.off] == 95u8) {
@@ -732,7 +867,7 @@ fn next(s: *Scanner) -> Token {
         let integer_end = s.off
         if !digits_are_valid(s.source, integer_start, integer_end, 10u8) {
             while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
-            ret token(s, .Invalid, start, line, column, column_utf16)
+            ret token(s, .Invalid, start)
         }
         if s.off + 1usize < s.source.len && s.source[s.off] == 46u8 && s.source[s.off + 1usize] != 46u8 && is_digit(s.source[s.off + 1usize]) {
             kind = .Float
@@ -743,7 +878,7 @@ fn next(s: *Scanner) -> Token {
             }
             if !digits_are_valid(s.source, fraction_start, s.off, 10u8) {
                 while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
-                ret token(s, .Invalid, start, line, column, column_utf16)
+                ret token(s, .Invalid, start)
             }
         }
         if s.off < s.source.len && (s.source[s.off] == 101u8 || s.source[s.off] == 69u8) {
@@ -756,17 +891,17 @@ fn next(s: *Scanner) -> Token {
             }
             if !digits_are_valid(s.source, exponent_start, s.off, 10u8) {
                 while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
-                ret token(s, .Invalid, start, line, column, column_utf16)
+                ret token(s, .Invalid, start)
             }
         }
         let suffix_start = s.off
         while s.off < s.source.len && (is_alnum(s.source[s.off]) || s.source[s.off] == 95u8) { take(s, 1usize) }
         if kind == .Float {
-            if !float_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start, line, column, column_utf16) }
+            if !float_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start) }
         } else {
-            if !integer_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start, line, column, column_utf16) }
+            if !integer_suffix_is_valid(s.source, suffix_start, s.off) { ret token(s, .Invalid, start) }
         }
-        ret token(s, kind, start, line, column, column_utf16)
+        ret token(s, kind, start)
     }
 
     if c == 34u8 || c == 39u8 {
@@ -785,7 +920,7 @@ fn next(s: *Scanner) -> Token {
             }
             if s.source[s.off] == 92u8 {
                 take(s, 1usize)
-                if s.off == s.source.len { ret token(s, .Invalid, start, line, column, column_utf16) }
+                if s.off == s.source.len { ret token(s, .Invalid, start) }
                 let escaped = s.source[s.off]
                 if escaped != 110u8 && escaped != 116u8 && escaped != 114u8 && escaped != 92u8 && escaped != 34u8 && escaped != 39u8 && escaped != 48u8 && escaped != 120u8 {
                     valid = false
@@ -814,10 +949,10 @@ fn next(s: *Scanner) -> Token {
             }
             take(s, 1usize)
         }
-        if s.off == s.source.len || s.source[s.off] != quote { ret token(s, .Invalid, start, line, column, column_utf16) }
+        if s.off == s.source.len || s.source[s.off] != quote { ret token(s, .Invalid, start) }
         take(s, 1usize)
-        if !valid || (kind == .Character && character_bytes != 1usize) { ret token(s, .Invalid, start, line, column, column_utf16) }
-        ret token(s, kind, start, line, column, column_utf16)
+        if !valid || (kind == .Character && character_bytes != 1usize) { ret token(s, .Invalid, start) }
+        ret token(s, kind, start)
     }
 
     // The next two bytes, read once (D306): every punctuation token probed up to
@@ -828,138 +963,138 @@ fn next(s: *Scanner) -> Token {
     if s.off + 2usize < s.source.len { e = s.source[s.off + 2usize] }
     if c == 46u8 && d == 46u8 && e == 46u8 {
         take(s, 3usize)
-        ret token(s, .PunctEllipsis, start, line, column, column_utf16)
+        ret token(s, .PunctEllipsis, start)
     }
     if c == 43u8 && d == 37u8 && e == 61u8 {
         take(s, 3usize)
-        ret token(s, .PunctAddWrapAssign, start, line, column, column_utf16)
+        ret token(s, .PunctAddWrapAssign, start)
     }
     if c == 45u8 && d == 37u8 && e == 61u8 {
         take(s, 3usize)
-        ret token(s, .PunctSubWrapAssign, start, line, column, column_utf16)
+        ret token(s, .PunctSubWrapAssign, start)
     }
     if c == 42u8 && d == 37u8 && e == 61u8 {
         take(s, 3usize)
-        ret token(s, .PunctMulWrapAssign, start, line, column, column_utf16)
+        ret token(s, .PunctMulWrapAssign, start)
     }
     if c == 60u8 && d == 60u8 && e == 61u8 {
         take(s, 3usize)
-        ret token(s, .PunctShiftLeftAssign, start, line, column, column_utf16)
+        ret token(s, .PunctShiftLeftAssign, start)
     }
     if c == 62u8 && d == 62u8 && e == 61u8 {
         take(s, 3usize)
-        ret token(s, .PunctShiftRightAssign, start, line, column, column_utf16)
+        ret token(s, .PunctShiftRightAssign, start)
     }
     if c == 46u8 && d == 46u8 {
         take(s, 2usize)
-        ret token(s, .PunctRange, start, line, column, column_utf16)
+        ret token(s, .PunctRange, start)
     }
     if c == 45u8 && d == 62u8 {
         take(s, 2usize)
-        ret token(s, .PunctArrow, start, line, column, column_utf16)
+        ret token(s, .PunctArrow, start)
     }
     if c == 61u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctEqEq, start, line, column, column_utf16)
+        ret token(s, .PunctEqEq, start)
     }
     if c == 33u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctBangEq, start, line, column, column_utf16)
+        ret token(s, .PunctBangEq, start)
     }
     if c == 60u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctLtEq, start, line, column, column_utf16)
+        ret token(s, .PunctLtEq, start)
     }
     if c == 62u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctGtEq, start, line, column, column_utf16)
+        ret token(s, .PunctGtEq, start)
     }
     if c == 60u8 && d == 60u8 {
         take(s, 2usize)
-        ret token(s, .PunctShiftLeft, start, line, column, column_utf16)
+        ret token(s, .PunctShiftLeft, start)
     }
     if c == 62u8 && d == 62u8 {
         take(s, 2usize)
-        ret token(s, .PunctShiftRight, start, line, column, column_utf16)
+        ret token(s, .PunctShiftRight, start)
     }
     if c == 43u8 && d == 37u8 {
         take(s, 2usize)
-        ret token(s, .PunctAddWrap, start, line, column, column_utf16)
+        ret token(s, .PunctAddWrap, start)
     }
     if c == 45u8 && d == 37u8 {
         take(s, 2usize)
-        ret token(s, .PunctSubWrap, start, line, column, column_utf16)
+        ret token(s, .PunctSubWrap, start)
     }
     if c == 42u8 && d == 37u8 {
         take(s, 2usize)
-        ret token(s, .PunctMulWrap, start, line, column, column_utf16)
+        ret token(s, .PunctMulWrap, start)
     }
     if c == 43u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctAddAssign, start, line, column, column_utf16)
+        ret token(s, .PunctAddAssign, start)
     }
     if c == 45u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctSubAssign, start, line, column, column_utf16)
+        ret token(s, .PunctSubAssign, start)
     }
     if c == 42u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctMulAssign, start, line, column, column_utf16)
+        ret token(s, .PunctMulAssign, start)
     }
     if c == 47u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctDivAssign, start, line, column, column_utf16)
+        ret token(s, .PunctDivAssign, start)
     }
     if c == 37u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctRemAssign, start, line, column, column_utf16)
+        ret token(s, .PunctRemAssign, start)
     }
     if c == 38u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctBitAndAssign, start, line, column, column_utf16)
+        ret token(s, .PunctBitAndAssign, start)
     }
     if c == 94u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctBitXorAssign, start, line, column, column_utf16)
+        ret token(s, .PunctBitXorAssign, start)
     }
     if c == 124u8 && d == 61u8 {
         take(s, 2usize)
-        ret token(s, .PunctBitOrAssign, start, line, column, column_utf16)
+        ret token(s, .PunctBitOrAssign, start)
     }
     if c == 38u8 && d == 38u8 {
         take(s, 2usize)
-        ret token(s, .PunctAndAnd, start, line, column, column_utf16)
+        ret token(s, .PunctAndAnd, start)
     }
     if c == 124u8 && d == 124u8 {
         take(s, 2usize)
-        ret token(s, .PunctOrOr, start, line, column, column_utf16)
+        ret token(s, .PunctOrOr, start)
     }
 
     take(s, 1usize)
-    if c == 64u8 { ret token(s, .PunctAt, start, line, column, column_utf16) }
-    if c == 46u8 { ret token(s, .PunctDot, start, line, column, column_utf16) }
-    if c == 44u8 { ret token(s, .PunctComma, start, line, column, column_utf16) }
-    if c == 58u8 { ret token(s, .PunctColon, start, line, column, column_utf16) }
-    if c == 61u8 { ret token(s, .PunctAssign, start, line, column, column_utf16) }
-    if c == 40u8 { ret token(s, .PunctLParen, start, line, column, column_utf16) }
-    if c == 41u8 { ret token(s, .PunctRParen, start, line, column, column_utf16) }
-    if c == 91u8 { ret token(s, .PunctLBracket, start, line, column, column_utf16) }
-    if c == 93u8 { ret token(s, .PunctRBracket, start, line, column, column_utf16) }
-    if c == 123u8 { ret token(s, .PunctLBrace, start, line, column, column_utf16) }
-    if c == 125u8 { ret token(s, .PunctRBrace, start, line, column, column_utf16) }
-    if c == 42u8 { ret token(s, .PunctStar, start, line, column, column_utf16) }
-    if c == 47u8 { ret token(s, .PunctSlash, start, line, column, column_utf16) }
-    if c == 37u8 { ret token(s, .PunctPercent, start, line, column, column_utf16) }
-    if c == 43u8 { ret token(s, .PunctPlus, start, line, column, column_utf16) }
-    if c == 45u8 { ret token(s, .PunctMinus, start, line, column, column_utf16) }
-    if c == 60u8 { ret token(s, .PunctLt, start, line, column, column_utf16) }
-    if c == 62u8 { ret token(s, .PunctGt, start, line, column, column_utf16) }
-    if c == 38u8 { ret token(s, .PunctAmp, start, line, column, column_utf16) }
-    if c == 94u8 { ret token(s, .PunctCaret, start, line, column, column_utf16) }
-    if c == 124u8 { ret token(s, .PunctPipe, start, line, column, column_utf16) }
-    if c == 33u8 { ret token(s, .PunctBang, start, line, column, column_utf16) }
-    if c == 126u8 { ret token(s, .PunctTilde, start, line, column, column_utf16) }
-    ret token(s, .Invalid, start, line, column, column_utf16)
+    if c == 64u8 { ret token(s, .PunctAt, start) }
+    if c == 46u8 { ret token(s, .PunctDot, start) }
+    if c == 44u8 { ret token(s, .PunctComma, start) }
+    if c == 58u8 { ret token(s, .PunctColon, start) }
+    if c == 61u8 { ret token(s, .PunctAssign, start) }
+    if c == 40u8 { ret token(s, .PunctLParen, start) }
+    if c == 41u8 { ret token(s, .PunctRParen, start) }
+    if c == 91u8 { ret token(s, .PunctLBracket, start) }
+    if c == 93u8 { ret token(s, .PunctRBracket, start) }
+    if c == 123u8 { ret token(s, .PunctLBrace, start) }
+    if c == 125u8 { ret token(s, .PunctRBrace, start) }
+    if c == 42u8 { ret token(s, .PunctStar, start) }
+    if c == 47u8 { ret token(s, .PunctSlash, start) }
+    if c == 37u8 { ret token(s, .PunctPercent, start) }
+    if c == 43u8 { ret token(s, .PunctPlus, start) }
+    if c == 45u8 { ret token(s, .PunctMinus, start) }
+    if c == 60u8 { ret token(s, .PunctLt, start) }
+    if c == 62u8 { ret token(s, .PunctGt, start) }
+    if c == 38u8 { ret token(s, .PunctAmp, start) }
+    if c == 94u8 { ret token(s, .PunctCaret, start) }
+    if c == 124u8 { ret token(s, .PunctPipe, start) }
+    if c == 33u8 { ret token(s, .PunctBang, start) }
+    if c == 126u8 { ret token(s, .PunctTilde, start) }
+    ret token(s, .Invalid, start)
 }
 
 fn validate(source: str) -> err {

@@ -22,6 +22,14 @@ type Module = struct {
     name: str,
     path: str,
     text: str,
+    // Where the text's lines begin (D315): tokens carry offsets, and a line is looked
+    // up here when a diagnostic, a trap record or a tooling record asks.
+    lines: []usize,
+    // The module's tokens, scanned once when it is loaded (D316): every pass parses
+    // from these, and the resolver's and checker's token tables point at them.
+    tokens: []lex.Token,
+    // Whether the scanner refused a byte: the parse reports it, a later pass refuses.
+    has_invalid: bool,
     first_import: usize,
     import_count: usize,
     visit_state: u8,
@@ -30,6 +38,7 @@ type Module = struct {
 type Graph = struct {
     modules: []Module,
     imports: []Import,
+    token_scratch: []lex.Token,
     nodes: []syntax.Node,
     children: []syntax.Child,
     project: project.Project,
@@ -95,6 +104,46 @@ fn ensure_tree_pool(a: *mem.Arena, g: *Graph, bytes: usize) -> err {
     ret ok
 }
 
+// Scratch for one module's tokens as they are scanned, before the exact copy is taken:
+// at most a token per byte, plus the end.
+fn ensure_token_pool(a: *mem.Arena, g: *Graph, bytes: usize) -> err {
+    let needed = bytes + 16usize
+    if g.token_scratch.len >= needed { ret ok }
+    var count = g.token_scratch.len * 2usize
+    if count < needed { count = needed }
+    let (scratch, scratch_error) = mem.alloc[lex.Token](a, count)
+    if scratch_error != ok { ret scratch_error }
+    g.token_scratch = scratch
+    ret ok
+}
+
+// A module's tokens, scanned once into the scratch and kept at their own size.
+fn scan_module(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
+    let text = g.modules[module_index].text
+    try ensure_token_pool(a, g, text.len)
+    var scanner = lex.init(text)
+    var count = 0usize
+    var invalid = false
+    while true {
+        if count == g.token_scratch.len { ret Capacity }
+        let token = lex.next(&scanner)
+        if token.kind == .Invalid { invalid = true }
+        g.token_scratch[count] = token
+        count += 1usize
+        if token.kind == .Eof { break }
+    }
+    let (tokens, tokens_error) = mem.alloc[lex.Token](a, count)
+    if tokens_error != ok { ret tokens_error }
+    var at = 0usize
+    while at < count {
+        tokens[at] = g.token_scratch[at]
+        at += 1usize
+    }
+    g.modules[module_index].tokens = tokens
+    g.modules[module_index].has_invalid = invalid
+    ret ok
+}
+
 fn init(g: *Graph, modules: []Module, imports: []Import, nodes: []syntax.Node, children: []syntax.Child) -> err {
     if modules.len == 0usize || imports.len == 0usize || nodes.len == 0usize || children.len == 0usize { ret Capacity }
     g.modules = modules
@@ -124,7 +173,7 @@ fn parse_module(g: *Graph, module_index: usize, tree: *parse.Tree) -> err {
     }
     g.has_parsed = false
     try parse.init_tree(tree, g.nodes, g.children)
-    let parse_error = parse.parse(tree, g.modules[module_index].text)
+    let parse_error = parse.parse_tokens(tree, g.modules[module_index].text, g.modules[module_index].tokens)
     if parse_error != ok { ret parse_error }
     g.parsed = *tree
     g.parsed_module = module_index
@@ -218,7 +267,7 @@ fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     try ensure_tree_pool(a, g, g.modules[module_index].text.len)
     g.has_parsed = false
     try parse.init_tree(&tree, g.nodes, g.children)
-    let parse_error = parse.parse(&tree, g.modules[module_index].text)
+    let parse_error = parse.parse_tokens(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
     if parse_error != ok {
         // Every module is parsed here first, so this is where a syntax error is
         // seen with the module still in hand to name it.
@@ -289,8 +338,13 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     let (text, load_error) = source.load(a, path)
     if load_error != ok { ret (0usize, load_error) }
     let index = g.count
-    g.modules[index] = Module { name: name, path: path, text: text, first_import: 0usize, import_count: 0usize, visit_state: 0u8 }
+    let (lines, lines_error) = lex.line_starts(a, text)
+    if lines_error != ok { ret (0usize, lines_error) }
+    var no_tokens: [1]lex.Token = zero
+    g.modules[index] = Module { name: name, path: path, text: text, lines: lines, tokens: no_tokens[0usize..0usize], has_invalid: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8 }
     g.count += 1usize
+    let scan_error = scan_module(a, g, index)
+    if scan_error != ok { ret (0usize, scan_error) }
     g.total_bytes += text.len
     if text.len > g.largest_bytes { g.largest_bytes = text.len }
     ret (index, ok)

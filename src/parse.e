@@ -226,7 +226,7 @@ fn soft_barrier_follows(p: *Parser) -> bool {
     var following = lex.next(&look)
     while following.kind == .Newline { following = lex.next(&look) }
     if following.kind == .Eof || following.kind == .KwCase || following.kind == .KwDefault { ret true }
-    if following.column == 1usize && is_top_barrier(following.kind) {
+    if lex.at_line_start(look.source, following.start) && is_top_barrier(following.kind) {
         p.soft_top_barrier = true
         p.barrier_pending = true
         p.barrier_keyword = following
@@ -1917,5 +1917,14 @@ fn parse_file(p: *Parser) -> err {
 fn parse(tree: *Tree, source: str) -> err {
     if tree.nodes.len == 0usize || tree.children.len == 0usize { ret InvalidSyntax }
     var p = init(tree, source)
+    ret parse_file(&p)
+}
+
+// The parse over a module's token list (D316): the same parser, its scanner replaying.
+fn parse_tokens(tree: *Tree, source: str, tokens: []const lex.Token) -> err {
+    if tree.nodes.len == 0usize || tree.children.len == 0usize { ret InvalidSyntax }
+    var p = init(tree, source)
+    p.scanner = lex.init_tokens(source, tokens)
+    p.current = lex.next(&p.scanner)
     ret parse_file(&p)
 }
