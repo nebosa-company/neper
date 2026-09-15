@@ -3411,6 +3411,12 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     let (error_block_index, error_block_error) = nir.begin_block(builder)
     if error_block_error != ok || error_block_index != error_block { ret nir.InvalidControlFlow }
     try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, binding_count, defers, 0usize)
+    // A `try` that fails in `main` is `main` returning an error (section 13), and it
+    // wrote nothing (D312): the failure line was on the `ret` path alone. The value is
+    // known to be an error here, so the report is called without the comparison.
+    if module_index == 0usize && check.same(function.name, "main") {
+        try emit_failure_report_call(c, builder, module_index, call_result, c.tokens[node.token_start])
+    }
     let (return_instruction, return_ignored, return_error) = nir.emit(builder, .Return, caller_error_type, false, 0usize, c.tokens[node.token_start])
     if return_error != ok { ret return_error }
     try nir.add_operand(builder, return_instruction, call_result)
@@ -3497,17 +3503,12 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         try nir.set_branch_targets(builder, branch_instruction, report_block, return_block)
         let (report_index, report_block_error) = nir.begin_block(builder)
         if report_block_error != ok || report_index != report_block { ret nir.InvalidControlFlow }
-        let (report_ref, report_ref_error) = nir.intern_function(builder, module_index, "neper_report_failure", 0usize)
-        if report_ref_error != ok { ret report_ref_error }
-        let (report_call, report_ignored, report_call_error) = nir.emit(builder, .Call, zero, false, report_ref, token)
-        if report_call_error != ok { ret report_call_error }
-        try nir.add_operand(builder, report_call, values[0usize])
+        try emit_failure_report_call(c, builder, module_index, values[0usize], token)
         let (to_return, to_return_error) = emit_branch(builder, token)
         if to_return_error != ok { ret to_return_error }
         try nir.set_branch_targets(builder, to_return, return_block, 0usize)
         let (return_index, return_block_error) = nir.begin_block(builder)
         if return_block_error != ok || return_index != return_block { ret nir.InvalidControlFlow }
-        c.main_reports_failure = true
     }
     let (instruction, ignored, emit_error) = nir.emit(builder, .Return, return_type, false, 0usize, c.tokens[node.token_start])
     if emit_error != ok { ret emit_error }
@@ -3516,6 +3517,18 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         try nir.add_operand(builder, instruction, values[at])
         at += 1usize
     }
+    ret ok
+}
+
+// The call that writes `main`'s failure line, and the note that the function it calls
+// has to be synthesized after the module.
+fn emit_failure_report_call(c: *check.Checker, builder: *nir.Builder, module_index: usize, value: usize, token: lex.Token) -> err {
+    let (report_ref, report_ref_error) = nir.intern_function(builder, module_index, "neper_report_failure", 0usize)
+    if report_ref_error != ok { ret report_ref_error }
+    let (report_call, report_ignored, report_call_error) = nir.emit(builder, .Call, zero, false, report_ref, token)
+    if report_call_error != ok { ret report_call_error }
+    try nir.add_operand(builder, report_call, value)
+    c.main_reports_failure = true
     ret ok
 }
 

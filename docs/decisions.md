@@ -6354,3 +6354,15 @@ it prints was measured, and `run` takes the child's from `wait_usage`; the boots
 compiler compiling a three-line program is 9 MB, the same job by the self-hosted compiler
 128 MB -- its debug build fills every pool it sizes (section 11), which is what the row
 is for. `os_process` checks both calls.
+
+## D312 -- A failing `try` in `main` writes the failure line
+
+Section 13 says `main` returning anything but `ok` writes `error: <qualified name>` to
+stderr, and D199 put that line on the `ret` path: a `ret err_value` compared the value
+to `ok` and called `neper_report_failure`. A `try` that fails in `main` returns the
+error too, and it returned it silently -- the compiler compiling a program past its
+arena exited 1 with nothing on stderr, and an hour went to finding which of its `try`s
+had. The `try` lowering now calls the reporter on its error path when the function is
+module 0's `main`; the value is known to be an error there, so there is no comparison.
+The call and the note that the reporter must be synthesized after the module are one
+helper both paths use. `failure_line` gains a `try` case.

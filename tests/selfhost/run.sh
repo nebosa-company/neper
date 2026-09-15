@@ -1426,6 +1426,10 @@ failure_status=0
 failure_os=$("$failure_path" os 2>&1) || failure_status=$?
 [ "$failure_status" -eq 1 ]
 [ "$failure_os" = 'error: e.os.NotFound' ]
+failure_status=0
+failure_try=$("$failure_path" try 2>&1) || failure_status=$?
+[ "$failure_status" -eq 1 ]
+[ "$failure_try" = 'error: main.Tried' ]
 failure_none=$("$failure_path" none 2>&1)
 [ "$failure_none" = '' ]
 # The `tag` row -- a payload read or written under another member's tag -- and the

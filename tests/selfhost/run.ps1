@@ -1448,6 +1448,8 @@ $failureOwn = & $failurePath own 2>&1
 if ($LASTEXITCODE -ne 1 -or ($failureOwn -join "`n") -ne 'error: main.Boom') { throw "main returning its own error did not write the failure line: exit $LASTEXITCODE, $($failureOwn -join "`n")" }
 $failureOs = & $failurePath os 2>&1
 if ($LASTEXITCODE -ne 1 -or ($failureOs -join "`n") -ne 'error: e.os.NotFound') { throw "main returning e.os's error did not write the failure line: exit $LASTEXITCODE, $($failureOs -join "`n")" }
+$failureTry = & $failurePath try 2>&1
+if ($LASTEXITCODE -ne 1 -or ($failureTry -join "`n") -ne 'error: main.Tried') { throw "a failing try in main did not write the failure line: exit $LASTEXITCODE, $($failureTry -join "`n")" }
 $failureNone = & $failurePath none 2>&1
 if ($LASTEXITCODE -ne 0 -or ($failureNone -join "`n") -ne '') { throw 'main returning ok wrote a failure line' }
 # The `tag` row -- a payload read or written under another member's tag -- and the
