@@ -7158,3 +7158,30 @@ The warm build of the million lines, Windows, wall:
 
 The compiler's own warm release build is 150 ms to 65 ms. What remains of the link is
 sequential by nature: reachability, the layout, and the module and error tables.
+
+## D337 -- A relocated build is the same build: the image spells its sources from the root
+
+The M2 gate's last harness case but the device one: the same sources at another path
+build to the same image. They did not. An image carries the path of every module in
+its line table -- what a trap prints as `file:line:col` and in each frame, and what
+the artifact's Lines section records -- and that path was the module's as the loader
+formed it: the operand as spelled, and the sibling modules under the project root as
+discovered, so `src/main.e`, `./src/main.e` and `D:/.../src/main.e` were three images,
+and a toolchain module was spelled by the toolchain's absolute root.
+
+A module has a `spelling` now, section 2's identity as a path: `src/` or `lib/` and
+the path under it for a module of the project, `lib/` and the path for one of the
+toolchain, the basename for a file under no root; `/`-separated; a leading `./` on the
+operand ignored, since the project root is discovered as `.` from both spellings.
+The lowering, the trap text and the artifact use it; diagnostics keep the operand as
+given, which is what a harness passed and expects back. A trap now reads
+`src/leaf.e:3:13: trap[unreachable]: ...`, which is the spec's own example. The run
+and test drivers, which map a trap back onto the operand by comparing the printed
+file with what the child spells, compare with the spelling; the test runner's is its
+basename, lying under no root.
+
+Both suites copy the inlining fixture to two places and build it from inside each as
+`src/main.e` and `./src/main.e`, and by absolute path, requiring one image and the
+root-relative trap; the `run --json` golden's stderr changed from the operand's
+`../../../../tests/conformance/tools/run_trap.e` to `run_trap.e`, its identity's
+path, and nothing else in it moved.

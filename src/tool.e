@@ -419,7 +419,7 @@ fn test_error_name(out: *Out, stderr_bytes: str, module_name: str, spelled: str)
 
 // `run --json` (D231): the program's exit status and its whole stdout and stderr as one
 // record, with section 11's trap record read back as the `trap` payload (D253).
-// `spelled` is the operand as the compiler was given it, which is how the child prints
+// `spelled` is the operand as the child prints it -- its reproducible spelling (D337),
 // it; `path` is section 2's operand identity, the basename.
 fn run_record(a: *mem.Arena, status: i32, stdout_bytes: str, stderr_bytes: str, module_name: str, path: str, source: str, spelled: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, (stdout_bytes.len + stderr_bytes.len) * 6usize + 256usize)

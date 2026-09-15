@@ -1030,7 +1030,7 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
     try mark_module_references(builder, c, module_index)
     let (module_name, module_name_error) = intern(table, g.modules[module_index].name)
     if module_name_error != ok { ret module_name_error }
-    let (source_path, source_path_error) = intern(table, g.modules[module_index].path)
+    let (source_path, source_path_error) = intern(table, g.modules[module_index].spelling)
     if source_path_error != ok { ret source_path_error }
     var import_at = g.modules[module_index].first_import
     while import_at < g.modules[module_index].first_import + g.modules[module_index].import_count {
@@ -2163,7 +2163,7 @@ fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *
     if module_index >= g.count { ret InvalidArtifact }
     let (source_hash, source_hash_error) = source_text_hash(g.modules[module_index].text)
     if source_hash_error != ok { ret source_hash_error }
-    let (path_index, path_error) = string_index(table, g.modules[module_index].path)
+    let (path_index, path_error) = string_index(table, g.modules[module_index].spelling)
     if path_error != ok { ret path_error }
     try binary.little_u32(output, path_index)
     try binary.little_u64(output, source_hash)

@@ -2040,7 +2040,9 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     if suite_end > suite_start { suite_ms = (suite_end - suite_start) / 1000000usize }
     var timeout_s = (timeout_ms + 999usize) / 1000usize
     if timeout_s == 0usize { timeout_s = 1usize }
-    try tool.test_json(a, module_name, "operand", identity, text, runner_path, names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
+    // The child prints the runner by its reproducible spelling (D337), the basename
+    // for a file under no source root.
+    try tool.test_json(a, module_name, "operand", identity, text, basename(runner_path), names[0usize..count], lines[0usize..count], outcomes[0usize..count], statuses[0usize..count], durations[0usize..count], stdouts[0usize..count], stderrs[0usize..count], count, suite_ms, timeout_s)
     var any = false
     at = 0usize
     while at < count {
@@ -7262,7 +7264,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                         os.exit(2i32)
                         ret ok
                     }
-                    try tool.run_record(a, status, stdout_captured, stderr_captured, loaded.modules[0usize].name, basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].path)
+                    try tool.run_record(a, status, stdout_captured, stderr_captured, loaded.modules[0usize].name, basename(args[2usize]), loaded.modules[0usize].text, loaded.modules[0usize].spelling)
                     try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
                     try write_json_string(&report, args[6usize])
                     try write_all(&report, ",\"process_exit_code\":")

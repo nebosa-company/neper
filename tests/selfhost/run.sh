@@ -1776,6 +1776,28 @@ chmod +x "$nested_release"
 nested_status=0
 "$nested_release" || nested_status=$?
 [ "$nested_status" -eq 5 ]
+# The relocated build (D337): the same sources at two places, named four ways -- from
+# inside each as `src/main.e` and `./src/main.e`, and by absolute path -- are one image,
+# and its trap names `src/leaf.e`.
+reloc_a="$test_build/relocated-a"
+reloc_b="$test_build/relocated-b"
+for reloc_dir in "$reloc_a" "$reloc_b"; do
+    rm -rf "$reloc_dir"
+    mkdir -p "$reloc_dir"
+    cp -r "$nested_fixture/src" "$reloc_dir/src"
+done
+(cd "$reloc_a" && [ "$($test_build/neper-self emit-executable src/main.e "$repo" x64 linux rel --release)" = 'executable written' ])
+(cd "$reloc_a" && [ "$($test_build/neper-self emit-executable ./src/main.e "$repo" x64 linux dot --release)" = 'executable written' ])
+(cd "$reloc_b" && [ "$($test_build/neper-self emit-executable src/main.e "$repo" x64 linux rel --release)" = 'executable written' ])
+(cd "$reloc_b" && [ "$($test_build/neper-self emit-executable "$reloc_b/src/main.e" "$repo" x64 linux abs --release)" = 'executable written' ])
+cmp "$reloc_a/rel" "$reloc_a/dot"
+cmp "$reloc_a/rel" "$reloc_b/rel"
+cmp "$reloc_a/rel" "$reloc_b/abs"
+chmod +x "$reloc_b/abs"
+reloc_status=0
+reloc_output=$("$reloc_b/abs" trap 2>&1) || reloc_status=$?
+[ "$reloc_status" -eq 134 ]
+case "$reloc_output" in 'src/leaf.e:3:13: trap[unreachable]'*) ;; *) printf %s "the relocated build's trap is not spelled from the project root: $reloc_output" >&2; echo >&2; exit 1 ;; esac
 # `-j 1 --perturb` (D331): the inlined release image on one worker, turned around.
 nested_jobs="$test_build/inline-nested-release-jobs"
 nested_jobs_written=$($test_build/neper-self emit-executable "$nested_fixture/src/main.e" "$repo" x64 linux "$nested_jobs" --release -j 1 --perturb)

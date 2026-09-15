@@ -41,6 +41,61 @@ type Module = struct {
     // The manifest's digests (D323), hex, once computed or read from the artifact.
     sha256: str,
     interface_sha256: str,
+    // The reproducible spelling (D337): section 2's identity as a path -- `src/` or
+    // `lib/` under the project, `lib/` under the toolchain, the basename otherwise,
+    // `/`-separated -- for what an image carries, so a build is the same wherever the
+    // sources sit and however the operand was spelled.
+    spelling: str,
+}
+
+fn spelling_of(a: *mem.Arena, g: *Graph, given: str) -> (str, err) {
+    var prefix = ""
+    var relative = ""
+    // A leading `./` is the operand's spelling, not a directory: the project root is
+    // discovered as `.` from `src/main.e` and `./src/main.e` alike.
+    var path = given
+    while path.len > 2usize && path[0usize] == 46u8 && (path[1usize] == 47u8 || path[1usize] == 92u8) { path = path[2usize..path.len] }
+    let (src_relative, under_src) = project.relative_under(path, g.project.root, "src")
+    let (lib_relative, under_lib) = project.relative_under(path, g.project.root, "lib")
+    let (toolchain_relative, under_toolchain) = project.relative_under(path, g.toolchain_root, "lib")
+    if under_src && g.project.has_sources {
+        prefix = "src/"
+        relative = src_relative
+    } else {
+        if under_lib && g.project.has_sources {
+            prefix = "lib/"
+            relative = lib_relative
+        } else {
+            if under_toolchain {
+                prefix = "lib/"
+                relative = toolchain_relative
+            } else {
+                var start = 0usize
+                var scan = 0usize
+                while scan < path.len {
+                    if path[scan] == 47u8 || path[scan] == 92u8 { start = scan + 1usize }
+                    scan += 1usize
+                }
+                relative = path[start..path.len]
+            }
+        }
+    }
+    let (spelled, spelled_error) = mem.alloc[u8](a, prefix.len + relative.len)
+    if spelled_error != ok { ret ("", spelled_error) }
+    var at = 0usize
+    while at < prefix.len {
+        spelled[at] = prefix[at]
+        at += 1usize
+    }
+    var from = 0usize
+    while from < relative.len {
+        var c = relative[from]
+        if c == 92u8 { c = 47u8 }
+        spelled[at] = c
+        at += 1usize
+        from += 1usize
+    }
+    ret (spelled[0usize..at], ok)
 }
 
 type Graph = struct {
@@ -401,7 +456,9 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     var no_tokens: [1]lex.Token = zero
     var no_lines: [1]usize = zero
     var no_tree: parse.Tree = zero
-    g.modules[index] = Module { name: name, path: path, text: "", lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "" }
+    let (spelling, spelling_error) = spelling_of(a, g, path)
+    if spelling_error != ok { ret (0usize, spelling_error) }
+    g.modules[index] = Module { name: name, path: path, text: "", lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }

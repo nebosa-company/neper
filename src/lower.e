@@ -5132,9 +5132,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     if function.generic { ret check.Unsupported }
     let (nir_function, begin_error) = nir.begin_function(builder, function.owner_module_index, name, function.instance_id)
     if begin_error != ok { ret begin_error }
-    builder.functions[nir_function].path = g.modules[function.module_index].path
+    builder.functions[nir_function].path = g.modules[function.module_index].spelling
     builder.functions[nir_function].module_name = g.modules[function.owner_module_index].name
-    builder.current_path = g.modules[function.module_index].path
+    builder.current_path = g.modules[function.module_index].spelling
     builder.current_text = g.modules[function.module_index].text
     builder.current_lines = g.modules[function.module_index].lines
     builder.site_line = 0usize
@@ -5883,9 +5883,9 @@ fn lower_formatter_instance(c: *check.Checker, g: *graph.Graph, module_index: us
     let (nir_function, begin_error) = nir.begin_function(builder, instance.owner_module_index, instance.name, instance.instance_id)
     if begin_error != ok { ret begin_error }
     // An instance's tokens are the template's, so the record names the template's file.
-    builder.functions[nir_function].path = g.modules[instance.module_index].path
+    builder.functions[nir_function].path = g.modules[instance.module_index].spelling
     builder.functions[nir_function].module_name = g.modules[instance.owner_module_index].name
-    builder.current_path = g.modules[instance.module_index].path
+    builder.current_path = g.modules[instance.module_index].spelling
     builder.current_text = g.modules[instance.module_index].text
     builder.current_lines = g.modules[instance.module_index].lines
     builder.site_line = 0usize
@@ -6053,9 +6053,9 @@ fn synthesize_failure_report(c: *check.Checker, g: *graph.Graph, builder: *nir.B
     let boolean = check.make_type(.Bool, "bool", module_index)
     let (nir_function, begin_error) = nir.begin_function(builder, module_index, "neper_report_failure", 0usize)
     if begin_error != ok { ret begin_error }
-    builder.functions[nir_function].path = g.modules[module_index].path
+    builder.functions[nir_function].path = g.modules[module_index].spelling
     builder.functions[nir_function].module_name = g.modules[module_index].name
-    builder.current_path = g.modules[module_index].path
+    builder.current_path = g.modules[module_index].spelling
     builder.current_text = g.modules[module_index].text
     builder.current_lines = g.modules[module_index].lines
     builder.site_line = 0usize

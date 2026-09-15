@@ -1648,6 +1648,35 @@ $nestedReleaseWritten = & $compiler emit-executable (Join-Path $nestedFixture 's
 if ($LASTEXITCODE -ne 0 -or $nestedReleaseWritten -ne 'executable written') { throw 'nested inlining release emission failed' }
 & $nestedRelease
 if ($LASTEXITCODE -ne 5) { throw "the nested release build did not compute through both copies: exit $LASTEXITCODE" }
+# The relocated build (D337): the same sources at two places, named four ways -- from
+# inside each as `src/main.e` and `./src/main.e`, and by absolute path -- are one image,
+# and its trap names `src/leaf.e`.
+$relocA = Join-Path $testBuild 'relocated-a'
+$relocB = Join-Path $testBuild 'relocated-b'
+foreach ($relocDir in @($relocA, $relocB)) {
+    if (Test-Path -LiteralPath $relocDir) { Remove-Item -Recurse -Force -LiteralPath $relocDir }
+    New-Item -ItemType Directory -Force -Path $relocDir | Out-Null
+    Copy-Item -Recurse (Join-Path $nestedFixture 'src') (Join-Path $relocDir 'src')
+}
+$relocCases = @(
+    @{ Dir = $relocA; Operand = 'src\main.e'; Out = 'rel.exe' },
+    @{ Dir = $relocA; Operand = '.\src\main.e'; Out = 'dot.exe' },
+    @{ Dir = $relocB; Operand = 'src\main.e'; Out = 'rel.exe' },
+    @{ Dir = $relocB; Operand = (Join-Path $relocB 'src\main.e'); Out = 'abs.exe' }
+)
+foreach ($relocCase in $relocCases) {
+    Push-Location $relocCase.Dir
+    try {
+        $relocWritten = & $compiler emit-executable $relocCase.Operand $repo 'x64' 'windows' $relocCase.Out --release
+        if ($LASTEXITCODE -ne 0 -or $relocWritten -ne 'executable written') { throw "the relocated build did not compile: $($relocCase.Operand)" }
+    } finally { Pop-Location }
+}
+$relocHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $relocA 'rel.exe')).Hash
+foreach ($relocOther in @((Join-Path $relocA 'dot.exe'), (Join-Path $relocB 'rel.exe'), (Join-Path $relocB 'abs.exe'))) {
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $relocOther).Hash -ne $relocHash) { throw "a relocated build differs: $relocOther" }
+}
+$relocTrap = (& (Join-Path $relocB 'abs.exe') trap 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 134 -or $relocTrap -notmatch '^src/leaf\.e:3:13: trap\[unreachable\]') { throw "the relocated build's trap is not spelled from the project root: $relocTrap" }
 # `-j 1 --perturb` (D331): the inlined release image on one worker, turned around.
 $nestedJobs = Join-Path $testBuild 'inline-nested-release-jobs.exe'
 $nestedJobsWritten = & $compiler emit-executable (Join-Path $nestedFixture 'src\main.e') $repo 'x64' 'windows' $nestedJobs --release -j 1 --perturb
