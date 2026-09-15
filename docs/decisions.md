@@ -7073,3 +7073,29 @@ count, and an error declared for a caller's `err == os.NotFound` is used by a
 comparison in another module, never raised; types and constants do not reach the
 link at all. A count of zero-reference declarations is a checker pass -- a
 `check --unused` someday -- not a build statistic.
+
+## D335 -- `--stats` as a record in the stream (planned)
+
+`--stats` (D308) prints a table on stderr so `run --json`'s stream on stdout stays a
+stream, and the plain `emit-executable --json` path returns its result record before
+`stats.print` is reached at all -- `build --json --stats` prints nothing. Nothing
+under `benchmarks/` or `tests/` reads the table; its only reader is a person.
+
+With `--json`, `--stats` will emit one `{"record":"stats", ...}` line on stdout
+before the `result` record, and the stderr table stays for the plain path. The
+record is flat: one key per row, snake_case, values under the scalar-only rule
+`result.data` already has (`string`, `number`, `boolean`, `null`), so the schema
+gains a `stats` definition with `additionalProperties` of scalars and nothing
+nested. Rows that print several values -- module sizes, the target, the executable
+-- become a key each: `module_size_min`, `module_size_median`, `module_size_max`,
+`target_arch`, `target_os`, `image_bytes`. Phases are `phase_<name>_ms`, the run's
+rows `run_ms` and `run_exit_code` (`null` when nothing ran), and `--stats-full`'s
+pools `pool_<name>_capacity` and `pool_<name>_used`.
+
+One row list, two renderings: `stats.e` already routes every row through
+`row_number`, `row_text`, `row_ms` and `row_bytes`, so a `json` flag on `Build`
+switches those helpers to `"key":value,` and there is no second table to drift
+from the first. The trap is `number`: the table groups thousands with an
+apostrophe (D308), and the record must write bare digits, so the flag reaches it
+too. A fixture under `tests/conformance/tools` pins the record on both hosts and
+validates it against the schema, as every other record has (D250).
