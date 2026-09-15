@@ -401,6 +401,17 @@ type Checker = struct {
     fork_signatures: usize,
     // Which fork this is: zero for the program's checker, a worker's number for its.
     fork_id: usize,
+    // The body sweep's answers kept for the lowering (D327): per module, per tree
+    // node, the expected and resulting types as ids in `memo_types`, each plus one,
+    // packed as `(expected + 1) << 32 | (result + 1)`; zero is no answer. Only a
+    // plain body's -- an instance's or an unrolled iteration's answers depend on
+    // bindings the node does not say -- and only on a worker's checker (`memo_on`),
+    // whose arena keeps the tables from the sweep to the lowering.
+    memo_on: bool,
+    memo_tables: [][]usize,
+    memo_types: []Type,
+    memo_type_count: usize,
+    memo_slots: []usize,
     // The (module, table, name) index over the declaration tables (D303): table 1 is
     // functions, 2 aggregates, 3 aliases, 4 constants, 5 globals. Absent, the finders scan.
     names: lookup.Index,
@@ -9125,7 +9136,76 @@ fn is_fallible(c: *Checker, function: Function) -> bool {
     ret last.kind == .Err
 }
 
+// A type's id in the memo, interned by every field `same_expectation` compares;
+// false when the table is full, and that answer is simply not kept.
+fn memo_intern(c: *Checker, ty: Type) -> (usize, bool) {
+    if c.memo_slots.len == 0usize { ret (0usize, false) }
+    var h = 1469598103934665603usize
+    // The kind is compared, not hashed: an enum does not convert to an integer here.
+    h = (h ^ ty.module_index) *% 1099511628211usize
+    h = (h ^ ty.element) *% 1099511628211usize
+    h = (h ^ ty.array_length) *% 1099511628211usize
+    var flags = 0usize
+    if ty.has_element { flags += 1usize }
+    if ty.is_const { flags += 2usize }
+    if ty.has_length { flags += 4usize }
+    h = (h ^ flags) *% 1099511628211usize
+    var at = 0usize
+    while at < ty.name.len {
+        h = (h ^ usize(ty.name[at])) *% 1099511628211usize
+        at += 1usize
+    }
+    let mask = c.memo_slots.len - 1usize
+    var probe = h & mask
+    while true {
+        let held = c.memo_slots[probe]
+        if held == 0usize {
+            if c.memo_type_count * 2usize >= c.memo_slots.len || c.memo_type_count == c.memo_types.len { ret (0usize, false) }
+            c.memo_types[c.memo_type_count] = ty
+            c.memo_slots[probe] = c.memo_type_count + 1usize
+            c.memo_type_count += 1usize
+            ret (c.memo_type_count - 1usize, true)
+        }
+        if same_expectation(c.memo_types[held - 1usize], ty) { ret (held - 1usize, true) }
+        probe = (probe + 1usize) & mask
+    }
+    ret (0usize, false)
+}
+
+fn memo_wanted(c: *Checker, module_index: usize, node_index: usize) -> bool {
+    if !c.memo_on || c.active_arguments || c.comptime_binding_count != 0usize { ret false }
+    ret module_index < c.memo_tables.len && node_index < c.memo_tables[module_index].len
+}
+
+// A module's memo, made once its tree is known, before its bodies are checked.
+fn memo_module(c: *Checker, module_index: usize, node_count: usize) -> err {
+    if !c.memo_on || module_index >= c.memo_tables.len || c.memo_tables[module_index].len != 0usize { ret ok }
+    let (table, table_error) = mem.alloc[usize](c.arena, node_count + 1usize)
+    if table_error != ok { ret table_error }
+    var at = 0usize
+    while at < table.len {
+        table[at] = 0usize
+        at += 1usize
+    }
+    c.memo_tables[module_index] = table
+    ret ok
+}
+
 fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (Type, err) {
+    if memo_wanted(c, module_index, node_index) {
+        let entry = c.memo_tables[module_index][node_index]
+        if entry != 0usize {
+            let (expected_id, expected_known) = memo_intern(c, expected)
+            if expected_known && (entry >> 32usize) == expected_id + 1usize { ret (c.memo_types[(entry & 4294967295usize) - 1usize], ok) }
+        }
+        let (fresh, fresh_error) = check_expr_uncached(c, g, tree, module_index, node_index, expected)
+        if fresh_error == ok {
+            let (expected_id, expected_known) = memo_intern(c, expected)
+            let (result_id, result_known) = memo_intern(c, fresh)
+            if expected_known && result_known { c.memo_tables[module_index][node_index] = ((expected_id + 1usize) << 32usize) | (result_id + 1usize) }
+        }
+        ret (fresh, fresh_error)
+    }
     var slot = 0usize
     var start = 0usize
     var end = 0usize
@@ -11508,6 +11588,7 @@ fn bodies_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_inde
     var tree: parse.Tree = zero
     try graph.parse_module(g, module_index, &tree)
     try tokenize_module(c, g, module_index)
+    try memo_module(c, module_index, tree.count)
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]

@@ -6808,3 +6808,40 @@ the compiler's own sweep 80 ms to 30 ms. Under `--time` each phase now prints it
 workers' times and whether the generous one had to step in. A worker costs about 690 MB of arena for the two-million-line program
 and 150 MB for the compiler, so a compiler with the default gibibyte runs three
 workers on itself.
+
+## D327 -- The settle writes an interface only when an edge asks, and the sweep's answers reach the lowering
+
+Two things the profile of a cold build showed being done for nobody.
+
+The settle (D319, D322) walked the modules in dependency order and, for every one to
+be rebuilt, wrote its fresh interface and indexed its declarations by name -- so that
+an unchanged dependent's recorded edges could be checked against them. A cold build
+has no unchanged module, so it wrote and indexed every interface for nothing: 1.15 s
+of the two-million-line program's build, 0.3 s of the five-hundred-thousand-line
+one's, all sequential. A rebuilt module's interface is now written and indexed the
+first time an edge asks for it (`settle_edges`), which the dependency order makes
+sound: by then its declarations are final. The cold settle is 0 ms; a hot build's
+touches only the rebuilt modules something unchanged depends on.
+
+Lowering asks the checker the type of every expression it lowers, and the checker's
+cache (D318) was scoped to one function's check or lowering, so lowering a module
+re-checked every body it had just checked: thirteen percent of a cold build's cycles.
+A worker's checker keeps the sweep's answers now (`memo_tables`): per module, per
+tree node, the expected and resulting types as ids in a table of interned types, kept
+on the worker's arena from its sweep to its lowering -- which is what D326's one
+worker per module makes possible. Only a plain body's answers are kept: an
+instance's, or an unrolled iteration's, depend on bindings the node does not name,
+and those keep the per-scope cache. The lowering of the five-hundred-thousand-line
+program's modules is fourteen percent shorter on every worker.
+
+Found on the way: `build/rb.sh` hid a failed bootstrap stage behind a stale stage
+one for two edits (`*=` is not bootstrap syntax); it stops loudly now. And the
+two-million-line release build could not be measured again this evening: its eleven
+gibibytes of commit no longer fit beside what else the machine was running, which is
+an argument for sharing the workers' declaration tables rather than copying them.
+
+Measured, cold, with the machine's memory back and every image byte for byte the
+D325 compiler's in both modes: the two-million-line program 7.6 s debug and 7.4 s
+release (were 9.7 and 10.3), its settle 1.15 s to 0 and its lowering phase 5.1 s to
+4.2 s and 3.6 s; the five-hundred-thousand-line program 1.8 s in both modes (was
+2.6).

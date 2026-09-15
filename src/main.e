@@ -3369,7 +3369,7 @@ fn settle_index(a: *mem.Arena, s: *Settle, fresh: [][]const u8, module_index: us
 }
 
 // Whether every edge an artifact recorded still holds against the target's interface.
-fn settle_edges(a: *mem.Arena, s: *Settle, fresh: [][]const u8, old: []const u8) -> (bool, err) {
+fn settle_edges(a: *mem.Arena, s: *Settle, fresh: [][]const u8, c: *check.Checker, g: *graph.Graph, old: []const u8) -> (bool, err) {
     let (edge_count, count_error) = em.artifact_dependency_count(old)
     if count_error != ok { ret (false, count_error) }
     var edge_at = 0usize
@@ -3380,6 +3380,14 @@ fn settle_edges(a: *mem.Arena, s: *Settle, fresh: [][]const u8, old: []const u8)
         if target_name_error != ok { ret (false, target_name_error) }
         let (target_at, found_target) = lookup.find(&s.modules, 0usize, 0usize, target_name)
         if !found_target { ret (false, ok) }
+        // A rebuilt target's interface, written and indexed the first time an edge
+        // asks (D327): the walk is in dependency order, so its declarations are final.
+        if fresh[target_at].len == 0usize {
+            let interface_error = settle_interface(a, s, fresh, c, g, target_at)
+            if interface_error != ok { ret (false, interface_error) }
+            let index_error = settle_index(a, s, fresh, target_at)
+            if index_error != ok { ret (false, index_error) }
+        }
         let (edge_name, edge_name_error) = artifact_string(a, old, dependency.name_index)
         if edge_name_error != ok { ret (false, edge_name_error) }
         let (cursor, found_declaration) = lookup.find(&s.declarations, target_at, 0usize, edge_name)
@@ -3429,7 +3437,7 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
             let (new_hash, new_hash_error) = em.source_text_hash(g.modules[module_at].text)
             let (old_mode, old_mode_error) = em.artifact_mode(old)
             if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
-                let (holds, edges_error) = settle_edges(a, &s, fresh, old)
+                let (holds, edges_error) = settle_edges(a, &s, fresh, c, g, old)
                 if edges_error != ok { ret edges_error }
                 keep[module_at] = holds
             }
@@ -3528,7 +3536,7 @@ fn settle_hot(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, triple: str, mo
             continue
         }
         if hot.unchanged[module_index] {
-            let (holds, edges_error) = settle_edges(a, &s, fresh, held[module_index])
+            let (holds, edges_error) = settle_edges(a, &s, fresh, c, g, held[module_index])
             if edges_error != ok { ret edges_error }
             if holds {
                 keep[module_index] = true
@@ -3539,9 +3547,9 @@ fn settle_hot(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, triple: str, mo
             held[module_index] = no_bytes
             try declare_late(a, c, g, module_index, list, listed)
         }
-        // Rebuilt: its fresh interface stands for what depends on it.
-        try settle_interface(a, &s, fresh, c, g, module_index)
-        try settle_index(a, &s, fresh, module_index)
+        // Rebuilt: its fresh interface stands for what depends on it, written when an
+        // unchanged dependent's edges first ask for it (D327). A cold build, with
+        // nothing unchanged, wrote and indexed every module's interface for nobody.
     }
     ret ok
 }
@@ -5224,6 +5232,30 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     into.fork_types = from.type_count
     into.fork_aggregates = from.aggregate_count
     into.fork_signatures = from.function_signature_count
+    // The memo (D327): a table per module, made when its bodies are checked, and the
+    // types the answers are given as, interned.
+    var memo_modules = 1usize
+    if from.has_graph { memo_modules = from.graph.count + 1usize }
+    let (memo_tables, memo_tables_error) = mem.alloc[[]usize](a, memo_modules)
+    if memo_tables_error != ok { ret memo_tables_error }
+    var memo_at = 0usize
+    while memo_at < memo_tables.len {
+        var none: []usize = zero
+        memo_tables[memo_at] = none
+        memo_at += 1usize
+    }
+    into.memo_tables = memo_tables
+    let (memo_types, memo_types_error) = mem.alloc[check.Type](a, sized(4096usize, bytes, 64usize))
+    if memo_types_error != ok { ret memo_types_error }
+    into.memo_types = memo_types
+    into.memo_type_count = 0usize
+    var memo_slot_count = 8192usize
+    while memo_slot_count < memo_types.len * 4usize { memo_slot_count = memo_slot_count * 2usize }
+    let (memo_slots, memo_slots_error) = mem.alloc[usize](a, memo_slot_count)
+    if memo_slots_error != ok { ret memo_slots_error }
+    try clear_usizes(memo_slots)
+    into.memo_slots = memo_slots
+    into.memo_on = true
     into.interp_ready = false
     into.arena = a
     ret ok
