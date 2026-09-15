@@ -7013,3 +7013,37 @@ CPUID gate in both runtime assemblies -- two gigabytes a second, five millisecon
 for the image -- because it is assembly on two platforms for a hash the warm path
 need not run at all. It stays the answer if the cold build's manifest time ever
 matters, where every source is hashed once and the reuse saves nothing.
+
+## D333 -- The compiler's hashes from `e.algo.hash` and `e.crypto.hash` (planned)
+
+`src/artifact_hash.e` carries its own xxHash64, FNV-1a, CRC-32C and SHA-256 because
+D238 wrote them under the bootstrap's limits -- every value a `usize`, arithmetic
+masked to 32 bits, no `u32`, no wrapping operator. Those limits are gone: the file
+itself uses `+%` and `*%`, and `em.e` uses `u64` throughout. What is left is
+duplication -- xxHash64 in `lib/e/algo/hash.e` and here, SHA-256 in
+`lib/e/crypto/hash.e` and here -- and a compiler that imports `e.mem`, `e.os`,
+`e.str` and `e.io` from the library by habit rather than by any rule.
+
+The compiler will call the library for the primitives and keep what is its own.
+`xxhash64` is `algo.hash.xxhash64(bytes, 0u64)`. `fnv1a32` is the library's, and
+`qualified_error_value` -- the module-dot-name fold D6 pins -- stays here and calls
+it. `sha256_hex` becomes `crypto.hash.sha256` and a hex wrapper kept here; the
+compiler's copy is the tuned one (the table built once, D323; a rolling sixteen-word
+window, D330) and the library's the textbook one, so the faster moves into the
+library rather than the slower surviving. `interface_cut` and the interface digests
+stay: they are the manifest's, not a hash.
+
+CRC is not a swap. The compiler's is CRC-32C, polynomial `0x82F63B78`, slice-by-8,
+with the checksum field zeroed as it hashes; the library's `crc32` is IEEE,
+`0xEDB88320`, one bit at a time -- the shape D213 found cost minutes on the artifact
+path. `e.algo.hash` gains a table-driven `crc32c` with the streaming init/update/done
+the others have, and the zeroed window becomes three updates. Format 7's checksums
+are unchanged by construction.
+
+The pin is what already exists: every artifact, the manifest goldens and the image
+must be byte for byte what they were, and stage two must still be stage three.
+The one risk is the bootstrap: both suites build stage one from `bootstrap/neper.c`
+on every run, so a library module the compiler imports must compile under it too.
+If it refuses `algo/hash.e` or `crypto/hash.e`, that is the finding, and the item
+waits on the bootstrap's deletion (the M2 exit item, D208) rather than on a second
+subset of the library. Independent of D332, which lands on either side of it.
