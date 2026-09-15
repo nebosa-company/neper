@@ -1506,6 +1506,7 @@ host trust store, clock or network revocation service implicitly.
 ```neper
 type File = struct { raw: usize }
 type Proc = struct { raw: usize }
+type ProcUsage = struct { exit_code: i32, peak_memory: usize }
 type Thread = struct { raw: usize }
 type Lib = struct { raw: usize }
 type Handle = struct { raw: usize }
@@ -1570,6 +1571,7 @@ fn pipe() -> (File, File, err)
 fn spawn(a: *mem.Arena, argv: []const str, stdio: Stdio) -> (Proc, err)
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err)
 fn wait(p: Proc) -> (i32, err)
+fn wait_usage(p: Proc) -> (ProcUsage, err)
 fn kill(p: Proc) -> err
 fn exit(code: i32)
 fn args(a: *mem.Arena) -> ([]str, err)
@@ -1580,6 +1582,7 @@ fn reserve(n: usize) -> (*u8, err)
 fn commit(p: *u8, n: usize) -> err
 fn release(p: *u8, n: usize) -> err
 fn clock(c: Clock) -> (i64, err)
+fn peak_memory() -> (usize, err)
 fn thread_create[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)
 fn thread_join(t: Thread) -> err
 fn thread_detach(t: Thread) -> err
@@ -1666,6 +1669,13 @@ path, so a caller that moves is the one that has to move back.
 is not a link is `Unsupported`. `symlink` stores that string, and a host that records at
 creation whether a link names a directory decides that from the target as the link will
 see it. Creating one is privileged on some hosts and is `Denied` there.
+
+`peak_memory` is the most memory this process has had resident at once, in bytes, and
+`wait_usage` is `wait` that also answers that for the child: the peak is only readable
+while the child is still known to the host, which on both is inside the wait, so it
+cannot be a separate call after one. Each host rounds it its own way (pages on one,
+kilobytes on the other) and one counts resident pages lazily, so a process that touched
+only a few may read as zero: it is a measurement and not a number to compare exactly.
 
 `set_mode` takes the same `mode` `stat` reports, and `set_times` the same nanoseconds:
 a negative one leaves that stamp as it is, which is the `-1` that means "not recorded" on

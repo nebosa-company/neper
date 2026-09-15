@@ -23,6 +23,9 @@ const NATIVE_SEPARATOR: u8 = 92u8
 
 type File = struct { raw: usize }
 type Proc = struct { raw: usize }
+// What `wait_usage` answers (D311): the exit code `wait` would, and the most memory the
+// process ever had resident, in bytes.
+type ProcUsage = struct { exit_code: i32, peak_memory: usize }
 type Thread = struct { raw: usize }
 type Clock = enum u8 { Wall, Monotonic }
 type SeekWhence = enum u8 { Start, Current, End }
@@ -840,6 +843,19 @@ extern fn raw_create_pipe(reading: *usize, writing: *usize, security: usize, siz
 
 @import("kernel32.dll", "TerminateProcess")
 extern fn raw_terminate_process(process: usize, code: u32) -> i32
+
+@import("kernel32.dll", "WaitForSingleObject")
+extern fn raw_wait_for_single_object(handle: usize, milliseconds: u32) -> u32
+
+@import("kernel32.dll", "GetExitCodeProcess")
+extern fn raw_exit_code_process(process: usize, code: *u32) -> i32
+
+@import("kernel32.dll", "GetCurrentProcess")
+extern fn raw_current_process() -> usize
+
+// `psapi`'s counters, exported by `kernel32` under this name since Windows 7.
+@import("kernel32.dll", "K32GetProcessMemoryInfo")
+extern fn raw_process_memory_info(process: usize, counters: *MemoryCounters, size: u32) -> i32
 
 @import("kernel32.dll", "VirtualFree")
 extern fn raw_virtual_free(address: *u8, size: usize, kind: u32) -> i32
@@ -2034,6 +2050,53 @@ fn pipe() -> (File, File, err) {
     reading.raw = read_handle
     writing.raw = write_handle
     ret (reading, writing, ok)
+}
+
+// `PROCESS_MEMORY_COUNTERS`: the size first, then a page-fault count, then eight sizes of
+// which the peak working set is the first. The layout is the ABI.
+type MemoryCounters = struct {
+    size: u32,
+    page_faults: u32,
+    peak_working_set: usize,
+    working_set: usize,
+    quota_peak_paged: usize,
+    quota_paged: usize,
+    quota_peak_nonpaged: usize,
+    quota_nonpaged: usize,
+    pagefile: usize,
+    peak_pagefile: usize,
+}
+
+const WAIT_OBJECT_0: u32 = 0u32
+const WAIT_INFINITE: u32 = 4294967295u32
+
+fn peak_of(process: usize) -> (usize, err) {
+    var counters: MemoryCounters = zero
+    counters.size = 72u32
+    if raw_process_memory_info(process, &counters, 72u32) == 0i32 { ret (0usize, from_last_error()) }
+    ret (counters.peak_working_set, ok)
+}
+
+// The peak working set of this process so far, which at the end of a run is its peak.
+fn peak_memory() -> (usize, err) {
+    let (peak, peak_error) = peak_of(raw_current_process())
+    ret (peak, peak_error)
+}
+
+// `wait`, and what the child's peak was: the handle is closed by the wait, so the peak is
+// read in the same call, between the exit and the close (D311).
+fn wait_usage(p: Proc) -> (ProcUsage, err) {
+    var usage: ProcUsage = zero
+    usage.exit_code = -1i32
+    if raw_wait_for_single_object(p.raw, WAIT_INFINITE) != WAIT_OBJECT_0 { ret (usage, from_last_error()) }
+    var code = 0u32
+    if raw_exit_code_process(p.raw, &code) == 0i32 { ret (usage, from_last_error()) }
+    let (peak, peak_error) = peak_of(p.raw)
+    let unused_close = raw_close_handle(p.raw)
+    if peak_error != ok { ret (usage, peak_error) }
+    usage.exit_code = i32(code)
+    usage.peak_memory = peak
+    ret (usage, ok)
 }
 
 // Not a request: this host has no signal to send, so the process is ended and told what its

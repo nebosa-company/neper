@@ -168,8 +168,22 @@ fn main(a: *mem.Arena) -> err {
     }
     if !same(said[0usize..said_len], "said") { os.exit(54i32) }
     if os.close(said_read) != ok { os.exit(55i32) }
-    let (said_status, said_wait) = os.wait(speaker)
+    // --- `wait_usage` is `wait` with the child's peak beside the code (D311), and
+    // `peak_memory` is this process's own. The child's peak is not checked: Linux counts
+    // resident pages lazily and a process as small as `np-say` can read as zero. This one
+    // touches a megabyte first, which is past that.
+    let (said_usage, said_wait) = os.wait_usage(speaker)
     if said_wait != ok { os.exit(56i32) }
-    if said_status != 0i32 { os.exit(57i32) }
+    if said_usage.exit_code != 0i32 { os.exit(57i32) }
+    let (touched, touched_error) = mem.alloc[u8](a, 1048576usize)
+    if touched_error != ok { os.exit(58i32) }
+    var touch_at = 0usize
+    while touch_at < touched.len {
+        touched[touch_at] = 1u8
+        touch_at += size
+    }
+    let (own_peak, own_peak_error) = os.peak_memory()
+    if own_peak_error != ok { os.exit(59i32) }
+    if own_peak < touched.len { os.exit(60i32) }
     ret ok
 }

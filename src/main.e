@@ -1243,7 +1243,10 @@ fn program_arguments(args: []str) -> []str {
     ret args[0usize..0usize]
 }
 
-fn run_program(a: *mem.Arena, path: str, arguments: []str) -> (i32, str, str, err) {
+// The child's peak working set comes from the same wait as its exit code (D311), and
+// goes straight to the build record: `--stats` is its one reader, and `fn main` has no
+// local to spare for it.
+fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str) -> (i32, str, str, err) {
     let (stdout_path, stdout_path_error) = with_suffix(a, path, ".stdout")
     if stdout_path_error != ok { ret (0i32, "", "", stdout_path_error) }
     let (stderr_path, stderr_path_error) = with_suffix(a, path, ".stderr")
@@ -1298,13 +1301,14 @@ fn run_program(a: *mem.Arena, path: str, arguments: []str) -> (i32, str, str, er
     if spawn_error != ok { ret (0i32, "", "", spawn_error) }
     if stdout_close_error != ok { ret (0i32, "", "", stdout_close_error) }
     if stderr_close_error != ok { ret (0i32, "", "", stderr_close_error) }
-    let (status, wait_error) = os.wait(child)
+    let (usage, wait_error) = os.wait_usage(child)
     if wait_error != ok { ret (0i32, "", "", wait_error) }
     let (stdout_captured, stdout_load_error) = source.load(a, stdout_path)
     if stdout_load_error != ok { ret (0i32, "", "", stdout_load_error) }
     let (stderr_captured, stderr_load_error) = source.load(a, stderr_path)
     if stderr_load_error != ok { ret (0i32, "", "", stderr_load_error) }
-    ret (status, stdout_captured, stderr_captured, ok)
+    report.build.run_peak = usage.peak_memory
+    ret (usage.exit_code, stdout_captured, stderr_captured, ok)
 }
 
 // `index-file PATH ROOT ARCH OS --json` (D232): the operand module's symbol records.
@@ -4848,7 +4852,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 report.build.image_bytes = packed.len
                 if running {
                     report.build.started = nptest_now()
-                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, args[6usize], program_arguments(args))
+                    let (status, stdout_captured, stderr_captured, run_error) = run_program(a, &report, args[6usize], program_arguments(args))
                     report.build.ran = true
                     report.build.run_ms = (nptest_now() - report.build.started) / 1000000usize
                     report.build.exit_code = status

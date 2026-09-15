@@ -1055,6 +1055,9 @@ static void install_os_intrinsics(Compiler *c) {
     intrinsic_field(decl, token, "raw", usize, 1, 0);
     decl = intrinsic_type(c, token, "os.Proc", ND_STRUCT, type_make(TY_VOID, "void"));
     intrinsic_field(decl, token, "raw", usize, 1, 0);
+    decl = intrinsic_type(c, token, "os.ProcUsage", ND_STRUCT, type_make(TY_VOID, "void"));
+    intrinsic_field(decl, token, "exit_code", i32, 1, 0);
+    intrinsic_field(decl, token, "peak_memory", usize, 1, 0);
     decl = intrinsic_type(c, token, "os.Handle", ND_STRUCT, type_make(TY_VOID, "void"));
     intrinsic_field(decl, token, "raw", usize, 1, 0);
     decl = intrinsic_type(c, token, "os.Clock", ND_ENUM, u8);
@@ -1093,6 +1096,8 @@ static void install_os_intrinsics(Compiler *c) {
     OS_FN("os.set_mode", "neper_os_set_mode"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "path", string); intrinsic_param(fn, token, "mode", u32); intrinsic_returns(fn, 1, error, error);
     OS_FN("os.spawn", "neper_os_spawn"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_param(fn, token, "argv", const_strings); intrinsic_param(fn, token, "stdio", stdio_type); intrinsic_returns(fn, 2, proc, error);
     OS_FN("os.wait", "neper_os_wait"); intrinsic_param(fn, token, "p", proc); intrinsic_returns(fn, 2, i32, error);
+    OS_FN("os.wait_usage", "neper_os_wait_usage"); intrinsic_param(fn, token, "p", proc); intrinsic_returns(fn, 2, type_make(TY_NAMED, "os.ProcUsage"), error);
+    OS_FN("os.peak_memory", "neper_os_peak_memory"); intrinsic_returns(fn, 2, usize, error);
     OS_FN("os.exit", "neper_os_exit"); intrinsic_param(fn, token, "code", i32); intrinsic_returns(fn, 0, error, error);
     OS_FN("os.args", "neper_os_args"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_returns(fn, 2, strings, error);
     OS_FN("os.current_dir", "neper_os_current_dir"); intrinsic_param(fn, token, "a", arena_pointer); intrinsic_returns(fn, 2, string, error);
@@ -7265,7 +7270,7 @@ static void emit_windows_runtime(Compiler *c, FILE *out) {
         "EXTERN neper_os_set_args:PROC\nEXTERN neper_os_open:PROC\nEXTERN neper_os_read:PROC\n"
         "EXTERN neper_os_write:PROC\nEXTERN neper_os_close:PROC\nEXTERN neper_os_stdin:PROC\nEXTERN neper_os_stdout:PROC\n"
         "EXTERN neper_os_stderr:PROC\nEXTERN neper_os_readdir:PROC\nEXTERN neper_os_mkdir:PROC\nEXTERN neper_os_set_mode:PROC\nEXTERN neper_os_spawn:PROC\n"
-        "EXTERN neper_os_wait:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\n"
+        "EXTERN neper_os_wait:PROC\nEXTERN neper_os_wait_usage:PROC\nEXTERN neper_os_peak_memory:PROC\nEXTERN neper_os_exit:PROC\nEXTERN neper_os_args:PROC\nEXTERN neper_os_current_dir:PROC\n"
         "EXTERN neper_os_reserve:PROC\nEXTERN neper_os_commit:PROC\nEXTERN neper_os_clock:PROC\n"
         "EXTERN neper_mem_arena_from:PROC\nEXTERN neper_mem_alloc:PROC\nEXTERN neper_mem_root:PROC\n"
         "EXTERN neper_mem_mark:PROC\nEXTERN neper_mem_reset:PROC\nEXTERN neper_mem_stats:PROC\n\n"

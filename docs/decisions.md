@@ -6338,3 +6338,19 @@ instead of 61, a release build 68 s instead of 101, and its peak 2.1 GB instead 
 5.4 -- the same as a debug build, which is what the second oracle's whole-program pool
 had cost. What remains is the pre-filter: a hundred tokens admits a body of fifty
 instructions, and each such body is still lowered to forty-one before it is rejected.
+
+## D311 -- `os.peak_memory` and `os.wait_usage`: the two `--stats` rows that read n/a
+
+D308 printed "compiler peak working set" and "executable peak working set" as n/a because
+no fixed-surface call answered either. Two now do, D291-style on every layer -- the
+bootstrap's declarations and its C runtime on both hosts, and the per-target `e.os`
+sources: `peak_memory() -> (usize, err)` is the calling process's peak resident set in
+bytes (`PeakWorkingSetSize` / `ru_maxrss`), and `wait_usage(p: Proc) -> (ProcUsage, err)`
+is `wait` that also answers it for the child. The child's peak cannot be a separate call:
+the handle is closed by the wait on one host and the process is reaped by it on the other,
+so the exit code and the peak come out of the same call, as a struct because the bootstrap
+returns at most two values. `--stats` reads the compiler's own peak after everything else
+it prints was measured, and `run` takes the child's from `wait_usage`; the bootstrap-built
+compiler compiling a three-line program is 9 MB, the same job by the self-hosted compiler
+128 MB -- its debug build fills every pool it sizes (section 11), which is what the row
+is for. `os_process` checks both calls.

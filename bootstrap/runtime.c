@@ -220,6 +220,8 @@ void neper_os_args(void *result, NpArena *arena) {
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#define PSAPI_VERSION 2
+#include <psapi.h>
 
 #pragma function(memset)
 void *memset(void *destination, int value, size_t count) {
@@ -490,6 +492,26 @@ void neper_os_wait(void *result, uintptr_t raw) {
     CloseHandle((HANDLE)raw); *(int32_t *)out = (int32_t)code;
 }
 
+/* The exit code and the peak working set together (D311): the handle is closed by the
+   wait, so the peak has to be read before it goes, in the same call. */
+void neper_os_wait_usage(void *result, uintptr_t raw) {
+    unsigned char *out = (unsigned char *)result; DWORD status, code; PROCESS_MEMORY_COUNTERS counters;
+    *(int32_t *)out = -1; *(size_t *)(out + 8) = 0; *(uint32_t *)(out + 16) = NP_OK;
+    status = WaitForSingleObject((HANDLE)raw, INFINITE);
+    if (status != WAIT_OBJECT_0 || !GetExitCodeProcess((HANDLE)raw, &code)) {
+        *(uint32_t *)(out + 16) = status == WAIT_TIMEOUT ? NP_TIMEOUT : np_error(GetLastError()); return;
+    }
+    if (GetProcessMemoryInfo((HANDLE)raw, &counters, sizeof counters)) *(size_t *)(out + 8) = counters.PeakWorkingSetSize;
+    CloseHandle((HANDLE)raw); *(int32_t *)out = (int32_t)code;
+}
+
+void neper_os_peak_memory(void *result) {
+    unsigned char *out = (unsigned char *)result; PROCESS_MEMORY_COUNTERS counters;
+    *(size_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof counters)) *(size_t *)out = counters.PeakWorkingSetSize;
+    else *(uint32_t *)(out + 8) = np_error(GetLastError());
+}
+
 void neper_os_exit(int32_t code) { ExitProcess((UINT)code); }
 
 void neper_os_reserve(void *result, size_t n) {
@@ -532,6 +554,7 @@ void neper_os_clock(void *result, unsigned char clock_kind) {
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -689,6 +712,21 @@ void neper_os_wait(void *result, uintptr_t raw) {
     *(int32_t *)out = -1; *(uint32_t *)(out + 4) = NP_OK;
     if (waitpid((pid_t)raw, &status, 0) < 0) { *(uint32_t *)(out + 4) = np_error(errno); return; }
     *(int32_t *)out = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+}
+
+void neper_os_wait_usage(void *result, uintptr_t raw) {
+    unsigned char *out = (unsigned char *)result; int status; struct rusage usage;
+    *(int32_t *)out = -1; *(size_t *)(out + 8) = 0; *(uint32_t *)(out + 16) = NP_OK;
+    if (wait4((pid_t)raw, &status, 0, &usage) < 0) { *(uint32_t *)(out + 16) = np_error(errno); return; }
+    *(int32_t *)out = WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
+    *(size_t *)(out + 8) = (size_t)usage.ru_maxrss * 1024;
+}
+
+void neper_os_peak_memory(void *result) {
+    unsigned char *out = (unsigned char *)result; struct rusage usage;
+    *(size_t *)out = 0; *(uint32_t *)(out + 8) = NP_OK;
+    if (getrusage(RUSAGE_SELF, &usage) < 0) { *(uint32_t *)(out + 8) = np_error(errno); return; }
+    *(size_t *)out = (size_t)usage.ru_maxrss * 1024;
 }
 
 void neper_os_exit(int32_t code) { _exit(code); }

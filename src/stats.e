@@ -70,6 +70,8 @@ type Build = struct {
     ran: bool,
     run_ms: usize,
     exit_code: i32,
+    // The child's peak working set in bytes (D311), from the same wait as its exit code.
+    run_peak: usize,
 }
 
 fn record_phase(b: *Build, name: str, ms: usize) {
@@ -143,6 +145,13 @@ fn row_ms(name: str, ms: usize) -> err {
     try row(name)
     try number(ms)
     ret out(" ms\n")
+}
+
+fn row_bytes(name: str, bytes: usize) -> err {
+    try row(name)
+    try number(bytes / 1048576usize)
+    try out(" MB\n")
+    ret ok
 }
 
 fn row_text(name: str, value: str) -> err {
@@ -340,7 +349,11 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row("executable size")
     try number(b.image_bytes)
     try out(" bytes\n")
-    try row_text("compiler peak working set", "n/a (no os intrinsic yet)")
+    // Read here, after everything the build allocated: the process's peak so far is its
+    // peak (D311).
+    let (peak, peak_error) = os.peak_memory()
+    if peak_error != ok { ret peak_error }
+    try row_bytes("compiler peak working set", peak)
     try row_ms("wall time", b.wall_ms)
     var phase = 0usize
     while phase < b.phase_count {
@@ -351,7 +364,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     }
     if b.ran {
         try row_ms("execution time", b.run_ms)
-        try row_text("executable peak working set", "n/a (no os intrinsic yet)")
+        try row_bytes("executable peak working set", b.run_peak)
         try row("exit code")
         if b.exit_code < 0i32 {
             try out("-")

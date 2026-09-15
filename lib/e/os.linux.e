@@ -24,6 +24,9 @@ const NATIVE_SEPARATOR: u8 = 47u8
 
 type File = struct { raw: usize }
 type Proc = struct { raw: usize }
+// What `wait_usage` answers (D311): the exit code `wait` would, and the most memory the
+// process ever had resident, in bytes.
+type ProcUsage = struct { exit_code: i32, peak_memory: usize }
 type Thread = struct { raw: usize }
 type Clock = enum u8 { Wall, Monotonic }
 type SeekWhence = enum u8 { Start, Current, End }
@@ -111,6 +114,9 @@ const SYS_GETTID: usize = 186usize
 const SYS_MMAP: usize = 9usize
 const SYS_NANOSLEEP: usize = 35usize
 const SYS_KILL: usize = 62usize
+const SYS_WAIT4: usize = 61usize
+const SYS_GETRUSAGE: usize = 98usize
+const RUSAGE_SELF: usize = 0usize
 const SYS_FLOCK: usize = 73usize
 const SYS_DUP2: usize = 33usize
 const SYS_FORK: usize = 57usize
@@ -1497,6 +1503,35 @@ fn pipe() -> (File, File, err) {
     reading.raw = usize(pair[0usize])
     writing.raw = usize(pair[1usize])
     ret (reading, writing, ok)
+}
+
+// `struct rusage`: two `timeval`s and then fourteen longs, of which `ru_maxrss` is the first
+// -- kilobytes, the only peak the kernel keeps. The layout is the ABI.
+type Rusage = struct { words: [18]i64 }
+
+fn peak_memory() -> (usize, err) {
+    var usage: Rusage = zero
+    let result = syscall(SYS_GETRUSAGE, RUSAGE_SELF, mem.address_of(&usage), 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (0usize, from_errno(result)) }
+    ret (usize(usage.words[4usize]) * 1024usize, ok)
+}
+
+// `wait`, and what the child's peak was: `wait4` hands both back at once, and after the
+// reap there is nowhere else to ask (D311).
+fn wait_usage(p: Proc) -> (ProcUsage, err) {
+    var usage: ProcUsage = zero
+    usage.exit_code = -1i32
+    var status = 0u32
+    var used: Rusage = zero
+    let result = syscall(SYS_WAIT4, p.raw, mem.address_of(&status), 0usize, mem.address_of(&used), 0usize, 0usize)
+    if result < 0isize { ret (usage, from_errno(result)) }
+    if status & 127u32 == 0u32 {
+        usage.exit_code = i32((status >> 8u32) & 255u32)
+    } else {
+        usage.exit_code = i32(128u32 + (status & 127u32))
+    }
+    usage.peak_memory = usize(used.words[4usize]) * 1024usize
+    ret (usage, ok)
 }
 
 // `SIGKILL`, so this is not a request. What `wait` then reports is 128 plus the signal, which
