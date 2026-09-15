@@ -2065,7 +2065,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
     try check.tokenize_module(c, g, module_index)
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .FnDecl && node.token_end - node.token_start <= 100usize {
             let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
             if name_error != ok { ret name_error }
@@ -2503,9 +2503,9 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     var child_position = 0usize
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_position == 0usize && call.indirect {
-                let (callee_value, callee_type, callee_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, call.indirect_type, builder, bindings, binding_count)
+                let (callee_value, callee_type, callee_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), call.indirect_type, builder, bindings, binding_count)
                 if callee_error != ok { ret callee_error }
                 *callee_out = callee_value
             }
@@ -2522,7 +2522,7 @@ fn lower_call_arguments(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
                     if parameter_type_error != ok { ret parameter_type_error }
                     parameter_type = declared_type
                 }
-                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, parameter_type, builder, bindings, binding_count)
+                let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), parameter_type, builder, bindings, binding_count)
                 if value_error != ok { ret value_error }
                 var argument = value
                 if captured && aggregate_value(c, parameter_type) {
@@ -2568,9 +2568,9 @@ fn lower_call_results(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
         var at = node.first_child
         var child_position = 0usize
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if child_position == 1usize {
-                    let message_node = tree.nodes[tree.children[at].index]
+                    let message_node = parse.node_at(tree, parse.child_index_at(tree, at))
                     let literal_token = c.tokens[message_node.token_start]
                     let (interned, intern_error) = nir.intern_string(builder, g.modules[module_index].text[literal_token.start..literal_token.end])
                     if intern_error != ok { ret intern_error }
@@ -2647,7 +2647,7 @@ fn aggregate_value(c: *check.Checker, ty: check.Type) -> bool {
 }
 
 fn lower_slice(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     var bracket: check.BracketInfo = zero
     let bracket_error = check.read_bracket(c, tree, node, &bracket)
     if bracket_error != ok || !bracket.range { ret (0usize, zero, check.Unsupported) }
@@ -2703,12 +2703,12 @@ fn lower_slice(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         upper = upper_value
     } else {
         if bracket.child_count == 2usize {
-            var range_at = tree.nodes[bracket.base].token_end
+            var range_at = parse.node_at(tree, bracket.base).token_end
             while range_at < node.token_end && c.tokens[range_at].kind != .PunctRange { range_at += 1usize }
             if range_at >= node.token_end { ret (0usize, result_type, parse.InvalidSyntax) }
             let (bound, bound_type, bound_error) = lower_expression(c, g, tree, module_index, bracket.first, length_type, builder, bindings, binding_count)
             if bound_error != ok { ret (0usize, result_type, bound_error) }
-            if tree.nodes[bracket.first].token_start < range_at { lower = bound } else { upper = bound }
+            if parse.node_at(tree, bracket.first).token_start < range_at { lower = bound } else { upper = bound }
         }
     }
     let (stack_instruction, stack, stack_error) = nir.emit(builder, .Stack, result_type, true, 2usize, c.tokens[node.token_start])
@@ -2729,15 +2729,15 @@ fn lower_slice(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 }
 
 fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     var children: [2]usize = zero
     var child_count = 0usize
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == children.len { ret (0usize, zero, check.Unsupported) }
-            children[child_count] = tree.children[at].index
+            children[child_count] = parse.child_index_at(tree, at)
             child_count += 1usize
         }
         at += 1usize
@@ -2797,7 +2797,7 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
 }
 
 fn lower_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let (address, element_type, address_error) = lower_index_address(c, g, tree, module_index, node_index, builder, bindings, binding_count)
     if address_error != ok { ret (0usize, element_type, address_error) }
     if aggregate_value(c, element_type) { ret (address, element_type, ok) }
@@ -2813,7 +2813,7 @@ fn lower_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 }
 
 fn lower_place(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind == .NameExpr {
         let token = c.tokens[node.token_start]
         if token.kind != .Identifier { ret (0usize, zero, check.Unsupported) }
@@ -2875,7 +2875,7 @@ fn lower_place(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 }
 
 fn lower_member(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
     if result_type_error != ok { ret (0usize, result_type, result_type_error) }
     let (aggregate_index, found_aggregate) = layout.aggregate_index(c, result_type)
@@ -2921,7 +2921,7 @@ fn lower_member(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
 }
 
 fn lower_unary(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let (child_index, found_child) = check.first_node_child(tree, node)
     if !found_child { ret (0usize, zero, parse.InvalidSyntax) }
     let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
@@ -2998,7 +2998,7 @@ fn store_tag(c: *check.Checker, aggregate: check.Aggregate, field_index: usize, 
 }
 
 fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let (result_type, result_type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
     if result_type_error != ok { ret (0usize, result_type, result_type_error) }
     let (info, info_error) = layout.type_info(c, result_type)
@@ -3046,8 +3046,8 @@ fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let item = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let item = parse.node_at(tree, parse.child_index_at(tree, at))
             if item.kind == .LiteralItem {
                 var item_type: check.Type = zero
                 var item_offset = 0usize
@@ -3103,7 +3103,7 @@ fn lower_aggregate_literal(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree
 }
 
 fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     c.failure_module = module_index
     c.failure_token = c.tokens[node.token_start]
     c.failure_has_token = true
@@ -3117,8 +3117,8 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
-                let (group_value, group_type, group_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder, bindings, binding_count)
+            if parse.child_is_node_at(tree, at) {
+                let (group_value, group_type, group_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), expected, builder, bindings, binding_count)
                 ret (group_value, group_type, group_error)
             }
             at += 1usize
@@ -3331,8 +3331,8 @@ fn lower_expression(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             let end = node.first_child + node.child_count
             var at = node.first_child
             while at < end {
-                if tree.children[at].node {
-                    if child_position == 1usize { argument_index = tree.children[at].index }
+                if parse.child_is_node_at(tree, at) {
+                    if child_position == 1usize { argument_index = parse.child_index_at(tree, at) }
                     child_position += 1usize
                 }
                 at += 1usize
@@ -3410,15 +3410,15 @@ fn lower_try(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     var found_call = false
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            call_index = tree.children[at].index
+        if parse.child_is_node_at(tree, at) {
+            call_index = parse.child_index_at(tree, at)
             found_call = true
             break
         }
         at += 1usize
     }
     if !found_call { ret parse.InvalidSyntax }
-    let call_node = tree.nodes[call_index]
+    let call_node = parse.node_at(tree, call_index)
     let (call, call_result, call_error) = lower_call(c, g, tree, module_index, call_node, builder, bindings, binding_count)
     if call_error != ok { ret call_error }
     if call.function.return_count != 1usize || !check.call_is_fallible(c, call) { ret check.InvalidTry }
@@ -3464,13 +3464,13 @@ fn lower_return(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if count == values.len || count >= function.return_count { ret check.InvalidReturn }
-            let returned = tree.nodes[tree.children[at].index]
+            let returned = parse.node_at(tree, parse.child_index_at(tree, at))
             if count == 0usize && returned.kind == .LiteralExpr && c.tokens[returned.token_start].kind == .KwOk { literal_ok = true }
             let (expected, type_error) = check.function_return(c, function, count)
             if type_error != ok { ret type_error }
-            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, tree.children[at].index, expected, builder, bindings, binding_count)
+            let (value, value_type, value_error) = lower_expression(c, g, tree, module_index, parse.child_index_at(tree, at), expected, builder, bindings, binding_count)
             if value_error != ok { ret value_error }
             values[count] = value
             count += 1usize
@@ -3569,9 +3569,9 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if child.kind == .Binding {
                 binding_node = child
                 found_binding = true
@@ -3589,11 +3589,11 @@ fn lower_binding(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         at += 1usize
     }
     if !found_binding { ret check.Unsupported }
-    if found_initializer && check.contains_token(c, node.token_start, tree.nodes[initializer_index].token_start, .KwTry) { ret check.Unsupported }
+    if found_initializer && check.contains_token(c, node.token_start, parse.node_at(tree, initializer_index).token_start, .KwTry) { ret check.Unsupported }
     if c.tokens[binding_node.token_start].kind == .PunctLParen {
-        if !found_initializer || tree.nodes[initializer_index].kind != .CallExpr || declared.kind != .Invalid { ret check.ArgumentCount }
+        if !found_initializer || parse.kind_at(tree, initializer_index) != .CallExpr || declared.kind != .Invalid { ret check.ArgumentCount }
         var results: CallResults = zero
-        let results_error = lower_call_results(c, g, tree, module_index, tree.nodes[initializer_index], builder, bindings, *binding_count, &results)
+        let results_error = lower_call_results(c, g, tree, module_index, parse.node_at(tree, initializer_index), builder, bindings, *binding_count, &results)
         if results_error != ok { ret results_error }
         let mutable = c.tokens[node.token_start].kind == .KwVar
         ret bind_call_results(c, g, module_index, binding_node, &results, mutable, builder, bindings, binding_count)
@@ -3688,9 +3688,9 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if count == children.len { ret parse.InvalidSyntax }
-            children[count] = tree.children[at].index
+            children[count] = parse.child_index_at(tree, at)
             count += 1usize
         }
         at += 1usize
@@ -3709,7 +3709,7 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
             place_types[place_at] = place_type
             place_at += 1usize
         }
-        let initializer = tree.nodes[children[place_count]]
+        let initializer = parse.node_at(tree, children[place_count])
         if initializer.kind != .CallExpr { ret check.ArgumentCount }
         var results: CallResults = zero
         let results_error = lower_call_results(c, g, tree, module_index, initializer, builder, bindings, binding_count, &results)
@@ -3727,7 +3727,7 @@ fn lower_assignment(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     }
     let (address, place_type, address_error) = lower_place(c, g, tree, module_index, children[0usize], builder, bindings, binding_count)
     if address_error != ok { ret address_error }
-    let assignment = check.assignment_operator(c, tree.nodes[children[0usize]].token_end, tree.nodes[children[1usize]].token_start)
+    let assignment = check.assignment_operator(c, parse.node_at(tree, children[0usize]).token_end, parse.node_at(tree, children[1usize]).token_start)
     if assignment != .PunctAssign {
         let opcode = compound_opcode(assignment)
         if opcode == .Invalid || aggregate_value(c, place_type) { ret check.InvalidOperator }
@@ -3759,8 +3759,8 @@ fn lower_call_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let call_node = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let call_node = parse.node_at(tree, parse.child_index_at(tree, at))
             var results: CallResults = zero
             let call_error = lower_call_results(c, g, tree, module_index, call_node, builder, bindings, binding_count, &results)
             if call_error != ok { ret call_error }
@@ -3792,8 +3792,8 @@ fn lower_when(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
             if !found_condition {
                 condition_index = child_index
                 found_condition = true
@@ -3808,8 +3808,8 @@ fn lower_when(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if !found_condition || branch_count == 0usize { ret parse.InvalidSyntax }
     let (taken, condition_error) = check.when_condition(c, g, tree, module_index, condition_index)
     if condition_error != ok { ret condition_error }
-    if taken { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers) }
-    if branch_count == 2usize { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
+    if taken { ret lower_block(c, g, tree, module_index, function, parse.node_at(tree, branches[0usize]), builder, bindings, binding_count, control, defers) }
+    if branch_count == 2usize { ret lower_block(c, g, tree, module_index, function, parse.node_at(tree, branches[1usize]), builder, bindings, binding_count, control, defers) }
     ret ok
 }
 
@@ -3828,9 +3828,9 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if !found_condition {
                 condition_index = child_index
                 found_condition = true
@@ -3849,8 +3849,8 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     // twice is what keeps the two passes from drifting apart.
     let (taken, settled) = check.comptime_condition(c, g, tree, module_index, condition_index)
     if settled {
-        if taken { ret lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers) }
-        if branch_count == 2usize { ret lower_branch(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
+        if taken { ret lower_block(c, g, tree, module_index, function, parse.node_at(tree, branches[0usize]), builder, bindings, binding_count, control, defers) }
+        if branch_count == 2usize { ret lower_branch(c, g, tree, module_index, function, parse.node_at(tree, branches[1usize]), builder, bindings, binding_count, control, defers) }
         ret ok
     }
     let boolean = check.make_type(.Bool, "bool", module_index)
@@ -3863,7 +3863,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let true_block = builder.block_count
     let (true_index, true_error) = nir.begin_block(builder)
     if true_error != ok || true_index != true_block { ret nir.InvalidControlFlow }
-    try lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers)
+    try lower_block(c, g, tree, module_index, function, parse.node_at(tree, branches[0usize]), builder, bindings, binding_count, control, defers)
     var true_exit = 0usize
     let true_falls_through = !builder.blocks[builder.current_block].terminated
     if true_falls_through {
@@ -3875,7 +3875,7 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     let false_block = builder.block_count
     let (false_index, false_error) = nir.begin_block(builder)
     if false_error != ok || false_index != false_block { ret nir.InvalidControlFlow }
-    if branch_count == 2usize { try lower_branch(c, g, tree, module_index, function, tree.nodes[branches[1usize]], builder, bindings, binding_count, control, defers) }
+    if branch_count == 2usize { try lower_branch(c, g, tree, module_index, function, parse.node_at(tree, branches[1usize]), builder, bindings, binding_count, control, defers) }
     var false_exit = 0usize
     let false_falls_through = !builder.blocks[builder.current_block].terminated
     if false_falls_through {
@@ -3903,13 +3903,13 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
             if !found_condition {
                 condition_index = child_index
                 found_condition = true
             } else {
-                if found_body || tree.nodes[child_index].kind != .Block { ret check.Unsupported }
+                if found_body || parse.kind_at(tree, child_index) != .Block { ret check.Unsupported }
                 body_index = child_index
                 found_body = true
             }
@@ -3934,7 +3934,7 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if body_block_error != ok || body_block_index != body_block { ret nir.InvalidControlFlow }
     var break_storage: [256]usize = zero
     var control = LoopControl { active: true, continue_target: condition_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
-    try lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
+    try lower_block(c, g, tree, module_index, function, parse.node_at(tree, body_index), builder, bindings, binding_count, &control, defers)
     if !builder.blocks[builder.current_block].terminated {
         let (back_edge, back_edge_error) = emit_branch(builder, c.tokens[node.token_start])
         if back_edge_error != ok { ret back_edge_error }
@@ -3949,7 +3949,7 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         try nir.set_branch_targets(builder, control.breaks[break_at], exit_block, 0usize)
         break_at += 1usize
     }
-    let condition_node = tree.nodes[condition_index]
+    let condition_node = parse.node_at(tree, condition_index)
     if control.break_count == 0usize && condition_node.kind == .LiteralExpr && c.tokens[condition_node.token_start].kind == .KwTrue {
         let (unreachable_instruction, unreachable_value, unreachable_error) = nir.emit(builder, .Unreachable, zero, false, 0usize, c.tokens[condition_node.token_start])
         if unreachable_error != ok { ret unreachable_error }
@@ -3972,13 +3972,13 @@ fn lower_iterable_parts(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     *data = subject
     let usize_type = check.make_type(.Integer, "usize", module_index)
     if subject_type.kind == .Array {
-        let (length_instruction, length_value, length_error) = nir.emit(builder, .ConstInteger, usize_type, true, subject_type.array_length, c.tokens[tree.nodes[expression_index].token_start])
+        let (length_instruction, length_value, length_error) = nir.emit(builder, .ConstInteger, usize_type, true, subject_type.array_length, c.tokens[parse.node_at(tree, expression_index).token_start])
         if length_error != ok { ret length_error }
         *length = length_value
         ret ok
     }
     let pointer_type = check.make_type(.Pointer, "", module_index)
-    let token = c.tokens[tree.nodes[expression_index].token_start]
+    let token = c.tokens[parse.node_at(tree, expression_index).token_start]
     let (data_address_instruction, data_address, data_address_error) = nir.emit(builder, .FieldAddress, pointer_type, true, 0usize, token)
     if data_address_error != ok { ret data_address_error }
     try nir.add_operand(builder, data_address_instruction, subject)
@@ -4056,7 +4056,7 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
     try bind_value(c, g, module_index, name, element_type, results.values[0usize], results.addresses[0usize], false, builder, bindings, binding_count)
     var break_storage: [256]usize = zero
     var control = LoopControl { active: true, continue_target: condition_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
-    let lowered_body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
+    let lowered_body_error = lower_block(c, g, tree, module_index, function, parse.node_at(tree, body_index), builder, bindings, binding_count, &control, defers)
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
     if lowered_body_error != ok { ret lowered_body_error }
@@ -4087,15 +4087,15 @@ fn lower_protocol_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
 // limit -- every binding below would otherwise be one of its. The short-circuit
 // operators alone account for a third of them.
 fn lower_binary_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> (usize, check.Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     var children: [2]usize = zero
     var child_count = 0usize
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == children.len { ret (0usize, zero, parse.InvalidSyntax) }
-            children[child_count] = tree.children[at].index
+            children[child_count] = parse.child_index_at(tree, at)
             child_count += 1usize
         }
         at += 1usize
@@ -4339,7 +4339,7 @@ fn lower_comptime_array(c: *check.Checker, argument: check.GenericArgument, toke
 }
 
 fn lower_binding_member_expr(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: check.Type, builder: *nir.Builder) -> (usize, check.Type, bool, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let (bound, bound_member, is_bound) = check.comptime_binding_base(c, g.modules[module_index].text, tree, node)
     if !is_bound { ret (0usize, check.invalid_type(), false, ok) }
     let (result_type, type_error) = check.check_expr(c, g, tree, module_index, node_index, expected)
@@ -4364,7 +4364,7 @@ fn lower_unrolled_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
             // not raise `loop_depth` for an unrolled `for` either, so one in the body
             // is already rejected there as having no enclosing loop.
             var control: LoopControl = zero
-            let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
+            let body_error = lower_block(c, g, tree, module_index, function, parse.node_at(tree, body_index), builder, bindings, binding_count, &control, defers)
             *binding_count = body_bindings
             c.comptime_binding_count = depth
             if body_error != ok { ret body_error }
@@ -4485,9 +4485,9 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind == .Block {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) == .Block {
                 if found_body { ret parse.InvalidSyntax }
                 body_index = child_index
                 found_body = true
@@ -4623,7 +4623,7 @@ fn lower_for(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     }
     var break_storage: [256]usize = zero
     var control = LoopControl { active: true, continue_target: increment_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
-    let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
+    let body_error = lower_block(c, g, tree, module_index, function, parse.node_at(tree, body_index), builder, bindings, binding_count, &control, defers)
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint
     if body_error != ok { ret body_error }
@@ -4656,9 +4656,9 @@ fn deferred_call_node(tree: *parse.Tree, node: syntax.Node) -> (usize, bool) {
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind == .CallExpr { ret (child_index, true) }
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) == .CallExpr { ret (child_index, true) }
         }
         at += 1usize
     }
@@ -4669,13 +4669,13 @@ fn lower_defer(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if defers.count == defers.entries.len { ret check.Capacity }
     let (child_index, found_child) = check.first_node_child(tree, node)
     if !found_child { ret parse.InvalidSyntax }
-    let child = tree.nodes[child_index]
+    let child = parse.node_at(tree, child_index)
     var entry: Deferred = zero
     entry.token = c.tokens[node.token_start]
     let (call_index, has_call) = deferred_call_node(tree, child)
     if has_call {
         entry.kind = .Call
-        let arguments_error = lower_call_arguments(c, g, tree, module_index, tree.nodes[call_index], builder, bindings, binding_count, true, &entry.call, &entry.callee, entry.arguments[..], &entry.argument_count)
+        let arguments_error = lower_call_arguments(c, g, tree, module_index, parse.node_at(tree, call_index), builder, bindings, binding_count, true, &entry.call, &entry.callee, entry.arguments[..], &entry.argument_count)
         if arguments_error != ok { ret arguments_error }
     } else {
         entry.node_index = child_index
@@ -4700,10 +4700,10 @@ fn emit_deferred_from(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mod
             var current_binding_count = binding_count
             var no_loop: LoopControl = zero
             if entry.kind == .Block {
-                try lower_block(c, g, tree, module_index, function, tree.nodes[entry.node_index], builder, bindings, &current_binding_count, &no_loop, defers)
+                try lower_block(c, g, tree, module_index, function, parse.node_at(tree, entry.node_index), builder, bindings, &current_binding_count, &no_loop, defers)
             } else {
                 if entry.kind != .Statement { ret nir.InvalidControlFlow }
-                try lower_statement(c, g, tree, module_index, function, tree.nodes[entry.node_index], builder, bindings, &current_binding_count, &no_loop, defers)
+                try lower_statement(c, g, tree, module_index, function, parse.node_at(tree, entry.node_index), builder, bindings, &current_binding_count, &no_loop, defers)
             }
             c.local_count = local_checkpoint
         }
@@ -4723,9 +4723,9 @@ fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
         let arm_end = arm.first_child + arm.child_count
         var case_at = arm.first_child
         while case_at < arm_end {
-            if tree.children[case_at].node {
-                let case_index = tree.children[case_at].index
-                if !check.check_statement_kind(tree.nodes[case_index].kind) {
+            if parse.child_is_node_at(tree, case_at) {
+                let case_index = parse.child_index_at(tree, case_at)
+                if !check.check_statement_kind(parse.kind_at(tree, case_index)) {
                     let (key, candidate, has_candidate, key_error) = check.switch_case_key(c, g, tree, module_index, case_index, subject_type, aggregate_index, true)
                     if key_error != ok { ret key_error }
                     field_index = candidate
@@ -4765,8 +4765,8 @@ fn lower_switch_arm(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modul
     var at = arm.first_child
     while at < end {
         if builder.blocks[builder.current_block].terminated { break }
-        if tree.children[at].node {
-            let statement = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let statement = parse.node_at(tree, parse.child_index_at(tree, at))
             if check.check_statement_kind(statement.kind) { try lower_statement(c, g, tree, module_index, function, statement, builder, bindings, binding_count, control, defers) }
         }
         at += 1usize
@@ -4784,9 +4784,9 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind != .SwitchArm {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) != .SwitchArm {
                 subject_index = child_index
                 has_subject = true
                 break
@@ -4823,8 +4823,8 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     var has_default = false
     at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let arm = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let arm = parse.node_at(tree, parse.child_index_at(tree, at))
             if arm.kind == .SwitchArm {
                 if c.tokens[arm.token_start].kind == .KwDefault {
                     default_arm = arm
@@ -4835,9 +4835,9 @@ fn lower_switch(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
                     let arm_end = arm.first_child + arm.child_count
                     var case_at = arm.first_child
                     while case_at < arm_end {
-                        if tree.children[case_at].node {
-                            let case_index = tree.children[case_at].index
-                            if !check.check_statement_kind(tree.nodes[case_index].kind) {
+                        if parse.child_is_node_at(tree, case_at) {
+                            let case_index = parse.child_index_at(tree, case_at)
+                            if !check.check_statement_kind(parse.kind_at(tree, case_index)) {
                                 var case_value = 0usize
                                 if has_aggregate && c.aggregates[aggregate_index].kind == .TaggedUnion {
                                     let (key, field_index, has_field, key_error) = check.switch_case_key(c, g, tree, module_index, case_index, subject_type, aggregate_index, true)
@@ -4943,8 +4943,8 @@ fn lower_statement(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
-                let child = tree.nodes[tree.children[at].index]
+            if parse.child_is_node_at(tree, at) {
+                let child = parse.node_at(tree, parse.child_index_at(tree, at))
                 if child.kind == .Block { block_error = lower_block(c, g, tree, module_index, function, child, builder, bindings, binding_count, control, defers) }
             }
             at += 1usize
@@ -4980,7 +4980,7 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     var at = node.first_child
     while at < end {
         if builder.blocks[builder.current_block].terminated { break }
-        if tree.children[at].node { try lower_statement(c, g, tree, module_index, function, tree.nodes[tree.children[at].index], builder, bindings, binding_count, control, defers) }
+        if parse.child_is_node_at(tree, at) { try lower_statement(c, g, tree, module_index, function, parse.node_at(tree, parse.child_index_at(tree, at)), builder, bindings, binding_count, control, defers) }
         at += 1usize
     }
     if !builder.blocks[builder.current_block].terminated { try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, *binding_count, defers, defer_checkpoint) }
@@ -5054,8 +5054,8 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let child = parse.node_at(tree, parse.child_index_at(tree, at))
             if child.kind == .Block {
                 found_body = true
                 try lower_block(c, g, tree, module_index, function, child, builder, bindings, &binding_count, &no_loop, defers)
@@ -5091,7 +5091,7 @@ fn lower_instance(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_
     let template = c.functions[instance_generic.template_index]
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(tree, node_index)
         if node.top_level && node.kind == .FnDecl {
             let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
             if name_error != ok { ret name_error }
@@ -5887,7 +5887,7 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
     try check.tokenize_module(c, g, module_index)
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .FnDecl { try lower_declaration(c, g, &tree, module_index, node, builder, signatures, bindings, &defers) }
         node_index += 1usize
     }

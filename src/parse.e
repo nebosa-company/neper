@@ -6,8 +6,10 @@ use syntax
 error InvalidSyntax
 
 type Tree = struct {
-    nodes: []syntax.Node,
-    children: []syntax.Child,
+    // Dense (D317): a node is 20 bytes and a child one word; `node_at` and `child_at`
+    // hand out the unpacked forms every reader takes.
+    nodes: []syntax.Packed,
+    children: []u32,
     count: usize,
     child_count: usize,
     errors: usize,
@@ -24,7 +26,57 @@ type Tree = struct {
     failure_keywords: [64]lex.Token,
 }
 
-fn init_tree(tree: *Tree, nodes: []syntax.Node, children: []syntax.Child) -> err {
+fn node_at(tree: *Tree, index: usize) -> syntax.Node {
+    // Unpacked here rather than through `syntax.unpack`: a node comes back through a
+    // slot, and two slot-returning calls per read were a tenth of a build.
+    let packed = tree.nodes[index]
+    var node: syntax.Node = zero
+    node.kind = packed.kind
+    node.top_level = (packed.flags & 1u8) != 0u8
+    node.parented = (packed.flags & 2u8) != 0u8
+    node.token_start = usize(packed.token_start)
+    node.token_end = usize(packed.token_end)
+    node.first_child = usize(packed.first_child)
+    node.child_count = usize(packed.child_count)
+    ret node
+}
+
+fn child_at(tree: *Tree, index: usize) -> syntax.Child {
+    ret syntax.unpack_child(tree.children[index])
+}
+
+// One field at a time, as a register result the release build inlines: a whole node
+// or child comes back through a slot, which the oracle does not copy in (D310).
+fn kind_at(tree: *Tree, index: usize) -> syntax.Kind {
+    ret tree.nodes[index].kind
+}
+
+fn child_index_at(tree: *Tree, index: usize) -> usize {
+    ret usize(tree.children[index] & 2147483647u32)
+}
+
+fn child_is_node_at(tree: *Tree, index: usize) -> bool {
+    let flagged = tree.children[index] & 2147483648u32
+    ret flagged != 0u32
+}
+
+fn set_node(tree: *Tree, index: usize, value: syntax.Node) {
+    tree.nodes[index] = syntax.pack(value)
+}
+
+fn set_child(tree: *Tree, index: usize, value: syntax.Child) {
+    tree.children[index] = syntax.pack_child(value)
+}
+
+fn mark_parented(tree: *Tree, index: usize) {
+    tree.nodes[index].flags = tree.nodes[index].flags | 2u8
+}
+
+fn mark_top_level(tree: *Tree, index: usize) {
+    tree.nodes[index].flags = tree.nodes[index].flags | 1u8
+}
+
+fn init_tree(tree: *Tree, nodes: []syntax.Packed, children: []u32) -> err {
     if nodes.len == 0usize || children.len == 0usize { ret InvalidSyntax }
     tree.nodes = nodes
     tree.children = children
@@ -102,7 +154,7 @@ fn init(tree: *Tree, source: str) -> Parser {
     p.tree.failure_reserved_name = false
     p.tree.has_failure = false
     p.tree.failure_count = 0usize
-    p.tree.nodes[0usize] = syntax.node(.File, 0usize, 0usize, 1usize, 0usize)
+    set_node(p.tree, 0usize, syntax.node(.File, 0usize, 0usize, 1usize, 0usize))
     ret p
 }
 
@@ -119,7 +171,7 @@ fn advance(p: *Parser) -> err {
 
 fn add_child(p: *Parser, child: syntax.Child) -> err {
     if p.tree.child_count == p.tree.children.len { ret InvalidSyntax }
-    p.tree.children[p.tree.child_count] = child
+    set_child(p.tree, p.tree.child_count, child)
     p.tree.child_count += 1usize
     ret ok
 }
@@ -133,7 +185,7 @@ fn add_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize)
         token += 1usize
     }
     p.last_node = p.tree.count
-    p.tree.nodes[p.tree.count] = syntax.node(kind, token_start, token_end, child_start, token_end - token_start)
+    set_node(p.tree, p.tree.count, syntax.node(kind, token_start, token_end, child_start, token_end - token_start))
     p.tree.count += 1usize
     ret ok
 }
@@ -145,14 +197,14 @@ fn add_parent_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end:
     var child = 0usize
     while child < nested.len {
         let node_index = nested[child]
-        if p.tree.nodes[node_index].token_start < token { ret InvalidSyntax }
-        while token < p.tree.nodes[node_index].token_start {
+        if node_at(p.tree, node_index).token_start < token { ret InvalidSyntax }
+        while token < node_at(p.tree, node_index).token_start {
             try add_child(p, syntax.token_child(token))
             token += 1usize
         }
         try add_child(p, syntax.node_child(node_index))
-        p.tree.nodes[node_index].parented = true
-        token = p.tree.nodes[node_index].token_end
+        mark_parented(p.tree, node_index)
+        token = node_at(p.tree, node_index).token_end
         child += 1usize
     }
     while token < token_end {
@@ -160,7 +212,7 @@ fn add_parent_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end:
         token += 1usize
     }
     p.last_node = p.tree.count
-    p.tree.nodes[p.tree.count] = syntax.node(kind, token_start, token_end, child_start, p.tree.child_count - child_start)
+    set_node(p.tree, p.tree.count, syntax.node(kind, token_start, token_end, child_start, p.tree.child_count - child_start))
     p.tree.count += 1usize
     ret ok
 }
@@ -171,15 +223,15 @@ fn add_parent_since(p: *Parser, kind: syntax.Kind, token_start: usize, token_end
     var token = token_start
     var node_index = node_start
     while node_index < p.tree.count {
-        if !p.tree.nodes[node_index].parented && !p.tree.nodes[node_index].top_level {
-            if p.tree.nodes[node_index].token_start < token { ret InvalidSyntax }
-            while token < p.tree.nodes[node_index].token_start {
+        if !node_at(p.tree, node_index).parented && !node_at(p.tree, node_index).top_level {
+            if node_at(p.tree, node_index).token_start < token { ret InvalidSyntax }
+            while token < node_at(p.tree, node_index).token_start {
                 try add_child(p, syntax.token_child(token))
                 token += 1usize
             }
             try add_child(p, syntax.node_child(node_index))
-            p.tree.nodes[node_index].parented = true
-            token = p.tree.nodes[node_index].token_end
+            mark_parented(p.tree, node_index)
+            token = node_at(p.tree, node_index).token_end
         }
         node_index += 1usize
     }
@@ -188,26 +240,26 @@ fn add_parent_since(p: *Parser, kind: syntax.Kind, token_start: usize, token_end
         token += 1usize
     }
     p.last_node = p.tree.count
-    p.tree.nodes[p.tree.count] = syntax.node(kind, token_start, token_end, child_start, p.tree.child_count - child_start)
+    set_node(p.tree, p.tree.count, syntax.node(kind, token_start, token_end, child_start, p.tree.child_count - child_start))
     p.tree.count += 1usize
     ret ok
 }
 
 fn add_top_node(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize) -> err {
     try add_node(p, kind, token_start, token_end)
-    p.tree.nodes[p.last_node].top_level = true
+    mark_top_level(p.tree, p.last_node)
     ret ok
 }
 
 fn add_top_parent(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize, nested: []usize) -> err {
     try add_parent_node(p, kind, token_start, token_end, nested)
-    p.tree.nodes[p.last_node].top_level = true
+    mark_top_level(p.tree, p.last_node)
     ret ok
 }
 
 fn add_top_parent_since(p: *Parser, kind: syntax.Kind, token_start: usize, token_end: usize, node_start: usize) -> err {
     try add_parent_since(p, kind, token_start, token_end, node_start)
-    p.tree.nodes[p.last_node].top_level = true
+    mark_top_level(p.tree, p.last_node)
     ret ok
 }
 
@@ -503,7 +555,7 @@ fn parse_aggregate_literal_node(p: *Parser) -> err {
     } else {
         var has_type_node = false
         try parse_type_node(p, &has_type_node)
-        if !has_type_node || p.tree.nodes[p.last_node].kind != .ArrayType { ret InvalidSyntax }
+        if !has_type_node || kind_at(p.tree, p.last_node) != .ArrayType { ret InvalidSyntax }
     }
     try require(p, .PunctLBrace)
     enter_soft(p)
@@ -567,7 +619,7 @@ fn parse_primary_node(p: *Parser) -> err {
 }
 
 fn parse_call_postfix(p: *Parser, receiver: usize) -> err {
-    let token_start = p.tree.nodes[receiver].token_start
+    let token_start = node_at(p.tree, receiver).token_start
     let node_start = receiver
     try require(p, .PunctLParen)
     enter_soft(p)
@@ -629,7 +681,7 @@ fn parse_bracket_argument_node(p: *Parser) -> err {
 }
 
 fn parse_bracket_postfix(p: *Parser, receiver: usize) -> err {
-    let token_start = p.tree.nodes[receiver].token_start
+    let token_start = node_at(p.tree, receiver).token_start
     let node_start = receiver
     try require(p, .PunctLBracket)
     enter_soft(p)
@@ -676,7 +728,7 @@ fn parse_postfix_node(p: *Parser) -> err {
     while p.current.kind == .PunctDot || p.current.kind == .PunctLParen || p.current.kind == .PunctLBracket {
         let receiver = p.last_node
         if p.current.kind == .PunctDot {
-            let token_start = p.tree.nodes[receiver].token_start
+            let token_start = node_at(p.tree, receiver).token_start
             var nested: [1]usize = zero
             nested[0usize] = receiver
             try advance(p)
@@ -704,7 +756,7 @@ fn parse_prefix_node(p: *Parser) -> err {
         try skip_soft(p)
         try parse_prefix_node(p)
         nested[0usize] = p.last_node
-        try add_parent_node(p, .UnaryExpr, token_start, p.tree.nodes[p.last_node].token_end, nested[..])
+        try add_parent_node(p, .UnaryExpr, token_start, node_at(p.tree, p.last_node).token_end, nested[..])
         ret ok
     }
     ret parse_postfix_node(p)
@@ -724,7 +776,7 @@ fn parse_binary_node(p: *Parser, minimum: usize) -> err {
         try parse_binary_node(p, precedence + 1usize)
         try skip_soft(p)
         nested[1usize] = p.last_node
-        try add_parent_node(p, .BinaryExpr, p.tree.nodes[left].token_start, p.tree.nodes[p.last_node].token_end, nested[..])
+        try add_parent_node(p, .BinaryExpr, node_at(p.tree, left).token_start, node_at(p.tree, p.last_node).token_end, nested[..])
         left = p.last_node
         if precedence == 3usize && binary_precedence(p.current.kind) == 3usize { ret InvalidSyntax }
     }
@@ -1044,7 +1096,7 @@ fn parse_initializer_node(p: *Parser) -> err {
     if p.current.kind == .KwTry {
         try advance(p)
         try parse_postfix_node(p)
-        if p.tree.nodes[p.last_node].kind != .CallExpr { ret InvalidSyntax }
+        if kind_at(p.tree, p.last_node) != .CallExpr { ret InvalidSyntax }
         ret ok
     }
     ret parse_expression_node(p)
@@ -1083,7 +1135,7 @@ fn parse_try_statement(p: *Parser) -> err {
     var nested: [1]usize = zero
     try require(p, .KwTry)
     try parse_postfix_node(p)
-    if p.tree.nodes[p.last_node].kind != .CallExpr || !at_statement_end(p) { ret InvalidSyntax }
+    if kind_at(p.tree, p.last_node) != .CallExpr || !at_statement_end(p) { ret InvalidSyntax }
     nested[0usize] = p.last_node
     try add_parent_node(p, .TryStmt, token_start, p.token_index, nested[..])
     ret ok
@@ -1129,7 +1181,7 @@ fn parse_place_node(p: *Parser) -> err {
     try skip_soft(p)
     try parse_place_node(p)
     nested[0usize] = p.last_node
-    try add_parent_node(p, .UnaryExpr, token_start, p.tree.nodes[p.last_node].token_end, nested[..])
+    try add_parent_node(p, .UnaryExpr, token_start, node_at(p.tree, p.last_node).token_end, nested[..])
     ret ok
 }
 
@@ -1142,7 +1194,7 @@ fn parse_tuple_assignment_statement(p: *Parser) -> err {
     try skip_separators(p)
     while p.current.kind != .PunctRParen {
         try parse_place_node(p)
-        if !is_assignment_target_kind(p.tree.nodes[p.last_node].kind) { ret InvalidSyntax }
+        if !is_assignment_target_kind(kind_at(p.tree, p.last_node)) { ret InvalidSyntax }
         place_count += 1usize
         try skip_separators(p)
         if p.current.kind == .PunctComma {
@@ -1179,8 +1231,8 @@ fn parse_expression_statement(p: *Parser) -> err {
     }
     nested[0usize] = p.last_node
     if is_assignment_op(p.current.kind) {
-        if !is_assignment_target_kind(p.tree.nodes[p.last_node].kind) { ret InvalidSyntax }
-        if p.tree.nodes[p.last_node].kind == .UnaryExpr && !explicit_deref { ret InvalidSyntax }
+        if !is_assignment_target_kind(kind_at(p.tree, p.last_node)) { ret InvalidSyntax }
+        if kind_at(p.tree, p.last_node) == .UnaryExpr && !explicit_deref { ret InvalidSyntax }
         try advance(p)
         if p.current.kind == .KwUndef { ret InvalidSyntax }
         let initializer_has_node = p.current.kind != .KwZero
@@ -1193,7 +1245,7 @@ fn parse_expression_statement(p: *Parser) -> err {
         try add_parent_node(p, .AssignmentStmt, token_start, p.token_index, nested[..nested_count])
         ret ok
     }
-    if p.tree.nodes[p.last_node].kind != .CallExpr || !at_statement_end(p) { ret InvalidSyntax }
+    if kind_at(p.tree, p.last_node) != .CallExpr || !at_statement_end(p) { ret InvalidSyntax }
     try add_parent_node(p, .CallStmt, token_start, p.token_index, nested[..nested_count])
     ret ok
 }
@@ -1890,18 +1942,20 @@ fn parse_file(p: *Parser) -> err {
         p.failure_frozen = true
         try add_top_node(p, .ErrorNode, p.token_index, p.token_index)
     }
-    p.tree.nodes[0usize].token_end = p.token_index + 1usize
-    p.tree.nodes[0usize].first_child = p.tree.child_count
+    var root = node_at(p.tree, 0usize)
+    root.token_end = p.token_index + 1usize
+    root.first_child = p.tree.child_count
+    set_node(p.tree, 0usize, root)
     var token = 0usize
     var node_index = 1usize
     while node_index < p.tree.count {
-        if p.tree.nodes[node_index].top_level {
-            while token < p.tree.nodes[node_index].token_start {
+        if node_at(p.tree, node_index).top_level {
+            while token < node_at(p.tree, node_index).token_start {
                 try add_child(p, syntax.token_child(token))
                 token += 1usize
             }
             try add_child(p, syntax.node_child(node_index))
-            token = p.tree.nodes[node_index].token_end
+            token = node_at(p.tree, node_index).token_end
         }
         node_index += 1usize
     }
@@ -1909,7 +1963,9 @@ fn parse_file(p: *Parser) -> err {
         try add_child(p, syntax.token_child(token))
         token += 1usize
     }
-    p.tree.nodes[0usize].child_count = p.tree.child_count - p.tree.nodes[0usize].first_child
+    root = node_at(p.tree, 0usize)
+    root.child_count = p.tree.child_count - root.first_child
+    set_node(p.tree, 0usize, root)
     if p.tree.errors != 0usize { ret InvalidSyntax }
     ret ok
 }

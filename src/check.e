@@ -905,7 +905,7 @@ fn first_node_child(tree: *parse.Tree, node: syntax.Node) -> (usize, bool) {
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node { ret (tree.children[at].index, true) }
+        if parse.child_is_node_at(tree, at) { ret (parse.child_index_at(tree, at), true) }
         at += 1usize
     }
     ret (0usize, false)
@@ -1146,7 +1146,7 @@ fn integer_literal_value(c: *Checker, text: str, node: syntax.Node) -> (usize, T
 }
 
 fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (IntegerValue, Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let text = g.modules[module_index].text
     if node.kind == .CallExpr {
         let (subject, is_array_len) = array_len_subject(c, g, tree, module_index, node)
@@ -1256,9 +1256,9 @@ fn evaluate_array_length_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, m
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if count == 2usize { ret (normalized_integer(0usize, false), invalid_type(), parse.InvalidSyntax) }
-                children[count] = tree.children[at].index
+                children[count] = parse.child_index_at(tree, at)
                 count += 1usize
             }
             at += 1usize
@@ -1312,13 +1312,13 @@ fn function_type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, t
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let child = parse.node_at(tree, parse.child_index_at(tree, at))
             if child.kind == .Parameter {
                 if parameter_count == parameter_types.len { ret (invalid_type(), Capacity) }
                 let (type_index, has_type) = first_node_child(tree, child)
                 if !has_type { ret (invalid_type(), parse.InvalidSyntax) }
-                let (parameter_type, parameter_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+                let (parameter_type, parameter_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, type_index))
                 if parameter_error != ok { ret (invalid_type(), parameter_error) }
                 if parameter_type.kind == .Void { ret (invalid_type(), InvalidType) }
                 parameter_types[parameter_count] = parameter_type
@@ -1328,9 +1328,9 @@ fn function_type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, t
                 let return_end = child.first_child + child.child_count
                 var return_at = child.first_child
                 while return_at < return_end {
-                    if tree.children[return_at].node {
+                    if parse.child_is_node_at(tree, return_at) {
                         if return_count == return_types.len { ret (invalid_type(), Capacity) }
-                        let (return_type, return_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[tree.children[return_at].index])
+                        let (return_type, return_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, parse.child_index_at(tree, return_at)))
                         if return_error != ok { ret (invalid_type(), return_error) }
                         return_types[return_count] = return_type
                         return_count += 1usize
@@ -1411,17 +1411,17 @@ fn collect_generic_arguments(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mo
     var argument_count = 0usize
     var at = first_child
     while at < child_end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if argument_count >= template.comptime_count { ret (0usize, ArgumentCount) }
             let parameter = c.comptime_parameters[template.first_comptime + argument_count]
-            let argument_node = tree.children[at].index
+            let argument_node = parse.child_index_at(tree, at)
             var argument: GenericArgument = zero
             argument.kind = parameter.kind
             argument.set = true
             if parameter.kind == .Field || parameter.kind == .Member {
                 // As at a call: a comptime value has no spelling of its own, so the argument is
                 // a name that already holds one.
-                let value_node = tree.nodes[argument_node]
+                let value_node = parse.node_at(tree, argument_node)
                 if value_node.kind != .NameExpr { ret (0usize, TypeMismatch) }
                 let value_token = c.tokens[value_node.token_start]
                 if value_token.kind != .Identifier { ret (0usize, TypeMismatch) }
@@ -1464,7 +1464,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     if node.kind == .PointerType || node.kind == .SliceType {
         let (child_index, has_child) = first_node_child(tree, node)
         if !has_child { ret (invalid_type(), parse.InvalidSyntax) }
-        let child = tree.nodes[child_index]
+        let child = parse.node_at(tree, child_index)
         let (element_type, element_error) = type_from_node(c, r, g, tree, module_index, child)
         if element_error != ok { ret (invalid_type(), element_error) }
         if node.kind == .SliceType && element_type.kind == .Void { ret (invalid_type(), InvalidType) }
@@ -1487,9 +1487,9 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         var has_length = false
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
-                let child_index = tree.children[at].index
-                if is_type_node(tree.nodes[child_index].kind) {
+            if parse.child_is_node_at(tree, at) {
+                let child_index = parse.child_index_at(tree, at)
+                if is_type_node(parse.kind_at(tree, child_index)) {
                     element_index = child_index
                     has_element = true
                 } else {
@@ -1501,7 +1501,7 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
         }
         if !has_element { ret (invalid_type(), parse.InvalidSyntax) }
         if !has_length { ret (invalid_type(), Unsupported) }
-        let (element_type, element_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[element_index])
+        let (element_type, element_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, element_index))
         if element_error != ok { ret (invalid_type(), element_error) }
         if element_type.kind == .Void { ret (invalid_type(), InvalidType) }
         let (stored_element, store_error) = store_type(c, element_type)
@@ -1515,8 +1515,8 @@ fn type_from_node(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
             has_concrete_length = true
         } else {
             if c.active_comptime_count == 0usize || c.active_arguments {
-                if length_error == TypeMismatch { record_failure(c, module_index, tree.nodes[length_index], .ArrayLengthType, "", "") }
-                if length_error == ComptimeDeferred { record_failure(c, module_index, tree.nodes[length_index], .ComptimeDeferredUse, "", "") }
+                if length_error == TypeMismatch { record_failure(c, module_index, parse.node_at(tree, length_index), .ArrayLengthType, "", "") }
+                if length_error == ComptimeDeferred { record_failure(c, module_index, parse.node_at(tree, length_index), .ComptimeDeferredUse, "", "") }
                 ret (invalid_type(), length_error)
             }
             let (copied_expression, expression_error) = copy_constant_expr(c, g, tree, module_index, length_index)
@@ -1739,9 +1739,9 @@ fn collect_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
     var generic = false
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if child.kind == .ComptimeParam { generic = true }
             if is_type_node(child.kind) {
                 rhs_index = child_index
@@ -1761,7 +1761,7 @@ fn collect_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
     }
     if !has_rhs { ret ok }
     if c.alias_count == c.aliases.len { ret Capacity }
-    var (rhs, rhs_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[rhs_index])
+    var (rhs, rhs_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, rhs_index))
     if rhs_error != ok {
         if !allow_deferred || rhs_error != Unsupported { ret rhs_error }
         rhs = make_type(.Other, "", module_index)
@@ -1782,7 +1782,7 @@ fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_def
         try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
-            let node = tree.nodes[node_index]
+            let node = parse.node_at(&tree, node_index)
             if node.top_level && node.kind == .TypeDecl { try collect_alias_declaration(c, r, g, &tree, module_index, node, allow_deferred) }
             node_index += 1usize
         }
@@ -1910,7 +1910,7 @@ fn tagged_union_tag_type(c: *Checker, ty: Type) -> (Type, bool) {
 fn field_expression_name(c: *Checker, text: str, tree: *parse.Tree, node: syntax.Node) -> (str, bool) {
     let (base_index, has_base) = first_node_child(tree, node)
     if !has_base { ret ("", false) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     var name = ""
     var at = base.token_end
     while at < node.token_end {
@@ -1929,9 +1929,9 @@ fn aggregate_declaration_shape(tree: *parse.Tree, node: syntax.Node) -> (usize, 
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if child.kind == .ComptimeParam { generic = true }
             if child.kind == .StructType || child.kind == .UnionType || child.kind == .UnionEnumType || child.kind == .EnumType {
                 body_index = child_index
@@ -1959,8 +1959,8 @@ fn register_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.G
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let child = parse.node_at(tree, parse.child_index_at(tree, at))
             if child.kind == .ComptimeParam {
                 c.active_first_comptime = aggregate.first_comptime
                 c.active_comptime_count = aggregate.comptime_count
@@ -1990,14 +1990,14 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
     var at = node.first_child
     c.active_first_comptime = aggregate.first_comptime
     c.active_comptime_count = aggregate.comptime_count
-    let body = tree.nodes[body_index]
+    let body = parse.node_at(tree, body_index)
     let body_end = body.first_child + body.child_count
     var backing_type = invalid_type()
     if kind == .Enum || kind == .TaggedUnion {
         var backing_at = body.first_child
         while backing_at < body_end {
-            if tree.children[backing_at].node {
-                let backing_node = tree.nodes[tree.children[backing_at].index]
+            if parse.child_is_node_at(tree, backing_at) {
+                let backing_node = parse.node_at(tree, parse.child_index_at(tree, backing_at))
                 if is_type_node(backing_node.kind) {
                     let (resolved_backing, backing_error) = type_from_node(c, r, g, tree, module_index, backing_node)
                     if backing_error != ok { ret backing_error }
@@ -2015,8 +2015,8 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
     var next_enum_valid = true
     at = body.first_child
     while at < body_end {
-        if tree.children[at].node {
-            let field_node = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let field_node = parse.node_at(tree, parse.child_index_at(tree, at))
             if field_node.kind == .FieldDecl || field_node.kind == .UnionMember || field_node.kind == .EnumMember {
                 if c.aggregate_field_count == c.aggregate_fields.len { ret Capacity }
                 let (field_name, has_name) = first_name(c, g.modules[module_index].text, field_node)
@@ -2024,7 +2024,7 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
                 var field_type = make_type(.Void, "void", module_index)
                 let (type_index, has_type) = first_node_child(tree, field_node)
                 if has_type && kind != .Enum {
-                    let (resolved, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+                    let (resolved, type_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, type_index))
                     if type_error != ok { ret type_error }
                     field_type = resolved
                 } else {
@@ -2314,7 +2314,7 @@ fn vector_operator_legal(c: *Checker, ty: Type, op: lex.Kind) -> bool {
 fn array_len_subject(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, bool) {
     let (receiver_index, has_receiver) = first_node_child(tree, node)
     if !has_receiver { ret (invalid_type(), false) }
-    let receiver = tree.nodes[receiver_index]
+    let receiver = parse.node_at(tree, receiver_index)
     if receiver.kind != .BracketPostfix { ret (invalid_type(), false) }
     let end = receiver.first_child + receiver.child_count
     var at = receiver.first_child
@@ -2322,18 +2322,18 @@ fn array_len_subject(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count != 2usize { ret (invalid_type(), false) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (invalid_type(), false) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.meta") || !same(member, "array_len") { ret (invalid_type(), false) }
@@ -2368,7 +2368,7 @@ fn collect_aggregate_pass(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, re
         try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
-            let node = tree.nodes[node_index]
+            let node = parse.node_at(&tree, node_index)
             if node.top_level && node.kind == .TypeDecl {
                 if register {
                     try register_aggregate_declaration(c, r, g, &tree, module_index, node)
@@ -2862,7 +2862,7 @@ fn collect_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *
     if !has_name { ret Unsupported }
     let (type_index, has_type) = first_node_child(tree, node)
     if !has_type { ret Unsupported }
-    let (ty, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+    let (ty, type_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, type_index))
     if type_error != ok { ret type_error }
     if ty.kind == .Void { ret InvalidType }
     c.parameters[c.parameter_count] = Parameter { name: name, ty: ty }
@@ -2900,7 +2900,7 @@ fn collect_comptime_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
     }
     let (type_index, has_type) = first_node_child(tree, node)
     if !has_type { ret Unsupported }
-    let (ty, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[type_index])
+    let (ty, type_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, type_index))
     if type_error != ok { ret type_error }
     if ty.kind == .String {
         c.comptime_parameters[c.comptime_parameter_count] = ComptimeParameter { name: name, kind: .Str, ty: ty }
@@ -2943,7 +2943,7 @@ fn collect_comptime_parameter(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
 // representable in the element type, exactly the declared count once that is known.
 // What is bound is the literal's spelling and the array type it wrote.
 fn bind_array_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function_index: usize, first_argument: usize, parameter_index: usize, node_index: usize) -> err {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let text = g.modules[module_index].text
     // Forwarding another generic's comptime array by name.
     if node.kind == .NameExpr {
@@ -2976,8 +2976,8 @@ fn bind_array_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let item = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let item = parse.node_at(tree, parse.child_index_at(tree, at))
             if item.kind == .LiteralItem {
                 let (expression, has_expression) = literal_item_expression(tree, item)
                 if !has_expression { ret parse.InvalidSyntax }
@@ -3061,7 +3061,7 @@ fn declaration_import(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     var at = node_index
     while at > 1usize {
         at = at - 1usize
-        let node = tree.nodes[at]
+        let node = parse.node_at(tree, at)
         if !node.top_level { continue }
         if node.kind != .Attribute { ret ("", "", false) }
         var name = ""
@@ -3112,8 +3112,8 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let child = parse.node_at(tree, parse.child_index_at(tree, at))
             if child.kind == .ComptimeParam {
                 c.active_first_comptime = generic.first_comptime
                 c.active_comptime_count = generic.comptime_count
@@ -3128,8 +3128,8 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
     c.active_comptime_count = generic.comptime_count
     at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let child = parse.node_at(tree, parse.child_index_at(tree, at))
             if child.kind == .Parameter {
                 if child.token_start < child.token_end && c.tokens[child.token_start].kind == .PunctEllipsis {
                     // Legal on an `extern` alone; anywhere else `...` is still refused.
@@ -3145,8 +3145,8 @@ fn collect_function(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *p
                 let return_end = child.first_child + child.child_count
                 var return_at = child.first_child
                 while return_at < return_end {
-                    if tree.children[return_at].node {
-                        let (return_type, type_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[tree.children[return_at].index])
+                    if parse.child_is_node_at(tree, return_at) {
+                        let (return_type, type_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, parse.child_index_at(tree, return_at)))
                         if type_error != ok { ret type_error }
                         try store_return_type(c, return_type)
                         item.return_count += 1usize
@@ -3447,7 +3447,7 @@ fn collect_signatures(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err
         try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
-            let node = tree.nodes[node_index]
+            let node = parse.node_at(&tree, node_index)
             if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl) {
                 try collect_function(c, r, g, &tree, module_index, node, node_index)
             }
@@ -3622,7 +3622,7 @@ fn imported_module(g: *graph.Graph, module_index: usize, qualifier: str) -> (usi
 fn qualified_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (usize, str, bool) {
     let (base_index, has_base) = first_node_child(tree, node)
     if !has_base { ret (0usize, "", false) }
-    let base_node = tree.nodes[base_index]
+    let base_node = parse.node_at(tree, base_index)
     if base_node.kind != .NameExpr { ret (0usize, "", false) }
     let base_token = c.tokens[base_node.token_start]
     if base_token.kind != .Identifier { ret (0usize, "", false) }
@@ -3726,7 +3726,7 @@ fn normalized_integer(magnitude: usize, negative: bool) -> IntegerValue {
 }
 
 fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let text = g.modules[module_index].text
     var item: ConstantExpr = zero
     if node.kind == .CallExpr {
@@ -3747,13 +3747,13 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         let call_end = node.first_child + node.child_count
         var call_at = node.first_child
         while call_at < call_end {
-            if tree.children[call_at].node {
+            if parse.child_is_node_at(tree, call_at) {
                 if first {
-                    callee_index = tree.children[call_at].index
+                    callee_index = parse.child_index_at(tree, call_at)
                     first = false
                 } else {
                     if argument_count == arguments.len { ret (0usize, InvalidConstant) }
-                    let (copied, copy_error) = copy_constant_expr(c, g, tree, module_index, tree.children[call_at].index)
+                    let (copied, copy_error) = copy_constant_expr(c, g, tree, module_index, parse.child_index_at(tree, call_at))
                     if copy_error != ok { ret (0usize, copy_error) }
                     arguments[argument_count] = copied
                     argument_count += 1usize
@@ -3762,7 +3762,7 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
             call_at += 1usize
         }
         if first { ret (0usize, InvalidConstant) }
-        let callee = tree.nodes[callee_index]
+        let callee = parse.node_at(tree, callee_index)
         item.kind = .Call
         item.module_index = module_index
         item.site = node
@@ -3851,9 +3851,9 @@ fn copy_constant_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if count == 2usize { ret (0usize, parse.InvalidSyntax) }
-                children[count] = tree.children[at].index
+                children[count] = parse.child_index_at(tree, at)
                 count += 1usize
             }
             at += 1usize
@@ -3885,9 +3885,9 @@ fn collect_constant_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gra
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if is_type_node(child.kind) {
                 let (resolved_type, type_error) = type_from_node(c, r, g, tree, module_index, child)
                 if type_error != ok { ret type_error }
@@ -4382,58 +4382,14 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
         c.interp_ready = true
     }
     if c.interp_parsed[module_index] { ret (module_index, ok) }
-    // Parsed into scratch the size of the graph's own, then copied at its own size.
-    let (scratch_nodes, scratch_nodes_error) = mem.alloc[syntax.Node](c.arena, g.nodes.len)
-    if scratch_nodes_error != ok { ret (0usize, scratch_nodes_error) }
-    let (scratch_children, scratch_children_error) = mem.alloc[syntax.Child](c.arena, g.children.len)
-    if scratch_children_error != ok { ret (0usize, scratch_children_error) }
-    var tree: parse.Tree = zero
-    let init_error = parse.init_tree(&tree, scratch_nodes, scratch_children)
-    if init_error != ok { ret (0usize, init_error) }
-    let parse_error = parse.parse_tokens(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
-    if parse_error != ok { ret (0usize, parse_error) }
-    let (nodes, nodes_error) = mem.alloc[syntax.Node](c.arena, tree.count)
-    if nodes_error != ok { ret (0usize, nodes_error) }
-    let (children, children_error) = mem.alloc[syntax.Child](c.arena, tree.child_count)
-    if children_error != ok { ret (0usize, children_error) }
-    var copy_at = 0usize
-    while copy_at < tree.count {
-        nodes[copy_at] = scratch_nodes[copy_at]
-        copy_at += 1usize
-    }
-    copy_at = 0usize
-    while copy_at < tree.child_count {
-        children[copy_at] = scratch_children[copy_at]
-        copy_at += 1usize
-    }
+    // The module's tree is the one the graph keeps (D317).
     var kept: parse.Tree = zero
-    kept.nodes = nodes
-    kept.children = children
-    kept.count = tree.count
-    kept.child_count = tree.child_count
+    let kept_error = graph.parse_module(g, module_index, &kept)
+    if kept_error != ok { ret (0usize, kept_error) }
     c.interp_trees[module_index] = kept
-    // The tokens likewise, at their own size.
-    let (scratch_tokens, scratch_tokens_error) = mem.alloc[lex.Token](c.arena, c.tokens.len)
-    if scratch_tokens_error != ok { ret (0usize, scratch_tokens_error) }
-    var scanner = lex.init(g.modules[module_index].text)
-    var token_count = 0usize
-    while true {
-        if token_count == scratch_tokens.len { ret (0usize, Capacity) }
-        let token = lex.next(&scanner)
-        if token.kind == .Invalid { ret (0usize, lex.InvalidSource) }
-        scratch_tokens[token_count] = token
-        token_count += 1usize
-        if token.kind == .Eof { break }
-    }
-    let (tokens, tokens_error) = mem.alloc[lex.Token](c.arena, token_count)
-    if tokens_error != ok { ret (0usize, tokens_error) }
-    copy_at = 0usize
-    while copy_at < token_count {
-        tokens[copy_at] = scratch_tokens[copy_at]
-        copy_at += 1usize
-    }
-    c.interp_tokens[module_index] = tokens
-    c.interp_token_counts[module_index] = token_count
+    // The tokens likewise are the module's own (D316).
+    c.interp_tokens[module_index] = g.modules[module_index].tokens
+    c.interp_token_counts[module_index] = g.modules[module_index].tokens.len
     c.interp_parsed[module_index] = true
     ret (module_index, ok)
 }
@@ -4488,15 +4444,15 @@ fn interp_cell(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            if count == 0usize { base_index = tree.children[at].index }
-            if count == 1usize { index_index = tree.children[at].index }
+        if parse.child_is_node_at(tree, at) {
+            if count == 0usize { base_index = parse.child_index_at(tree, at) }
+            if count == 1usize { index_index = parse.child_index_at(tree, at) }
             count += 1usize
         }
         at += 1usize
     }
     if count != 2usize { ret (0usize, 0usize, interp_fail(c, module_index, node, "an index of a shape it does not evaluate")) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .NameExpr { ret (0usize, 0usize, interp_fail(c, module_index, node, "an index into something that is not an array local")) }
     let base_token = c.tokens[base.token_start]
     let (slot, found) = interp_lookup(frame, text[base_token.start..base_token.end])
@@ -4541,7 +4497,7 @@ fn interp_compare(op: lex.Kind, left: IntegerValue, right: IntegerValue) -> bool
 
 fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, node_index: usize, expected: Type) -> (IntegerValue, Type, err) {
     let module_index = frame.module_index
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let text = g.modules[module_index].text
     let none = normalized_integer(0usize, false)
     let step_error = interp_step(c, module_index, node)
@@ -4583,13 +4539,13 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
     if node.kind == .FieldExpr {
         // `t.len` of an array local, before a qualified constant is tried.
         let (receiver_index, has_receiver) = first_node_child(tree, node)
-        if has_receiver && tree.nodes[receiver_index].kind == .NameExpr {
-            let receiver_token = c.tokens[tree.nodes[receiver_index].token_start]
+        if has_receiver && parse.kind_at(tree, receiver_index) == .NameExpr {
+            let receiver_token = c.tokens[parse.node_at(tree, receiver_index).token_start]
             let (slot, found_local) = interp_lookup(frame, text[receiver_token.start..receiver_token.end])
             if found_local {
                 if !frame.is_array[slot] { ret (none, invalid_type(), interp_fail(c, module_index, node, "a field, which no value here has")) }
                 var member_at = node.token_end
-                while member_at > tree.nodes[receiver_index].token_end {
+                while member_at > parse.node_at(tree, receiver_index).token_end {
                     member_at = member_at - 1usize
                     if c.tokens[member_at].kind == .Identifier { break }
                 }
@@ -4639,9 +4595,9 @@ fn interp_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFr
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if count == children.len { ret (none, invalid_type(), parse.InvalidSyntax) }
-                children[count] = tree.children[at].index
+                children[count] = parse.child_index_at(tree, at)
                 count += 1usize
             }
             at += 1usize
@@ -4719,20 +4675,20 @@ fn interp_call_node(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if first {
-                callee_index = tree.children[at].index
+                callee_index = parse.child_index_at(tree, at)
                 first = false
             } else {
                 if argument_count == arguments.len { ret (none, invalid_type(), interp_fail(c, module_index, node, "a call of more than sixteen arguments")) }
-                arguments[argument_count] = tree.children[at].index
+                arguments[argument_count] = parse.child_index_at(tree, at)
                 argument_count += 1usize
             }
         }
         at += 1usize
     }
     if first { ret (none, invalid_type(), parse.InvalidSyntax) }
-    let callee = tree.nodes[callee_index]
+    let callee = parse.node_at(tree, callee_index)
     var target_module = module_index
     var name = ""
     if callee.kind == .NameExpr {
@@ -4816,7 +4772,7 @@ fn interp_function(c: *Checker, g: *graph.Graph, module_index: usize, function_i
     var found_declaration = false
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(tree, node_index)
         if node.top_level && node.kind == .FnDecl {
             let (declared_name, name_error) = function_name(c, text, node)
             if name_error == ok && same(declared_name, function.name) {
@@ -4827,30 +4783,30 @@ fn interp_function(c: *Checker, g: *graph.Graph, module_index: usize, function_i
         }
         node_index += 1usize
     }
-    if !found_declaration { ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[0usize], "a function whose declaration it cannot find")) }
+    if !found_declaration { ret (none, invalid_type(), interp_fail(c, module_index, parse.node_at(tree, 0usize), "a function whose declaration it cannot find")) }
     var frame: InterpFrame = zero
     frame.module_index = module_index
     frame.return_type = return_type
     var parameter_at = 0usize
     while parameter_at < function.parameter_count {
         let parameter = c.parameters[function.first_parameter + parameter_at]
-        if parameter.ty.kind != .Integer && parameter.ty.kind != .Bool { ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[declaration], "a parameter that is not an integer or bool")) }
-        let (converted, converted_type, convert_error) = interp_convert(c, module_index, tree.nodes[declaration], arguments[parameter_at], argument_types[parameter_at], parameter.ty)
+        if parameter.ty.kind != .Integer && parameter.ty.kind != .Bool { ret (none, invalid_type(), interp_fail(c, module_index, parse.node_at(tree, declaration), "a parameter that is not an integer or bool")) }
+        let (converted, converted_type, convert_error) = interp_convert(c, module_index, parse.node_at(tree, declaration), arguments[parameter_at], argument_types[parameter_at], parameter.ty)
         if convert_error != ok { ret (none, invalid_type(), convert_error) }
         let bind_error = interp_bind(&frame, parameter.name, converted, converted_type)
         if bind_error != ok { ret (none, invalid_type(), bind_error) }
         parameter_at += 1usize
     }
-    let declared = tree.nodes[declaration]
+    let declared = parse.node_at(tree, declaration)
     let end = declared.first_child + declared.child_count
     var at = declared.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind == .Block {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) == .Block {
                 let (control, control_error) = interp_block(c, g, tree, &frame, child_index)
                 if control_error != ok { ret (none, invalid_type(), control_error) }
-                if control != interp_control_return() { ret (none, invalid_type(), interp_fail(c, module_index, tree.nodes[child_index], "the end of a body without `ret`")) }
+                if control != interp_control_return() { ret (none, invalid_type(), interp_fail(c, module_index, parse.node_at(tree, child_index), "the end of a body without `ret`")) }
                 ret (frame.result, frame.result_type, ok)
             }
         }
@@ -4860,7 +4816,7 @@ fn interp_function(c: *Checker, g: *graph.Graph, module_index: usize, function_i
 }
 
 fn interp_block(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, block_index: usize) -> (usize, err) {
-    let block = tree.nodes[block_index]
+    let block = parse.node_at(tree, block_index)
     if frame.mark_count == frame.marks.len { ret (0usize, Capacity) }
     frame.marks[frame.mark_count] = frame.count
     frame.mark_count += 1usize
@@ -4868,8 +4824,8 @@ fn interp_block(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpF
     let end = block.first_child + block.child_count
     var at = block.first_child
     while at < end && control == interp_control_next() {
-        if tree.children[at].node {
-            let (statement_control, statement_error) = interp_statement(c, g, tree, frame, tree.children[at].index)
+        if parse.child_is_node_at(tree, at) {
+            let (statement_control, statement_error) = interp_statement(c, g, tree, frame, parse.child_index_at(tree, at))
             if statement_error != ok { ret (0usize, statement_error) }
             control = statement_control
         }
@@ -4890,7 +4846,7 @@ fn interp_block(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpF
 
 fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *InterpFrame, node_index: usize) -> (usize, err) {
     let module_index = frame.module_index
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let text = g.modules[module_index].text
     let step_error = interp_step(c, module_index, node)
     if step_error != ok { ret (0usize, step_error) }
@@ -4909,9 +4865,9 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
-                let child_index = tree.children[at].index
-                let child = tree.nodes[child_index]
+            if parse.child_is_node_at(tree, at) {
+                let child_index = parse.child_index_at(tree, at)
+                let child = parse.node_at(tree, child_index)
                 if child.kind == .Binding {
                     binding_index = child_index
                     has_binding = true
@@ -4937,7 +4893,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         // `zero` is a token of the statement, not a node of its own.
         let zeroed = contains_token(c, node.token_start, node.token_end, .KwZero)
         if !has_binding || (!has_initializer && !zeroed) { ret (0usize, interp_fail(c, module_index, node, "a binding without a value")) }
-        let binding = tree.nodes[binding_index]
+        let binding = parse.node_at(tree, binding_index)
         let binding_token = c.tokens[binding.token_start]
         if binding_token.kind != .Identifier { ret (0usize, interp_fail(c, module_index, node, "a binding that is not one name")) }
         if !has_array_type && !has_initializer {
@@ -4949,24 +4905,24 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         if has_array_type {
             // `var t: [N]u8 = zero` (D221): a length the length evaluator settles, an
             // element type that is an integer or bool, and `zero` as the value.
-            let array_node = tree.nodes[array_type_index]
+            let array_node = parse.node_at(tree, array_type_index)
             var length_index = 0usize
             var element_index = 0usize
             var array_children = 0usize
             let array_end = array_node.first_child + array_node.child_count
             var array_at = array_node.first_child
             while array_at < array_end {
-                if tree.children[array_at].node {
-                    if array_children == 0usize { length_index = tree.children[array_at].index }
-                    if array_children == 1usize { element_index = tree.children[array_at].index }
+                if parse.child_is_node_at(tree, array_at) {
+                    if array_children == 0usize { length_index = parse.child_index_at(tree, array_at) }
+                    if array_children == 1usize { element_index = parse.child_index_at(tree, array_at) }
                     array_children += 1usize
                 }
                 array_at += 1usize
             }
-            if array_children != 2usize || tree.nodes[element_index].kind != .NamedType { ret (0usize, interp_fail(c, module_index, node, "an array of a shape it does not evaluate")) }
+            if array_children != 2usize || parse.kind_at(tree, element_index) != .NamedType { ret (0usize, interp_fail(c, module_index, node, "an array of a shape it does not evaluate")) }
             let (length, length_error) = array_length_value(c, g, tree, module_index, length_index)
             if length_error != ok { ret (0usize, interp_fail(c, module_index, node, "an array length it cannot settle")) }
-            let element_token = c.tokens[tree.nodes[element_index].token_start]
+            let element_token = c.tokens[parse.node_at(tree, element_index).token_start]
             let element = primitive_type(text[element_token.start..element_token.end], module_index)
             if element.kind != .Integer && element.kind != .Bool { ret (0usize, interp_fail(c, module_index, node, "an array of elements that are not integers or bools")) }
             if has_initializer || !zeroed { ret (0usize, interp_fail(c, module_index, node, "an array with a value other than `zero`")) }
@@ -4990,15 +4946,15 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
-                if count == 0usize { place_index = tree.children[at].index }
-                value_index = tree.children[at].index
+            if parse.child_is_node_at(tree, at) {
+                if count == 0usize { place_index = parse.child_index_at(tree, at) }
+                value_index = parse.child_index_at(tree, at)
                 count += 1usize
             }
             at += 1usize
         }
         if count != 2usize { ret (0usize, interp_fail(c, module_index, node, "an assignment that is not `name op= value`")) }
-        let place = tree.nodes[place_index]
+        let place = parse.node_at(tree, place_index)
         var slot = 0usize
         var cell = 0usize
         var into_cell = false
@@ -5015,7 +4971,7 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
             if !found || frame.is_array[found_slot] { ret (0usize, interp_fail(c, module_index, node, "an assignment to a name that is no scalar local")) }
             slot = found_slot
         }
-        let op = assignment_operator(c, place.token_end, tree.nodes[value_index].token_start)
+        let op = assignment_operator(c, place.token_end, parse.node_at(tree, value_index).token_start)
         let slot_type = frame.types[slot]
         var current = frame.values[slot]
         if into_cell { current = frame.cells[cell] }
@@ -5065,9 +5021,9 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if part_count == parts.len { ret (0usize, interp_fail(c, module_index, node, "a `for` of a shape it does not evaluate")) }
-                parts[part_count] = tree.children[at].index
+                parts[part_count] = parse.child_index_at(tree, at)
                 part_count += 1usize
             }
             at += 1usize
@@ -5115,13 +5071,13 @@ fn interp_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, frame: *Int
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if !found_condition {
-                    condition_index = tree.children[at].index
+                    condition_index = parse.child_index_at(tree, at)
                     found_condition = true
                 } else {
                     if arm_count == arms.len { ret (0usize, interp_fail(c, module_index, node, "an `if` of a shape it does not evaluate")) }
-                    arms[arm_count] = tree.children[at].index
+                    arms[arm_count] = parse.child_index_at(tree, at)
                     arm_count += 1usize
                 }
             }
@@ -5219,9 +5175,9 @@ fn collect_global_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if is_type_node(child.kind) {
                 let (resolved_type, type_error) = type_from_node(c, r, g, tree, module_index, child)
                 if type_error != ok { ret type_error }
@@ -5259,7 +5215,7 @@ fn collect_constants(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err 
         try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
-            let node = tree.nodes[node_index]
+            let node = parse.node_at(&tree, node_index)
             if node.top_level && node.kind == .ConstDecl { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
             if node.top_level && node.kind == .VarDecl { try collect_global_declaration(c, r, g, &tree, module_index, node) }
             node_index += 1usize
@@ -5333,12 +5289,12 @@ fn binary_operator(c: *Checker, tree: *parse.Tree, node: syntax.Node) -> lex.Kin
     var found_left = false
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if !found_left {
-                left_end = tree.nodes[tree.children[at].index].token_end
+                left_end = parse.node_at(tree, parse.child_index_at(tree, at)).token_end
                 found_left = true
             } else {
-                right_start = tree.nodes[tree.children[at].index].token_start
+                right_start = parse.node_at(tree, parse.child_index_at(tree, at)).token_start
                 break
             }
         }
@@ -5786,7 +5742,7 @@ fn instantiate_function(c: *Checker, owner_module_index: usize, template_index: 
 fn bracket_function(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (usize, err) {
     let (base_index, found_base) = first_node_child(tree, receiver)
     if !found_base { ret (0usize, parse.InvalidSyntax) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind == .NameExpr {
         let token = c.tokens[base.token_start]
         let name = g.modules[module_index].text[token.start..token.end]
@@ -5821,17 +5777,17 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         var child_position = 0usize
         at = receiver.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if child_position > 0usize {
                     let argument_position = child_position - 1usize
                     if argument_position >= generic.comptime_count { ret (0usize, ArgumentCount) }
                     let parameter = c.comptime_parameters[generic.first_comptime + argument_position]
-                    let node_index = tree.children[at].index
+                    let node_index = parse.child_index_at(tree, at)
                     if parameter.kind == .Field || parameter.kind == .Member {
                         // A comptime `Field` has no way to be written down: it comes from
                         // `meta.fields`, so the argument is always a name that already holds
                         // one -- a loop's binding, or this caller's own parameter.
-                        let argument_node = tree.nodes[node_index]
+                        let argument_node = parse.node_at(tree, node_index)
                         if argument_node.kind != .NameExpr { ret (0usize, TypeMismatch) }
                         let argument_token = c.tokens[argument_node.token_start]
                         if argument_token.kind != .Identifier { ret (0usize, TypeMismatch) }
@@ -5852,7 +5808,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
                         if bind_error != ok { ret (0usize, bind_error) }
                     } else {
                     if parameter.kind == .Str {
-                        let argument_node = tree.nodes[node_index]
+                        let argument_node = parse.node_at(tree, node_index)
                         if argument_node.kind != .LiteralExpr { ret (0usize, TypeMismatch) }
                         let literal = c.tokens[argument_node.token_start]
                         if literal.kind != .String && literal.kind != .RawString { ret (0usize, TypeMismatch) }
@@ -5887,7 +5843,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     let call_end = call.first_child + call.child_count
     at = call.first_child
     while at < call_end {
-        if tree.children[at].node { runtime_count += 1usize }
+        if parse.child_is_node_at(tree, at) { runtime_count += 1usize }
         at += 1usize
     }
     if runtime_count == 0usize || runtime_count - 1usize != template.parameter_count { ret (0usize, ArgumentCount) }
@@ -5895,14 +5851,14 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     var dependent_runtime = false
     at = call.first_child
     while at < call_end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if runtime_position > 0usize {
                 let formal = c.parameters[template.first_parameter + runtime_position - 1usize].ty
                 var expected = invalid_type()
                 let (specialized, specialize_error) = substitute_type(c, template_index, first_argument, formal)
                 if specialize_error == ok { expected = specialized }
                 if specialize_error != ok && specialize_error != MissingContext { ret (0usize, specialize_error) }
-                let (actual, actual_error) = check_expr(c, g, tree, module_index, tree.children[at].index, expected)
+                let (actual, actual_error) = check_expr(c, g, tree, module_index, parse.child_index_at(tree, at), expected)
                 if actual_error != ok { ret (0usize, actual_error) }
                 if type_depends_on_comptime(c, actual) { dependent_runtime = true }
                 let inference_error = infer_comptime_type(c, template_index, first_argument, formal, actual)
@@ -6084,7 +6040,7 @@ type FormatterInfo = struct {
 fn derived_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, err) {
     let (receiver_index, has_receiver) = first_node_child(tree, node)
     if !has_receiver { ret (invalid_type(), InvalidType) }
-    let receiver = tree.nodes[receiver_index]
+    let receiver = parse.node_at(tree, receiver_index)
     if receiver.kind != .BracketPostfix { ret (invalid_type(), InvalidType) }
     let end = receiver.first_child + receiver.child_count
     var at = receiver.first_child
@@ -6092,18 +6048,18 @@ fn derived_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count != 2usize { ret (invalid_type(), InvalidType) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (invalid_type(), InvalidType) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.meta") { ret (invalid_type(), InvalidType) }
@@ -6200,7 +6156,7 @@ fn named_type_derived(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
 }
 
 fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let text = g.modules[module_index].text
     if is_type_node(node.kind) {
         let (parsed, parsed_error) = type_from_node(c, c.resolver, g, tree, module_index, node)
@@ -6260,10 +6216,10 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         // The base occupies the first child slot; the arguments are the slots after it.
         let child_end = node.first_child + node.child_count
         var base_slot = node.first_child
-        while base_slot < child_end && !tree.children[base_slot].node { base_slot += 1usize }
+        while base_slot < child_end && !parse.child_is_node_at(tree, base_slot) { base_slot += 1usize }
         if base_slot >= child_end { ret (invalid_type(), parse.InvalidSyntax) }
-        let base_index = tree.children[base_slot].index
-        let base = tree.nodes[base_index]
+        let base_index = parse.child_index_at(tree, base_slot)
+        let base = parse.node_at(tree, base_index)
         var target_module = module_index
         var name = ""
         if base.kind == .NameExpr {
@@ -6308,7 +6264,7 @@ fn comptime_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         var pointer = make_type(.Pointer, "", module_index)
         pointer.element = stored_element
         pointer.has_element = true
-        pointer.is_const = contains_token(c, node.token_start, tree.nodes[child_index].token_start, .KwConst)
+        pointer.is_const = contains_token(c, node.token_start, parse.node_at(tree, child_index).token_start, .KwConst)
         ret (pointer, ok)
     }
     ret (invalid_type(), InvalidType)
@@ -6388,18 +6344,18 @@ fn bitcast_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.mem") || !same(member, "bitcast") { ret (info, ok) }
@@ -6430,18 +6386,18 @@ fn sqrt_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     var target_module = module_index
     if base.kind == .FieldExpr {
         let (member_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
@@ -6767,18 +6723,18 @@ fn dl_symbol_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.os") || !same(member, "dlsym") { ret (info, ok) }
@@ -6807,18 +6763,18 @@ fn cast_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.mem") || !same(member, "cast") { ret (info, ok) }
@@ -6874,18 +6830,18 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member { ret (info, ok) }
@@ -6962,11 +6918,11 @@ fn meta_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usiz
 // here. `false` covers every other call, and covers a question whose subject is still a type
 // parameter -- in a template body nothing is settled, so nothing may be folded (D136).
 fn meta_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, Type, bool) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind != .CallExpr { ret (0usize, invalid_type(), false) }
     let (receiver_index, has_receiver) = first_node_child(tree, node)
     if !has_receiver { ret (0usize, invalid_type(), false) }
-    let receiver = tree.nodes[receiver_index]
+    let receiver = parse.node_at(tree, receiver_index)
     if receiver.kind != .BracketPostfix { ret (0usize, invalid_type(), false) }
     let (info, info_error) = meta_info(c, g, tree, module_index, receiver)
     if info_error != ok || !info.matched || info.deferred { ret (0usize, invalid_type(), false) }
@@ -7001,7 +6957,7 @@ fn scalar_size(ty: Type) -> usize {
 // The other side, read against the type the question answers with: `.Int` is a member of
 // `TypeKind` and a length is an ordinary integer, so one of the two evaluators has it.
 fn compared_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (usize, bool) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind == .MemberExpr {
         let (aggregate_index, found_aggregate) = aggregate_for_type(c, expected)
         if !found_aggregate { ret (0usize, false) }
@@ -7039,7 +6995,7 @@ fn compared_constant(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // that a reader would expect to be. A general comptime `if` is the upgrade, and wants the
 // interpreter this compiler does not have.
 fn comptime_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, bool) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind != .BinaryExpr { ret (false, false) }
     let op = binary_operator(c, tree, node)
     if op != .PunctEqEq && op != .PunctBangEq { ret (false, false) }
@@ -7048,9 +7004,9 @@ fn comptime_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if count == children.len { ret (false, false) }
-            children[count] = tree.children[at].index
+            children[count] = parse.child_index_at(tree, at)
             count += 1usize
         }
         at += 1usize
@@ -7089,18 +7045,18 @@ fn thread_create_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.os") || !same(member, "thread_create") { ret (info, ok) }
@@ -7132,18 +7088,18 @@ fn alloc_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.mem") || !same(member, "alloc") { ret (info, ok) }
@@ -7189,18 +7145,18 @@ fn formatter_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     var base_index = 0usize
     var format_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                format_index = tree.children[at].index
+                format_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member { ret (info, ok) }
@@ -7213,7 +7169,7 @@ fn formatter_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     }
     info.matched = true
     if child_count != 2usize { ret (info, ArgumentCount) }
-    let format_node = tree.nodes[format_index]
+    let format_node = parse.node_at(tree, format_index)
     if format_node.kind != .LiteralExpr { ret (info, TypeMismatch) }
     let literal = c.tokens[format_node.token_start]
     if literal.kind != .String && literal.kind != .RawString { ret (info, TypeMismatch) }
@@ -7562,7 +7518,7 @@ fn check_atomic_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         if value_error != ok { ret value_error }
         if is_untyped(value) { ret MissingContext }
         if !atomic_element_legal(value) {
-            record_failure_token(c, module_index, c.tokens[tree.nodes[child_index].token_start], .AtomicElement, value.name, "")
+            record_failure_token(c, module_index, c.tokens[parse.node_at(tree, child_index).token_start], .AtomicElement, value.name, "")
             ret InvalidType
         }
         info.atomic_element = value
@@ -7574,7 +7530,7 @@ fn check_atomic_argument(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         let (element, found) = atomic_pointee_element(c, pointer)
         if !found { ret TypeMismatch }
         if atomic_integer_only(op) && element.kind != .Integer {
-            record_failure_token(c, module_index, c.tokens[tree.nodes[child_index].token_start], .AtomicElement, element.name, "")
+            record_failure_token(c, module_index, c.tokens[parse.node_at(tree, child_index).token_start], .AtomicElement, element.name, "")
             ret InvalidType
         }
         info.atomic_element = element
@@ -7605,7 +7561,7 @@ fn check_atomic_ordering(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
     let (given, given_error) = check_expr(c, g, tree, module_index, child_index, ordering_type)
     if given_error != ok { ret given_error }
     var ordering: Ordering = .Dynamic
-    let node = tree.nodes[child_index]
+    let node = parse.node_at(tree, child_index)
     if node.kind == .MemberExpr {
         let (member, has_member) = switch_member_name(c, g.modules[module_index].text, node)
         if has_member { ordering = atomic_ordering_for_name(member) }
@@ -7648,16 +7604,16 @@ fn meta_access_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     var field_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
-            if child_count == 0usize { base_index = tree.children[at].index }
-            if child_count == 1usize { field_index = tree.children[at].index }
-            if child_count == 2usize { type_index = tree.children[at].index }
+        if parse.child_is_node_at(tree, at) {
+            if child_count == 0usize { base_index = parse.child_index_at(tree, at) }
+            if child_count == 1usize { field_index = parse.child_index_at(tree, at) }
+            if child_count == 2usize { type_index = parse.child_index_at(tree, at) }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.meta") { ret (info, ok) }
@@ -7667,7 +7623,7 @@ fn meta_access_info(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if child_count != 3usize { ret (info, ArgumentCount) }
     // The first bracket argument names a comptime `Field`, which today can only come
     // from the binding of an unrolled `for` over `meta.fields[T]()`.
-    let field_node = tree.nodes[field_index]
+    let field_node = parse.node_at(tree, field_index)
     if field_node.kind != .NameExpr { ret (info, InvalidType) }
     let field_token = c.tokens[field_node.token_start]
     if field_token.kind != .Identifier { ret (info, InvalidType) }
@@ -7720,10 +7676,10 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     var child_position = 0usize
     var has_function = false
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
             if child_position == 0usize {
-                let receiver = tree.nodes[child_index]
+                let receiver = parse.node_at(tree, child_index)
                 if receiver.kind == .NameExpr && c.tokens[receiver.token_start].kind == .KwUnreachable {
                     info.is_unreachable = true
                     info.function.module_index = module_index
@@ -7991,7 +7947,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
                     // At most one argument, and it is a `str` literal: the message is the
                     // record's values, so it has to be text the back end can lay out.
                     if child_position != 1usize { ret (info, ArgumentCount) }
-                    let argument = tree.nodes[child_index]
+                    let argument = parse.node_at(tree, child_index)
                     if argument.kind != .LiteralExpr || c.tokens[argument.token_start].kind != .String { ret (info, TypeMismatch) }
                     child_position += 1usize
                     at += 1usize
@@ -8234,7 +8190,7 @@ fn check_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
 fn protocol_receiver(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, receiver: syntax.Node) -> (Type, str, bool) {
     let (base_index, has_base) = first_node_child(tree, receiver)
     if !has_base { ret (invalid_type(), "", false) }
-    let base_node = tree.nodes[base_index]
+    let base_node = parse.node_at(tree, base_index)
     if base_node.kind != .NameExpr { ret (invalid_type(), "", false) }
     if base_node.token_start >= c.token_count { ret (invalid_type(), "", false) }
     let base_token = c.tokens[base_node.token_start]
@@ -8659,8 +8615,8 @@ fn read_bracket(c: *Checker, tree: *parse.Tree, node: syntax.Node, info: *Bracke
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
             if info.child_count == 0usize { info.base = child_index }
             if info.child_count == 1usize { info.first = child_index }
             if info.child_count == 2usize { info.second = child_index }
@@ -8669,7 +8625,7 @@ fn read_bracket(c: *Checker, tree: *parse.Tree, node: syntax.Node, info: *Bracke
         at += 1usize
     }
     if info.child_count == 0usize { ret parse.InvalidSyntax }
-    let base = tree.nodes[info.base]
+    let base = parse.node_at(tree, info.base)
     at = base.token_end
     while at < node.token_end {
         if c.tokens[at].kind == .PunctRange { info.range = true }
@@ -8716,7 +8672,7 @@ fn literal_item_named(c: *Checker, tree: *parse.Tree, item: syntax.Node) -> bool
     let (expression, has_expression) = literal_item_expression(tree, item)
     if !has_expression { ret false }
     var at = item.token_start
-    let expression_start = tree.nodes[expression].token_start
+    let expression_start = parse.node_at(tree, expression).token_start
     while at < expression_start {
         if c.tokens[at].kind == .PunctColon { ret true }
         at += 1usize
@@ -8731,9 +8687,9 @@ fn aggregate_literal_header(tree: *parse.Tree, node: syntax.Node) -> (usize, usi
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind == .LiteralItem {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) == .LiteralItem {
                 item_count += 1usize
             } else {
                 if has_header { ret (0usize, 0usize, parse.InvalidSyntax) }
@@ -8748,16 +8704,16 @@ fn aggregate_literal_header(tree: *parse.Tree, node: syntax.Node) -> (usize, usi
 }
 
 fn check_array_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, header_index: usize, item_count: usize, expected: Type) -> (Type, err) {
-    let header = tree.nodes[header_index]
+    let header = parse.node_at(tree, header_index)
     if header.kind != .ArrayType { ret (invalid_type(), InvalidType) }
     var element_index = 0usize
     var has_element = false
     let header_end = header.first_child + header.child_count
     var at = header.first_child
     while at < header_end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if is_type_node(tree.nodes[child_index].kind) {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if is_type_node(parse.kind_at(tree, child_index)) {
                 element_index = child_index
                 has_element = true
             }
@@ -8765,7 +8721,7 @@ fn check_array_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         at += 1usize
     }
     if !has_element { ret (invalid_type(), parse.InvalidSyntax) }
-    let (element, element_error) = type_from_node(c, c.resolver, g, tree, module_index, tree.nodes[element_index])
+    let (element, element_error) = type_from_node(c, c.resolver, g, tree, module_index, parse.node_at(tree, element_index))
     if element_error != ok { ret (invalid_type(), element_error) }
     if element.kind == .Void { ret (invalid_type(), InvalidType) }
     let inferred = contains_token(c, header.token_start, header.token_end, .PunctUnderscore)
@@ -8794,8 +8750,8 @@ fn check_array_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     let end = node.first_child + node.child_count
     at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let item = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let item = parse.node_at(tree, parse.child_index_at(tree, at))
             if item.kind == .LiteralItem {
                 if literal_item_named(c, tree, item) { ret (invalid_type(), InvalidType) }
                 let (expression, has_expression) = literal_item_expression(tree, item)
@@ -8823,8 +8779,8 @@ fn aggregate_field_for_name(c: *Checker, aggregate: Aggregate, name: str) -> (us
 fn literal_name_seen(c: *Checker, text: str, tree: *parse.Tree, node: syntax.Node, before_child: usize, name: str) -> bool {
     var at = node.first_child
     while at < before_child {
-        if tree.children[at].node {
-            let item = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let item = parse.node_at(tree, parse.child_index_at(tree, at))
             if item.kind == .LiteralItem {
                 let (previous, found) = literal_item_name(c, text, item)
                 if found && same(previous, name) { ret true }
@@ -8836,7 +8792,7 @@ fn literal_name_seen(c: *Checker, text: str, tree: *parse.Tree, node: syntax.Nod
 }
 
 fn check_named_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, header_index: usize, item_count: usize, expected: Type) -> (Type, err) {
-    let header = tree.nodes[header_index]
+    let header = parse.node_at(tree, header_index)
     if header.kind != .NamedType { ret (invalid_type(), InvalidType) }
     let (constructed_type, type_error) = type_from_node(c, c.resolver, g, tree, module_index, header)
     if type_error != ok { ret (invalid_type(), type_error) }
@@ -8869,8 +8825,8 @@ fn check_named_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let item = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let item = parse.node_at(tree, parse.child_index_at(tree, at))
             if item.kind == .LiteralItem {
                 let (name, has_name) = literal_item_name(c, text, item)
                 if !has_name { ret (invalid_type(), InvalidType) }
@@ -8898,12 +8854,12 @@ fn check_named_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree
 fn check_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, expected: Type) -> (Type, err) {
     let (header_index, item_count, header_error) = aggregate_literal_header(tree, node)
     if header_error != ok { ret (invalid_type(), header_error) }
-    if tree.nodes[header_index].kind == .ArrayType {
+    if parse.kind_at(tree, header_index) == .ArrayType {
         let (array, array_error) = check_array_literal(c, g, tree, module_index, node, header_index, item_count, expected)
         ret (array, array_error)
     }
-    if tree.nodes[header_index].kind == .NamedType {
-        let (named, named_error) = type_from_node(c, c.resolver, g, tree, module_index, tree.nodes[header_index])
+    if parse.kind_at(tree, header_index) == .NamedType {
+        let (named, named_error) = type_from_node(c, c.resolver, g, tree, module_index, parse.node_at(tree, header_index))
         if named_error == ok && is_vector_type(c, named) {
             let (vector, vector_error) = check_vector_literal(c, g, tree, module_index, node, named, item_count, expected)
             ret (vector, vector_error)
@@ -8931,8 +8887,8 @@ fn check_vector_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let item = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let item = parse.node_at(tree, parse.child_index_at(tree, at))
             if item.kind == .LiteralItem {
                 if literal_item_named(c, tree, item) { ret (invalid_type(), InvalidType) }
                 let (expression, has_expression) = literal_item_expression(tree, item)
@@ -8948,7 +8904,7 @@ fn check_vector_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_
 }
 
 fn direct_place_mutable(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind == .NameExpr {
         let token = c.tokens[node.token_start]
         if token.kind != .Identifier { ret (false, Unsupported) }
@@ -9085,7 +9041,7 @@ fn is_fallible(c: *Checker, function: Function) -> bool {
 }
 
 fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, expected: Type) -> (Type, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let text = g.modules[module_index].text
     if node.kind == .LiteralExpr {
         let token = c.tokens[node.token_start]
@@ -9292,7 +9248,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
             ret (result_type, context_error)
         }
         if op == .PunctAmp {
-            let place = tree.nodes[child_index]
+            let place = parse.node_at(tree, child_index)
             var place_type = invalid_type()
             var mutable = false
             if place.kind == .NameExpr {
@@ -9349,9 +9305,9 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         var count = 0usize
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if count == 2usize { ret (invalid_type(), parse.InvalidSyntax) }
-                children[count] = tree.children[at].index
+                children[count] = parse.child_index_at(tree, at)
                 count += 1usize
             }
             at += 1usize
@@ -9560,9 +9516,9 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
     var declared = invalid_type()
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if child.kind == .Binding {
                 binding_index = child_index
                 has_binding = true
@@ -9583,12 +9539,12 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
         at += 1usize
     }
     if !has_binding { ret parse.InvalidSyntax }
-    let binding = tree.nodes[binding_index]
+    let binding = parse.node_at(tree, binding_index)
     let tuple = c.tokens[binding.token_start].kind == .PunctLParen
     var mutable = false
     if c.tokens[node.token_start].kind == .KwVar { mutable = true }
-    if has_initializer && tree.nodes[initializer_index].kind == .CallExpr {
-        let initializer = tree.nodes[initializer_index]
+    if has_initializer && parse.kind_at(tree, initializer_index) == .CallExpr {
+        let initializer = parse.node_at(tree, initializer_index)
         let tried = contains_token(c, node.token_start, initializer.token_start, .KwTry)
         let (call, call_error) = check_call(c, g, tree, module_index, initializer)
         if call_error != ok { ret call_error }
@@ -9677,7 +9633,7 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             count += 1usize
         }
         at += 1usize
@@ -9690,12 +9646,12 @@ fn check_return(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     var return_index = 0usize
     at = node.first_child
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             let (expected, return_type_error) = function_return(c, function, return_index)
             if return_type_error != ok { ret return_type_error }
-            let (actual, expression_error) = check_expr(c, g, tree, module_index, tree.children[at].index, expected)
+            let (actual, expression_error) = check_expr(c, g, tree, module_index, parse.child_index_at(tree, at), expected)
             if expression_error == TypeMismatch {
-                record_failure(c, module_index, tree.nodes[tree.children[at].index], .ReturnType, "", "")
+                record_failure(c, module_index, parse.node_at(tree, parse.child_index_at(tree, at)), .ReturnType, "", "")
                 ret ReturnType
             }
             if expression_error != ok { ret expression_error }
@@ -9710,7 +9666,7 @@ fn check_children(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *par
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node { try check_statement(c, r, g, tree, module_index, tree.children[at].index, function) }
+        if parse.child_is_node_at(tree, at) { try check_statement(c, r, g, tree, module_index, parse.child_index_at(tree, at), function) }
         at += 1usize
     }
     ret ok
@@ -9737,13 +9693,13 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
         var foldable = true
         var scan = node.first_child
         while scan < end {
-            if tree.children[scan].node {
-                let scanned = tree.children[scan].index
+            if parse.child_is_node_at(tree, scan) {
+                let scanned = parse.child_index_at(tree, scan)
                 if !found_condition {
                     condition_index = scanned
                     found_condition = true
                 } else {
-                    if arm_count == arms.len || tree.nodes[scanned].kind != .Block {
+                    if arm_count == arms.len || parse.kind_at(tree, scanned) != .Block {
                         foldable = false
                     } else {
                         arms[arm_count] = scanned
@@ -9760,8 +9716,8 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
             if condition_type.kind != .Bool { ret InvalidCondition }
             let (taken, settled) = comptime_condition(c, g, tree, module_index, condition_index)
             if settled {
-                if taken { ret check_block(c, r, g, tree, module_index, tree.nodes[arms[0usize]], function) }
-                if arm_count == 2usize { ret check_block(c, r, g, tree, module_index, tree.nodes[arms[1usize]], function) }
+                if taken { ret check_block(c, r, g, tree, module_index, parse.node_at(tree, arms[0usize]), function) }
+                if arm_count == 2usize { ret check_block(c, r, g, tree, module_index, parse.node_at(tree, arms[1usize]), function) }
                 ret ok
             }
         }
@@ -9769,9 +9725,9 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
     var first = true
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if first {
                 let (condition_type, condition_error) = check_expr(c, g, tree, module_index, child_index, make_type(.Bool, "bool", module_index))
                 if condition_error == TypeMismatch { ret InvalidCondition }
@@ -9804,7 +9760,7 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
 fn check_call_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
     let (child_index, found) = first_node_child(tree, node)
     if !found { ret parse.InvalidSyntax }
-    let (call, call_error) = check_call(c, g, tree, module_index, tree.nodes[child_index])
+    let (call, call_error) = check_call(c, g, tree, module_index, parse.node_at(tree, child_index))
     if call_error != ok { ret call_error }
     if call.is_cast { ret ArgumentCount }
     if call.function.return_count != 0usize { ret ArgumentCount }
@@ -9815,7 +9771,7 @@ fn check_try_statement(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if c.defer_depth != 0usize { ret InvalidTry }
     let (child_index, found) = first_node_child(tree, node)
     if !found { ret parse.InvalidSyntax }
-    let call_node = tree.nodes[child_index]
+    let call_node = parse.node_at(tree, child_index)
     let (call, call_error) = check_call(c, g, tree, module_index, call_node)
     if call_error != ok { ret call_error }
     if call.is_cast { ret TryCast }
@@ -9957,11 +9913,11 @@ type MetaSequence = struct {
 // `meta.fields[T]()` written as a whole call: a bracket receiver under a call node.
 fn meta_sequence(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (MetaSequence, err) {
     var info: MetaSequence = zero
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind != .CallExpr { ret (info, ok) }
     let (receiver_index, has_receiver) = first_node_child(tree, node)
     if !has_receiver { ret (info, ok) }
-    let receiver = tree.nodes[receiver_index]
+    let receiver = parse.node_at(tree, receiver_index)
     if receiver.kind != .BracketPostfix { ret (info, ok) }
     let end = receiver.first_child + receiver.child_count
     var at = receiver.first_child
@@ -9969,18 +9925,18 @@ fn meta_sequence(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     var base_index = 0usize
     var type_index = 0usize
     while at < end {
-        if tree.children[at].node {
+        if parse.child_is_node_at(tree, at) {
             if child_count == 0usize {
-                base_index = tree.children[at].index
+                base_index = parse.child_index_at(tree, at)
             } else {
-                type_index = tree.children[at].index
+                type_index = parse.child_index_at(tree, at)
             }
             child_count += 1usize
         }
         at += 1usize
     }
     if child_count == 0usize { ret (info, ok) }
-    let base = tree.nodes[base_index]
+    let base = parse.node_at(tree, base_index)
     if base.kind != .FieldExpr { ret (info, ok) }
     let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, base)
     if !found_member || !same(g.modules[target_module].name, "e.meta") { ret (info, ok) }
@@ -9999,7 +9955,7 @@ fn meta_sequence(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     }
     let (aggregate_index, found_aggregate) = aggregate_for_type(c, subject)
     if !found_aggregate {
-        record_failure(c, module_index, tree.nodes[type_index], .MetaShape, subject.name, member)
+        record_failure(c, module_index, parse.node_at(tree, type_index), .MetaShape, subject.name, member)
         ret (info, InvalidType)
     }
     let aggregate = c.aggregates[aggregate_index]
@@ -10008,12 +9964,12 @@ fn meta_sequence(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     // an enum or a tagged union has.
     if kind == .Fields {
         if aggregate.kind != .Struct && aggregate.kind != .TaggedUnion {
-            record_failure(c, module_index, tree.nodes[type_index], .MetaShape, subject.name, member)
+            record_failure(c, module_index, parse.node_at(tree, type_index), .MetaShape, subject.name, member)
             ret (info, InvalidType)
         }
     } else {
         if aggregate.kind != .Enum && aggregate.kind != .TaggedUnion {
-            record_failure(c, module_index, tree.nodes[type_index], .MetaShape, subject.name, member)
+            record_failure(c, module_index, parse.node_at(tree, type_index), .MetaShape, subject.name, member)
             ret (info, InvalidType)
         }
     }
@@ -10063,7 +10019,7 @@ fn check_unrolled_for(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: 
             let depth = c.comptime_binding_count
             if name.len != 0usize { try push_comptime_binding(c, name, argument) }
             let checkpoint = c.local_count
-            let body_error = check_block(c, r, g, tree, module_index, tree.nodes[block_index], function)
+            let body_error = check_block(c, r, g, tree, module_index, parse.node_at(tree, block_index), function)
             c.local_count = checkpoint
             c.comptime_binding_count = depth
             if body_error != ok { ret body_error }
@@ -10098,7 +10054,7 @@ fn comptime_binding_member(c: *Checker, argument: GenericArgument, member: str, 
 fn truncation_cast(c: *Checker, text: str, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> (Type, bool) {
     let (base_index, has_base) = first_node_child(tree, node)
     if !has_base { ret (invalid_type(), false) }
-    let base_node = tree.nodes[base_index]
+    let base_node = parse.node_at(tree, base_index)
     if base_node.kind != .NameExpr { ret (invalid_type(), false) }
     let base_token = c.tokens[base_node.token_start]
     if base_token.kind != .Identifier { ret (invalid_type(), false) }
@@ -10130,7 +10086,7 @@ fn comptime_binding_base(c: *Checker, text: str, tree: *parse.Tree, node: syntax
     var empty: GenericArgument = zero
     let (base_index, has_base) = first_node_child(tree, node)
     if !has_base { ret (empty, "", false) }
-    let base_node = tree.nodes[base_index]
+    let base_node = parse.node_at(tree, base_index)
     if base_node.kind != .NameExpr { ret (empty, "", false) }
     let base_token = c.tokens[base_node.token_start]
     if base_token.kind != .Identifier { ret (empty, "", false) }
@@ -10169,9 +10125,9 @@ fn check_for_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind == .Block {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) == .Block {
                 block_index = child_index
                 has_block = true
             } else {
@@ -10248,7 +10204,7 @@ fn check_for_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     }
     c.loop_depth += 1usize
     c.break_depth += 1usize
-    let body_error = check_block(c, r, g, tree, module_index, tree.nodes[block_index], function)
+    let body_error = check_block(c, r, g, tree, module_index, parse.node_at(tree, block_index), function)
     c.loop_depth = c.loop_depth - 1usize
     c.break_depth = c.break_depth - 1usize
     c.local_count = checkpoint
@@ -10272,7 +10228,7 @@ fn switch_member_name(c: *Checker, text: str, node: syntax.Node) -> (str, bool) 
 }
 
 fn unwrap_switch_case(tree: *parse.Tree, node_index: usize) -> usize {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind != .GroupExpr { ret node_index }
     let (child_index, found) = first_node_child(tree, node)
     if !found { ret node_index }
@@ -10282,7 +10238,7 @@ fn unwrap_switch_case(tree: *parse.Tree, node_index: usize) -> usize {
 fn switch_case_key(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, subject: Type, aggregate_index: usize, has_aggregate: bool) -> (SwitchKey, usize, bool, err) {
     var key: SwitchKey = zero
     let unwrapped_index = unwrap_switch_case(tree, node_index)
-    let node = tree.nodes[unwrapped_index]
+    let node = parse.node_at(tree, unwrapped_index)
     let text = g.modules[module_index].text
     if has_aggregate {
         let aggregate = c.aggregates[aggregate_index]
@@ -10362,15 +10318,15 @@ fn switch_case_seen_before(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modu
     let end = switch_node.first_child + switch_node.child_count
     var at = switch_node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let child = parse.node_at(tree, parse.child_index_at(tree, at))
             if child.kind == .SwitchArm {
                 let arm_end = child.first_child + child.child_count
                 var arm_at = child.first_child
                 while arm_at < arm_end {
-                    if tree.children[arm_at].node {
-                        let prior_index = tree.children[arm_at].index
-                        let prior = tree.nodes[prior_index]
+                    if parse.child_is_node_at(tree, arm_at) {
+                        let prior_index = parse.child_index_at(tree, arm_at)
+                        let prior = parse.node_at(tree, prior_index)
                         if !check_statement_kind(prior.kind) {
                             if prior_index == current_index { ret (false, ok) }
                             let (prior_key, prior_field, prior_has_field, prior_error) = switch_case_key(c, g, tree, module_index, prior_index, subject, aggregate_index, has_aggregate)
@@ -10423,8 +10379,8 @@ fn switch_arm_returns(c: *Checker, tree: *parse.Tree, module_index: usize, arm: 
     let end = arm.first_child + arm.child_count
     var at = arm.first_child
     while at < end {
-        if tree.children[at].node {
-            let child = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let child = parse.node_at(tree, parse.child_index_at(tree, at))
             if check_statement_kind(child.kind) && statement_returns(c, tree, module_index, child) { ret true }
         }
         at += 1usize
@@ -10436,14 +10392,14 @@ fn switch_has_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let arm = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let arm = parse.node_at(tree, parse.child_index_at(tree, at))
             if arm.kind == .SwitchArm && c.tokens[arm.token_start].kind != .KwDefault {
                 let arm_end = arm.first_child + arm.child_count
                 var arm_at = arm.first_child
                 while arm_at < arm_end {
-                    if tree.children[arm_at].node {
-                        let value = tree.nodes[tree.children[arm_at].index]
+                    if parse.child_is_node_at(tree, arm_at) {
+                        let value = parse.node_at(tree, parse.child_index_at(tree, arm_at))
                         if !check_statement_kind(value.kind) {
                             let (member, found) = switch_member_name(c, g.modules[module_index].text, value)
                             if found && same(member, name) { ret true }
@@ -10465,8 +10421,8 @@ fn check_dependent_switch(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
     var returning_arm_count = 0usize
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let arm = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let arm = parse.node_at(tree, parse.child_index_at(tree, at))
             if arm.kind == .SwitchArm {
                 arm_count += 1usize
                 let checkpoint = c.local_count
@@ -10479,7 +10435,7 @@ fn check_dependent_switch(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                     let arm_end = arm.first_child + arm.child_count
                     var case_at = arm.first_child
                     while case_at < arm_end {
-                        if tree.children[case_at].node && !check_statement_kind(tree.nodes[tree.children[case_at].index].kind) { case_count += 1usize }
+                        if parse.child_is_node_at(tree, case_at) && !check_statement_kind(parse.kind_at(tree, parse.child_index_at(tree, case_at))) { case_count += 1usize }
                         case_at += 1usize
                     }
                     if case_count == 0usize { ret parse.InvalidSyntax }
@@ -10498,9 +10454,9 @@ fn check_dependent_switch(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                 var arm_at = arm.first_child
                 var body_error = ok
                 while arm_at < arm_end {
-                    if tree.children[arm_at].node {
-                        let statement_index = tree.children[arm_at].index
-                        if check_statement_kind(tree.nodes[statement_index].kind) {
+                    if parse.child_is_node_at(tree, arm_at) {
+                        let statement_index = parse.child_index_at(tree, arm_at)
+                        if check_statement_kind(parse.kind_at(tree, statement_index)) {
                             body_error = check_statement(c, r, g, tree, module_index, statement_index, function)
                             if body_error != ok { break }
                         }
@@ -10524,9 +10480,9 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind != .SwitchArm {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) != .SwitchArm {
                 subject_index = child_index
                 has_subject = true
                 break
@@ -10551,8 +10507,8 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
     var returning_arm_count = 0usize
     at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let arm = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let arm = parse.node_at(tree, parse.child_index_at(tree, at))
             if arm.kind == .SwitchArm {
                 arm_count += 1usize
                 let checkpoint = c.local_count
@@ -10567,9 +10523,9 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                     default_seen = true
                 } else {
                     while arm_at < arm_end {
-                        if tree.children[arm_at].node {
-                            let case_index = tree.children[arm_at].index
-                            if !check_statement_kind(tree.nodes[case_index].kind) {
+                        if parse.child_is_node_at(tree, arm_at) {
+                            let case_index = parse.child_index_at(tree, arm_at)
+                            if !check_statement_kind(parse.kind_at(tree, case_index)) {
                                 let (key, field_index, has_field, key_error) = switch_case_key(c, g, tree, module_index, case_index, subject, aggregate_index, has_aggregate)
                                 if key_error != ok { ret key_error }
                                 let (duplicate, duplicate_error) = switch_case_seen_before(c, g, tree, module_index, node, case_index, subject, aggregate_index, has_aggregate, key)
@@ -10600,9 +10556,9 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                 arm_at = arm.first_child
                 var body_error = ok
                 while arm_at < arm_end {
-                    if tree.children[arm_at].node {
-                        let statement_index = tree.children[arm_at].index
-                        if check_statement_kind(tree.nodes[statement_index].kind) {
+                    if parse.child_is_node_at(tree, arm_at) {
+                        let statement_index = parse.child_index_at(tree, arm_at)
+                        if check_statement_kind(parse.kind_at(tree, statement_index)) {
                             body_error = check_statement(c, r, g, tree, module_index, statement_index, function)
                             if body_error != ok { break }
                         }
@@ -10645,7 +10601,7 @@ fn check_defer_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
     c.loop_depth = 0usize
     c.break_depth = 0usize
     c.defer_depth += 1usize
-    let child = tree.nodes[child_index]
+    let child = parse.node_at(tree, child_index)
     var body_error = ok
     if child.kind == .Block {
         body_error = check_block(c, r, g, tree, module_index, child, function)
@@ -10664,7 +10620,7 @@ fn check_defer_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
 }
 
 fn assignment_place_type(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (Type, err) {
-    let place = tree.nodes[node_index]
+    let place = parse.node_at(tree, node_index)
     if place.kind == .NameExpr {
         let token = c.tokens[place.token_start]
         let name = g.modules[module_index].text[token.start..token.end]
@@ -10795,16 +10751,16 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            if count == 0usize { first_index = tree.children[at].index }
-            initializer_index = tree.children[at].index
+        if parse.child_is_node_at(tree, at) {
+            if count == 0usize { first_index = parse.child_index_at(tree, at) }
+            initializer_index = parse.child_index_at(tree, at)
             count += 1usize
         }
         at += 1usize
     }
     if count < 2usize { ret Unsupported }
-    let initializer = tree.nodes[initializer_index]
-    let op = assignment_operator(c, tree.nodes[first_index].token_end, initializer.token_start)
+    let initializer = parse.node_at(tree, initializer_index)
+    let op = assignment_operator(c, parse.node_at(tree, first_index).token_end, initializer.token_start)
     if op == .Invalid { ret Unsupported }
     let tried = contains_token(c, node.token_start, initializer.token_start, .KwTry)
     if count == 2usize && !tried {
@@ -10832,8 +10788,8 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     var result_index = 0usize
     at = node.first_child
     while at < end {
-        if tree.children[at].node && result_index < result_count {
-            let (place_type, place_error) = assignment_place_type(c, g, tree, module_index, tree.children[at].index)
+        if parse.child_is_node_at(tree, at) && result_index < result_count {
+            let (place_type, place_error) = assignment_place_type(c, g, tree, module_index, parse.child_index_at(tree, at))
             if place_error != ok {
                 if place_error == ImmutableAssignment && c.failure_kind == .AssignmentImmutable {
                     c.failure_kind = .MultipleAssignmentImmutable
@@ -10859,7 +10815,7 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 }
 
 fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, function: Function) -> err {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind == .Block { ret check_block(c, r, g, tree, module_index, node, function) }
     if node.kind == .BindingStmt { ret check_binding(c, r, g, tree, module_index, node, function) }
     if node.kind == .ReturnStmt { ret check_return(c, g, tree, module_index, node, function) }
@@ -10892,7 +10848,7 @@ fn check_statement_inner(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tre
 }
 
 fn check_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, function: Function) -> err {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     let statement_error = check_statement_inner(c, r, g, tree, module_index, node_index, function)
     if statement_error != ok && !c.failure_has_token {
         record_failure(c, module_index, node, default_failure_kind(statement_error, node), "", "")
@@ -10906,7 +10862,7 @@ fn contains_loop_break(tree: *parse.Tree, node: syntax.Node) -> bool {
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node && contains_loop_break(tree, tree.nodes[tree.children[at].index]) { ret true }
+        if parse.child_is_node_at(tree, at) && contains_loop_break(tree, parse.node_at(tree, parse.child_index_at(tree, at))) { ret true }
         at += 1usize
     }
     ret false
@@ -10918,9 +10874,9 @@ fn statement_returns(c: *Checker, tree: *parse.Tree, module_index: usize, node: 
     if node.kind == .CallStmt {
         let (call_index, has_call) = first_node_child(tree, node)
         if !has_call { ret false }
-        let (receiver_index, has_receiver) = first_node_child(tree, tree.nodes[call_index])
+        let (receiver_index, has_receiver) = first_node_child(tree, parse.node_at(tree, call_index))
         if !has_receiver { ret false }
-        let receiver = tree.nodes[receiver_index]
+        let receiver = parse.node_at(tree, receiver_index)
         ret receiver.kind == .NameExpr && c.tokens[receiver.token_start].kind == .KwUnreachable
     }
     if node.kind == .SwitchStmt { ret checked_switch_returns(c, module_index, node.token_start) }
@@ -10928,7 +10884,7 @@ fn statement_returns(c: *Checker, tree: *parse.Tree, module_index: usize, node: 
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node && statement_returns(c, tree, module_index, tree.nodes[tree.children[at].index]) { ret true }
+            if parse.child_is_node_at(tree, at) && statement_returns(c, tree, module_index, parse.node_at(tree, parse.child_index_at(tree, at))) { ret true }
             at += 1usize
         }
         ret false
@@ -10936,13 +10892,13 @@ fn statement_returns(c: *Checker, tree: *parse.Tree, module_index: usize, node: 
     if node.kind == .WhileStmt {
         let (condition_index, has_condition) = first_node_child(tree, node)
         if !has_condition { ret false }
-        let condition = tree.nodes[condition_index]
+        let condition = parse.node_at(tree, condition_index)
         if condition.kind != .LiteralExpr || c.tokens[condition.token_start].kind != .KwTrue { ret false }
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
-                let child = tree.nodes[tree.children[at].index]
+            if parse.child_is_node_at(tree, at) {
+                let child = parse.node_at(tree, parse.child_index_at(tree, at))
                 if child.kind == .Block { ret !contains_loop_break(tree, child) }
             }
             at += 1usize
@@ -10956,12 +10912,12 @@ fn statement_returns(c: *Checker, tree: *parse.Tree, module_index: usize, node: 
         var first = true
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if first {
                     first = false
                 } else {
                     branch_count += 1usize
-                    if statement_returns(c, tree, module_index, tree.nodes[tree.children[at].index]) { returning_count += 1usize }
+                    if statement_returns(c, tree, module_index, parse.node_at(tree, parse.child_index_at(tree, at))) { returning_count += 1usize }
                 }
             }
             at += 1usize
@@ -10984,14 +10940,14 @@ fn check_when_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree
     var first = true
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
             if first {
                 let (taken, condition_error) = when_condition(c, g, tree, module_index, child_index)
                 if condition_error != ok { ret condition_error }
                 first = false
             } else {
-                try check_block(c, r, g, tree, module_index, tree.nodes[child_index], function)
+                try check_block(c, r, g, tree, module_index, parse.node_at(tree, child_index), function)
             }
         }
         at += 1usize
@@ -11000,11 +10956,11 @@ fn check_when_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree
 }
 
 fn target_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, bool) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind != .FieldExpr { ret ("", false) }
     let (receiver_index, has_receiver) = first_node_child(tree, node)
-    if !has_receiver || tree.nodes[receiver_index].kind != .NameExpr { ret ("", false) }
-    let receiver = tree.nodes[receiver_index]
+    if !has_receiver || parse.kind_at(tree, receiver_index) != .NameExpr { ret ("", false) }
+    let receiver = parse.node_at(tree, receiver_index)
     let base = c.tokens[receiver.token_start]
     if base.kind != .Identifier || !same(g.modules[module_index].text[base.start..base.end], "target") { ret ("", false) }
     var at = node.token_end
@@ -11016,7 +10972,7 @@ fn target_member(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 }
 
 fn member_spelling(c: *Checker, g: *graph.Graph, tree: *parse.Tree, node_index: usize, module_index: usize) -> (str, bool) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind != .MemberExpr { ret ("", false) }
     var at = node.token_start
     while at < node.token_end {
@@ -11045,7 +11001,7 @@ fn known_target_member(question: str, member: str) -> bool {
 }
 
 fn when_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (bool, err) {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     if node.kind == .GroupExpr {
         let (inner, found) = first_node_child(tree, node)
         if !found { ret (false, parse.InvalidSyntax) }
@@ -11065,9 +11021,9 @@ fn when_condition(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
         let end = node.first_child + node.child_count
         var at = node.first_child
         while at < end {
-            if tree.children[at].node {
+            if parse.child_is_node_at(tree, at) {
                 if count == children.len { ret (false, parse.InvalidSyntax) }
-                children[count] = tree.children[at].index
+                children[count] = parse.child_index_at(tree, at)
                 count += 1usize
             }
             at += 1usize
@@ -11144,8 +11100,8 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child = tree.nodes[tree.children[at].index]
+        if parse.child_is_node_at(tree, at) {
+            let child = parse.node_at(tree, parse.child_index_at(tree, at))
             if child.kind == .Block {
                 let body_error = check_block(c, r, g, tree, module_index, child, function)
                 if body_error != ok { ret body_error }
@@ -11212,7 +11168,7 @@ fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_i
     var result = UnknownCallable
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .FnDecl {
             let (name, name_error) = function_name(c, g.modules[instance.module_index].text, node)
             if name_error != ok { result = name_error }
@@ -11251,7 +11207,7 @@ fn check_bodies(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, skip: []cons
         try tokenize_module(c, g, module_index)
         var node_index = 1usize
         while node_index < tree.count {
-            let node = tree.nodes[node_index]
+            let node = parse.node_at(&tree, node_index)
             if node.top_level && node.kind == .FnDecl { try check_function(c, r, g, &tree, module_index, node) }
             node_index += 1usize
         }
@@ -11314,9 +11270,9 @@ fn retype_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, 
     var generic = false
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if child.kind == .ComptimeParam { generic = true }
             if is_type_node(child.kind) {
                 rhs_index = child_index
@@ -11331,7 +11287,7 @@ fn retype_alias_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, 
     if name_error != ok { ret name_error }
     let (alias_index, found) = find_alias(c, module_index, name)
     if !found { ret ok }
-    let (rhs, rhs_error) = type_from_node(c, r, g, tree, module_index, tree.nodes[rhs_index])
+    let (rhs, rhs_error) = type_from_node(c, r, g, tree, module_index, parse.node_at(tree, rhs_index))
     if rhs_error != ok { ret rhs_error }
     c.aliases[alias_index].rhs = rhs
     ret ok
@@ -11349,7 +11305,7 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     c.expand_aliases = false
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .TypeDecl { try collect_alias_declaration(c, r, g, &tree, module_index, node, true) }
         node_index += 1usize
     }
@@ -11357,7 +11313,7 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     // Constants and globals; the ones that reach no call are settled now.
     node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .ConstDecl { try collect_constant_declaration(c, r, g, &tree, module_index, node) }
         if node.top_level && node.kind == .VarDecl { try collect_global_declaration(c, r, g, &tree, module_index, node) }
         node_index += 1usize
@@ -11372,13 +11328,13 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     // Aggregates: every one registered, then every one's fields collected.
     node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .TypeDecl { try register_aggregate_declaration(c, r, g, &tree, module_index, node) }
         node_index += 1usize
     }
     node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .TypeDecl { try collect_aggregate_declaration(c, r, g, &tree, module_index, node) }
         node_index += 1usize
     }
@@ -11388,7 +11344,7 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     c.expand_aliases = false
     node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .TypeDecl { try retype_alias_declaration(c, r, g, &tree, module_index, node) }
         node_index += 1usize
     }
@@ -11414,7 +11370,7 @@ fn declarations_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, modul
     // Signatures.
     node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && (node.kind == .FnDecl || node.kind == .ExternDecl) {
             try collect_function(c, r, g, &tree, module_index, node, node_index)
         }
@@ -11442,7 +11398,7 @@ fn bodies_module(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, module_inde
     try tokenize_module(c, g, module_index)
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .FnDecl { try check_function(c, r, g, &tree, module_index, node) }
         node_index += 1usize
     }

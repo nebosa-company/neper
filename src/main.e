@@ -42,8 +42,8 @@ fn expect(s: *lex.Scanner, kind: lex.Kind, start: usize, end: usize, line: usize
 }
 
 fn validate_test_parse(text: str) -> err {
-    var nodes: [64]syntax.Node = zero
-    var children: [512]syntax.Child = zero
+    var nodes: [64]syntax.Packed = zero
+    var children: [512]u32 = zero
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, nodes[..], children[..])
     ret parse.parse(&tree, text)
@@ -230,77 +230,77 @@ fn self_test() -> err {
     if invalid_tab != lex.InvalidSource { ret lex.InvalidSource }
 
     let parser_source = "use e.mem\nuse util.math as calc\nerror Failed\ntype Item = struct { value: i32, }\nfn read(item: Item) -> i32 {\n    ret item.value\n}\nextern fn call[T: type](ctx: *T, ...,) -> (i32, err)\ntype Choice = enum u8 { One, Two = 2u8, }\ntype Value = union { integer: i32, flag: bool, }\ntype Maybe[T: type] = union enum u8 { None, Some: T, }\ntype Id = i64\n"
-    var nodes: [64]syntax.Node = zero
-    var children: [512]syntax.Child = zero
+    var nodes: [64]syntax.Packed = zero
+    var children: [512]u32 = zero
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, nodes[..], children[..])
     let parser_error = parse.parse(&tree, parser_source)
     if parser_error != ok { ret lex.InvalidSource }
-    if tree.nodes[0usize].kind != .File || tree.count != 47usize { ret lex.InvalidSource }
-    if tree.nodes[0usize].child_count != 21usize { ret lex.InvalidSource }
-    if tree.nodes[0usize].top_level || tree.nodes[0usize].parented || !tree.nodes[1usize].top_level || !tree.nodes[2usize].top_level { ret lex.InvalidSource }
-    if tree.nodes[1usize].parented || tree.nodes[5usize].top_level || !tree.nodes[5usize].parented { ret lex.InvalidSource }
-    if !tree.nodes[7usize].top_level || tree.nodes[7usize].parented || !tree.nodes[16usize].top_level || tree.nodes[16usize].parented { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 0usize) != .File || tree.count != 47usize { ret lex.InvalidSource }
+    if parse.node_at(&tree, 0usize).child_count != 21usize { ret lex.InvalidSource }
+    if parse.node_at(&tree, 0usize).top_level || parse.node_at(&tree, 0usize).parented || !parse.node_at(&tree, 1usize).top_level || !parse.node_at(&tree, 2usize).top_level { ret lex.InvalidSource }
+    if parse.node_at(&tree, 1usize).parented || parse.node_at(&tree, 5usize).top_level || !parse.node_at(&tree, 5usize).parented { ret lex.InvalidSource }
+    if !parse.node_at(&tree, 7usize).top_level || parse.node_at(&tree, 7usize).parented || !parse.node_at(&tree, 16usize).top_level || parse.node_at(&tree, 16usize).parented { ret lex.InvalidSource }
     var adoption_index = 1usize
     while adoption_index < tree.count {
-        if tree.nodes[adoption_index].top_level == tree.nodes[adoption_index].parented { ret lex.InvalidSource }
+        if parse.node_at(&tree, adoption_index).top_level == parse.node_at(&tree, adoption_index).parented { ret lex.InvalidSource }
         adoption_index += 1usize
     }
-    if tree.nodes[1usize].kind != .UseDecl || tree.nodes[2usize].kind != .UseDecl { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ErrorDecl || tree.nodes[4usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .FieldDecl || tree.nodes[6usize].kind != .StructType { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .TypeDecl || tree.nodes[8usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .Parameter || tree.nodes[10usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .ReturnSpec || tree.nodes[12usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .FieldExpr || tree.nodes[14usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .Block || tree.nodes[16usize].kind != .FnDecl { ret lex.InvalidSource }
-    if tree.nodes[16usize].child_count != 8usize || tree.nodes[17usize].kind != .ComptimeParam { ret lex.InvalidSource }
-    if tree.nodes[18usize].kind != .NamedType || tree.nodes[19usize].kind != .PointerType { ret lex.InvalidSource }
-    if tree.nodes[20usize].kind != .Parameter || tree.nodes[21usize].kind != .Parameter { ret lex.InvalidSource }
-    if tree.nodes[22usize].kind != .NamedType || tree.nodes[23usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[24usize].kind != .ReturnSpec || tree.nodes[25usize].kind != .ExternDecl { ret lex.InvalidSource }
-    if tree.nodes[26usize].kind != .NamedType || tree.nodes[27usize].kind != .EnumMember { ret lex.InvalidSource }
-    if tree.nodes[28usize].kind != .LiteralExpr || tree.nodes[29usize].kind != .EnumMember { ret lex.InvalidSource }
-    if tree.nodes[30usize].kind != .EnumType || tree.nodes[31usize].kind != .TypeDecl { ret lex.InvalidSource }
-    if tree.nodes[32usize].kind != .NamedType || tree.nodes[33usize].kind != .FieldDecl { ret lex.InvalidSource }
-    if tree.nodes[34usize].kind != .NamedType || tree.nodes[35usize].kind != .FieldDecl { ret lex.InvalidSource }
-    if tree.nodes[36usize].kind != .UnionType || tree.nodes[37usize].kind != .TypeDecl { ret lex.InvalidSource }
-    if tree.nodes[38usize].kind != .ComptimeParam || tree.nodes[39usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[40usize].kind != .UnionMember || tree.nodes[41usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[42usize].kind != .UnionMember || tree.nodes[43usize].kind != .UnionEnumType { ret lex.InvalidSource }
-    if tree.nodes[44usize].kind != .TypeDecl || tree.nodes[45usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[46usize].kind != .TypeDecl { ret lex.InvalidSource }
-    if tree.nodes[1usize].child_count != 4usize { ret lex.InvalidSource }
-    let file_children = tree.nodes[0usize].first_child
-    if !tree.children[file_children].node || tree.children[file_children].index != 1usize { ret lex.InvalidSource }
-    if tree.children[file_children + 1usize].node || tree.children[file_children + 1usize].index != 4usize { ret lex.InvalidSource }
-    if !tree.children[file_children + 2usize].node || tree.children[file_children + 2usize].index != 2usize { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .UseDecl || parse.kind_at(&tree, 2usize) != .UseDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ErrorDecl || parse.kind_at(&tree, 4usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .FieldDecl || parse.kind_at(&tree, 6usize) != .StructType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .TypeDecl || parse.kind_at(&tree, 8usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .Parameter || parse.kind_at(&tree, 10usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .ReturnSpec || parse.kind_at(&tree, 12usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .FieldExpr || parse.kind_at(&tree, 14usize) != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .Block || parse.kind_at(&tree, 16usize) != .FnDecl { ret lex.InvalidSource }
+    if parse.node_at(&tree, 16usize).child_count != 8usize || parse.kind_at(&tree, 17usize) != .ComptimeParam { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 18usize) != .NamedType || parse.kind_at(&tree, 19usize) != .PointerType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 20usize) != .Parameter || parse.kind_at(&tree, 21usize) != .Parameter { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 22usize) != .NamedType || parse.kind_at(&tree, 23usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 24usize) != .ReturnSpec || parse.kind_at(&tree, 25usize) != .ExternDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 26usize) != .NamedType || parse.kind_at(&tree, 27usize) != .EnumMember { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 28usize) != .LiteralExpr || parse.kind_at(&tree, 29usize) != .EnumMember { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 30usize) != .EnumType || parse.kind_at(&tree, 31usize) != .TypeDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 32usize) != .NamedType || parse.kind_at(&tree, 33usize) != .FieldDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 34usize) != .NamedType || parse.kind_at(&tree, 35usize) != .FieldDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 36usize) != .UnionType || parse.kind_at(&tree, 37usize) != .TypeDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 38usize) != .ComptimeParam || parse.kind_at(&tree, 39usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 40usize) != .UnionMember || parse.kind_at(&tree, 41usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 42usize) != .UnionMember || parse.kind_at(&tree, 43usize) != .UnionEnumType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 44usize) != .TypeDecl || parse.kind_at(&tree, 45usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 46usize) != .TypeDecl { ret lex.InvalidSource }
+    if parse.node_at(&tree, 1usize).child_count != 4usize { ret lex.InvalidSource }
+    let file_children = parse.node_at(&tree, 0usize).first_child
+    if !parse.child_is_node_at(&tree, file_children) || parse.child_index_at(&tree, file_children) != 1usize { ret lex.InvalidSource }
+    if parse.child_is_node_at(&tree, file_children + 1usize) || parse.child_index_at(&tree, file_children + 1usize) != 4usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, file_children + 2usize) || parse.child_index_at(&tree, file_children + 2usize) != 2usize { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let value_decl_error = parse.parse(&tree, "const WIDTH: usize = BASE * 2usize\nvar state: *const State = zero\nvar cache = try init()\nvar optional: []u8\n")
     if value_decl_error != ok || tree.count != 15usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .LiteralExpr || tree.nodes[4usize].kind != .BinaryExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .ConstDecl || tree.nodes[6usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .PointerType || tree.nodes[8usize].kind != .VarDecl { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .NameExpr || tree.nodes[10usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .VarDecl || tree.nodes[12usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .SliceType || tree.nodes[14usize].kind != .VarDecl { ret lex.InvalidSource }
-    if tree.nodes[0usize].child_count != 9usize { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NamedType || parse.kind_at(&tree, 2usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .LiteralExpr || parse.kind_at(&tree, 4usize) != .BinaryExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .ConstDecl || parse.kind_at(&tree, 6usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .PointerType || parse.kind_at(&tree, 8usize) != .VarDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .NameExpr || parse.kind_at(&tree, 10usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .VarDecl || parse.kind_at(&tree, 12usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .SliceType || parse.kind_at(&tree, 14usize) != .VarDecl { ret lex.InvalidSource }
+    if parse.node_at(&tree, 0usize).child_count != 9usize { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let value_recovery_error = parse.parse(&tree, "const BROKEN: usize = call() +\nerror Good\n")
     if value_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 3usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode || parse.kind_at(&tree, 2usize) != .ErrorDecl { ret lex.InvalidSource }
     let invalid_try_initializer_error = validate_test_parse("var value = try not_a_call\n")
     if invalid_try_initializer_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let tuple_assignment_error = parse.parse(&tree, "fn assign() {\n    (\n        left,\n        values[index],\n        *pointer,\n    ) = try split()\n}\n")
     if tuple_assignment_error != ok || tree.count != 12usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .NameExpr || tree.nodes[4usize].kind != .BracketPostfix { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .NameExpr || tree.nodes[6usize].kind != .UnaryExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .NameExpr || tree.nodes[8usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .AssignmentStmt || tree.nodes[10usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NameExpr || parse.kind_at(&tree, 2usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .NameExpr || parse.kind_at(&tree, 4usize) != .BracketPostfix { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .NameExpr || parse.kind_at(&tree, 6usize) != .UnaryExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .NameExpr || parse.kind_at(&tree, 8usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .AssignmentStmt || parse.kind_at(&tree, 10usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .FnDecl { ret lex.InvalidSource }
     let one_item_assignment_error = validate_test_parse("fn invalid() {\n    (only,) = zero\n}\n")
     if one_item_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let binary_target_error = validate_test_parse("fn invalid() {\n    left + right = zero\n}\n")
@@ -314,66 +314,66 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let attribute_error = parse.parse(&tree, "@gpu(\n    8usize * 4usize,\n    config.size,\n)\n@align(64usize)\nfn kernel() {}\n")
     if attribute_error != ok || tree.count != 11usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .LiteralExpr || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .BinaryExpr || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .FieldExpr || tree.nodes[6usize].kind != .Attribute { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .LiteralExpr || tree.nodes[8usize].kind != .Attribute { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .Block || tree.nodes[10usize].kind != .FnDecl { ret lex.InvalidSource }
-    if tree.nodes[0usize].child_count != 7usize || tree.nodes[6usize].child_count != 11usize { ret lex.InvalidSource }
-    let attribute_children = tree.nodes[6usize].first_child
-    if !tree.children[attribute_children + 4usize].node || tree.children[attribute_children + 4usize].index != 3usize { ret lex.InvalidSource }
-    if !tree.children[attribute_children + 7usize].node || tree.children[attribute_children + 7usize].index != 5usize { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .LiteralExpr || parse.kind_at(&tree, 2usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .BinaryExpr || parse.kind_at(&tree, 4usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .FieldExpr || parse.kind_at(&tree, 6usize) != .Attribute { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .LiteralExpr || parse.kind_at(&tree, 8usize) != .Attribute { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .Block || parse.kind_at(&tree, 10usize) != .FnDecl { ret lex.InvalidSource }
+    if parse.node_at(&tree, 0usize).child_count != 7usize || parse.node_at(&tree, 6usize).child_count != 11usize { ret lex.InvalidSource }
+    let attribute_children = parse.node_at(&tree, 6usize).first_child
+    if !parse.child_is_node_at(&tree, attribute_children + 4usize) || parse.child_index_at(&tree, attribute_children + 4usize) != 3usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, attribute_children + 7usize) || parse.child_index_at(&tree, attribute_children + 7usize) != 5usize { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let malformed_attribute_error = parse.parse(&tree, "@gpu(1usize +)\nerror Good\n")
     if malformed_attribute_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 3usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode || parse.kind_at(&tree, 2usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let attributed_recovery_error = parse.parse(&tree, "@test\nfn broken(value i32) {}\nerror Good\n")
     if attributed_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 4usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .Attribute || tree.nodes[2usize].kind != .ErrorNode { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .Attribute || parse.kind_at(&tree, 2usize) != .ErrorNode { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let attribute_gap_error = parse.parse(&tree, "@test\n\nfn valid() {}\n")
     if attribute_gap_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 5usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .Attribute || tree.nodes[2usize].kind != .ErrorNode { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .Block || tree.nodes[4usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .Attribute || parse.kind_at(&tree, 2usize) != .ErrorNode { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .Block || parse.kind_at(&tree, 4usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let attribute_comment_gap_error = parse.parse(&tree, "@test\n// detached\nfn valid() {}\n")
     if attribute_comment_gap_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 5usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .Attribute || tree.nodes[2usize].kind != .ErrorNode { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .Block || tree.nodes[4usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .Attribute || parse.kind_at(&tree, 2usize) != .ErrorNode { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .Block || parse.kind_at(&tree, 4usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let attributed_use_error = parse.parse(&tree, "@test\nuse e.io\nerror Good\n")
     if attributed_use_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 4usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .Attribute || tree.nodes[2usize].kind != .ErrorNode { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .Attribute || parse.kind_at(&tree, 2usize) != .ErrorNode { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let signature_tree_error = parse.parse(&tree, "fn signature[T: type, N: usize, F: fn](value: *const T, bytes: []u8, matrix: [N]T) -> (*T, []const u8) {}\n")
     if signature_tree_error != ok || tree.count != 22usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ComptimeParam || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ComptimeParam || tree.nodes[4usize].kind != .ComptimeParam { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .NamedType || tree.nodes[6usize].kind != .PointerType { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .Parameter || tree.nodes[8usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .SliceType || tree.nodes[10usize].kind != .Parameter { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .NameExpr || tree.nodes[12usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .ArrayType || tree.nodes[14usize].kind != .Parameter { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .NamedType || tree.nodes[16usize].kind != .PointerType { ret lex.InvalidSource }
-    if tree.nodes[17usize].kind != .NamedType || tree.nodes[18usize].kind != .SliceType { ret lex.InvalidSource }
-    if tree.nodes[19usize].kind != .ReturnSpec || tree.nodes[20usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[21usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ComptimeParam || parse.kind_at(&tree, 2usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ComptimeParam || parse.kind_at(&tree, 4usize) != .ComptimeParam { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .NamedType || parse.kind_at(&tree, 6usize) != .PointerType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .Parameter || parse.kind_at(&tree, 8usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .SliceType || parse.kind_at(&tree, 10usize) != .Parameter { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .NameExpr || parse.kind_at(&tree, 12usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .ArrayType || parse.kind_at(&tree, 14usize) != .Parameter { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .NamedType || parse.kind_at(&tree, 16usize) != .PointerType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 17usize) != .NamedType || parse.kind_at(&tree, 18usize) != .SliceType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 19usize) != .ReturnSpec || parse.kind_at(&tree, 20usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 21usize) != .FnDecl { ret lex.InvalidSource }
     let grouped_return_type_error = validate_test_parse("fn invalid() -> (i32) {}\n")
     if grouped_return_type_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let alias_error = parse.parse(&tree, "type Ptr = *const i32\ntype Bytes = []const u8\ntype Block4 = [4usize]u8\ntype Callback = fn(i32) -> err\n")
     if alias_error != ok || tree.count != 17usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .PointerType { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .TypeDecl || tree.nodes[4usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .SliceType || tree.nodes[6usize].kind != .TypeDecl { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .LiteralExpr || tree.nodes[8usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .ArrayType || tree.nodes[10usize].kind != .TypeDecl { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .NamedType || tree.nodes[12usize].kind != .Parameter { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .NamedType || tree.nodes[14usize].kind != .ReturnSpec { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .FunctionType || tree.nodes[16usize].kind != .TypeDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NamedType || parse.kind_at(&tree, 2usize) != .PointerType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .TypeDecl || parse.kind_at(&tree, 4usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .SliceType || parse.kind_at(&tree, 6usize) != .TypeDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .LiteralExpr || parse.kind_at(&tree, 8usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .ArrayType || parse.kind_at(&tree, 10usize) != .TypeDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .NamedType || parse.kind_at(&tree, 12usize) != .Parameter { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .NamedType || parse.kind_at(&tree, 14usize) != .ReturnSpec { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .FunctionType || parse.kind_at(&tree, 16usize) != .TypeDecl { ret lex.InvalidSource }
     let named_function_type_variadic_error = validate_test_parse("type Bad = fn(args: ...)\n")
     if named_function_type_variadic_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let signature_forms_error = validate_test_parse("extern fn c_variadic(value: i32, args: ...,)\nfn packed(args: ...,) {}\nfn bare(...,) {}\ntype Callback = extern fn(i32, ...,) -> i32\ntype EmptyArgs = Box[]\n")
@@ -385,8 +385,8 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let soft_type_error = parse.parse(&tree, "type Soft = struct {\n    value\n    :\n    i32,\n}\n")
     if soft_type_error != ok || tree.count != 5usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .FieldDecl { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .StructType || tree.nodes[4usize].kind != .TypeDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NamedType || parse.kind_at(&tree, 2usize) != .FieldDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .StructType || parse.kind_at(&tree, 4usize) != .TypeDecl { ret lex.InvalidSource }
     let soft_array_type_error = validate_test_parse("type SoftArray = struct {\n    values: [\n        size\n        +\n        1usize\n    ]u8,\n}\n")
     if soft_array_type_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
@@ -403,64 +403,64 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let soft_recovery_error = parse.parse(&tree, "fn recover_soft() {\n    call(value +)\n    ret ok\n}\n")
     if soft_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 6usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ReturnStmt || tree.nodes[4usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode || parse.kind_at(&tree, 2usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ReturnStmt || parse.kind_at(&tree, 4usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let signature_barrier_error = parse.parse(&tree, "fn broken(\nfn good() {}\nerror Good\n")
     if signature_barrier_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 5usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .FnDecl || tree.nodes[4usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode || parse.kind_at(&tree, 2usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .FnDecl || parse.kind_at(&tree, 4usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let block_barrier_error = parse.parse(&tree, "fn broken() {\n    call(\nfn good() {}\nerror Good\n")
     if block_barrier_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 5usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .FnDecl || tree.nodes[4usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode || parse.kind_at(&tree, 2usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .FnDecl || parse.kind_at(&tree, 4usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let switch_barrier_error = parse.parse(&tree, "fn recover_markers() {\n    switch value {\n    case 1i32:\n        call(\n    case 2i32:\n        ret\n    default:\n        ret\n    }\n}\n")
     if switch_barrier_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 13usize { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ErrorNode || tree.nodes[4usize].kind != .SwitchArm { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .SwitchArm || tree.nodes[9usize].kind != .SwitchArm { ret lex.InvalidSource }
-    if tree.nodes[10usize].kind != .SwitchStmt || tree.nodes[11usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[12usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ErrorNode || parse.kind_at(&tree, 4usize) != .SwitchArm { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .SwitchArm || parse.kind_at(&tree, 9usize) != .SwitchArm { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 10usize) != .SwitchStmt || parse.kind_at(&tree, 11usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 12usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let close_barrier_error = parse.parse(&tree, "fn recover_close() {\n    call(\n}\nerror Good\n")
     if close_barrier_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 5usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .FnDecl || tree.nodes[4usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode || parse.kind_at(&tree, 2usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .FnDecl || parse.kind_at(&tree, 4usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let eof_barrier_error = parse.parse(&tree, "fn recover_eof() {\n    call(\n")
     if eof_barrier_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 2usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let statements_error = parse.parse(&tree, "fn statements() -> err {\n    let x = 1i32\n    var y = x\n    y += 1i32\n    call()\n    try fallible()\n    defer cleanup()\n    break\n    continue\n    ret ok\n}\n")
     if statements_error != ok || tree.count != 28usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .ReturnSpec { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .Binding || tree.nodes[4usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .BindingStmt || tree.nodes[6usize].kind != .Binding { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .NameExpr || tree.nodes[8usize].kind != .BindingStmt { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .NameExpr || tree.nodes[10usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .AssignmentStmt || tree.nodes[12usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .CallExpr || tree.nodes[14usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .NameExpr || tree.nodes[16usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[17usize].kind != .TryStmt || tree.nodes[18usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[19usize].kind != .CallExpr || tree.nodes[20usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[21usize].kind != .DeferStmt || tree.nodes[22usize].kind != .BreakStmt { ret lex.InvalidSource }
-    if tree.nodes[23usize].kind != .ContinueStmt || tree.nodes[24usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[25usize].kind != .ReturnStmt || tree.nodes[26usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[27usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NamedType || parse.kind_at(&tree, 2usize) != .ReturnSpec { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .Binding || parse.kind_at(&tree, 4usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .BindingStmt || parse.kind_at(&tree, 6usize) != .Binding { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .NameExpr || parse.kind_at(&tree, 8usize) != .BindingStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .NameExpr || parse.kind_at(&tree, 10usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .AssignmentStmt || parse.kind_at(&tree, 12usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .CallExpr || parse.kind_at(&tree, 14usize) != .CallStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .NameExpr || parse.kind_at(&tree, 16usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 17usize) != .TryStmt || parse.kind_at(&tree, 18usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 19usize) != .CallExpr || parse.kind_at(&tree, 20usize) != .CallStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 21usize) != .DeferStmt || parse.kind_at(&tree, 22usize) != .BreakStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 23usize) != .ContinueStmt || parse.kind_at(&tree, 24usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 25usize) != .ReturnStmt || parse.kind_at(&tree, 26usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 27usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let initializer_error = parse.parse(&tree, "fn initializers() {\n    let (\n        a,\n        _,\n    ): Pair = make(\n    )\n    var bytes: []u8 = zero\n    a = try next()\n    bytes = zero\n}\n")
     if initializer_error != ok || tree.count != 18usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .Binding || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .NameExpr || tree.nodes[4usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .BindingStmt || tree.nodes[6usize].kind != .Binding { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .NamedType || tree.nodes[8usize].kind != .SliceType { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .BindingStmt || tree.nodes[10usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .NameExpr || tree.nodes[12usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .AssignmentStmt || tree.nodes[14usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .AssignmentStmt || tree.nodes[16usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[17usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .Binding || parse.kind_at(&tree, 2usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .NameExpr || parse.kind_at(&tree, 4usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .BindingStmt || parse.kind_at(&tree, 6usize) != .Binding { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .NamedType || parse.kind_at(&tree, 8usize) != .SliceType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .BindingStmt || parse.kind_at(&tree, 10usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .NameExpr || parse.kind_at(&tree, 12usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .AssignmentStmt || parse.kind_at(&tree, 14usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .AssignmentStmt || parse.kind_at(&tree, 16usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 17usize) != .FnDecl { ret lex.InvalidSource }
     let undef_assignment_error = validate_test_parse("fn invalid() {\n    value = undef\n}\n")
     if undef_assignment_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let undef_tuple_assignment_error = validate_test_parse("fn invalid() {\n    (left, right) = undef\n}\n")
@@ -468,51 +468,51 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let local_type_error = parse.parse(&tree, "fn local_types() {\n    let pointer: *const []shared u8 = zero\n    let array: [size + 1usize]Point = zero\n    let callback: extern fn(\n        ctx: *Ctx,\n        ...,\n    ) -> (i32, err) = zero\n}\n")
     if local_type_error != ok || tree.count != 25usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .Binding || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .SliceType || tree.nodes[4usize].kind != .PointerType { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .BindingStmt || tree.nodes[6usize].kind != .Binding { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .NameExpr || tree.nodes[8usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .BinaryExpr || tree.nodes[10usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .ArrayType || tree.nodes[12usize].kind != .BindingStmt { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .Binding || tree.nodes[14usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .PointerType || tree.nodes[16usize].kind != .Parameter { ret lex.InvalidSource }
-    if tree.nodes[17usize].kind != .Parameter || tree.nodes[18usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[19usize].kind != .NamedType || tree.nodes[20usize].kind != .ReturnSpec { ret lex.InvalidSource }
-    if tree.nodes[21usize].kind != .FunctionType || tree.nodes[22usize].kind != .BindingStmt { ret lex.InvalidSource }
-    if tree.nodes[23usize].kind != .Block || tree.nodes[24usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .Binding || parse.kind_at(&tree, 2usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .SliceType || parse.kind_at(&tree, 4usize) != .PointerType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .BindingStmt || parse.kind_at(&tree, 6usize) != .Binding { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .NameExpr || parse.kind_at(&tree, 8usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .BinaryExpr || parse.kind_at(&tree, 10usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .ArrayType || parse.kind_at(&tree, 12usize) != .BindingStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .Binding || parse.kind_at(&tree, 14usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .PointerType || parse.kind_at(&tree, 16usize) != .Parameter { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 17usize) != .Parameter || parse.kind_at(&tree, 18usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 19usize) != .NamedType || parse.kind_at(&tree, 20usize) != .ReturnSpec { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 21usize) != .FunctionType || parse.kind_at(&tree, 22usize) != .BindingStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 23usize) != .Block || parse.kind_at(&tree, 24usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let expression_error = parse.parse(&tree, "fn expression() -> i32 {\n    ret -call(a + b * c)[i].field\n}\n")
     if expression_error != ok || tree.count != 17usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .ReturnSpec { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .NameExpr || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .NameExpr || tree.nodes[6usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .BinaryExpr || tree.nodes[8usize].kind != .BinaryExpr { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .CallExpr || tree.nodes[10usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .BracketPostfix || tree.nodes[12usize].kind != .FieldExpr { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .UnaryExpr || tree.nodes[14usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .Block || tree.nodes[16usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NamedType || parse.kind_at(&tree, 2usize) != .ReturnSpec { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .NameExpr || parse.kind_at(&tree, 4usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .NameExpr || parse.kind_at(&tree, 6usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .BinaryExpr || parse.kind_at(&tree, 8usize) != .BinaryExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .CallExpr || parse.kind_at(&tree, 10usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .BracketPostfix || parse.kind_at(&tree, 12usize) != .FieldExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .UnaryExpr || parse.kind_at(&tree, 14usize) != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .Block || parse.kind_at(&tree, 16usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let comparison_error = parse.parse(&tree, "fn comparison() -> bool {\n    ret a & b == c\n}\n")
     if comparison_error != ok || tree.count != 11usize { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .NameExpr || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .BinaryExpr || tree.nodes[6usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .BinaryExpr || tree.nodes[8usize].kind != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .NameExpr || parse.kind_at(&tree, 4usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .BinaryExpr || parse.kind_at(&tree, 6usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .BinaryExpr || parse.kind_at(&tree, 8usize) != .ReturnStmt { ret lex.InvalidSource }
     let chained_comparison_error = validate_test_parse("fn invalid() -> bool {\n    ret a < b < c\n}\n")
     if chained_comparison_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let grouped_error = parse.parse(&tree, "fn grouped() -> bool {\n    ret (.Ready == value)\n}\n")
     if grouped_error != ok || tree.count != 10usize { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .MemberExpr || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .BinaryExpr || tree.nodes[6usize].kind != .GroupExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .ReturnStmt || tree.nodes[8usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .MemberExpr || parse.kind_at(&tree, 4usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .BinaryExpr || parse.kind_at(&tree, 6usize) != .GroupExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .ReturnStmt || parse.kind_at(&tree, 8usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let bracket_error = parse.parse(&tree, "fn postfix() {\n    call(values[], values[index], values[..], values[start..], values[..end], values[start..end], table[\n        row,\n        column,\n    ])\n}\n")
     if bracket_error != ok || tree.count != 27usize { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .BracketPostfix || tree.nodes[6usize].kind != .BracketPostfix { ret lex.InvalidSource }
-    if tree.nodes[8usize].kind != .BracketPostfix || tree.nodes[11usize].kind != .BracketPostfix { ret lex.InvalidSource }
-    if tree.nodes[14usize].kind != .BracketPostfix || tree.nodes[18usize].kind != .BracketPostfix { ret lex.InvalidSource }
-    if tree.nodes[22usize].kind != .BracketPostfix || tree.nodes[23usize].kind != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .BracketPostfix || parse.kind_at(&tree, 6usize) != .BracketPostfix { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 8usize) != .BracketPostfix || parse.kind_at(&tree, 11usize) != .BracketPostfix { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 14usize) != .BracketPostfix || parse.kind_at(&tree, 18usize) != .BracketPostfix { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 22usize) != .BracketPostfix || parse.kind_at(&tree, 23usize) != .CallExpr { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let bracket_type_error = parse.parse(&tree, "fn bracket_types() {\n    mem.alloc[[]u8](a, 1usize)\n    mem.alloc[[3]u16](a, 1usize)\n    mem.alloc[*const u8](a, 1usize)\n    generic[[3]u8{ 1u8, 2u8, 3u8 }]()\n}\n")
     if bracket_type_error != ok { ret lex.InvalidSource }
@@ -522,7 +522,7 @@ fn self_test() -> err {
     var saw_array_literal = false
     var bracket_type_index = 1usize
     while bracket_type_index < tree.count {
-        let bracket_node = tree.nodes[bracket_type_index]
+        let bracket_node = parse.node_at(&tree, bracket_type_index)
         if bracket_node.kind == .SliceType { saw_slice_type = true }
         if bracket_node.kind == .ArrayType { saw_array_type = true }
         if bracket_node.kind == .PointerType { saw_const_pointer_type = true }
@@ -539,77 +539,77 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let return_list_error = parse.parse(&tree, "fn returns() -> (i32, err) {\n    ret (\n        value + 1i32,\n        ok,\n    )\n}\n")
     if return_list_error != ok || tree.count != 11usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NamedType || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ReturnSpec || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .LiteralExpr || tree.nodes[6usize].kind != .BinaryExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .LiteralExpr || tree.nodes[8usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .Block || tree.nodes[10usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NamedType || parse.kind_at(&tree, 2usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ReturnSpec || parse.kind_at(&tree, 4usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .LiteralExpr || parse.kind_at(&tree, 6usize) != .BinaryExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .LiteralExpr || parse.kind_at(&tree, 8usize) != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .Block || parse.kind_at(&tree, 10usize) != .FnDecl { ret lex.InvalidSource }
     let empty_return_list_error = validate_test_parse("fn invalid() {\n    ret ()\n}\n")
     if empty_return_list_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let named_aggregate_error = parse.parse(&tree, "fn point() -> Point {\n    ret Point{\n        x: 1i32,\n        y: base + 2i32,\n    }\n}\n")
     if named_aggregate_error != ok || tree.count != 14usize { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .NamedType || tree.nodes[4usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .LiteralItem || tree.nodes[6usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .LiteralExpr || tree.nodes[8usize].kind != .BinaryExpr { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .LiteralItem || tree.nodes[10usize].kind != .AggregateLiteral { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .ReturnStmt || tree.nodes[12usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .FnDecl || tree.nodes[10usize].child_count != 10usize { ret lex.InvalidSource }
-    let named_children = tree.nodes[10usize].first_child
-    if !tree.children[named_children].node || tree.children[named_children].index != 3usize { ret lex.InvalidSource }
-    if !tree.children[named_children + 3usize].node || tree.children[named_children + 3usize].index != 5usize { ret lex.InvalidSource }
-    if !tree.children[named_children + 6usize].node || tree.children[named_children + 6usize].index != 9usize { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .NamedType || parse.kind_at(&tree, 4usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .LiteralItem || parse.kind_at(&tree, 6usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .LiteralExpr || parse.kind_at(&tree, 8usize) != .BinaryExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .LiteralItem || parse.kind_at(&tree, 10usize) != .AggregateLiteral { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .ReturnStmt || parse.kind_at(&tree, 12usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .FnDecl || parse.node_at(&tree, 10usize).child_count != 10usize { ret lex.InvalidSource }
+    let named_children = parse.node_at(&tree, 10usize).first_child
+    if !parse.child_is_node_at(&tree, named_children) || parse.child_index_at(&tree, named_children) != 3usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, named_children + 3usize) || parse.child_index_at(&tree, named_children + 3usize) != 5usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, named_children + 6usize) || parse.child_index_at(&tree, named_children + 6usize) != 9usize { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let generic_aggregate_error = parse.parse(&tree, "fn boxed() -> Box[i32] {\n    ret Box[i32]{ value: item, }\n}\n")
     if generic_aggregate_error != ok || tree.count != 12usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ReturnSpec || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .NamedType || tree.nodes[6usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .LiteralItem || tree.nodes[8usize].kind != .AggregateLiteral { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .ReturnStmt || tree.nodes[10usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .FnDecl || tree.nodes[8usize].child_count != 5usize { ret lex.InvalidSource }
-    let generic_children = tree.nodes[8usize].first_child
-    if !tree.children[generic_children].node || tree.children[generic_children].index != 5usize { ret lex.InvalidSource }
-    if !tree.children[generic_children + 2usize].node || tree.children[generic_children + 2usize].index != 7usize { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NameExpr || parse.kind_at(&tree, 2usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ReturnSpec || parse.kind_at(&tree, 4usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .NamedType || parse.kind_at(&tree, 6usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .LiteralItem || parse.kind_at(&tree, 8usize) != .AggregateLiteral { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .ReturnStmt || parse.kind_at(&tree, 10usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .FnDecl || parse.node_at(&tree, 8usize).child_count != 5usize { ret lex.InvalidSource }
+    let generic_children = parse.node_at(&tree, 8usize).first_child
+    if !parse.child_is_node_at(&tree, generic_children) || parse.child_index_at(&tree, generic_children) != 5usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, generic_children + 2usize) || parse.child_index_at(&tree, generic_children + 2usize) != 7usize { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let array_aggregate_error = parse.parse(&tree, "fn values() -> [2usize]i32 {\n    ret [size + 1usize]i32{ 0i32, value, }\n}\n")
     if array_aggregate_error != ok || tree.count != 18usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .LiteralExpr || tree.nodes[2usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ArrayType || tree.nodes[4usize].kind != .ReturnSpec { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .NameExpr || tree.nodes[6usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .BinaryExpr || tree.nodes[8usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .ArrayType || tree.nodes[10usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .LiteralItem || tree.nodes[12usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .LiteralItem || tree.nodes[14usize].kind != .AggregateLiteral { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .ReturnStmt || tree.nodes[16usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[17usize].kind != .FnDecl || tree.nodes[14usize].child_count != 7usize { ret lex.InvalidSource }
-    let array_children = tree.nodes[14usize].first_child
-    if !tree.children[array_children].node || tree.children[array_children].index != 9usize { ret lex.InvalidSource }
-    if !tree.children[array_children + 2usize].node || tree.children[array_children + 2usize].index != 11usize { ret lex.InvalidSource }
-    if !tree.children[array_children + 4usize].node || tree.children[array_children + 4usize].index != 13usize { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .LiteralExpr || parse.kind_at(&tree, 2usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ArrayType || parse.kind_at(&tree, 4usize) != .ReturnSpec { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .NameExpr || parse.kind_at(&tree, 6usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .BinaryExpr || parse.kind_at(&tree, 8usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .ArrayType || parse.kind_at(&tree, 10usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .LiteralItem || parse.kind_at(&tree, 12usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .LiteralItem || parse.kind_at(&tree, 14usize) != .AggregateLiteral { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .ReturnStmt || parse.kind_at(&tree, 16usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 17usize) != .FnDecl || parse.node_at(&tree, 14usize).child_count != 7usize { ret lex.InvalidSource }
+    let array_children = parse.node_at(&tree, 14usize).first_child
+    if !parse.child_is_node_at(&tree, array_children) || parse.child_index_at(&tree, array_children) != 9usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, array_children + 2usize) || parse.child_index_at(&tree, array_children + 2usize) != 11usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, array_children + 4usize) || parse.child_index_at(&tree, array_children + 4usize) != 13usize { ret lex.InvalidSource }
     let inferred_aggregate_error = validate_test_parse("fn inferred() {\n    let values = [_]u8{ 1u8, 2u8, }\n}\n")
     if inferred_aggregate_error != ok { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let constant_item_error = parse.parse(&tree, "fn constants() {\n    let values = [_]usize{ MAX_NODES, N, }\n}\n")
     if constant_item_error != ok || tree.count != 12usize { ret lex.InvalidSource }
-    if tree.nodes[4usize].kind != .NameExpr || tree.nodes[5usize].kind != .LiteralItem { ret lex.InvalidSource }
-    if tree.nodes[6usize].kind != .NameExpr || tree.nodes[7usize].kind != .LiteralItem { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 4usize) != .NameExpr || parse.kind_at(&tree, 5usize) != .LiteralItem { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 6usize) != .NameExpr || parse.kind_at(&tree, 7usize) != .LiteralItem { ret lex.InvalidSource }
     let slice_aggregate_error = validate_test_parse("fn invalid() {\n    let values = []u8{ 1u8, }\n}\n")
     if slice_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let member_aggregate_error = parse.parse(&tree, "fn none() -> Maybe {\n    ret Maybe{ None }\n}\n")
     if member_aggregate_error != ok || tree.count != 9usize { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .NamedType || tree.nodes[4usize].kind != .LiteralItem { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .AggregateLiteral || tree.nodes[6usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .Block || tree.nodes[8usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .NamedType || parse.kind_at(&tree, 4usize) != .LiteralItem { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .AggregateLiteral || parse.kind_at(&tree, 6usize) != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .Block || parse.kind_at(&tree, 8usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let nested_aggregate_error = parse.parse(&tree, "fn nested() -> Outer {\n    ret Outer{ inner: Inner{ value: 1i32 } }\n}\n")
     if nested_aggregate_error != ok || tree.count != 13usize { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .NamedType || tree.nodes[4usize].kind != .NamedType { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .LiteralExpr || tree.nodes[6usize].kind != .LiteralItem { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .AggregateLiteral || tree.nodes[8usize].kind != .LiteralItem { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .AggregateLiteral || tree.nodes[10usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .Block || tree.nodes[12usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .NamedType || parse.kind_at(&tree, 4usize) != .NamedType { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .LiteralExpr || parse.kind_at(&tree, 6usize) != .LiteralItem { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .AggregateLiteral || parse.kind_at(&tree, 8usize) != .LiteralItem { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .AggregateLiteral || parse.kind_at(&tree, 10usize) != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .Block || parse.kind_at(&tree, 12usize) != .FnDecl { ret lex.InvalidSource }
     let empty_aggregate_error = validate_test_parse("fn invalid() -> Point {\n    ret Point{}\n}\n")
     if empty_aggregate_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let constant_condition_error = validate_test_parse("fn flags() {\n    if N { ret }\n    while N { break }\n    when N { ret } else { ret }\n    switch N {\n    case 1usize:\n        ret\n    }\n}\n")
@@ -619,48 +619,48 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let control_error = parse.parse(&tree, "fn control() {\n    if true { call() }\n    while true { break }\n    for item in items { call() }\n    when true { call() } else { cleanup() }\n    switch item {\n        case 1i32:\n            ret\n    }\n    @nocheck { call() }\n    shared var value: i32 = 0i32\n}\n")
     if control_error != ok || tree.count != 42usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .LiteralExpr || tree.nodes[2usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .CallExpr || tree.nodes[4usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .Block || tree.nodes[6usize].kind != .IfStmt { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .LiteralExpr || tree.nodes[8usize].kind != .BreakStmt { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .Block || tree.nodes[10usize].kind != .WhileStmt { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .NameExpr || tree.nodes[12usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .CallExpr || tree.nodes[14usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .Block || tree.nodes[16usize].kind != .ForStmt { ret lex.InvalidSource }
-    if tree.nodes[17usize].kind != .LiteralExpr || tree.nodes[18usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[19usize].kind != .CallExpr || tree.nodes[20usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[21usize].kind != .Block || tree.nodes[22usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[23usize].kind != .CallExpr || tree.nodes[24usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[25usize].kind != .Block || tree.nodes[26usize].kind != .WhenStmt { ret lex.InvalidSource }
-    if tree.nodes[27usize].kind != .NameExpr || tree.nodes[28usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[29usize].kind != .ReturnStmt || tree.nodes[30usize].kind != .SwitchArm { ret lex.InvalidSource }
-    if tree.nodes[31usize].kind != .SwitchStmt || tree.nodes[32usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[33usize].kind != .CallExpr || tree.nodes[34usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[35usize].kind != .Block || tree.nodes[36usize].kind != .NocheckStmt { ret lex.InvalidSource }
-    if tree.nodes[37usize].kind != .NamedType || tree.nodes[38usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[39usize].kind != .SharedVarStmt || tree.nodes[40usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[41usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .LiteralExpr || parse.kind_at(&tree, 2usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .CallExpr || parse.kind_at(&tree, 4usize) != .CallStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .Block || parse.kind_at(&tree, 6usize) != .IfStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .LiteralExpr || parse.kind_at(&tree, 8usize) != .BreakStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .Block || parse.kind_at(&tree, 10usize) != .WhileStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .NameExpr || parse.kind_at(&tree, 12usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .CallExpr || parse.kind_at(&tree, 14usize) != .CallStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .Block || parse.kind_at(&tree, 16usize) != .ForStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 17usize) != .LiteralExpr || parse.kind_at(&tree, 18usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 19usize) != .CallExpr || parse.kind_at(&tree, 20usize) != .CallStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 21usize) != .Block || parse.kind_at(&tree, 22usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 23usize) != .CallExpr || parse.kind_at(&tree, 24usize) != .CallStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 25usize) != .Block || parse.kind_at(&tree, 26usize) != .WhenStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 27usize) != .NameExpr || parse.kind_at(&tree, 28usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 29usize) != .ReturnStmt || parse.kind_at(&tree, 30usize) != .SwitchArm { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 31usize) != .SwitchStmt || parse.kind_at(&tree, 32usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 33usize) != .CallExpr || parse.kind_at(&tree, 34usize) != .CallStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 35usize) != .Block || parse.kind_at(&tree, 36usize) != .NocheckStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 37usize) != .NamedType || parse.kind_at(&tree, 38usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 39usize) != .SharedVarStmt || parse.kind_at(&tree, 40usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 41usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let branches_error = parse.parse(&tree, "fn branches() {\n    if a {\n        ret\n    } else if b {\n        call()\n    } else {\n        cleanup()\n    }\n}\n")
     if branches_error != ok || tree.count != 17usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .Block || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .NameExpr || tree.nodes[6usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .CallStmt || tree.nodes[8usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .NameExpr || tree.nodes[10usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .CallStmt || tree.nodes[12usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .IfStmt || tree.nodes[14usize].kind != .IfStmt { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .Block || tree.nodes[16usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NameExpr || parse.kind_at(&tree, 2usize) != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .Block || parse.kind_at(&tree, 4usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .NameExpr || parse.kind_at(&tree, 6usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .CallStmt || parse.kind_at(&tree, 8usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .NameExpr || parse.kind_at(&tree, 10usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .CallStmt || parse.kind_at(&tree, 12usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .IfStmt || parse.kind_at(&tree, 14usize) != .IfStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .Block || parse.kind_at(&tree, 16usize) != .FnDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let loops_error = parse.parse(&tree, "fn loops() {\n    for item, index in items { call(item) }\n    for _, i in 0usize..limit { continue }\n}\n")
     if loops_error != ok || tree.count != 15usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .NameExpr || tree.nodes[4usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .CallStmt || tree.nodes[6usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .ForStmt || tree.nodes[8usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .NameExpr || tree.nodes[10usize].kind != .ContinueStmt { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .Block || tree.nodes[12usize].kind != .ForStmt { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .Block || tree.nodes[14usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NameExpr || parse.kind_at(&tree, 2usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .NameExpr || parse.kind_at(&tree, 4usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .CallStmt || parse.kind_at(&tree, 6usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .ForStmt || parse.kind_at(&tree, 8usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .NameExpr || parse.kind_at(&tree, 10usize) != .ContinueStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .Block || parse.kind_at(&tree, 12usize) != .ForStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .Block || parse.kind_at(&tree, 14usize) != .FnDecl { ret lex.InvalidSource }
     let missing_range_end_error = validate_test_parse("fn invalid() {\n    for i in 0usize.. {}\n}\n")
     if missing_range_end_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let comptime_range_end_error = validate_test_parse("fn generic_range[N: usize]() {\n    for i in 0usize..N { continue }\n}\n")
@@ -668,10 +668,10 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let deferred_block_error = parse.parse(&tree, "fn deferred() {\n    defer {\n        cleanup()\n    }\n}\n")
     if deferred_block_error != ok || tree.count != 8usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .CallExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .CallStmt || tree.nodes[4usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .DeferStmt || tree.nodes[6usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NameExpr || parse.kind_at(&tree, 2usize) != .CallExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .CallStmt || parse.kind_at(&tree, 4usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .DeferStmt || parse.kind_at(&tree, 6usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .FnDecl { ret lex.InvalidSource }
     let invalid_directive_error = validate_test_parse("fn invalid() {\n    @checked {}\n}\n")
     if invalid_directive_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let trailing_break_error = validate_test_parse("fn invalid() {\n    break value\n}\n")
@@ -679,28 +679,28 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let switch_error = parse.parse(&tree, "fn choose() {\n    switch value {\n    case 1i32, 2i32:\n        call()\n    case .Some as item:\n        ret item\n    default:\n        break\n    }\n}\n")
     if switch_error != ok || tree.count != 17usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .LiteralExpr || tree.nodes[4usize].kind != .NameExpr { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .CallExpr || tree.nodes[6usize].kind != .CallStmt { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .SwitchArm || tree.nodes[8usize].kind != .MemberExpr { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .NameExpr || tree.nodes[10usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    if tree.nodes[11usize].kind != .SwitchArm || tree.nodes[12usize].kind != .BreakStmt { ret lex.InvalidSource }
-    if tree.nodes[13usize].kind != .SwitchArm || tree.nodes[14usize].kind != .SwitchStmt { ret lex.InvalidSource }
-    if tree.nodes[15usize].kind != .Block || tree.nodes[16usize].kind != .FnDecl { ret lex.InvalidSource }
-    if tree.nodes[14usize].child_count != 8usize || tree.nodes[7usize].child_count != 8usize { ret lex.InvalidSource }
-    let switch_children = tree.nodes[14usize].first_child
-    if !tree.children[switch_children + 1usize].node || tree.children[switch_children + 1usize].index != 1usize { ret lex.InvalidSource }
-    if !tree.children[switch_children + 4usize].node || tree.children[switch_children + 4usize].index != 7usize { ret lex.InvalidSource }
-    if !tree.children[switch_children + 5usize].node || tree.children[switch_children + 5usize].index != 11usize { ret lex.InvalidSource }
-    if !tree.children[switch_children + 6usize].node || tree.children[switch_children + 6usize].index != 13usize { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NameExpr || parse.kind_at(&tree, 2usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .LiteralExpr || parse.kind_at(&tree, 4usize) != .NameExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .CallExpr || parse.kind_at(&tree, 6usize) != .CallStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .SwitchArm || parse.kind_at(&tree, 8usize) != .MemberExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .NameExpr || parse.kind_at(&tree, 10usize) != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 11usize) != .SwitchArm || parse.kind_at(&tree, 12usize) != .BreakStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 13usize) != .SwitchArm || parse.kind_at(&tree, 14usize) != .SwitchStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 15usize) != .Block || parse.kind_at(&tree, 16usize) != .FnDecl { ret lex.InvalidSource }
+    if parse.node_at(&tree, 14usize).child_count != 8usize || parse.node_at(&tree, 7usize).child_count != 8usize { ret lex.InvalidSource }
+    let switch_children = parse.node_at(&tree, 14usize).first_child
+    if !parse.child_is_node_at(&tree, switch_children + 1usize) || parse.child_index_at(&tree, switch_children + 1usize) != 1usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, switch_children + 4usize) || parse.child_index_at(&tree, switch_children + 4usize) != 7usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, switch_children + 5usize) || parse.child_index_at(&tree, switch_children + 5usize) != 11usize { ret lex.InvalidSource }
+    if !parse.child_is_node_at(&tree, switch_children + 6usize) || parse.child_index_at(&tree, switch_children + 6usize) != 13usize { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let switch_recovery_error = parse.parse(&tree, "fn recover_switch() {\n    switch value {\n    case 1i32:\n        call() + value\n    default:\n        ret\n    }\n}\n")
     if switch_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 10usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .NameExpr || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ErrorNode || tree.nodes[4usize].kind != .SwitchArm { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .ReturnStmt || tree.nodes[6usize].kind != .SwitchArm { ret lex.InvalidSource }
-    if tree.nodes[7usize].kind != .SwitchStmt || tree.nodes[8usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[9usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .NameExpr || parse.kind_at(&tree, 2usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ErrorNode || parse.kind_at(&tree, 4usize) != .SwitchArm { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .ReturnStmt || parse.kind_at(&tree, 6usize) != .SwitchArm { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 7usize) != .SwitchStmt || parse.kind_at(&tree, 8usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 9usize) != .FnDecl { ret lex.InvalidSource }
     let empty_switch_error = validate_test_parse("fn invalid() {\n    switch value {}\n}\n")
     if empty_switch_error != parse.InvalidSyntax { ret lex.InvalidSource }
     let inline_switch_arm_error = validate_test_parse("fn invalid() {\n    switch value {\n    default: ret\n    }\n}\n")
@@ -714,37 +714,37 @@ fn self_test() -> err {
     try parse.init_tree(&tree, nodes[..], children[..])
     let block_error = parse.parse(&tree, "fn recover() {\n    use bad\n    ret\n}\nerror Good\n")
     if block_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 6usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .ReturnStmt { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .Block || tree.nodes[4usize].kind != .FnDecl { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode || parse.kind_at(&tree, 2usize) != .ReturnStmt { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .Block || parse.kind_at(&tree, 4usize) != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&tree, nodes[..], children[..])
     let expression_recovery_error = parse.parse(&tree, "fn recover_expression() {\n    call() + value\n    ret ok\n}\n")
     if expression_recovery_error != parse.InvalidSyntax || tree.errors != 1usize || tree.count != 6usize { ret lex.InvalidSource }
-    if tree.nodes[1usize].kind != .ErrorNode || tree.nodes[2usize].kind != .LiteralExpr { ret lex.InvalidSource }
-    if tree.nodes[3usize].kind != .ReturnStmt || tree.nodes[4usize].kind != .Block { ret lex.InvalidSource }
-    if tree.nodes[5usize].kind != .FnDecl { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 1usize) != .ErrorNode || parse.kind_at(&tree, 2usize) != .LiteralExpr { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 3usize) != .ReturnStmt || parse.kind_at(&tree, 4usize) != .Block { ret lex.InvalidSource }
+    if parse.kind_at(&tree, 5usize) != .FnDecl { ret lex.InvalidSource }
     let syntax_error = validate_test_parse("fn broken() -> err {\n    ret ok\n")
     if syntax_error != parse.InvalidSyntax { ret lex.InvalidSource }
-    var recovery_nodes: [4]syntax.Node = zero
-    var recovery_children: [16]syntax.Child = zero
+    var recovery_nodes: [4]syntax.Packed = zero
+    var recovery_children: [16]u32 = zero
     var recovered: parse.Tree = zero
     try parse.init_tree(&recovered, recovery_nodes[..], recovery_children[..])
     let recovery_error = parse.parse(&recovered, "@\nerror Good\n")
     if recovery_error != parse.InvalidSyntax || recovered.errors != 1usize { ret lex.InvalidSource }
-    if recovered.count != 3usize || recovered.nodes[1usize].kind != .ErrorNode { ret lex.InvalidSource }
-    if recovered.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if recovered.count != 3usize || parse.kind_at(&recovered, 1usize) != .ErrorNode { ret lex.InvalidSource }
+    if parse.kind_at(&recovered, 2usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&recovered, recovery_nodes[..], recovery_children[..])
     let signature_error = parse.parse(&recovered, "fn broken(value i32) -> err {}\nerror Good\n")
     if signature_error != parse.InvalidSyntax || recovered.errors != 1usize { ret lex.InvalidSource }
-    if recovered.count != 3usize || recovered.nodes[1usize].kind != .ErrorNode { ret lex.InvalidSource }
-    if recovered.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
+    if recovered.count != 3usize || parse.kind_at(&recovered, 1usize) != .ErrorNode { ret lex.InvalidSource }
+    if parse.kind_at(&recovered, 2usize) != .ErrorDecl { ret lex.InvalidSource }
     try parse.init_tree(&recovered, recovery_nodes[..], recovery_children[..])
     let type_error = parse.parse(&recovered, "type Bad = enum {}\nerror Good\n")
     if type_error != parse.InvalidSyntax || recovered.errors != 1usize { ret lex.InvalidSource }
-    if recovered.count != 3usize || recovered.nodes[1usize].kind != .ErrorNode { ret lex.InvalidSource }
-    if recovered.nodes[2usize].kind != .ErrorDecl { ret lex.InvalidSource }
-    var tiny_nodes: [1]syntax.Node = zero
-    var tiny_children: [1]syntax.Child = zero
+    if recovered.count != 3usize || parse.kind_at(&recovered, 1usize) != .ErrorNode { ret lex.InvalidSource }
+    if parse.kind_at(&recovered, 2usize) != .ErrorDecl { ret lex.InvalidSource }
+    var tiny_nodes: [1]syntax.Packed = zero
+    var tiny_children: [1]u32 = zero
     var tiny: parse.Tree = zero
     try parse.init_tree(&tiny, tiny_nodes[..], tiny_children[..])
     let capacity_error = parse.parse(&tiny, "error Full\n")
@@ -1381,9 +1381,9 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *
     var no_lines: [1]usize = zero
     let (tokens, token_count, invalid, scan_error) = tool.scan_all(a, text)
     if scan_error != ok { ret (0usize, scan_error) }
-    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, text.len + 1024usize)
+    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, text.len + 1024usize)
     if nodes_error != ok { ret (0usize, nodes_error) }
-    let (children, children_error) = mem.alloc[syntax.Child](a, text.len + 1024usize)
+    let (children, children_error) = mem.alloc[u32](a, text.len + 1024usize)
     if children_error != ok { ret (0usize, children_error) }
     var tree: parse.Tree = zero
     let init_error = parse.init_tree(&tree, nodes, children)
@@ -1394,7 +1394,7 @@ fn discover_tests(a: *mem.Arena, text: str, names: []str, lines: []usize, bad: *
     var pending = false
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level {
             if node.kind == .Attribute {
                 let name_token = tokens[node.token_start + 1usize]
@@ -2646,9 +2646,9 @@ fn same(a: str, b: str) -> bool {
 
 fn validate_cli_parse(a: *mem.Arena, report: *Sink, path: str, text: str) -> err {
     // The CLI supplies explicit storage; parser lists have no separate caps.
-    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 4096usize)
+    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, 4096usize)
     if nodes_error != ok { ret nodes_error }
-    let (children, children_error) = mem.alloc[syntax.Child](a, 65536usize)
+    let (children, children_error) = mem.alloc[u32](a, 65536usize)
     if children_error != ok { ret children_error }
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, nodes, children)
@@ -2667,9 +2667,9 @@ fn init_cli_graph(a: *mem.Arena, loaded: *graph.Graph) -> err {
     if modules_error != ok { ret modules_error }
     let (imports, imports_error) = mem.alloc[graph.Import](a, 262144usize)
     if imports_error != ok { ret imports_error }
-    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, 4096usize)
+    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, 4096usize)
     if nodes_error != ok { ret nodes_error }
-    let (children, children_error) = mem.alloc[syntax.Child](a, 16384usize)
+    let (children, children_error) = mem.alloc[u32](a, 16384usize)
     if children_error != ok { ret children_error }
     try graph.init(loaded, modules, imports, nodes, children)
     // Dependency order (D304), one slot per module.

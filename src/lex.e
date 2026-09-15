@@ -193,7 +193,12 @@ fn line_start_of(source: str, lines: []const usize, offset: usize) -> usize {
 // The 1-based column of `offset`: scalars from the line's start, the byte-order mark
 // none of them.
 fn column_of(source: str, lines: []const usize, offset: usize) -> usize {
-    var at = line_start_of(source, lines, offset)
+    ret column_from(source, line_start_of(source, lines, offset), offset)
+}
+
+// The column of `offset` on the line that begins at `line_start`, already known.
+fn column_from(source: str, line_start: usize, offset: usize) -> usize {
+    var at = line_start
     if at == 0usize && offset >= 3usize && source[0usize] == 239u8 && source[1usize] == 187u8 && source[2usize] == 191u8 { at = 3usize }
     var column = 1usize
     while at < offset {

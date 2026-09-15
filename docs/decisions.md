@@ -6449,3 +6449,22 @@ compiler's own resolve 173 ms to 55 ms and its declaration sweep 156 ms to 35 ms
 The tokens of the two-million-line program are 340 MB, which the peak working set
 shows (710 MB to 1.07 GB); what still re-parses on each pass is the tree, which the
 next step keeps the same way.
+
+## D317 -- A node is twenty bytes, a child one word, and every module keeps its tree
+
+With the tokens kept (D316), the tree was what each pass still re-parsed, and at 40
+bytes a node and 16 a child it was too large to keep: the two-million-line program has
+eleven million nodes. The tree now stores `syntax.Packed` -- a kind, a flag byte and
+four 32-bit indexes, 20 bytes -- and a child as one 32-bit word whose high bit says
+node, the shape Zig and Carbon give their trees; `syntax.Node` and `syntax.Child`
+stay the forms every reader is handed, unpacked by `parse.node_at` and
+`parse.child_at`, and a reader of one field takes `parse.kind_at`,
+`parse.child_index_at` or `parse.child_is_node_at` -- register results the release
+build inlines, where a whole node comes back through a slot the oracle does not copy
+(D310), and the accessors were a tenth of a build before those three. Each module's
+tree is copied out of the pool at its own size when its imports are collected and
+handed back by `graph.parse_module` ever after; the checker's interpreter takes the
+same tree instead of parsing its own. A site's column is counted from the cached
+line start rather than found again. Two-million lines: 46 s to 33 s release, 40 s to
+28 s debug, with resolve 2.6 s to 1.0 s, the declaration sweep 2.2 s to 1.1 s and
+the body sweep 3.9 s to 2.0 s; the trees cost 300 MB. Images byte-identical.

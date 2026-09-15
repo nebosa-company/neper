@@ -30,6 +30,10 @@ type Module = struct {
     tokens: []lex.Token,
     // Whether the scanner refused a byte: the parse reports it, a later pass refuses.
     has_invalid: bool,
+    // The module's tree, parsed once when its imports are collected and kept at its
+    // own size (D317): every pass reads it, none re-parses.
+    tree: parse.Tree,
+    has_tree: bool,
     first_import: usize,
     import_count: usize,
     visit_state: u8,
@@ -39,8 +43,8 @@ type Graph = struct {
     modules: []Module,
     imports: []Import,
     token_scratch: []lex.Token,
-    nodes: []syntax.Node,
-    children: []syntax.Child,
+    nodes: []syntax.Packed,
+    children: []u32,
     project: project.Project,
     toolchain_root: str,
     arch: str,
@@ -94,13 +98,38 @@ fn ensure_tree_pool(a: *mem.Arena, g: *Graph, bytes: usize) -> err {
     if node_count < nodes_needed { node_count = nodes_needed }
     var child_count = g.children.len * 2usize
     if child_count < children_needed { child_count = children_needed }
-    let (nodes, nodes_error) = mem.alloc[syntax.Node](a, node_count)
+    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, node_count)
     if nodes_error != ok { ret nodes_error }
-    let (children, children_error) = mem.alloc[syntax.Child](a, child_count)
+    let (children, children_error) = mem.alloc[u32](a, child_count)
     if children_error != ok { ret children_error }
     g.nodes = nodes
     g.children = children
     g.has_parsed = false
+    ret ok
+}
+
+// The parsed tree copied out of the pool at its own size, and the module marked as
+// holding it (D317).
+fn keep_tree(a: *mem.Arena, g: *Graph, module_index: usize, tree: *parse.Tree) -> err {
+    let (nodes, nodes_error) = mem.alloc[syntax.Packed](a, tree.count + 1usize)
+    if nodes_error != ok { ret nodes_error }
+    let (children, children_error) = mem.alloc[u32](a, tree.child_count + 1usize)
+    if children_error != ok { ret children_error }
+    var at = 0usize
+    while at < tree.count {
+        nodes[at] = tree.nodes[at]
+        at += 1usize
+    }
+    at = 0usize
+    while at < tree.child_count {
+        children[at] = tree.children[at]
+        at += 1usize
+    }
+    var kept = *tree
+    kept.nodes = nodes[0usize..tree.count]
+    kept.children = children[0usize..tree.child_count]
+    g.modules[module_index].tree = kept
+    g.modules[module_index].has_tree = true
     ret ok
 }
 
@@ -144,7 +173,7 @@ fn scan_module(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     ret ok
 }
 
-fn init(g: *Graph, modules: []Module, imports: []Import, nodes: []syntax.Node, children: []syntax.Child) -> err {
+fn init(g: *Graph, modules: []Module, imports: []Import, nodes: []syntax.Packed, children: []u32) -> err {
     if modules.len == 0usize || imports.len == 0usize || nodes.len == 0usize || children.len == 0usize { ret Capacity }
     g.modules = modules
     g.imports = imports
@@ -167,6 +196,10 @@ fn set_order(g: *Graph, order: []usize) {
 
 // The module's tree, parsed into the pool unless it is what the pool already holds.
 fn parse_module(g: *Graph, module_index: usize, tree: *parse.Tree) -> err {
+    if g.modules[module_index].has_tree {
+        *tree = g.modules[module_index].tree
+        ret ok
+    }
     if g.has_parsed && g.parsed_module == module_index {
         *tree = g.parsed
         ret ok
@@ -268,6 +301,7 @@ fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     g.has_parsed = false
     try parse.init_tree(&tree, g.nodes, g.children)
     let parse_error = parse.parse_tokens(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
+    if parse_error == ok { try keep_tree(a, g, module_index, &tree) }
     if parse_error != ok {
         // Every module is parsed here first, so this is where a syntax error is
         // seen with the module still in hand to name it.
@@ -284,7 +318,7 @@ fn collect_imports(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     let first_import = g.import_count
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level && node.kind == .UseDecl {
             if g.import_count == g.imports.len { ret Capacity }
             let (item, import_error) = extract_import(a, g.modules[module_index].text, node)
@@ -341,7 +375,8 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     let (lines, lines_error) = lex.line_starts(a, text)
     if lines_error != ok { ret (0usize, lines_error) }
     var no_tokens: [1]lex.Token = zero
-    g.modules[index] = Module { name: name, path: path, text: text, lines: lines, tokens: no_tokens[0usize..0usize], has_invalid: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8 }
+    var no_tree: parse.Tree = zero
+    g.modules[index] = Module { name: name, path: path, text: text, lines: lines, tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8 }
     g.count += 1usize
     let scan_error = scan_module(a, g, index)
     if scan_error != ok { ret (0usize, scan_error) }

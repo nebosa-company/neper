@@ -250,7 +250,7 @@ fn collect_module(r: *Resolver, g: *graph.Graph, module_index: usize) -> err {
     try tokenize_module(r, g, module_index)
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(&tree, node_index)
         if node.top_level {
             let (kind, space, is_declaration) = declaration_kind(node.kind)
             if is_declaration {
@@ -371,7 +371,7 @@ fn first_node_child(tree: *parse.Tree, node: syntax.Node) -> (usize, bool) {
     let end = node.first_child + node.child_count
     var i = node.first_child
     while i < end {
-        if tree.children[i].node { ret (tree.children[i].index, true) }
+        if parse.child_is_node_at(tree, i) { ret (parse.child_index_at(tree, i), true) }
         i += 1usize
     }
     ret (0usize, false)
@@ -379,8 +379,8 @@ fn first_node_child(tree: *parse.Tree, node: syntax.Node) -> (usize, bool) {
 
 fn validate_field(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
     let (receiver_index, has_receiver) = first_node_child(tree, node)
-    if !has_receiver || tree.nodes[receiver_index].kind != .NameExpr { ret ok }
-    let receiver = tree.nodes[receiver_index]
+    if !has_receiver || parse.kind_at(tree, receiver_index) != .NameExpr { ret ok }
+    let receiver = parse.node_at(tree, receiver_index)
     if receiver.token_start >= r.token_count { ret parse.InvalidSyntax }
     let base_token = r.tokens[receiver.token_start]
     if base_token.kind != .Identifier { ret ok }
@@ -618,8 +618,8 @@ fn visit_children(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            try visit_scope_node(r, g, tree, module_index, tree.children[at].index)
+        if parse.child_is_node_at(tree, at) {
+            try visit_scope_node(r, g, tree, module_index, parse.child_index_at(tree, at))
         }
         at += 1usize
     }
@@ -640,13 +640,13 @@ fn visit_binding(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index:
     var has_declared_type = false
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind == .Binding {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) == .Binding {
                 binding_index = child_index
                 has_binding = true
             } else {
-                let child = tree.nodes[child_index]
+                let child = parse.node_at(tree, child_index)
                 if child.kind == .NamedType || child.kind == .PointerType || child.kind == .SliceType || child.kind == .ArrayType || child.kind == .FunctionType { has_declared_type = true }
                 let child_error = visit_scope_node(r, g, tree, module_index, child_index)
                 if child_error != ok {
@@ -661,7 +661,7 @@ fn visit_binding(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index:
         at += 1usize
     }
     if !has_binding { ret parse.InvalidSyntax }
-    ret add_binding_names(r, g, module_index, tree.nodes[binding_index])
+    ret add_binding_names(r, g, module_index, parse.node_at(tree, binding_index))
 }
 
 fn visit_for(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node) -> err {
@@ -671,9 +671,9 @@ fn visit_for(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usi
     var has_block = false
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if tree.nodes[child_index].kind == .Block {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if parse.kind_at(tree, child_index) == .Block {
                 block_index = child_index
                 has_block = true
             } else {
@@ -695,7 +695,7 @@ fn visit_for(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usi
         r.local_count = checkpoint
         ret parse.InvalidSyntax
     }
-    let block_error = visit_block(r, g, tree, module_index, tree.nodes[block_index])
+    let block_error = visit_block(r, g, tree, module_index, parse.node_at(tree, block_index))
     r.local_count = checkpoint
     ret block_error
 }
@@ -705,9 +705,9 @@ fn visit_switch_arm(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_ind
     let end = node.first_child + node.child_count
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if !is_statement_node(tree.nodes[child_index].kind) {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if !is_statement_node(parse.kind_at(tree, child_index)) {
                 let child_error = visit_scope_node(r, g, tree, module_index, child_index)
                 if child_error != ok {
                     r.local_count = checkpoint
@@ -724,9 +724,9 @@ fn visit_switch_arm(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_ind
     }
     at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            if is_statement_node(tree.nodes[child_index].kind) {
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            if is_statement_node(parse.kind_at(tree, child_index)) {
                 let child_error = visit_scope_node(r, g, tree, module_index, child_index)
                 if child_error != ok {
                     r.local_count = checkpoint
@@ -807,7 +807,7 @@ fn validate_attribute(r: *Resolver, g: *graph.Graph, module_index: usize, node: 
 }
 
 fn visit_scope_node(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
-    let node = tree.nodes[node_index]
+    let node = parse.node_at(tree, node_index)
     // An attribute's arguments are parsed as expressions but are not values: `c` in
     // `@cc(c)` names a calling convention, not something in scope. Resolving them as
     // values reported `unknown value name` at every `@cc`, so the whole attribute is
@@ -828,8 +828,8 @@ fn visit_scope_node(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_ind
     if node.kind == .FieldExpr {
         // `target.arch` / `target.os` (D223): section 2's namespace, no declaration.
         let (target_receiver, has_target_receiver) = first_node_child(tree, node)
-        if has_target_receiver && tree.nodes[target_receiver].kind == .NameExpr {
-            let target_token = r.tokens[tree.nodes[target_receiver].token_start]
+        if has_target_receiver && parse.kind_at(tree, target_receiver) == .NameExpr {
+            let target_token = r.tokens[parse.node_at(tree, target_receiver).token_start]
             if target_token.kind == .Identifier && same(g.modules[module_index].text[target_token.start..target_token.end], "target") { ret ok }
         }
         try validate_field(r, g, tree, module_index, node)
@@ -866,9 +866,9 @@ fn validate_declaration_scope(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, 
     var has_block = false
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if child.kind == .ComptimeParam {
                 try visit_children(r, g, tree, module_index, child)
                 try add_first_name(r, g, module_index, child, comptime_space(r, child))
@@ -882,9 +882,9 @@ fn validate_declaration_scope(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, 
     }
     at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if child.kind == .Parameter {
                 try visit_children(r, g, tree, module_index, child)
                 try add_first_name(r, g, module_index, child, .Value)
@@ -894,16 +894,16 @@ fn validate_declaration_scope(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, 
     }
     at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            let child_index = tree.children[at].index
-            let child = tree.nodes[child_index]
+        if parse.child_is_node_at(tree, at) {
+            let child_index = parse.child_index_at(tree, at)
+            let child = parse.node_at(tree, child_index)
             if child.kind != .ComptimeParam && child.kind != .Parameter && child.kind != .Block {
                 try visit_scope_node(r, g, tree, module_index, child_index)
             }
         }
         at += 1usize
     }
-    if has_block { try visit_block(r, g, tree, module_index, tree.nodes[block_index]) }
+    if has_block { try visit_block(r, g, tree, module_index, parse.node_at(tree, block_index)) }
     r.local_count = 0usize
     ret ok
 }
@@ -911,7 +911,7 @@ fn validate_declaration_scope(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, 
 fn validate_top_levels(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: usize) -> err {
     var node_index = 1usize
     while node_index < tree.count {
-        let node = tree.nodes[node_index]
+        let node = parse.node_at(tree, node_index)
         if node.top_level {
             if node.kind == .FnDecl || node.kind == .ExternDecl || node.kind == .TypeDecl {
                 try validate_declaration_scope(r, g, tree, module_index, node)
@@ -971,8 +971,8 @@ fn visit_when(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index: us
     var first = true
     var at = node.first_child
     while at < end {
-        if tree.children[at].node {
-            if !first { try visit_scope_node(r, g, tree, module_index, tree.children[at].index) }
+        if parse.child_is_node_at(tree, at) {
+            if !first { try visit_scope_node(r, g, tree, module_index, parse.child_index_at(tree, at)) }
             first = false
         }
         at += 1usize

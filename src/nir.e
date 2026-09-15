@@ -1014,7 +1014,7 @@ fn site_of(builder: *Builder, token: lex.Token) -> Site {
             if line < builder.current_lines.len { builder.site_line_end = builder.current_lines[line] }
         }
         site.line = builder.site_line
-        site.column = lex.column_of(builder.current_text, builder.current_lines, token.start)
+        site.column = lex.column_from(builder.current_text, builder.site_line_start, token.start)
     }
     ret site
 }
