@@ -6942,3 +6942,40 @@ Measured on the million-line fixture, wall clock, cold and warm (nothing changed
 The Linux figures are on the Linux filesystem: the same build from `/mnt/d` spends
 two seconds reading a thousand files through 9P. Images are the D329 compiler's for
 every program that the promotion bug did not touch, and both suites pass.
+
+## D331 -- `-j N`, a perturbed schedule, and the harness asking whether the image depends on either
+
+The roadmap's M2 gate wants byte-identical output across `-j 1`, every worker count
+and a perturbed schedule, and spec section 15 makes it a hard requirement; until now
+nothing could ask, since the worker count was a constant and the schedule the one
+the greedy assignment produced.
+
+`-j N` is a trailing flag of `emit-executable`, `emit-em-all` and `run`, and of the
+short `build` and `run` (D276), which pass it through: a decimal count from one, and
+every phase that runs workers -- the front end's waves (D321), the artifact loads
+(D324), the resolver (D328) and the crew (D325, D326) -- takes the smaller of its own
+count and the request. The arrays stay sized at the phase's constant; the request
+only lowers how many are made. The default is unchanged, eight, and `-j 0` or a
+non-count is the usage error.
+
+`--perturb` turns the crew's schedule around: the sorted module list is reversed so
+the smallest is handed out first, the modules go round-robin instead of to the
+lightest worker, and each worker's run is reversed, so every module's worker and
+every worker's order differ from the default schedule's. It is a harness flag, not
+a documented option; it costs one branch per assignment.
+
+Asked the question, the answer was yes on the first try: the compiler in debug and
+release, the generic-heavy fixtures (`generic_same_name`, `generic_instances`,
+`meta_generic`, `data_map`, `crypto_x509`), `inline_nested` and the million-line
+fixture build to one image under the default, `-j 1`, `-j 3 --perturb` and
+`--perturb`, and a hot build under `-j 1` or `-j 3 --perturb` is the cold image.
+Nothing in the crew writes anything whose order depends on the worker: the oracles
+are gathered in module order, the instances belong to the module that asked, and
+the link lays the artifacts out in graph order. The suites now require it: the
+compiler built by the self-hosted stage under `-j 1` and under `-j 3 --perturb`
+must be the stable stage byte for byte, and the inlined release fixture under
+`-j 1 --perturb` the default build. `build/jobs.sh` runs the same comparison over
+any list of programs.
+
+What the harness still lacks is the relocated build -- the same sources at another
+path -- and the device-reached edit case that waits on M3.

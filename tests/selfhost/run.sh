@@ -1776,6 +1776,11 @@ chmod +x "$nested_release"
 nested_status=0
 "$nested_release" || nested_status=$?
 [ "$nested_status" -eq 5 ]
+# `-j 1 --perturb` (D331): the inlined release image on one worker, turned around.
+nested_jobs="$test_build/inline-nested-release-jobs"
+nested_jobs_written=$($test_build/neper-self emit-executable "$nested_fixture/src/main.e" "$repo" x64 linux "$nested_jobs" --release -j 1 --perturb)
+[ "$nested_jobs_written" = 'executable written' ]
+cmp "$nested_jobs" "$nested_release"
 nested_status=0
 nested_output=$("$nested_release" trap 2>&1) || nested_status=$?
 [ "$nested_status" -eq 134 ]
@@ -2680,6 +2685,14 @@ stable_compiler_path="$test_build/neper-own-stable"
 stable_compiler_written=$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$stable_compiler_path")
 [ "$stable_compiler_written" = 'executable written' ]
 cmp "$own_compiler_path" "$stable_compiler_path"
+# `-j N` and `--perturb` (D331): the compiler built on one worker, and on three with
+# the schedule turned around, is the stable stage byte for byte.
+for jobs_case in '-j 1' '-j 3 --perturb'; do
+    jobs_path="$test_build/neper-own-jobs$(echo "$jobs_case" | tr -d ' -')"
+    jobs_written=$("$own_compiler_path" emit-executable "$repo/src/main.e" "$repo" x64 linux "$jobs_path" $jobs_case)
+    [ "$jobs_written" = 'executable written' ]
+    cmp "$jobs_path" "$stable_compiler_path"
+done
 branches_lowered=$($test_build/neper-self nir-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)
 [ "$branches_lowered" = 'module nir ok' ]
 branches_generated=$($test_build/neper-self codegen-file "$repo/tests/selfhost/fixtures/nir/branches/src/main.e" "$repo" x64 linux)

@@ -86,6 +86,17 @@ type Graph = struct {
     assignment: []usize,
     list: []usize,
     scanned: usize,
+    // `-j N` (D331): how many workers any phase may run, none asked is the phase's
+    // own count; and `--perturb`, the schedule turned around so the harness can ask
+    // whether the image depends on it.
+    jobs: usize,
+    perturb: bool,
+}
+
+// A phase's worker count under `-j N`.
+fn worker_cap(g: *Graph, most: usize) -> usize {
+    if g.jobs != 0usize && g.jobs < most { ret g.jobs }
+    ret most
 }
 
 fn same(a: str, b: str) -> bool {
@@ -699,7 +710,7 @@ fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: st
     g.scanned = 0usize
     let (root_index, root_error) = add_module(a, g, root_name, root_path)
     if root_error != ok { ret root_error }
-    let (workers, workers_error) = mem.alloc[Worker](a, FRONT_WORKERS)
+    let (workers, workers_error) = mem.alloc[Worker](a, worker_cap(g, FRONT_WORKERS))
     if workers_error != ok { ret workers_error }
     var clear_at = 0usize
     while clear_at < workers.len {

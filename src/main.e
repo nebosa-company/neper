@@ -774,7 +774,7 @@ fn has_flag(args: []str, name: str) -> bool {
     while at < args.len {
         if same(args[at], "--") { ret false }
         if same(args[at], name) { ret true }
-        if same(args[at], "--arena") || same(args[at], "--project") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") { at += 1usize }
         at += 1usize
     }
     ret false
@@ -786,7 +786,7 @@ fn project_flag(args: []str) -> str {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret "" }
         if same(args[at], "--project") { ret args[at + 1usize] }
-        if same(args[at], "--arena") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "-j") { at += 1usize }
         at += 1usize
     }
     ret ""
@@ -807,7 +807,13 @@ fn flags_known(args: []str) -> bool {
                 if at + 1usize >= args.len { ret false }
                 at += 1usize
             } else {
-                if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") { ret false }
+                // `-j N` (D331): a worker count from one up.
+                if same(args[at], "-j") {
+                    if at + 1usize >= args.len || jobs_count(args[at + 1usize]) == 0usize { ret false }
+                    at += 1usize
+                } else {
+                    if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") { ret false }
+                }
             }
         }
         at += 1usize
@@ -847,10 +853,37 @@ fn arena_flag(args: []str) -> usize {
             let (size, size_ok) = arena_size(args[at + 1usize])
             if size_ok { ret size }
         }
-        if same(args[at], "--project") { at += 1usize }
+        if same(args[at], "--project") || same(args[at], "-j") { at += 1usize }
         at += 1usize
     }
     ret 0usize
+}
+
+// `-j N` (D331): the worker count asked for, none when the flag is absent.
+fn jobs_flag(args: []str) -> usize {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--") { ret 0usize }
+        if same(args[at], "-j") { ret jobs_count(args[at + 1usize]) }
+        if same(args[at], "--arena") || same(args[at], "--project") { at += 1usize }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+// A decimal count from one to a thousand, or zero for anything else.
+fn jobs_count(spelling: str) -> usize {
+    if spelling.len == 0usize || spelling.len > 4usize { ret 0usize }
+    var value = 0usize
+    var at = 0usize
+    while at < spelling.len {
+        let byte = spelling[at]
+        if byte < 48u8 || byte > 57u8 { ret 0usize }
+        value = value * 10usize + usize(byte - 48u8)
+        at += 1usize
+    }
+    if value > 1000usize { ret 0usize }
+    ret value
 }
 
 // The file's name without its directories, for an operand's source identity.
@@ -990,6 +1023,8 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var check_only = false
     var project_dir = ""
     var virtual_path = ""
+    var jobs = ""
+    var perturb = false
     var program_args_at = args.len
     var at = 3usize
     if project_form { at = 2usize }
@@ -1015,9 +1050,14 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
                             virtual_path = args[at + 1usize]
                             at += 1usize
                         } else {
+                            if same(args[at], "-j") && at + 1usize < args.len {
+                                jobs = args[at + 1usize]
+                                at += 1usize
+                            }
                             if same(args[at], "--release") { release = true }
                             if same(args[at], "--json") { json = true }
                             if same(args[at], "--check") { check_only = true }
+                            if same(args[at], "--perturb") { perturb = true }
                         }
                     }
                 }
@@ -1064,6 +1104,15 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
             long_form[count] = "--project"
             long_form[count + 1usize] = project_dir
             count += 2usize
+        }
+        if jobs.len != 0usize {
+            long_form[count] = "-j"
+            long_form[count + 1usize] = jobs
+            count += 2usize
+        }
+        if perturb {
+            long_form[count] = "--perturb"
+            count += 1usize
         }
         var program_at = program_args_at
         while program_at < args.len {
@@ -4091,7 +4140,8 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
     let wave_count = wave_end - wave_start
     if wave_count == 0usize { ret ok }
     var worker_count = wave_count
-    if worker_count > 8usize { worker_count = 8usize }
+    let most_workers = graph.worker_cap(loaded, 8usize)
+    if worker_count > most_workers { worker_count = most_workers }
     let (workers, workers_error) = mem.alloc[ArtifactWorker](a, worker_count)
     if workers_error != ok { ret workers_error }
     let (paths, paths_error) = mem.alloc[str](a, wave_count)
@@ -4700,7 +4750,7 @@ fn resolve_per_module(a: *mem.Arena, resolver: *resolve.Resolver, loaded: *graph
         order_at += 1usize
     }
     var worker_count = pending
-    let most_workers = LOWER_WORKERS
+    let most_workers = graph.worker_cap(loaded, LOWER_WORKERS)
     if worker_count > most_workers { worker_count = most_workers }
     var sort_at = 0usize
     while sort_at < pending {
@@ -5823,7 +5873,7 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         module_at += 1usize
     }
     var worker_count = pending
-    let most_workers = LOWER_WORKERS
+    let most_workers = graph.worker_cap(loaded, LOWER_WORKERS)
     if worker_count > most_workers { worker_count = most_workers }
     var order_at = 0usize
     while order_at < pending {
@@ -5838,6 +5888,20 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         list[best] = swap
         order_at += 1usize
     }
+    // `--perturb` (D331): the modules handed out smallest first and round-robin, so
+    // every module's worker and every worker's order differ from the schedule
+    // above, and the harness can require the same image of both.
+    if loaded.perturb {
+        var low = 0usize
+        var high = pending
+        while low + 1usize < high {
+            high = high - 1usize
+            let swap = list[low]
+            list[low] = list[high]
+            list[high] = swap
+            low += 1usize
+        }
+    }
     var loads: [LOWER_WORKERS]usize = zero
     order_at = 0usize
     while order_at < pending {
@@ -5847,6 +5911,7 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
             if loads[worker_at] < loads[lightest] { lightest = worker_at }
             worker_at += 1usize
         }
+        if loaded.perturb { lightest = order_at % worker_count }
         loads[lightest] += loaded.modules[list[order_at]].text.len + 4096usize
         owner[list[order_at]] = lightest
         order_at += 1usize
@@ -5916,6 +5981,17 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
                 filled += 1usize
             }
             module_at += 1usize
+        }
+        if loaded.perturb {
+            var low = first
+            var high = filled
+            while low + 1usize < high {
+                high = high - 1usize
+                let swap = runs[low]
+                runs[low] = runs[high]
+                runs[high] = swap
+                low += 1usize
+            }
         }
         workers[worker_at].modules = runs[first..filled]
         workers[worker_at].count = filled - first
@@ -6675,7 +6751,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     // `emit-executable ... --release`: section 11's release build, every debug-only
     // check left out and the release results in their place (D204), and the inliner
     // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
-    let trailing_flags = args.len >= 8usize && (args.len <= 12usize || has_dashdash(args)) && flags_known(args)
+    let trailing_flags = args.len >= 8usize && (args.len <= 16usize || has_dashdash(args)) && flags_known(args)
     let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all") || same(args[1usize], "run")) && has_flag(args, "--release")
     // `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then
     // the program's whole output as one `run` record before the result.
@@ -6707,6 +6783,10 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
+        if trailing_flags {
+            loaded.jobs = jobs_flag(args)
+            loaded.perturb = has_flag(args, "--perturb")
+        }
         report.timing = trailing_flags && has_flag(args, "--time")
         report.build.full = trailing_flags && has_flag(args, "--stats-full")
         report.build.on = report.build.full || (trailing_flags && has_flag(args, "--stats"))
@@ -7222,7 +7302,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

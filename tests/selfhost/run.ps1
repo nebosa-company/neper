@@ -1648,6 +1648,11 @@ $nestedReleaseWritten = & $compiler emit-executable (Join-Path $nestedFixture 's
 if ($LASTEXITCODE -ne 0 -or $nestedReleaseWritten -ne 'executable written') { throw 'nested inlining release emission failed' }
 & $nestedRelease
 if ($LASTEXITCODE -ne 5) { throw "the nested release build did not compute through both copies: exit $LASTEXITCODE" }
+# `-j 1 --perturb` (D331): the inlined release image on one worker, turned around.
+$nestedJobs = Join-Path $testBuild 'inline-nested-release-jobs.exe'
+$nestedJobsWritten = & $compiler emit-executable (Join-Path $nestedFixture 'src\main.e') $repo 'x64' 'windows' $nestedJobs --release -j 1 --perturb
+if ($LASTEXITCODE -ne 0 -or $nestedJobsWritten -ne 'executable written') { throw 'nested inlining release emission under -j 1 --perturb failed' }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $nestedJobs).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $nestedRelease).Hash) { throw 'the release build under -j 1 --perturb is not the default build' }
 $nestedOutput = (& $nestedRelease trap 2>&1) -join "`n"
 if ($LASTEXITCODE -ne 134 -or $nestedOutput -notmatch 'leaf\.e:3:13: trap\[unreachable\]: leaf gave up\n  at main\.main \(' -or $nestedOutput -match 'at mid\.') { throw "the nested release trap did not name leaf.e with one frame: exit $LASTEXITCODE, $nestedOutput" }
 $nestedDebug = Join-Path $testBuild 'inline-nested-debug.exe'
@@ -2434,6 +2439,14 @@ $stableCompilerPath = Join-Path $testBuild 'neper-own-stable.exe'
 & $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $stableCompilerPath | Out-Null
 if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $stableCompilerPath)) { throw 'compiler-owned PE compiler did not emit its stable stage' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $ownCompilerPath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw 'compiler-owned PE stages are not byte-for-byte deterministic' }
+# `-j N` and `--perturb` (D331): the compiler built on one worker, and on three with
+# the schedule turned around, is the stable stage byte for byte.
+foreach ($jobsCase in @(@('-j', '1'), @('-j', '3', '--perturb'))) {
+    $jobsPath = Join-Path $testBuild ('neper-own-jobs' + $jobsCase.Count + '.exe')
+    & $ownCompilerPath emit-executable (Join-Path $repo 'src\main.e') $repo 'x64' 'windows' $jobsPath @jobsCase | Out-Null
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $jobsPath)) { throw "the compiler did not build under $jobsCase" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $jobsPath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $stableCompilerPath).Hash) { throw "the compiler built under $jobsCase is not the stable stage" }
+}
 $branchesLowered = & $compiler nir-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $branchesLowered -ne 'module nir ok') { throw 'if branches and fallthrough merges did not lower to canonical NIR' }
 $branchesGenerated = & $compiler codegen-file (Join-Path $PSScriptRoot 'fixtures\nir\branches\src\main.e') $repo 'x64' 'windows'
