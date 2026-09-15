@@ -388,6 +388,19 @@ type Checker = struct {
     // was scanned. The checker only carries them; `em.update_spans` fills them.
     writer_spans: []usize,
     writer_scanned: [9]usize,
+    // A function's body hash plus one, by function index, once `em.body_hash` has
+    // computed it (D326): zero is not yet. A callee's hash is written into every
+    // module that reaches it, and was recomputed from its tokens for each of them.
+    // Each worker's checker has a table of its own.
+    body_hashes: []usize,
+    // Where a worker's private tails begin (D326): the rows below are the program's
+    // declarations, the same in every checker forked from the one that made them; a
+    // row at or past them is the worker's own, and another worker imports it.
+    fork_types: usize,
+    fork_aggregates: usize,
+    fork_signatures: usize,
+    // Which fork this is: zero for the program's checker, a worker's number for its.
+    fork_id: usize,
     // The (module, table, name) index over the declaration tables (D303): table 1 is
     // functions, 2 aggregates, 3 aliases, 4 constants, 5 globals. Absent, the finders scan.
     names: lookup.Index,
@@ -1045,12 +1058,7 @@ fn attach_index(c: *Checker, entries: []lookup.Entry) -> err {
 
 fn find_alias(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     if lookup.attached(&c.names) {
-        while c.names.indexed[3usize] < c.alias_count {
-            let row = c.names.indexed[3usize]
-            let insert_error = lookup.insert(&c.names, c.aliases[row].module_index, 3usize, c.aliases[row].name, row)
-            if insert_error != ok { break }
-            c.names.indexed[3usize] = row + 1usize
-        }
+        fill_indexes(c)
         if c.names.indexed[3usize] == c.alias_count {
             let (found_at, found) = lookup.find(&c.names, module_index, 3usize, name)
             ret (found_at, found)
@@ -1821,12 +1829,7 @@ fn collect_aliases(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, allow_def
 
 fn find_aggregate(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     if lookup.attached(&c.names) {
-        while c.names.indexed[2usize] < c.aggregate_count {
-            let row = c.names.indexed[2usize]
-            let insert_error = lookup.insert(&c.names, c.aggregates[row].module_index, 2usize, c.aggregates[row].name, row)
-            if insert_error != ok { break }
-            c.names.indexed[2usize] = row + 1usize
-        }
+        fill_indexes(c)
         if c.names.indexed[2usize] == c.aggregate_count {
             let (found_at, found) = lookup.find(&c.names, module_index, 2usize, name)
             ret (found_at, found)
@@ -3537,14 +3540,51 @@ fn type_crosses(c: *Checker, ty: Type, depth: usize) -> bool {
     ret true
 }
 
+// The rows added since the index was last filled, into it (D326): a declaration's
+// row only. An instance shares its template's key, and the first row wins, so it was
+// never found by name; leaving it out is what lets a body worker's checker, whose
+// instances live in a tail of its own, share the index without writing to it.
+fn fill_indexes(c: *Checker) {
+    if !lookup.attached(&c.names) { ret }
+    while c.names.indexed[1usize] < c.function_count {
+        let row = c.names.indexed[1usize]
+        if !c.function_generics[row].instance {
+            let insert_error = lookup.insert(&c.names, c.functions[row].module_index, 1usize, c.functions[row].name, row)
+            if insert_error != ok { ret }
+        }
+        c.names.indexed[1usize] = row + 1usize
+    }
+    while c.names.indexed[2usize] < c.aggregate_count {
+        let row = c.names.indexed[2usize]
+        if !c.aggregates[row].instance {
+            let insert_error = lookup.insert(&c.names, c.aggregates[row].module_index, 2usize, c.aggregates[row].name, row)
+            if insert_error != ok { ret }
+        }
+        c.names.indexed[2usize] = row + 1usize
+    }
+    while c.names.indexed[3usize] < c.alias_count {
+        let row = c.names.indexed[3usize]
+        let insert_error = lookup.insert(&c.names, c.aliases[row].module_index, 3usize, c.aliases[row].name, row)
+        if insert_error != ok { ret }
+        c.names.indexed[3usize] = row + 1usize
+    }
+    while c.names.indexed[4usize] < c.constant_count {
+        let row = c.names.indexed[4usize]
+        let insert_error = lookup.insert(&c.names, c.constants[row].module_index, 4usize, c.constants[row].name, row)
+        if insert_error != ok { ret }
+        c.names.indexed[4usize] = row + 1usize
+    }
+    while c.names.indexed[5usize] < c.global_count {
+        let row = c.names.indexed[5usize]
+        let insert_error = lookup.insert(&c.names, c.globals[row].module_index, 5usize, c.globals[row].name, row)
+        if insert_error != ok { ret }
+        c.names.indexed[5usize] = row + 1usize
+    }
+}
+
 fn find_function(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     if lookup.attached(&c.names) {
-        while c.names.indexed[1usize] < c.function_count {
-            let row = c.names.indexed[1usize]
-            let insert_error = lookup.insert(&c.names, c.functions[row].module_index, 1usize, c.functions[row].name, row)
-            if insert_error != ok { break }
-            c.names.indexed[1usize] = row + 1usize
-        }
+        fill_indexes(c)
         if c.names.indexed[1usize] == c.function_count {
             let (found_at, found) = lookup.find(&c.names, module_index, 1usize, name)
             ret (found_at, found)
@@ -3585,12 +3625,7 @@ fn global_initial_bits(c: *Checker, global_index: usize) -> (usize, err) {
 
 fn find_global(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     if lookup.attached(&c.names) {
-        while c.names.indexed[5usize] < c.global_count {
-            let row = c.names.indexed[5usize]
-            let insert_error = lookup.insert(&c.names, c.globals[row].module_index, 5usize, c.globals[row].name, row)
-            if insert_error != ok { break }
-            c.names.indexed[5usize] = row + 1usize
-        }
+        fill_indexes(c)
         if c.names.indexed[5usize] == c.global_count {
             let (found_at, found) = lookup.find(&c.names, module_index, 5usize, name)
             ret (found_at, found)
@@ -3606,12 +3641,7 @@ fn find_global(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
 
 fn find_constant(c: *Checker, module_index: usize, name: str) -> (usize, bool) {
     if lookup.attached(&c.names) {
-        while c.names.indexed[4usize] < c.constant_count {
-            let row = c.names.indexed[4usize]
-            let insert_error = lookup.insert(&c.names, c.constants[row].module_index, 4usize, c.constants[row].name, row)
-            if insert_error != ok { break }
-            c.names.indexed[4usize] = row + 1usize
-        }
+        fill_indexes(c)
         if c.names.indexed[4usize] == c.constant_count {
             let (found_at, found) = lookup.find(&c.names, module_index, 4usize, name)
             ret (found_at, found)
@@ -3996,11 +4026,15 @@ fn unsigned_integer_type(ty: Type) -> bool {
     ret same(ty.name, "u8") || same(ty.name, "u16") || same(ty.name, "u32") || same(ty.name, "u64") || same(ty.name, "usize")
 }
 
+// By the name's shape (D326): `i8`/`u8`, `i16`/`u16`, `i32`/`u32`, and the rest --
+// `i64`, `u64`, `isize`, `usize` -- are 64. Codegen asks per instruction.
 fn integer_width(ty: Type) -> usize {
     if ty.kind != .Integer { ret 0usize }
-    if same(ty.name, "i8") || same(ty.name, "u8") { ret 8usize }
-    if same(ty.name, "i16") || same(ty.name, "u16") { ret 16usize }
-    if same(ty.name, "i32") || same(ty.name, "u32") { ret 32usize }
+    if ty.name.len == 2usize { ret 8usize }
+    if ty.name.len == 3usize {
+        if ty.name[1usize] == 49u8 { ret 16usize }
+        if ty.name[1usize] == 51u8 { ret 32usize }
+    }
     ret 64usize
 }
 

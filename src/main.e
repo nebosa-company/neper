@@ -2784,15 +2784,27 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph
         span_at += 1usize
     }
     checker.writer_spans = spans
+    let (body_hashes, body_hashes_error) = mem.alloc[usize](a, functions.len)
+    if body_hashes_error != ok { ret body_hashes_error }
+    try clear_usizes(body_hashes)
+    checker.body_hashes = body_hashes
     ret check.attach_index(checker, entries)
+}
+
+fn clear_usizes(values: []usize) -> err {
+    var at = 0usize
+    while at < values.len {
+        values[at] = 0usize
+        at += 1usize
+    }
+    ret ok
 }
 
 // The inlining oracle's builder (D207): the short functions of every module, which the
 // source filter keeps to a few instructions each, so a tenth of the program's tables.
 // An oracle lowers every candidate function before it knows which are short enough to
 // inline (D207), so its pools are the main builder's sizes (D308).
-fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, loaded: *graph.Graph) -> err {
-    let total = loaded.total_bytes
+fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signatures, signature_type_capacity: usize, total: usize) -> err {
     // An oracle keeps a body of at most the cap per entry and drops the rest as it
     // goes (D310), so its pools follow the entry table, not the program (D313): sized
     // like the builder's, the two oracles were two thirds of a two-million-line
@@ -4692,7 +4704,7 @@ fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loade
 fn init_first_oracle(a: *mem.Arena, oracle: *nir.Builder, signatures: *nir.Signatures, checker: *check.Checker, loaded: *graph.Graph) -> err {
     // Built before the bodies are checked (D313), so the signature types are sized by
     // the checker's pools rather than by what the bodies will have added to them.
-    try init_oracle_nir(a, oracle, signatures, checker.parameters.len + checker.return_types.len + 1usize, loaded)
+    try init_oracle_nir(a, oracle, signatures, checker.parameters.len + checker.return_types.len + 1usize, loaded.total_bytes)
     oracle.nocheck = true
     oracle.release = true
     let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
@@ -5027,15 +5039,25 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
 
 // The modules lowered, selected and written as artifacts on worker threads (D325), and
 // the image linked from the artifacts, kept and fresh alike: the hot build's link
-// (D319), which every executable takes now. Lowering reads the checker's declarations
-// and adds only types and function signatures, so a worker's checker is a copy that
-// shares the declaration tables and owns those two, its locals, its caches and its
-// diagnostics; its builder, staging and artifact writer are its own. A worker writes
-// only its own modules' artifact slots. The modules go to the workers largest first
-// to the least loaded, and a worker that cannot go on -- a lowering error, or an
-// arena run dry -- stops where it is: the lowest failing module's error is the
-// build's, reported as the one-at-a-time loop reported it, and the modules a dry
-// worker left are lowered on the main thread out of the program's arena.
+// (D319), which every executable takes now. Since D326 the same workers check the
+// bodies first: a worker's checker is a copy that shares the declaration tables and
+// owns a tail of every table a body check or a lowering appends to -- the instances
+// its modules make, their types, signatures and generic arguments -- with its locals,
+// its caches and its diagnostics; its builder, staging, artifact writer and, in a
+// release build, its two inlining oracles are its own. A worker writes only its own
+// modules' artifact slots. The modules go to the workers largest first to the least
+// loaded, and a worker that cannot go on -- an error, or an arena run dry -- stops
+// where it is: the lowest failing module's error is the build's, reported as the
+// one-at-a-time loop reported it, and the modules of a dry worker are done again on
+// the main thread by a generous worker with the whole-program pools.
+// The workers (D325, D326): eight, since twelve on the twelve-core machine this is
+// measured on lowered no faster; the arena caps how many are actually made.
+const LOWER_WORKERS: usize = 8usize
+
+// The generous worker's slot, past the last thread's: a function, since the bootstrap
+// reads a constant before `{` as an aggregate literal.
+fn generous_slot() -> usize { ret LOWER_WORKERS }
+
 type LowerWorker = struct {
     arena: mem.Arena,
     checker: check.Checker,
@@ -5052,52 +5074,132 @@ type LowerWorker = struct {
     modules: []usize,
     count: usize,
     loaded: *graph.Graph,
+    resolver: *resolve.Resolver,
     held: [][]const u8,
     stopped: bool,
     stopped_at: usize,
     failure: err,
+    // Whether the failure was a lowering's (a lowering diagnostic) or the checker's,
+    // and which builder it was lowering into: 1 the first oracle, 2 the second, 3 the
+    // program's.
+    failed_lowering: bool,
+    failed_builder: usize,
+    // Taken over by the generous worker during the body sweep: its first entries are
+    // the generous worker's, not its own partial ones.
+    replaced_in_sweep: bool,
     scale: usize,
+    // The worker's share of the program's text, which its tails are sized from.
+    share: usize,
+    forked: bool,
+    fork_id: usize,
+    // Handed to the generous worker: nothing of this one's is used any more.
+    replaced: bool,
+    // Which modules' bodies are checked: a kept module's are not in a debug build.
+    body_skip: []bool,
+    // The inlining oracles of a release build (D326), built by this worker for its
+    // own modules: the first over the bodies, the second over the first's entries.
+    release: bool,
+    oracle: nir.Builder,
+    oracle_signatures: nir.Signatures,
+    second: nir.Builder,
+    second_signatures: nir.Signatures,
+    first_entries: []nir.InlineEntry,
+    first_count: usize,
+    second_entries: []nir.InlineEntry,
+    second_count: usize,
+    // Where this worker's first entries start in the crew's table of all of them,
+    // which is where the second oracle's cursor over them starts.
+    first_offset: usize,
+    cursor: usize,
+    defers: lower.DeferState,
+    elapsed_ns: usize,
+    body_ns: usize,
+    second_ns: usize,
+    lower_ns: usize,
+    write_ns: usize,
 }
 
-fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, loaded: *graph.Graph, report: *Sink, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, bindings: []lower.Binding, program: *nir.Builder) -> err {
-    w.loaded = loaded
-    w.held = held
-    w.report = *report
-    w.report.regalloc_ns = 0usize
-    w.report.codegen_ns = 0usize
-    w.report.fold_ns = 0usize
-    // The checker: the declarations shared, what lowering appends its own.
-    w.checker = *checker
-    let (types, types_error) = mem.alloc[check.Type](a, checker.type_count + sized(4096usize, loaded.largest_bytes, 16usize))
-    if types_error != ok { ret types_error }
-    var copy_at = 0usize
-    while copy_at < checker.type_count {
-        types[copy_at] = checker.types[copy_at]
-        copy_at += 1usize
-    }
-    w.checker.types = types
-    let (signatures, signatures_error) = mem.alloc[check.FunctionSignature](a, checker.function_signature_count + sized(1024usize, loaded.largest_bytes, 64usize))
+// The workers of one build (D326): made before the bodies are checked, kept through
+// the second oracle and the lowering, so a module's instances stay with the checker
+// that made them.
+type Crew = struct {
+    on: bool,
+    workers: []LowerWorker,
+    count: usize,
+    generous_made: bool,
+    release: bool,
+    first_all: []nir.InlineEntry,
+    first_all_count: usize,
+    second_all: []nir.InlineEntry,
+    second_all_count: usize,
+}
+
+// The worker's checker forked from the program's (D326): the declaration tables
+// copied, with a tail of its own on each one a body check or a lowering appends to,
+// sized from the worker's share of the text. The copies are made on the worker's
+// thread, out of its arena, so eight of them cost the time of one.
+fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share: usize, largest: usize, fork_id: usize) -> err {
+    *into = *from
+    into.fork_id = fork_id
+    let bytes = share * 2usize + largest
+    let (functions, functions_error) = mem.alloc[check.Function](a, from.function_count + sized(1024usize, bytes, 128usize))
+    if functions_error != ok { ret functions_error }
+    try copy_functions(functions, from.functions[0usize..from.function_count])
+    into.functions = functions
+    let (generics, generics_error) = mem.alloc[check.FunctionGeneric](a, functions.len)
+    if generics_error != ok { ret generics_error }
+    try copy_generics(generics, from.function_generics[0usize..from.function_count])
+    into.function_generics = generics
+    let (parameters, parameters_error) = mem.alloc[check.Parameter](a, from.parameter_count + sized(2048usize, bytes, 64usize))
+    if parameters_error != ok { ret parameters_error }
+    try copy_parameters(parameters, from.parameters[0usize..from.parameter_count])
+    into.parameters = parameters
+    let (return_types, return_types_error) = mem.alloc[check.Type](a, from.return_type_count + sized(4096usize, bytes, 64usize))
+    if return_types_error != ok { ret return_types_error }
+    try copy_types(return_types, from.return_types[0usize..from.return_type_count])
+    into.return_types = return_types
+    let (comptime_parameters, comptime_parameters_error) = mem.alloc[check.ComptimeParameter](a, from.comptime_parameter_count + sized(256usize, bytes, 1024usize))
+    if comptime_parameters_error != ok { ret comptime_parameters_error }
+    try copy_comptime_parameters(comptime_parameters, from.comptime_parameters[0usize..from.comptime_parameter_count])
+    into.comptime_parameters = comptime_parameters
+    let (generic_arguments, generic_arguments_error) = mem.alloc[check.GenericArgument](a, from.generic_argument_count + sized(1024usize, bytes, 256usize))
+    if generic_arguments_error != ok { ret generic_arguments_error }
+    try copy_generic_arguments(generic_arguments, from.generic_arguments[0usize..from.generic_argument_count])
+    into.generic_arguments = generic_arguments
+    let (aggregates, aggregates_error) = mem.alloc[check.Aggregate](a, from.aggregate_count + sized(1024usize, bytes, 256usize))
+    if aggregates_error != ok { ret aggregates_error }
+    try copy_aggregates(aggregates, from.aggregates[0usize..from.aggregate_count])
+    into.aggregates = aggregates
+    let (fields, fields_error) = mem.alloc[check.AggregateField](a, from.aggregate_field_count + sized(2048usize, bytes, 128usize))
+    if fields_error != ok { ret fields_error }
+    try copy_fields(fields, from.aggregate_fields[0usize..from.aggregate_field_count])
+    into.aggregate_fields = fields
+    let (switches, switches_error) = mem.alloc[check.CheckedSwitch](a, from.checked_switch_count + sized(1024usize, bytes, 256usize))
+    if switches_error != ok { ret switches_error }
+    try copy_switches(switches, from.checked_switches[0usize..from.checked_switch_count])
+    into.checked_switches = switches
+    let (signatures, signatures_error) = mem.alloc[check.FunctionSignature](a, from.function_signature_count + sized(1024usize, bytes, 64usize))
     if signatures_error != ok { ret signatures_error }
-    copy_at = 0usize
-    while copy_at < checker.function_signature_count {
-        signatures[copy_at] = checker.function_signatures[copy_at]
-        copy_at += 1usize
-    }
-    w.checker.function_signatures = signatures
-    let (locals, locals_error) = mem.alloc[check.Local](a, checker.locals.len)
+    try copy_signatures(signatures, from.function_signatures[0usize..from.function_signature_count])
+    into.function_signatures = signatures
+    let (types, types_error) = mem.alloc[check.Type](a, from.type_count + sized(16384usize, bytes, 40usize))
+    if types_error != ok { ret types_error }
+    try copy_types(types, from.types[0usize..from.type_count])
+    into.types = types
+    let (locals, locals_error) = mem.alloc[check.Local](a, from.locals.len)
     if locals_error != ok { ret locals_error }
-    w.checker.locals = locals
-    w.checker.local_count = 0usize
-    let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, checker.diagnostics.len)
+    into.locals = locals
+    into.local_count = 0usize
+    let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, from.diagnostics.len)
     if diagnostics_error != ok { ret diagnostics_error }
-    w.checker.diagnostics = diagnostics
-    w.checker.diagnostic_count = 0usize
-    let (call_cache, call_cache_error) = mem.alloc[check.CallCacheEntry](a, checker.call_cache.len)
+    into.diagnostics = diagnostics
+    into.diagnostic_count = 0usize
+    let (call_cache, call_cache_error) = mem.alloc[check.CallCacheEntry](a, from.call_cache.len)
     if call_cache_error != ok { ret call_cache_error }
-    w.checker.call_cache = call_cache
-    let (expr_cache, expr_cache_error) = mem.alloc[check.ExprCacheEntry](a, checker.expr_cache.len)
+    into.call_cache = call_cache
+    let (expr_cache, expr_cache_error) = mem.alloc[check.ExprCacheEntry](a, from.expr_cache.len)
     if expr_cache_error != ok { ret expr_cache_error }
-    w.checker.expr_cache = expr_cache
+    into.expr_cache = expr_cache
     var clear_cache = 0usize
     while clear_cache < call_cache.len {
         var blank_call: check.CallCacheEntry = zero
@@ -5110,19 +5212,143 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         expr_cache[clear_cache] = blank_expr
         clear_cache += 1usize
     }
-    w.checker.call_generation = checker.call_generation + 1usize
-    let (spans, spans_error) = mem.alloc[usize](a, checker.writer_spans.len)
+    into.call_generation = from.call_generation + 1usize
+    let (spans, spans_error) = mem.alloc[usize](a, from.writer_spans.len)
     if spans_error != ok { ret spans_error }
-    copy_at = 0usize
-    while copy_at < checker.writer_spans.len {
-        spans[copy_at] = checker.writer_spans[copy_at]
-        copy_at += 1usize
+    try copy_usizes(spans, from.writer_spans)
+    into.writer_spans = spans
+    let (body_hashes, body_hashes_error) = mem.alloc[usize](a, from.body_hashes.len)
+    if body_hashes_error != ok { ret body_hashes_error }
+    try copy_usizes(body_hashes, from.body_hashes)
+    into.body_hashes = body_hashes
+    into.fork_types = from.type_count
+    into.fork_aggregates = from.aggregate_count
+    into.fork_signatures = from.function_signature_count
+    into.interp_ready = false
+    into.arena = a
+    ret ok
+}
+
+fn copy_functions(into: []check.Function, from: []check.Function) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
     }
-    w.checker.writer_spans = spans
-    w.checker.interp_ready = false
-    w.checker.arena = &w.arena
-    // The builder and its staging, sized as the one-at-a-time path sized its own.
-    try init_cli_nir(a, &w.builder, &w.signatures, checker.parameter_count + checker.return_type_count + 1usize, loaded, &w.report, loaded.largest_bytes, w.scale)
+    ret ok
+}
+
+fn copy_generics(into: []check.FunctionGeneric, from: []check.FunctionGeneric) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_parameters(into: []check.Parameter, from: []check.Parameter) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_types(into: []check.Type, from: []check.Type) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_comptime_parameters(into: []check.ComptimeParameter, from: []check.ComptimeParameter) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_generic_arguments(into: []check.GenericArgument, from: []check.GenericArgument) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_aggregates(into: []check.Aggregate, from: []check.Aggregate) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_fields(into: []check.AggregateField, from: []check.AggregateField) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_switches(into: []check.CheckedSwitch, from: []check.CheckedSwitch) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_signatures(into: []check.FunctionSignature, from: []check.FunctionSignature) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+fn copy_usizes(into: []usize, from: []usize) -> err {
+    var at = 0usize
+    while at < from.len {
+        into[at] = from[at]
+        at += 1usize
+    }
+    ret ok
+}
+
+// The worker's builder, staging, artifact writer and oracles, out of the program's
+// arena on the main thread; the checker is forked on the worker's own thread.
+fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, loaded: *graph.Graph, resolver: *resolve.Resolver, report: *Sink, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, bindings: []lower.Binding, program: *nir.Builder, release: bool, body_skip: []bool) -> err {
+    w.loaded = loaded
+    w.resolver = resolver
+    w.held = held
+    w.report = *report
+    w.report.regalloc_ns = 0usize
+    w.report.codegen_ns = 0usize
+    w.report.fold_ns = 0usize
+    w.release = release
+    w.body_skip = body_skip
+    w.forked = false
+    w.replaced = false
+    // Until forked, the checker is the program's: what `declare_globals` reads.
+    w.checker = *checker
+    // The builder and its staging, sized as the one-at-a-time path sized its own; its
+    // signature types by the worker's share (D326), where the program's count was
+    // eight times what eight workers between them needed.
+    let signature_types = sized(4096usize, w.share * 2usize + loaded.largest_bytes, 64usize)
+    try init_cli_nir(a, &w.builder, &w.signatures, signature_types, loaded, &w.report, loaded.largest_bytes, w.scale)
     // What the program's builder carries of the build: the mode, the arena, the oracle.
     w.builder.release = program.release
     w.builder.nocheck = program.nocheck
@@ -5176,7 +5402,144 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     w.context.line_count = &w.line_count
     w.hot = *hot
     try init_hot_writer(a, &w.hot, loaded.largest_bytes)
+    // A release build's oracles (D326), sized from the worker's share as the program's
+    // were sized from the program: the first is built with the bodies, the second
+    // over the first's entries once every worker has them.
+    if release {
+        let oracle_bytes = w.share * 2usize + loaded.largest_bytes
+        try init_oracle_nir(a, &w.oracle, &w.oracle_signatures, signature_types, oracle_bytes)
+        w.oracle.nocheck = true
+        w.oracle.release = true
+        let (oracle_inlined, oracle_inlined_error) = mem.alloc[nir.InlinedRef](a, sized(1024usize, oracle_bytes, 64usize))
+        if oracle_inlined_error != ok { ret oracle_inlined_error }
+        w.oracle.inlined = oracle_inlined
+        let (first_entries, first_entries_error) = mem.alloc[nir.InlineEntry](a, sized(1024usize, oracle_bytes, 128usize))
+        if first_entries_error != ok { ret first_entries_error }
+        w.first_entries = first_entries
+        w.first_count = 0usize
+        try init_oracle_nir(a, &w.second, &w.second_signatures, signature_types, oracle_bytes)
+        w.second.nocheck = true
+        w.second.release = true
+        w.second.oracle = &w.oracle
+        w.second.oracle_signatures = &w.oracle_signatures
+        w.second.has_oracle = true
+        let (second_inlined, second_inlined_error) = mem.alloc[nir.InlinedRef](a, sized(1024usize, oracle_bytes, 64usize))
+        if second_inlined_error != ok { ret second_inlined_error }
+        w.second.inlined = second_inlined
+        let (second_entries, second_entries_error) = mem.alloc[nir.InlineEntry](a, sized(1024usize, oracle_bytes, 128usize))
+        if second_entries_error != ok { ret second_entries_error }
+        w.second_entries = second_entries
+        w.second_count = 0usize
+    }
     ret ok
+}
+
+fn stop_worker(w: *LowerWorker, at: usize, failure: err, lowering: usize) {
+    w.stopped = true
+    w.stopped_at = at
+    w.failure = failure
+    w.failed_lowering = lowering != 0usize
+    w.failed_builder = lowering
+}
+
+fn worker_forked(w: *LowerWorker, a: *mem.Arena, program: *check.Checker) -> err {
+    if w.forked {
+        w.checker.arena = a
+        ret ok
+    }
+    try fork_checker(a, &w.checker, program, w.share, w.loaded.largest_bytes, w.fork_id)
+    w.forked = true
+    ret ok
+}
+
+fn body_wanted(w: *LowerWorker, module_index: usize) -> bool {
+    if !w.loaded.modules[module_index].has_tree { ret false }
+    ret !(module_index < w.body_skip.len && w.body_skip[module_index])
+}
+
+// The body sweep of the worker's modules (D326), and the first oracle inside it as
+// the one-at-a-time sweep had it (D313); then the instances they made. `program` is
+// the checker the worker's is forked from, read only.
+fn body_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, from: usize) {
+    let started = nptest_now()
+    let fork_error = worker_forked(w, a, program)
+    if fork_error != ok {
+        stop_worker(w, from, fork_error, 0usize)
+        ret
+    }
+    // The oracle's globals, as the one-at-a-time sweep declared them (D313).
+    if w.release && from == 0usize {
+        // The entry count is the worker's own: the generous worker begins more than once.
+        var first_count = 0usize
+        let begin_error = lower.begin_inline_oracle(&w.checker, &w.oracle, &first_count)
+        if begin_error != ok {
+            stop_worker(w, from, begin_error, 1usize)
+            ret
+        }
+    }
+    var at = from
+    while at < w.count {
+        let module_index = w.modules[at]
+        if body_wanted(w, module_index) {
+            let check_error = check.bodies_module(&w.checker, w.resolver, w.loaded, module_index)
+            if check_error != ok {
+                stop_worker(w, at, check_error, 0usize)
+                ret
+            }
+            if w.release {
+                let oracle_error = lower.oracle_module(&w.checker, w.loaded, &w.oracle, &w.oracle_signatures, w.bindings, w.first_entries, &w.first_count, module_index, &w.cursor, &w.defers)
+                if oracle_error != ok {
+                    stop_worker(w, at, oracle_error, 1usize)
+                    ret
+                }
+            }
+        }
+        at += 1usize
+    }
+    let finish_error = check.finish_bodies(&w.checker, w.resolver, w.loaded)
+    if finish_error != ok { stop_worker(w, w.count, finish_error, 0usize) }
+    w.body_ns += nptest_now() - started
+}
+
+type BodyStart = struct {
+    worker: *LowerWorker,
+    program: *check.Checker,
+}
+
+fn body_worker_entry(start: *BodyStart) {
+    body_worker_run(start.worker, &start.worker.arena, start.program, 0usize)
+}
+
+// The second oracle's share of one worker (D326): its modules' first entries lowered
+// again, against every worker's first oracle.
+fn second_worker_run(w: *LowerWorker, from: usize) {
+    let started = nptest_now()
+    var defers: lower.DeferState = zero
+    if from == 0usize {
+        var second_count = 0usize
+        let begin_error = lower.begin_inline_oracle(&w.checker, &w.second, &second_count)
+        if begin_error != ok {
+            stop_worker(w, from, begin_error, 2usize)
+            ret
+        }
+    }
+    var at = from
+    while at < w.count {
+        let module_index = w.modules[at]
+        if body_wanted(w, module_index) {
+            let oracle_error = lower.oracle_module(&w.checker, w.loaded, &w.second, &w.second_signatures, w.bindings, w.second_entries, &w.second_count, module_index, &w.cursor, &defers)
+            if oracle_error != ok {
+                stop_worker(w, at, oracle_error, 2usize)
+                ret
+            }
+        }
+        at += 1usize
+    }
+    w.second_ns += nptest_now() - started
+}
+
+fn second_worker_entry(w: *LowerWorker) {
+    second_worker_run(w, 0usize)
 }
 
 // One module through the worker's builder, staging and writer, as the one-at-a-time
@@ -5186,53 +5549,88 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     w.context.arena = a
     let mark = nir.mark(&w.builder)
     let first = w.builder.function_count
+    let lower_started = nptest_now()
     try lower.module(&w.checker, w.loaded, module_index, &w.builder, &w.signatures, w.bindings)
+    w.lower_ns += nptest_now() - lower_started
     w.stage.count = 0usize
     w.relocation_count = 0usize
     w.line_count = 0usize
     var no_fold: Fold = zero
     try codegen_functions(a, &w.report, w.loaded, &w.builder, &w.context, first, w.stage_offsets, true, &no_fold)
+    let write_started = nptest_now()
     try write_hot_artifact(a, &w.checker, w.loaded, &w.builder, module_index, &w.context, w.stage_offsets, &w.hot, w.held)
+    w.write_ns += nptest_now() - write_started
     nir.discard_bodies(&w.builder, mark)
     ret ok
 }
 
-fn lower_worker_entry(w: *LowerWorker) {
-    var at = 0usize
+fn lower_wanted(w: *LowerWorker, module_index: usize) -> bool {
+    ret !(w.hot.on && w.hot.keep[module_index])
+}
+
+fn lower_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, from: usize) {
+    let started = nptest_now()
+    let fork_error = worker_forked(w, a, program)
+    if fork_error != ok {
+        stop_worker(w, from, fork_error, 3usize)
+        ret
+    }
+    var at = from
     while at < w.count {
-        let module_error = lower_worker_module(w, &w.arena, w.modules[at])
-        if module_error != ok {
-            w.stopped = true
-            w.stopped_at = at
-            w.failure = module_error
-            ret
+        if lower_wanted(w, w.modules[at]) {
+            let module_error = lower_worker_module(w, a, w.modules[at])
+            if module_error != ok {
+                stop_worker(w, at, module_error, 3usize)
+                break
+            }
         }
         at += 1usize
     }
+    w.elapsed_ns += nptest_now() - started
 }
 
-fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, builder: *nir.Builder, signatures: *nir.Signatures, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, code: *Code) -> err {
-    var clear_at = 0usize
-    while clear_at < loaded.count {
-        lowered[clear_at] = false
-        clear_at += 1usize
-    }
-    // The modules to lower, largest first to the least loaded worker.
+fn lower_worker_entry(start: *BodyStart) {
+    lower_worker_run(start.worker, &start.worker.arena, start.program, 0usize)
+}
+
+// Whether a worker stopped for want of room rather than on the program: what the
+// generous worker takes over.
+fn ran_dry(w: *LowerWorker) -> bool {
+    ret w.stopped && (w.failure == mem.Exhausted || w.failure == nir.Capacity || w.failure == check.Capacity || w.failure == lookup.Capacity)
+}
+
+// The workers made and given their modules (D326): as many as the arena has room
+// for, the modules largest first to the least loaded, each worker's in module order.
+// The first worker is set up and measured; each further one is added while what it
+// cost fits in what is left with a quarter gibibyte kept back for the link and a
+// generous fallback. Its arena holds its checker's fork, the artifacts it holds at
+// some bytes per byte of text, and what lowering allocates.
+fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, resolver: *resolve.Resolver, builder: *nir.Builder, bindings: []lower.Binding, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, release: bool, body_skip: []bool) -> err {
+    crew.release = release
+    // The finders' indexes filled here, once (D326): the workers read them and never
+    // write, since an instance is not indexed.
+    check.fill_indexes(checker)
+    resolve.fill_index(resolver)
     let (list, list_error) = mem.alloc[usize](a, loaded.count + 1usize)
     if list_error != ok { ret list_error }
+    // Which worker each module goes to; one past the last worker is none.
     let (owner, owner_error) = mem.alloc[usize](a, loaded.count + 1usize)
     if owner_error != ok { ret owner_error }
     var pending = 0usize
     var module_at = 0usize
     while module_at < loaded.count {
-        if !(hot.on && hot.keep[module_at]) {
+        owner[module_at] = generous_slot() + 1usize
+        let body = loaded.modules[module_at].has_tree && !(module_at < body_skip.len && body_skip[module_at])
+        let lowered = loaded.modules[module_at].has_tree && !(hot.on && hot.keep[module_at])
+        if body || lowered {
             list[pending] = module_at
             pending += 1usize
         }
         module_at += 1usize
     }
     var worker_count = pending
-    if worker_count > 8usize { worker_count = 8usize }
+    let most_workers = LOWER_WORKERS
+    if worker_count > most_workers { worker_count = most_workers }
     var order_at = 0usize
     while order_at < pending {
         var best = order_at
@@ -5246,7 +5644,7 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
         list[best] = swap
         order_at += 1usize
     }
-    var loads: [8]usize = zero
+    var loads: [LOWER_WORKERS]usize = zero
     order_at = 0usize
     while order_at < pending {
         var lightest = 0usize
@@ -5259,21 +5657,24 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
         owner[list[order_at]] = lightest
         order_at += 1usize
     }
-    // Each worker's modules in module order, in worker-major runs of `runs`.
+    var largest_share = 0usize
+    var share_at = 0usize
+    while share_at < worker_count {
+        if loads[share_at] > largest_share { largest_share = loads[share_at] }
+        share_at += 1usize
+    }
     let (runs, runs_error) = mem.alloc[usize](a, loaded.count + 1usize)
     if runs_error != ok { ret runs_error }
-    let (workers, workers_error) = mem.alloc[LowerWorker](a, 9usize)
+    let (workers, workers_error) = mem.alloc[LowerWorker](a, generous_slot() + 1usize)
     if workers_error != ok { ret workers_error }
-    // As many workers as the arena has room for (D325): the first is set up and
-    // measured, and each further one is added while what it cost fits in what is
-    // left with a quarter gibibyte kept back for the link and a generous fallback.
+    crew.workers = workers
     var worker_at = 0usize
     var worker_cost = 0usize
+    var fork_cost = 0usize
     while worker_at < worker_count {
         if worker_at != 0usize {
             let stats_now = mem.stats(a)
             if stats_now.used + worker_cost + 268435456usize > stats_now.capacity {
-                // The modules of the workers not made go to the ones that are.
                 var reassign = 0usize
                 while reassign < loaded.count {
                     if owner[reassign] >= worker_at { owner[reassign] = owner[reassign] % worker_at }
@@ -5289,120 +5690,409 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
         let (worker_bindings, bindings_error) = mem.alloc[lower.Binding](a, bindings.len)
         if bindings_error != ok { ret bindings_error }
         workers[worker_at].scale = 4usize
-        try init_lower_worker(a, &workers[worker_at], checker, loaded, report, abi, hot, held, worker_bindings, builder)
+        workers[worker_at].share = largest_share
+        workers[worker_at].fork_id = worker_at + 1usize
+        try init_lower_worker(a, &workers[worker_at], checker, loaded, resolver, report, abi, hot, held, worker_bindings, builder, release, body_skip)
+        // The first worker's checker is forked here, out of the program's arena, and
+        // measured: every fork copies the same declarations into tails of the same
+        // size, so the others' arenas are given that much, and they fork on their
+        // own threads.
+        var arena_bytes = largest_share * 12usize + 4194304usize
+        if worker_at == 0usize {
+            let fork_before = mem.stats(a).used
+            try worker_forked(&workers[0usize], a, checker)
+            fork_cost = mem.stats(a).used - fork_before
+        } else {
+            arena_bytes += fork_cost + fork_cost / 8usize
+        }
+        let (storage, storage_error) = mem.alloc[u8](a, arena_bytes)
+        if storage_error != ok { ret storage_error }
+        workers[worker_at].arena = mem.arena_from(storage)
         worker_cost = mem.stats(a).used - cost_before
         worker_at += 1usize
     }
-    // Each worker's modules in module order, in worker-major runs, and its arena: the
-    // artifacts held, at some bytes per byte of text, and the symbols lowering makes.
     var filled = 0usize
     worker_at = 0usize
     while worker_at < worker_count {
         let first = filled
-        var bytes = 0usize
         module_at = 0usize
         while module_at < loaded.count {
-            if !(hot.on && hot.keep[module_at]) && owner[module_at] == worker_at {
+            if owner[module_at] == worker_at {
                 runs[filled] = module_at
-                bytes += loaded.modules[module_at].text.len
                 filled += 1usize
             }
             module_at += 1usize
         }
         workers[worker_at].modules = runs[first..filled]
         workers[worker_at].count = filled - first
-        let (storage, storage_error) = mem.alloc[u8](a, bytes * 12usize + 4194304usize)
-        if storage_error != ok { ret storage_error }
-        workers[worker_at].arena = mem.arena_from(storage)
         worker_at += 1usize
     }
-    var threads: [8]os.Thread = zero
-    var started: [8]bool = zero
-    worker_at = 1usize
-    while worker_at < worker_count {
+    crew.count = worker_count
+    crew.on = true
+    ret ok
+}
+
+// The generous worker (D325): whole-program pools, the program's arena, made when a
+// worker first runs dry, taking over every module of each such worker.
+fn crew_generous(a: *mem.Arena, crew: *Crew, loaded: *graph.Graph, checker: *check.Checker, resolver: *resolve.Resolver, report: *Sink, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, bindings: []lower.Binding, program: *nir.Builder, body_skip: []bool) -> err {
+    if crew.generous_made { ret ok }
+    var blank: LowerWorker = zero
+    crew.workers[LOWER_WORKERS] = blank
+    let (generous_bindings, generous_bindings_error) = mem.alloc[lower.Binding](a, bindings.len)
+    if generous_bindings_error != ok { ret generous_bindings_error }
+    crew.workers[LOWER_WORKERS].scale = 1usize
+    crew.workers[LOWER_WORKERS].share = loaded.total_bytes
+    crew.workers[LOWER_WORKERS].fork_id = LOWER_WORKERS + 1usize
+    try init_lower_worker(a, &crew.workers[LOWER_WORKERS], checker, loaded, resolver, report, abi, hot, held, generous_bindings, program, crew.release, body_skip)
+    try worker_forked(&crew.workers[LOWER_WORKERS], a, checker)
+    crew.generous_made = true
+    ret ok
+}
+
+// The generous worker does one worker's modules over from the bodies (D326): the
+// dry worker's tail is abandoned whole, and an instance's number depends only on its
+// own module's order, so the redone modules come out the same.
+fn crew_replace(a: *mem.Arena, crew: *Crew, worker_at: usize, in_sweep: bool, loaded: *graph.Graph, checker: *check.Checker, resolver: *resolve.Resolver, report: *Sink, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, bindings: []lower.Binding, program: *nir.Builder, body_skip: []bool) -> err {
+    try crew_generous(a, crew, loaded, checker, resolver, report, abi, hot, held, bindings, program, body_skip)
+    let dry = &crew.workers[worker_at]
+    let generous = &crew.workers[LOWER_WORKERS]
+    dry.replaced = true
+    dry.replaced_in_sweep = in_sweep
+    generous.modules = dry.modules
+    generous.count = dry.count
+    generous.stopped = false
+    generous.cursor = 0usize
+    body_worker_run(generous, a, checker, 0usize)
+    ret ok
+}
+
+fn crew_failure(report: *Sink, loaded: *graph.Graph, w: *LowerWorker) -> err {
+    if w.failed_lowering {
+        var builder = &w.builder
+        if w.failed_builder == 1usize { builder = &w.oracle }
+        if w.failed_builder == 2usize { builder = &w.second }
+        try print_lower_diagnostic(report, loaded, &w.checker, builder, w.failure)
+    } else {
+        if w.checker.diagnostic_count == 0usize {
+            try print_check_diagnostic(report, loaded, &w.checker, w.failure)
+        } else {
+            var diagnostic_at = 0usize
+            while diagnostic_at < w.checker.diagnostic_count {
+                select_check_diagnostic(&w.checker, w.checker.diagnostics[diagnostic_at])
+                try print_check_diagnostic(report, loaded, &w.checker, w.failure)
+                diagnostic_at += 1usize
+            }
+        }
+    }
+    try finish_report(report)
+    os.exit(1i32)
+    ret ok
+}
+
+// The worker that failed on the program at the lowest module, if one did: its error
+// is the build's. A worker that ran dry is not a failure.
+fn crew_lowest_failure(crew: *Crew, loaded: *graph.Graph) -> (usize, bool) {
+    var lowest_failure = loaded.count + 1usize
+    var lowest_worker = 0usize
+    var worker_at = 0usize
+    while worker_at <= crew.count {
+        var index = worker_at
+        if worker_at == crew.count { index = generous_slot() }
+        if (index != generous_slot() || crew.generous_made) && crew.workers[index].stopped && !ran_dry(&crew.workers[index]) {
+            var failed = loaded.count
+            if crew.workers[index].stopped_at < crew.workers[index].count { failed = crew.workers[index].modules[crew.workers[index].stopped_at] }
+            if failed < lowest_failure {
+                lowest_failure = failed
+                lowest_worker = index
+            }
+        }
+        worker_at += 1usize
+    }
+    ret (lowest_worker, lowest_failure <= loaded.count)
+}
+
+// The bodies of every module checked on the workers (D326), the first oracle with
+// them in a release build, then each worker's instances; a worker that ran dry has
+// its modules done over by the generous one.
+fn crew_bodies(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, resolver: *resolve.Resolver, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, bindings: []lower.Binding, program: *nir.Builder, body_skip: []bool) -> err {
+    var starts: [LOWER_WORKERS]BodyStart = zero
+    var threads: [LOWER_WORKERS]os.Thread = zero
+    var started: [LOWER_WORKERS]bool = zero
+    var worker_at = 1usize
+    while worker_at < crew.count {
+        starts[worker_at].worker = &crew.workers[worker_at]
+        starts[worker_at].program = checker
         started[worker_at] = false
-        let (thread, spawn_error) = os.thread_create[LowerWorker](lower_worker_entry, &workers[worker_at], 16777216usize)
+        let (thread, spawn_error) = os.thread_create[BodyStart](body_worker_entry, &starts[worker_at], 16777216usize)
         if spawn_error == ok {
             threads[worker_at] = thread
             started[worker_at] = true
         }
         worker_at += 1usize
     }
-    if worker_count != 0usize { lower_worker_entry(&workers[0usize]) }
+    if crew.count != 0usize { body_worker_run(&crew.workers[0usize], &crew.workers[0usize].arena, checker, 0usize) }
     worker_at = 1usize
-    while worker_at < worker_count {
+    while worker_at < crew.count {
         if started[worker_at] {
             try os.thread_join(threads[worker_at])
         } else {
-            lower_worker_entry(&workers[worker_at])
+            starts[worker_at].worker = &crew.workers[worker_at]
+            starts[worker_at].program = checker
+            body_worker_entry(&starts[worker_at])
         }
         worker_at += 1usize
     }
-    // What the workers left: a lowering error is the lowest failing module's; a worker
-    // whose arena ran dry has its remaining modules lowered here.
-    var lowest_failure = loaded.count
-    var lowest_worker = 0usize
     worker_at = 0usize
-    while worker_at < worker_count {
-        if workers[worker_at].stopped && workers[worker_at].failure != mem.Exhausted && workers[worker_at].failure != nir.Capacity {
-            let failed = workers[worker_at].modules[workers[worker_at].stopped_at]
-            if failed < lowest_failure {
-                lowest_failure = failed
-                lowest_worker = worker_at
+    while worker_at < crew.count {
+        if ran_dry(&crew.workers[worker_at]) { try crew_replace(a, crew, worker_at, true, loaded, checker, resolver, report, abi, hot, held, bindings, program, body_skip) }
+        worker_at += 1usize
+    }
+    let (failed_worker, failed) = crew_lowest_failure(crew, loaded)
+    if failed { ret crew_failure(report, loaded, &crew.workers[failed_worker]) }
+    if report.timing {
+        var line_storage: [512]u8 = zero
+        var line = capture_sink(line_storage[..])
+        try write_all(&line, "  workers, ms (bodies):")
+        worker_at = 0usize
+        while worker_at < crew.count {
+            try write_all(&line, " ")
+            try write_usize(&line, crew.workers[worker_at].body_ns / 1000000usize)
+            worker_at += 1usize
+        }
+        try write_all(&line, "\n")
+        try stderr_text(line_storage[..line.count])
+    }
+    ret ok
+}
+
+// What the driver learns after the bodies -- the program's error table -- given to
+// every worker's checker, forked before it was known.
+fn crew_errors(crew: *Crew, values: []usize, spellings: []str, count: usize) {
+    var worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            crew.workers[worker_at].checker.error_values = values
+            crew.workers[worker_at].checker.error_spellings = spellings
+            crew.workers[worker_at].checker.error_count = count
+        }
+        worker_at += 1usize
+    }
+}
+
+// Every worker's entries in one table, worker-major, each worker's in its own module
+// order: a cursor from a worker's offset walks its own entries as the sweep recorded
+// them, and a search by key finds any worker's.
+fn crew_gather(a: *mem.Arena, crew: *Crew, second: bool) -> err {
+    var total = 0usize
+    var worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            if second { total += crew.workers[worker_at].second_count } else { total += crew.workers[worker_at].first_count }
+        }
+        worker_at += 1usize
+    }
+    let (all, all_error) = mem.alloc[nir.InlineEntry](a, total + 1usize)
+    if all_error != ok { ret all_error }
+    var filled = 0usize
+    worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            let w = &crew.workers[worker_at]
+            var count = w.first_count
+            if second { count = w.second_count }
+            if !second { w.first_offset = filled }
+            var at = 0usize
+            while at < count {
+                if second { all[filled] = w.second_entries[at] } else { all[filled] = w.first_entries[at] }
+                filled += 1usize
+                at += 1usize
             }
         }
         worker_at += 1usize
     }
-    if lowest_failure < loaded.count {
-        try print_lower_diagnostic(report, loaded, &workers[lowest_worker].checker, &workers[lowest_worker].builder, workers[lowest_worker].failure)
-        try finish_report(report)
-        os.exit(1i32)
-        ret ok
+    if second {
+        crew.second_all = all
+        crew.second_all_count = filled
+    } else {
+        crew.first_all = all
+        crew.first_all_count = filled
     }
-    // A worker that stopped for want of room -- its arena, or a pool a quarter the
-    // whole-program size -- leaves the rest of its modules to a ninth worker with the
-    // whole-program pools, made only now, out of the program's arena.
-    var generous_made = false
-    worker_at = 0usize
-    while worker_at < worker_count {
-        if workers[worker_at].stopped {
-            if !generous_made {
-                var blank: LowerWorker = zero
-                workers[8usize] = blank
-                let (generous_bindings, generous_bindings_error) = mem.alloc[lower.Binding](a, bindings.len)
-                if generous_bindings_error != ok { ret generous_bindings_error }
-                workers[8usize].scale = 1usize
-                try init_lower_worker(a, &workers[8usize], checker, loaded, report, abi, hot, held, generous_bindings, builder)
-                generous_made = true
-            }
-            var remaining = workers[worker_at].stopped_at
-            while remaining < workers[worker_at].count {
-                let module_error = lower_worker_module(&workers[8usize], a, workers[worker_at].modules[remaining])
-                if module_error != ok {
-                    try print_lower_diagnostic(report, loaded, &workers[8usize].checker, &workers[8usize].builder, module_error)
-                    try finish_report(report)
-                    os.exit(1i32)
-                    ret ok
-                }
-                remaining += 1usize
+    ret ok
+}
+
+// The second oracle on the workers (D326): each lowers its own modules' first
+// entries again against every worker's first oracle, and the program's builders are
+// then given every worker's second entries.
+fn crew_second_oracle(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, resolver: *resolve.Resolver, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, bindings: []lower.Binding, program: *nir.Builder, body_skip: []bool) -> err {
+    try crew_gather(a, crew, false)
+    var worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            crew.workers[worker_at].second.inline_entries = crew.first_all
+            crew.workers[worker_at].second.inline_entry_count = crew.first_all_count
+            crew.workers[worker_at].cursor = crew.workers[worker_at].first_offset
+        }
+        worker_at += 1usize
+    }
+    var threads: [LOWER_WORKERS]os.Thread = zero
+    var started: [LOWER_WORKERS]bool = zero
+    worker_at = 1usize
+    while worker_at < crew.count {
+        started[worker_at] = false
+        if !crew.workers[worker_at].replaced {
+            let (thread, spawn_error) = os.thread_create[LowerWorker](second_worker_entry, &crew.workers[worker_at], 16777216usize)
+            if spawn_error == ok {
+                threads[worker_at] = thread
+                started[worker_at] = true
             }
         }
-        report.regalloc_ns = report.regalloc_ns +% workers[worker_at].report.regalloc_ns
-        report.codegen_ns = report.codegen_ns +% workers[worker_at].report.codegen_ns
-        builder.instruction_total += workers[worker_at].builder.instruction_total
-        if workers[worker_at].builder.instruction_peak > builder.instruction_peak { builder.instruction_peak = workers[worker_at].builder.instruction_peak }
+        worker_at += 1usize
+    }
+    if crew.count != 0usize && !crew.workers[0usize].replaced { second_worker_run(&crew.workers[0usize], 0usize) }
+    worker_at = 1usize
+    while worker_at < crew.count {
+        if started[worker_at] {
+            try os.thread_join(threads[worker_at])
+        } else {
+            if !crew.workers[worker_at].replaced { second_worker_run(&crew.workers[worker_at], 0usize) }
+        }
+        worker_at += 1usize
+    }
+    // The generous worker's turn: the modules it took over in the sweep, whose first
+    // entries are its own, in the order it made them; and those of any worker that
+    // ran dry just now, whose bodies it checks over first and whose own first entries,
+    // complete, it walks.
+    var generous_cursor = 0usize
+    if crew.generous_made { generous_cursor = crew.workers[LOWER_WORKERS].first_offset }
+    worker_at = 0usize
+    while worker_at < crew.count {
+        let dry = ran_dry(&crew.workers[worker_at])
+        if crew.workers[worker_at].replaced || dry {
+            if dry { try crew_replace(a, crew, worker_at, false, loaded, checker, resolver, report, abi, hot, held, bindings, program, body_skip) }
+            let generous = &crew.workers[LOWER_WORKERS]
+            generous.modules = crew.workers[worker_at].modules
+            generous.count = crew.workers[worker_at].count
+            generous.cursor = crew.workers[worker_at].first_offset
+            if crew.workers[worker_at].replaced_in_sweep { generous.cursor = generous_cursor }
+            generous.second.inline_entries = crew.first_all
+            generous.second.inline_entry_count = crew.first_all_count
+            second_worker_run(generous, 0usize)
+            if crew.workers[worker_at].replaced_in_sweep { generous_cursor = generous.cursor }
+        }
+        worker_at += 1usize
+    }
+    let (failed_worker, failed) = crew_lowest_failure(crew, loaded)
+    if failed { ret crew_failure(report, loaded, &crew.workers[failed_worker]) }
+    try crew_gather(a, crew, true)
+    worker_at = 0usize
+    while worker_at <= generous_slot() {
+        if worker_at < crew.count || (worker_at == generous_slot() && crew.generous_made) {
+            crew.workers[worker_at].builder.has_oracle = true
+            crew.workers[worker_at].builder.oracle = &crew.workers[worker_at].second
+            crew.workers[worker_at].builder.oracle_signatures = &crew.workers[worker_at].second_signatures
+            crew.workers[worker_at].builder.inline_entries = crew.second_all
+            crew.workers[worker_at].builder.inline_entry_count = crew.second_all_count
+        }
+        worker_at += 1usize
+    }
+    if report.timing {
+        var line_storage: [512]u8 = zero
+        var line = capture_sink(line_storage[..])
+        try write_all(&line, "  workers, ms (second oracle):")
+        worker_at = 0usize
+        while worker_at < crew.count {
+            try write_all(&line, " ")
+            try write_usize(&line, crew.workers[worker_at].second_ns / 1000000usize)
+            worker_at += 1usize
+        }
+        try write_all(&line, "\n")
+        try stderr_text(line_storage[..line.count])
+    }
+    ret ok
+}
+
+// The modules lowered, selected and written on the crew's workers (D325, D326), and
+// the image linked from the artifacts.
+fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, resolver: *resolve.Resolver, builder: *nir.Builder, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, code: *Code, body_skip: []bool) -> err {
+    var clear_at = 0usize
+    while clear_at < loaded.count {
+        lowered[clear_at] = false
+        clear_at += 1usize
+    }
+    var starts: [LOWER_WORKERS]BodyStart = zero
+    var threads: [LOWER_WORKERS]os.Thread = zero
+    var started: [LOWER_WORKERS]bool = zero
+    var worker_at = 1usize
+    while worker_at < crew.count {
+        started[worker_at] = false
+        if !crew.workers[worker_at].replaced {
+            starts[worker_at].worker = &crew.workers[worker_at]
+            starts[worker_at].program = checker
+            let (thread, spawn_error) = os.thread_create[BodyStart](lower_worker_entry, &starts[worker_at], 16777216usize)
+            if spawn_error == ok {
+                threads[worker_at] = thread
+                started[worker_at] = true
+            }
+        }
+        worker_at += 1usize
+    }
+    if crew.count != 0usize && !crew.workers[0usize].replaced { lower_worker_run(&crew.workers[0usize], &crew.workers[0usize].arena, checker, 0usize) }
+    worker_at = 1usize
+    while worker_at < crew.count {
+        if started[worker_at] {
+            try os.thread_join(threads[worker_at])
+        } else {
+            if !crew.workers[worker_at].replaced { lower_worker_run(&crew.workers[worker_at], &crew.workers[worker_at].arena, checker, 0usize) }
+        }
+        worker_at += 1usize
+    }
+    let (failed_worker, failed) = crew_lowest_failure(crew, loaded)
+    if failed { ret crew_failure(report, loaded, &crew.workers[failed_worker]) }
+    // What the workers left: a worker replaced in an earlier phase has every module
+    // lowered by the generous one, whose checker has them; one that ran dry now has
+    // the rest of its modules lowered there, after their bodies are checked there.
+    worker_at = 0usize
+    while worker_at < crew.count {
+        let dry = ran_dry(&crew.workers[worker_at])
+        if crew.workers[worker_at].replaced || dry {
+            let generous = &crew.workers[LOWER_WORKERS]
+            var from = 0usize
+            if dry {
+                from = crew.workers[worker_at].stopped_at
+                try crew_generous(a, crew, loaded, checker, resolver, report, abi, hot, held, bindings, builder, body_skip)
+                generous.builder.has_oracle = crew.workers[worker_at].builder.has_oracle
+                generous.builder.oracle = &generous.second
+                generous.builder.oracle_signatures = &generous.second_signatures
+                generous.builder.inline_entries = crew.second_all
+                generous.builder.inline_entry_count = crew.second_all_count
+                generous.modules = crew.workers[worker_at].modules
+                generous.count = crew.workers[worker_at].count
+                generous.stopped = false
+                body_worker_run(generous, a, checker, from)
+                crew.workers[worker_at].replaced = true
+            }
+            generous.modules = crew.workers[worker_at].modules
+            generous.count = crew.workers[worker_at].count
+            generous.stopped = false
+            lower_worker_run(generous, a, checker, from)
+            if generous.stopped { ret crew_failure(report, loaded, generous) }
+        }
         var done = 0usize
-        while done < workers[worker_at].count {
-            lowered[workers[worker_at].modules[done]] = true
+        while done < crew.workers[worker_at].count {
+            if lower_wanted(&crew.workers[worker_at], crew.workers[worker_at].modules[done]) { lowered[crew.workers[worker_at].modules[done]] = true }
             done += 1usize
         }
+        report.regalloc_ns = report.regalloc_ns +% crew.workers[worker_at].report.regalloc_ns
+        report.codegen_ns = report.codegen_ns +% crew.workers[worker_at].report.codegen_ns
+        builder.instruction_total += crew.workers[worker_at].builder.instruction_total
+        if crew.workers[worker_at].builder.instruction_peak > builder.instruction_peak { builder.instruction_peak = crew.workers[worker_at].builder.instruction_peak }
         worker_at += 1usize
     }
-    if generous_made {
-        report.regalloc_ns = report.regalloc_ns +% workers[8usize].report.regalloc_ns
-        report.codegen_ns = report.codegen_ns +% workers[8usize].report.codegen_ns
-        builder.instruction_total += workers[8usize].builder.instruction_total
-        if workers[8usize].builder.instruction_peak > builder.instruction_peak { builder.instruction_peak = workers[8usize].builder.instruction_peak }
+    if crew.generous_made {
+        report.regalloc_ns = report.regalloc_ns +% crew.workers[LOWER_WORKERS].report.regalloc_ns
+        report.codegen_ns = report.codegen_ns +% crew.workers[LOWER_WORKERS].report.codegen_ns
+        builder.instruction_total += crew.workers[LOWER_WORKERS].builder.instruction_total
+        if crew.workers[LOWER_WORKERS].builder.instruction_peak > builder.instruction_peak { builder.instruction_peak = crew.workers[LOWER_WORKERS].builder.instruction_peak }
     }
     report.arena_used = mem.stats(a).used
     try report_phase(report, "lower and codegen")
@@ -5413,11 +6103,54 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
         try report_ms(report.codegen_ns)
         try report_count("nir instructions in all", builder.instruction_total)
         try report_count("nir instructions, largest module", builder.instruction_peak)
+        // Each worker's wall time (D326): the phase is as long as its slowest worker.
+        var workers_storage: [512]u8 = zero
+        var workers_line = capture_sink(workers_storage[..])
+        try write_all(&workers_line, "  workers, ms (lower/write):")
+        worker_at = 0usize
+        while worker_at < crew.count {
+            try write_all(&workers_line, " ")
+            try write_usize(&workers_line, crew.workers[worker_at].elapsed_ns / 1000000usize)
+            try write_all(&workers_line, "(")
+            try write_usize(&workers_line, crew.workers[worker_at].lower_ns / 1000000usize)
+            try write_all(&workers_line, "/")
+            try write_usize(&workers_line, crew.workers[worker_at].write_ns / 1000000usize)
+            try write_all(&workers_line, ")")
+            worker_at += 1usize
+        }
+        try write_all(&workers_line, "\n")
+        try stderr_text(workers_storage[..workers_line.count])
+        // Which workers ran dry, and so had their modules done over by the generous one.
+        if crew.generous_made {
+            var replaced = 0usize
+            worker_at = 0usize
+            while worker_at < crew.count {
+                if crew.workers[worker_at].replaced { replaced += 1usize }
+                worker_at += 1usize
+            }
+            try report_count("workers replaced by the generous one", replaced)
+        }
     }
     try link_hot_artifacts(a, report, loaded, builder, hot, held, code)
     report.arena_used = mem.stats(a).used
     try report_phase(report, "link from artifacts")
     ret ok
+}
+
+// The executable path without a crew (D325): the bodies were checked on the main
+// thread, so the workers are made now, fork from the finished checker, and lower.
+fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: *check.Checker, resolver: *resolve.Resolver, builder: *nir.Builder, bindings: []lower.Binding, lowered: []bool, abi: codegen_x64.Abi, hot: *HotBuild, held: [][]const u8, code: *Code) -> err {
+    var crew: Crew = zero
+    // Every module's bodies are checked already: none is wanted here.
+    let (all_skip, all_skip_error) = mem.alloc[bool](a, loaded.count + 1usize)
+    if all_skip_error != ok { ret all_skip_error }
+    var skip_at = 0usize
+    while skip_at < all_skip.len {
+        all_skip[skip_at] = true
+        skip_at += 1usize
+    }
+    try crew_begin(a, &crew, report, loaded, checker, resolver, builder, bindings, abi, hot, held, false, all_skip)
+    ret crew_emit(a, &crew, report, loaded, checker, resolver, builder, bindings, lowered, abi, hot, held, code, all_skip)
 }
 
 fn main(a: *mem.Arena, args: []str) -> err {
@@ -5894,14 +6627,38 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if bindings_error != ok { ret bindings_error }
         report.build.pools[stats.POOL_BINDINGS] = bindings.len
         checker.arena = a
-        if release_build { try init_first_oracle(a, &first_oracle, &first_signatures, &checker, &loaded) }
         let fused = check_error == ok && !(writes_all_em && incremental_build) && loaded.order_count == loaded.count
+        // A release build checks every body, kept or not: the oracle inlines from
+        // all of them, and a hot release image is then the cold one's (D319).
+        var body_skip = keep
+        if release_build { body_skip = keep[0usize..0usize] }
+        // The executable path's crew (D326): the workers that check the bodies, build
+        // the oracles and lower, made now so a module's instances stay with the
+        // checker that made them.
+        var crew: Crew = zero
+        var hot: HotBuild = zero
+        // What the workers copy the build mode from until the program builder exists.
+        var early_builder: nir.Builder = zero
+        if writes_executable {
+            hot.on = hot_build
+            hot.keep = keep
+            hot.directory = artifact_dir
+            hot.release = release_build
+            let (hot_triple, hot_triple_error) = target_triple(a, args[4usize], args[5usize])
+            if hot_triple_error != ok { ret hot_triple_error }
+            hot.triple = hot_triple
+        }
+        let with_crew = fused && writes_executable
+        if with_crew {
+            try crew_begin(a, &crew, &report, &loaded, &checker, &resolver, &early_builder, bindings, machine_abi_of(args), &hot, held, release_build, body_skip)
+        }
+        if release_build && !with_crew { try init_first_oracle(a, &first_oracle, &first_signatures, &checker, &loaded) }
         if fused {
-            // A release build checks every body, kept or not: the oracle inlines from
-            // all of them, and a hot release image is then the cold one's (D319).
-            var body_skip = keep
-            if release_build { body_skip = keep[0usize..0usize] }
-            check_error = bodies_per_module(&checker, &resolver, &loaded, &report, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count, release_build, body_skip)
+            if with_crew {
+                try crew_bodies(a, &crew, &report, &loaded, &checker, &resolver, machine_abi_of(args), &hot, held, bindings, &early_builder, body_skip)
+            } else {
+                check_error = bodies_per_module(&checker, &resolver, &loaded, &report, &first_oracle, &first_signatures, bindings, first_entries, &first_entry_count, release_build, body_skip)
+            }
         } else {
             if check_error == ok { check_error = check.check_bodies(&checker, &resolver, &loaded, keep) }
         }
@@ -5944,6 +6701,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         checker.error_values = error_values
         checker.error_spellings = error_spellings
         checker.error_count = error_count
+        if with_crew { crew_errors(&crew, error_values, error_spellings, error_count) }
         checker.arena = a
         var builder: nir.Builder = zero
         var signatures: nir.Signatures = zero
@@ -5969,7 +6727,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if inlined_marks_error != ok { ret inlined_marks_error }
         builder.inlined_marks = inlined_marks
         builder.has_oracle = false
-        if release_build {
+        if release_build && with_crew {
+            // The two oracles on the crew (D326): the first was built with the bodies,
+            // the second is built now against it, worker by worker.
+            try crew_second_oracle(a, &crew, &report, &loaded, &checker, &resolver, machine_abi_of(args), &hot, held, bindings, &builder, body_skip)
+            builder.has_oracle = true
+            builder.inline_entries = crew.second_all
+            builder.inline_entry_count = crew.second_all_count
+            report.arena_used = mem.stats(a).used
+            try report_phase(&report, "inline oracles")
+            if report.timing {
+                try report_count("first oracle entries", crew.first_all_count)
+                try report_count("second oracle entries", crew.second_all_count)
+            }
+        }
+        if release_build && !with_crew {
             // Twice (D212): the first oracle's bodies hold no copies; the second is
             // lowered against it, so its bodies hold one level of copies, and a call
             // the program inlines from it is two levels deep. Each pass records, per
@@ -5984,7 +6756,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                     ret ok
                 }
             }
-            try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize, &loaded)
+            try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize, loaded.total_bytes)
             oracle.nocheck = true
             oracle.release = true
             oracle.oracle = &first_oracle
@@ -6057,15 +6829,22 @@ fn main(a: *mem.Arena, args: []str) -> err {
         }
         var code: Code = zero
         if per_module {
-            var hot: HotBuild = zero
-            hot.on = hot_build
-            hot.keep = keep
-            hot.directory = artifact_dir
-            hot.release = release_build
-            let (hot_triple, hot_triple_error) = target_triple(a, args[4usize], args[5usize])
-            if hot_triple_error != ok { ret hot_triple_error }
-            hot.triple = hot_triple
-            try emit_per_module(a, &report, &loaded, &checker, &builder, &signatures, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code)
+            if with_crew {
+                // The workers' builders carry the program's mode and arena from the
+                // one made early; what the oracles added they were given above.
+                var mode_at = 0usize
+                while mode_at <= generous_slot() {
+                    if mode_at < crew.count || (mode_at == generous_slot() && crew.generous_made) {
+                        crew.workers[mode_at].builder.release = builder.release
+                        crew.workers[mode_at].builder.nocheck = builder.nocheck
+                        crew.workers[mode_at].builder.arena_bytes = builder.arena_bytes
+                    }
+                    mode_at += 1usize
+                }
+                try crew_emit(a, &crew, &report, &loaded, &checker, &resolver, &builder, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code, body_skip)
+            } else {
+                try emit_per_module(a, &report, &loaded, &checker, &resolver, &builder, bindings, lowered_modules, machine_abi_of(args), &hot, held, &code)
+            }
         } else {
             try emit_whole_program(a, &report, &loaded, &builder, emit_machine_code, writes_executable, machine_abi_of(args), &code)
         }

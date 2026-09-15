@@ -136,16 +136,22 @@ fn space_tag(space: Namespace) -> usize {
     ret 1usize
 }
 
+// The symbols added since the last search, into the index (D326): on its own so the
+// driver can fill it before the body workers share it read-only.
+fn fill_index(r: *Resolver) {
+    if !lookup.attached(&r.names) { ret }
+    while r.names.indexed[0usize] < r.count {
+        let at = r.names.indexed[0usize]
+        let s = r.symbols[at]
+        let insert_error = lookup.insert(&r.names, s.module_index, space_tag(s.space), s.name, at)
+        if insert_error != ok { ret }
+        r.names.indexed[0usize] = at + 1usize
+    }
+}
+
 fn find(r: *Resolver, module_index: usize, name: str, space: Namespace) -> (usize, bool) {
     if lookup.attached(&r.names) {
-        // Index the symbols added since the last search, then probe.
-        while r.names.indexed[0usize] < r.count {
-            let at = r.names.indexed[0usize]
-            let s = r.symbols[at]
-            let insert_error = lookup.insert(&r.names, s.module_index, space_tag(s.space), s.name, at)
-            if insert_error != ok { break }
-            r.names.indexed[0usize] = at + 1usize
-        }
+        fill_index(r)
         if r.names.indexed[0usize] == r.count {
             let (found_at, found) = lookup.find(&r.names, module_index, space_tag(space), name)
             ret (found_at, found)

@@ -861,6 +861,17 @@ fn write_declaration_tokens_canonical(text: str, tokens: []const lex.Token, star
 }
 
 fn body_hash(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_function: usize, nir_function: usize, has_nir: bool, scratch: *binary.Buffer) -> (usize, err) {
+    // Memoized for a function with source (D326): its tokens and line are fixed for
+    // the build. One without source is hashed from NIR, which differs by builder.
+    if checked_function >= c.function_count { ret (0usize, InvalidArtifact) }
+    let memoized = checked_function < c.body_hashes.len && c.functions[checked_function].source_end > c.functions[checked_function].source_start
+    if memoized && c.body_hashes[checked_function] != 0usize { ret (c.body_hashes[checked_function] - 1usize, ok) }
+    let (hash, hash_error) = body_hash_uncached(c, g, builder, checked_function, nir_function, has_nir, scratch)
+    if hash_error == ok && memoized { c.body_hashes[checked_function] = hash + 1usize }
+    ret (hash, hash_error)
+}
+
+fn body_hash_uncached(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, checked_function: usize, nir_function: usize, has_nir: bool, scratch: *binary.Buffer) -> (usize, err) {
     let (signature, signature_error) = signature_hash(c, g, checked_function, scratch)
     if signature_error != ok { ret (0usize, signature_error) }
     scratch.count = 0usize

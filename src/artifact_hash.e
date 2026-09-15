@@ -36,15 +36,9 @@ fn read_u32(bytes: []const u8, at: usize) -> (usize, err) {
 
 fn read_u64(bytes: []const u8, at: usize) -> (usize, err) {
     if at + 8usize > bytes.len { ret (0usize, InvalidByte) }
-    var result = 0usize
-    var offset = 0usize
-    var multiplier = 1usize
-    while offset < 8usize {
-        result = result +% usize(bytes[at + offset]) *% multiplier
-        multiplier = multiplier *% 256usize
-        offset += 1usize
-    }
-    ret (result, ok)
+    let low = usize(bytes[at]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize)
+    let high = usize(bytes[at + 4usize]) | (usize(bytes[at + 5usize]) << 8usize) | (usize(bytes[at + 6usize]) << 16usize) | (usize(bytes[at + 7usize]) << 24usize)
+    ret (low | (high << 32usize), ok)
 }
 
 fn round(accumulator: usize, lane: usize) -> usize {

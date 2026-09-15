@@ -466,6 +466,10 @@ fn signed_integer(ty: check.Type) -> bool {
 }
 
 fn value_type(builder: *nir.Builder, current: nir.Function, value: usize) -> (check.Type, err) {
+    if builder.definers_valid && builder.definers_first == current.first_instruction && value < builder.definers.len {
+        let defined_at = builder.definers[value]
+        if defined_at != 0usize { ret (builder.instructions[defined_at - 1usize].ty, ok) }
+    }
     let end = current.first_instruction + current.instruction_count
     var at = current.first_instruction
     while at < end {
@@ -1864,7 +1868,26 @@ fn function(builder: *nir.Builder, function_index: usize, stack_slots: usize, co
     try build_live_masks(builder, current, context, deltas, masks)
     context.live_masks = masks[0usize..current.instruction_count]
     context.live_base = current.first_instruction
+    // Each value's defining instruction (D326), for `value_type`.
+    let (definers, definers_error) = mem.alloc[usize](context.arena, current.value_count + 1usize)
+    if definers_error != ok { ret definers_error }
+    var clear_at = 0usize
+    while clear_at < definers.len {
+        definers[clear_at] = 0usize
+        clear_at += 1usize
+    }
+    var fill_at = current.first_instruction
+    let fill_end = current.first_instruction + current.instruction_count
+    while fill_at < fill_end {
+        let filled = builder.instructions[fill_at]
+        if filled.has_result && filled.result < definers.len { definers[filled.result] = fill_at + 1usize }
+        fill_at += 1usize
+    }
+    builder.definers = definers
+    builder.definers_first = current.first_instruction
+    builder.definers_valid = true
     let body_error = function_body(builder, function_index, stack_slots, context)
+    builder.definers_valid = false
     context.live_masks = context.live_masks[0usize..0usize]
     mem.reset(context.arena, mark)
     ret body_error

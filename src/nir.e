@@ -223,6 +223,11 @@ type InlineEntry = struct {
     // the owner: a per-target variant's function is owned by the module it merges into.
     // The second oracle skips a module with no entry recorded under it.
     walked_in: usize,
+    // The builder the body was lowered into and the checker it was lowered with
+    // (D326): the oracles are built per worker, and a copy taken into another
+    // worker's builder carries the types over from that checker.
+    oracle: *Builder,
+    checker: *check.Checker,
 }
 
 // A callee inlined into a module: what section 12 calls a body edge, recorded so the
@@ -294,6 +299,12 @@ type Builder = struct {
     used_marks: []u8,
     used_marks_module: usize,
     used_marks_valid: bool,
+    // The instruction defining each value of the function being emitted, plus one
+    // (D326), filled by `codegen_x64.function` for `definers_first`'s function: the
+    // type of a value was found by walking the function's instructions from the top.
+    definers: []usize,
+    definers_first: usize,
+    definers_valid: bool,
     // The writer's edge marks (D320), valid with the used marks: which used references
     // record a dependency edge, which inlined entries stand for a body edge, and the
     // index that dedupes both -- the walks they replace were quadratic per module.

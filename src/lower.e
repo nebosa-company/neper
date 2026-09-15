@@ -2138,6 +2138,8 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         entry.instance = function.instance_id
                         entry.function_index = before
                         entry.walked_in = module_index
+                        entry.oracle = oracle
+                        entry.checker = c
                         entries[entry_at] = entry
                         *entry_count = entry_at + 1usize
                     } else {
@@ -2150,6 +2152,117 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
     }
     *cursor = entry_cursor
     ret ok
+}
+
+// A type from another worker's checker, made this checker's (D326): the declarations
+// are the same rows in both, so a type over them is itself; an element type in the
+// other's tail is stored here, an instance aggregate there is instantiated here from
+// the same template and arguments, and a function signature there is copied here.
+fn import_type(c: *check.Checker, source: *check.Checker, ty: check.Type) -> (check.Type, err) {
+    if !ty.has_element { ret (ty, ok) }
+    var imported = ty
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Array {
+        if ty.element < c.fork_types { ret (ty, ok) }
+        if ty.element >= source.type_count { ret (ty, check.InvalidType) }
+        let (element, element_error) = import_type(c, source, source.types[ty.element])
+        if element_error != ok { ret (ty, element_error) }
+        let (stored, store_error) = check.store_type(c, element)
+        if store_error != ok { ret (ty, store_error) }
+        imported.element = stored
+        ret (imported, ok)
+    }
+    if ty.kind == .Named || ty.kind == .Tag {
+        if ty.element < c.fork_aggregates { ret (ty, ok) }
+        let (instance, instance_error) = import_aggregate(c, source, ty.element)
+        if instance_error != ok { ret (ty, instance_error) }
+        imported.element = instance
+        ret (imported, ok)
+    }
+    if ty.kind == .Function {
+        if ty.element < c.fork_signatures { ret (ty, ok) }
+        if ty.element >= source.function_signature_count { ret (ty, check.InvalidType) }
+        let signature = source.function_signatures[ty.element]
+        var parameter_types: [32]check.Type = zero
+        var return_types: [8]check.Type = zero
+        if signature.parameter_count > parameter_types.len || signature.return_count > return_types.len { ret (ty, check.Capacity) }
+        var at = 0usize
+        while at < signature.parameter_count {
+            if signature.first_parameter + at >= source.type_count { ret (ty, check.InvalidType) }
+            let (parameter, parameter_error) = import_type(c, source, source.types[signature.first_parameter + at])
+            if parameter_error != ok { ret (ty, parameter_error) }
+            parameter_types[at] = parameter
+            at += 1usize
+        }
+        at = 0usize
+        while at < signature.return_count {
+            if signature.first_return + at >= source.type_count { ret (ty, check.InvalidType) }
+            let (returned, returned_error) = import_type(c, source, source.types[signature.first_return + at])
+            if returned_error != ok { ret (ty, returned_error) }
+            return_types[at] = returned
+            at += 1usize
+        }
+        var copied: check.FunctionSignature = zero
+        copied.parameter_count = signature.parameter_count
+        copied.return_count = signature.return_count
+        copied.first_parameter = c.type_count
+        at = 0usize
+        while at < signature.parameter_count {
+            let (stored, store_error) = check.store_type(c, parameter_types[at])
+            if store_error != ok { ret (ty, store_error) }
+            at += 1usize
+        }
+        copied.first_return = c.type_count
+        at = 0usize
+        while at < signature.return_count {
+            let (stored, store_error) = check.store_type(c, return_types[at])
+            if store_error != ok { ret (ty, store_error) }
+            at += 1usize
+        }
+        let (index, signature_error) = check.store_function_signature(c, copied)
+        if signature_error != ok { ret (ty, signature_error) }
+        imported.element = index
+        ret (imported, ok)
+    }
+    ret (ty, ok)
+}
+
+// An instance aggregate of another worker's checker, instantiated here from the same
+// template and arguments, which finds it when this checker made it already.
+fn import_aggregate(c: *check.Checker, source: *check.Checker, index: usize) -> (usize, err) {
+    if index >= source.aggregate_count { ret (0usize, check.InvalidType) }
+    let instance = source.aggregates[index]
+    if !instance.instance || instance.template_index >= c.fork_aggregates { ret (0usize, check.InvalidType) }
+    let template = c.aggregates[instance.template_index]
+    if c.generic_argument_count + template.comptime_count > c.generic_arguments.len { ret (0usize, check.Capacity) }
+    var arguments: [16]check.GenericArgument = zero
+    if template.comptime_count > arguments.len { ret (0usize, check.Capacity) }
+    var at = 0usize
+    while at < template.comptime_count {
+        if instance.first_argument + at >= source.generic_argument_count { ret (0usize, check.InvalidType) }
+        var argument = source.generic_arguments[instance.first_argument + at]
+        let (argument_type, argument_type_error) = import_type(c, source, argument.ty)
+        if argument_type_error != ok { ret (0usize, argument_type_error) }
+        argument.ty = argument_type
+        if (argument.kind == .Field || argument.kind == .Member) && argument.owner >= c.fork_aggregates {
+            let (owner, owner_error) = import_aggregate(c, source, argument.owner)
+            if owner_error != ok { ret (0usize, owner_error) }
+            argument.owner = owner
+        }
+        arguments[at] = argument
+        at += 1usize
+    }
+    // The block is claimed whole after every argument is imported, as the checker
+    // claims its own (D145): an import in between would land in it.
+    let first = c.generic_argument_count
+    c.generic_argument_count += template.comptime_count
+    at = 0usize
+    while at < template.comptime_count {
+        c.generic_arguments[first + at] = arguments[at]
+        at += 1usize
+    }
+    let (made, make_error) = check.instantiate_aggregate(c, instance.template_index, first)
+    if make_error != ok { ret (0usize, make_error) }
+    ret (made, ok)
 }
 
 // The oracle's function copied in at a call site: the current block branches to a copy
@@ -2179,8 +2292,11 @@ fn record_inlined(builder: *nir.Builder, callee_module: usize, name: str, instan
 }
 
 fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize, arguments: []usize, argument_count: usize, builder: *nir.Builder, token: lex.Token, results: *CallResults) -> err {
-    let oracle = builder.oracle
     let entry = builder.inline_entries[entry_index]
+    let oracle = entry.oracle
+    // The body was lowered with another worker's checker (D326) when it was not this
+    // one: the types its instructions carry are imported as they are copied.
+    let foreign = entry.checker.fork_id != c.fork_id
     let callee = oracle.functions[entry.function_index]
     try record_inlined(builder, entry.module_index, entry.name, entry.instance)
     // The callee's body may itself hold copies (D212): every callee of those is a
@@ -2287,9 +2403,15 @@ fn emit_inlined_call(c: *check.Checker, call: check.CallInfo, entry_index: usize
                     if instruction.opcode == .GlobalAddress {
                         if instruction.immediate >= builder.global_count || !check.same(builder.globals[instruction.immediate].name, oracle.globals[instruction.immediate].name) { ret check.Unsupported }
                     }
+                    var copied_type = instruction.ty
+                    if foreign {
+                        let (imported, import_error) = import_type(c, entry.checker, instruction.ty)
+                        if import_error != ok { ret import_error }
+                        copied_type = imported
+                    }
                     let was_nocheck = builder.nocheck
                     builder.nocheck = was_nocheck || instruction.nocheck
-                    let (copied, result, copy_error) = nir.emit_at(builder, instruction.opcode, instruction.ty, instruction.has_result, immediate, instruction.site)
+                    let (copied, result, copy_error) = nir.emit_at(builder, instruction.opcode, copied_type, instruction.has_result, immediate, instruction.site)
                     builder.nocheck = was_nocheck
                     if copy_error != ok { ret copy_error }
                     if instruction.path.len != 0usize { builder.instructions[copied].path = instruction.path }

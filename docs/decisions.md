@@ -6759,3 +6759,52 @@ Measured, cold: the two-million-line program 10.4 s debug (was 29) and 13.1 s re
 phase; the five-hundred-thousand-line program 2.3 s (was 6.7); the compiler 1.1 s (was
 1.8). Warm builds are as they were, and every image is byte for byte the D324
 compiler's, in both modes.
+
+## D326 -- The bodies checked and both oracles built on the workers that lower
+
+After D325 a cold build's largest phase was the body sweep: sequential, and in a
+release build two thirds of it the first inlining oracle lowered inside it -- 1.9 s
+debug and 5.7 s release of a two-million-line program's ten and thirteen.
+
+The eight `LowerWorker`s are now made before the bodies are checked (`Crew` in
+`main.e`) and kept through every phase, so a module's instances stay with the checker
+that made them. A worker's checker is forked from the program's after the
+declarations: the declaration tables copied, with a tail of its own on every table a
+body check appends to -- functions and their generics, parameters, return types,
+comptime parameters, generic arguments, aggregates and their fields, checked switches,
+signatures, types -- sized from the worker's share of the text. The copies are made on
+the worker's own thread out of its own arena, so eight cost the time of one; the first
+worker forks on the main thread and is measured, which is what sizes the others'
+arenas. An instance's number depends only on its owner module's order, so any
+partition of the modules gives the same image. The finders' name indexes are filled
+once before the fork and skip instance rows, so the workers share them read-only.
+
+The first oracle rides each worker's sweep as it rode the one-at-a-time sweep (D313),
+into an oracle builder of the worker's own; the second is built by each worker over
+its own modules' first entries, against every worker's first oracle; and the program
+is lowered against every worker's second entries. An entry carries the builder its
+body was lowered into and the checker it was lowered with, and a copy taken into
+another worker's builder imports the types its instructions carry (`lower.import_type`):
+an element chain is stored again, an instance aggregate is instantiated again from the
+same template and arguments, a function signature is copied -- and a row below the
+fork is the same row in both. A worker that runs dry in any phase has its modules done
+over from the bodies by the generous worker on the main thread. Every oracle builder
+declares the globals before it lowers, as `begin_inline_oracle` did.
+
+Found on the way, in the workers' own profile (`benchmarks/scale/perf_inclusive.py`
+folds `perf script` stacks through the image's symbol table): a callee's body hash was
+recomputed from its tokens for every module that reaches it (memoized on the checker
+now); `read_u64` was a byte loop with a multiply; the width of a scalar was found by a
+chain of string compares per instruction (by the name's shape now); and codegen found
+the type of a value by walking the function's instructions (a value-to-definer table
+per function now). Together a tenth off the lowering phase.
+
+Measured, cold, images byte for byte the D325 compiler's in both modes: the
+two-million-line program's body sweep 1.9 s to 0.7 s debug, 5.7 s to 1.5 s release;
+the program 9.7 s debug (was 10.4) and 10.3 s release (was 13.1); the
+five-hundred-thousand-line program's sweep 0.44 s to 0.14 s debug and 1.5 s to 0.37 s
+release, the program 2.6 s in both modes (was 2.3 and 2.9, on a machine grown noisier);
+the compiler's own sweep 80 ms to 30 ms. Under `--time` each phase now prints its
+workers' times and whether the generous one had to step in. A worker costs about 690 MB of arena for the two-million-line program
+and 150 MB for the compiler, so a compiler with the default gibibyte runs three
+workers on itself.

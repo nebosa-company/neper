@@ -27,10 +27,16 @@ fn align_up(value: usize, alignment: usize) -> (usize, err) {
 fn scalar_size(ty: check.Type) -> usize {
     if ty.kind == .Bool { ret 1usize }
     if ty.kind == .Err { ret 4usize }
+    // By the name's shape (D326), as `check.integer_width` decides: two letters are a
+    // byte, `bf16` and a `1` in the middle are two, a `3` is four, and the rest --
+    // `i64`, `u64`, `f64`, `isize`, `usize` -- are eight.
     if ty.kind == .Integer || ty.kind == .Float {
-        if check.same(ty.name, "i8") || check.same(ty.name, "u8") { ret 1usize }
-        if check.same(ty.name, "i16") || check.same(ty.name, "u16") || check.same(ty.name, "f16") || check.same(ty.name, "bf16") { ret 2usize }
-        if check.same(ty.name, "i32") || check.same(ty.name, "u32") || check.same(ty.name, "f32") { ret 4usize }
+        if ty.name.len == 2usize { ret 1usize }
+        if ty.name.len == 4usize { ret 2usize }
+        if ty.name.len == 3usize {
+            if ty.name[1usize] == 49u8 { ret 2usize }
+            if ty.name[1usize] == 51u8 { ret 4usize }
+        }
         ret 8usize
     }
     ret 0usize
