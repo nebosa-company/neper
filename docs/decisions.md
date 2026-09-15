@@ -7047,3 +7047,29 @@ on every run, so a library module the compiler imports must compile under it too
 If it refuses `algo/hash.e` or `crypto/hash.e`, that is the finding, and the item
 waits on the bootstrap's deletion (the M2 exit item, D208) rather than on a second
 subset of the library. Independent of D332, which lands on either side of it.
+
+## D334 -- `--stats` counts what the link dropped
+
+`--stats` (D308) reported reached and unreached modules -- a module with a function
+in the lowered program, or one loaded and never called -- and nothing finer. Every
+executable is linked from artifacts now (D325), and `em_link.reachable_from_main`
+already marks each function `kept` or not from `main` over the recorded call edges
+before the copy loop skips the rest, so the finer count was one store away. The
+skip branch adds the function and its `code_length` to the program's
+`unreached_functions` and `unreached_bytes`, the driver copies both into the
+`Build` record after `assemble`, and the table prints `reached functions` (the
+assembled builder's count), `unreached functions` and `unreached code` in bytes
+under the module rows. Nothing runs during the build that did not run before,
+which is D308's rule.
+
+The word is unreached, not dead: a library function no call chain from this root
+reaches is unreached by this program, and live from another. The compiler built
+by itself, release: 1'399 reached, 513 unreached, 302'410 bytes of code carried
+and dropped, in a 5.4 MB image.
+
+Not added: unreached errors, types and constants. An error value is a comptime
+constant folded into the code (D6), so after lowering there is no reference to
+count, and an error declared for a caller's `err == os.NotFound` is used by a
+comparison in another module, never raised; types and constants do not reach the
+link at all. A count of zero-reference declarations is a checker pass -- a
+`check --unused` someday -- not a build statistic.

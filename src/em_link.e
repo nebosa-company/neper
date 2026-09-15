@@ -32,6 +32,9 @@ type Program = struct {
     line_count: usize,
     // The reference no artifact defines, when the link fails with `MissingSymbol`.
     missing_symbol: str,
+    // What `reachable_from_main` dropped, for `--stats` (D334): functions and their code bytes.
+    unreached_functions: usize,
+    unreached_bytes: usize,
 }
 
 fn capacity(value: usize) -> usize {
@@ -463,6 +466,8 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     var position = 0usize
     while position < table.count {
             if !kept[position] {
+                program.unreached_functions += 1usize
+                program.unreached_bytes += table.funcs[position].code_length
                 position += 1usize
                 continue
             }

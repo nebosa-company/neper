@@ -72,6 +72,9 @@ type Build = struct {
     exit_code: i32,
     // The child's peak working set in bytes (D311), from the same wait as its exit code.
     run_peak: usize,
+    // The link's drop count (D334): functions no call chain from `main` reaches, and their code bytes.
+    unreached_functions: usize,
+    unreached_bytes: usize,
 }
 
 fn record_phase(b: *Build, name: str, ms: usize) {
@@ -345,6 +348,11 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try out("\n")
     try row_number("reached modules", hot_count)
     try row_number("unreached modules", g.count - hot_count)
+    try row_number("reached functions", builder.function_count)
+    try row_number("unreached functions", b.unreached_functions)
+    try row("unreached code")
+    try number(b.unreached_bytes)
+    try out(" bytes\n")
     try row_number("compile threads", 1usize)
     try row("executable size")
     try number(b.image_bytes)

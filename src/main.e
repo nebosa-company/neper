@@ -5239,6 +5239,8 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
         os.exit(1i32)
     }
     if assemble_error != ok { ret assemble_error }
+    report.build.unreached_functions = program.unreached_functions
+    report.build.unreached_bytes = program.unreached_bytes
     // The assembled builder replaces the program's: what the image carries of the
     // build itself -- the arena size (D225) and the mode -- comes across.
     let arena_bytes = builder.arena_bytes
