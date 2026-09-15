@@ -5,6 +5,9 @@ use lex
 use lookup
 
 error Capacity
+// A body longer than the builder's `instruction_limit` (D310): the inlining oracle
+// stops lowering a function the moment it cannot inline it.
+error TooLong
 error InvalidControlFlow
 error InvalidValue
 
@@ -270,6 +273,10 @@ type Builder = struct {
     inline_entry_count: usize,
     inlined: []InlinedRef,
     inlined_count: usize,
+    // An oracle's cap on one body's instructions, measured from `limit_base`; zero is
+    // no cap (D310).
+    instruction_limit: usize,
+    limit_base: usize,
     function_count: usize,
     block_count: usize,
     instruction_count: usize,
@@ -844,6 +851,7 @@ fn begin_block(builder: *Builder) -> (usize, err) {
 fn emit(builder: *Builder, opcode: Opcode, ty: check.Type, has_result: bool, immediate: usize, token: lex.Token) -> (usize, usize, err) {
     if !builder.function_active || !builder.block_active || builder.blocks[builder.current_block].terminated || opcode == .Invalid { ret (0usize, 0usize, InvalidControlFlow) }
     if builder.instruction_count == builder.instructions.len { ret (0usize, 0usize, Capacity) }
+    if builder.instruction_limit != 0usize && builder.instruction_count - builder.limit_base >= builder.instruction_limit { ret (0usize, 0usize, TooLong) }
     let instruction_index = builder.instruction_count
     var result = 0usize
     if has_result {
@@ -914,6 +922,32 @@ fn validate_function(builder: *Builder, function: Function) -> err {
         block_at += 1usize
     }
     ret ok
+}
+
+// Where the builder stands, and back to it (D310): what an oracle lowered and cannot
+// inline is discarded rather than kept. References and strings interned meanwhile
+// stay -- they are names, and the indexes over them would otherwise point past the
+// table.
+type Mark = struct {
+    function_count: usize,
+    block_count: usize,
+    instruction_count: usize,
+    operand_count: usize,
+    inlined_count: usize,
+}
+
+fn mark(builder: *Builder) -> Mark {
+    ret Mark { function_count: builder.function_count, block_count: builder.block_count, instruction_count: builder.instruction_count, operand_count: builder.operand_count, inlined_count: builder.inlined_count }
+}
+
+fn reset(builder: *Builder, at: Mark) {
+    builder.function_count = at.function_count
+    builder.block_count = at.block_count
+    builder.instruction_count = at.instruction_count
+    builder.operand_count = at.operand_count
+    builder.inlined_count = at.inlined_count
+    builder.function_active = false
+    builder.block_active = false
 }
 
 fn end_function(builder: *Builder) -> err {

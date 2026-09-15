@@ -6309,3 +6309,32 @@ The 2M-line program, release-built compiler, warm file cache, both modes:
 | compiler peak (external) | 2.1 GB | 5.4 GB |
 | image | 12.7 MB | 9.1 MB |
 | run | 3.19 s | 3.14 s |
+
+## D310 -- The oracle lowers what it can inline, and no more than that
+
+D309 found a release build lowering the program three times: each of the two inlining
+oracles (D207, D212) lowered every function under a hundred tokens in full, kept the
+body in its pool, and then rejected the ones over forty instructions -- which, for a
+program whose functions run to fifty, was all of them, twice, and 61 of 101 seconds.
+
+Three changes, each exact:
+- **A body stops at the cap.** The builder has an `instruction_limit` measured from a
+  base; the oracle sets it to the cap plus one around each function, `emit` answers
+  `TooLong` past it, and the oracle discards the function on that answer. A body of
+  fifty instructions is lowered to forty-one, not fifty; a body of a thousand, to
+  forty-one, not a thousand.
+- **A rejected body is discarded.** `nir.mark` and `nir.reset` return the builder to
+  where it stood -- functions, blocks, instructions, operands, inlined refs; references
+  and strings interned meanwhile stay, since they are names and the indexes over them
+  would otherwise point past the table. The oracle's pool holds inlinable bodies only.
+  A result returned through a slot is decided before lowering, not after.
+- **The second oracle visits only the first's entries.** Inlining into a body only
+  lengthens it, so a body the first oracle rejected stays rejected; the entries were
+  recorded in the same walk order, so a cursor over them decides membership.
+
+The compiler's own release image is byte-identical from the previous compiler and
+this one, and so is the 2M-line program's. On that program the oracles take 15-18 s
+instead of 61, a release build 68 s instead of 101, and its peak 2.1 GB instead of
+5.4 -- the same as a debug build, which is what the second oracle's whole-program pool
+had cost. What remains is the pre-filter: a hundred tokens admits a body of fifty
+instructions, and each such body is still lowered to forty-one before it is rejected.

@@ -2029,6 +2029,7 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
     try declare_globals(c, oracle)
     *entry_count = 0usize
     var oracle_defers: DeferState = zero
+    var entry_cursor = 0usize
     var module_index = 0usize
     while module_index < g.count {
         var tree: parse.Tree = zero
@@ -2043,11 +2044,23 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
                 let (function_index, found) = check.find_function(c, module_index, name)
                 if found {
                     let function = c.functions[function_index]
-                    if !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
-                        let before = oracle.function_count
-                        let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, &oracle_defers)
-                        if lower_error != ok { ret lower_error }
-                        let lowered = oracle.functions[before]
+                    // The second oracle (D212) is built against the first, and inlining into a
+                    // body only lengthens it, so a body the first oracle rejected stays
+                    // rejected: the second visits the first's entries alone (D310). The
+                    // entries were recorded in this same walk order, so a cursor finds them.
+                    var wanted = true
+                    if oracle.has_oracle {
+                        wanted = false
+                        if entry_cursor < oracle.inline_entry_count {
+                            let previous = oracle.inline_entries[entry_cursor]
+                            if previous.module_index == function.owner_module_index && previous.instance == function.instance_id && check.same(previous.name, name) {
+                                wanted = true
+                                entry_cursor += 1usize
+                            }
+                        }
+                    }
+                    if wanted && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
+                        // A result that comes back through a slot is decided before any lowering.
                         var hidden = false
                         if function.return_count == 1usize {
                             var function_call: check.CallInfo = zero
@@ -2056,6 +2069,26 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
                             try call_return_layout(c, function_call, &return_layout)
                             hidden = return_layout.via_slot
                         }
+                        if hidden {
+                            node_index += 1usize
+                            continue
+                        }
+                        let before = oracle.function_count
+                        let checkpoint = nir.mark(oracle)
+                        let local_checkpoint = c.local_count
+                        oracle.limit_base = oracle.instruction_count
+                        oracle.instruction_limit = inline_cap() + 1usize
+                        let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, &oracle_defers)
+                        oracle.instruction_limit = 0usize
+                        if lower_error == nir.TooLong {
+                            // Past the cap: what was lowered so far goes, and so does the function.
+                            nir.reset(oracle, checkpoint)
+                            c.local_count = local_checkpoint
+                            node_index += 1usize
+                            continue
+                        }
+                        if lower_error != ok { ret lower_error }
+                        let lowered = oracle.functions[before]
                         // A body that calls a generic instance stays out: an instance is the
                         // instantiating module's own copy, not the target of anyone's edge,
                         // and a copy of the call in another module would name it anyway.
@@ -2066,7 +2099,7 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
                             if (scanned.opcode == .Call || scanned.opcode == .FunctionAddress) && scanned.immediate < oracle.function_ref_count && oracle.function_refs[scanned.immediate].instance != 0usize { calls_instance = true }
                             scan_at += 1usize
                         }
-                        if lowered.instruction_count <= inline_cap() && !hidden && !calls_instance {
+                        if lowered.instruction_count <= inline_cap() && !calls_instance {
                             let entry_at = *entry_count
                             if entry_at == entries.len { ret check.Capacity }
                             var entry: nir.InlineEntry = zero
@@ -2076,6 +2109,8 @@ fn build_inline_oracle(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder,
                             entry.function_index = before
                             entries[entry_at] = entry
                             *entry_count = entry_at + 1usize
+                        } else {
+                            nir.reset(oracle, checkpoint)
                         }
                     }
                 }
