@@ -261,11 +261,11 @@ if ($LASTEXITCODE -ne 0 -or $genericArtifactExecutableWritten -ne 'artifact exec
 if ($LASTEXITCODE -ne 0) { throw 'generic compiled-module executable failed' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $genericArtifactExecutablePath).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $genericExecutablePath).Hash) { throw 'generic compiled-module and source links differ' }
 # Walk a compiled module's code section. The section directory is fixed, so the
-# code section offset is at byte 136; each record is a 24-byte header followed by
+# code section offset is at byte 112 (D320: no NIR section); each record is a 24-byte header followed by
 # its machine code and its relocations of 28 bytes each (format 5, D319).
 function Get-EmCodeRecords([string]$path) {
     $bytes = [IO.File]::ReadAllBytes($path)
-    $code = [int][BitConverter]::ToUInt64($bytes, 136)
+    $code = [int][BitConverter]::ToUInt64($bytes, 112)
     $count = [int][BitConverter]::ToUInt32($bytes, $code)
     $records = @()
     $cursor = $code + 4
@@ -2501,7 +2501,7 @@ if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module ou
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
 if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 5 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
-if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 8) { throw 'compiled-module section count is invalid' }
+if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 7) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'
 $interfaceArtifactWritten = & $compiler emit-em (Join-Path $PSScriptRoot 'fixtures\em\interface\src\main.e') $repo 'x64' 'windows' $interfaceArtifactPath

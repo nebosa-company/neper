@@ -33,5 +33,5 @@ for line in open(sys.argv[2]):
     if not m: continue
     pct, addr = float(m.group(1)), int(m.group(2), 16)
     totals[lookup(addr)] = totals.get(lookup(addr), 0) + pct
-for n, p in sorted(totals.items(), key=lambda x: -x[1])[:20]:
+for n, p in sorted(totals.items(), key=lambda x: -x[1])[:int(sys.argv[3]) if len(sys.argv) > 3 else 20]:
     print(f'{p:6.2f}%  {n}')

@@ -4,12 +4,15 @@ error Capacity
 error InvalidByte
 error InvalidEncoding
 
+// One byte per byte (D320): the buffer held one byte per `usize`, and so did every
+// artifact read back, which made a two-million-line program's artifacts eight times
+// their size in memory.
 type Buffer = struct {
-    bytes: []usize,
+    bytes: []u8,
     count: usize,
 }
 
-fn init(buffer: *Buffer, bytes: []usize) -> err {
+fn init(buffer: *Buffer, bytes: []u8) -> err {
     if bytes.len == 0usize { ret Capacity }
     buffer.bytes = bytes
     buffer.count = 0usize
@@ -19,45 +22,51 @@ fn init(buffer: *Buffer, bytes: []usize) -> err {
 fn byte(buffer: *Buffer, value: usize) -> err {
     if value > 255usize { ret InvalidByte }
     if buffer.count == buffer.bytes.len { ret Capacity }
-    buffer.bytes[buffer.count] = value
+    buffer.bytes[buffer.count] = u8(value)
     buffer.count += 1usize
     ret ok
 }
 
+// The runs check the capacity once and store in a plain loop (D320): a byte at a time
+// through `byte`, an artifact's megabytes of code paid a call and an error check each.
 fn zeroes(buffer: *Buffer, count: usize) -> err {
-    var at = 0usize
-    while at < count {
-        try byte(buffer, 0usize)
+    if count > buffer.bytes.len - buffer.count { ret Capacity }
+    var at = buffer.count
+    let end = at + count
+    while at < end {
+        buffer.bytes[at] = 0u8
         at += 1usize
     }
+    buffer.count = end
     ret ok
 }
 
-fn copy(buffer: *Buffer, bytes: []const usize) -> err {
+fn copy(buffer: *Buffer, bytes: []const u8) -> err {
+    if bytes.len > buffer.bytes.len - buffer.count { ret Capacity }
+    let start = buffer.count
     var at = 0usize
     while at < bytes.len {
-        try byte(buffer, bytes[at])
+        buffer.bytes[start + at] = bytes[at]
         at += 1usize
     }
+    buffer.count = start + bytes.len
     ret ok
 }
 
 // The same over machine code, which is bytes (D307).
 fn copy_bytes(buffer: *Buffer, bytes: []const u8) -> err {
-    var at = 0usize
-    while at < bytes.len {
-        try byte(buffer, usize(bytes[at]))
-        at += 1usize
-    }
-    ret ok
+    ret copy(buffer, bytes)
 }
 
 fn text(buffer: *Buffer, value: str) -> err {
+    if value.len > buffer.bytes.len - buffer.count { ret Capacity }
+    let start = buffer.count
     var at = 0usize
     while at < value.len {
-        try byte(buffer, usize(value[at]))
+        buffer.bytes[start + at] = value[at]
         at += 1usize
     }
+    buffer.count = start + value.len
     ret ok
 }
 
@@ -81,24 +90,27 @@ fn little_u16(buffer: *Buffer, value: usize) -> err {
 
 fn little_u32(buffer: *Buffer, value: usize) -> err {
     if value > 4294967295usize { ret InvalidEncoding }
-    var remaining = value
-    var at = 0usize
-    while at < 4usize {
-        try byte(buffer, remaining % 256usize)
-        remaining = remaining / 256usize
-        at += 1usize
-    }
+    if 4usize > buffer.bytes.len - buffer.count { ret Capacity }
+    let at = buffer.count
+    buffer.bytes[at] = u8(value & 255usize)
+    buffer.bytes[at + 1usize] = u8((value >> 8usize) & 255usize)
+    buffer.bytes[at + 2usize] = u8((value >> 16usize) & 255usize)
+    buffer.bytes[at + 3usize] = u8((value >> 24usize) & 255usize)
+    buffer.count = at + 4usize
     ret ok
 }
 
 fn little_u64(buffer: *Buffer, value: usize) -> err {
+    if 8usize > buffer.bytes.len - buffer.count { ret Capacity }
+    let at = buffer.count
     var remaining = value
-    var at = 0usize
-    while at < 8usize {
-        try byte(buffer, remaining % 256usize)
-        remaining = remaining / 256usize
-        at += 1usize
+    var offset = 0usize
+    while offset < 8usize {
+        buffer.bytes[at + offset] = u8(remaining & 255usize)
+        remaining = remaining >> 8usize
+        offset += 1usize
     }
+    buffer.count = at + 8usize
     ret ok
 }
 
@@ -107,7 +119,7 @@ fn patch_little_u32(buffer: *Buffer, offset: usize, value: usize) -> err {
     var remaining = value
     var at = 0usize
     while at < 4usize {
-        buffer.bytes[offset + at] = remaining % 256usize
+        buffer.bytes[offset + at] = u8(remaining % 256usize)
         remaining = remaining / 256usize
         at += 1usize
     }
@@ -119,41 +131,30 @@ fn patch_little_u64(buffer: *Buffer, offset: usize, value: usize) -> err {
     var remaining = value
     var at = 0usize
     while at < 8usize {
-        buffer.bytes[offset + at] = remaining % 256usize
+        buffer.bytes[offset + at] = u8(remaining % 256usize)
         remaining = remaining / 256usize
         at += 1usize
     }
     ret ok
 }
 
-fn read_u16(bytes: []const usize, offset: usize) -> (usize, err) {
+fn read_u16(bytes: []const u8, offset: usize) -> (usize, err) {
     if offset + 2usize > bytes.len { ret (0usize, InvalidEncoding) }
-    if bytes[offset] > 255usize || bytes[offset + 1usize] > 255usize { ret (0usize, InvalidByte) }
-    ret (bytes[offset] + bytes[offset + 1usize] * 256usize, ok)
+    ret (usize(bytes[offset]) + usize(bytes[offset + 1usize]) * 256usize, ok)
 }
 
-fn read_u32(bytes: []const usize, offset: usize) -> (usize, err) {
+fn read_u32(bytes: []const u8, offset: usize) -> (usize, err) {
     if offset + 4usize > bytes.len { ret (0usize, InvalidEncoding) }
-    var result = 0usize
-    var multiplier = 1usize
-    var at = 0usize
-    while at < 4usize {
-        if bytes[offset + at] > 255usize { ret (0usize, InvalidByte) }
-        result += bytes[offset + at] * multiplier
-        multiplier = multiplier * 256usize
-        at += 1usize
-    }
-    ret (result, ok)
+    ret (usize(bytes[offset]) | (usize(bytes[offset + 1usize]) << 8usize) | (usize(bytes[offset + 2usize]) << 16usize) | (usize(bytes[offset + 3usize]) << 24usize), ok)
 }
 
-fn read_u64(bytes: []const usize, offset: usize) -> (usize, err) {
+fn read_u64(bytes: []const u8, offset: usize) -> (usize, err) {
     if offset + 8usize > bytes.len { ret (0usize, InvalidEncoding) }
     var result = 0usize
     var multiplier = 1usize
     var at = 0usize
     while at < 8usize {
-        if bytes[offset + at] > 255usize { ret (0usize, InvalidByte) }
-        result = result +% bytes[offset + at] *% multiplier
+        result = result +% usize(bytes[offset + at]) *% multiplier
         multiplier = multiplier *% 256usize
         at += 1usize
     }
@@ -164,15 +165,14 @@ fn pack(buffer: *Buffer, destination: []u8) -> err {
     if buffer.count > destination.len { ret Capacity }
     var at = 0usize
     while at < buffer.count {
-        if buffer.bytes[at] > 255usize { ret InvalidByte }
-        destination[at] = u8(buffer.bytes[at])
+        destination[at] = buffer.bytes[at]
         at += 1usize
     }
     ret ok
 }
 
 fn self_test() -> err {
-    var storage: [32]usize = zero
+    var storage: [32]u8 = zero
     var buffer: Buffer = zero
     try init(&buffer, storage[..])
     try little_u16(&buffer, 4660usize)

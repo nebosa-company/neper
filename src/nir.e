@@ -294,6 +294,16 @@ type Builder = struct {
     used_marks: []u8,
     used_marks_module: usize,
     used_marks_valid: bool,
+    // The writer's edge marks (D320), valid with the used marks: which used references
+    // record a dependency edge, which inlined entries stand for a body edge, and the
+    // index that dedupes both -- the walks they replace were quadratic per module.
+    edge_marks: []u8,
+    inlined_marks: []u8,
+    edge_index: lookup.Index,
+    // The marked references by index, in order (D320): a module names a few dozen,
+    // and its edges were deduplicated by walking every reference of the program.
+    used_list: []usize,
+    used_count: usize,
     // The imports in name order (D319), built when the linker first asks.
     import_order: [1024]usize,
     import_order_count: usize,
@@ -582,6 +592,7 @@ fn compact_references(builder: *Builder) -> err {
     }
     builder.function_ref_count = moved_to
     builder.imports_ordered = false
+    builder.used_marks_valid = false
     // The references moved, so the name index over them is rebuilt from nothing the
     // next time one is asked for (D306).
     if lookup.attached(&builder.ref_names) { try lookup.attach(&builder.ref_names, builder.ref_names.entries) }

@@ -19,28 +19,26 @@ fn rotate_left(value: usize, count: usize) -> usize {
 // written went through it three hundred times a byte: minutes per module (D213).
 fn xor(a: usize, b: usize) -> usize { ret a ^ b }
 
-fn read_u32(bytes: []const usize, at: usize) -> (usize, err) {
+fn read_u32(bytes: []const u8, at: usize) -> (usize, err) {
     if at + 4usize > bytes.len { ret (0usize, InvalidByte) }
     var result = 0usize
     var offset = 0usize
     var multiplier = 1usize
     while offset < 4usize {
-        if bytes[at + offset] > 255usize { ret (0usize, InvalidByte) }
-        result += bytes[at + offset] * multiplier
+        result += usize(bytes[at + offset]) * multiplier
         multiplier = multiplier * 256usize
         offset += 1usize
     }
     ret (result, ok)
 }
 
-fn read_u64(bytes: []const usize, at: usize) -> (usize, err) {
+fn read_u64(bytes: []const u8, at: usize) -> (usize, err) {
     if at + 8usize > bytes.len { ret (0usize, InvalidByte) }
     var result = 0usize
     var offset = 0usize
     var multiplier = 1usize
     while offset < 8usize {
-        if bytes[at + offset] > 255usize { ret (0usize, InvalidByte) }
-        result = result +% bytes[at + offset] *% multiplier
+        result = result +% usize(bytes[at + offset]) *% multiplier
         multiplier = multiplier *% 256usize
         offset += 1usize
     }
@@ -58,7 +56,7 @@ fn merge_round(accumulator: usize, lane: usize) -> usize {
     ret result *% prime1() +% prime4()
 }
 
-fn xxhash64(bytes: []const usize) -> (usize, err) {
+fn xxhash64(bytes: []const u8) -> (usize, err) {
     var hash = 0usize
     var at = 0usize
     if bytes.len >= 32usize {
@@ -106,8 +104,7 @@ fn xxhash64(bytes: []const usize) -> (usize, err) {
         at += 4usize
     }
     while at < bytes.len {
-        if bytes[at] > 255usize { ret (0usize, InvalidByte) }
-        hash = xor(hash, bytes[at] *% prime5())
+        hash = xor(hash, usize(bytes[at]) *% prime5())
         hash = rotate_left(hash, 11usize) *% prime1()
         at += 1usize
     }
@@ -121,8 +118,14 @@ fn xxhash64(bytes: []const usize) -> (usize, err) {
 
 // Table-driven (D224): the table is built per call, two thousand steps, against a
 // byte loop that ran eight per byte over every artifact loaded.
-fn crc32c(bytes: []const usize, zero_at: usize, zero_count: usize) -> (usize, err) {
-    var table: [256]usize = zero
+// CRC-32C eight bytes at a time (D320): the byte loop, with its branch for the zeroed
+// field, walked every artifact byte a load takes, and a two-million-line program's
+// artifacts are hundreds of megabytes. Slicing-by-eight: eight tables, the k-th the
+// first applied to the (k-1)-th's entries, and one lookup per byte with no dependence
+// between the eight of a word. The bytes before the zeroed field's end and the tail
+// go a byte at a time.
+fn crc32c(bytes: []const u8, zero_at: usize, zero_count: usize) -> (usize, err) {
+    var table: [2048]usize = zero
     var entry = 0usize
     while entry < 256usize {
         var crc = entry
@@ -138,13 +141,34 @@ fn crc32c(bytes: []const usize, zero_at: usize, zero_count: usize) -> (usize, er
         table[entry] = crc
         entry += 1usize
     }
+    var slice = 1usize
+    while slice < 8usize {
+        entry = 0usize
+        while entry < 256usize {
+            let prior = table[(slice - 1usize) * 256usize + entry]
+            table[slice * 256usize + entry] = (prior >> 8usize) ^ table[prior & 255usize]
+            entry += 1usize
+        }
+        slice += 1usize
+    }
     var crc = 4294967295usize
     var at = 0usize
-    while at < bytes.len {
-        var value = bytes[at]
+    var head = zero_at + zero_count
+    if zero_count == 0usize { head = 0usize }
+    if head > bytes.len { head = bytes.len }
+    while at < head {
+        var value = usize(bytes[at])
         if at >= zero_at && at - zero_at < zero_count { value = 0usize }
-        if value > 255usize { ret (0usize, InvalidByte) }
         crc = table[(crc ^ value) & 255usize] ^ (crc >> 8usize)
+        at += 1usize
+    }
+    while at + 8usize <= bytes.len {
+        let low = crc ^ (usize(bytes[at]) | (usize(bytes[at + 1usize]) << 8usize) | (usize(bytes[at + 2usize]) << 16usize) | (usize(bytes[at + 3usize]) << 24usize))
+        crc = table[1792usize + (low & 255usize)] ^ table[1536usize + ((low >> 8usize) & 255usize)] ^ table[1280usize + ((low >> 16usize) & 255usize)] ^ table[1024usize + ((low >> 24usize) & 255usize)] ^ table[768usize + usize(bytes[at + 4usize])] ^ table[512usize + usize(bytes[at + 5usize])] ^ table[256usize + usize(bytes[at + 6usize])] ^ table[usize(bytes[at + 7usize])]
+        at += 8usize
+    }
+    while at < bytes.len {
+        crc = table[(crc ^ usize(bytes[at])) & 255usize] ^ (crc >> 8usize)
         at += 1usize
     }
     ret (crc ^ 4294967295usize, ok)
@@ -155,11 +179,11 @@ fn fnv1a32_step(hash: usize, value: usize) -> (usize, err) {
     ret (xor(hash, value) *% 16777619usize % 4294967296usize, ok)
 }
 
-fn fnv1a32(bytes: []const usize) -> (usize, err) {
+fn fnv1a32(bytes: []const u8) -> (usize, err) {
     var hash = 2166136261usize
     var at = 0usize
     while at < bytes.len {
-        let (next, step_error) = fnv1a32_step(hash, bytes[at])
+        let (next, step_error) = fnv1a32_step(hash, usize(bytes[at]))
         if step_error != ok { ret (0usize, step_error) }
         hash = next
         at += 1usize
@@ -334,16 +358,13 @@ fn sha256_hex(a: *mem.Arena, bytes: []const u8) -> (str, err) {
 }
 
 fn self_test() -> err {
-    var empty: [1]usize = zero
+    var empty: [1]u8 = zero
     let (empty_hash, empty_error) = xxhash64(empty[0usize..0usize])
     if empty_error != ok || empty_hash != 17241709254077376921usize { ret InvalidByte }
-    let digits = [9]usize{ 49usize, 50usize, 51usize, 52usize, 53usize, 54usize, 55usize, 56usize, 57usize }
+    let digits = [9]u8{ 49u8, 50u8, 51u8, 52u8, 53u8, 54u8, 55u8, 56u8, 57u8 }
     let (checksum, checksum_error) = crc32c(digits[..], 0usize, 0usize)
     if checksum_error != ok || checksum != 3808858755usize { ret InvalidByte }
-    let invalid = [1]usize{ 256usize }
-    let (invalid_hash, invalid_error) = xxhash64(invalid[..])
-    if invalid_error != InvalidByte { ret InvalidByte }
-    let hello = [5]usize{ 104usize, 101usize, 108usize, 108usize, 111usize }
+    let hello = [5]u8{ 104u8, 101u8, 108u8, 108u8, 111u8 }
     let (fnv, fnv_error) = fnv1a32(hello[..])
     if fnv_error != ok || fnv != 1335831723usize { ret InvalidByte }
     let (qualified, qualified_error) = qualified_error_value("e.os", "NotFound")

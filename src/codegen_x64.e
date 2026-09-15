@@ -1114,8 +1114,9 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     var path_count = 0usize
     var paths_total = 0usize
     var row = 0usize
+    var last_path = 0usize
     while row < line_count {
-        let (path_index, found) = path_position(paths[..path_count], lines[row].path)
+        let (path_index, found) = path_position(paths[..path_count], lines[row].path, &last_path)
         if !found {
             if path_count == paths.len { ret Unsupported }
             paths[path_count] = lines[row].path
@@ -1181,7 +1182,7 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
             var row_at = first_row
             while row_at < first_row + row_total {
                 let entry = lines[row_at]
-                let (path_index, found) = path_position(paths[..path_count], entry.path)
+                let (path_index, found) = path_position(paths[..path_count], entry.path, &last_path)
                 if !found { ret Unsupported }
                 try emit_x64.little_u32(machine, entry.offset - start)
                 try emit_x64.little_u32(machine, entry.line)
@@ -1204,10 +1205,17 @@ fn append_symbol_table(builder: *nir.Builder, machine: *emit_x64.Buffer, functio
     ret ok
 }
 
-fn path_position(paths: []const str, path: str) -> (usize, bool) {
+// The rows come function by function and the functions module by module, so the path
+// is nearly always the one the last row had (D320): checked first, since a scan of the
+// two thousand paths of a two-million-line program per row was the whole symbol table.
+fn path_position(paths: []const str, path: str, last: *usize) -> (usize, bool) {
+    if *last < paths.len && check.same(paths[*last], path) { ret (*last, true) }
     var at = 0usize
     while at < paths.len {
-        if check.same(paths[at], path) { ret (at, true) }
+        if check.same(paths[at], path) {
+            *last = at
+            ret (at, true)
+        }
         at += 1usize
     }
     ret (0usize, false)

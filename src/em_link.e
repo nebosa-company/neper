@@ -15,7 +15,7 @@ error TargetMismatch
 error MissingSymbol
 
 type Artifact = struct {
-    bytes: []usize,
+    bytes: []const u8,
     // The string table's bounds, walked once when the artifact is taken up (D319).
     string_starts: []usize,
     string_lengths: []usize,
@@ -39,21 +39,14 @@ fn capacity(value: usize) -> usize {
     ret value
 }
 
-// A string already located to `start`/`length` -- no walk of the string table.
-fn copy_string_bytes(a: *mem.Arena, bytes: []const usize, start: usize, length: usize) -> (str, err) {
+// A string already located to `start`/`length` -- no walk of the string table, and no
+// copy (D320): the artifact's bytes are bytes and outlive the link, so a name is a view.
+fn copy_string_bytes(a: *mem.Arena, bytes: []const u8, start: usize, length: usize) -> (str, err) {
     if length == 0usize || start + length > bytes.len { ret ("", InvalidInput) }
-    let (storage, storage_error) = mem.alloc[u8](a, length)
-    if storage_error != ok { ret ("", storage_error) }
-    var at = 0usize
-    while at < length {
-        if bytes[start + at] > 255usize { ret ("", InvalidInput) }
-        storage[at] = u8(bytes[start + at])
-        at += 1usize
-    }
-    ret (storage[..], ok)
+    ret (bytes[start..start + length], ok)
 }
 
-fn copy_string(a: *mem.Arena, bytes: []const usize, index: usize) -> (str, err) {
+fn copy_string(a: *mem.Arena, bytes: []const u8, index: usize) -> (str, err) {
     let (start, length, bounds_error) = em.string_bounds(bytes, index)
     if bounds_error != ok || length == 0usize { ret ("", InvalidInput) }
     let (text, copy_error) = copy_string_bytes(a, bytes, start, length)
@@ -79,26 +72,22 @@ fn artifact_strings_equal(left: Artifact, left_index: usize, right: Artifact, ri
     ret true
 }
 
-fn validate_set(artifacts: []Artifact) -> err {
+fn validate_set(a: *mem.Arena, artifacts: []Artifact) -> err {
     if artifacts.len == 0usize { ret InvalidInput }
     let (root_target, root_target_error) = em.artifact_target_index(artifacts[0usize].bytes)
     if root_target_error != ok { ret root_target_error }
+    // Each artifact's module name once (D320): the duplicate check read it per pair,
+    // and each read validated the artifact's layout.
+    let (module_indices, indices_error) = module_index_cache(a, artifacts)
+    if indices_error != ok { ret indices_error }
     var at = 0usize
     while at < artifacts.len {
         let (artifact_target, target_error) = em.artifact_target_index(artifacts[at].bytes)
         if target_error != ok { ret target_error }
-        let (same_target, target_match_error) = em.strings_equal(artifacts[0usize].bytes, root_target, artifacts[at].bytes, artifact_target)
-        if target_match_error != ok { ret target_match_error }
-        if !same_target { ret TargetMismatch }
-        let (module_index, module_error) = em.interface_module_index(artifacts[at].bytes)
-        if module_error != ok { ret module_error }
+        if !artifact_strings_equal(artifacts[0usize], root_target, artifacts[at], artifact_target) { ret TargetMismatch }
         var prior = 0usize
         while prior < at {
-            let (prior_module, prior_error) = em.interface_module_index(artifacts[prior].bytes)
-            if prior_error != ok { ret prior_error }
-            let (same_module, same_module_error) = em.strings_equal(artifacts[prior].bytes, prior_module, artifacts[at].bytes, module_index)
-            if same_module_error != ok { ret same_module_error }
-            if same_module { ret DuplicateModule }
+            if artifact_strings_equal(artifacts[prior], module_indices[prior], artifacts[at], module_indices[at]) { ret DuplicateModule }
             prior += 1usize
         }
         at += 1usize
@@ -122,13 +111,28 @@ fn module_index_cache(a: *mem.Arena, artifacts: []Artifact) -> ([]usize, err) {
     ret (indices, ok)
 }
 
-fn target_module(artifacts: []Artifact, module_indices: []usize, source: Artifact, target_module_index: usize) -> (usize, err) {
+// The artifacts by module name (D320): a relocation's target module was a walk over
+// every artifact, comparing names, per relocation.
+fn index_modules(a: *mem.Arena, artifacts: []Artifact, module_indices: []usize, modules: *lookup.Index) -> err {
+    let (entries, entries_error) = mem.alloc[lookup.Entry](a, artifacts.len * 8usize + 256usize)
+    if entries_error != ok { ret entries_error }
+    try lookup.attach(modules, entries)
     var at = 0usize
     while at < artifacts.len {
-        if artifact_strings_equal(source, target_module_index, artifacts[at], module_indices[at]) { ret (at, ok) }
+        let (name, name_error) = artifact_text(a, artifacts[at], module_indices[at])
+        if name_error != ok { ret name_error }
+        try lookup.insert(modules, 0usize, 0usize, name, at)
         at += 1usize
     }
-    ret (0usize, MissingSymbol)
+    ret ok
+}
+
+fn target_module(a: *mem.Arena, modules: *lookup.Index, source: Artifact, target_module_index: usize) -> (usize, err) {
+    let (name, name_error) = artifact_text(a, source, target_module_index)
+    if name_error != ok { ret (0usize, name_error) }
+    let (at, found) = lookup.find(modules, 0usize, 0usize, name)
+    if !found { ret (0usize, MissingSymbol) }
+    ret (at, ok)
 }
 
 // Which functions an image needs, read from the artifacts' own tables rather than from code: each
@@ -145,10 +149,12 @@ type FunctionTable = struct {
     names: []str,
     base: []usize,
     count: usize,
+    // By (module, instance, name) (D320): a callee was a scan of its module's slice.
+    positions: lookup.Index,
 }
 
 fn build_function_table(a: *mem.Arena, artifacts: []Artifact, function_count: usize) -> (FunctionTable, err) {
-    let empty = FunctionTable { funcs: zero, owner: zero, names: zero, base: zero, count: 0usize }
+    let empty = FunctionTable { funcs: zero, owner: zero, names: zero, base: zero, count: 0usize, positions: zero }
     let (funcs, funcs_error) = mem.alloc[em.CodeFunction](a, capacity(function_count))
     if funcs_error != ok { ret (empty, funcs_error) }
     let (owner, owner_error) = mem.alloc[usize](a, capacity(function_count))
@@ -190,27 +196,32 @@ fn build_function_table(a: *mem.Arena, artifacts: []Artifact, function_count: us
         artifact_at += 1usize
     }
     base[artifacts.len] = position
-    ret (FunctionTable { funcs: funcs, owner: owner, names: names, base: base, count: position }, ok)
+    var table = FunctionTable { funcs: funcs, owner: owner, names: names, base: base, count: position, positions: zero }
+    let (entries, entries_error) = mem.alloc[lookup.Entry](a, position * 8usize + 256usize)
+    if entries_error != ok { ret (empty, entries_error) }
+    let attach_error = lookup.attach(&table.positions, entries)
+    if attach_error != ok { ret (empty, attach_error) }
+    var index_at = 0usize
+    while index_at < position {
+        let insert_error = lookup.insert(&table.positions, owner[index_at], funcs[index_at].instance, names[index_at], index_at)
+        if insert_error != ok { ret (empty, insert_error) }
+        index_at += 1usize
+    }
+    ret (table, ok)
 }
 
 // Where a function sits in the table: searched within its own module's slice, since a callee
 // names the module it is in. The keep-set and copy loop index by this position.
-fn table_position(table: FunctionTable, module_index: usize, name: str, instance: usize) -> (usize, bool) {
-    if module_index + 1usize >= table.base.len { ret (0usize, false) }
-    var at = table.base[module_index]
-    let stop = table.base[module_index + 1usize]
-    while at < stop {
-        if table.funcs[at].instance == instance && check.same(table.names[at], name) { ret (at, true) }
-        at += 1usize
-    }
-    ret (0usize, false)
+fn table_position(table: *FunctionTable, module_index: usize, name: str, instance: usize) -> (usize, bool) {
+    let (at, found) = lookup.find(&table.positions, module_index, instance, name)
+    ret (at, found)
 }
 
 // Only what `main` reaches is kept, following the calls and taken addresses a relocation records
 // -- the same edge set `nir` walks after lowering, so an image linked from artifacts drops the
 // same functions from the same sequence as one compiled from source. Over the prebuilt table:
 // no artifact is re-read, so a pass is the edges, not the file.
-fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, module_indices: []usize, table: FunctionTable, kept: []bool) -> err {
+fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.Index, table: *FunctionTable, kept: []bool) -> err {
     let total = table.count
     if total > kept.len { ret InvalidInput }
     var at = 0usize
@@ -260,7 +271,7 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, module_indices: []u
             let (stored, stored_error) = em.artifact_code_relocation_at(artifacts[owner].bytes, function, relocation_at)
             if stored_error != ok { ret stored_error }
             if !stored.global {
-                let (module_index, module_error) = target_module(artifacts, module_indices, artifacts[owner], stored.module_index)
+                let (module_index, module_error) = target_module(a, modules, artifacts[owner], stored.module_index)
                 if module_error != ok { ret module_error }
                 let (callee_name, callee_error) = artifact_text(a, artifacts[owner], stored.name_index)
                 if callee_error != ok { ret callee_error }
@@ -278,7 +289,6 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, module_indices: []u
 }
 
 fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
-    try validate_set(artifacts)
     var bounds_at = 0usize
     while bounds_at < artifacts.len {
         let (starts, lengths, bounds_error) = em.string_table_bounds(a, artifacts[bounds_at].bytes)
@@ -287,6 +297,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
         artifacts[bounds_at].string_lengths = lengths
         bounds_at += 1usize
     }
+    try validate_set(a, artifacts)
     var function_count = 0usize
     var global_count = 0usize
     var artifact_at = 0usize
@@ -303,7 +314,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
 
     // Read every function once into a table the reachability pass and the copy loop both index,
     // then take the sizes from it -- no artifact is parsed per function or re-validated per read.
-    let (table, table_error) = build_function_table(a, artifacts, function_count)
+    var (table, table_error) = build_function_table(a, artifacts, function_count)
     if table_error != ok { ret table_error }
     var relocation_count = 0usize
     var code_size = 0usize
@@ -339,7 +350,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
         scratch_at += 1usize
     }
 
-    let (hash_storage, hash_storage_error) = mem.alloc[usize](a, capacity(hash_scratch_size))
+    let (hash_storage, hash_storage_error) = mem.alloc[u8](a, capacity(hash_scratch_size))
     if hash_storage_error != ok { ret hash_storage_error }
     var hash_scratch: binary.Buffer = zero
     try binary.init(&hash_scratch, hash_storage)
@@ -419,11 +430,6 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     // Either way one copy is shared, keyed by the content hash the artifact carries. The
     // whole-program path folds by the same hash over the same order (D157), so an image linked
     // from artifacts stays byte-identical to one compiled from source (D130).
-    let (folded_hashes, folded_hashes_error) = mem.alloc[usize](a, function_count)
-    if folded_hashes_error != ok { ret folded_hashes_error }
-    let (folded_offsets, folded_offsets_error) = mem.alloc[usize](a, function_count)
-    if folded_offsets_error != ok { ret folded_offsets_error }
-    var folded_count = 0usize
 
     // The same rule the source path applies after lowering: keep what `main` reaches and drop the
     // rest. It is done here, before a byte of code is copied, so that both link paths leave out
@@ -433,7 +439,25 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
     if kept_error != ok { ret kept_error }
     let (module_indices, module_indices_error) = module_index_cache(a, artifacts)
     if module_indices_error != ok { ret module_indices_error }
-    let reach_error = reachable_from_main(a, artifacts, module_indices, table, kept)
+    var modules: lookup.Index = zero
+    try index_modules(a, artifacts, module_indices, &modules)
+    // Each artifact's module name once (D320): it was read and copied per function.
+    let (owner_names, owner_names_error) = mem.alloc[str](a, artifacts.len + 1usize)
+    if owner_names_error != ok { ret owner_names_error }
+    var owner_name_at = 0usize
+    while owner_name_at < artifacts.len {
+        let (owner_name, owner_name_error) = artifact_text(a, artifacts[owner_name_at], module_indices[owner_name_at])
+        if owner_name_error != ok { ret owner_name_error }
+        owner_names[owner_name_at] = owner_name
+        owner_name_at += 1usize
+    }
+    // The folded functions by content hash (D320): a scan of every folded hash per
+    // function was quadratic in the functions the image keeps.
+    let (folded_entries, folded_entries_error) = mem.alloc[lookup.Entry](a, function_count * 8usize + 256usize)
+    if folded_entries_error != ok { ret folded_entries_error }
+    var folded: lookup.Index = zero
+    try lookup.attach(&folded, folded_entries)
+    let reach_error = reachable_from_main(a, artifacts, &modules, &table, kept)
     if reach_error != ok { ret reach_error }
     var position = 0usize
     while position < table.count {
@@ -455,37 +479,18 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             assembled_function.instance = function.instance
             // The backtrace names a frame `module.function` (D206), and the source path
             // spells the module the same way, which the byte-equality of the two needs.
-            let (owner_module_index, owner_module_error) = em.interface_module_index(artifacts[owner_at].bytes)
-            if owner_module_error != ok { ret owner_module_error }
-            let (owner_name, owner_name_error) = copy_string(a, artifacts[owner_at].bytes, owner_module_index)
-            if owner_name_error != ok { ret owner_name_error }
-            assembled_function.module_name = owner_name
+            assembled_function.module_name = owner_names[owner_at]
             functions[global_function] = assembled_function
             program.builder.function_count += 1usize
-            var folded = false
-            var fold_at = 0usize
-            while fold_at < folded_count {
-                if folded_hashes[fold_at] == function.content_hash {
-                    program.function_offsets[global_function] = folded_offsets[fold_at]
-                    folded = true
-                    break
-                }
-                fold_at += 1usize
-            }
-            if folded {
+            let (folded_offset, already_folded) = lookup.find(&folded, function.content_hash, 0usize, "")
+            if already_folded {
+                program.function_offsets[global_function] = folded_offset
                 position += 1usize
                 continue
             }
             program.function_offsets[global_function] = program.machine.count
-            if folded_count == folded_hashes.len { ret InvalidInput }
-            folded_hashes[folded_count] = function.content_hash
-            folded_offsets[folded_count] = program.machine.count
-            folded_count += 1usize
-            var code_at = 0usize
-            while code_at < function.code_length {
-                try emit_x64.byte(&program.machine, artifacts[owner_at].bytes[function.code_start + code_at])
-                code_at += 1usize
-            }
+            try lookup.insert(&folded, function.content_hash, 0usize, "", program.machine.count)
+            try emit_x64.append_bytes(&program.machine, artifacts[owner_at].bytes[function.code_start..function.code_start + function.code_length])
             let (row_count, rows_error) = em.read_code_lines(artifacts[owner_at].bytes, position - table.base[owner_at], row_scratch)
             if rows_error != ok { ret rows_error }
             var row_at = 0usize
@@ -505,7 +510,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program) -> err {
             while relocation_at < function.relocation_count {
                 let (stored, stored_error) = em.artifact_code_relocation_at(artifacts[owner_at].bytes, function, relocation_at)
                 if stored_error != ok { ret stored_error }
-                let (module_index, module_error) = target_module(artifacts, module_indices, artifacts[owner_at], stored.module_index)
+                let (module_index, module_error) = target_module(a, &modules, artifacts[owner_at], stored.module_index)
                 if module_error != ok { ret module_error }
                 let (target_name, target_name_error) = artifact_text(a, artifacts[owner_at], stored.name_index)
                 if target_name_error != ok { ret target_name_error }

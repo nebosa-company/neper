@@ -3572,7 +3572,7 @@ both as a module and as the Windows variant of `thing`.
 | Strings | deduplicated UTF-8 strings referenced by numeric index from every other section; index 0 is the empty string |
 | Interface | exported declarations — every module-scope declaration, the language having no visibility mechanism (§5) — in a compact binary form, each with its **signature hash**; for a `@gpu` kernel, its workgroup size, `shared` byte total and inferred capability set (§10); the module's error table — value to qualified name (§7); and the interface hash over the whole section |
 | Deps | fine-grained edges (Incremental rebuilds, below): signature edges for foreign declarations, value edges for foreign constants, body edges for functions inlined, instantiated, comptime-executed or device-compiled, and lookup edges for every protocol name (§9) examined |
-| NIR | typed IR for exported and inline-eligible functions and for every generic template, each with its **body hash** |
+| NIR | typed IR for exported and inline-eligible functions and for every generic template, each with its **body hash**; kind 4 is reserved and the section is not written until a reader exists (D320) -- nothing read it, and at two million lines it was most of the artifact bytes |
 | Code | machine code (or SPIR-V/PTX) with relocations: the module's own functions, plus the monomorphised instances and device-compiled helpers it emitted under module-local linkage; a relocation names its target by module, name and instance, or the library and symbol an `@import` binds |
 | Debug | the standard-format debug sections of §13 — line tables, and the locals-and-types subset in DWARF or CodeView — plus the source hash; from M4, the neper-format side table beside them |
 

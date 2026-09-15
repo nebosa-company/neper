@@ -2194,17 +2194,20 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try quoted(out, g.modules[0usize].name)
     }
     try text(out, ",\"inputs\":[")
+    // A source's digest is hashed once and named twice (D320): as the input's `sha256`
+    // and as the dependency's `body_sha256`, which is the same text.
+    let (digests, digests_error) = mem.alloc[str](a, g.count + 1usize)
+    if digests_error != ok { ret digests_error }
     var at = 0usize
     while at < g.count {
         if at != 0usize { try byte(out, 44u8) }
         try text(out, "{\"source\":")
         try manifest_source(out, g, g.modules[at].path)
         try text(out, ",\"sha256\":")
-        let checkpoint = mem.mark(a)
         let (digest, digest_error) = manifest_sha256(a, g.modules[at].text)
         if digest_error != ok { ret digest_error }
+        digests[at] = digest
         try quoted(out, digest)
-        mem.reset(a, checkpoint)
         try byte(out, 125u8)
         at += 1usize
     }
@@ -2224,9 +2227,7 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         if interface_error != ok { ret interface_error }
         try quoted(out, interface_digest)
         try text(out, ",\"body_sha256\":")
-        let (body_digest, body_error) = manifest_sha256(a, g.modules[at].text)
-        if body_error != ok { ret body_error }
-        try quoted(out, body_digest)
+        try quoted(out, digests[at])
         mem.reset(a, checkpoint)
         try byte(out, 125u8)
         at += 1usize

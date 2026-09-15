@@ -2335,14 +2335,14 @@ chmod +x "$generic_instances_artifact_executable"
 "$generic_instances_artifact_executable"
 cmp "$generic_instances_artifact_executable" "$generic_instances_executable_path"
 # Walk a compiled module's code section. The section directory is fixed, so the
-# code section offset is at byte 136; each record is a 24-byte header followed by
+# code section offset is at byte 112 (D320: no NIR section); each record is a 24-byte header followed by
 # its machine code and its relocations.
 em_code_count() {
-    em_code=$(od -An -tu8 -j136 -N8 "$1" | tr -d ' ')
+    em_code=$(od -An -tu8 -j112 -N8 "$1" | tr -d ' ')
     od -An -tu4 -j"$em_code" -N4 "$1" | tr -d ' '
 }
 em_code_field() {
-    em_code=$(od -An -tu8 -j136 -N8 "$1" | tr -d ' ')
+    em_code=$(od -An -tu8 -j112 -N8 "$1" | tr -d ' ')
     em_cursor=$((em_code + 4))
     em_index=0
     while [ "$em_index" -lt "$2" ]; do
@@ -2742,7 +2742,7 @@ cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
 [ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '5' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
-[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '8' ]
+[ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '7' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]
 interface_artifact_path="$test_build/interface.x64-linux.em"
 interface_artifact_written=$($test_build/neper-self emit-em "$repo/tests/selfhost/fixtures/em/interface/src/main.e" "$repo" x64 linux "$interface_artifact_path")

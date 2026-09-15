@@ -6516,3 +6516,56 @@ an offset table so a string is one read. Compiling the compiler: a cold hot buil
 1.9 s of lowering, selection and artifacts against 0.9 s without them; a warm one --
 nothing changed -- settles in 0.6 s and links from artifacts in 1.0 s, and its image
 is the cold build's byte for byte.
+
+## D320 -- The artifact path at scale: bytes are bytes, a module's own rows, indexes over every walk
+
+A hot build (D319) was measured on a two-million-line program and its artifact path
+was slower than a cold build by minutes: settle 34 s, the writer 244 s, the link 49 s.
+Every part of it had been written for one artifact at a time and walked something
+program-wide per module, per function, per relocation or per row.
+
+The artifact bytes are bytes. `binary.Buffer`, every reader and every hash took one
+`usize` per byte, so an artifact in memory was eight times its size and a
+two-million-line build's arena was 13 GB; it is 5 GB. The NIR section is not written:
+nothing reads it, and at two million lines it was most of the bytes. The section is
+reserved in the spec until a reader exists. The runs of `binary` -- `copy`, `text`,
+`zeroes`, the little-endian words -- check the capacity once and store in a plain
+loop, where a byte at a time through `byte` paid a call and an error check each.
+CRC-32C is slicing-by-eight.
+
+The writer walks a module's own rows. The checker carries per-module spans over the
+program-wide tables -- source functions, instances by owner, aggregates, aliases,
+constants, symbols, and the builder's functions, globals and inlined entries -- a
+first and an end per module and table, extended over the rows appended since the
+last call, so every walk in `collect_module_strings`, `write_interface`,
+`write_dependencies`, `write_code` and the rest covers the module's rows and little
+else. The dependency edges are marked in the same pass that marks the module's used
+references: a used reference to another module's declaration records an edge unless
+an earlier one resolves to the same declaration, decided through an index, where the
+walk compared every used reference against every earlier one and named every
+reference through the intrinsic table twice per module. A body hash reads the
+declaration's tokens from the module's own stream (D316) by offset, where it lexed
+the range again -- the whole program a second time in settle and a third in the
+writer. An inlined callee's NIR is looked up only when the callee has no source.
+
+Settle loads each artifact once and holds a kept one for the link, which read every
+artifact from disk and checksummed it a second time; a fresh artifact is held as
+written. An edge's target module and target declaration are two index probes over
+the modules by name and the fresh interfaces' declarations by (module, name), where
+each was a scan. The link resolves a relocation's module through an index over the
+artifacts by name and its callee through one over the function table by (module,
+instance, name), folds identical bodies through a hashed set, names are views into
+the artifact bytes rather than copies, and the symbol table checks the last row's
+path before searching the paths -- a scan of two thousand paths per row was the
+whole of the link phase at two million lines. The manifest hashes each source once
+where it hashed it twice.
+
+Measured, warm and nothing changed, debug: the compiler 1.1 s (was 1.5), the
+five-hundred-thousand-line program 3.1 s (was 5.8, the cold build's time), the
+two-million-line program 12.6 s (was over a minute and a half); a cold-cache hot
+build of the two-million-line program 41 s where the writer alone took four minutes.
+Every image is the cold build's byte for byte. What remains at two million lines is
+the front end of the kept modules (4.7 s of lexing and parsing what is then skipped),
+settle's interface hashes (1.1 s) and artifact loads (1.5 s for 368 MB), and the
+manifest's SHA-256 over the sources; the front end is the next step, an interface
+loaded from the artifact in place of the module's source.

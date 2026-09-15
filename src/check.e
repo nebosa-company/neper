@@ -383,6 +383,11 @@ type Diagnostic = struct {
 
 type Checker = struct {
     resolver: *resolve.Resolver,
+    // Where each module's rows lie in the program-wide tables (D320), for the artifact
+    // writer: em's nine tables, a first and an end per module, and how far each table
+    // was scanned. The checker only carries them; `em.update_spans` fills them.
+    writer_spans: []usize,
+    writer_scanned: [9]usize,
     // The (module, table, name) index over the declaration tables (D303): table 1 is
     // functions, 2 aggregates, 3 aliases, 4 constants, 5 globals. Absent, the finders scan.
     names: lookup.Index,

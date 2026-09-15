@@ -2774,6 +2774,16 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph
     let (entries, entries_error) = mem.alloc[lookup.Entry](a, (functions.len + aggregates.len + aliases.len + constants.len + globals.len) * 4usize)
     if entries_error != ok { ret entries_error }
     report.build.pools[stats.POOL_CHECKER_INDEX] = entries.len
+    // The writer's spans (D320): nine tables, a first and an end per module, zeroed
+    // since a debug build's allocation is filled.
+    let (spans, spans_error) = mem.alloc[usize](a, em.span_tables() * loaded.count * 2usize)
+    if spans_error != ok { ret spans_error }
+    var span_at = 0usize
+    while span_at < spans.len {
+        spans[span_at] = 0usize
+        span_at += 1usize
+    }
+    checker.writer_spans = spans
     ret check.attach_index(checker, entries)
 }
 
@@ -2860,6 +2870,16 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     let (used_marks, used_marks_error) = mem.alloc[u8](a, function_refs.len)
     if used_marks_error != ok { ret used_marks_error }
     builder.used_marks = used_marks
+    let (used_list, used_list_error) = mem.alloc[usize](a, function_refs.len)
+    if used_list_error != ok { ret used_list_error }
+    builder.used_list = used_list
+    let (edge_marks, edge_marks_error) = mem.alloc[u8](a, function_refs.len)
+    if edge_marks_error != ok { ret edge_marks_error }
+    builder.edge_marks = edge_marks
+    // One module's edges at a time, so a fraction of the reference pool.
+    let (edge_entries, edge_entries_error) = mem.alloc[lookup.Entry](a, function_refs.len / 2usize + 1024usize)
+    if edge_entries_error != ok { ret edge_entries_error }
+    try lookup.attach(&builder.edge_index, edge_entries)
     let (ref_entries, ref_entries_error) = mem.alloc[lookup.Entry](a, function_refs.len * 4usize)
     if ref_entries_error != ok { ret ref_entries_error }
     report.build.pools[stats.POOL_NIR_INDEX] = ref_entries.len
@@ -3243,12 +3263,24 @@ fn widen_artifact(a: *mem.Arena, packed: []const u8) -> ([]usize, err) {
 // recorded still matches the declaration it names in the target's fresh Interface --
 // which the checker alone can write. A kept module is then not lowered, selected or
 // written at all; that is the saving.
-fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: str, triple: str, mode: em.BuildMode, strings: *em.StringTable, scratch: *binary.Buffer, keep: []bool) -> err {
-    let (fresh, fresh_error) = mem.alloc[[]usize](a, g.count)
+fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: str, triple: str, mode: em.BuildMode, strings: *em.StringTable, scratch: *binary.Buffer, keep: []bool, held: [][]const u8) -> err {
+    let (fresh, fresh_error) = mem.alloc[[]u8](a, g.count)
     if fresh_error != ok { ret fresh_error }
+    // The modules by name (D320): an edge's target was a walk over every module. An
+    // index grows by doubling into the region after itself, so its entries are eight
+    // times the keys: the regions sum to under twice the last, which is under four.
+    let (module_entries, module_entries_error) = mem.alloc[lookup.Entry](a, g.count * 8usize + 256usize)
+    if module_entries_error != ok { ret module_entries_error }
+    var modules: lookup.Index = zero
+    try lookup.attach(&modules, module_entries)
+    var name_at = 0usize
+    while name_at < g.count {
+        try lookup.insert(&modules, 0usize, 0usize, g.modules[name_at].name, name_at)
+        name_at += 1usize
+    }
     let (sections, sections_error) = mem.alloc[em.Section](a, 2usize)
     if sections_error != ok { ret sections_error }
-    let (interface_storage, interface_storage_error) = mem.alloc[usize](a, 1048576usize)
+    let (interface_storage, interface_storage_error) = mem.alloc[u8](a, 1048576usize)
     if interface_storage_error != ok { ret interface_storage_error }
     var interface_buffer: binary.Buffer = zero
     try binary.init(&interface_buffer, interface_storage)
@@ -3260,14 +3292,38 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
         keep[module_at] = false
         interface_buffer.count = 0usize
         try em.write_interface_artifact(c, g, module_at, triple, mode, strings, sections, scratch, &interface_buffer)
-        let (held, held_error) = mem.alloc[usize](a, interface_buffer.count)
-        if held_error != ok { ret held_error }
+        let (interface_copy, interface_copy_error) = mem.alloc[u8](a, interface_buffer.count)
+        if interface_copy_error != ok { ret interface_copy_error }
         var copy_at = 0usize
         while copy_at < interface_buffer.count {
-            held[copy_at] = interface_buffer.bytes[copy_at]
+            interface_copy[copy_at] = interface_buffer.bytes[copy_at]
             copy_at += 1usize
         }
-        fresh[module_at] = held
+        fresh[module_at] = interface_copy
+        module_at += 1usize
+    }
+    // The fresh declarations by (module, name) (D320): an edge's target declaration was
+    // a scan of the target's interface, per edge.
+    let declaration_total = c.function_count + c.aggregate_count + c.alias_count + c.constant_count + c.resolver.count
+    let (declaration_entries, declaration_entries_error) = mem.alloc[lookup.Entry](a, declaration_total * 8usize + 256usize)
+    if declaration_entries_error != ok { ret declaration_entries_error }
+    var declarations: lookup.Index = zero
+    try lookup.attach(&declarations, declaration_entries)
+    module_at = 0usize
+    while module_at < g.count {
+        let (count, first, end, open_error) = em.interface_declarations(fresh[module_at])
+        if open_error != ok { ret open_error }
+        var cursor = first
+        var declaration_at = 0usize
+        while declaration_at < count {
+            let (declaration, next, read_error) = em.declaration_from(fresh[module_at], cursor, end)
+            if read_error != ok { ret read_error }
+            let (declaration_name, declaration_name_error) = artifact_string(a, fresh[module_at], declaration.name_index)
+            if declaration_name_error != ok { ret declaration_name_error }
+            try lookup.insert(&declarations, module_at, 0usize, declaration_name, cursor)
+            cursor = next
+            declaration_at += 1usize
+        }
         module_at += 1usize
     }
     module_at = 0usize
@@ -3290,19 +3346,20 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
                     if dependency_error != ok { ret dependency_error }
                     let (target_name, target_name_error) = artifact_string(a, old, dependency.module_index)
                     if target_name_error != ok { ret target_name_error }
-                    var target_at = 0usize
-                    var found_target = false
-                    while target_at < g.count {
-                        if same(g.modules[target_at].name, target_name) {
-                            found_target = true
-                            break
-                        }
-                        target_at += 1usize
-                    }
+                    let (target_at, found_target) = lookup.find(&modules, 0usize, 0usize, target_name)
                     if !found_target {
                         keep[module_at] = false
                     } else {
-                        let (matches, match_error) = em.dependency_matches(old, edge_at, fresh[target_at])
+                        let (edge_name, edge_name_error) = artifact_string(a, old, dependency.name_index)
+                        if edge_name_error != ok { ret edge_name_error }
+                        let (cursor, found_declaration) = lookup.find(&declarations, target_at, 0usize, edge_name)
+                        var declaration: em.Declaration = zero
+                        if found_declaration {
+                            let (found, next, read_error) = em.declaration_from(fresh[target_at], cursor, fresh[target_at].len)
+                            if read_error != ok { ret read_error }
+                            declaration = found
+                        }
+                        let (matches, match_error) = em.dependency_holds(dependency, declaration, found_declaration)
                         if match_error != ok { ret match_error }
                         if !matches { keep[module_at] = false }
                     }
@@ -3310,46 +3367,35 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
                 }
             }
         }
-        mem.reset(a, checkpoint)
+        // A kept module's artifact is held for the link (D320), validated once here;
+        // a rebuilt module's goes with the checkpoint.
+        if keep[module_at] { held[module_at] = old } else { mem.reset(a, checkpoint) }
         module_at += 1usize
     }
     ret ok
 }
 
-fn load_artifact(a: *mem.Arena, path: str) -> ([]usize, err) {
+fn load_artifact(a: *mem.Arena, path: str) -> ([]const u8, err) {
     let (packed, load_error) = source.load(a, path)
     if load_error != ok {
-        var empty: []usize = zero
+        var empty: []const u8 = zero
         ret (empty, load_error)
     }
-    let (bytes, bytes_error) = mem.alloc[usize](a, packed.len)
-    if bytes_error != ok { ret (bytes, bytes_error) }
-    var at = 0usize
-    while at < packed.len {
-        bytes[at] = usize(packed[at])
-        at += 1usize
-    }
+    // The bytes as loaded (D320): they used to be widened to one `usize` each.
     // The checksum is checked here, once; the readers check the layout alone (D213).
-    let validation_error = em.validate(bytes)
-    if validation_error != ok { ret (bytes, validation_error) }
-    ret (bytes, ok)
+    let validation_error = em.validate(packed)
+    if validation_error != ok { ret (packed, validation_error) }
+    ret (packed, ok)
 }
 
-fn artifact_string(a: *mem.Arena, bytes: []const usize, index: usize) -> (str, err) {
+// A view of the artifact's string (D320): the bytes are bytes, so nothing is copied.
+fn artifact_string(a: *mem.Arena, bytes: []const u8, index: usize) -> (str, err) {
     let (start, length, bounds_error) = em.string_bounds(bytes, index)
     if bounds_error != ok { ret ("", bounds_error) }
-    let (storage, storage_error) = mem.alloc[u8](a, length)
-    if storage_error != ok { ret ("", storage_error) }
-    var at = 0usize
-    while at < length {
-        if bytes[start + at] > 255usize { ret ("", em.InvalidArtifact) }
-        storage[at] = u8(bytes[start + at])
-        at += 1usize
-    }
-    ret (storage[..], ok)
+    ret (bytes[start..start + length], ok)
 }
 
-fn print_artifact_error_collision(a: *mem.Arena, left_bytes: []const usize, left: em.ErrorValue, right_bytes: []const usize, right: em.ErrorValue) -> err {
+fn print_artifact_error_collision(a: *mem.Arena, left_bytes: []const u8, left: em.ErrorValue, right_bytes: []const u8, right: em.ErrorValue) -> err {
     let (left_module, left_module_error) = artifact_string(a, left_bytes, left.module_index)
     if left_module_error != ok { ret left_module_error }
     let (left_name, left_name_error) = artifact_string(a, left_bytes, left.name_index)
@@ -4137,7 +4183,7 @@ fn init_fold(a: *mem.Arena, fold: *Fold, function_count: usize) -> err {
     let (offsets, offsets_error) = mem.alloc[usize](a, function_count + 1usize)
     if offsets_error != ok { ret offsets_error }
     fold.offsets = offsets
-    let (scratch, scratch_error) = mem.alloc[usize](a, 2097152usize)
+    let (scratch, scratch_error) = mem.alloc[u8](a, 2097152usize)
     if scratch_error != ok { ret scratch_error }
     try binary.init(&fold.scratch, scratch)
     ret ok
@@ -4390,6 +4436,9 @@ fn function_span(code: ModuleCode, function_at: usize) -> (usize, usize) {
 type HotBuild = struct {
     on: bool,
     keep: []bool,
+    // Every module's artifact bytes (D320): a kept one as settle loaded and validated
+    // it, a fresh one as written, so the link reads nothing back from disk.
+    held: [][]const u8,
     directory: str,
     triple: str,
     release: bool,
@@ -4425,13 +4474,13 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild) -> err {
     let (string_slots, string_slots_error) = mem.alloc[usize](a, 131072usize)
     if string_slots_error != ok { ret string_slots_error }
     try em.init_strings(&hot.strings, string_values, string_slots)
-    let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
+    let (sections, sections_error) = mem.alloc[em.Section](a, 7usize)
     if sections_error != ok { ret sections_error }
     hot.sections = sections
-    let (scratch_storage, scratch_storage_error) = mem.alloc[usize](a, 4194304usize)
+    let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
     if scratch_storage_error != ok { ret scratch_storage_error }
     try binary.init(&hot.scratch, scratch_storage)
-    let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 8388608usize)
+    let (artifact_storage, artifact_storage_error) = mem.alloc[u8](a, 8388608usize)
     if artifact_storage_error != ok { ret artifact_storage_error }
     try binary.init(&hot.artifact, artifact_storage)
     let (packed, packed_error) = mem.alloc[u8](a, artifact_storage.len)
@@ -4447,10 +4496,13 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if hot.release { mode = .Release }
     hot.artifact.count = 0usize
     try em.write_module(checker, loaded, builder, module_index, hot.triple, mode, context.output, stage_offsets, context.relocations, *context.relocation_count, context.lines, *context.line_count, &hot.strings, hot.sections, &hot.scratch, &hot.artifact)
-    try binary.pack(&hot.artifact, hot.packed)
+    let (held, held_error) = mem.alloc[u8](a, hot.artifact.count)
+    if held_error != ok { ret held_error }
+    try binary.pack(&hot.artifact, held)
+    hot.held[module_index] = held
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
     if artifact_path_error != ok { ret artifact_path_error }
-    ret save_bytes(a, artifact_path, hot.packed[..hot.artifact.count])
+    ret save_bytes(a, artifact_path, held)
 }
 
 // The link over every module's artifact, kept and fresh alike, in module order with
@@ -4462,11 +4514,15 @@ fn link_hot_artifacts(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
     if artifacts_error != ok { ret artifacts_error }
     var module_index = 0usize
     while module_index < loaded.count {
-        let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
-        if artifact_path_error != ok { ret artifact_path_error }
-        let (bytes, load_error) = load_artifact(a, artifact_path)
-        if load_error != ok { ret load_error }
-        artifacts[module_index].bytes = bytes
+        if hot.held[module_index].len != 0usize {
+            artifacts[module_index].bytes = hot.held[module_index]
+        } else {
+            let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
+            if artifact_path_error != ok { ret artifact_path_error }
+            let (bytes, load_error) = load_artifact(a, artifact_path)
+            if load_error != ok { ret load_error }
+            artifacts[module_index].bytes = bytes
+        }
         module_index += 1usize
     }
     let (errors_valid, errors_error) = merge_artifact_error_tables(a, artifacts)
@@ -5162,6 +5218,14 @@ fn main(a: *mem.Arena, args: []str) -> err {
         // (D224). `keep` is what lowering skips below.
         let (keep, keep_error) = mem.alloc[bool](a, loaded.count)
         if keep_error != ok { ret keep_error }
+        let (held, held_error) = mem.alloc[[]const u8](a, loaded.count)
+        if held_error != ok { ret held_error }
+        var no_bytes: []const u8 = zero
+        var held_at = 0usize
+        while held_at < loaded.count {
+            held[held_at] = no_bytes
+            held_at += 1usize
+        }
         var keep_at = 0usize
         while keep_at < loaded.count {
             keep[keep_at] = false
@@ -5189,7 +5253,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if settle_slots_error != ok { ret settle_slots_error }
             var settle_table: em.StringTable = zero
             try em.init_strings(&settle_table, settle_strings, settle_slots)
-            let (settle_scratch_storage, settle_scratch_error) = mem.alloc[usize](a, 4194304usize)
+            let (settle_scratch_storage, settle_scratch_error) = mem.alloc[u8](a, 4194304usize)
             if settle_scratch_error != ok { ret settle_scratch_error }
             var settle_scratch: binary.Buffer = zero
             try binary.init(&settle_scratch, settle_scratch_storage)
@@ -5197,7 +5261,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             if settle_triple_error != ok { ret settle_triple_error }
             var settle_mode: em.BuildMode = .Debug
             if release_build { settle_mode = .Release }
-            try settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep)
+            try settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep, held)
             report.arena_used = mem.stats(a).used
             try report_phase(&report, "settle")
         }
@@ -5286,6 +5350,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if inlined_error != ok { ret inlined_error }
         builder.inlined = inlined
         builder.inlined_count = 0usize
+        let (inlined_marks, inlined_marks_error) = mem.alloc[u8](a, inlined.len)
+        if inlined_marks_error != ok { ret inlined_marks_error }
+        builder.inlined_marks = inlined_marks
         builder.has_oracle = false
         if release_build {
             // Twice (D212): the first oracle's bodies hold no copies; the second is
@@ -5378,6 +5445,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
             var hot: HotBuild = zero
             hot.on = hot_build
             hot.keep = keep
+            hot.held = held
             hot.directory = artifact_dir
             hot.release = release_build
             if hot_build {
@@ -5394,11 +5462,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 // One entry per byte of the artifact, and `e.str` alone compiles to
                 // more than 256 KiB, so the old quarter-megabyte stopped every
                 // `emit-em-all` over a module that uses it.
-                let (artifact_storage, artifact_storage_error) = mem.alloc[usize](a, 8388608usize)
+                let (artifact_storage, artifact_storage_error) = mem.alloc[u8](a, 8388608usize)
                 if artifact_storage_error != ok { ret artifact_storage_error }
                 var artifact: binary.Buffer = zero
                 try binary.init(&artifact, artifact_storage)
-                let (scratch_storage, scratch_storage_error) = mem.alloc[usize](a, 4194304usize)
+                let (scratch_storage, scratch_storage_error) = mem.alloc[u8](a, 4194304usize)
                 if scratch_storage_error != ok { ret scratch_storage_error }
                 var scratch: binary.Buffer = zero
                 try binary.init(&scratch, scratch_storage)
@@ -5408,7 +5476,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
                 if string_slots_error != ok { ret string_slots_error }
                 var strings: em.StringTable = zero
                 try em.init_strings(&strings, string_values, string_slots)
-                let (sections, sections_error) = mem.alloc[em.Section](a, 8usize)
+                let (sections, sections_error) = mem.alloc[em.Section](a, 7usize)
                 if sections_error != ok { ret sections_error }
                 let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
                 if triple_error != ok { ret triple_error }
