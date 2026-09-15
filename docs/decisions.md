@@ -6979,3 +6979,37 @@ any list of programs.
 
 What the harness still lacks is the relocated build -- the same sources at another
 path -- and the device-reached edit case that waits on M3.
+
+## D332 -- The image's digest reused when the image is the one on disk (planned)
+
+The one SHA-256 still on the warm path is the executable's: `tool.manifest_file`
+hashes the packed image after every build for the manifest's `executable.sha256`
+(D254), sixty milliseconds for the compiler's ten megabytes (D323) -- a third of a
+warm build's 189 ms (D324), spent on bytes the warm build proved are the cold
+build's byte for byte.
+
+The freshness decision is on the right hash already: `em.source_text_hash` is
+xxHash64 (D50, D61), and a module's manifest digests ride its artifact (D323), so a
+warm build hashes no source. What remains is the image, and the fastest hash of it
+is none: before `save_executable`, compare the packed image with the file at the
+output path -- size first, the way `source.load` seeks (D324), then the bytes,
+stopping at the first that differs. Equal, the write is skipped -- the file's mtime
+stays, so nothing watching the binary wakes -- and the digest is taken from the
+existing `.neper/<mode>/build-manifest.json`, read with `json_str_after` as the
+source map's `generated_sha256` is (D255), when that manifest's artifact is the same
+path. Any of those missing or different, the image is written and hashed as before.
+
+The reuse trusts the manifest's digest to be the file's; the manifest is written by
+nobody but the compiler, with the hash of what it wrote, which is the trust the
+artifacts already carry. The reproducible-build check (D261) is the pin: the second
+build must find the first's image, skip the write, and its manifest must carry the
+first's digest, which was of these same bytes; `--time`'s `manifest` phase for the
+compiler's warm build is the measurement, expected under forty milliseconds from a
+hundred. A build whose image changed pays one read of the old one, a few
+milliseconds from the page cache, and no hash it did not pay before.
+
+Considered and not taken: SHA-NI (`sha256rnds2`, `sha256msg1`, `sha256msg2`) under a
+CPUID gate in both runtime assemblies -- two gigabytes a second, five milliseconds
+for the image -- because it is assembly on two platforms for a hash the warm path
+need not run at all. It stays the answer if the cold build's manifest time ever
+matters, where every source is hashed once and the reuse saves nothing.
