@@ -906,6 +906,19 @@ fn capture_flag(args: []str) -> usize {
     ret 1048576usize
 }
 
+// A `snake_case` value name: letters, digits and underscores, not starting with a digit.
+fn identifier_ok(spelling: str) -> bool {
+    if spelling.len == 0usize || spelling.len > 64usize { ret false }
+    if spelling[0usize] >= 48u8 && spelling[0usize] <= 57u8 { ret false }
+    var at = 0usize
+    while at < spelling.len {
+        let b = spelling[at]
+        if !((b >= 97u8 && b <= 122u8) || (b >= 65u8 && b <= 90u8) || (b >= 48u8 && b <= 57u8) || b == 95u8) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
 fn decimal_ok(spelling: str) -> bool {
     if spelling.len == 0usize || spelling.len > 6usize { ret false }
     var at = 0usize
@@ -6871,6 +6884,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
         try tool.context_json(a, &checker, &loaded, args[8usize], budget, cursor, target_text, "retained")
     }
     if kind == 3usize { try tool.uses_json(a, &checker, &loaded, args[8usize]) }
+    if kind == 4usize { try tool.plan_rename_json(a, &checker, &loaded, args[8usize], args[10usize]) }
     os.exit(0i32)
     ret ok
 }
@@ -7159,6 +7173,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len == 7usize && same(args[1usize], "explain-file") && same(args[6usize], "--json") { ret query_file(a, &report, args, 1usize) }
     if args.len >= 9usize && same(args[1usize], "context-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") { ret query_file(a, &report, args, 2usize) }
     if args.len == 9usize && same(args[1usize], "uses-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") { ret query_file(a, &report, args, 3usize) }
+    // `plan-rename-file PATH ROOT ARCH OS --json --symbol module.name --to NEW` (D376, H29).
+    if args.len == 11usize && same(args[1usize], "plan-rename-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--to") && identifier_ok(args[10usize]) { ret query_file(a, &report, args, 4usize) }
     // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md
     // -- header, a diagnostic record each, the result -- on stdout (D228).
     if args.len >= 6usize && same(args[1usize], "check-file") && check_flags(a, &report, args) {

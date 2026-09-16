@@ -279,6 +279,21 @@ function's name is taken as a value anywhere, `indirect_calls` zero as well; a
 rename plan edits every `use` span's spelling and the declaration, and nothing in
 comments, strings or generated registrations, which this command does not see.
 
+### Rename plans
+
+`neper plan-rename-file PATH ROOT ARCH OS --json --symbol module.name --to NEW`
+(D376, H29) is the first structured edit: a plan, not an application. It checks
+the program and emits one `precondition` record per file the rename touches --
+`source` and the file's SHA-256 as read -- then one `edit` record per site: `op`
+`rename-symbol`, `symbol`, `site` (`declaration` or `use`), the `span` of the name
+token (qualified uses edit the name after the qualifier) and `replacement`; then a
+`postcondition` record whose `check` says what re-checking must find; then the
+result with `edits`, `files` and `complete`. A harness applies the edits to files
+whose hashes still match -- all of them or none -- from the highest offset down, and
+re-checks; `scripts/apply_plan.py` is the reference applier. What `uses-file` does
+not see (comments, strings, generated registrations) the plan does not edit.
+`m25-h29-structured-edits.md` fixes the plan shape for the operations to come.
+
 ## 6. Formatting contract
 
 `neper fmt` is a canonical **layout** formatter, not a semantic normalizer. It does

@@ -2540,6 +2540,180 @@ fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) ->
     ret flush(&out)
 }
 
+// `plan-rename-file --json --symbol module.name --to new` (D376, H29): the first
+// structured edit. One `precondition` record per file the plan touches (its SHA-256
+// as read), one `edit` record per site -- the declaration's name token and the name
+// token of every resolved use -- each a byte span and its replacement, and one
+// `postcondition` record saying what re-checking must find. Nothing is applied: a
+// harness applies the edits to files whose hashes still match and re-checks.
+fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, to: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "plan-rename")
+    let (function_index, has_function) = uses_subject(c, g, subject)
+    if !has_function {
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try flush(&out)
+        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
+        ret flush(&out)
+    }
+    let function = c.functions[function_index]
+    // The sites, in (module, offset) order, deduplicated: an instance record and a
+    // call record share the offset of one spelling.
+    let (site_modules, modules_error) = mem.alloc[usize](a, c.explain_count + 1usize)
+    if modules_error != ok { ret modules_error }
+    let (site_offsets, offsets_error) = mem.alloc[usize](a, c.explain_count + 1usize)
+    if offsets_error != ok { ret offsets_error }
+    let (site_kinds, kinds_error) = mem.alloc[u8](a, c.explain_count + 1usize)
+    if kinds_error != ok { ret kinds_error }
+    var site_count = 0usize
+    if function.module_index < g.count {
+        let (declaration, has_declaration) = rename_declaration_offset(g.modules[function.module_index].text, function.source_start, function.name)
+        if has_declaration {
+            site_modules[0usize] = function.module_index
+            site_offsets[0usize] = declaration
+            site_kinds[0usize] = 0u8
+            site_count = 1usize
+        }
+    }
+    var at = 0usize
+    while at < c.explain_count {
+        let e = c.explains[at]
+        var called = e.function_index == function_index
+        if !called && e.function_index < c.function_count && c.function_generics[e.function_index].instance && c.function_generics[e.function_index].template_index == function_index { called = true }
+        let targets = (e.kind == 4u8 && !e.found && called) || (e.kind == 2u8 && e.template_index == function_index) || (e.kind == 5u8 && e.function_index == function_index)
+        if targets && e.module_index < g.count {
+            let (name_at, has_name) = rename_use_offset(g.modules[e.module_index].text, e.offset, function.name)
+            if has_name {
+                var seen = false
+                var probe = 0usize
+                while probe < site_count {
+                    if site_modules[probe] == e.module_index && site_offsets[probe] == name_at { seen = true }
+                    probe += 1usize
+                }
+                if !seen {
+                    // Insert in order.
+                    var slot = site_count
+                    while slot > 0usize && (site_modules[slot - 1usize] > e.module_index || (site_modules[slot - 1usize] == e.module_index && site_offsets[slot - 1usize] > name_at)) {
+                        site_modules[slot] = site_modules[slot - 1usize]
+                        site_offsets[slot] = site_offsets[slot - 1usize]
+                        site_kinds[slot] = site_kinds[slot - 1usize]
+                        slot = slot - 1usize
+                    }
+                    site_modules[slot] = e.module_index
+                    site_offsets[slot] = name_at
+                    site_kinds[slot] = 1u8
+                    site_count += 1usize
+                }
+            }
+        }
+        at += 1usize
+    }
+    // Preconditions: each touched file's hash, once, in module order.
+    var files = 0usize
+    var site = 0usize
+    while site < site_count {
+        if site == 0usize || site_modules[site] != site_modules[site - 1usize] {
+            let module = g.modules[site_modules[site]]
+            let (root, relative) = source_identity_of(g, module.path)
+            let (path, path_error) = manifest_slashes(a, relative)
+            if path_error != ok { ret path_error }
+            let (digest, digest_error) = manifest_sha256(a, module.text)
+            if digest_error != ok { ret digest_error }
+            try text(&out, "{\"record\":\"precondition\",\"source\":{\"root\":")
+            try quoted(&out, root)
+            try text(&out, ",\"path\":")
+            try quoted(&out, path)
+            try text(&out, "},\"sha256\":")
+            try quoted(&out, digest)
+            try byte(&out, 125u8)
+            try flush(&out)
+            files += 1usize
+        }
+        site += 1usize
+    }
+    site = 0usize
+    while site < site_count {
+        let module = g.modules[site_modules[site]]
+        let (root, relative) = source_identity_of(g, module.path)
+        let (path, path_error) = manifest_slashes(a, relative)
+        if path_error != ok { ret path_error }
+        out.lines = module.lines
+        var name_token: lex.Token = zero
+        name_token.start = site_offsets[site]
+        name_token.end = site_offsets[site] + function.name.len
+        try text(&out, "{\"record\":\"edit\",\"op\":\"rename-symbol\",\"symbol\":")
+        try quoted_function(&out, c, g, function_index)
+        try text(&out, ",\"site\":")
+        if site_kinds[site] == 0u8 { try text(&out, "\"declaration\"") } else { try text(&out, "\"use\"") }
+        try text(&out, ",\"span\":")
+        try token_span(&out, root, path, module.text, name_token, name_token)
+        try text(&out, ",\"replacement\":")
+        try quoted(&out, to)
+        try byte(&out, 125u8)
+        try flush(&out)
+        site += 1usize
+    }
+    try text(&out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; uses-file --symbol ")
+    try text(&out, subject[0usize..rename_qualifier_len(subject)])
+    try text(&out, to)
+    try text(&out, " reports uses at ")
+    if site_count > 0usize { try decimal(&out, site_count - 1usize) } else { try decimal(&out, 0usize) }
+    try text(&out, " sites and ")
+    try text(&out, subject)
+    try text(&out, " names no function\"}")
+    try flush(&out)
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":")
+    try decimal(&out, site_count)
+    try text(&out, ",\"files\":")
+    try decimal(&out, files)
+    try text(&out, ",\"complete\":")
+    if !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
+// `module.` of a subject, or nothing.
+fn rename_qualifier_len(subject: str) -> usize {
+    var at = subject.len
+    while at > 0usize {
+        if subject[at - 1usize] == 46u8 { ret at }
+        at = at - 1usize
+    }
+    ret 0usize
+}
+
+// The offset of the declaration's name: the first `fn NAME` at or after `from`.
+fn rename_declaration_offset(source_text: str, from: usize, name: str) -> (usize, bool) {
+    var at = from
+    while at + 3usize + name.len <= source_text.len {
+        if source_text[at] == 102u8 && source_text[at + 1usize] == 110u8 && source_text[at + 2usize] == 32u8 && graph.same(source_text[at + 3usize..at + 3usize + name.len], name) && !rename_word_byte(source_text, at + 3usize + name.len) { ret (at + 3usize, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The offset of `name` at a use: the spelling at `offset`, or after a qualifier
+// (`module.name`, `name[T]` follows either).
+fn rename_use_offset(source_text: str, offset: usize, name: str) -> (usize, bool) {
+    if offset + name.len <= source_text.len && graph.same(source_text[offset..offset + name.len], name) && !rename_word_byte(source_text, offset + name.len) { ret (offset, true) }
+    var at = offset
+    while at < source_text.len && (rename_word_byte(source_text, at) || source_text[at] == 46u8) {
+        if source_text[at] == 46u8 && at + 1usize + name.len <= source_text.len && graph.same(source_text[at + 1usize..at + 1usize + name.len], name) && !rename_word_byte(source_text, at + 1usize + name.len) { ret (at + 1usize, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+fn rename_word_byte(source_text: str, at: usize) -> bool {
+    if at >= source_text.len { ret false }
+    let b = source_text[at]
+    let word = (b >= 97u8 && b <= 122u8) || (b >= 65u8 && b <= 90u8) || (b >= 48u8 && b <= 57u8) || b == 95u8
+    ret word
+}
+
 // The declared function `module.name` names, preferring the concrete one.
 fn uses_subject(c: *check.Checker, g: *graph.Graph, subject: str) -> (usize, bool) {
     var dot = subject.len
