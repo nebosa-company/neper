@@ -1564,10 +1564,14 @@ if (-not $boundsElided -or [int]$Matches[1] -lt 2) { throw "the bounds proof eli
 if ($LASTEXITCODE -ne 0) { throw 'the proven loop summed wrongly' }
 $boundsShifted = & $boundsProofPath shifted 2>&1
 if ($LASTEXITCODE -ne 134 -or ($boundsShifted -join "`n") -notmatch 'main\.e:26:26: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the unproven access did not trap: exit $LASTEXITCODE, $($boundsShifted -join "`n")" }
-foreach ($boundsMode in @('nested', 'reslice')) {
+foreach ($boundsMode in @('nested', 'reslice', 'guarded', 'conjunct')) {
     & $boundsProofPath $boundsMode 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "the $boundsMode loop went wrong under its retained check" }
 }
+# The guard form (D377): `if at < items.len` proves the block's access; a write of
+# the index first keeps the check, which trips at the end.
+$boundsGuarded = & $boundsProofPath guarded_shifted 2>&1
+if ($LASTEXITCODE -ne 134 -or ($boundsGuarded -join "`n") -notmatch 'main\.e:70:17: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the guarded-then-shifted access did not trap: exit $LASTEXITCODE, $($boundsGuarded -join "`n")" }
 # Error detail across a cleanup (D360, H07): a failing close after a failed stat
 # leaves the stat's detail to be read, and the next failing cleanup after that read.
 $errorDetailPath = Join-Path $testBuild 'error-detail-selfhost.exe'
@@ -2046,6 +2050,24 @@ if ((Get-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-run-flood.ou
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index.expected.jsonl')).Hash) { throw "index --json differs from the conformance corpus" }
+# `plan-rename-file --json` (D376, H29): the plan byte for byte; applied to a copy it
+# re-checks, the new name has uses at the old sites, and a second apply is refused.
+$planActual = Join-Path $testBuild 'conformance-tools-plan-rename.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-rename-file explain.e `"$repo`" x64 windows --json --symbol explain.same --to alike > `"$planActual`""
+if ($LASTEXITCODE -ne 0) { throw "plan-rename-file --json failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $planActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename.expected.jsonl')).Hash) { throw "plan-rename-file --json differs from the conformance corpus" }
+$planScratch = Join-Path $testBuild 'plan-scratch'
+if (Test-Path -LiteralPath $planScratch) { Remove-Item -LiteralPath $planScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $planScratch 'src') | Out-Null
+Copy-Item (Join-Path $conformanceRoot 'tools/explain.e') (Join-Path $planScratch 'src')
+& python (Join-Path $repo 'scripts/apply_plan.py') $planActual --root (Join-Path $planScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the rename plan did not apply' }
+$planChecked = & $compiler check-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $planChecked -ne 'module check ok') { throw "the renamed program does not check: $planChecked" }
+$planUses = & $compiler uses-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows' --json --symbol explain.alike
+if ($LASTEXITCODE -ne 0 -or (($planUses | Where-Object { $_ -match '"record":"use"' }) | ForEach-Object { ($_ -replace '.*"byte_start":(\d+).*', '$1') } | Sort-Object -Unique).Count -ne 2) { throw 'the renamed function is not used at the two sites' }
+& python (Join-Path $repo 'scripts/apply_plan.py') $planActual --root (Join-Path $planScratch 'src') 2>&1 | Out-Null
+if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
 # `explain-file --json` (D359): every dispatch and instantiation the checker decided, byte
 # for byte (target-independent).
 $explainActual = Join-Path $testBuild 'conformance-tools-explain.jsonl'

@@ -8342,3 +8342,70 @@ Not yet, of H26: a profile for the Claude and Gemini families (no public
 tokenizer; the numbers there are measured through the API in the R03 report, not
 predicted); the profile stamped into the build manifest; the per-form table in
 the language card.
+
+## D376 -- The first structured edit: a rename is a plan with preconditions, and nothing applies itself
+
+H29 asks that the tool stream express semantic refactors as typed operations
+with pre- and postconditions beside byte spans, so a multi-file migration is
+verified by re-check rather than trusted as text replacement; H17 asked for the
+change plan a rename needs, and D362's `uses-file` gave every resolved use of a
+function. `plan-rename-file PATH ROOT ARCH OS --json --symbol module.name --to
+NEW` puts them together: one `precondition` record per touched file with its
+SHA-256 as read, one `edit` record per site -- the declaration's name token,
+found as `fn NAME` from the function's source start, and the name token of every
+resolved use, after its qualifier when it has one, instance and call records of
+one spelling folded to one site -- with `op: rename-symbol`, `site`, the `span`
+and the `replacement`; a `postcondition` record saying what re-checking must
+find; the result with `edits`, `files`, `complete`. The compiler applies nothing.
+`scripts/apply_plan.py` is the reference applier: every precondition checked
+before any write, the edits of a file applied from the highest offset down, each
+file written whole through a temporary and a replace, and a plan over a changed
+file refused whole. `m25-h29-structured-edits.md` fixes the plan shape and names
+the next operations (`change-signature`, `add-parameter-and-migrate`,
+`replace-expression`) so they arrive as the same record kinds.
+
+Verified in both suites on the `explain` fixture (a generic function, its
+declaration and two instantiating calls): the plan byte for byte, applied to a
+copy the program checks, `uses-file` of the new name reports the two sites, and
+the second apply is refused by the precondition. A cross-module rename over
+`manifest_project` (`helper.twice` from `main.e`) plans an edit in each file.
+
+Not yet: the three named operations; a plan's identity in the H18 stream (a
+snapshot id rather than per-file hashes); names in comments and strings, which
+are not uses; a library symbol's dependents outside the operand's program.
+
+## D377 -- The guard form of the bounds proof: `if i < x.len` proves its block
+
+D356's proof opened over `while i < x.len { ... }` and nothing else. The same
+reasoning holds over the true block of `if i < x.len { ... }`: the guard read the
+length the access sees, so `x[i]` before the block's first write of `i` is in
+range under the same side conditions -- `i` and `x` locals, no nested loop in the
+block writing `i`, `x` unwritten in the block, `&i` nowhere in the function.
+`lower_if` opens the proof over the true block and closes it after, through the
+one `proof_open`; `--stats` counts both forms in `bounds checks elided`. On the
+compiler's own build the count goes from 312 to 336.
+
+The fixture `bounds_proof` gains `guarded` (eliminated: the block's access under
+the guard) and `guarded_shifted` (retained: the index written first in the block,
+which trips at the end with the section 11 record), and both suites run them.
+
+Not yet: `&&` conjuncts (`if i < x.len && x[i] != 0`, the most common guard in
+the compiler, whose right side is evaluated only under the left), a prior check
+on the same operand, a bound through a second local, a field base.
+
+## D378 -- The conjunct form of the bounds proof: the leftmost `i < x.len` of an `&&` proves the rest
+
+D377 left out the guard the compiler writes most: `if i < x.len && x[i] != 0 {
+... }`, where the access is in the condition itself. The leftmost operand of an
+`&&` chain is evaluated before every other conjunct and before the block, and an
+expression assigns nothing, so the D356 proof over that conjunct covers the rest
+of the condition and the true block under the same side conditions (the
+function-wide `&i` scan refuses a call that could write `i` through a pointer).
+`lower_if` walks the condition's left spine to the leftmost conjunct, opens the
+proof over it before the condition is lowered, and closes it after the block.
+The compiler's own build reports 354 checks elided, from 336; the fixture's
+`conjunct` case reads `items[at]` in the condition and the block under one guard.
+
+Not yet: a prior check on the same operand (`if i >= x.len { ret } ... x[i]`),
+a bound through a second local, a field base (`c.tokens[at]`, which is most of
+the compiler's remaining checks), and a `||` of negations.

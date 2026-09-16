@@ -1660,6 +1660,17 @@ case "$bounds_shifted" in
 esac
 "$bounds_proof_path" nested
 "$bounds_proof_path" reslice
+"$bounds_proof_path" guarded
+"$bounds_proof_path" conjunct
+# The guard form (D377): `if at < items.len` proves the block's access; a write of
+# the index first keeps the check, which trips at the end.
+bounds_guarded_status=0
+bounds_guarded=$("$bounds_proof_path" guarded_shifted 2>&1) || bounds_guarded_status=$?
+[ "$bounds_guarded_status" -eq 134 ]
+case "$bounds_guarded" in
+    *'main.e:70:17: trap[bounds]: index 5 out of bounds for len 5'*) ;;
+    *) printf '%s\n' "the guarded-then-shifted access did not trap: $bounds_guarded" >&2; exit 1 ;;
+esac
 # Error detail across a cleanup (D360, H07): a failing close after a failed stat
 # leaves the stat's detail to be read, and the next failing cleanup after that read.
 error_detail_path="$test_build/error-detail-selfhost"
@@ -2308,6 +2319,20 @@ stale_error_status=0
 [ ! -e "$test_build/conformance-tools-stale-map-error.out" ]
 # The language card is the render of the grammar (D374, H28).
 python3 "$repo/scripts/render_card.py" --check > /dev/null
+# `plan-rename-file --json` (D376, H29): the plan byte for byte; applied to a copy it
+# re-checks, the new name has uses at the old sites, and a second apply is refused.
+(cd "$conformance_root/tools" && $test_build/neper-self plan-rename-file explain.e "$repo" x64 linux --json --symbol explain.same --to alike > "$test_build/conformance-tools-plan-rename.jsonl")
+cmp -s "$test_build/conformance-tools-plan-rename.jsonl" "$conformance_root/tools/plan_rename.expected.jsonl" || { echo "plan-rename-file --json differs from the conformance corpus" >&2; exit 1; }
+plan_scratch="$test_build/plan-scratch"
+rm -rf "$plan_scratch" && mkdir -p "$plan_scratch/src" && cp "$conformance_root/tools/explain.e" "$plan_scratch/src/"
+python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null
+plan_checked=$($test_build/neper-self check-file "$plan_scratch/src/explain.e" "$repo" x64 linux)
+[ "$plan_checked" = 'module check ok' ]
+plan_sites=$($test_build/neper-self uses-file "$plan_scratch/src/explain.e" "$repo" x64 linux --json --symbol explain.alike | grep '"record":"use"' | sed 's/.*"byte_start":\([0-9]*\).*/\1/' | sort -u | wc -l)
+[ "$plan_sites" -eq 2 ]
+plan_again=0
+python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null 2>&1 || plan_again=$?
+[ "$plan_again" -ne 0 ]
 # A version 2 map (D373, H19): the generator's input is hashed, a regeneration-owned
 # mapping says so in the related location, and a changed input is E-TOOL-0001.
 for map_case in generated_map stale_generator; do
