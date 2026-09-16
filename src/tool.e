@@ -3011,6 +3011,10 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         // cost fifty milliseconds on the compiler's own build, this costs two.
         let text_bytes = g.modules[module_at].text
         let lines = g.modules[module_at].lines
+        // A kept module has no line table (it was never scanned), and `line_of` would
+        // count from the start at every site: a cursor counts each byte once (D389).
+        var line_cursor_at = 0usize
+        var line_cursor = 1usize
         var byte_at = 0usize
         while byte_at < text_bytes.len {
             // One load per byte (D383): the loop is the D356 shape, so it carries no check.
@@ -3024,7 +3028,11 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
                 let word_end = manifest_word_end(text_bytes, byte_at + 1usize)
                 let word = text_bytes[byte_at + 1usize..word_end]
                 if graph.same(word, "unsafe") || graph.same(word, "nocheck") {
-                    let line = lex.line_of(text_bytes, lines, byte_at)
+                    while line_cursor_at < byte_at {
+                        if text_bytes[line_cursor_at] == 10u8 { line_cursor += 1usize }
+                        line_cursor_at += 1usize
+                    }
+                    let line = line_cursor
                     var function = ""
                     if graph.same(word, "unsafe") {
                         // The next `fn` after the attribute.
@@ -3062,7 +3070,11 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
                     site_end = found_end
                 }
                 if site_end != 0usize {
-                    try manifest_unsafe_site(out, written, kind, "trusted", g.modules[module_at].name, function, lex.line_of(text_bytes, lines, byte_at))
+                    while line_cursor_at < byte_at {
+                        if text_bytes[line_cursor_at] == 10u8 { line_cursor += 1usize }
+                        line_cursor_at += 1usize
+                    }
+                    try manifest_unsafe_site(out, written, kind, "trusted", g.modules[module_at].name, function, line_cursor)
                     written += 1usize
                     byte_at = site_end
                 } else {
