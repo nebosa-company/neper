@@ -6625,7 +6625,12 @@ fn module(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl { try lower_declaration(c, g, &tree, module_index, node, builder, signatures, bindings, &defers) }
+        if node.top_level && node.kind == .FnDecl {
+            // The build's deadline between two functions (D442, H16): the checker's
+            // clock, as the body sweep reads it.
+            if check.past_deadline(c) { ret check.Cancelled }
+            try lower_declaration(c, g, &tree, module_index, node, builder, signatures, bindings, &defers)
+        }
         node_index += 1usize
     }
     if module_index == 0usize && c.main_reports_failure {

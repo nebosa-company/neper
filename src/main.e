@@ -6709,6 +6709,12 @@ fn lower_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, fro
         }
         if lower_wanted(w, w.modules[at]) {
             let module_error = lower_worker_module(w, a, w.modules[at])
+            if module_error == check.Cancelled {
+                // The deadline passed between two functions of the module (D442).
+                stop_worker(w, at, Cancelled, 3usize)
+                w.cancelled_inside = true
+                break
+            }
             if module_error != ok {
                 stop_worker(w, at, module_error, 3usize)
                 break
@@ -6929,6 +6935,7 @@ fn crew_replace(a: *mem.Arena, crew: *Crew, worker_at: usize, in_sweep: bool, lo
 fn crew_failure(report: *Sink, loaded: *graph.Graph, w: *LowerWorker) -> err {
     // A worker that stopped at the deadline (D422): the build is cancelled, not failed.
     if w.failure == Cancelled {
+        if w.failed_lowering && w.cancelled_inside { ret cancel_build(report, "lowering, between functions") }
         if w.failed_lowering { ret cancel_build(report, "lowering, between modules") }
         if w.cancelled_inside { ret cancel_build(report, "the body sweep, between functions") }
         ret cancel_build(report, "the body sweep, between modules")

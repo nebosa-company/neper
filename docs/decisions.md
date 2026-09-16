@@ -9722,3 +9722,15 @@ compiler's own release build under a deadline of 150 ms -- holds, exit 3 and
 no image, and now cancels inside the sweep.
 
 Not yet: the clock inside a long function, and between lowering's functions.
+
+## D442 -- The lowering reads the deadline between functions too
+
+D441 put the clock between the functions of the body sweep; the lowering, the
+longer phase, still waited for a module. `lower.module` now asks the checker's
+`past_deadline` before each declaration it lowers and answers `Cancelled`,
+which the lowering worker turns into the crew's cancellation with
+`cancelled_after` "lowering, between functions". On the compiler's own release
+build the module in hand was `check.e`, a quarter second of one worker, which
+a deadline now cuts at the function.
+
+Not yet: the clock inside one function's lowering or codegen.
