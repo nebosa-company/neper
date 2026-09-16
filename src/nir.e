@@ -272,6 +272,12 @@ type Builder = struct {
     // The slack of the proof (D385): `while i + K <= x.len` proves `x[i + j]` for
     // `j` below `K`, `while i + K < x.len` for `j` at most `K`; the plain forms have none.
     proof_slack: [8]usize,
+    // Two slices known to be the same length (D390): `if a.len != b.len { ret }` for
+    // the rest of the block, or `if a.len == b.len { ... }` for its block, so a proof
+    // over one covers an index into the other. Innermost last, like the proofs.
+    proof_equal_a: [8]str,
+    proof_equal_b: [8]str,
+    proof_equal_count: usize,
     proof_ok: [8]bool,
     proof_count: usize,
     proof_function_start: usize,

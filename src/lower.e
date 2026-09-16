@@ -4095,8 +4095,15 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     // (D377): the guard read the length the access sees.
     var proved = false
     if !is_conjunction { proved = proof_open(c, g, tree, module_index, condition_index, branches[0usize], builder, bindings, *binding_count) }
+    // `if a.len == b.len { ... }`: the same length over the block (D390).
+    var equality = false
+    if !is_conjunction {
+        let true_branch = tree.nodes[branches[0usize]]
+        equality = proof_equal_open(c, g, tree, module_index, condition_index, false, usize(true_branch.token_start) + 1usize, usize(true_branch.token_end), builder, bindings, *binding_count)
+    }
     let true_body_error = lower_block(c, g, tree, module_index, function, tree.nodes[branches[0usize]], builder, bindings, binding_count, control, defers)
     if proved || proved_conjunct { builder.proof_count = builder.proof_count - 1usize }
+    if equality { builder.proof_equal_count = builder.proof_equal_count - 1usize }
     if true_body_error != ok { ret true_body_error }
     var true_exit = 0usize
     let true_falls_through = !builder.blocks[builder.current_block].terminated
@@ -4414,7 +4421,80 @@ fn proof_guard_exits(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, modu
     if !has_last { ret false }
     let last = tree.nodes[last_index].kind
     if last != .ReturnStmt && last != .BreakStmt && last != .ContinueStmt && c.tokens[usize(tree.nodes[last_index].token_start)].kind != .KwUnreachable { ret false }
+    if proof_equal_open(c, g, tree, module_index, condition_index, true, scan_start, scan_end, builder, bindings, binding_count) { ret false }
     ret proof_open_over(c, g, tree, module_index, condition_index, true, scan_start, scan_end, builder, bindings, binding_count)
+}
+
+// `a.len != b.len` (negated: an exit guard) or `a.len == b.len` (a block's condition)
+// with `a` and `b` slice, array or string locals neither of which the range writes:
+// the two are the same length over the range (D390), pushed as an equality. True
+// when one was pushed; the caller pops it with the proofs.
+fn proof_equal_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, condition_index: usize, negated: bool, scan_start: usize, scan_end: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> bool {
+    if builder.proof_equal_count >= builder.proof_equal_a.len { ret false }
+    let condition = tree.nodes[condition_index]
+    if condition.kind != .BinaryExpr { ret false }
+    let (left_index, has_left) = check.first_node_child(tree, condition)
+    if !has_left { ret false }
+    var operator_at = usize(tree.nodes[left_index].token_end)
+    while operator_at < usize(condition.token_end) && c.tokens[operator_at].kind == .Newline { operator_at += 1usize }
+    let operator = c.tokens[operator_at].kind
+    if negated && operator != .PunctBangEq { ret false }
+    if !negated && operator != .PunctEqEq { ret false }
+    var right_index = left_index
+    let end = usize(condition.first_child) + usize(condition.child_count)
+    var at = usize(condition.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) { right_index = parse.child_index_at(tree, at) }
+        at += 1usize
+    }
+    if right_index == left_index { ret false }
+    let (a_name, has_a) = proof_length_base(c, g, tree, module_index, left_index)
+    let (b_name, has_b) = proof_length_base(c, g, tree, module_index, right_index)
+    if !has_a || !has_b || check.same(a_name, b_name) { ret false }
+    let (a_binding, a_bound) = find_binding(bindings, binding_count, a_name)
+    let (b_binding, b_bound) = find_binding(bindings, binding_count, b_name)
+    if !a_bound || !b_bound { ret false }
+    if a_binding.ty.kind != .Slice && a_binding.ty.kind != .Array && a_binding.ty.kind != .String { ret false }
+    if b_binding.ty.kind != .Slice && b_binding.ty.kind != .Array && b_binding.ty.kind != .String { ret false }
+    // Neither is written or addressed over the range.
+    var scan = scan_start
+    while scan < scan_end {
+        let token = c.tokens[scan]
+        if token.kind == .Identifier {
+            let word = g.modules[module_index].text[token.start..token.end]
+            if (check.same(word, a_name) || check.same(word, b_name)) && proof_token_writes(c, scan, scan_end) { ret false }
+        }
+        scan += 1usize
+    }
+    builder.proof_equal_a[builder.proof_equal_count] = a_name
+    builder.proof_equal_b[builder.proof_equal_count] = b_name
+    builder.proof_equal_count += 1usize
+    ret true
+}
+
+// `x` of `x.len`, a bare local.
+fn proof_length_base(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .FieldExpr { ret ("", false) }
+    let member = c.tokens[usize(node.token_end) - 1usize]
+    if member.kind != .Identifier || !check.same(g.modules[module_index].text[member.start..member.end], "len") { ret ("", false) }
+    let (base_index, has_base) = check.first_node_child(tree, node)
+    if !has_base { ret ("", false) }
+    let (base_name, has_name) = proof_name(c, g, tree, module_index, base_index)
+    ret (base_name, has_name)
+}
+
+// Whether two names are known to be slices of the same length under the open
+// equalities (D390), directly or through a chain.
+fn proof_same_length(builder: *nir.Builder, a: str, b: str) -> bool {
+    if check.same(a, b) { ret true }
+    var at = 0usize
+    while at < builder.proof_equal_count {
+        if check.same(builder.proof_equal_a[at], a) && check.same(builder.proof_equal_b[at], b) { ret true }
+        if check.same(builder.proof_equal_a[at], b) && check.same(builder.proof_equal_b[at], a) { ret true }
+        at += 1usize
+    }
+    ret false
 }
 
 // The leftmost operand of an `&&` chain -- `a` of `a && b && c` -- or the node
@@ -4457,7 +4537,7 @@ fn proof_covers(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_in
     var at = builder.proof_count
     while at > 0usize {
         at = at - 1usize
-        if builder.proof_ok[at] && check.same(builder.proof_index[at], index_name) && check.same(builder.proof_base[at], base_name) && usize(node.token_start) < builder.proof_first_assign[at] && offset <= builder.proof_slack[at] { ret true }
+        if builder.proof_ok[at] && check.same(builder.proof_index[at], index_name) && proof_same_length(builder, builder.proof_base[at], base_name) && usize(node.token_start) < builder.proof_first_assign[at] && offset <= builder.proof_slack[at] { ret true }
     }
     ret false
 }
@@ -5572,18 +5652,21 @@ fn lower_block(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     let end = usize(node.first_child) + usize(node.child_count)
     var at = usize(node.first_child)
     var proofs_opened = 0usize
+    let equalities_before = builder.proof_equal_count
     while at < end {
         if builder.blocks[builder.current_block].terminated { break }
         if parse.child_is_node_at(tree, at) {
             let statement = tree.nodes[parse.child_index_at(tree, at)]
             try lower_statement(c, g, tree, module_index, function, statement, builder, bindings, binding_count, control, defers)
             // `if i >= x.len { ret ... }` proves `x[i]` for the rest of this block (D380):
-            // the guard exits, so what follows runs only under its negation.
+            // the guard exits, so what follows runs only under its negation; `if a.len !=
+            // b.len { ret }` makes the two the same length for the rest (D390).
             if statement.kind == .IfStmt && proof_guard_exits(c, g, tree, module_index, statement, usize(statement.token_end), usize(node.token_end), builder, bindings, *binding_count) { proofs_opened += 1usize }
         }
         at += 1usize
     }
     builder.proof_count = builder.proof_count - proofs_opened
+    builder.proof_equal_count = equalities_before
     if !builder.blocks[builder.current_block].terminated { try emit_deferred_from(c, g, tree, module_index, function, builder, bindings, *binding_count, defers, defer_checkpoint) }
     c.local_count = local_checkpoint
     *binding_count = binding_checkpoint

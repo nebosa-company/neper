@@ -1665,6 +1665,15 @@ esac
 "$bounds_proof_path" exit_guard
 "$bounds_proof_path" width
 "$bounds_proof_path" slack
+"$bounds_proof_path" equal
+bounds_equal_status=0
+bounds_equal=$("$bounds_proof_path" equal_shifted 2>&1) || bounds_equal_status=$?
+[ "$bounds_equal_status" -eq 134 ]
+case "$bounds_equal" in
+    *'main.e:145:30: trap[bounds]: index 5 out of bounds for len 5'*) ;;
+    *) printf '%s
+' "the access past the equal length did not trap: $bounds_equal" >&2; exit 1 ;;
+esac
 bounds_slack_status=0
 bounds_slack=$("$bounds_proof_path" slack_shifted 2>&1) || bounds_slack_status=$?
 [ "$bounds_slack_status" -eq 134 ]

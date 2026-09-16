@@ -34,7 +34,9 @@ and the block (D378: 354); an early exit under `i >= x.len` proves the rest of i
 block (D380: 369); an index bounded by its shape -- a `u8` widened, a literal mask,
 a literal offset of a bounded value -- into an array of known length needs no
 control flow at all (D384: 376); `while at + K <= x.len` proves `x[at + j]` for a
-literal `j` within the slack (D385: 447). Further proofs -- a bound through a
+literal `j` within the slack (D385: 447); `if at + K > x.len { ret }` is its exit
+form (D387); `if a.len != b.len { ret }` makes two slices one length, so a proof
+over one covers the other (D390: 544). Further proofs -- a bound through a
 second local, a field base (`out.bytes[at]`) -- are the follow-up, and the compiler's own hot loops are mostly of
 those shapes, which is why the cost below stands.
 

@@ -124,6 +124,31 @@ fn slack_shifted(items: []const u32) -> u32 {
     ret total
 }
 
+// The equal-length form (D390): after `if a.len != b.len { ret }` a loop over `a`
+// proves `b[at]` too; `equal_shifted` reads `b[at + 1usize]` and keeps its check.
+fn equal(a: []const u32, b: []const u32) -> u32 {
+    if a.len != b.len { ret 0u32 }
+    var total = 0u32
+    var at = 0usize
+    while at < a.len {
+        total = total +% a[at] *% b[at]
+        at += 1usize
+    }
+    ret total
+}
+
+fn equal_shifted(a: []const u32, b: []const u32) -> u32 {
+    var total = 0u32
+    if a.len == b.len {
+        var at = 0usize
+        while at < a.len {
+            total = total +% b[at + 1usize]
+            at += 1usize
+        }
+    }
+    ret total
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var mode = ""
     if args.len > 1usize { mode = args[1usize] }
@@ -187,6 +212,15 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if str.eq(mode, "slack_shifted") {
         var four: [4]u32 = zero
         if slack_shifted(four[..]) != 0u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "equal") {
+        if equal(values[..], values[..]) != 55u32 { ret mem.Exhausted }
+        if equal(values[..], values[..4usize]) != 0u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "equal_shifted") {
+        if equal_shifted(values[..], values[..]) == 0u32 { ret mem.Exhausted }
         ret ok
     }
     if str.eq(mode, "guarded_shifted") {

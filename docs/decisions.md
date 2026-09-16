@@ -8649,3 +8649,20 @@ three thousand lines. The scan keeps a newline cursor and advances it to each
 site as it finds them, so every byte is counted once per module, and the line
 table is not needed. The inventory is the same (the `manifest_unsafe` golden and
 a warm build's ninety-two library sites, checked against the source).
+
+## D390 -- Two slices of one length: `if a.len != b.len { ret }` proves the other
+
+`check.same` was the top function of the cold profile after D386: `if a.len !=
+b.len { ret false }` then `while i < a.len { if a[i] != b[i] ... }`, where `a[i]`
+was proven since D356 and `b[i]` never -- and every string comparison in the
+checker, the resolver and the linker is that function or its twin. The proof:
+an exit guard `if a.len != b.len { ... }` makes `a` and `b` the same length for
+the rest of its block, and `if a.len == b.len { ... }` for that block, provided
+neither is written or addressed over the range; a proof over one base then
+covers an index into the other, through the equalities the block holds. The
+compiler's own build reports 544 checks elided, from 523; the fixture's `equal`
+and `equal_shifted` cases are the eliminated and the retained (`b[at + 1usize]`
+past the slack, which trips at the end).
+
+Not yet: a length carried by a `let` (`let n = a.len`, then `while i < n`), and
+the two-locals bound; the field base stays out.
