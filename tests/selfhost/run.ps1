@@ -2100,6 +2100,24 @@ $planUses = & $compiler uses-file (Join-Path $planScratch 'src/explain.e') $repo
 if ($LASTEXITCODE -ne 0 -or (($planUses | Where-Object { $_ -match '"record":"use"' }) | ForEach-Object { ($_ -replace '.*"byte_start":(\d+).*', '$1') } | Sort-Object -Unique).Count -ne 2) { throw 'the renamed function is not used at the two sites' }
 & python (Join-Path $repo 'scripts/apply_plan.py') $planActual --root (Join-Path $planScratch 'src') 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
+# `plan-replace-expression-file --json` (D414, H29): one expression's plan byte for byte,
+# applied to a copy it checks; a span that is not one expression is refused with exit 2.
+$replaceActual = Join-Path $testBuild 'conformance-tools-plan-replace.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-replace-expression-file contract.e `"$repo`" x64 windows --json --span 693:703 --with 131072usize > `"$replaceActual`""
+if ($LASTEXITCODE -ne 0) { throw "plan-replace-expression-file --json failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $replaceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_replace.expected.jsonl')).Hash) { throw "plan-replace-expression-file --json differs from the conformance corpus" }
+$replaceScratch = Join-Path $testBuild 'plan-replace-scratch'
+if (Test-Path -LiteralPath $replaceScratch) { Remove-Item -LiteralPath $replaceScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $replaceScratch 'src') | Out-Null
+Copy-Item (Join-Path $conformanceRoot 'tools/contract.e') (Join-Path $replaceScratch 'src')
+& python (Join-Path $repo 'scripts/apply_plan.py') $replaceActual --root (Join-Path $replaceScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the replace-expression plan did not apply' }
+$replaceChecked = & $compiler check-file (Join-Path $replaceScratch 'src/contract.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $replaceChecked -ne 'module check ok') { throw "the program with the replaced expression does not check: $replaceChecked" }
+$replaceRefused = Join-Path $testBuild 'conformance-tools-plan-replace-refused.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-replace-expression-file contract.e `"$repo`" x64 windows --json --span 693:700 --with 1usize > `"$replaceRefused`""
+if ($LASTEXITCODE -ne 2) { throw "a plan over a span that is not one expression did not exit 2 (got $LASTEXITCODE)" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $replaceRefused).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_replace_refused.expected.jsonl')).Hash) { throw "a refused plan-replace-expression-file differs from the conformance corpus" }
 # The subject's snapshot (D407, H15): the renamed program's differs from the original's.
 $snapshotBefore = (& $compiler context-file (Join-Path $conformanceRoot 'tools/explain.e') $repo 'x64' 'windows' --json --symbol explain.main --budget 1 | Select-String -Pattern '"snapshot":"([0-9a-f]{16})"').Matches[0].Groups[1].Value
 $snapshotAfter = (& $compiler context-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows' --json --symbol explain.main --budget 1 | Select-String -Pattern '"snapshot":"([0-9a-f]{16})"').Matches[0].Groups[1].Value

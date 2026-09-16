@@ -9196,3 +9196,23 @@ of `counter` itself and nothing else. The corpus gains
 Not yet: a struct with addresses in two fields (the first is the one followed),
 an alias whose target is rebound under it, and the same following for a
 pointer stored into an array element.
+
+## D414 -- `plan-replace-expression-file`: the fourth plan shape
+
+H29 fixed four plan shapes (D376) and delivered two; `replace-expression` is the
+third to exist: `plan-replace-expression-file PATH ROOT ARCH OS --json --span
+START:END --with EXPR`. The precondition the shape names -- that the span is one
+expression node -- is checked at the tokens: the node whose first token starts at
+START and whose last token ends at END, of an expression kind, the outermost
+such node since a name and the call around it can begin at one byte; a span that
+is none is refused with exit 2 and no edit. The plan is the file's hash, one
+`edit` with `op` `replace-expression` (the expression's text as its `symbol`,
+site `use`, the span, the replacement) and the postcondition that re-checking
+passes with the expression's type unchanged -- a claim the checker decides at
+apply time, since nothing here types the replacement. The corpus gains
+`tools/plan_replace` (a thread's stack size replaced) and
+`tools/plan_replace_refused` (a span cutting a literal), target-independent; both
+suites apply the plan to a copy and check it.
+
+Not yet: `change-signature`, and the old expression's type in the plan as a
+fact, which would let a harness know the postcondition before applying.

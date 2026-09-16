@@ -60,7 +60,7 @@
       "required":["schema","version","record","command","tool_version","language_version","grammar_revision"],
       "properties":{
         "schema":{"const":"neper-stream"},"version":{"const":1},"record":{"const":"header"},
-        "command":{"enum":["plan-add-parameter","build","check","run","test","fmt","tokens","parse","index","dis","info","explain","context","uses","plan-rename"]},"tool_version":{"type":"string"},
+        "command":{"enum":["plan-add-parameter","plan-replace-expression","build","check","run","test","fmt","tokens","parse","index","dis","info","explain","context","uses","plan-rename"]},"tool_version":{"type":"string"},
         "language_version":{"type":"string"},"grammar_revision":{"type":"integer","minimum":1}
       }
     },

@@ -361,8 +361,15 @@ insertion point being the list's closing `)`; the postcondition says the signatu
 and the use count re-checking must find. A function named as a value (a thread
 entry, a callback) or chosen by a protocol cannot be migrated -- its type is its
 signature -- and the plan is refused with an `E-CLI-9999` naming the first such
-site and exit 2, so no half-migration is emitted. Every refused query (a subject
-that names nothing, a plan that cannot be made) exits 2 as its result says.
+site and exit 2, so no half-migration is emitted. `neper
+plan-replace-expression-file PATH ROOT ARCH OS --json --span START:END --with EXPR`
+(D414, H29) plans one expression's replacement: the bytes START..END of the
+operand must be exactly one expression node of its tree, else the plan is
+refused; the `edit` (`op` `replace-expression`, `symbol` the expression's text,
+site `use`) carries the span and the replacement, the precondition the file's
+hash, the postcondition that re-checking passes with the expression's type
+unchanged. Every refused query (a subject that names nothing, a plan that
+cannot be made) exits 2 as its result says.
 `m25-h29-structured-edits.md` fixes the plan shape for the operations to come.
 
 ## 6. Formatting contract

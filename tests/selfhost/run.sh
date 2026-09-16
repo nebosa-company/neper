@@ -2416,6 +2416,19 @@ plan_sites=$($test_build/neper-self uses-file "$plan_scratch/src/explain.e" "$re
 plan_again=0
 python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null 2>&1 || plan_again=$?
 [ "$plan_again" -ne 0 ]
+# `plan-replace-expression-file --json` (D414, H29): one expression's plan, applied and
+# checked; a span that is not one expression is refused with exit 2.
+(cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:703 --with 131072usize > "$test_build/conformance-tools-plan-replace.jsonl")
+cmp -s "$test_build/conformance-tools-plan-replace.jsonl" "$conformance_root/tools/plan_replace.expected.jsonl" || { echo "plan-replace-expression-file --json differs from the conformance corpus" >&2; exit 1; }
+replace_scratch="$test_build/plan-replace-scratch"
+rm -rf "$replace_scratch" && mkdir -p "$replace_scratch/src" && cp "$conformance_root/tools/contract.e" "$replace_scratch/src/"
+python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-replace.jsonl" --root "$replace_scratch/src" > /dev/null
+replace_checked=$($test_build/neper-self check-file "$replace_scratch/src/contract.e" "$repo" x64 linux)
+[ "$replace_checked" = 'module check ok' ]
+replace_refused=0
+(cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:700 --with 1usize > "$test_build/conformance-tools-plan-replace-refused.jsonl") || replace_refused=$?
+[ "$replace_refused" -eq 2 ]
+cmp -s "$test_build/conformance-tools-plan-replace-refused.jsonl" "$conformance_root/tools/plan_replace_refused.expected.jsonl" || { echo "a refused plan-replace-expression-file differs from the conformance corpus" >&2; exit 1; }
 # The subject's snapshot (D407, H15): the renamed program's differs from the original's.
 snapshot_before=$($test_build/neper-self context-file "$conformance_root/tools/explain.e" "$repo" x64 linux --json --symbol explain.main --budget 1 | grep -o '"snapshot":"[0-9a-f]*"' | head -1)
 snapshot_after=$($test_build/neper-self context-file "$plan_scratch/src/explain.e" "$repo" x64 linux --json --symbol explain.main --budget 1 | grep -o '"snapshot":"[0-9a-f]*"' | head -1)

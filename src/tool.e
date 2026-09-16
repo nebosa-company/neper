@@ -2458,6 +2458,115 @@ fn batch_memory(a: *mem.Arena) -> err {
     ret flush(&out)
 }
 
+// `plan-replace-expression-file PATH ROOT ARCH OS --json --span START:END --with EXPR`
+// (D414, H29): the last of the four plan shapes. The bytes START..END of the operand
+// must be exactly one expression node of its tree -- found at the tokens, the node
+// whose first token starts at START and whose last token ends at END, of an
+// expression kind -- else the plan is refused naming what the span holds; the plan
+// is one `edit` (`replace-expression`, site `use`) with the file's hash as its
+// precondition and the postcondition that re-checking passes with the expression's
+// type unchanged, which the checker at apply time decides.
+fn plan_replace_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, span_text: str, replacement: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "plan-replace-expression")
+    // The operand is module 0 (D289): the span is its bytes.
+    var colon = span_text.len
+    var scan = 0usize
+    while scan < span_text.len {
+        if span_text[scan] == 58u8 { colon = scan }
+        scan += 1usize
+    }
+    var span_ok = colon != span_text.len && colon != 0usize && colon + 1usize != span_text.len
+    var byte_start = 0usize
+    var byte_end = 0usize
+    if span_ok {
+        let (start_value, start_ok) = plan_decimal(span_text[0usize..colon])
+        let (end_value, end_ok) = plan_decimal(span_text[colon + 1usize..span_text.len])
+        span_ok = start_ok && end_ok
+        byte_start = start_value
+        byte_end = end_value
+    }
+    let module = g.modules[0usize]
+    if !span_ok || byte_start >= byte_end || byte_end > module.text.len { ret plan_refused(&out, "the span is not START:END within the operand") }
+    var operand_tree = module.tree
+    let (node_index, has_node) = expression_at(module.tokens, &operand_tree, byte_start, byte_end)
+    if !has_node { ret plan_refused(&out, "the span is not one expression of the operand") }
+    let (root, relative) = source_identity_of(g, module.path)
+    let (path, path_error) = manifest_slashes(a, relative)
+    if path_error != ok { ret path_error }
+    let (digest, digest_error) = manifest_sha256(a, module.text)
+    if digest_error != ok { ret digest_error }
+    try text(&out, "{\"record\":\"precondition\",\"source\":{\"root\":")
+    try quoted(&out, root)
+    try text(&out, ",\"path\":")
+    try quoted(&out, path)
+    try text(&out, "},\"sha256\":")
+    try quoted(&out, digest)
+    try byte(&out, 125u8)
+    try flush(&out)
+    out.lines = module.lines
+    var first: lex.Token = zero
+    first.start = byte_start
+    first.end = byte_start
+    var last: lex.Token = zero
+    last.start = byte_end
+    last.end = byte_end
+    try text(&out, "{\"record\":\"edit\",\"op\":\"replace-expression\",\"symbol\":")
+    try quoted(&out, module.text[byte_start..byte_end])
+    try text(&out, ",\"site\":\"use\",\"span\":")
+    try token_span(&out, root, path, module.text, first, last)
+    try text(&out, ",\"replacement\":")
+    try quoted(&out, replacement)
+    try byte(&out, 125u8)
+    try flush(&out)
+    try text(&out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; the expression at the span has the type the replaced one had\"}")
+    try flush(&out)
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":1,\"files\":1,\"complete\":true}}")
+    ret flush(&out)
+}
+
+// A decimal of a plan's arguments: digits alone, at most eighteen.
+fn plan_decimal(text_bytes: str) -> (usize, bool) {
+    if text_bytes.len == 0usize || text_bytes.len > 18usize { ret (0usize, false) }
+    var value = 0usize
+    var at = 0usize
+    while at < text_bytes.len {
+        if text_bytes[at] < 48u8 || text_bytes[at] > 57u8 { ret (0usize, false) }
+        value = value * 10usize + usize(text_bytes[at] - 48u8)
+        at += 1usize
+    }
+    ret (value, true)
+}
+
+fn plan_refused(out: *Out, message: str) -> err {
+    try text(out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":")
+    try quoted(out, message)
+    try text(out, ",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+    try flush(out)
+    try text(out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
+    try flush(out)
+    ret Refused
+}
+
+// The expression node whose tokens span exactly START..END (D414): the outermost
+// such node, since a name inside a call and the call itself can begin at one byte.
+fn expression_at(tokens: []const lex.Token, tree: *parse.Tree, byte_start: usize, byte_end: usize) -> (usize, bool) {
+    var node_index = 0usize
+    while node_index < tree.count {
+        let node = tree.nodes[node_index]
+        let kind = node.kind
+        let expression = kind == .UnaryExpr || kind == .BinaryExpr || kind == .FieldExpr || kind == .BracketPostfix || kind == .CallExpr || kind == .NameExpr || kind == .MemberExpr || kind == .GroupExpr || kind == .AggregateLiteral || kind == .LiteralExpr
+        if expression && usize(node.token_start) < tokens.len && usize(node.token_end) <= tokens.len && usize(node.token_end) > usize(node.token_start) {
+            if tokens[usize(node.token_start)].start == byte_start && tokens[usize(node.token_end) - 1usize].end == byte_end { ret (node_index, true) }
+        }
+        node_index += 1usize
+    }
+    ret (0usize, false)
+}
+
 // A batch line no query reads (D409): a stream of its own, refused.
 fn batch_line_refused(a: *mem.Arena, line: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, line.len * 2usize + 1024usize)

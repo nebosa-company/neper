@@ -7075,7 +7075,8 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
 // checked with the checker's explain table open, then the command's writer.
 // `kind` is 1 for `explain-file`, 2 for `context-file --symbol`, 3 for `uses-file`,
 // 4 for `plan-rename-file`, 5 for `context-file --module` (D397), 6 for
-// `plan-add-parameter-file` (D406), 7 for `query-batch` (D409).
+// `plan-add-parameter-file` (D406), 7 for `query-batch` (D409), 8 for
+// `plan-replace-expression-file` (D414).
 fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
@@ -7130,6 +7131,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     // The batch (D409, H16): one program loaded, resolved and checked, and every
     // line of the batch file answered from it as its own stream, in order.
     if kind == 7usize { query_error = query_batch(a, &checker, &loaded, args[8usize], target_text) }
+    if kind == 8usize { query_error = tool.plan_replace_json(a, &checker, &loaded, args[8usize], args[10usize]) }
     // A refused query's stream said exit 2, and so does the process (D406).
     if query_error == tool.Refused {
         os.exit(2i32)
@@ -7509,6 +7511,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len == 9usize && same(args[1usize], "uses-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") { ret query_file(a, &report, args, 3usize) }
     // `plan-rename-file PATH ROOT ARCH OS --json --symbol module.name --to NEW` (D376, H29).
     if args.len == 11usize && same(args[1usize], "plan-rename-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--to") && identifier_ok(args[10usize]) { ret query_file(a, &report, args, 4usize) }
+    // `plan-replace-expression-file PATH ROOT ARCH OS --json --span START:END --with EXPR` (D414, H29).
+    if args.len == 11usize && same(args[1usize], "plan-replace-expression-file") && same(args[6usize], "--json") && same(args[7usize], "--span") && same(args[9usize], "--with") && args[10usize].len != 0usize { ret query_file(a, &report, args, 8usize) }
     // `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): many queries, one check.
     if args.len == 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") { ret query_file(a, &report, args, 7usize) }
     // `plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name --parameter "name: T" --argument EXPR` (D406, H17).
