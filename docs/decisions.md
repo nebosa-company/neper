@@ -10332,3 +10332,22 @@ it, and the custom rows (sizes, target) branch once. The values are a
 build's own, so no golden pins them; `scripts/check_stats_record.py` checks
 that the stream has exactly one flat `stats` record before its result with the
 keys every build has, and the schema validates it, on both hosts.
+
+## D477 -- Metamorphic tests: renamed locals and reversed fields
+
+D438's harness gains the two transformations it named next. `renamed`: every
+local of the root module -- a parameter, a `let`, a `var`, a `for` binding -- is
+renamed through the lossless token stream to a name of the same length (each
+letter shifted, again past a keyword or a name the module already spells, each
+new name reserved so two locals never meet), a field access or a struct
+literal's field name left alone; the columns are what they were, so the image
+must be byte-identical in both modes, and is, over four fixtures (131 lines
+renamed in `algo_sort`). `fields`: every `struct { ... }` has its fields put in
+reverse order, the line breaks around them kept -- the layout changes, so the
+image may differ, and the program must exit with the same code and write the
+same bytes, which it does, `atomic_ops` (an eight-field struct of atomics)
+joining the three fixtures for it. The token stream is the only parser the
+harness has: `index` lists no locals, so the rename reads `let`, `var`, `for`
+and the signature's `name:` pairs off the tokens itself.
+
+Not yet: renamed functions and types, reordered parameters.

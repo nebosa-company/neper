@@ -2421,7 +2421,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deadlineActual).Hash -ne (Get-
 # Metamorphic tests (D438, H10): a fixture without its comments builds the same image,
 # and with its declarations reversed behaves the same.
 $metamorphicOut = Join-Path $testBuild 'metamorphic'
-& python (Join-Path $repo 'benchmarks/metamorphic/metamorphic.py') $compiler $repo 'x64' 'windows' $metamorphicOut (Join-Path $PSScriptRoot 'fixtures\link\algo_sort\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\algo_bitset\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\control\src\main.e')
+& python (Join-Path $repo 'benchmarks/metamorphic/metamorphic.py') $compiler $repo 'x64' 'windows' $metamorphicOut (Join-Path $PSScriptRoot 'fixtures\link\algo_sort\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\algo_bitset\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\control\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\atomic_ops\src\main.e')
 if ($LASTEXITCODE -ne 0) { throw 'a metamorphic transformation changed what a fixture builds or does' }
 # The bootstrap as the codegen's oracle (D456, H10): seventeen neper0 programs built
 # by the C bootstrap and by this compiler must exit and print alike.
