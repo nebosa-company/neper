@@ -983,14 +983,14 @@ fn dispatch_short_form(a: *mem.Arena, args: []str) -> err {
                 }
                 copy += 1usize
             }
-            ret main(a, stripped[0usize..count])
+            ret dispatch(a, stripped[0usize..count])
         }
         at += 1usize
     }
     let (long_form, rewritten, rewrite_error) = short_form(a, args)
     if rewrite_error != ok { ret rewrite_error }
     if !rewritten { ret NotShortForm }
-    ret main(a, long_form)
+    ret dispatch(a, long_form)
 }
 
 fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
@@ -6472,7 +6472,50 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
     ret crew_emit(a, &crew, report, loaded, checker, resolver, builder, bindings, lowered, abi, hot, held, code, all_skip)
 }
 
+// A failure that reaches the top (D344, H10): the arena or a table full, or an
+// internal failure, is reported as a diagnostic with a registered code -- as a record
+// under `--json`, so the stream still ends in its result -- rather than as the bare
+// `error: <name>` line the runtime prints for an escaped error. A resource limit is
+// the registry's E-TYPE-9999 and exits 1, as the pools' limit does; anything else is
+// an internal failure, E-TOOL-9999, exit 2. Deterministic either way: the same input
+// on the same machine ends the same way.
 fn main(a: *mem.Arena, args: []str) -> err {
+    let result = dispatch(a, args)
+    if result == ok { ret ok }
+    var code = "E-TOOL-9999"
+    var message = "internal compiler failure"
+    var status = 2i32
+    if result == mem.Exhausted {
+        code = "E-TYPE-9999"
+        message = "resource limit: the compiler's arena is exhausted; the program is larger than this compiler was built to hold"
+        status = 1i32
+    }
+    if result == nir.Capacity || result == graph.Capacity || result == check.Capacity || result == resolve.Capacity || result == lookup.Capacity || result == em.Capacity || result == regalloc.Capacity {
+        code = "E-TYPE-9999"
+        message = "resource limit: a compiler table is full; the program is larger than this compiler was built to hold"
+        status = 1i32
+    }
+    var json = false
+    var at = 1usize
+    while at < args.len {
+        if same(args[at], "--json") { json = true }
+        at += 1usize
+    }
+    if !json {
+        var human = stderr_sink()
+        try emit_command_diagnostic(&human, code, message)
+        ret result
+    }
+    var report = json_sink()
+    try emit_command_diagnostic(&report, code, message)
+    try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":")
+    if status == 2i32 { try write_all(&report, "2") } else { try write_all(&report, "1") }
+    try write_all(&report, ",\"data\":{\"diagnostics\":1}}\n")
+    os.exit(status)
+    ret ok
+}
+
+fn dispatch(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     // Spec section 2's spellings -- `neper build FILE`, `neper check FILE`, ... -- are
     // rewritten into the positional forms below and dispatched again (D276).

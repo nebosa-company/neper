@@ -7383,3 +7383,23 @@ fails the validation past it and the module is rebuilt; a stray `.tmp` is never
 opened. In every case the image is the clean build's, byte for byte, in both modes,
 which both suites now require (`benchmarks/fuzz/corrupt.py` makes the damage). A
 corrupt disposable cache is quarantined by rebuilding, never linked.
+
+## D344 -- A failure that reaches the top is a diagnostic, and the stream still ends
+
+H10 wants resource exhaustion to have deterministic error behaviour, and section 1
+of the tooling protocol wants every `--json` command to end in its result record.
+An error that escaped every phase -- the arena exhausted, a table full, an internal
+failure -- reached the runtime's `main` handler, which printed `error: mem.Exhausted`
+to stderr and exited 1: no record, no result, and under `--json` a stream cut off
+after its header.
+
+`main` is now a wrapper around the dispatch. A failure that comes back is reported
+through `emit_command_diagnostic`: a resource limit (`mem.Exhausted`, or any
+module's `Capacity`) as the registry's E-TYPE-9999 -- "resource limit: the
+compiler's arena is exhausted; the program is larger than this compiler was built
+to hold", or "a compiler table is full" -- exiting 1 as the pools' limit does;
+anything else as E-TOOL-9999 "internal compiler failure", exiting 2 as section 13
+says an internal failure does. Under `--json` the diagnostic is a location-free
+record and the result follows it, validated against the schema; without, the
+`error[code]` line precedes the runtime's own, which still names the error. The
+short forms dispatch through the same function, so a failure is reported once.
