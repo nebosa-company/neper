@@ -382,6 +382,10 @@ type Builder = struct {
     import_order: [1024]usize,
     import_order_count: usize,
     imports_ordered: bool,
+    // Every reference's target set by whoever made the references (D460): the
+    // artifact link, which knows each callee's function from its reach walk, so
+    // `resolve_reference_targets` has nothing to search for.
+    targets_preset: bool,
     // What `discard_bodies` has let go of (D314): the instructions lowered in all, and
     // the most one module held at once, for `--stats` and for sizing the body pools.
     instruction_total: usize,
@@ -457,6 +461,7 @@ fn references_function(opcode: Opcode) -> bool {
 // `prune_unreachable` and `codegen_x64.resolve_calls` then read the answer instead of
 // scanning the functions per call instruction and per relocation.
 fn resolve_reference_targets(builder: *Builder) {
+    if builder.targets_preset { ret }
     var at = 0usize
     while at < builder.function_ref_count {
         builder.function_refs[at].has_target = false

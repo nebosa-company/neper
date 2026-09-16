@@ -182,6 +182,12 @@ type LinkWorker = struct {
     copies: []bool,
     // Which functions' content hashes the copy verifies (D459): the ones that fold.
     verify: []bool,
+    // The reach walk's answer per relocation (D460): the callee's table position, or
+    // the table's count for a global, a runtime symbol or an import; and each kept
+    // function's index in the program, so a reference is made with its target.
+    edge_base: []usize,
+    edge_target: []usize,
+    global_of: []usize,
     code_offset: []usize,
     reloc_base: []usize,
     row_base: []usize,
@@ -330,6 +336,11 @@ fn link_copy_artifact(w: *LinkWorker, artifact_at: usize) -> err {
                 if symbol_error != ok { ret symbol_error }
                 assembled_reference.library = library_name
                 assembled_reference.symbol = symbol_name
+            }
+            let callee = w.edge_target[w.edge_base[position] + relocation_at]
+            if callee < table.count {
+                assembled_reference.target = w.global_of[callee]
+                assembled_reference.has_target = true
             }
             w.references_tmp[slot] = assembled_reference
             w.reference_valid[slot] = true
@@ -508,9 +519,9 @@ fn table_position(table: *FunctionTable, module_index: usize, name: str, instanc
 // -- the same edge set `nir` walks after lowering, so an image linked from artifacts drops the
 // same functions from the same sequence as one compiled from source. Over the prebuilt table:
 // no artifact is re-read, so a pass is the edges, not the file.
-fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.Index, table: *FunctionTable, kept: []bool) -> err {
+fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.Index, table: *FunctionTable, kept: []bool, edge_base: []usize, edge_target: []usize) -> (bool, err) {
     let total = table.count
-    if total > kept.len { ret InvalidInput }
+    if total > kept.len { ret (false, InvalidInput) }
     var at = 0usize
     while at < total {
         kept[at] = false
@@ -535,7 +546,7 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.In
             kept[index] = true
             index += 1usize
         }
-        ret ok
+        ret (false, ok)
     }
 
     // Breadth-first from `main` over the call edges each function records: a function is visited
@@ -544,7 +555,7 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.In
     // pulls in a large module but reaches little of it depends on. A global or a host-runtime
     // symbol is not a function edge and is skipped.
     let (queue, queue_error) = mem.alloc[usize](a, total)
-    if queue_error != ok { ret queue_error }
+    if queue_error != ok { ret (false, queue_error) }
     queue[0usize] = at
     var head = 0usize
     var tail = 1usize
@@ -556,14 +567,15 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.In
         var relocation_at = 0usize
         while relocation_at < function.relocation_count {
             let (stored, stored_error) = em.code_relocation_raw(artifacts[owner].bytes, function, relocation_at)
-            if stored_error != ok { ret stored_error }
-            if stored.module_index >= artifacts[owner].string_starts.len || stored.name_index >= artifacts[owner].string_starts.len { ret InvalidInput }
+            if stored_error != ok { ret (false, stored_error) }
+            if stored.module_index >= artifacts[owner].string_starts.len || stored.name_index >= artifacts[owner].string_starts.len { ret (false, InvalidInput) }
             if !stored.global {
                 let (module_index, module_error) = target_module(a, modules, artifacts[owner], stored.module_index)
-                if module_error != ok { ret module_error }
+                if module_error != ok { ret (false, module_error) }
                 let (callee_name, callee_error) = artifact_text(a, artifacts[owner], stored.name_index)
-                if callee_error != ok { ret callee_error }
+                if callee_error != ok { ret (false, callee_error) }
                 let (callee, found) = table_position(table, module_index, callee_name, stored.instance)
+                if found { edge_target[edge_base[position] + relocation_at] = callee }
                 if found && !kept[callee] {
                     kept[callee] = true
                     queue[tail] = callee
@@ -573,7 +585,7 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.In
             relocation_at += 1usize
         }
     }
-    ret ok
+    ret (true, ok)
 }
 
 fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize) -> err {
@@ -625,6 +637,28 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     // index -- on the workers, each artifact's rows by its own.
     var (table, table_error) = build_function_table(a, artifacts, function_count, workers, worker_count, needs[0usize..artifacts.len])
     if table_error != ok { ret table_error }
+    // Every function's relocations in one range (D460): the reach walk resolves each
+    // edge once and the copy reads the answer, where it looked the callee up again
+    // and `resolve_reference_targets` a third time, by name, over the whole program.
+    let (edge_base, edge_base_error) = mem.alloc[usize](a, table.count + 1usize)
+    if edge_base_error != ok { ret edge_base_error }
+    var edge_total = 0usize
+    var edge_at = 0usize
+    while edge_at < table.count {
+        edge_base[edge_at] = edge_total
+        edge_total += table.funcs[edge_at].relocation_count
+        edge_at += 1usize
+    }
+    edge_base[table.count] = edge_total
+    let (edge_target, edge_target_error) = mem.alloc[usize](a, edge_total + 1usize)
+    if edge_target_error != ok { ret edge_target_error }
+    edge_at = 0usize
+    while edge_at < edge_total {
+        edge_target[edge_at] = table.count
+        edge_at += 1usize
+    }
+    let (global_of, global_of_error) = mem.alloc[usize](a, table.count + 1usize)
+    if global_of_error != ok { ret global_of_error }
     try validate_set(a, artifacts)
     // The content hash's input is a function's code and, per relocation, seventeen
     // bytes and two of the artifact's strings (D341): its scratch is sized to the
@@ -790,7 +824,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     if folded_entries_error != ok { ret folded_entries_error }
     var folded: lookup.Index = zero
     try lookup.attach(&folded, folded_entries)
-    let reach_error = reachable_from_main(a, artifacts, &modules, &table, kept)
+    let (rooted, reach_error) = reachable_from_main(a, artifacts, &modules, &table, kept, edge_base, edge_target)
     if reach_error != ok { ret reach_error }
     // The layout (D333), sequential: every kept function in table order gets its place
     // in the builder, its code offset -- or the offset of the copy it folds onto -- and
@@ -838,6 +872,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         // spells the module the same way, which the byte-equality of the two needs.
         assembled_function.module_name = owner_names[owner_at]
         functions[global_function] = assembled_function
+        global_of[position] = global_function
         program.builder.function_count += 1usize
         let (folded_position, already_folded) = lookup.find(&folded, function.content_hash, 0usize, "")
         if already_folded {
@@ -872,6 +907,9 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         workers[worker_at].kept = kept
         workers[worker_at].copies = copies
         workers[worker_at].verify = verify
+        workers[worker_at].edge_base = edge_base
+        workers[worker_at].edge_target = edge_target
+        workers[worker_at].global_of = global_of
         workers[worker_at].code_offset = code_offset
         workers[worker_at].reloc_base = reloc_base
         workers[worker_at].row_base = row_base
@@ -923,6 +961,9 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         }
         position += 1usize
     }
+    // Without a `main` nothing was walked, and the references resolve by name as
+    // before, so that the missing entry is the error reported, not a missing callee.
+    program.builder.targets_preset = rooted
     try codegen_x64.resolve_calls(&program.builder, program.function_offsets, program.relocations, program.relocation_count, &program.machine)
     var relocation_at = 0usize
     while relocation_at < program.relocation_count {

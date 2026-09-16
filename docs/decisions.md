@@ -9988,3 +9988,22 @@ own warm build: `link from artifacts` 34 -> 27 ms, the image byte for byte what
 it was. D458 is the other stream's, numbered in the shared tree.
 
 Not yet: the `link` phase (18 ms) and the reach walk, the next bounds.
+
+## D460 -- A callee resolved once
+
+The artifact link resolved every relocation's callee three times: the reach walk
+looked it up in its module's index to follow the edge, the copy looked it up
+again to make the reference, and `resolve_reference_targets` searched the whole
+program's references by name a third time -- the last two sequential, and the
+string hashing and comparing of the third the largest self-time left in the warm
+build after D459. The walk now writes each edge's answer into a table of every
+function's relocations (`edge_base`/`edge_target`), the layout records each kept
+function's index in the program (`global_of`), and the copy makes each reference
+with its target set; `nir.Builder.targets_preset` tells `resolve_reference_targets`
+there is nothing to find. A program without a `main` keeps everything unwalked and
+resolves by name as before, so the error it reports is still the missing entry.
+The compiler's own warm build: `link from artifacts` 27 -> 22 ms, `link` 18 -> 15;
+the warm image, the cold image and the non-incremental image are one file.
+
+Not yet: the copy still looks a callee's module up by name for the reference's
+module index, and the walk still copies every callee name into the main arena.
