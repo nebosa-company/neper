@@ -2012,6 +2012,10 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
 // Section 12's cross-module inlining cap: a callee of at most this many NIR instructions
 // is copied into its caller rather than called. Forty, unless the build says otherwise
 // (D346, `--inline-cap N`).
+// The longest declaration, in tokens, the oracle looks at as a candidate: what a
+// release build's header tree keeps the body of (D421).
+fn oracle_candidate_tokens() -> usize { ret 100usize }
+
 fn inline_cap(builder: *nir.Builder) -> usize {
     // The builder holds the cap plus one, so that zero means unset and `--inline-cap 0`
     // means no inlining at all.
@@ -2118,7 +2122,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
     var node_index = 1usize
     while node_index < tree.count {
         let node = tree.nodes[node_index]
-        if node.top_level && node.kind == .FnDecl && usize(node.token_end) - usize(node.token_start) <= 100usize {
+        if node.top_level && node.kind == .FnDecl && usize(node.token_end) - usize(node.token_start) <= oracle_candidate_tokens() {
             let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
             if name_error != ok { ret name_error }
             let (function_index, found) = check.find_function(c, module_index, name)

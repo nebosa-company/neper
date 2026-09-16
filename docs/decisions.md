@@ -9338,3 +9338,27 @@ and find the new name at the five sites.
 
 Not yet: a store told from a read (the record is the access), a field of a
 generic instance by its arguments, and address relations (`&x.field`).
+
+## D421 -- A release build's header trees keep the oracle's candidates
+
+D392 gave a debug build header trees for the unchanged imports of a changed
+module and left a release build parsing them whole, since its inlining oracle
+lowers the short functions of every module, kept or not (D391). The oracle
+looks at no declaration longer than a hundred tokens (`oracle_module`'s bound,
+now `oracle_candidate_tokens`), so the header parse takes a `body_cap`: a
+non-generic body is skipped when the declaration with it would exceed the cap
+-- counted by a look ahead over the replayed tokens from the `{` at hand,
+without moving -- and kept otherwise; a debug build's cap is zero, every body
+skipped as before, a release build's the oracle's hundred. The kept module's
+tree then holds every body the oracle would inline from and none it would not,
+its `token_end - token_start` per declaration the same as the whole tree's, so
+the oracle's decisions and the image are the clean build's (both suites check
+hot against clean in both modes). Measured on the compiler after a comment
+appended to `tool.e`, best of five: load and parse 57-62 -> 45-51 ms, resolve
+12 -> 6-7, the edited release build's phases 294 -> 264 ms; the wall clock on
+this machine swings more than that between runs.
+
+Not yet: the oracle's own work over kept modules (46 ms of the same build, the
+candidates lowered again), which an oracle-entry cache in the artifacts would
+end; and `--stats`'s node count, which counts a header tree's nodes for a kept
+module.

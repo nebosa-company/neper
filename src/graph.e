@@ -148,6 +148,10 @@ type Graph = struct {
     list: []usize,
     // Which modules the next front wave parses as headers only (D392); empty means none.
     want_headers: []bool,
+    // What a header tree keeps of the bodies (D421): none at zero, else the bodies of
+    // declarations of at most this many tokens -- the oracle's candidate bound in a
+    // release build, where a kept module's short functions are still inlined from.
+    header_body_cap: usize,
     // The hash of this compiler's executable (D398, H15), written into every artifact
     // and compared on every incremental load; zero when it could not be read.
     compiler_identity: usize,
@@ -426,7 +430,7 @@ fn parse_into_pool(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     let headers = module_index < g.want_headers.len && g.want_headers[module_index]
     var parse_error = ok
     if headers {
-        parse_error = parse.parse_tokens_headers(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
+        parse_error = parse.parse_tokens_headers(&tree, g.modules[module_index].text, g.modules[module_index].tokens, g.header_body_cap)
     } else {
         parse_error = parse.parse_tokens(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
     }
@@ -593,7 +597,7 @@ fn worker_module(w: *Worker, module_index: usize) -> err {
     let headers = module_index < w.g.want_headers.len && w.g.want_headers[module_index]
     var parse_error = ok
     if headers {
-        parse_error = parse.parse_tokens_headers(&tree, text, tokens)
+        parse_error = parse.parse_tokens_headers(&tree, text, tokens, w.g.header_body_cap)
     } else {
         parse_error = parse.parse_tokens(&tree, text, tokens)
     }

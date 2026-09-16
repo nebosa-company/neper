@@ -4907,8 +4907,9 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
             unparsed += 1usize
             // An unchanged import of a changed module is parsed for its declarations
             // alone (D392): a header tree, in a debug build. A release build's oracle
-            // wants every body of the closure and parses in full.
-            if !hot.release && hot.unchanged[list[queue_at]] && list[queue_at] < loaded.want_headers.len { loaded.want_headers[list[queue_at]] = true }
+            // wants the bodies it would inline from, which are the short ones (D421):
+            // the header tree keeps those and skips the rest.
+            if hot.unchanged[list[queue_at]] && list[queue_at] < loaded.want_headers.len { loaded.want_headers[list[queue_at]] = true }
         }
         queue_at += 1usize
     }
@@ -4938,6 +4939,10 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     hot.unchecked = unchecked
     hot.scratch = scratch
     if !on { ret ok }
+    // A release build's header trees keep the oracle's candidates (D421): the
+    // declarations of at most the tokens `lower.oracle_module` looks at.
+    loaded.header_body_cap = 0usize
+    if release { loaded.header_body_cap = lower.oracle_candidate_tokens() }
     let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
     if triple_error != ok { ret triple_error }
     hot.triple = triple

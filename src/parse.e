@@ -90,6 +90,11 @@ type Parser = struct {
     // unchanged import of a changed module -- costs its signatures and nothing more.
     // A generic function keeps its body: an instance elsewhere reads it.
     headers_only: bool,
+    // What a header tree keeps of a body (D421): none when zero; else the body of a
+    // declaration of at most this many tokens, which is the inlining oracle's own
+    // bound on a candidate, so a release build's kept module gives the oracle every
+    // body it would look at and skips the rest.
+    body_cap: usize,
     // The token before `current`, and the token that opened each soft delimiter
     // still open, so a barrier crossing can be reported at the opener (D275).
     previous: lex.Token,
@@ -1648,7 +1653,7 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     if is_extern {
         if p.current.kind == .PunctLBrace { ret InvalidSyntax }
     } else {
-        if p.headers_only && !generic {
+        if p.headers_only && !generic && (p.body_cap == 0usize || declaration_tokens(p, token_start) > p.body_cap) {
             try skip_body(p)
         } else {
             try parse_block_node(p)
@@ -1662,6 +1667,26 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     }
     try finish_line(p)
     ret ok
+}
+
+// How many tokens the declaration would span with its body (D421): a look ahead
+// over the replayed tokens from the `{` at hand to the `}` that closes it, without
+// moving; the count the node's `token_end - token_start` would give. A scanner over
+// source cannot look ahead and answers zero, which keeps the body.
+fn declaration_tokens(p: *Parser, token_start: usize) -> usize {
+    if !p.scanner.replay { ret 0usize }
+    var depth = 1usize
+    var at = p.scanner.at
+    while at < p.scanner.tokens.len {
+        let kind = p.scanner.tokens[at].kind
+        if kind == .PunctLBrace { depth += 1usize }
+        if kind == .PunctRBrace {
+            depth = depth - 1usize
+            if depth == 0usize { ret at + 1usize - token_start }
+        }
+        at += 1usize
+    }
+    ret p.scanner.tokens.len - token_start
 }
 
 // A function body passed over at the tokens (D392): from its `{` to the `}` that
@@ -2036,11 +2061,13 @@ fn parse_tokens(tree: *Tree, source: str, tokens: []const lex.Token) -> err {
     ret parse_file(&p)
 }
 
-// The header parse (D392): declarations with the non-generic function bodies skipped.
-fn parse_tokens_headers(tree: *Tree, source: str, tokens: []const lex.Token) -> err {
+// The header parse (D392): declarations with the non-generic function bodies skipped,
+// all of them under a `body_cap` of zero, the ones past the cap otherwise (D421).
+fn parse_tokens_headers(tree: *Tree, source: str, tokens: []const lex.Token, body_cap: usize) -> err {
     if tree.nodes.len == 0usize || tree.children.len == 0usize { ret InvalidSyntax }
     var p = init(tree, source)
     p.headers_only = true
+    p.body_cap = body_cap
     p.scanner = lex.init_tokens(source, tokens)
     p.current = lex.next(&p.scanner)
     ret parse_file(&p)
