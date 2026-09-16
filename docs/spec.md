@@ -3984,7 +3984,8 @@ unless `--absolute-paths` is requested. A harness never has to parse human outpu
 duplicate name resolution.
 
 Successful commands exit `0`; source, option and link errors exit `1`; internal
-compiler failures exit `2`; and `neper test` exits `1` when any test fails, crashes or
+compiler failures exit `2`; a build cancelled at a checkpoint by its `--deadline`
+exits `3` (D399); and `neper test` exits `1` when any test fails, crashes or
 times out. Warnings are disabled in v1: every emitted diagnostic is either a note
 attached to an error or an error that makes the command fail.
 

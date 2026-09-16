@@ -775,7 +775,7 @@ fn has_flag(args: []str, name: str) -> bool {
     while at < args.len {
         if same(args[at], "--") { ret false }
         if same(args[at], name) { ret true }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture")) { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) { at += 1usize }
         at += 1usize
     }
     ret false
@@ -787,7 +787,7 @@ fn project_flag(args: []str) -> str {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret "" }
         if same(args[at], "--project") { ret args[at + 1usize] }
-        if same(args[at], "--arena") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture")) { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) { at += 1usize }
         at += 1usize
     }
     ret ""
@@ -810,9 +810,9 @@ fn flags_known(args: []str) -> bool {
             } else {
                 // `-j N` (D331): a worker count from one up; `--inline-cap N` (D348): a
                 // cap from zero, for a measurement.
-                if same(args[at], "-j") || same(args[at], "--inline-cap") || same(args[at], "--capture") {
+                if same(args[at], "-j") || same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline") {
                     if at + 1usize >= args.len || (same(args[at], "-j") && jobs_count(args[at + 1usize]) == 0usize) { ret false }
-                    if (same(args[at], "--inline-cap") || same(args[at], "--capture")) && !decimal_ok(args[at + 1usize]) { ret false }
+                    if (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
                     if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") { ret false }
@@ -856,7 +856,7 @@ fn arena_flag(args: []str) -> usize {
             let (size, size_ok) = arena_size(args[at + 1usize])
             if size_ok { ret size }
         }
-        if same(args[at], "--project") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture")) { at += 1usize }
+        if same(args[at], "--project") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -887,7 +887,7 @@ fn inline_cap_flag(args: []str) -> usize {
             }
             ret value + 1usize
         }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--capture") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--capture") || same(args[at], "--deadline") { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -904,6 +904,20 @@ fn capture_flag(args: []str) -> usize {
         at += 1usize
     }
     ret 1048576usize
+}
+
+// `--deadline MS` (D399, H16): how long a build may run before it is cancelled at the
+// next checkpoint between phases, and whether the flag was given at all -- zero with
+// the flag is a deadline that has already passed.
+fn deadline_flag(args: []str) -> (usize, bool) {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--") { ret (0usize, false) }
+        if same(args[at], "--deadline") && decimal_ok(args[at + 1usize]) { ret (decimal_value(args[at + 1usize]), true) }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--inline-cap") || same(args[at], "--capture") { at += 1usize }
+        at += 1usize
+    }
+    ret (0usize, false)
 }
 
 // A `snake_case` value name: letters, digits and underscores, not starting with a digit.
@@ -935,7 +949,7 @@ fn jobs_flag(args: []str) -> usize {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret 0usize }
         if same(args[at], "-j") { ret jobs_count(args[at + 1usize]) }
-        if same(args[at], "--arena") || same(args[at], "--project") || (same(args[at], "--inline-cap") || same(args[at], "--capture")) { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -1747,6 +1761,9 @@ fn report_ms(ns: usize) -> err {
 }
 
 fn report_phase(report: *Sink, name: str) -> err {
+    // A checkpoint (D399, H16): a build past its deadline stops here, between phases,
+    // before the image and the manifest are written.
+    if report.deadline_set && nptest_now() - report.build.started >= report.deadline_ns { ret cancel_build(report, name) }
     if !report.timing && !report.build.on { ret ok }
     let now = nptest_now()
     let started = report.phase_started
@@ -1766,6 +1783,36 @@ fn report_phase(report: *Sink, name: str) -> err {
     try write_all(&line, " MB\n")
     report.phase_started = now
     ret stderr_text(line_storage[..line.count])
+}
+
+// The deadline passed (D399): one diagnostic naming the deadline and the phase that
+// finished last, a result of exit code 3 under `--json`, and the process ends. What
+// the phases built stays in the arena the exit reclaims; no image and no manifest
+// reached the disk, since both come after the last checkpoint. An artifact a hot
+// build's worker had already published is complete and valid on its own (D343) and
+// stays; the manifest that would have made the set a snapshot is not written.
+fn cancel_build(report: *Sink, phase: str) -> err {
+    var message_storage: [256]u8 = zero
+    var message = capture_sink(message_storage[..])
+    try write_all(&message, "the deadline of ")
+    try write_usize(&message, report.deadline_ns / 1000000usize)
+    try write_all(&message, " ms passed after ")
+    try write_all(&message, phase)
+    try write_all(&message, ": the build was cancelled between phases; no image and no manifest were written")
+    if report.json {
+        try write_all(report, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-0001\",\"message\":\"")
+        try write_all(report, message_storage[..message.count])
+        try write_all(report, "\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}\n")
+        try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":3,\"data\":{\"diagnostics\":1,\"cancelled_after\":\"")
+        try write_all(report, phase)
+        try write_all(report, "\"}}\n")
+    } else {
+        try stderr_text("error[E-CLI-0001]: ")
+        try stderr_text(message_storage[..message.count])
+        try stderr_text("\n")
+    }
+    os.exit(3i32)
+    ret ok
 }
 
 // Section 2's module name of a path under a source root: the separators become dots and
@@ -3090,6 +3137,10 @@ type Sink = struct {
     // `--time` (D303): a line per phase on stderr, and when the last one ended.
     timing: bool,
     phase_started: usize,
+    // `--deadline MS` (D399): nanoseconds after the build's start at which the next
+    // checkpoint cancels it; set only when the flag was given.
+    deadline_set: bool,
+    deadline_ns: usize,
     // The arena's offset when the phase ended, set by the caller before reporting.
     arena_used: usize,
     // Within the codegen phase: nanoseconds in register allocation and in emission.
@@ -7382,6 +7433,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         report.build.target_os = args[5usize]
         report.phase_started = nptest_now()
         report.build.started = report.phase_started
+        if trailing_flags {
+            let (deadline_ms, has_deadline) = deadline_flag(args)
+            report.deadline_set = has_deadline
+            report.deadline_ns = deadline_ms * 1000000usize
+        }
         // A hot build's loader (D322): the artifacts decide what is parsed. Set up in a
         // helper: `main` is at the bootstrap's cap of locals.
         var hot_load: HotLoad = zero
@@ -7918,7 +7974,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

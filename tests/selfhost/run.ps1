@@ -2116,6 +2116,15 @@ $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module contract --budget 12 > `"$catalogActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --module failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $catalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog.x64-windows.expected.jsonl')).Hash) { throw "context-file --module differs from the conformance corpus" }
+# `--deadline MS` (D399, H16): a deadline already passed cancels the build at the first
+# checkpoint -- one diagnostic, a result of exit code 3, no image written.
+$deadlineActual = Join-Path $testBuild 'conformance-tools-deadline.jsonl'
+$deadlineImage = Join-Path $testBuild 'deadline-never.exe'
+if (Test-Path -LiteralPath $deadlineImage) { Remove-Item -LiteralPath $deadlineImage }
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-executable contract.e `"$repo`" x64 windows `"$deadlineImage`" --json --deadline 0 > `"$deadlineActual`""
+if ($LASTEXITCODE -ne 3) { throw "a build past its deadline did not exit 3 (got $LASTEXITCODE)" }
+if (Test-Path -LiteralPath $deadlineImage) { throw "a build past its deadline wrote an image" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deadlineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/deadline.expected.jsonl')).Hash) { throw "the cancelled build's stream differs from the conformance corpus" }
 # `uses-file --json` (D362): every resolved use of one function, target-independent.
 $usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""

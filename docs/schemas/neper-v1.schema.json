@@ -206,7 +206,7 @@
     },
     "result": {
       "type":"object","additionalProperties":false,"required":["record","ok","exit_code","data"],
-      "properties":{"record":{"const":"result"},"ok":{"type":"boolean"},"exit_code":{"enum":[0,1,2]},"data":{"type":"object","additionalProperties":{"type":["string","number","integer","boolean","null"]}}}
+      "properties":{"record":{"const":"result"},"ok":{"type":"boolean"},"exit_code":{"enum":[0,1,2,3]},"data":{"type":"object","additionalProperties":{"type":["string","number","integer","boolean","null"]}}}
     },
     "info": {
       "type":"object","additionalProperties":false,"required":["record","tool_version","language_profiles","commands","host_target","build_targets","cpu_levels","features"],

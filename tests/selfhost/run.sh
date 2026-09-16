@@ -2298,6 +2298,19 @@ catalog_actual="$test_build/conformance-tools-catalog.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self context-file contract.e "$repo" x64 linux --json --module contract --budget 12 > "$catalog_actual")
 cmp -s "$catalog_actual" "$conformance_root/tools/catalog.x64-linux.expected.jsonl" || { printf '%s
 ' "context-file --module differs from the conformance corpus" >&2; exit 1; }
+# `--deadline MS` (D399, H16): a deadline already passed cancels the build at the first
+# checkpoint -- one diagnostic, a result of exit code 3, no image written.
+deadline_actual="$test_build/conformance-tools-deadline.jsonl"
+deadline_image="$test_build/deadline-never"
+rm -f "$deadline_image"
+deadline_status=0
+(cd "$conformance_root/tools" && $test_build/neper-self emit-executable contract.e "$repo" x64 linux "$deadline_image" --json --deadline 0 > "$deadline_actual") || deadline_status=$?
+[ "$deadline_status" = 3 ] || { printf '%s
+' "a build past its deadline did not exit 3 (got $deadline_status)" >&2; exit 1; }
+[ ! -e "$deadline_image" ] || { printf '%s
+' "a build past its deadline wrote an image" >&2; exit 1; }
+cmp -s "$deadline_actual" "$conformance_root/tools/deadline.expected.jsonl" || { printf '%s
+' "the cancelled build's stream differs from the conformance corpus" >&2; exit 1; }
 # `uses-file --json` (D362): every resolved use of one function.
 uses_actual="$test_build/conformance-tools-uses.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file explain.e "$repo" x64 linux --json --symbol explain.same > "$uses_actual")

@@ -8868,3 +8868,30 @@ bounded by the run-to-run spread, not measured to the millisecond.
 
 Not yet, of H15: `--inline-cap` and CPU features in the identity, in-memory
 overlays, snapshot identifiers on query results, the transaction boundary.
+
+## D399 -- `--deadline MS`: a build is cancelled at the next checkpoint between phases
+
+H16 asks for cancellation checkpoints and H10 for cancellation beyond killing the
+process; both had nothing but the kill, which leaves a harness unable to tell a
+slow build from a hung one and unable to say what the compiler had reached. A
+build command takes `--deadline MS`; every phase boundary the timing already
+marks -- `report_phase`, after load and parse, resolve, check declarations,
+settle, check bodies, inline oracles, lower, regalloc and codegen, link -- is a
+checkpoint, and a build past its deadline there writes one `E-CLI-0001`
+diagnostic naming the deadline and the phase that finished last, a `result`
+with exit code 3 (a new status: not the program's error, not the compiler's
+failure) and `data.cancelled_after`, and exits. No image and no manifest are
+written, since both come after the last checkpoint; an artifact a hot build's
+worker had already published is complete and valid on its own (D343) and stays,
+which is the cache publication boundary H16 asks to be defined -- the artifact,
+never the manifest that would make the set a snapshot. A deadline is a
+wall-clock bound and not a work budget: D218's comptime budgets are the
+deterministic kind, and this one may cancel on one machine what finishes on
+another. `--deadline 0` is a deadline already passed and cancels at the first
+checkpoint deterministically; the corpus gains `tools/deadline`, one golden for
+both hosts, and both suites check the exit status and that no image exists.
+
+Not yet: cancellation inside a phase (a body worker or a lowering worker runs
+the module it holds to its end before the checkpoint is reached), a deadline
+on the query commands, and disposal accounting for what a cancelled build had
+allocated beyond the process exit that reclaims it.

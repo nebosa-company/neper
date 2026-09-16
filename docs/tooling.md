@@ -416,6 +416,19 @@ Every JSON command ends with a `result` record containing `ok`, `exit_code`, and
 `data` object holding command-specific counts or artifact identifiers. Exit statuses remain those in
 spec.md §13; the record and process status must agree.
 
+`--deadline MS` (D399, H16) on a build command (`emit-executable`, `emit-em-all`,
+`run`, with or without `--json`) is a wall-clock deadline: at every checkpoint
+between phases -- after load and parse, resolve, check declarations, settle, check
+bodies, inline oracles, lower, regalloc and codegen, link -- a build past it stops.
+One `E-CLI-0001` diagnostic names the deadline and the phase that finished last,
+the `result` has `exit_code` 3 and `data.cancelled_after`, and no image and no
+manifest are written; an artifact a hot build's worker had already published is
+complete on its own and stays. A deadline is not a work budget (D218's comptime
+budgets are): the same build under the same deadline may finish on one machine and
+be cancelled on another, which is what a harness's deadline means. `--deadline 0`
+is a deadline already passed and cancels at the first checkpoint, the corpus's
+`tools/deadline` case.
+
 `emit-executable ... --release --unchecked` (D355) builds the release image with
 spec section 11's memory rows left out, which the manifest records as
 `options.checks: "off"`; without it a release build keeps them.

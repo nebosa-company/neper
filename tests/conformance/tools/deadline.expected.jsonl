@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"build","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-CLI-0001","message":"the deadline of 0 ms passed after load and parse: the build was cancelled between phases; no image and no manifest were written","span":null,"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":3,"data":{"diagnostics":1,"cancelled_after":"load and parse"}}
