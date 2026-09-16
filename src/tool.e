@@ -2741,7 +2741,8 @@ fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (us
     if storage_error != ok { ret (2usize, storage_error) }
     var out: Out = zero
     out.bytes = storage
-    let build_error = manifest_write(a, &out, arch, os_name, g, "debug", false, "", "")
+    var no_reasons: []u8 = zero
+    let build_error = manifest_write(a, &out, arch, os_name, g, "debug", false, "", "", no_reasons)
     if build_error != ok { ret (2usize, build_error) }
     let flush_error = flush(&out)
     if flush_error != ok { ret (2usize, flush_error) }
@@ -2750,7 +2751,7 @@ fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (us
 
 // The object, into `out`, without a newline: the command flushes it as a record and a
 // build saves it as a file. An empty `artifact_path` is no artifact.
-fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, unchecked: bool, artifact_path: str, artifact_sha256: str) -> err {
+fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, unchecked: bool, artifact_path: str, artifact_sha256: str, reasons: []u8) -> err {
     try text(out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3,\"target\":\"")
     try text(out, arch)
     try byte(out, 45u8)
@@ -2856,6 +2857,25 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
             }
         }
         module_at += 1usize
+    }
+    // What an incremental build kept and rebuilt, and why (D363, H14): one entry per
+    // module in graph order, or none for a build that read no artifact.
+    try text(out, "],\"incremental\":[")
+    var reason_at = 0usize
+    while reason_at < reasons.len && reason_at < g.count {
+        if reason_at != 0usize { try byte(out, 44u8) }
+        try text(out, "{\"module\":")
+        try quoted(out, g.modules[reason_at].name)
+        let reason = reasons[reason_at]
+        if reason == 3u8 || reason == 4u8 { try text(out, ",\"decision\":\"kept\",\"reason\":") } else { try text(out, ",\"decision\":\"rebuilt\",\"reason\":") }
+        if reason == 0u8 { try text(out, "\"no-artifact\"") }
+        if reason == 1u8 { try text(out, "\"source-changed\"") }
+        if reason == 2u8 { try text(out, "\"mode-changed\"") }
+        if reason == 3u8 { try text(out, "\"stable\"") }
+        if reason == 4u8 { try text(out, "\"edges-hold\"") }
+        if reason == 5u8 { try text(out, "\"edge-changed\"") }
+        try byte(out, 125u8)
+        reason_at += 1usize
     }
     if unchecked { ret text(out, "],\"options\":{\"checks\":\"off\"}}") }
     ret text(out, "],\"options\":{\"checks\":\"retained\"}}")
@@ -3000,7 +3020,7 @@ fn manifest_artifact_path(a: *mem.Arena, project_root: str, named: str) -> (str,
     ret (relative[0usize..at], ok)
 }
 
-fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, unchecked: bool, artifact_path: str, packed: []const u8) -> err {
+fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, unchecked: bool, artifact_path: str, packed: []const u8, reasons: []u8) -> err {
     var mode = "debug"
     if release_mode { mode = "release" }
     let (dot_dir, dot_error) = manifest_join(a, g.project.root, ".neper")
@@ -3018,7 +3038,7 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     out.bytes = storage
     let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
     if relative_error != ok { ret relative_error }
-    try manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest)
+    try manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest, reasons)
     try byte(&out, 10u8)
     // The file is opened once the text is ready (D345): every exit before this has
     // nothing to close.

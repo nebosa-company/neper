@@ -335,8 +335,14 @@ artifacts carry project-relative paths, kind, target and SHA-256; `unsafe` is th
 inventory of the program's unsafe boundaries (D355, H03/H27) -- one entry per
 `@unsafe` function and `@nocheck` block the build checked, with `kind`, `module`,
 `function` and `line`, read off every module's tokens so a warm build lists them
-too, in module then line order; `options.checks` is the check policy the image
-was built under, `retained` (spec section 11: every row kept in both modes). Arrays use the
+too, in module then line order; `incremental` (D363, H14) is what an
+`--incremental` build decided per module, in graph order -- `decision` `kept` or
+`rebuilt` and `reason`: `stable` (source and every dependency unchanged),
+`edges-hold` (source unchanged, every imported interface still as recorded),
+`edge-changed` (an imported interface differs), `source-changed`, `mode-changed`,
+`no-artifact` -- empty for a build that read no artifacts; `options.checks` is the
+check policy the image was built under, `retained` (spec section 11: every row
+kept in both modes). Arrays use the
 deterministic order in which their corresponding compiler operation is specified,
 and object keys use the order listed here.
 

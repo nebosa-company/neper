@@ -1790,6 +1790,11 @@ for hot_mode in --release --time; do
     cmp "$hot_exe" "$hot_clean"
     hot_warm=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
     [ "$hot_warm" = 'executable written' ]
+    # The manifest says what the warm build kept and why (D363, H14): everything, stable.
+    hot_manifest_mode=debug
+    [ "$hot_mode" = --release ] && hot_manifest_mode=release
+    hot_manifest="$hot_scratch/.neper/$hot_manifest_mode/build-manifest.json"
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable
     cmp "$hot_exe" "$hot_clean"
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
@@ -1810,6 +1815,9 @@ for hot_mode in --release --time; do
     hot_status=0
     "$hot_exe" || hot_status=$?
     [ "$hot_status" -eq 8 ]
+    # A body edit behind a signature edge (D363): `dep` rebuilt for its source, `main`
+    # kept because every edge held, the rest stable.
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:edges-hold dep=rebuilt:source-changed e.os=kept:stable
     hot_clean_edited=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_clean" $hot_mode 2>/dev/null)
     [ "$hot_clean_edited" = 'executable written' ]
     cmp "$hot_exe" "$hot_clean"

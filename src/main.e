@@ -3679,10 +3679,12 @@ fn settle_hot(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, triple: str, mo
             if holds {
                 keep[module_index] = true
                 fresh[module_index] = held[module_index]
+                hot.reason[module_index] = 4u8
                 try settle_index(a, &s, fresh, module_index)
                 continue
             }
             held[module_index] = no_bytes
+            hot.reason[module_index] = 5u8
             try declare_late(a, c, g, module_index, list, listed)
         }
         // Rebuilt: its fresh interface stands for what depends on it, written when an
@@ -4296,6 +4298,10 @@ type HotLoad = struct {
     // travel beside it as `held`, which the link reads.
     unchanged: []bool,
     stable: []bool,
+    // Why each module was kept or rebuilt (D363, H14): 0 no artifact, 1 the source
+    // changed, 2 the mode changed, 3 stable, 4 unchanged with every edge holding,
+    // 5 unchanged with an edge that did not hold; the manifest lists them.
+    reason: []u8,
 }
 
 // A wave's artifacts on worker threads (D324): each worker reads its modules' artifacts
@@ -4313,6 +4319,7 @@ type ArtifactWorker = struct {
     texts: []str,
     held: [][]const u8,
     unchanged: []bool,
+    reason: []u8,
     mode_id: usize,
     stopped: bool,
     stopped_at: usize,
@@ -4321,15 +4328,19 @@ type ArtifactWorker = struct {
 fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     let module_index = w.modules[at]
     w.unchanged[module_index] = false
+    w.reason[module_index] = 0u8
     let (old, old_error) = load_artifact(&w.arena, w.paths[at])
     if old_error == mem.Exhausted { ret old_error }
     if old_error != ok { ret ok }
     let (old_hash, old_hash_error) = em.artifact_source_hash(old)
     let (new_hash, new_hash_error) = em.source_text_hash(w.texts[at])
     let (old_mode, old_mode_error) = em.artifact_mode(old)
+    w.reason[module_index] = 1u8
+    if old_mode_error == ok && old_mode != w.mode_id { w.reason[module_index] = 2u8 }
     if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == w.mode_id {
         w.unchanged[module_index] = true
         w.held[module_index] = old
+        w.reason[module_index] = 3u8
     }
     ret ok
 }
@@ -4406,6 +4417,7 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
         workers[worker_at].texts = texts[first..filled]
         workers[worker_at].held = held
         workers[worker_at].unchanged = hot.unchanged
+        workers[worker_at].reason = hot.reason
         workers[worker_at].mode_id = mode_id
         worker_at += 1usize
     }
@@ -4440,14 +4452,18 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
             while remaining < workers[worker_at].count {
                 let module_index = workers[worker_at].modules[remaining]
                 hot.unchanged[module_index] = false
+                hot.reason[module_index] = 0u8
                 let (old, old_error) = load_artifact(a, workers[worker_at].paths[remaining])
                 if old_error == ok {
                     let (old_hash, old_hash_error) = em.artifact_source_hash(old)
                     let (new_hash, new_hash_error) = em.source_text_hash(loaded.modules[module_index].text)
                     let (old_mode, old_mode_error) = em.artifact_mode(old)
+                    hot.reason[module_index] = 1u8
+                    if old_mode_error == ok && old_mode != mode_id { hot.reason[module_index] = 2u8 }
                     if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
                         hot.unchanged[module_index] = true
                         held[module_index] = old
+                        hot.reason[module_index] = 3u8
                     }
                 }
                 remaining += 1usize
@@ -4607,14 +4623,18 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     if unchanged_error != ok { ret unchanged_error }
     let (stable, stable_error) = mem.alloc[bool](a, loaded.modules.len)
     if stable_error != ok { ret stable_error }
+    let (reason, reason_error) = mem.alloc[u8](a, loaded.modules.len)
+    if reason_error != ok { ret reason_error }
     var at = 0usize
     while at < loaded.modules.len {
         unchanged[at] = false
         stable[at] = false
+        reason[at] = 0u8
         at += 1usize
     }
     hot.unchanged = unchanged
     hot.stable = stable
+    hot.reason = reason
     ret ok
 }
 
@@ -7597,7 +7617,10 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 // Every build writes `.neper/<mode>/build-manifest.json` under the project root
                 // (section 7, D254), with the executable it just wrote as the one artifact.
                 try fill_manifest_digests(a, &loaded, held)
-                try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, unchecked_build, args[6usize], packed)
+                var no_reasons: []u8 = zero
+                var reasons = no_reasons
+                if hot_load.on { reasons = hot_load.reason[0usize..loaded.count] }
+                try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, unchecked_build, args[6usize], packed, reasons)
                 try report_phase(&report, "manifest")
                 report.build.wall_ms = (nptest_now() - report.build.started) / 1000000usize
                 report.build.image_bytes = packed.len

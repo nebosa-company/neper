@@ -7975,3 +7975,26 @@ Not yet, of H17: field reads and writes, address-taken edges, ownership and
 borrow uses, allocation and blocking as relations; plans with edits and
 validation obligations; move and error-rename compatibility; the fixtures for
 shadowed names, aliases and comptime-only references.
+
+## D363 -- The build manifest says what an incremental build kept, and why
+
+H14 asks that dirty reasons be structured and exposed. The hot build (D319,
+D322, D327) decides per module -- source unchanged and every dependency stable;
+source unchanged but an imported interface must be compared; the comparison holds
+or does not; the source changed; the mode changed; no artifact -- and said only
+`kept`/`rebuilt` on stderr. The decision and its reason are now recorded per
+module and written into the build manifest's `incremental` array in graph order
+(`stable`, `edges-hold`, `edge-changed`, `source-changed`, `mode-changed`,
+`no-artifact`; empty for a build that read no artifacts). `scripts/check_incremental.py`
+asserts them, and the suites do on both hosts: a warm build keeps every module
+stable; a body edit behind a signature edge rebuilds `dep` for its source, keeps
+`main` because every edge held, and leaves `e.os` stable. On the compiler's own
+build, a comment-only edit to `syntax.e` rebuilds one module, keeps twenty by
+their edges and fourteen stable -- the shape H14's first fixture asks for, at
+module granularity.
+
+Not yet, of H14: declaration-level reuse inside a rebuilt module (the module is
+still the unit of checking and emission); the counts of declarations rechecked,
+instances expanded, functions emitted and bytes regenerated; the separation of
+trivia from semantic identity (a comment edit rebuilds its module, and the manifest
+says so); the fallback-protocol and comptime-dependency fixtures.

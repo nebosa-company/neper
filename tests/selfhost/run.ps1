@@ -1659,6 +1659,12 @@ foreach ($hotMode in @('--release', '--time')) {
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a cold hot build is not the clean build ($hotMode)" }
     $hotWarm = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotWarm -ne 'executable written') { throw "the warm hot build failed ($hotMode)" }
+    # The manifest says what the warm build kept and why (D363, H14): everything, stable.
+    $hotManifestMode = 'debug'
+    if ($hotMode -eq '--release') { $hotManifestMode = 'release' }
+    $hotManifest = Join-Path $hotScratch ".neper\$hotManifestMode\build-manifest.json"
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable' 'e.os=kept:stable'
+    if ($LASTEXITCODE -ne 0) { throw "the warm hot build's manifest does not say every module was kept stable ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build is not the clean build ($hotMode)" }
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
@@ -1678,6 +1684,10 @@ foreach ($hotMode in @('--release', '--time')) {
     if ($LASTEXITCODE -ne 0 -or $hotEdited -ne 'executable written') { throw "the hot build after a body edit failed ($hotMode)" }
     & $hotExe
     if ($LASTEXITCODE -ne 8) { throw "the hot build did not carry the edited body: exit $LASTEXITCODE ($hotMode)" }
+    # A body edit behind a signature edge (D363): `dep` rebuilt for its source, `main`
+    # kept because every edge held, the rest stable.
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:edges-hold' 'dep=rebuilt:source-changed' 'e.os=kept:stable'
+    if ($LASTEXITCODE -ne 0) { throw "the hot build's manifest after a body edit does not record the expected decisions ($hotMode)" }
     $hotCleanEdited = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotClean $hotMode 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotCleanEdited -ne 'executable written') { throw "the clean build of the edited fixture failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a hot build after a body edit is not the clean build ($hotMode)" }
