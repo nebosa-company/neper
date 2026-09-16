@@ -123,7 +123,9 @@ replacing the expression's span with `T(expr)` for the expected `T`; a wider
 expression gets no fix, since which of its parts to convert is a reading. An
 unknown value name within two edits of a local or of one of the module's own
 values (D445, H09) names it -- `unknown value name; did you mean `x`?` -- and
-carries `use the nearest name in scope`, `maybe`, one edit over the token. A
+carries `use the nearest name in scope`, `maybe`, one edit over the token; a
+member a module does not export is ``m` has no member `x`` at the member's
+token, with the module's nearest export named and offered the same way (D447). A
 fix's `preconditions` (D432, H18) are the plans' (§5): the identity and SHA-256 of every source its edits
 touch, as the diagnostic saw it, so an applier refuses a file edited since -- an
 edit's byte offsets mean nothing against other bytes.

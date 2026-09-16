@@ -405,7 +405,11 @@ fn validate_field(r: *Resolver, g: *graph.Graph, tree: *parse.Tree, module_index
         at = at - 1usize
         if r.tokens[at].kind == .Identifier {
             let member = g.modules[module_index].text[r.tokens[at].start..r.tokens[at].end]
-            if !exported(r, target_module, member, false) { ret UnknownMember }
+            if !exported(r, target_module, member, false) {
+                // The member, the module and the nearest export (D447, H09).
+                note_unknown_member(r, module_index, r.tokens[at], base, member, target_module)
+                ret UnknownMember
+            }
             ret ok
         }
     }
@@ -475,7 +479,10 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
                 if token.kind == .PunctLBracket { break }
                 if token.kind == .Identifier {
                     let member = g.modules[module_index].text[token.start..token.end]
-                    if !exported(r, target_module, member, !names_a_value) { ret UnknownMember }
+                    if !exported(r, target_module, member, !names_a_value) {
+                        note_unknown_member(r, module_index, token, base, member, target_module)
+                        ret UnknownMember
+                    }
                     ret ok
                 }
                 at += 1usize
@@ -522,6 +529,35 @@ fn validate_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: synta
     r.failure_has_token = true
     r.failure_near = nearest_name(r, module_index, name)
     ret UnknownName
+}
+
+// An unknown member of a module (D447): where, which module, which name, and the
+// module's nearest export within two edits.
+fn note_unknown_member(r: *Resolver, module_index: usize, token: lex.Token, owner: str, member: str, target_module: usize) {
+    r.failure_module = module_index
+    r.failure_token = token
+    r.failure_has_token = true
+    r.failure_owner = owner
+    r.failure_name = member
+    var best = ""
+    var best_distance = 3usize
+    if member.len < 3usize {
+        r.failure_near = best
+        ret
+    }
+    var symbol_index = 0usize
+    while symbol_index < r.count {
+        let symbol = r.symbols[symbol_index]
+        if symbol.module_index == target_module && symbol.kind != .Qualifier && symbol.name.len >= 3usize {
+            let distance = edit_distance(symbol.name, member)
+            if distance < best_distance {
+                best = symbol.name
+                best_distance = distance
+            }
+        }
+        symbol_index += 1usize
+    }
+    r.failure_near = best
 }
 
 // The name in scope nearest to `name` (D445): the live locals first, then the

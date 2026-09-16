@@ -5356,6 +5356,28 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
         }
         ret print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
     }
+    // A module without the member named (D447, H09): the module and the member in
+    // the message, the nearest export named and offered as a `maybe` fix.
+    if resolve_error == resolve.UnknownMember && resolver.failure_has_token {
+        var member_storage: [512]u8 = zero
+        var member_at = tool.nptest_copy(member_storage[..], 0usize, "`")
+        member_at = tool.nptest_copy(member_storage[..], member_at, resolver.failure_owner)
+        member_at = tool.nptest_copy(member_storage[..], member_at, "` has no member `")
+        member_at = tool.nptest_copy(member_storage[..], member_at, resolver.failure_name)
+        member_at = tool.nptest_copy(member_storage[..], member_at, "`")
+        if resolver.failure_near.len != 0usize {
+            member_at = tool.nptest_copy(member_storage[..], member_at, "; did you mean `")
+            member_at = tool.nptest_copy(member_storage[..], member_at, resolver.failure_near)
+            member_at = tool.nptest_copy(member_storage[..], member_at, "`?")
+            report.fix_text = resolver.failure_near
+            report.fix_at = resolver.failure_token.start
+            report.fix_end = resolver.failure_token.end
+            report.fix_kind = 4u8
+        }
+        let member_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", member_storage[0usize..member_at])
+        report.fix_text = ""
+        ret member_emitted
+    }
     // Declaration and scope collisions carry an exact token and the offending
     // name; docs/diagnostics.md reserves E-NAME-0001 through E-NAME-0003 for them.
     if resolver.failure_has_token && named_resolve_failure(resolve_error) {

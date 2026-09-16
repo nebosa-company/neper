@@ -9799,3 +9799,16 @@ inside a rebuilt module, not across kept ones, and the row now says so.
 
 Not yet: the count per module, and reuse of declarations inside a module that
 is rebuilt for one edited body.
+
+## D447 -- A module without the member named says which
+
+`os.opne(...)` was `name resolution failed` at no position: the resolver's
+`UnknownMember` set no token. It now records the member's token, the module's
+qualifier and the member, and looks for the module's nearest export within two
+edits as D445 does; the diagnostic is ``os` has no member `opne`; did you mean
+`open`?` at the member, with `use the nearest name in scope` as a `maybe` fix
+over the token when there is a neighbour. Both value paths and type paths
+record it. The corpus gains `reject/member_near`.
+
+Not yet: a field of a struct that is not there, and the members a module
+declares but does not export, named as such.
