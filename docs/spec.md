@@ -3453,11 +3453,29 @@ the device build lowers `unreachable()` to the backend's trap instruction.
 
 A **resource type** is affine: a value of it lives in one place and is moved at most
 once; one with a **cleanup** is also obligated: consumed on every exit of the block
-that owns it. In this revision the resource types are `os.File`, `os.Proc` and
-`os.Thread`, whose cleanups are `os.close`, `os.wait`/`os.wait_usage` and
-`os.thread_join`/`os.thread_detach` (D345; a declared `resource` type is the next
-revision's). These rules are checked statically, in every build mode, and none
-becomes a trap:
+that owns it. The seeded handles `os.File`, `os.Proc` and `os.Thread` are resource
+types, with `os.close`, `os.wait`/`os.wait_usage` and `os.thread_join`/
+`os.thread_detach` their cleanups (D345); and a declared type is one when its body
+is prefixed (D348):
+
+```
+type Token = resource(release) struct { slot: usize }    // affine, owed to `release`
+type Cursor = resource struct { at: usize }              // affine, owed nothing
+```
+
+`resource(name)` names the cleanup, which must be `fn name(x: own T)` in the same
+module (`E-SAFETY-9999` otherwise); the cleanup owes nothing for the value it takes.
+A struct that holds a resource is affine by containment, and its owed fields are
+followed one by one: a field moved out of a local struct leaves the rest; the struct
+cannot then move whole (`E-SAFETY-0003`); its owed fields are audited at every exit
+as the struct's are. A struct that came back from a call, or a field assigned one,
+owes nothing by containment -- what it holds is the callee's business unless its
+type names a cleanup -- and a field read, an element read, or a borrowed producer's
+handle is a **view**: read as often as wanted, owed by nobody. A declared resource's
+fields are read only in the module that declares it, or in an `@unsafe` function
+(`E-SAFETY-0010`); the seeded handles' `raw` stays readable until the fixed surface
+gains `file_handle`. These rules are checked statically, in every build mode, and
+none becomes a trap:
 
 - A parameter borrows unless it is declared `own`: `fn close(f: own File) -> err`.
   Passing a resource to an `own` parameter moves it; the callee owns it and its
@@ -3486,8 +3504,8 @@ becomes a trap:
   `e.os` implementations are such functions. The three standard streams from
   `os.stdin`/`os.stdout`/`os.stderr` are borrowed: owned by the process, never owed.
 
-Aggregates that hold resources are not yet tracked: a store into a field moves the
-value in, and the aggregate is the owner from then on, closed through its fields.
+Arrays and slices of resources are not tracked: a store into an element moves the
+value in, and an element read is a view.
 
 ### Debug fills
 

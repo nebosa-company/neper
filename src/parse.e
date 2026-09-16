@@ -1751,6 +1751,18 @@ fn parse_type_declaration(p: *Parser) -> err {
         try advance(p)
     }
     try require(p, .PunctAssign)
+    // `resource` or `resource(cleanup)` before a type body (D348): the type is
+    // affine, and obligated when it names its cleanup. A contextual word, one only
+    // where `struct` or `union` follows.
+    if p.current.kind == .Identifier && lex.text_is(p.scanner.source, p.current.start, p.current.end, "resource") {
+        try advance(p)
+        if p.current.kind == .PunctLParen {
+            try advance(p)
+            try require(p, .Identifier)
+            try require(p, .PunctRParen)
+        }
+        try skip_soft(p)
+    }
     if p.current.kind == .KwStruct {
         let rhs_start = p.token_index
         try advance(p)

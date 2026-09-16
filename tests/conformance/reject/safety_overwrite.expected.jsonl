@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-SAFETY-0006","message":"`f` still owns what it acquired at line 12; close it before assigning over it","span":{"source":{"root":"operand","path":"safety_overwrite.e"},"byte_start":270,"byte_end":271,"line":13,"column":5,"end_line":13,"end_column":6,"column_utf16":5,"end_column_utf16":6},"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

@@ -165,9 +165,9 @@ fn reserved_arena(a: *mem.Arena) -> (mem.Arena, err) {
     let capacity = mem.stats(a).capacity - 4096usize
     let (base, reserve_error) = os.reserve(capacity)
     if reserve_error != ok { ret (none, reserve_error) }
-    // The host by its stderr handle, as `host_target` tells it (2 on Linux): the
-    // bootstrap has no `when` in a body.
-    if os.stderr().raw == 2usize {
+    // The host by the shape of its current directory (D348): `/` first is Linux.
+    let (cwd, cwd_error) = os.current_dir(a)
+    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 {
         let commit_error = os.commit(base, capacity)
         if commit_error != ok { ret (none, commit_error) }
     }

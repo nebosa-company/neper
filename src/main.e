@@ -808,7 +808,7 @@ fn flags_known(args: []str) -> bool {
                 if at + 1usize >= args.len { ret false }
                 at += 1usize
             } else {
-                // `-j N` (D331): a worker count from one up; `--inline-cap N` (D346): a
+                // `-j N` (D331): a worker count from one up; `--inline-cap N` (D348): a
                 // cap from zero, for a measurement.
                 if same(args[at], "-j") || same(args[at], "--inline-cap") {
                     if at + 1usize >= args.len || (same(args[at], "-j") && jobs_count(args[at + 1usize]) == 0usize) { ret false }
@@ -862,7 +862,7 @@ fn arena_flag(args: []str) -> usize {
     ret 0usize
 }
 
-// `--inline-cap N` (D346): the cap asked for plus one, or zero when the flag is absent.
+// `--inline-cap N` (D348): the cap asked for plus one, or zero when the flag is absent.
 fn inline_cap_flag(args: []str) -> usize {
     var at = 7usize
     while at + 1usize < args.len {
@@ -997,7 +997,7 @@ fn dispatch_short_form(a: *mem.Arena, args: []str) -> err {
                     report.file = os.stdout()
                     try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"")
                     try write_all(&report, stream_command_name(args[1usize]))
-                    try write_all(&report, "\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+                    try write_all(&report, "\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
                 }
                 try emit_command_diagnostic(&report, "E-CLI-9999", "the language version is not advertised; `info --json` lists the profiles")
                 if json { try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n") }
@@ -1048,7 +1048,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     if !project_form { file = args[2usize] }
     let root = own_directory(args[0usize])
     // Flags after the operand.
-    var triple = host_target()
+    var triple = host_target(a)
     var output = ""
     var has_output = false
     var release = false
@@ -1297,8 +1297,12 @@ fn ensure_dir(a: *mem.Arena, path: str) -> err {
     ret ok
 }
 
-fn host_target() -> str {
-    if os.stderr().raw == 2usize { ret "x64-linux" }
+// The host by the shape of its current directory (D348): an absolute path begins
+// with `/` on Linux and with a drive on Windows. A handle's representation is its
+// module's (E-SAFETY-0010), and the bootstrap has no `when` in a body.
+fn host_target(a: *mem.Arena) -> str {
+    let (cwd, cwd_error) = os.current_dir(a)
+    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 { ret "x64-linux" }
     ret "x64-windows"
 }
 
@@ -1365,7 +1369,7 @@ fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str) -> (i3
     var argc = 1usize
     // CreateProcess reads a relative path with `/` as no path at all (D267): spell it
     // the host's way when launching on Windows.
-    if !same(host_target(), "x64-linux") {
+    if !same(host_target(a), "x64-linux") {
         let (spelled, spelled_error) = mem.alloc[u8](a, launched.len)
         if spelled_error != ok { ret (0i32, "", "", spelled_error) }
         var fix = 0usize
@@ -1755,7 +1759,7 @@ fn test_project_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     report.json = true
     report.file = os.stdout()
-    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
     let (paths, paths_error) = mem.alloc[str](a, 1024usize)
     if paths_error != ok { ret paths_error }
     let (rels, rels_error) = mem.alloc[str](a, 1024usize)
@@ -1975,7 +1979,7 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     // A `@test` that is not a test is E-TEST-9999 (D256): the header, the diagnostic at the
     // declaration, and a result that exits 2, the way a runner that fails to compile does.
     if bad_kind != 0usize {
-        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         if bad_kind == 1usize {
             try emit_diagnostic(&report, args[2usize], text, no_lines[0usize..0usize], bad, true, "E-TEST-9999", "`@test` marks a function, and this declaration is not one")
         } else {
@@ -1997,7 +2001,7 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     // A module with no tests has nothing to compile or run: its stream is the header,
     // an empty summary and the result, and `test-project` counts it (D263).
     if count == 0usize {
-        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         try write_all(&report, "{\"record\":\"test_summary\",\"passed\":0,\"failed\":0,\"crashed\":0,\"timeout\":0,\"total\":0,\"duration_ms\":0}\n")
         try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"tests\":0}}\n")
         ret ok
@@ -2034,7 +2038,7 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     let (build_status, build_out, build_err, build_spawn_error) = nptest_spawn(a, build_argv[0usize..build_argc], runner_exe)
     if build_spawn_error != ok { ret build_spawn_error }
     if build_status != 0i32 {
-        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"test\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         // The compiler's own diagnostics first, mapped back onto the operand by the map.
         let (forwarded, forward_error) = forward_diagnostics(&report, build_out, "")
         if forward_error != ok { ret forward_error }
@@ -2130,7 +2134,7 @@ fn manifest_command(a: *mem.Arena, args: []str) -> err {
 fn unreadable_operand(report: *Sink, command: str, data: str) -> err {
     try write_all(report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"")
     try write_all(report, command)
-    try write_all(report, "\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+    try write_all(report, "\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
     try emit_command_diagnostic(report, "E-CLI-9999", "the operand cannot be read")
     try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":")
     try write_all(report, data)
@@ -2218,7 +2222,7 @@ fn index_project_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     report.json = true
     report.file = os.stdout()
-    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
     let (paths, paths_error) = mem.alloc[str](a, 4096usize)
     if paths_error != ok { ret paths_error }
     let (rels, rels_error) = mem.alloc[str](a, 4096usize)
@@ -2334,7 +2338,7 @@ fn check_project_command(a: *mem.Arena, args: []str) -> err {
     var report = stderr_sink()
     report.json = true
     report.file = os.stdout()
-    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+    try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
     let (paths, paths_error) = mem.alloc[str](a, 1024usize)
     if paths_error != ok { ret paths_error }
     let (rels, rels_error) = mem.alloc[str](a, 1024usize)
@@ -2625,7 +2629,7 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     try init_cli_graph(a, &loaded)
     let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
     if load_error != ok {
-        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read as a module")
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"symbols\":0,\"references\":0}}\n")
         os.exit(2i32)
@@ -2635,7 +2639,7 @@ fn index_command(a: *mem.Arena, args: []str) -> err {
     try init_cli_resolver(a, &resolver, &loaded, &report)
     let resolve_error = resolve.collect(&resolver, &loaded)
     if resolve_error != ok {
-        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+        try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"index\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
         try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":1,\"data\":{\"symbols\":0,\"references\":0}}\n")
         os.exit(1i32)
@@ -3958,10 +3962,26 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, ") but declared outside it, so the next iteration would use it moved")
     }
+    if checker.failure_kind == .ResourceOpaque {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, "` is a resource: its fields are read only in the module that declares it, or in an `@unsafe` function")
+    }
+    if checker.failure_kind == .ResourceCleanupSignature {
+        try write_all(file, "resource `")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` names its cleanup `")
+        try write_all(file, checker.failure_detail2)
+        try write_all(file, "`, which must be `fn ")
+        try write_all(file, checker.failure_detail2)
+        try write_all(file, "(x: own ")
+        try write_all(file, checker.failure_detail)
+        ret write_all(file, ")` in the same module")
+    }
     if checker.failure_kind == .ResourcePartialMove {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)
-        ret write_all(file, "` moves a resource out of an aggregate that stays; move the whole or borrow the field")
+        ret write_all(file, "` was moved out of its aggregate, which cannot then move whole; move every field, or none")
     }
     if checker.failure_kind == .MissingZeroValue {
         try write_all(file, "type `")
@@ -6800,7 +6820,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("parse ok\n")
         ret ok
     }
-    if args.len == 3usize && same(args[1usize], "info") && same(args[2usize], "--json") { ret tool.info_json(a, host_target()) }
+    if args.len == 3usize && same(args[1usize], "info") && same(args[2usize], "--json") { ret tool.info_json(a, host_target(a)) }
     if args.len >= 3usize && args.len <= 6usize && (same(args[1usize], "tokens") || same(args[1usize], "parse")) && !(args.len == 3usize && same(args[1usize], "parse")) { ret tool_command(a, args) }
     if args.len == 3usize && same(args[1usize], "scan-file") {
         let (text, load_error) = source.load(a, args[2usize])
@@ -6862,7 +6882,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // -- header, a diagnostic record each, the result -- on stdout (D228).
     if args.len >= 6usize && same(args[1usize], "check-file") && check_flags(a, &report, args) {
         if report.json {
-            try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+            try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"check\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
         }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
@@ -6977,9 +6997,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             report.json = true
             report.file = os.stdout()
             if running {
-                try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"run\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+                try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"run\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
             } else {
-                try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"build\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":2}\n")
+                try write_all(&report, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"build\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
             }
         }
         var loaded: graph.Graph = zero
@@ -7114,7 +7134,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         var hot: HotBuild = zero
         // What the workers copy the build mode from until the program builder exists.
         var early_builder: nir.Builder = zero
-        // The cap and the explanations (D346) ride the builder the oracles copy from.
+        // The cap and the explanations (D348) ride the builder the oracles copy from.
         if trailing_flags {
             early_builder.inline_cap = inline_cap_flag(args)
             early_builder.explain = has_flag(args, "--explain")

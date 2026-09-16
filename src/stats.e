@@ -253,9 +253,10 @@ fn count_nodes(r: *resolve.Resolver, g: *graph.Graph) -> (Counts, err) {
     ret (counts, ok)
 }
 
-// Probed from the standard-handle value, as the driver does: a Linux fd is 2.
-fn host_name() -> str {
-    if os.stderr().raw == 2usize { ret "Linux x64" }
+// The host by the shape of its current directory, as the driver tells it (D348).
+fn host_name(a: *mem.Arena) -> str {
+    let (cwd, cwd_error) = os.current_dir(a)
+    if cwd_error == ok && cwd.len != 0usize && cwd[0usize] == 47u8 { ret "Linux x64" }
     ret "Windows x64"
 }
 
@@ -340,7 +341,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try out(" bytes\n")
     if b.release { try row_text("compile mode", "RELEASE") } else { try row_text("compile mode", "DEBUG") }
     try row_text("compiler version", "0.1.0")
-    try row_text("host", host_name())
+    try row_text("host", host_name(a))
     try row("target")
     try out(b.arch)
     try out(" ")

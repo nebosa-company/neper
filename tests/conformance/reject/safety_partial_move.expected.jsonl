@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-SAFETY-0003","message":"`left` was moved out of its aggregate, which cannot then move whole; move every field, or none","span":{"source":{"root":"operand","path":"safety_partial_move.e"},"byte_start":766,"byte_end":770,"line":29,"column":14,"end_line":29,"end_column":18,"column_utf16":14,"end_column_utf16":18},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

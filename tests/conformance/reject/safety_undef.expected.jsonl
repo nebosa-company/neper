@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-SAFETY-0007","message":"`f` is a resource, which has no undefined value; use `zero`","span":{"source":{"root":"operand","path":"safety_undef.e"},"byte_start":69,"byte_end":72,"line":5,"column":5,"end_line":5,"end_column":8,"column_utf16":5,"end_column_utf16":8},"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

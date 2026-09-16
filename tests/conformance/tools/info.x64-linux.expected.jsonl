@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"info","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
-{"record":"info","tool_version":"0.1.0","language_profiles":[{"language_version":"0.1","grammar_revision":2,"stream_version":1,"experimental":false}],"commands":["build","check","dis","fmt","index","info","parse","run","test","tokens"],"host_target":"x64-linux","build_targets":["x64-linux","x64-windows"],"cpu_levels":["x64-v1"],"features":[]}
+{"schema":"neper-stream","version":1,"record":"header","command":"info","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"info","tool_version":"0.1.0","language_profiles":[{"language_version":"0.1","grammar_revision":3,"stream_version":1,"experimental":false}],"commands":["build","check","dis","fmt","index","info","parse","run","test","tokens"],"host_target":"x64-linux","build_targets":["x64-linux","x64-windows"],"cpu_levels":["x64-v1"],"features":[]}
 {"record":"result","ok":true,"exit_code":0,"data":{}}

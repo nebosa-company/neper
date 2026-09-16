@@ -1,4 +1,4 @@
-# neper concrete grammar — revision 2
+# neper concrete grammar — revision 3
 
 # Status: normative companion to docs/spec.md. This file specifies concrete syntax;
 # spec.md specifies typing, legality, evaluation and runtime semantics.
@@ -41,7 +41,8 @@ comptime_params = `[` comptime_param (`,` comptime_param)* `,`? `]` ;
 comptime_param  = comptime_name `:` comptime_kind ;
 comptime_kind   = `type` | `fn` | type_expr ;
 
-type_rhs        = struct_type | union_type | enum_type | union_enum_type | type_expr ;
+type_rhs        = resource_prefix? (struct_type | union_type | union_enum_type) | enum_type | type_expr ;
+resource_prefix = `resource` (`(` value_name `)`)? ;
 struct_type     = `struct` type_body ;
 union_type      = `union` type_body ;
 enum_type       = `enum` type_expr? enum_body ;

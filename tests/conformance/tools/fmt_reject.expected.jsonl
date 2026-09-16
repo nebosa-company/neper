@@ -1,4 +1,4 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"fmt","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
+{"schema":"neper-stream","version":1,"record":"header","command":"fmt","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-FORMAT-9999","message":"a comment may not separate an attribute from its declaration","span":{"source":{"root":"operand","path":"fmt_reject.e"},"byte_start":180,"byte_end":218,"line":6,"column":1,"end_line":6,"end_column":39,"column_utf16":1,"end_column_utf16":39},"parent":null,"related":[],"fixes":[]}
 {"record":"diagnostic","severity":"error","code":"E-LEX-9999","message":"invalid token","span":{"source":{"root":"operand","path":"fmt_reject.e"},"byte_start":270,"byte_end":271,"line":8,"column":19,"end_line":8,"end_column":20,"column_utf16":19,"end_column_utf16":20},"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":2}}

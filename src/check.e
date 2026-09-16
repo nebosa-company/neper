@@ -59,6 +59,8 @@ type DiagnosticKind = enum u8 {
     ResourceUnchecked,
     ResourceDeferredConsumed,
     ResourceMovedInLoop,
+    ResourceOpaque,
+    ResourceCleanupSignature,
     AssignmentImmutable,
     IndexedArrayImmutable,
     IndexedElementsImmutable,
@@ -273,6 +275,9 @@ type Aggregate = struct {
     instance: bool,
     backing_type: Type,
     token: lex.Token,
+    // `resource` (D348): affine; `cleanup` names the consuming function, or is empty.
+    resource: bool,
+    cleanup: str,
 }
 
 type AggregateField = struct {
@@ -296,6 +301,9 @@ type Local = struct {
     obligated: bool,
     bound_err: usize,
     has_bound_err: bool,
+    // A struct local's fields (D348): a state per field, the low four bits, and
+    // whether it is owed, the fifth; zero for a field that is not affine.
+    fields: []u8,
 }
 
 type Alias = struct {
@@ -2010,7 +2018,11 @@ fn register_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.G
     let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
     let aggregate_index = c.aggregate_count
-    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[usize(node.token_start)] }
+    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[usize(node.token_start)], resource: false, cleanup: "" }
+    // `resource` and its cleanup sit between the `=` and the body (D348).
+    let (is_resource, cleanup) = resource_declaration(c, g.modules[module_index].text, node, tree.nodes[body_index])
+    aggregate.resource = is_resource
+    aggregate.cleanup = cleanup
     c.aggregates[aggregate_index] = aggregate
     c.aggregate_count += 1usize
     let end = usize(node.first_child) + usize(node.child_count)
@@ -2182,7 +2194,7 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
 fn seed_target_enum(c: *Checker, name: str, members: []const str) -> err {
     if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + members.len > c.aggregate_fields.len { ret Capacity }
     let backing = make_type(.Integer, "u8", 0usize)
-    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero }
+    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero, resource: false, cleanup: "" }
     var at = 0usize
     while at < members.len {
         c.aggregate_fields[c.aggregate_field_count + at] = AggregateField { name: members[at], ty: backing, enum_value: at, enum_negative: false, has_enum_value: true, token: zero }
@@ -2232,7 +2244,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
     if has_memory {
         if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + 2usize > c.aggregate_fields.len { ret Capacity }
         let usize_type = make_type(.Integer, "usize", memory_module)
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "" }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "used", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_fields[c.aggregate_field_count + 1usize] = AggregateField { name: "capacity", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 2usize
@@ -2252,7 +2264,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
         var element = make_type(.TypeParameter, "T", atomic_module)
         element.element = parameter_index
         element.has_element = true
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "" }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "value", ty: element, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 1usize
         c.aggregate_count += 1usize
@@ -2294,7 +2306,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
             lanes.has_length = false
             var name = "Vec"
             if which == 1usize { name = "Mask" }
-            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero }
+            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "" }
             c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "lanes", ty: lanes, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
             c.aggregate_field_count += 1usize
             c.aggregate_count += 1usize
@@ -5386,7 +5398,8 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     if c.local_count == c.locals.len { ret Capacity }
     var state = 0u8
     if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
-    c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable, state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false }
+    var no_fields: []u8 = zero
+    c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable, state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields }
     c.local_count += 1usize
     ret ok
 }
@@ -9445,6 +9458,22 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             ret (contextual_enum, context_error)
         }
         if enum_target { ret (invalid_type(), InvalidType) }
+        // A resource's representation is its module's alone (D348, E-SAFETY-0010):
+        // a field of one read anywhere else, outside an `@unsafe` function, is refused.
+        if c.resources_on {
+            let (opaque_base_index, has_opaque_base) = first_node_child(tree, node)
+            if has_opaque_base && (tree.nodes[opaque_base_index].kind != .NameExpr || !name_is_qualifier(c, g, tree, module_index, opaque_base_index)) {
+                let (opaque_base, opaque_error) = check_expr(c, g, tree, module_index, opaque_base_index, invalid_type())
+                if opaque_error == ok {
+                    var opaque_subject = opaque_base
+                    while opaque_subject.kind == .Pointer && opaque_subject.has_element && opaque_subject.element < c.type_count { opaque_subject = c.types[opaque_subject.element] }
+                    if resource_type(c, opaque_subject) && !seeded_handle(c, opaque_subject) && opaque_subject.module_index != module_index {
+                        record_failure(c, module_index, node, .ResourceOpaque, opaque_subject.name, "")
+                        ret (invalid_type(), ResourceViolation)
+                    }
+                }
+            }
+        }
         let (target_module, member, found_member) = qualified_member(c, g, tree, module_index, node)
         if found_member {
             let (constant_index, constant_found) = find_constant(c, target_module, member)
@@ -9922,6 +9951,21 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
     try add_local(c, name, result, mutable)
     var no_call: CallInfo = zero
     try resource_bind_local(c, g, tree, module_index, c.local_count - 1usize, node, initializer_index, has_initializer, false, no_call, false, 0usize, false)
+    // `var failure = options_error`: the resources bound beside the source error are
+    // bound beside this one too from here on.
+    if has_initializer && result.kind == .Err && tree.nodes[initializer_index].kind == .NameExpr && c.resources_on {
+        let source_token = c.tokens[usize(tree.nodes[initializer_index].token_start)]
+        if source_token.kind == .Identifier {
+            let (source, source_found) = find_local(c, g.modules[module_index].text[source_token.start..source_token.end])
+            if source_found && c.locals[source].ty.kind == .Err {
+                var bound_at = 0usize
+                while bound_at < c.local_count - 1usize {
+                    if c.locals[bound_at].has_bound_err && c.locals[bound_at].bound_err == source { c.locals[bound_at].bound_err = c.local_count - 1usize }
+                    bound_at += 1usize
+                }
+            }
+        }
+    }
     ret ok
 }
 
@@ -10085,7 +10129,7 @@ fn check_condition_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph,
                         if after_error != ok { ret after_error }
                         resource_restore(c, before)
                         if !resource_diverges(c, g, tree, module_index, child) {
-                            if joined_count == 0usize { joined = after } else { resource_join_states(joined, after) }
+                            if joined_count == 0usize { joined = after } else { resource_join_states(c, joined, after) }
                             joined_count += 1usize
                         }
                         arm_total += 1usize
@@ -10956,7 +11000,7 @@ fn check_switch_statement(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tr
                     if body_error == ok {
                         let (after, after_error) = resource_snapshot(c, checkpoint)
                         if after_error != ok { ret after_error }
-                        if joined_count == 0usize { joined = after } else { resource_join_states(joined, after) }
+                        if joined_count == 0usize { joined = after } else { resource_join_states(c, joined, after) }
                         joined_count += 1usize
                     }
                 }
@@ -11498,11 +11542,19 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
         let parameter = c.parameters[function.first_parameter + parameter_index]
         if parameter.ty.kind == .Other { ret Unsupported }
         try add_local(c, parameter.name, parameter.ty, false)
-        // An `own` parameter carries its obligation into the body (D345); a borrowed
-        // one is owned by the caller and owes nothing here.
-        if parameter.own && c.locals[c.local_count - 1usize].state != resource_plain() {
-            c.locals[c.local_count - 1usize].obligated = affine_kind(c, parameter.ty, 0usize) == 2u8
+        // An `own` parameter carries its obligation into the body (D345), field by
+        // field for a struct (D348); a borrowed one is owned by the caller and owes
+        // nothing here, its fields views.
+        if c.locals[c.local_count - 1usize].state != resource_plain() {
             c.locals[c.local_count - 1usize].acquired = usize(node.token_start)
+            try resource_init_fields(c, c.local_count - 1usize, resource_owned())
+            if parameter.own {
+                c.locals[c.local_count - 1usize].obligated = affine_kind(c, parameter.ty, 0usize) == 2u8
+                // The type's own cleanup discharges what it is given by raw means.
+                if resource_cleanup_of(c, parameter.ty, function) { c.locals[c.local_count - 1usize].obligated = false }
+            } else {
+                resource_disown_fields(c, c.local_count - 1usize)
+            }
         }
         parameter_index += 1usize
     }
@@ -11864,6 +11916,7 @@ fn run_declarations(c: *Checker, r: *resolve.Resolver, g: *graph.Graph) -> err {
     try validate_aggregate_value_cycles(c)
     try collect_signatures(c, r, g)
     c.signatures_ready = true
+    try validate_resource_cleanups(c, g)
     // The constants that call are evaluated now (D218), so a failure is reported at
     // the declaration whether or not anything uses it.
     var constant_index = 0usize
@@ -11883,6 +11936,8 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourceUnchecked { ret "E-SAFETY-0008" }
     if kind == .ResourceDeferredConsumed { ret "E-SAFETY-0009" }
     if kind == .ResourceMovedInLoop { ret "E-SAFETY-0011" }
+    if kind == .ResourceOpaque { ret "E-SAFETY-0010" }
+    if kind == .ResourceCleanupSignature { ret "E-SAFETY-9999" }
     if kind == .TryInsideDefer || kind == .TryCast || kind == .TryNotFallible || kind == .TryNoPropagate { ret "E-ERROR-9999" }
     // docs/diagnostics.md: section 9's reflection and section 8's atomics under their
     // own categories (D215). A constant cycle stays E-TYPE-9999: the bootstrap says so
@@ -12003,9 +12058,180 @@ fn module_is_os(c: *Checker, module_index: usize) -> bool {
 // handles alone for now: containment through aggregates and arrays waits on the
 // partial-move rule of the next step, so a struct holding a `File` is not tracked.
 fn affine_kind(c: *Checker, ty: Type, depth: usize) -> u8 {
-    if ty.kind != .Named { ret 0u8 }
+    if ty.kind != .Named || depth > 6usize { ret 0u8 }
     if module_is_os(c, ty.module_index) && (same(ty.name, "File") || same(ty.name, "Proc") || same(ty.name, "Thread")) { ret 2u8 }
-    ret 0u8
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found { ret 0u8 }
+    var aggregate = c.aggregates[aggregate_index]
+    if aggregate.generic && aggregate.instance && aggregate.template_index < c.aggregate_count { aggregate = c.aggregates[aggregate.template_index] }
+    if aggregate.resource {
+        if aggregate.cleanup.len != 0usize { ret 2u8 }
+        ret 1u8
+    }
+    if aggregate.kind != .Struct { ret 0u8 }
+    // Containment: a struct holding a resource is affine, and owed if it is.
+    var worst = 0u8
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index < c.aggregate_field_count {
+            let field_kind = affine_kind(c, c.aggregate_fields[field_index].ty, depth + 1usize)
+            if field_kind > worst { worst = field_kind }
+        }
+        at += 1usize
+    }
+    ret worst
+}
+
+// Whether the type is a resource type itself -- a seeded handle or a declared
+// `resource` -- as against a struct that merely holds one.
+fn resource_type(c: *Checker, ty: Type) -> bool {
+    if ty.kind != .Named { ret false }
+    if module_is_os(c, ty.module_index) && (same(ty.name, "File") || same(ty.name, "Proc") || same(ty.name, "Thread")) { ret true }
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found { ret false }
+    var aggregate = c.aggregates[aggregate_index]
+    if aggregate.generic && aggregate.instance && aggregate.template_index < c.aggregate_count { aggregate = c.aggregates[aggregate.template_index] }
+    ret aggregate.resource
+}
+
+// The struct a tracked local is, when its fields are followed one by one: a struct
+// that holds resources and is not a resource itself.
+fn resource_tracked_struct(c: *Checker, ty: Type) -> (usize, bool) {
+    if ty.kind != .Named || resource_type(c, ty) { ret (0usize, false) }
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found { ret (0usize, false) }
+    var aggregate = c.aggregates[aggregate_index]
+    if aggregate.generic && aggregate.instance && aggregate.template_index < c.aggregate_count { aggregate = c.aggregates[aggregate.template_index] }
+    if aggregate.kind != .Struct { ret (0usize, false) }
+    ret (aggregate_index, affine_kind(c, ty, 0usize) != 0u8)
+}
+
+fn field_state(b: u8) -> u8 { ret b & 15u8 }
+fn field_owed(b: u8) -> bool {
+    let bit = b & 16u8
+    ret bit != 0u8
+}
+fn field_with(state: u8, owed: bool) -> u8 {
+    if owed { ret state | 16u8 }
+    ret state
+}
+
+// A tracked struct local's field bytes made, every affine field in `state`, owed
+// when its type names a cleanup; nothing for a local that is not a tracked struct.
+fn resource_init_fields(c: *Checker, local_index: usize, state: u8) -> err {
+    let (aggregate_index, tracked) = resource_tracked_struct(c, c.locals[local_index].ty)
+    if !tracked {
+        var none: []u8 = zero
+        c.locals[local_index].fields = none
+        ret ok
+    }
+    var aggregate = c.aggregates[aggregate_index]
+    if aggregate.generic && aggregate.instance && aggregate.template_index < c.aggregate_count { aggregate = c.aggregates[aggregate.template_index] }
+    let (fields, fields_error) = mem.alloc[u8](c.arena, aggregate.field_count + 1usize)
+    if fields_error != ok { ret fields_error }
+    var at = 0usize
+    while at < aggregate.field_count {
+        fields[at] = 0u8
+        let field_index = aggregate.first_field + at
+        if field_index < c.aggregate_field_count {
+            let kind = affine_kind(c, c.aggregate_fields[field_index].ty, 0usize)
+            if kind != 0u8 { fields[at] = field_with(state, kind == 2u8 && state != resource_null()) }
+        }
+        at += 1usize
+    }
+    c.locals[local_index].fields = fields[0usize..aggregate.field_count]
+    ret ok
+}
+
+fn resource_set_fields(c: *Checker, local_index: usize, state: u8) {
+    var at = 0usize
+    while at < c.locals[local_index].fields.len {
+        let b = c.locals[local_index].fields[at]
+        if b != 0u8 { c.locals[local_index].fields[at] = field_with(state, field_owed(b) && state != resource_null()) }
+        at += 1usize
+    }
+}
+
+// `s.f` where `s` is a tracked struct local and `f` an affine field: the local, the
+// field's position in it.
+fn resource_field_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .FieldExpr { ret (0usize, 0usize, false) }
+    let (base_index, has_base) = first_node_child(tree, node)
+    if !has_base { ret (0usize, 0usize, false) }
+    let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, base_index)
+    if !is_resource || c.locals[local_index].fields.len == 0usize { ret (0usize, 0usize, false) }
+    let member = c.tokens[usize(node.token_end) - 1usize]
+    if member.kind != .Identifier { ret (0usize, 0usize, false) }
+    let name = g.modules[module_index].text[member.start..member.end]
+    let (field_index, found) = find_aggregate_field(c, c.locals[local_index].ty, name)
+    if !found { ret (0usize, 0usize, false) }
+    let (aggregate_index, tracked) = resource_tracked_struct(c, c.locals[local_index].ty)
+    if !tracked { ret (0usize, 0usize, false) }
+    var aggregate = c.aggregates[aggregate_index]
+    if aggregate.generic && aggregate.instance && aggregate.template_index < c.aggregate_count { aggregate = c.aggregates[aggregate.template_index] }
+    if field_index < aggregate.first_field { ret (0usize, 0usize, false) }
+    let at = field_index - aggregate.first_field
+    if at >= c.locals[local_index].fields.len || c.locals[local_index].fields[at] == 0u8 { ret (0usize, 0usize, false) }
+    ret (local_index, at, true)
+}
+
+fn resource_field_name(c: *Checker, local_index: usize, at: usize) -> str {
+    let (aggregate_index, tracked) = resource_tracked_struct(c, c.locals[local_index].ty)
+    if !tracked { ret c.locals[local_index].name }
+    var aggregate = c.aggregates[aggregate_index]
+    if aggregate.generic && aggregate.instance && aggregate.template_index < c.aggregate_count { aggregate = c.aggregates[aggregate.template_index] }
+    if aggregate.first_field + at < c.aggregate_field_count { ret c.aggregate_fields[aggregate.first_field + at].name }
+    ret c.locals[local_index].name
+}
+
+// `resource(cleanup)` between a type declaration's `=` and its body.
+fn resource_declaration(c: *Checker, text: str, node: syntax.Node, body: syntax.Node) -> (bool, str) {
+    var at = usize(node.token_start)
+    var after_assign = false
+    var is_resource = false
+    var cleanup = ""
+    while at < usize(body.token_start) && at < c.token_count {
+        let token = c.tokens[at]
+        if token.kind == .PunctAssign { after_assign = true }
+        if after_assign && token.kind == .Identifier {
+            let spelled = text[token.start..token.end]
+            if !is_resource && same(spelled, "resource") {
+                is_resource = true
+            } else {
+                if is_resource && cleanup.len == 0usize { cleanup = spelled }
+            }
+        }
+        at += 1usize
+    }
+    ret (is_resource, cleanup)
+}
+
+// Every declared resource's cleanup is `fn cleanup(x: own T) -> ...` in its module.
+fn validate_resource_cleanups(c: *Checker, g: *graph.Graph) -> err {
+    var at = 0usize
+    while at < c.aggregate_count {
+        let aggregate = c.aggregates[at]
+        if aggregate.resource && aggregate.cleanup.len != 0usize && !aggregate.instance {
+            let (function_index, found) = find_function(c, aggregate.module_index, aggregate.cleanup)
+            var valid = found
+            if found {
+                let function = c.functions[function_index]
+                if function.parameter_count == 0usize || !c.parameters[function.first_parameter].own { valid = false }
+                if valid {
+                    let first = c.parameters[function.first_parameter].ty
+                    if first.kind != .Named || !same(first.name, aggregate.name) || first.module_index != aggregate.module_index { valid = false }
+                }
+            }
+            if !valid {
+                record_failure_token(c, aggregate.module_index, aggregate.token, .ResourceCleanupSignature, aggregate.name, aggregate.cleanup)
+                ret ResourceViolation
+            }
+        }
+        at += 1usize
+    }
+    ret ok
 }
 
 // Whether the callee's parameter takes ownership: declared `own`, or the seeded
@@ -12083,6 +12309,23 @@ fn resource_uses(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, skip_first_name: bool, parent: syntax.Kind) -> err {
     let node = tree.nodes[node_index]
     if node.kind == .Block { ret ok }
+    if node.kind == .FieldExpr {
+        let (local_index, at, is_field) = resource_field_of(c, g, tree, module_index, node_index)
+        if is_field {
+            let state = field_state(c.locals[local_index].fields[at])
+            if state == resource_moved() || state == resource_maybe() {
+                record_failure(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.locals[local_index].acquired))
+                ret ResourceViolation
+            }
+        }
+        // A field of a tracked struct is its own question: the struct's whole state
+        // does not gate a read of one field, plain or affine, only its own does.
+        let (base_index, has_base) = first_node_child(tree, node)
+        if has_base && tree.nodes[base_index].kind == .NameExpr {
+            let (base_local, base_is_resource) = resource_local_of(c, g, tree, module_index, base_index)
+            if base_is_resource && c.locals[base_local].fields.len != 0usize { ret ok }
+        }
+    }
     if node.kind == .NameExpr {
         let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
         if !is_resource { ret ok }
@@ -12120,10 +12363,22 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
 // argument, by `ret`. It has to be owned to be consumed.
 fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     if !c.resources_on { ret ok }
+    let node = tree.nodes[node_index]
+    if node.kind == .FieldExpr { ret resource_consume_field(c, g, tree, module_index, node_index) }
     let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
     if !is_resource { ret ok }
-    let node = tree.nodes[node_index]
     let state = c.locals[local_index].state
+    // A struct moved whole must be whole: a field moved out of it stays out.
+    var field_at = 0usize
+    while field_at < c.locals[local_index].fields.len {
+        let field_byte = c.locals[local_index].fields[field_at]
+        let one = field_state(field_byte)
+        if field_byte != 0u8 && (one == resource_moved() || one == resource_maybe() || one == resource_reserved()) {
+            record_failure(c, module_index, node, .ResourcePartialMove, resource_field_name(c, local_index, field_at), line_detail(c, g, module_index, c.locals[local_index].acquired))
+            ret ResourceViolation
+        }
+        field_at += 1usize
+    }
     if state == resource_reserved() {
         record_failure(c, module_index, node, .ResourceDeferredConsumed, c.locals[local_index].name, line_detail(c, g, module_index, c.locals[local_index].acquired))
         ret ResourceViolation
@@ -12131,6 +12386,9 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     // A null resource may be handed on -- `ret (file, Unsupported)` is the contract
     // for a failed acquisition -- and nothing is owed for it.
     if state == resource_null() { ret ok }
+    // A view -- a borrowed producer's handle, a field read of something that owns it
+    // -- owes nothing and is moved by nobody; it is read as often as wanted.
+    if state == resource_owned() && !c.locals[local_index].obligated && c.locals[local_index].fields.len == 0usize { ret ok }
     if state != resource_owned() {
         record_failure(c, module_index, node, .ResourceUseAfterMove, c.locals[local_index].name, line_detail(c, g, module_index, c.locals[local_index].acquired))
         ret ResourceViolation
@@ -12143,6 +12401,7 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     }
     c.locals[local_index].state = resource_moved()
     c.locals[local_index].acquired = usize(node.token_start)
+    resource_set_fields(c, local_index, resource_moved())
     ret ok
 }
 
@@ -12182,12 +12441,14 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if !has_initializer || contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwZero) {
         c.locals[local_index].state = resource_null()
         c.locals[local_index].obligated = false
-        ret ok
+        ret resource_init_fields(c, local_index, resource_null())
     }
     if from_call {
         if producer_borrowed(c, call.function) {
             c.locals[local_index].state = resource_owned()
             c.locals[local_index].obligated = false
+            try resource_init_fields(c, local_index, resource_owned())
+            resource_disown_fields(c, local_index)
             ret ok
         }
         c.locals[local_index].state = resource_owned()
@@ -12196,6 +12457,12 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             c.locals[local_index].bound_err = err_local
             c.locals[local_index].has_bound_err = true
         }
+        // A struct that came back from a call is affine, but what its fields hold
+        // is the callee's business unless the type names its cleanup: a `Sink` over
+        // the standard streams owes nothing, a writer over a file it opened says so
+        // by being a `resource(close)`.
+        try resource_init_fields(c, local_index, resource_owned())
+        resource_disown_fields(c, local_index)
         ret ok
     }
     // Not a call: another local, moved; or an expression that made a value (an
@@ -12208,22 +12475,103 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             c.locals[local_index].state = resource_unchecked()
             c.locals[local_index].bound_err = c.locals[source_index].bound_err
             c.locals[local_index].has_bound_err = c.locals[source_index].has_bound_err
+            try resource_copy_fields(c, local_index, source_index)
             c.locals[source_index].state = resource_moved()
+            resource_set_fields(c, source_index, resource_moved())
             ret ok
         }
+        // The fields come across as they stood, before the source is moved whole.
+        if source_is_resource { try resource_copy_fields(c, local_index, source_index) }
         try resource_consume(c, g, tree, module_index, initializer_index)
         c.locals[local_index].state = resource_owned()
-        if source_is_resource && !c.locals[source_index].obligated { c.locals[local_index].obligated = false }
+        if source_is_resource {
+            if !c.locals[source_index].obligated { c.locals[local_index].obligated = false }
+        }
+        if !source_is_resource { try resource_init_fields(c, local_index, resource_owned()) }
         ret ok
     }
-    if initializer.kind == .FieldExpr || initializer.kind == .BracketPostfix {
+    if initializer.kind == .FieldExpr {
+        // A field moved out into its own binding, or a view of something untracked.
+        let (source_index, source_at, is_field) = resource_field_of(c, g, tree, module_index, initializer_index)
+        if is_field {
+            try resource_consume(c, g, tree, module_index, initializer_index)
+            c.locals[local_index].state = resource_owned()
+            ret resource_init_fields(c, local_index, resource_owned())
+        }
         c.locals[local_index].state = resource_owned()
         c.locals[local_index].obligated = false
+        try resource_init_fields(c, local_index, resource_owned())
+        resource_disown_fields(c, local_index)
         ret ok
     }
-    try resource_move_literal_fields(c, g, tree, module_index, initializer_index)
+    if initializer.kind == .BracketPostfix {
+        c.locals[local_index].state = resource_owned()
+        c.locals[local_index].obligated = false
+        try resource_init_fields(c, local_index, resource_owned())
+        resource_disown_fields(c, local_index)
+        ret ok
+    }
+    try resource_literal_moves(c, g, tree, module_index, initializer_index)
     c.locals[local_index].state = resource_owned()
+    try resource_init_fields(c, local_index, resource_owned())
+    resource_literal_owed(c, g, tree, module_index, local_index, initializer_index)
     ret ok
+}
+
+// What a literal's fields owe: a field given a local that owed nothing, a literal of
+// bits, or a borrowed producer's handle owes nothing itself.
+fn resource_literal_owed(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, literal_index: usize) {
+    let literal = tree.nodes[literal_index]
+    if literal.kind != .AggregateLiteral || c.locals[local_index].fields.len == 0usize { ret }
+    let text = g.modules[module_index].text
+    let end = usize(literal.first_child) + usize(literal.child_count)
+    var at = usize(literal.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            let item_index = parse.child_index_at(tree, at)
+            let item = tree.nodes[item_index]
+            if item.kind == .LiteralItem {
+                let name_token = c.tokens[usize(item.token_start)]
+                let (value_index, has_value) = first_node_child(tree, item)
+                if name_token.kind == .Identifier && has_value {
+                    let (field_index, found) = find_aggregate_field(c, c.locals[local_index].ty, text[name_token.start..name_token.end])
+                    let first = resource_field_global(c, local_index, 0usize)
+                    if found && field_index >= first && field_index - first < c.locals[local_index].fields.len {
+                        let field_at = field_index - first
+                        let byte = c.locals[local_index].fields[field_at]
+                        if byte != 0u8 {
+                            var owed = field_owed(byte)
+                            let value = tree.nodes[value_index]
+                            if value.kind == .AggregateLiteral { owed = false }
+                            if value.kind == .NameExpr {
+                                let value_token = c.tokens[usize(value.token_start)]
+                                if value_token.kind == .Identifier {
+                                    let (source, source_found) = find_local(c, text[value_token.start..value_token.end])
+                                    if source_found && c.locals[source].state != resource_plain() && !c.locals[source].obligated { owed = false }
+                                }
+                            }
+                            if value.kind == .CallExpr {
+                                let (info, info_error) = check_call(c, g, tree, module_index, value)
+                                if info_error == ok && (producer_borrowed(c, info.function) || !resource_type(c, c.aggregate_fields[field_index].ty)) { owed = false }
+                            }
+                            c.locals[local_index].fields[field_at] = field_with(field_state(byte), owed)
+                        }
+                    }
+                }
+            }
+        }
+        at += 1usize
+    }
+}
+
+// A view -- of a field, an element, a borrowed producer -- owes nothing, field by field.
+fn resource_disown_fields(c: *Checker, local_index: usize) {
+    var at = 0usize
+    while at < c.locals[local_index].fields.len {
+        let b = c.locals[local_index].fields[at]
+        if b != 0u8 { c.locals[local_index].fields[at] = field_state(b) }
+        at += 1usize
+    }
 }
 
 // A value that names a resource local outright is moved by what takes it -- a
@@ -12231,7 +12579,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
 // aggregate literal is not, in this step: aggregates are not tracked yet.
 fn resource_move_literal_fields(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     let node = tree.nodes[node_index]
-    if node.kind == .NameExpr { ret resource_consume(c, g, tree, module_index, node_index) }
+    if node.kind == .NameExpr || node.kind == .FieldExpr { ret resource_consume(c, g, tree, module_index, node_index) }
     ret ok
 }
 
@@ -12242,9 +12590,26 @@ fn resource_audit(c: *Checker, g: *graph.Graph, module_index: usize, node: synta
     var at = from
     while at < c.local_count {
         let local = c.locals[at]
-        if local.obligated && (local.state == resource_owned() || local.state == resource_maybe() || local.state == resource_unchecked()) {
-            record_failure(c, module_index, node, exit_kind, local.name, line_detail(c, g, module_index, local.acquired))
-            ret ResourceViolation
+        let live = local.state == resource_owned() || local.state == resource_maybe() || local.state == resource_unchecked()
+        if local.fields.len != 0usize {
+            // A struct owes what its owed fields still hold, while it is here itself.
+            if live {
+                var field_at = 0usize
+                while field_at < local.fields.len {
+                    let b = local.fields[field_at]
+                    let one = field_state(b)
+                    if field_owed(b) && (one == resource_owned() || one == resource_maybe() || one == resource_unchecked()) {
+                        record_failure(c, module_index, node, exit_kind, resource_field_name(c, at, field_at), line_detail(c, g, module_index, local.acquired))
+                        ret ResourceViolation
+                    }
+                    field_at += 1usize
+                }
+            }
+        } else {
+            if local.obligated && live {
+                record_failure(c, module_index, node, exit_kind, local.name, line_detail(c, g, module_index, local.acquired))
+                ret ResourceViolation
+            }
         }
         at += 1usize
     }
@@ -12252,21 +12617,45 @@ fn resource_audit(c: *Checker, g: *graph.Graph, module_index: usize, node: synta
 }
 
 // The states of the locals below `count`, kept for a join.
+// The states of the locals below `count` and of their fields, in one run: a local's
+// byte, then its fields' bytes.
 fn resource_snapshot(c: *Checker, count: usize) -> ([]u8, err) {
-    let (states, states_error) = mem.alloc[u8](c.arena, count + 1usize)
-    if states_error != ok { ret (states, states_error) }
+    var size = 0usize
     var at = 0usize
     while at < count {
-        states[at] = c.locals[at].state
+        size += 1usize + c.locals[at].fields.len
         at += 1usize
     }
-    ret (states[0usize..count], ok)
+    let (states, states_error) = mem.alloc[u8](c.arena, size + 1usize)
+    if states_error != ok { ret (states, states_error) }
+    var out = 0usize
+    at = 0usize
+    while at < count {
+        states[out] = c.locals[at].state
+        out += 1usize
+        var field_at = 0usize
+        while field_at < c.locals[at].fields.len {
+            states[out] = c.locals[at].fields[field_at]
+            out += 1usize
+            field_at += 1usize
+        }
+        at += 1usize
+    }
+    ret (states[0usize..size], ok)
 }
 
 fn resource_restore(c: *Checker, states: []const u8) {
     var at = 0usize
-    while at < states.len && at < c.local_count {
-        c.locals[at].state = states[at]
+    var cursor = 0usize
+    while at < c.local_count && cursor < states.len {
+        c.locals[at].state = states[cursor]
+        cursor += 1usize
+        var field_at = 0usize
+        while field_at < c.locals[at].fields.len && cursor < states.len {
+            c.locals[at].fields[field_at] = states[cursor]
+            cursor += 1usize
+            field_at += 1usize
+        }
         at += 1usize
     }
 }
@@ -12274,10 +12663,20 @@ fn resource_restore(c: *Checker, states: []const u8) {
 // The join of two arms: the same state stays; anything else is Maybe, which no later
 // use or exit accepts, since one path moved the value and the other did not.
 // Two arms' states joined into the first.
-fn resource_join_states(into: []u8, other: []const u8) {
+// Two flat snapshots joined into the first: the same layout, since both were taken
+// over the same locals; a local's byte joins as a state, a field's as a field.
+fn resource_join_states(c: *Checker, into: []u8, other: []const u8) {
     var at = 0usize
-    while at < into.len && at < other.len {
-        into[at] = resource_join_one(into[at], other[at])
+    var cursor = 0usize
+    while at < c.local_count && cursor < into.len && cursor < other.len {
+        into[cursor] = resource_join_one(into[cursor], other[cursor])
+        cursor += 1usize
+        var field_at = 0usize
+        while field_at < c.locals[at].fields.len && cursor < into.len && cursor < other.len {
+            into[cursor] = resource_join_field(into[cursor], other[cursor])
+            cursor += 1usize
+            field_at += 1usize
+        }
         at += 1usize
     }
 }
@@ -12297,20 +12696,44 @@ fn resource_join_one(a: u8, b: u8) -> u8 {
 
 fn resource_join(c: *Checker, other: []const u8) {
     var at = 0usize
-    while at < other.len && at < c.local_count {
-        c.locals[at].state = resource_join_one(c.locals[at].state, other[at])
+    var cursor = 0usize
+    while at < c.local_count && cursor < other.len {
+        c.locals[at].state = resource_join_one(c.locals[at].state, other[cursor])
+        cursor += 1usize
+        var field_at = 0usize
+        while field_at < c.locals[at].fields.len && cursor < other.len {
+            c.locals[at].fields[field_at] = resource_join_field(c.locals[at].fields[field_at], other[cursor])
+            cursor += 1usize
+            field_at += 1usize
+        }
         at += 1usize
     }
+}
+
+fn resource_join_field(a: u8, b: u8) -> u8 {
+    if a == 0u8 || b == 0u8 { ret a }
+    ret field_with(resource_join_one(field_state(a), field_state(b)), field_owed(a) || field_owed(b))
 }
 
 // After a loop's body: an outer local it consumed would be used moved by the next
 // iteration, unless the body owned it again before the end.
 fn resource_loop_check(c: *Checker, g: *graph.Graph, module_index: usize, node: syntax.Node, before: []const u8) -> err {
     var at = 0usize
-    while at < before.len && at < c.local_count {
-        if c.locals[at].state != before[at] && before[at] == resource_owned() {
+    var cursor = 0usize
+    while at < c.local_count && cursor < before.len {
+        if c.locals[at].state != before[cursor] && before[cursor] == resource_owned() {
             record_failure(c, module_index, node, .ResourceMovedInLoop, c.locals[at].name, line_detail(c, g, module_index, c.locals[at].acquired))
             ret ResourceViolation
+        }
+        cursor += 1usize
+        var field_at = 0usize
+        while field_at < c.locals[at].fields.len && cursor < before.len {
+            if c.locals[at].fields[field_at] != before[cursor] && field_state(before[cursor]) == resource_owned() {
+                record_failure(c, module_index, node, .ResourceMovedInLoop, resource_field_name(c, at, field_at), line_detail(c, g, module_index, c.locals[at].acquired))
+                ret ResourceViolation
+            }
+            cursor += 1usize
+            field_at += 1usize
         }
         at += 1usize
     }
@@ -12349,7 +12772,10 @@ fn resource_err_test(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 fn resource_set_bound(c: *Checker, err_index: usize, state: u8) {
     var at = 0usize
     while at < c.local_count {
-        if c.locals[at].state == resource_unchecked() && c.locals[at].has_bound_err && c.locals[at].bound_err == err_index { c.locals[at].state = state }
+        if c.locals[at].state == resource_unchecked() && c.locals[at].has_bound_err && c.locals[at].bound_err == err_index {
+            c.locals[at].state = state
+            resource_set_fields(c, at, state)
+        }
         at += 1usize
     }
 }
@@ -12385,9 +12811,57 @@ fn resource_narrow_arm(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
 // names a resource local moves it, wherever it goes.
 fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, statement: syntax.Node, place_index: usize, initializer_index: usize, from_call: bool, call: CallInfo, tried: bool) -> err {
     if !c.resources_on { ret ok }
+    let (field_local, field_at, is_field) = resource_field_of(c, g, tree, module_index, place_index)
+    if is_field {
+        // A store into a tracked struct's field: the field's old value cannot be owed.
+        let old = c.locals[field_local].fields[field_at]
+        let old_state = field_state(old)
+        if old_state == resource_reserved() || ((old_state == resource_owned() || old_state == resource_maybe() || old_state == resource_unchecked()) && field_owed(old)) {
+            record_failure(c, module_index, statement, .ResourceOverwrite, resource_field_name(c, field_local, field_at), line_detail(c, g, module_index, c.locals[field_local].acquired))
+            ret ResourceViolation
+        }
+        let field_type = c.aggregate_fields[resource_field_global(c, field_local, field_at)].ty
+        var owed = affine_kind(c, field_type, 0usize) == 2u8
+        // A struct that came back from a call owes nothing by containment (as a local
+        // bound from one); a resource itself does.
+        if !resource_type(c, field_type) && tree.nodes[initializer_index].kind == .CallExpr { owed = false }
+        // A field or element read: a view, unless it is an owed field of a tracked
+        // struct, which the store moves.
+        let initializer_node = tree.nodes[initializer_index]
+        if initializer_node.kind == .FieldExpr || initializer_node.kind == .BracketPostfix {
+            owed = false
+            let (source_local, source_at, source_is_field) = resource_field_of(c, g, tree, module_index, initializer_index)
+            if source_is_field && field_owed(c.locals[source_local].fields[source_at]) { owed = true }
+        }
+        if initializer_node.kind == .NameExpr {
+            let (source_local, source_is_resource) = resource_local_of(c, g, tree, module_index, initializer_index)
+            if source_is_resource && !c.locals[source_local].obligated && c.locals[source_local].fields.len == 0usize { owed = false }
+        }
+        var producer = call
+        var from_producer = from_call
+        if !from_call && tree.nodes[initializer_index].kind == .CallExpr {
+            // `s.file = os.stdout()` through the plain assignment path: the call again,
+            // cached, to know its producer.
+            let (info, info_error) = check_call(c, g, tree, module_index, tree.nodes[initializer_index])
+            if info_error == ok {
+                producer = info
+                from_producer = true
+            }
+        }
+        if from_producer && producer_borrowed(c, producer.function) { owed = false }
+        if contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwZero) && tree.nodes[initializer_index].kind != .CallExpr {
+            c.locals[field_local].fields[field_at] = field_with(resource_null(), false)
+            ret ok
+        }
+        if !from_call { try resource_move_literal_fields(c, g, tree, module_index, initializer_index) }
+        c.locals[field_local].fields[field_at] = field_with(resource_owned(), owed)
+        if c.locals[field_local].state == resource_null() { c.locals[field_local].state = resource_owned() }
+        c.locals[field_local].acquired = usize(statement.token_start)
+        ret ok
+    }
     let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, place_index)
-    // A store into a field or an element moves the value into the aggregate, which
-    // owns it from then on; the aggregate itself is not tracked in this step.
+    // A store into a field of something untracked, or an element, moves the value
+    // into the aggregate, which owns it from then on.
     if !is_resource {
         if !from_call {
             resource_err_copied(c, g, tree, module_index, place_index, initializer_index)
@@ -12474,6 +12948,7 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // its state but moved -- an unchecked one goes with the error it was bound beside.
 fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     if !c.resources_on { ret ok }
+    if tree.nodes[node_index].kind == .FieldExpr { ret resource_consume(c, g, tree, module_index, node_index) }
     let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
     if !is_resource { ret ok }
     if c.locals[local_index].state == resource_unchecked() {
@@ -12481,4 +12956,105 @@ fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         ret ok
     }
     ret resource_consume(c, g, tree, module_index, node_index)
+}
+
+// Whether a name expression is a `use` qualifier or a type, not a value: `os.exit`
+// names a module's member, and is not a field read.
+fn name_is_qualifier(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> bool {
+    let node = tree.nodes[node_index]
+    if node.kind != .NameExpr { ret false }
+    let token = c.tokens[usize(node.token_start)]
+    if token.kind != .Identifier { ret true }
+    let name = g.modules[module_index].text[token.start..token.end]
+    let (local_index, found) = find_local(c, name)
+    ret !found
+}
+
+// `s.f` consumed: moved out of `s`, which keeps the rest. Inside a `defer`, reserved.
+fn resource_consume_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
+    let (local_index, at, is_field) = resource_field_of(c, g, tree, module_index, node_index)
+    if !is_field { ret ok }
+    let node = tree.nodes[node_index]
+    let byte = c.locals[local_index].fields[at]
+    let state = field_state(byte)
+    if state == resource_reserved() {
+        record_failure(c, module_index, node, .ResourceDeferredConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.locals[local_index].acquired))
+        ret ResourceViolation
+    }
+    if state == resource_null() { ret ok }
+    if state == resource_unchecked() {
+        record_failure(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.locals[local_index].acquired))
+        ret ResourceViolation
+    }
+    if state != resource_owned() {
+        record_failure(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.locals[local_index].acquired))
+        ret ResourceViolation
+    }
+    // A field that is not owed holds a view of someone else's handle: read as often
+    // as wanted, moved by nobody.
+    if !field_owed(byte) { ret ok }
+    if c.defer_depth != 0usize {
+        c.locals[local_index].fields[at] = field_with(resource_reserved(), field_owed(byte))
+        ret ok
+    }
+    c.locals[local_index].fields[at] = field_with(resource_moved(), field_owed(byte))
+    c.locals[local_index].acquired = usize(node.token_start)
+    ret ok
+}
+
+// The locals named as values of an aggregate literal's items are moved into it.
+fn resource_literal_moves(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
+    let node = tree.nodes[node_index]
+    if node.kind == .NameExpr { ret resource_consume(c, g, tree, module_index, node_index) }
+    if node.kind == .FieldExpr { ret resource_consume(c, g, tree, module_index, node_index) }
+    if node.kind != .AggregateLiteral && node.kind != .LiteralItem { ret ok }
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) { try resource_literal_moves(c, g, tree, module_index, parse.child_index_at(tree, at)) }
+        at += 1usize
+    }
+    ret ok
+}
+
+fn resource_field_global(c: *Checker, local_index: usize, at: usize) -> usize {
+    let (aggregate_index, tracked) = resource_tracked_struct(c, c.locals[local_index].ty)
+    if !tracked { ret 0usize }
+    var aggregate = c.aggregates[aggregate_index]
+    if aggregate.generic && aggregate.instance && aggregate.template_index < c.aggregate_count { aggregate = c.aggregates[aggregate.template_index] }
+    ret aggregate.first_field + at
+}
+
+// The seeded handles' `raw` stays readable for now: the fixed surface has no
+// `file_handle` for the bootstrap-compiled programs that need the bits.
+fn seeded_handle(c: *Checker, ty: Type) -> bool {
+    ret ty.kind == .Named && module_is_os(c, ty.module_index) && (same(ty.name, "File") || same(ty.name, "Proc") || same(ty.name, "Thread"))
+}
+
+// The source's field bytes copied into the destination's own run.
+fn resource_copy_fields(c: *Checker, local_index: usize, source_index: usize) -> err {
+    let count = c.locals[source_index].fields.len
+    if count == 0usize {
+        var none: []u8 = zero
+        c.locals[local_index].fields = none
+        ret ok
+    }
+    let (fields, fields_error) = mem.alloc[u8](c.arena, count)
+    if fields_error != ok { ret fields_error }
+    var at = 0usize
+    while at < count {
+        fields[at] = c.locals[source_index].fields[at]
+        at += 1usize
+    }
+    c.locals[local_index].fields = fields[0usize..count]
+    ret ok
+}
+
+// Whether `function` is the cleanup the resource type names.
+fn resource_cleanup_of(c: *Checker, ty: Type, function: Function) -> bool {
+    if ty.kind != .Named { ret false }
+    let (aggregate_index, found) = aggregate_for_type(c, ty)
+    if !found { ret false }
+    let aggregate = c.aggregates[aggregate_index]
+    ret aggregate.resource && aggregate.module_index == function.module_index && same(aggregate.cleanup, function.name)
 }

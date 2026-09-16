@@ -31,10 +31,12 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-GPU-9999` | invalid GPU declaration, profile operation or capability | spec §10 |
 | `E-SAFETY-0001` | a resource used after it was moved, or never owned | spec §11 |
 | `E-SAFETY-0002` | a resource still owned at an exit: its cleanup was forgotten | spec §11 |
+| `E-SAFETY-0003` | an aggregate moved whole after a field was moved out of it | spec §11 |
 | `E-SAFETY-0006` | an owned resource overwritten by assignment | spec §11 |
 | `E-SAFETY-0007` | `undef` of a resource type | spec §11 |
 | `E-SAFETY-0008` | a resource used before the error it was returned beside was tested | spec §11 |
 | `E-SAFETY-0009` | a resource consumed after a deferred call reserved it | spec §11 |
+| `E-SAFETY-0010` | a declared resource's field read outside its module | spec §11 |
 | `E-SAFETY-0011` | a resource declared outside a loop consumed inside it | spec §11 |
 | `E-SAFETY-9999` | statically diagnosed safety-contract violation | spec §11 |
 | `E-MODULE-0001` | module is missing or defined by multiple roots | spec §2 |

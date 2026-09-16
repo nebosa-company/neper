@@ -7524,3 +7524,49 @@ by the caller, not by it. The module plan carries `e.cancel` at `surface:source`
 with `e.mem` added to its direct dependencies and its blocker cleared. Not here:
 the operations that will take a `Control` -- process, DNS, connect, byte I/O, TLS --
 are H07/SL05/SL07 work and take it as they are migrated.
+## D348 -- Declared resources, containment, and a resource's fields as its module's
+
+The second cut of H01 over D345: what a program declares, and what holds a handle.
+
+**`resource` types.** `type T = resource(cleanup) struct { ... }` -- or `resource
+union enum` -- makes `T` affine, and owed to `cleanup` when one is named; `resource`
+alone is affine and owed nothing. The cleanup must be `fn cleanup(x: own T)` in the
+declaring module, checked once the signatures are collected (E-SAFETY-9999 at the
+type), and inside it the parameter owes nothing: it is discharged by whatever the
+body does. A contextual word between `=` and the body (grammar revision 3), read
+off the tokens when the aggregate is registered.
+
+**Containment.** A struct that holds a resource -- a seeded handle, a declared
+resource, or another such struct -- is affine, and a local of it is followed field
+by field: each affine field has its own state and its own "owed" bit. A store into
+a field moves the value in; a field moved out (a binding, an `own` argument, a
+`ret`) leaves the rest, and the struct cannot then move whole (E-SAFETY-0003); a
+`defer` on a field reserves it; the exit audits name `s.f`. What the rules say a
+field owes: a value acquired in the body (a call, a moved owed local) is owed; a
+struct that came back from a call owes nothing by containment, since what it holds
+is the callee's business unless the type names a cleanup -- a `Sink` over the
+standard streams is the case that decided it; a field or element read, and a
+borrowed producer's handle, are views, read as often as wanted and moved by nobody.
+Arrays stay untracked. Every join, restore and loop check walks the fields with the
+locals, in one flat run per snapshot.
+
+**Opacity.** A declared resource's fields are read only in its module, or in an
+`@unsafe` function (E-SAFETY-0010). The seeded handles' `raw` stays readable: the
+fixed surface has no `file_handle` for the bootstrap-compiled programs that need
+the bits, which is the one item this leaves for the surface. The compiler's own
+host probes read `os.stderr().raw` no more, for that reason: the host is told by
+the shape of the current directory (a `/` first is Linux), which the fixed surface
+answers.
+
+Fixtures: a declared resource acquired, held in a struct with another, released
+field by field and reserved by a `defer` (accept, a project); a field moved out
+then the struct moved whole; a cleanup with the wrong signature; a field read
+outside the module. The compiler, the library and every fixture pass; the rules
+found nothing new this time, but four false positives in the first draft each named
+a rule the design had not: views, structs from calls, plain-field reads of a
+partly moved struct, and the cleanup's own parameter.
+
+**Not yet:** E-SAFETY-0004 (a move while a borrow is live), E-SAFETY-0005 (copies
+through generics, `mem.bitcast`, reflection), E-SAFETY-0012 (closing a borrowed
+handle), `os.dup`, `mem.Arena` as an affine type, arrays of resources, and the
+fixed surface's `file_handle`.

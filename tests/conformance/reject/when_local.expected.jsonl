@@ -1,3 +1,3 @@
-{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":2}
+{"schema":"neper-stream","version":1,"record":"header","command":"check","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-COMPTIME-9999","message":"a `when` condition cannot be evaluated at compile time: it reached a name that is no local or constant","span":{"source":{"root":"operand","path":"when_local.e"},"byte_start":203,"byte_end":204,"line":5,"column":10,"end_line":5,"end_column":11,"column_utf16":10,"end_column_utf16":11},"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}
