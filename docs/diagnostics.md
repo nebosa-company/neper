@@ -32,6 +32,7 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-SAFETY-0001` | a resource used after it was moved, or never owned | spec §11 |
 | `E-SAFETY-0002` | a resource still owned at an exit: its cleanup was forgotten | spec §11 |
 | `E-SAFETY-0003` | an aggregate moved whole after a field was moved out of it | spec §11 |
+| `E-SAFETY-0004` | a resource moved or closed while a pointer to it, taken in the open block, is kept | spec §11 |
 | `E-SAFETY-0005` | a resource copied: `mem.bitcast`, a pointer cast, an element copied to an element | spec §11 |
 | `E-SAFETY-0006` | an owned resource overwritten by assignment | spec §11 |
 | `E-SAFETY-0007` | `undef` of a resource type | spec §11 |

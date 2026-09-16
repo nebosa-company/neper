@@ -24,6 +24,16 @@ fn capture_write(ctx: *void, record: *const log.Record) -> err {
     ret ok
 }
 
+fn log_to_file(handle: *os.File, fields: []log.Field) -> i32 {
+    var console_sinks: [1]log.Sink = zero
+    console_sinks[0] = log.console_sink(handle)
+    var c = log.logger(console_sinks[0..], .Info)
+    var scratch: [8]debug.Frame = zero
+    if log.write(&c, .Info, "to file", fields) != ok { ret 12i32 }
+    if log.write_with_backtrace(&c, .Error, "traced", zero, scratch[0..]) != ok { ret 13i32 }
+    ret 0i32
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var first: Capture = zero
     var second: Capture = zero
@@ -68,12 +78,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (file, open_error) = os.open(a, "log-fixture.txt", flags)
     if open_error != ok { os.exit(11) }
     var handle = file
-    var console_sinks: [1]log.Sink = zero
-    console_sinks[0] = log.console_sink(&handle)
-    var c = log.logger(console_sinks[0..], .Info)
-    var scratch: [8]debug.Frame = zero
-    if log.write(&c, .Info, "to file", fields[0..]) != ok { os.exit(12) }
-    if log.write_with_backtrace(&c, .Error, "traced", zero, scratch[0..]) != ok { os.exit(13) }
+    // The sink's pointer lives in its own function (D351), so the close follows it.
+    let logged = log_to_file(&handle, fields[0..])
+    if logged != 0i32 { os.exit(logged) }
     if os.close(handle) != ok { os.exit(14) }
     let (contents, read_error) = fs.read_file(a, "log-fixture.txt", 4096usize)
     if read_error != ok { os.exit(15) }
@@ -82,6 +89,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if !str.ends_with(rest, " ERROR traced\n") || rest.len != 44usize { os.exit(17) }
     if fs.remove_file(a, "log-fixture.txt") != ok { os.exit(18) }
     // debug answers what it has: no frames, the address kept.
+    var scratch: [8]debug.Frame = zero
     let frames = debug.backtrace(scratch[0..])
     if frames.len != 0usize { os.exit(19) }
     let frame = debug.symbolize(4096usize)

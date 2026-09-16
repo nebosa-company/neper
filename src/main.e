@@ -3985,6 +3985,13 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "): it cannot be closed, moved to an `own` parameter or returned; `os.dup` makes one that can")
     }
+    if checker.failure_kind == .ResourceMovedWhileBorrowed {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` has a pointer taken to it at line ")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, " that lives until this block ends, so it cannot be moved or closed here")
+    }
     if checker.failure_kind == .ResourceCopy {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)

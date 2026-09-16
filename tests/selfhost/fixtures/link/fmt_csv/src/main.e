@@ -40,6 +40,14 @@ fn expect_end(r: *csv.Reader) -> err {
     ret ok
 }
 
+fn write_twice(file: *os.File, fields: []str) -> err {
+    var file_out = io.file_writer(file)
+    var file_row: csv.Row = zero
+    file_row.fields = fields
+    try csv.write_row(&file_out, file_row, csv.csv())
+    ret csv.write_row(&file_out, file_row, csv.csv())
+}
+
 fn main(a: *mem.Arena) -> err {
     // --- The plain case, and the three shapes a field can have: bare, quoted, and quoted
     // around the delimiter and a line ending.
@@ -268,14 +276,10 @@ fn main(a: *mem.Arena) -> err {
     let (made, made_error) = os.open(a, "np-csv.txt", make)
     if made_error != ok { ret made_error }
     var made_file = made
-    var file_out = io.file_writer(&made_file)
-    var file_row: csv.Row = zero
-    file_row.fields = second[..]
-    let first_row = csv.write_row(&file_out, file_row, csv.csv())
-    let second_row = csv.write_row(&file_out, file_row, csv.csv())
+    // The writer's pointer lives in its own function (D351), so the close follows it.
+    let rows_written = write_twice(&made_file, second[..])
     let made_close = os.close(made_file)
-    if first_row != ok { ret first_row }
-    if second_row != ok { ret second_row }
+    if rows_written != ok { ret rows_written }
     if made_close != ok { ret Failed }
     var take_flags: os.OpenFlags = zero
     take_flags.read = true

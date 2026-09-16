@@ -7638,3 +7638,38 @@ of the wrappers had left nothing open.
 
 Fixture: a directory opened and left at a `try` exit (reject). `fs.mmap.close` and
 `fs.watch.close` take `own`; `e.net`'s planned `close` says `own` in its fence.
+
+## D351 -- Nothing moves out from under a pointer, and an arena is affine
+
+The last two rules of the H01 table, and a bug in D348's view rule found on the way.
+
+**E-SAFETY-0004.** `&f` and `&s.f` record a candidate while the statement is
+checked; when the statement ends, the candidates are pinned if what it made can keep
+the pointer -- a binding whose type holds a pointer, a slice, a function or an
+aggregate of such at any depth; a store whose value is the pointer itself or a
+literal; a `ret` -- and dropped otherwise, since a pointer that was an argument alone
+is the callee's for the call and gone when it returns. A pinned local, or a field of
+one, is moved or closed by nobody until the block the pointer was taken in ends,
+when the pins of that depth are cleared; a `defer` may still consume it, running at
+that end. The proposal's rule was "a pointer was taken in this scope", and its first
+implementation pinned on every `&`, which refused `write_twice(&file, ...)` followed
+by the close -- the commonest borrow there is. The kept-by rule is what makes the
+lexical answer usable: three fixtures kept a writer or a sink over a file's pointer
+and closed the file in the same block, and each now does its writing in a function
+of its own, which is where the pointer's life should have ended. The rule is
+lexical; the last use of the pointer does not free what it pinned, and nothing is
+inferred about what a callee does with a pointer it is given -- H02's question.
+
+**`mem.Arena`.** Seeded affine and owed nothing, by table like the handles, since
+`e.mem` is the bootstrap's fixed surface and cannot spell `resource`; exempt from the
+opacity rule for the same reason the handles are. The compiler, the library and every
+fixture passed as written: an arena is handed around by pointer everywhere, and the
+two by-value moves into workers were moves. Checked by a fixture that moves an arena
+into a second binding and allocates from the first.
+
+**The view bug.** D348 marked a view -- something read as often as wanted and moved
+by nobody -- as "owned, owes nothing, no fields", which is also what an affine value
+without a cleanup is; so an arena, and a declared `resource` without a cleanup, was
+never moved at all. A local now says whether it is a view (a field or element read,
+a borrowed producer's handle, a binding from one), and only a view or a borrow is
+exempt from moving.

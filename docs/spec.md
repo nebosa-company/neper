@@ -3467,7 +3467,9 @@ type Cursor = resource struct { at: usize }              // affine, owed nothing
 module (`E-SAFETY-9999` otherwise); the cleanup owes nothing for the value it takes.
 `e.os`'s other handles are declared so (D350): `Dir`, `Lib`, `ProcGroup`, `Watch`,
 `Mapping`, `Poller`, `Socket` and `FileLock`, each owed to its closer, its fields the
-module's alone; `Handle` is a view of a file or a socket and stays plain.
+module's alone; `Handle` is a view of a file or a socket and stays plain. `mem.Arena`
+is affine and owed nothing (D351): an arena lives in one place and is moved, never
+copied; what it holds is the process's to reclaim.
 A struct that holds a resource is affine by containment, and its owed fields are
 followed one by one: a field moved out of a local struct leaves the rest; the struct
 cannot then move whole (`E-SAFETY-0003`); its owed fields are audited at every exit
@@ -3511,6 +3513,13 @@ none becomes a trap:
   to no one: it cannot be closed, passed to an `own` parameter, or returned
   (`E-SAFETY-0012`). A second identity comes from the OS alone: `os.dup(f)` is a new
   handle with its own obligation, sharing the file's offset (D349).
+- A pointer taken to a resource -- `&f`, `&s.f` -- and kept, by a binding whose type
+  can hold a pointer, a store of the pointer or of a literal holding it, or a `ret`,
+  pins the resource until the block the pointer was taken in ends: it cannot be
+  moved or closed under the pointer (`E-SAFETY-0004`). A pointer that is an argument
+  alone, or bound beside a result that can hold no pointer, is the call's and pins
+  nothing; a `defer` may still consume a pinned value, since it runs when the block
+  ends. This is lexical: a pointer's last use does not free what it pinned (D351).
 - Copying the bits of a resource is not duplicating it, and nothing else becomes
   one: `mem.bitcast` into or out of a resource type, `mem.cast` to a pointer to a
   resource from anything but a pointer to that type or the `*void` it was erased

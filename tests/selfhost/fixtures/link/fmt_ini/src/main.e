@@ -46,6 +46,11 @@ fn expect_get(document: *const ini.Document, section: str, key: str, value: str)
     ret ok
 }
 
+fn write_document(file: *os.File, document: *const ini.Document) -> err {
+    var file_out = io.file_writer(file)
+    ret ini.write(&file_out, document)
+}
+
 fn main(a: *mem.Arena) -> err {
     // --- The document. A case-sensitive parse keeps every name as it was written.
     var strict: ini.Options = zero
@@ -255,8 +260,8 @@ fn main(a: *mem.Arena) -> err {
     let (made, made_error) = os.open(a, "np-ini.txt", make)
     if made_error != ok { ret made_error }
     var made_file = made
-    var file_out = io.file_writer(&made_file)
-    let file_write = ini.write(&file_out, &document)
+    // The writer's pointer lives in its own function (D351), so the close follows it.
+    let file_write = write_document(&made_file, &document)
     let made_close = os.close(made_file)
     if file_write != ok { ret file_write }
     if made_close != ok { os.exit(50i32) }
