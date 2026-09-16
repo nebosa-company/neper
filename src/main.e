@@ -3159,6 +3159,10 @@ type Sink = struct {
     fix_text: str,
     fix_at: usize,
     fix_kind: u8,
+    // The two types of a mismatch (D401, H09), as fields beside the message; empty
+    // when the diagnostic is not one.
+    expected_text: str,
+    actual_text: str,
     operand_path: str,
     // `--absolute-paths` (section 2, D290): the operand's absolute spelling, written as
     // `absolute_path` beside the operand's identity and no other module's.
@@ -3221,6 +3225,12 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
     try write_json_string(report, code)
     try write_all(report, ",\"message\":")
     try write_json_string(report, message)
+    if report.expected_text.len != 0usize {
+        try write_all(report, ",\"expected\":")
+        try write_json_string(report, report.expected_text)
+        try write_all(report, ",\"actual\":")
+        try write_json_string(report, report.actual_text)
+    }
     try write_all(report, ",\"span\":")
     if mapping < report.map_count {
         var original = at
@@ -4395,6 +4405,31 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     var message_storage: [4096]u8 = zero
     var message = capture_sink(message_storage[..])
     try write_check_message(&message, checker, check_error)
+    // A mismatch names its two types (D401, H09): in the message, and as `expected`
+    // and `actual` fields of the record.
+    var expected_storage: [256]u8 = zero
+    var actual_storage: [256]u8 = zero
+    let mismatch = checker.failure_kind == .InitializerType || checker.failure_kind == .ReturnType || (checker.failure_kind == .Generic && check_error == check.TypeMismatch)
+    if mismatch && checker.failure_has_types {
+        var expected_out: tool.Out = zero
+        expected_out.bytes = expected_storage[..]
+        try tool.type_text(&expected_out, checker, g, checker.failure_expected, 0usize)
+        var actual_out: tool.Out = zero
+        actual_out.bytes = actual_storage[..]
+        try tool.type_text(&actual_out, checker, g, checker.failure_actual, 0usize)
+        report.expected_text = expected_storage[..expected_out.count]
+        report.actual_text = actual_storage[..actual_out.count]
+        // The return-type words stay as they are: tests/neper0 holds the bootstrap and
+        // this front end to the same line, and the bootstrap spells no types.
+        if checker.failure_kind != .ReturnType {
+            message.count = 0usize
+            try write_all(&message, "type mismatch: expected `")
+            try write_all(&message, report.expected_text)
+            try write_all(&message, "`, found `")
+            try write_all(&message, report.actual_text)
+            try write_all(&message, "`")
+        }
+    }
     report.related_token = checker.failure_related
     report.has_related = checker.failure_has_related
     report.related_note = checker.failure_related_note
@@ -4404,6 +4439,8 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     let emitted = emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, check.diagnostic_code(checker.failure_kind), message_storage[..message.count])
     report.has_related = false
     report.fix_text = ""
+    report.expected_text = ""
+    report.actual_text = ""
     ret emitted
 }
 

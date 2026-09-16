@@ -8913,3 +8913,29 @@ budget would not; the `context` and `contract` goldens gain the `bytes` field.
 Not yet: a byte budget on the other query commands (`explain-file`, `uses-file`
 write everything), and a bound the harness could set on diagnostic bytes of a
 build.
+
+## D401 -- A type mismatch names both types, in the message and as fields
+
+H09 asks for expected and actual as fields; a mismatch read "initializer type
+does not match binding" whether it was an initializer, an argument, an
+assignment or a thread's context, and named no type -- the one thing a repair
+needs. The checker's one place where a context and an expression part
+(`apply_context`), and the three others that compare two known types (a
+constant's value against its declared type, two operands of a constant
+expression, a thread entry's parameter against its context), record the pair
+(`failure_expected`, `failure_actual`); a context that matches afterwards clears
+a speculative one, so the pair a diagnostic carries is the failure's. The
+driver spells them the way `context-file` spells types and writes ``type
+mismatch: expected `i32`, found `u64` `` for an initializer, argument or
+assignment, and emits the pair as `expected` and `actual` fields of the record
+(the schema gains both, optional). The return-type message keeps its words --
+`tests/neper0` holds the bootstrap and this front end to the same line, and the
+bootstrap spells no types -- and carries the two fields alone.
+A mismatch whose actual type is unknown -- an initializer that names nothing,
+the leaked-scope fixture -- keeps its old words and has no fields. Five tool
+goldens and two suite pins that carried the old words over a real mismatch now
+carry the new ones with the two fields; the corpus gains `reject/type_mismatch`.
+
+Not yet: the other sixty sites that return `TypeMismatch` with one type or a
+shape at hand rather than two (a cast's operand, a literal's shape, a generic
+argument's kind), instantiation chains, and fixes for the type codes.

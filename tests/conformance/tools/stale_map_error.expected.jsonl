@@ -1,4 +1,4 @@
 {"schema":"neper-stream","version":1,"record":"header","command":"build","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
 {"record":"diagnostic","severity":"error","code":"E-TOOL-0001","message":"the generated source map is stale: its hash is not the operand's","span":null,"parent":null,"related":[],"fixes":[]}
-{"record":"diagnostic","severity":"error","code":"E-TYPE-0002","message":"initializer type does not match binding","span":{"source":{"root":"operand","path":"stale_map_error.e"},"byte_start":231,"byte_end":234,"line":6,"column":5,"end_line":6,"end_column":8,"column_utf16":5,"end_column_utf16":8},"parent":null,"related":[],"fixes":[]}
+{"record":"diagnostic","severity":"error","code":"E-TYPE-0002","message":"type mismatch: expected `i32`, found `bool`","expected":"i32","actual":"bool","span":{"source":{"root":"operand","path":"stale_map_error.e"},"byte_start":231,"byte_end":234,"line":6,"column":5,"end_line":6,"end_column":8,"column_utf16":5,"end_column_utf16":8},"parent":null,"related":[],"fixes":[]}
 {"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":2}}

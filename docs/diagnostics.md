@@ -21,7 +21,7 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-NAME-0003` | illegal shadowing of an active or reserved name | spec §§2, 5 |
 | `E-NAME-9999` | other declaration or resolution violation | spec §§2, 5, 9, 14 |
 | `E-TYPE-0001` | expression has no typing context | spec §3 |
-| `E-TYPE-0002` | implicit conversion is not permitted | spec §§4, 6 |
+| `E-TYPE-0002` | implicit conversion is not permitted; the message names both types and the record carries `expected` and `actual` (D401) | spec §§4, 6 |
 | `E-TYPE-0003` | argument type does not match its parameter | spec §§4–6 |
 | `E-TYPE-0004` | value is not representable in the required type | spec §4 |
 | `E-TYPE-9999` | other typing, layout or operation violation | spec §§4–6, 8–10 |

@@ -115,6 +115,13 @@ Replacement text is normalized UTF-8 with LF endings.
 
 Every diagnostic field is present: an error has `parent:null`, a location-free
 command diagnostic has `span:null`, and empty `related` or `fixes` arrays are `[]`.
+A type mismatch (D401, H09) -- an argument, an initializer, an assignment, a
+returned value, a constant's value, a thread's context, two operands of one
+type -- carries both types as two further fields, `expected` and `actual`, in the
+spelling `context-file` uses for types, and names them in its message (``type
+mismatch: expected `i32`, found `u64` ``) except for a returned value, whose
+words the bootstrap parity fixes; a diagnostic that is not a mismatch has neither
+field.
 Every `E-SAFETY` diagnostic that is about two sites carries the other one as its
 `related` entry (D364, H09): the acquisition for a forgotten cleanup, an overwrite,
 an untested acquisition or a loop consumption; the move for a use after move; the

@@ -70,6 +70,7 @@
       "properties":{
         "record":{"const":"diagnostic"},"severity":{"enum":["error","note"]},
         "code":{"type":"string","pattern":"^E-[A-Z]+-[0-9]{4}$"},"message":{"type":"string"},
+        "expected":{"type":"string"},"actual":{"type":"string"},
         "span":{"oneOf":[{"$ref":"#/$defs/span"},{"type":"null"}]},
         "related":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["message","span"],"properties":{"message":{"type":"string"},"span":{"$ref":"#/$defs/span"}}}},
         "fixes":{"type":"array","items":{"$ref":"#/$defs/fix"}},

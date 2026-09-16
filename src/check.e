@@ -651,6 +651,11 @@ type Checker = struct {
     failure_has_token: bool,
     failure_detail: str,
     failure_detail2: str,
+    // The two types of the mismatch being reported (D401, H09): what the context
+    // asked for and what the expression had, recorded where they part.
+    failure_expected: Type,
+    failure_actual: Type,
+    failure_has_types: bool,
     failure_related: lex.Token,
     failure_has_related: bool,
     failure_related_note: str,
@@ -802,6 +807,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.failure_has_token = false
     c.failure_detail = ""
     c.failure_detail2 = ""
+    c.failure_has_types = false
     ret ok
 }
 
@@ -1099,13 +1105,29 @@ fn types_may_match_after_instantiation(c: *Checker, actual: Type, expected: Type
     ret false
 }
 
+// A mismatch of two known types (D401): recorded for the diagnostic, then the error.
+fn mismatch(c: *Checker, expected: Type, actual: Type) -> err {
+    c.failure_expected = expected
+    c.failure_actual = actual
+    c.failure_has_types = true
+    ret TypeMismatch
+}
+
 fn apply_context(c: *Checker, actual: Type, expected: Type) -> (Type, err) {
     if expected.kind == .Invalid { ret (actual, ok) }
     if actual.kind == .UntypedInteger && expected.kind == .Integer { ret (expected, ok) }
     if actual.kind == .UntypedFloat && expected.kind == .Float { ret (expected, ok) }
-    if type_assignable(c, actual, expected) { ret (expected, ok) }
-    if c.generic_declaration && types_may_match_after_instantiation(c, actual, expected) { ret (expected, ok) }
-    ret (invalid_type(), TypeMismatch)
+    if type_assignable(c, actual, expected) {
+        c.failure_has_types = false
+        ret (expected, ok)
+    }
+    if c.generic_declaration && types_may_match_after_instantiation(c, actual, expected) {
+        c.failure_has_types = false
+        ret (expected, ok)
+    }
+    // The pair the diagnostic names (D401): the last mismatch before the failure is
+    // the failure's, and a context that matched in between clears a speculative one.
+    ret (invalid_type(), mismatch(c, expected, actual))
 }
 
 // The module whose tokens `tokens` holds (D304): a phase that asks for the same
@@ -4265,7 +4287,7 @@ fn constant_result_type(c: *Checker, left: Type, right: Type) -> (Type, err) {
         ret (right, ok)
     }
     if is_untyped(right) { ret (left, ok) }
-    if !type_equal(c, left, right) { ret (invalid_type(), TypeMismatch) }
+    if !type_equal(c, left, right) { ret (invalid_type(), mismatch(c, left, right)) }
     ret (left, ok)
 }
 
@@ -5489,7 +5511,7 @@ fn evaluate_constant(c: *Checker, constant_index: usize) -> err {
         final_type = actual_type
     } else {
         if final_type.kind != .Integer && final_type.kind != .Bool { ret Unsupported }
-        if actual_type.kind != .UntypedInteger && !type_equal(c, actual_type, final_type) { ret TypeMismatch }
+        if actual_type.kind != .UntypedInteger && !type_equal(c, actual_type, final_type) { ret mismatch(c, final_type, actual_type) }
         if actual_type.kind == .UntypedInteger && final_type.kind == .Bool { ret TypeMismatch }
     }
     if final_type.kind == .Integer && !integer_representable(value, final_type) { ret ConstantOverflow }
@@ -8580,7 +8602,7 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if signature.parameter_count != 1usize || signature.return_count != 0usize { ret (info, TypeMismatch) }
         let (entry_parameter, has_parameter) = function_signature_parameter(c, signature, 0usize)
         if !has_parameter { ret (info, TypeMismatch) }
-        if !type_equal(c, entry_parameter, info.thread_context) { ret (info, TypeMismatch) }
+        if !type_equal(c, entry_parameter, info.thread_context) { ret (info, mismatch(c, entry_parameter, info.thread_context)) }
         ret (info, ok)
     }
     if !has_function { ret (info, UnknownCallable) }
