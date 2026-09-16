@@ -99,6 +99,15 @@ the message, is the machine discriminator:
 
 {{diagnostics}}
 
+## Token cost
+
+Model tokens per grammar terminal, after a space, from the grammar-versioned
+tokenizer profiles (`benchmarks/tokens/profile.py`, D375): a lexical
+token is not a model token, and the corpus runs at about 1.27 model tokens per
+lexical token. Prefer `usize` where the width is free; a fixed-width name costs two.
+
+{{token_costs}}
+
 ## Tool-assisted navigation
 
 `neper index --json` is versioned JSONL (stream version 1, tool {{tool_version}}). It

@@ -9502,3 +9502,19 @@ moved `np_utf16_to_utf8` out of the floor and every image died at its entry.
 Not yet: the RSS budget itself on the compiler's release row (+30% against +10%),
 whose remainder is the crew's pools sized for the compiler and written; and a
 fixture that hands an untouched buffer to an imported call and reads `Failed`.
+
+## D429 -- The card carries the token-cost table
+
+H26 asks that token cost be a design input; D375's profiles measured it, and the
+card -- what a model reads before editing -- said nothing of it. `render_card.py`
+now reads `benchmarks/tokens/profile-<encoding>.json` for `cl100k_base` and
+`o200k_base`, refuses a profile whose `grammar_revision` is not the grammar's (a
+stale profile would state a cost the grammar no longer has; the suites run
+`--check`), and renders a "Token cost" section: the keywords' cost as a range, and
+`usize`, a fixed-width name, a typed literal, `[]u8`, `[]const u8` and the
+two-character operators, per tokenizer, after a space. The section's prose keeps
+the corpus ratio D375 measured and the one steer it supports: `usize` where the
+width is free.
+
+Not yet: the profile in the build manifest, and a family without a public
+tokenizer.

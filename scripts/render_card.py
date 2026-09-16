@@ -11,7 +11,7 @@ docs/llm-neper-card.src.md. The rendered card carries the grammar revision, the
 language and tool versions and a content hash, so a card and the grammar cannot
 drift: the suites run --check.
 """
-import hashlib, os, re, sys
+import hashlib, json, os, re, sys
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def read(*parts):
@@ -64,6 +64,32 @@ diagnostics = '\n'.join(
     '- `E-%s-*`: %d codes; `%s` is the catch-all' % (family, len(entries), entries[-1][0])
     for family, entries in sorted(families.items()))
 
+# The token cost of the grammar's terminals per public tokenizer (D429, H26), from the
+# profiles D375 writes: every profile must be of this grammar revision, or the card
+# would state a cost the grammar no longer has.
+PROFILES = ['cl100k_base', 'o200k_base']
+SAMPLES = [('keyword (`fn`, `let`, `ret`, ...)', None), ('`usize`', 'usize'), ('`i32` / `u8` / `f64`', 'i32'),
+           ('`1usize`', '1usize'), ('`[]u8`', '[]u8'), ('`[]const u8`', '[]const u8'),
+           ('`->`, `==`, `+=`, `..`', '->')]
+profiles = {}
+for encoding in PROFILES:
+    profile = json.loads(read('benchmarks', 'tokens', 'profile-%s.json' % encoding))
+    if str(profile.get('grammar_revision')) != revision:
+        sys.exit('render_card: benchmarks/tokens/profile-%s.json is of grammar revision %s, not %s: re-run benchmarks/tokens/profile.py' % (encoding, profile.get('grammar_revision'), revision))
+    profiles[encoding] = profile['vocabulary']
+rows = ['| terminal | ' + ' | '.join(PROFILES) + ' |', '|---|' + '---|' * len(PROFILES)]
+for label, sample in SAMPLES:
+    cells = []
+    for encoding in PROFILES:
+        vocabulary = profiles[encoding]
+        if sample is None:
+            costs = sorted(set(vocabulary[k]['after_space'] for k in keywords if k in vocabulary))
+            cells.append('%d' % costs[0] if len(costs) == 1 else '%d-%d' % (costs[0], costs[-1]))
+        else:
+            cells.append('%d' % vocabulary[sample]['after_space'])
+    rows.append('| %s | %s |' % (label, ' | '.join(cells)))
+token_costs = '\n'.join(rows)
+
 template = read('docs', 'llm-neper-card.src.md')
 body = template
 for key, value in [
@@ -71,7 +97,7 @@ for key, value in [
     ('{{keywords}}', ' '.join('`%s`' % k for k in keywords)),
     ('{{declarations}}', block(DECLARATIONS)), ('{{types}}', block(TYPES)),
     ('{{statements}}', block(STATEMENTS)), ('{{expressions}}', block(EXPRESSIONS)),
-    ('{{diagnostics}}', diagnostics),
+    ('{{diagnostics}}', diagnostics), ('{{token_costs}}', token_costs),
 ]:
     body = body.replace(key, value)
 if '{{' in body:
