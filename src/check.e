@@ -8772,6 +8772,18 @@ fn explain_function_index(c: *Checker, function: Function) -> usize {
 // field's global index as its `function_index` and the member token's offset, so
 // `uses-file --symbol module.Type.field` lists every access and a rename plan edits
 // every spelling.
+// An error value named (D451, H17): kind 7, the name's token and the resolver's
+// symbol, for `uses-file` and `plan-rename-file` over `module.Error`.
+fn record_explain_error(c: *Checker, module_index: usize, offset: usize, symbol_index: usize) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    c.explains[c.explain_count] = Explain { kind: 7u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: symbol_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: "", reason_type: invalid_type() }
+    c.explain_count += 1usize
+}
+
 fn record_explain_field(c: *Checker, module_index: usize, offset: usize, field_index: usize) {
     if c.explains.len == 0usize { ret }
     if c.explain_count >= c.explains.len {
@@ -9900,6 +9912,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         let (symbol_index, found_symbol) = resolve.find(c.resolver, module_index, name, .Value)
         let (intrinsic_function, has_intrinsic_function) = find_function(c, module_index, name)
         if found_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
+            if c.resolver.symbols[symbol_index].kind == .Error && usize(node.token_start) < c.token_count { record_explain_error(c, module_index, c.tokens[usize(node.token_start)].start, symbol_index) }
             let (error_type, context_error) = apply_context(c, make_type(.Err, "err", module_index), expected)
             ret (error_type, context_error)
         }
@@ -9966,6 +9979,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             let (symbol_index, found_symbol) = resolve.find(c.resolver, target_module, member, .Value)
             let (intrinsic_function, has_intrinsic_function) = find_function(c, target_module, member)
             if found_symbol && (c.resolver.symbols[symbol_index].kind == .Error || (c.resolver.symbols[symbol_index].kind == .Intrinsic && !has_intrinsic_function)) {
+                if c.resolver.symbols[symbol_index].kind == .Error && usize(node.token_end) > 0usize && usize(node.token_end) <= c.token_count { record_explain_error(c, module_index, c.tokens[usize(node.token_end) - 1usize].start, symbol_index) }
                 let (error_type, context_error) = apply_context(c, make_type(.Err, "err", target_module), expected)
                 ret (error_type, context_error)
             }

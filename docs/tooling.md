@@ -375,6 +375,12 @@ tree whose snapshot differs applies edits computed for other sources, and the
 file-hash preconditions catch the file that changed while the snapshot says the
 program did.
 
+An error declared by a module is a subject too (D451, H17): `uses-file --symbol
+module.Name` lists every value naming it, bare in its own module or qualified
+from another, as `use` records with relation `error`, and `plan-rename-file
+--symbol module.Name --to New` renames the declaration's name token and every
+such value, applied and re-checked by both suites.
+
 ### Test impact
 
 `neper test-impact-file PATH ROOT ARCH OS --json --changed m1,m2,...` (D423, H10)

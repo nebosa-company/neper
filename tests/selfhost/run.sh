@@ -2528,6 +2528,19 @@ signature_refused=0
 (cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature.e "$repo" x64 linux --json --symbol signature.adjust --order 0,0 > "$test_build/conformance-tools-plan-signature-refused.jsonl") || signature_refused=$?
 [ "$signature_refused" -eq 2 ]
 cmp -s "$test_build/conformance-tools-plan-signature-refused.jsonl" "$conformance_root/tools/plan_signature_refused.expected.jsonl" || { echo "a refused plan-change-signature-file differs from the conformance corpus" >&2; exit 1; }
+# An error's uses and rename (D451, H17).
+(cd "$conformance_root/tools" && $test_build/neper-self uses-file errors_project/src/main.e "$repo" x64 linux --json --symbol faults.Stalled > "$test_build/conformance-tools-uses-error.jsonl")
+cmp -s "$test_build/conformance-tools-uses-error.jsonl" "$conformance_root/tools/uses_error.expected.jsonl" || { echo "uses-file --json over an error differs from the conformance corpus" >&2; exit 1; }
+(cd "$conformance_root/tools" && $test_build/neper-self plan-rename-file errors_project/src/main.e "$repo" x64 linux --json --symbol faults.Stalled --to Blocked > "$test_build/conformance-tools-plan-rename-error.jsonl")
+cmp -s "$test_build/conformance-tools-plan-rename-error.jsonl" "$conformance_root/tools/plan_rename_error.x64-linux.expected.jsonl" || { echo "plan-rename-file --json over an error differs from the conformance corpus" >&2; exit 1; }
+error_scratch="$test_build/plan-rename-error-scratch"
+rm -rf "$error_scratch"
+mkdir -p "$error_scratch/src"
+cp "$conformance_root/tools/errors_project/src/"*.e "$error_scratch/src/"
+python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename-error.jsonl" --root "$error_scratch/src" > /dev/null
+[ "$($test_build/neper-self check-file "$error_scratch/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
+! grep -q 'Stalled' "$error_scratch/src/"*.e
+grep -q 'error Blocked' "$error_scratch/src/faults.e"
 # A field's uses and rename (D420, H17): the uses byte for byte; the rename applied to a
 # copy checks, and the new name has the five uses.
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file contract.e "$repo" x64 linux --json --symbol contract.Counter.hits > "$test_build/conformance-tools-uses-field.jsonl")

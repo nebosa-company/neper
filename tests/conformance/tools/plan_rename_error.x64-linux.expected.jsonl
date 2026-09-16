@@ -1,0 +1,9 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"plan-rename","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"precondition","source":{"root":"project-src","path":"main.e"},"sha256":"05fd0e760967c1867d6af61c2f79f07fc4812a604a98c5bcfdcd9c91823811f7"}
+{"record":"precondition","source":{"root":"project-src","path":"faults.e"},"sha256":"4757afce174178bb333eb25a870e74caff4d0f39b9918c2cf57d64feaf825dda"}
+{"record":"edit","op":"rename-symbol","symbol":"faults.Stalled","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":278,"byte_end":285,"line":8,"column":24,"end_line":8,"end_column":31,"column_utf16":24,"end_column_utf16":31},"replacement":"Blocked"}
+{"record":"edit","op":"rename-symbol","symbol":"faults.Stalled","site":"use","span":{"source":{"root":"project-src","path":"main.e"},"byte_start":379,"byte_end":386,"line":10,"column":41,"end_line":10,"end_column":48,"column_utf16":41,"end_column_utf16":48},"replacement":"Blocked"}
+{"record":"edit","op":"rename-symbol","symbol":"faults.Stalled","site":"declaration","span":{"source":{"root":"project-src","path":"faults.e"},"byte_start":122,"byte_end":129,"line":3,"column":7,"end_line":3,"end_column":14,"column_utf16":7,"end_column_utf16":14},"replacement":"Blocked"}
+{"record":"edit","op":"rename-symbol","symbol":"faults.Stalled","site":"use","span":{"source":{"root":"project-src","path":"faults.e"},"byte_start":181,"byte_end":188,"line":6,"column":19,"end_line":6,"end_column":26,"column_utf16":19,"end_column_utf16":26},"replacement":"Blocked"}
+{"record":"postcondition","check":"check-file passes; uses-file --symbol faults.Blocked reports uses at 3 sites and faults.Stalled names no error"}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":4,"files":2,"complete":true,"snapshot":"7e881d3431a10c2c"}}

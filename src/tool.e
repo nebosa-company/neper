@@ -2112,7 +2112,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
         first = false
         last = e
         // Calls, values and field accesses (D420) are `uses-file`'s and `context-file`'s.
-        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 || e.kind == 6u8 { continue }
+        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 || e.kind == 6u8 || e.kind == 7u8 { continue }
         let module = g.modules[e.module_index]
         let (root, relative) = source_identity_of(g, module.path)
         let (path, path_error) = manifest_slashes(a, relative)
@@ -3209,7 +3209,7 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         var scan = 0usize
         while scan < c.explain_count {
             let e = c.explains[scan]
-            if e.kind != 6u8 && e.module_index == function.module_index && e.offset >= function.source_start && e.offset < function.source_end {
+            if e.kind != 6u8 && e.kind != 7u8 && e.module_index == function.module_index && e.offset >= function.source_start && e.offset < function.source_end {
                 let after = first || e.offset > last_offset || (e.offset == last_offset && (e.kind > last_kind || (e.kind == last_kind && e.function_index > last_function)))
                 if after && (best == c.explain_count || e.offset < c.explains[best].offset || (e.offset == c.explains[best].offset && (e.kind < c.explains[best].kind || (e.kind == c.explains[best].kind && e.function_index < c.explains[best].function_index)))) { best = scan }
             }
@@ -3339,10 +3339,13 @@ fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) ->
     try header(&out, "uses")
     // A field (D420, H17): `module.Type.field`, every access and every literal naming it.
     let (field_index, is_field) = uses_field_subject(c, g, subject)
-    if is_field { ret field_uses_json(a, &out, c, g, field_index) }
+    if is_field { ret sites_uses_json(a, &out, c, g, 6u8, field_index, "field") }
+    // An error (D451, H17): `module.Name`, every value naming it.
+    let (error_symbol, is_error) = uses_error_subject(c, g, subject)
+    if is_error { ret sites_uses_json(a, &out, c, g, 7u8, error_symbol, "error") }
     let (function_index, has_function) = uses_subject(c, g, subject)
     if !has_function {
-        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function or field of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function, field or error of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"uses\":0,\"roots\":0,\"complete\":true}}")
         try flush(&out)
@@ -3954,10 +3957,38 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
     try header(&out, "plan-rename")
     // A field's rename (D420): the declaration's token and every access or literal naming it.
     let (field_index, is_field) = uses_field_subject(c, g, subject)
-    if is_field { ret plan_rename_field_json(a, &out, c, g, subject, field_index, to) }
+    if is_field {
+        let field = c.aggregate_fields[field_index]
+        var aggregate_index = 0usize
+        var aggregate_at = 0usize
+        while aggregate_at < c.aggregate_count {
+            let candidate = c.aggregates[aggregate_at]
+            if field_index >= candidate.first_field && field_index < candidate.first_field + candidate.field_count && !candidate.instance { aggregate_index = aggregate_at }
+            aggregate_at += 1usize
+        }
+        var declared_at = 0usize
+        var has_declaration = false
+        if c.aggregates[aggregate_index].module_index < g.count && field.token.end > field.token.start {
+            declared_at = field.token.start
+            has_declaration = true
+        }
+        ret plan_rename_sites_json(a, &out, c, g, subject, 6u8, field_index, field.name, c.aggregates[aggregate_index].module_index, declared_at, has_declaration, "field", to)
+    }
+    // An error's rename (D451, H17): the declaration's name token and every value naming it.
+    let (error_symbol, is_error) = uses_error_subject(c, g, subject)
+    if is_error {
+        let symbol = c.resolver.symbols[error_symbol]
+        var declared_at = 0usize
+        var has_declaration = false
+        if symbol.module_index < g.count && symbol.token_start + 1usize < g.modules[symbol.module_index].tokens.len {
+            declared_at = g.modules[symbol.module_index].tokens[symbol.token_start + 1usize].start
+            has_declaration = true
+        }
+        ret plan_rename_sites_json(a, &out, c, g, subject, 7u8, error_symbol, symbol.name, symbol.module_index, declared_at, has_declaration, "error", to)
+    }
     let (function_index, has_function) = uses_subject(c, g, subject)
     if !has_function {
-        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function, field or error of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"complete\":true}}")
         try flush(&out)
@@ -4019,16 +4050,9 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
 
 // The rename plan of a field (D420): the same records as a function's, the sites
 // being the field's declaration token and every kind-6 record of it.
-fn plan_rename_field_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, field_index: usize, to: str) -> err {
-    let field = c.aggregate_fields[field_index]
-    var aggregate_index = 0usize
-    var aggregate_at = 0usize
-    while aggregate_at < c.aggregate_count {
-        let candidate = c.aggregates[aggregate_at]
-        if field_index >= candidate.first_field && field_index < candidate.first_field + candidate.field_count && !candidate.instance { aggregate_index = aggregate_at }
-        aggregate_at += 1usize
-    }
-    let aggregate = c.aggregates[aggregate_index]
+// A rename over sites the explain table holds (D420, D451): a field (kind 6) or an
+// error (kind 7), the declaration's name token first, every use after it.
+fn plan_rename_sites_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, explain_kind: u8, index: usize, name: str, declared_module: usize, declared_at: usize, has_declaration: bool, what: str, to: str) -> err {
     var sites: PlanSites = zero
     let (site_modules, modules_error) = mem.alloc[usize](a, c.explain_count + 1usize)
     if modules_error != ok { ret modules_error }
@@ -4037,16 +4061,16 @@ fn plan_rename_field_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph
     let (site_kinds, kinds_error) = mem.alloc[u8](a, c.explain_count + 1usize)
     if kinds_error != ok { ret kinds_error }
     var site_count = 0usize
-    if aggregate.module_index < g.count && field.token.end > field.token.start {
-        site_modules[0usize] = aggregate.module_index
-        site_offsets[0usize] = field.token.start
+    if has_declaration {
+        site_modules[0usize] = declared_module
+        site_offsets[0usize] = declared_at
         site_kinds[0usize] = 0u8
         site_count = 1usize
     }
     var at = 0usize
     while at < c.explain_count {
         let e = c.explains[at]
-        if e.kind == 6u8 && e.function_index == field_index && e.module_index < g.count {
+        if e.kind == explain_kind && e.function_index == index && e.module_index < g.count {
             var seen = false
             var probe = 0usize
             while probe < site_count {
@@ -4084,7 +4108,7 @@ fn plan_rename_field_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph
         out.lines = module.lines
         var name_token: lex.Token = zero
         name_token.start = sites.offsets[site]
-        name_token.end = sites.offsets[site] + field.name.len
+        name_token.end = sites.offsets[site] + name.len
         try text(out, "{\"record\":\"edit\",\"op\":\"rename-symbol\",\"symbol\":")
         try quoted(out, subject)
         try text(out, ",\"site\":")
@@ -4104,7 +4128,9 @@ fn plan_rename_field_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph
     if sites.count > 0usize { try decimal(out, sites.count - 1usize) } else { try decimal(out, 0usize) }
     try text(out, " sites and ")
     try text(out, subject)
-    try text(out, " names no field\"}")
+    try text(out, " names no ")
+    try text(out, what)
+    try text(out, "\"}")
     try flush(out)
     try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":")
     try decimal(out, sites.count)
@@ -4158,6 +4184,26 @@ fn rename_word_byte(source_text: str, at: usize) -> bool {
 }
 
 // The declared field `module.Type.field` names (D420): its global index.
+// The error `module.Name` names (D451): the resolver's symbol of kind error.
+fn uses_error_subject(c: *check.Checker, g: *graph.Graph, subject: str) -> (usize, bool) {
+    var dot = subject.len
+    var at = 0usize
+    while at < subject.len {
+        if subject[at] == 46u8 { dot = at }
+        at += 1usize
+    }
+    if dot == subject.len { ret (0usize, false) }
+    let module_name = subject[0usize..dot]
+    let name = subject[dot + 1usize..subject.len]
+    var symbol_index = 0usize
+    while symbol_index < c.resolver.count {
+        let symbol = c.resolver.symbols[symbol_index]
+        if symbol.kind == .Error && symbol.module_index < g.count && graph.same(g.modules[symbol.module_index].name, module_name) && graph.same(symbol.name, name) { ret (symbol_index, true) }
+        symbol_index += 1usize
+    }
+    ret (0usize, false)
+}
+
 fn uses_field_subject(c: *check.Checker, g: *graph.Graph, subject: str) -> (usize, bool) {
     var last_dot = subject.len
     var first_dot = subject.len
@@ -4188,7 +4234,9 @@ fn uses_field_subject(c: *check.Checker, g: *graph.Graph, subject: str) -> (usiz
 
 // The uses of a field (D420): every access `x.field` and every literal `{ field: .. }`
 // the checker typed, by module then offset, relation `field`.
-fn field_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, field_index: usize) -> err {
+// The uses the explain table holds of a field (kind 6) or an error (kind 7), by
+// module then offset, each a `use` record with the relation named (D420, D451).
+fn sites_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, explain_kind: u8, index: usize, relation: str) -> err {
     var written = 0usize
     var last = c.explains[0usize]
     var first = true
@@ -4197,7 +4245,7 @@ fn field_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph,
         var at = 0usize
         while at < c.explain_count {
             let e = c.explains[at]
-            if e.kind == 6u8 && e.function_index == field_index {
+            if e.kind == explain_kind && e.function_index == index {
                 let after = first || explain_before(last, e)
                 if after && (best == c.explain_count || explain_before(e, c.explains[best])) { best = at }
             }
@@ -4216,7 +4264,9 @@ fn field_uses_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph,
         var here: lex.Token = zero
         here.start = e.offset
         here.end = e.offset
-        try text(out, "{\"record\":\"use\",\"relation\":\"field\",\"provenance\":\"compiler-proved\",\"in\":")
+        try text(out, "{\"record\":\"use\",\"relation\":\"")
+        try text(out, relation)
+        try text(out, "\",\"provenance\":\"compiler-proved\",\"in\":")
         try quoted_function(out, c, g, enclosing_function(c, e.module_index, e.offset))
         try text(out, ",\"span\":")
         try point_span(out, root, path, module.text, here)

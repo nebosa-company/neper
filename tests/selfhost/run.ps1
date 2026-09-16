@@ -2181,6 +2181,25 @@ $signatureRefused = Join-Path $testBuild 'conformance-tools-plan-signature-refus
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature.e `"$repo`" x64 windows --json --symbol signature.adjust --order 0,0 > `"$signatureRefused`""
 if ($LASTEXITCODE -ne 2) { throw "a plan with a repeated index did not exit 2 (got $LASTEXITCODE)" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $signatureRefused).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_signature_refused.expected.jsonl')).Hash) { throw "a refused plan-change-signature-file differs from the conformance corpus" }
+# An error's uses and rename (D451, H17): every value naming it, bare or qualified,
+# and the declaration's name token; the renamed program checks.
+$errorUsesActual = Join-Path $testBuild 'conformance-tools-uses-error.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file errors_project/src/main.e `"$repo`" x64 windows --json --symbol faults.Stalled > `"$errorUsesActual`""
+if ($LASTEXITCODE -ne 0) { throw "uses-file --json over an error failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $errorUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_error.expected.jsonl')).Hash) { throw "uses-file --json over an error differs from the conformance corpus" }
+$errorPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-error.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-rename-file errors_project/src/main.e `"$repo`" x64 windows --json --symbol faults.Stalled --to Blocked > `"$errorPlanActual`""
+if ($LASTEXITCODE -ne 0) { throw "plan-rename-file --json over an error failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $errorPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_error.x64-windows.expected.jsonl')).Hash) { throw "plan-rename-file --json over an error differs from the conformance corpus" }
+$errorScratch = Join-Path $testBuild 'plan-rename-error-scratch'
+if (Test-Path -LiteralPath $errorScratch) { Remove-Item -LiteralPath $errorScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $errorScratch 'src') | Out-Null
+Copy-Item (Join-Path $conformanceRoot 'tools\errors_project\src\*.e') (Join-Path $errorScratch 'src')
+& python (Join-Path $repo 'scripts/apply_plan.py') $errorPlanActual --root (Join-Path $errorScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the error rename plan could not be applied' }
+$errorChecked = & $compiler check-file (Join-Path $errorScratch 'src/main.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $errorChecked -ne 'module check ok') { throw "the program with the renamed error does not check: $errorChecked" }
+if ((Select-String -Path (Join-Path $errorScratch 'src\*.e') -Pattern 'Stalled' -Quiet) -or -not (Select-String -LiteralPath (Join-Path $errorScratch 'src/faults.e') -Pattern 'error Blocked' -Quiet)) { throw 'the error was not renamed everywhere' }
 # A field's uses and rename (D420, H17): every access and literal naming it, byte for
 # byte; the rename applied to a copy checks, and the new name has the five uses.
 $fieldUsesActual = Join-Path $testBuild 'conformance-tools-uses-field.jsonl'

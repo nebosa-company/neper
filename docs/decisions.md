@@ -9859,3 +9859,18 @@ compiler's own release build: 292,368 values allocated, 3,718 spilled (1.3%),
 lowering is measured by before the wall clock is.
 
 Not yet: the rows per function, and the count of allocations a build makes.
+
+## D451 -- An error's uses and rename
+
+H17 listed error renames among what the plans could not do: an `error Name` was
+named by values the explain table did not record, so neither `uses-file` nor
+`plan-rename-file` could find them. The checker now records every error value
+it types (kind 7: the name's token, bare or the member of a qualified path, and
+the resolver's symbol), `uses-file --symbol module.Name` answers them as `use`
+records with relation `error`, and `plan-rename-file --symbol module.Name --to
+New` edits the declaration's name token and every use; the field writers of
+D420 became the shared site writers, a kind and a declaration their parameters.
+The corpus gains `tools/errors_project` (three values, one bare, two qualified) with its
+uses golden and a per-host rename plan, applied and re-checked by both suites.
+
+Not yet: an error named through a `use` alias, and moves.
