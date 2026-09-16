@@ -10541,3 +10541,15 @@ D488's root text serves `check-file` too: `check-file - ROOT ARCH OS --json
 both suites pipe `reject/scope.e` in and require its golden, exit 1 and all.
 An editor checking an unsaved buffer needs no temporary file for it. No source
 map is looked for beside a piped operand: there is no beside.
+
+## D491 -- The conversion fix over a whole value
+
+D444 wrapped a mismatched name or literal in the expected type and cleared the
+fix for anything wider, since which part of `a + b` to convert is a reading.
+A call, a field read, an index or a parenthesised group is not that case: the
+value is a whole, and `i64(half())` converts nothing but its result. Those
+node kinds keep their span now and get the same `maybe` fix over the whole
+expression; an arithmetic expression still gets none. A call bound by a `let`
+never passes through `check_expr` -- `bind_return_types` holds its results to
+the declared type -- so the binding notes the call itself on a mismatch.
+`reject/type_mismatch_call` pins a call.

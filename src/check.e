@@ -9918,8 +9918,10 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
 }
 
 // The expression a mismatch surfaced at (D444): every frame the error passes
-// records itself, so the outermost wins -- a name or a literal keeps its span, a
-// wider expression clears it, since which of its parts to convert is a reading.
+// records itself, so the outermost wins -- a name or a literal keeps its span, and
+// so does a whole value (D491, H09): a call, a field read, an index, a group,
+// whose conversion converts nothing but its result. An arithmetic expression
+// clears it, since which of its parts to convert is a reading.
 fn note_mismatch_expression(c: *Checker, tree: *parse.Tree, node_index: usize) {
     if c.failure_expected.kind == .Invalid { ret }
     let node = tree.nodes[node_index]
@@ -9927,10 +9929,11 @@ fn note_mismatch_expression(c: *Checker, tree: *parse.Tree, node_index: usize) {
     let last = usize(node.token_end)
     if last <= first || last > c.token_count { ret }
     c.failure_mismatch_end = 0usize
-    if last - first == 1usize {
+    let whole = node.kind == .CallExpr || node.kind == .FieldExpr || node.kind == .BracketPostfix || node.kind == .GroupExpr
+    if last - first == 1usize || whole {
         c.failure_fix_kind = 3u8
         c.failure_fix_at = c.tokens[first].start
-        c.failure_mismatch_end = c.tokens[first].end
+        c.failure_mismatch_end = c.tokens[last - 1usize].end
     }
 }
 
@@ -10543,7 +10546,11 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
         // A `try` is an exit before anything is bound (D345).
         if tried { try resource_audit(c, g, module_index, node, 0usize, .ResourceCleanupForgotten) }
         let first_local = c.local_count
-        try bind_return_types(c, g, module_index, node, binding, call, result_count, declared, mutable)
+        let bind_error = bind_return_types(c, g, module_index, node, binding, call, result_count, declared, mutable)
+        // A call's result against the declared type (D491): the whole call is the
+        // expression the mismatch surfaced at, as `check_expr` would have noted it.
+        if bind_error == TypeMismatch && !tuple { note_mismatch_expression(c, tree, initializer_index) }
+        if bind_error != ok { ret bind_error }
         // The resources bound (D345): owned, or unchecked beside the `err` bound last.
         // A `bool` bound last -- a container's `(T, bool)` -- is tested the same way
         // (D353): the value is null on the false path.
