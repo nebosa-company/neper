@@ -136,6 +136,14 @@ fn declaration_aggregate_kind() -> usize { ret 2usize }
 fn declaration_alias_kind() -> usize { ret 3usize }
 fn declaration_constant_kind() -> usize { ret 4usize }
 fn declaration_error_kind() -> usize { ret 5usize }
+// The checksum the header carries (D473): CRC-32C over the file with the field
+// zeroed, as `check_layout` verified it; read raw, for a manifest to record.
+fn artifact_checksum(bytes: []const u8) -> (usize, err) {
+    let (stored, read_error) = binary.read_u32(bytes, 28usize)
+    if read_error != ok { ret (0usize, InvalidArtifact) }
+    ret (stored, ok)
+}
+
 fn dependency_signature_kind() -> usize { ret 1usize }
 fn dependency_value_kind() -> usize { ret 2usize }
 fn dependency_body_kind() -> usize { ret 3usize }

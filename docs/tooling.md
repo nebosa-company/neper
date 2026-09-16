@@ -564,7 +564,12 @@ a build that read no artifacts; an artifact whose recorded imports close a cycle
 -- naming a module that imports it, which no source can spell -- is `invalid-artifact`
 too (D472, H24): a kept module's imports are read from its artifact, so such an
 artifact is distrusted, its module parsed from source, and the build is the clean
-build's;
+build's; each entry carries `artifact_crc32c` (D473, H24), the checksum of the
+module's artifact as this build wrote or kept it, and the next warm build refuses
+as `invalid-artifact` an artifact whose checksum is not the recorded one -- the
+manifest is the cache's anchor, so a file that is whole by its own checksum but
+was replaced, or rewritten with the checksum redone, is not read as the cache's;
+a module the previous manifest did not record stands on the file's own checksum;
 `mode-changed` covers `--unchecked` too, whose artifacts share `.neper/release/`
 with checked ones and carry their own mode (D369);
 `options.checks` is the

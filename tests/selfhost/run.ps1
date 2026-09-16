@@ -1749,36 +1749,22 @@ foreach ($hotMode in @('--release', '--time')) {
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cycleExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $cycleClean).Hash) { throw "the warm build over a self-referencing artifact is not the clean build ($hotMode)" }
     & python (Join-Path $repo 'scripts/check_incremental.py') $cycleManifest 'main=rebuilt:invalid-artifact' 'ring=kept:stable'
     if ($LASTEXITCODE -ne 0) { throw "the manifest after a self-referencing artifact does not say invalid-artifact ($hotMode)" }
-    # A cyclic artifact reference (D472, H24): an artifact rewritten to import the module
-    # that imports it is distrusted and rebuilt as `invalid-artifact`, the image is the
-    # clean build's, and the linker over the forged set refuses or links without crashing.
-    $cycleScratch = Join-Path $testBuild 'cycle-scratch'
-    if (Test-Path -LiteralPath $cycleScratch) { Remove-Item -LiteralPath $cycleScratch -Recurse -Force }
-    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\artifact_cycle') $cycleScratch
-    $cycleExe = Join-Path $testBuild "cycle$hotMode.exe"
-    $cycleClean = Join-Path $testBuild "cycle-clean$hotMode.exe"
-    $cycleCold = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleExe $hotMode --incremental 2>$null
-    if ($LASTEXITCODE -ne 0 -or $cycleCold -ne 'executable written') { throw "the cold cycle build failed ($hotMode)" }
-    $cycleCleanWritten = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleClean $hotMode 2>$null
-    if ($LASTEXITCODE -ne 0 -or $cycleCleanWritten -ne 'executable written') { throw "the clean cycle build failed ($hotMode)" }
-    $cycleManifest = Join-Path $cycleScratch ".neper\$hotManifestMode\build-manifest.json"
-    $cycleRing = Join-Path $cycleScratch ".neper\$hotManifestMode\em\ring.x64-windows.em"
-    $cycleMain = Join-Path $cycleScratch ".neper\$hotManifestMode\em\main.x64-windows.em"
-    & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') cycle $cycleRing e.os main
-    $cycleLinked = & $compiler link-em (Join-Path $testBuild "cycle-link$hotMode.exe") $cycleMain $cycleRing 2>&1 | Out-String
-    if ($LASTEXITCODE -gt 2) { throw "the linker over a cyclic artifact set exited $LASTEXITCODE" }
-    $cycleWarm = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleExe $hotMode --incremental 2>$null
-    if ($LASTEXITCODE -ne 0 -or $cycleWarm -ne 'executable written') { throw "the warm build over a cyclic artifact failed ($hotMode)" }
-    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cycleExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $cycleClean).Hash) { throw "the warm build over a cyclic artifact is not the clean build ($hotMode)" }
+    # The manifest as the anchor (D473, H24): an artifact rewritten with its checksum
+    # redone -- no cycle this time, a dependency renamed to another module -- is not the
+    # one the manifest recorded, and is rebuilt as `invalid-artifact`; the manifest
+    # records every module's checksum, and a warm build over a whole cache is stable.
+    & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') cycle $cycleRing e.os e.io
+    $cycleRenamed = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $cycleRenamed -ne 'executable written') { throw "the warm build over a rewritten artifact failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cycleExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $cycleClean).Hash) { throw "the warm build over a rewritten artifact is not the clean build ($hotMode)" }
     & python (Join-Path $repo 'scripts/check_incremental.py') $cycleManifest 'main=kept:edges-hold' 'ring=rebuilt:invalid-artifact'
-    if ($LASTEXITCODE -ne 0) { throw "the manifest after a cyclic artifact does not say invalid-artifact ($hotMode)" }
-    # The root's own artifact naming itself.
-    & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') cycle $cycleMain ring main
-    $cycleSelf = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleExe $hotMode --incremental 2>$null
-    if ($LASTEXITCODE -ne 0 -or $cycleSelf -ne 'executable written') { throw "the warm build over a self-referencing artifact failed ($hotMode)" }
-    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $cycleExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $cycleClean).Hash) { throw "the warm build over a self-referencing artifact is not the clean build ($hotMode)" }
-    & python (Join-Path $repo 'scripts/check_incremental.py') $cycleManifest 'main=rebuilt:invalid-artifact' 'ring=kept:stable'
-    if ($LASTEXITCODE -ne 0) { throw "the manifest after a self-referencing artifact does not say invalid-artifact ($hotMode)" }
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after a rewritten artifact does not say invalid-artifact ($hotMode)" }
+    $cycleRecorded = (Get-Content -Raw -LiteralPath $cycleManifest | ConvertFrom-Json).incremental
+    if (@($cycleRecorded | Where-Object { $_.artifact_crc32c -notmatch '^[0-9a-f]{8}$' }).Count -ne 0) { throw "the manifest does not record every artifact's checksum ($hotMode)" }
+    $cycleStable = & $compiler emit-executable (Join-Path $cycleScratch 'src\main.e') $repo 'x64' 'windows' $cycleExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $cycleStable -ne 'executable written') { throw "the warm build over the whole cache failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $cycleManifest 'main=kept:stable' 'ring=kept:stable'
+    if ($LASTEXITCODE -ne 0) { throw "the whole cache was not stable ($hotMode)" }
     # The unsafe inventory rides in the artifact (D457): a warm build's manifest lists
     # the same sites as the cold build's, copied from the kept modules' artifacts.
     $inventoryScratch = Join-Path $testBuild 'inventory-scratch'

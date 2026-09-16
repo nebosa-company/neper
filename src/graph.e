@@ -28,6 +28,10 @@ type Module = struct {
     inventory: []const u8,
     inventory_count: usize,
     inventory_known: bool,
+    // The artifact's checksum (D473, H24): its header's CRC-32C as written or kept,
+    // recorded in the manifest and checked against it on the next warm build.
+    artifact_hash: usize,
+    artifact_hash_known: bool,
     // Where the text's lines begin (D315): tokens carry offsets, and a line is looked
     // up here when a diagnostic, a trap record or a tooling record asks.
     lines: []usize,
@@ -540,7 +544,7 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     let (spelling, spelling_error) = spelling_of(a, g, path)
     if spelling_error != ok { ret (0usize, spelling_error) }
     var no_inventory: []const u8 = zero
-    g.modules[index] = Module { name: name, path: path, text: "", inventory: no_inventory, inventory_count: 0usize, inventory_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    g.modules[index] = Module { name: name, path: path, text: "", inventory: no_inventory, inventory_count: 0usize, inventory_known: false, artifact_hash: 0usize, artifact_hash_known: false, lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }

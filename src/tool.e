@@ -118,6 +118,16 @@ fn quoted_body(out: *Out, value: str) -> err {
     ret ok
 }
 
+// Eight hex digits of a 32-bit value, most significant first.
+fn hex32(out: *Out, value: usize) -> err {
+    var shift = 32usize
+    while shift > 0usize {
+        shift = shift - 4usize
+        try byte(out, hex_digit((value >> shift) & 15usize))
+    }
+    ret ok
+}
+
 fn hex_digit(value: usize) -> u8 {
     if value < 10usize { ret u8(48usize + value) }
     ret u8(87usize + value)
@@ -4934,6 +4944,13 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         if reason == 6u8 { try text(out, "\"invalid-artifact\"") }
         if reason == 7u8 { try text(out, "\"compiler-changed\"") }
         if reason == 8u8 { try text(out, "\"options-changed\"") }
+        // The artifact's checksum (D473, H24): what the next warm build checks the
+        // file against, so a cache is whole as a set or rebuilt.
+        if g.modules[reason_at].artifact_hash_known {
+            try text(out, ",\"artifact_crc32c\":\"")
+            try hex32(out, g.modules[reason_at].artifact_hash)
+            try byte(out, 34u8)
+        }
         try byte(out, 125u8)
         reason_at += 1usize
     }

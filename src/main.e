@@ -3697,6 +3697,57 @@ fn dirname(path: str) -> str {
     ret path[0usize..end]
 }
 
+// The previous manifest's `incremental` entries indexed by module name (D473):
+// each entry's `artifact_crc32c`, when it has one, into a slot the name finds.
+// A manifest without them -- none, or older -- records nothing, and every
+// artifact stands on its checksum.
+fn index_manifest_hashes(a: *mem.Arena, hot: *HotLoad, manifest: str, capacity: usize) -> err {
+    let (entries, entries_error) = mem.alloc[lookup.Entry](a, capacity * 8usize + 256usize)
+    if entries_error != ok { ret entries_error }
+    try lookup.attach(&hot.manifest_names, entries)
+    let (values, values_error) = mem.alloc[usize](a, capacity + 1usize)
+    if values_error != ok { ret values_error }
+    hot.manifest_values = values
+    var count = 0usize
+    let key = "\"module\":\""
+    var at = 0usize
+    while at + key.len <= manifest.len && count < capacity {
+        if same(manifest[at..at + key.len], key) {
+            var name_end = at + key.len
+            while name_end < manifest.len && manifest[name_end] != 34u8 { name_end += 1usize }
+            var entry_end = name_end
+            while entry_end < manifest.len && manifest[entry_end] != 125u8 { entry_end += 1usize }
+            let digits = json_str_after(manifest[name_end..entry_end], "\"artifact_crc32c\":\"")
+            if digits.len == 8usize {
+                var value = 0usize
+                var digit_at = 0usize
+                while digit_at < 8usize {
+                    let ch = usize(digits[digit_at])
+                    var nibble = 0usize
+                    if ch >= 48usize && ch <= 57usize { nibble = ch - 48usize }
+                    if ch >= 97usize && ch <= 102usize { nibble = ch - 87usize }
+                    value = (value << 4usize) | nibble
+                    digit_at += 1usize
+                }
+                values[count] = value
+                try lookup.insert(&hot.manifest_names, 0usize, 0usize, manifest[at + key.len..name_end], count)
+                count += 1usize
+            }
+            at = entry_end
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
+// The checksum the previous manifest recorded for a module (D473), if any.
+fn manifest_recorded_hash(hot: *HotLoad, module_name: str) -> (usize, bool) {
+    if !lookup.attached(&hot.manifest_names) { ret (0usize, false) }
+    let (slot, found) = lookup.find(&hot.manifest_names, 0usize, 0usize, module_name)
+    if !found || slot >= hot.manifest_values.len { ret (0usize, false) }
+    ret (hot.manifest_values[slot], true)
+}
+
 fn json_str_after(line: str, key: str) -> str {
     var at = 0usize
     while at + key.len <= line.len {
@@ -5067,6 +5118,17 @@ type HotLoad = struct {
     // An artifact whose recorded imports closed a cycle (D472, H24): its edges are
     // not the source's, so it is read as no artifact at all (`invalid-artifact`).
     distrust: []bool,
+    // The checksum the previous manifest recorded per module (D473, H24), and the
+    // checksum of the artifact read now; an artifact whose checksum is not the
+    // recorded one is `invalid-artifact`, though the file is whole by it.
+    recorded: []usize,
+    recorded_known: []bool,
+    hash_now: []usize,
+    // The previous manifest's records, indexed by module name once (D473): the
+    // value is a slot of `manifest_values`.
+    manifest_read: bool,
+    manifest_names: lookup.Index,
+    manifest_values: []usize,
 }
 
 // A wave's artifacts on worker threads (D324): each worker reads its modules' artifacts
@@ -5089,17 +5151,42 @@ type ArtifactWorker = struct {
     compiler_identity: usize,
     stopped: bool,
     stopped_at: usize,
+    // The manifest's recorded content hashes (D473), and where the hash read goes.
+    recorded: []usize,
+    recorded_known: []bool,
+    hash_now: []usize,
 }
 
 fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     let module_index = w.modules[at]
     let (old, old_error) = load_artifact(&w.arena, w.paths[at])
     if old_error == mem.Exhausted { ret old_error }
-    let (reason, unchanged) = artifact_identity(old, old_error, w.texts[at], w.mode_id, w.compiler_identity)
+    var (reason, unchanged) = artifact_identity(old, old_error, w.texts[at], w.mode_id, w.compiler_identity)
+    if unchanged {
+        let (hash, verified) = artifact_content_verified(old, w.recorded[module_index], w.recorded_known[module_index])
+        w.hash_now[module_index] = hash
+        if !verified {
+            reason = 6u8
+            unchanged = false
+        }
+    }
     w.reason[module_index] = reason
     w.unchanged[module_index] = unchanged
     if unchanged { w.held[module_index] = old }
     ret ok
+}
+
+// The artifact's checksum, checked against the manifest's record when there is one
+// (D473, H24): the checksum, and whether it is the recorded one. A module the
+// previous manifest did not record is taken as it is -- the file's own check stands
+// alone. The manifest is the anchor: a file whole by its own checksum but not the
+// one the manifest saw written -- replaced, or rewritten with the checksum redone --
+// is not the cache's.
+fn artifact_content_verified(old: []const u8, recorded: usize, recorded_known: bool) -> (usize, bool) {
+    let (checksum, checksum_error) = em.artifact_checksum(old)
+    if checksum_error != ok { ret (0usize, false) }
+    if recorded_known && checksum != recorded { ret (checksum, false) }
+    ret (checksum, true)
 }
 
 // Whether an artifact on disk is the module as it stands (D205, D211, D368, D398):
@@ -5203,6 +5290,9 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
         workers[worker_at].held = held
         workers[worker_at].unchanged = hot.unchanged
         workers[worker_at].reason = hot.reason
+        workers[worker_at].recorded = hot.recorded
+        workers[worker_at].recorded_known = hot.recorded_known
+        workers[worker_at].hash_now = hot.hash_now
         workers[worker_at].mode_id = mode_id
         workers[worker_at].compiler_identity = loaded.compiler_identity
         worker_at += 1usize
@@ -5239,7 +5329,15 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
                 let module_index = workers[worker_at].modules[remaining]
                 let (old, old_error) = load_artifact(a, workers[worker_at].paths[remaining])
                 if old_error == mem.Exhausted { ret old_error }
-                let (reason, unchanged) = artifact_identity(old, old_error, loaded.modules[module_index].text, mode_id, loaded.compiler_identity)
+                var (reason, unchanged) = artifact_identity(old, old_error, loaded.modules[module_index].text, mode_id, loaded.compiler_identity)
+                if unchanged {
+                    let (hash, verified) = artifact_content_verified(old, hot.recorded[module_index], hot.recorded_known[module_index])
+                    hot.hash_now[module_index] = hash
+                    if !verified {
+                        reason = 6u8
+                        unchanged = false
+                    }
+                }
                 hot.reason[module_index] = reason
                 hot.unchanged[module_index] = unchanged
                 if unchanged { held[module_index] = old }
@@ -5261,12 +5359,28 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
     if hot.unchecked { mode_id = 2usize }
     let (list, list_error) = mem.alloc[usize](a, loaded.modules.len)
     if list_error != ok { ret list_error }
+    // The previous build's manifest (D473): the content hash it recorded per module,
+    // read and indexed once.
+    if !hot.manifest_read {
+        hot.manifest_read = true
+        let (manifest_path, manifest_path_error) = with_suffix(a, dirname(directory[0usize..directory.len - 1usize]), "build-manifest.json")
+        if manifest_path_error != ok { ret manifest_path_error }
+        let (manifest_text, manifest_error) = source.load(a, manifest_path)
+        if manifest_error == ok { try index_manifest_hashes(a, hot, manifest_text, loaded.modules.len) }
+    }
     var module_at = 0usize
     while loaded.scanned < loaded.count {
         let wave_start = loaded.scanned
         let wave_end = loaded.count
         try graph.wave_texts(a, loaded, wave_start, wave_end)
         var to_parse = 0usize
+        module_at = wave_start
+        while module_at < wave_end {
+            let (recorded, recorded_known) = manifest_recorded_hash(hot, loaded.modules[module_at].name)
+            hot.recorded[module_at] = recorded
+            hot.recorded_known[module_at] = recorded_known
+            module_at += 1usize
+        }
         try load_wave_artifacts(a, loaded, hot, held, directory, mode_id, wave_start, wave_end, list)
         module_at = wave_start
         while module_at < wave_end {
@@ -5445,18 +5559,30 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     if reason_error != ok { ret reason_error }
     let (distrust, distrust_error) = mem.alloc[bool](a, loaded.modules.len)
     if distrust_error != ok { ret distrust_error }
+    let (recorded, recorded_error) = mem.alloc[usize](a, loaded.modules.len)
+    if recorded_error != ok { ret recorded_error }
+    let (recorded_known, recorded_known_error) = mem.alloc[bool](a, loaded.modules.len)
+    if recorded_known_error != ok { ret recorded_known_error }
+    let (hash_now, hash_now_error) = mem.alloc[usize](a, loaded.modules.len)
+    if hash_now_error != ok { ret hash_now_error }
     var at = 0usize
     while at < loaded.modules.len {
         unchanged[at] = false
         stable[at] = false
         reason[at] = 0u8
         distrust[at] = false
+        recorded[at] = 0usize
+        recorded_known[at] = false
+        hash_now[at] = 0usize
         at += 1usize
     }
     hot.unchanged = unchanged
     hot.stable = stable
     hot.reason = reason
     hot.distrust = distrust
+    hot.recorded = recorded
+    hot.recorded_known = recorded_known
+    hot.hash_now = hash_now
     ret ok
 }
 
@@ -5521,6 +5647,17 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
         }
     } else {
         load_error = graph.load(a, loaded, path, root, arch, target_os, project_root)
+    }
+    // The kept modules' checksums (D473), for the manifest.
+    if hot.on && load_error == ok {
+        var hashed_at = 0usize
+        while hashed_at < loaded.count && hashed_at < hot.unchanged.len {
+            if hot.unchanged[hashed_at] {
+                loaded.modules[hashed_at].artifact_hash = hot.hash_now[hashed_at]
+                loaded.modules[hashed_at].artifact_hash_known = true
+            }
+            hashed_at += 1usize
+        }
     }
     report.toolchain_root = loaded.toolchain_root
     report.project_root = loaded.project.root
@@ -6398,6 +6535,11 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if held_error != ok { ret held_error }
     try binary.pack(&hot.artifact, held)
     held_all[module_index] = held
+    // The artifact's checksum (D473), for the manifest.
+    let (written_hash, written_hash_error) = em.artifact_checksum(held)
+    if written_hash_error != ok { ret written_hash_error }
+    loaded.modules[module_index].artifact_hash = written_hash
+    loaded.modules[module_index].artifact_hash_known = true
     // A cold build holds its artifacts for the link alone (D325); a hot one keeps them.
     if !hot.on { ret ok }
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)

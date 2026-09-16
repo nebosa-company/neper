@@ -10253,3 +10253,28 @@ and the linker over the forged set refuses without crashing.
 
 Not yet: content integrity for imported artifacts beyond the CRC, which is what
 would have caught the forgery before the graph did.
+
+## D473 -- The manifest as the cache's anchor
+
+D472's forgery passed every check the artifact carries: a file rewritten with
+its checksum redone is whole by its own account, and the graph was what caught
+it. The build manifest's `incremental` entries now carry `artifact_crc32c`, the
+checksum of each module's artifact as the build wrote or kept it, and the next
+warm build reads the previous manifest once, indexes the records by module
+name, and refuses as `invalid-artifact` an artifact whose header checksum is
+not the recorded one -- replaced by another valid file, or rewritten and
+re-summed -- before its imports or edges are read. A module the previous
+manifest did not record stands on the file's own checksum, so an older cache
+is read as it was. Tried first: xxHash64 over every artifact's bytes on the
+workers, which cost the compiler's own warm build 8 ms of its 100 (the byte-
+wise word assembly runs at some 600 MB/s), where the header's CRC-32C is
+already computed and validated at load and anchors the same property for
+nothing -- an accident never recomputes a checksum, and a forger who rewrites
+the manifest too has the cache regardless, which no unkeyed check prevents.
+The artifact-cycle fixture gains a forgery that is no cycle (a dependency
+renamed to another module): refused by the record, the image the clean
+build's, and the whole cache stable afterwards; both suites, both modes. Also
+here: D472's suite block had landed twice in each runner, and is once.
+
+Not yet: a keyed integrity a hostile cache cannot satisfy by rewriting the
+manifest, and a whole-build comptime step budget.
