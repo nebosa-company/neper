@@ -9655,3 +9655,22 @@ gains `tools/subjects`, a constant and a global, per host.
 
 Not yet: a constant's non-integer values (strings, floats, arrays) spelled, and
 the uses of a global as `uses-file` answers a function's.
+
+## D438 -- Metamorphic tests: what must change nothing
+
+H10 lists metamorphic tests; the suites compared images against goldens and
+programs against expected exits, never a program against a transformed self.
+`benchmarks/metamorphic/metamorphic.py` applies two transformations to a
+fixture's root module and holds the build to them: every comment removed
+through the lossless token stream with lines and columns kept, after which the
+debug and release images must be byte-identical to the original's (their line
+tables name lines, not comments); and the top-level declarations after the
+`use` lines reversed, after which the image may differ -- functions are laid
+out in declaration order -- but the program must exit with the same code and
+write the same bytes, since spec section 14 makes module scope
+order-independent. Both suites run it over `algo_sort`, `algo_bitset` and
+`control`.
+
+Not yet: locals renamed (the index carries no locals to rename by), fields
+reordered (a layout change the program may observe), and a corpus wider than
+three.

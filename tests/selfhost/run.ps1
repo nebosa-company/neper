@@ -2273,6 +2273,11 @@ cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-ex
 if ($LASTEXITCODE -ne 3) { throw "a build past its deadline did not exit 3 (got $LASTEXITCODE)" }
 if (Test-Path -LiteralPath $deadlineImage) { throw "a build past its deadline wrote an image" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deadlineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/deadline.expected.jsonl')).Hash) { throw "the cancelled build's stream differs from the conformance corpus" }
+# Metamorphic tests (D438, H10): a fixture without its comments builds the same image,
+# and with its declarations reversed behaves the same.
+$metamorphicOut = Join-Path $testBuild 'metamorphic'
+& python (Join-Path $repo 'benchmarks/metamorphic/metamorphic.py') $compiler $repo 'x64' 'windows' $metamorphicOut (Join-Path $PSScriptRoot 'fixtures\link\algo_sort\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\algo_bitset\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\control\src\main.e')
+if ($LASTEXITCODE -ne 0) { throw 'a metamorphic transformation changed what a fixture builds or does' }
 # `--instances N` (D426, H06): a budget over the specializations a build makes -- three
 # instances past a budget of two is E-COMPTIME-0001 and exit 1; a budget of three builds.
 $instancesActual = Join-Path $testBuild 'conformance-tools-instances.jsonl'
