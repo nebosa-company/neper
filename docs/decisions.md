@@ -10007,3 +10007,22 @@ the warm image, the cold image and the non-incremental image are one file.
 
 Not yet: the copy still looks a callee's module up by name for the reference's
 module index, and the walk still copies every callee name into the main arena.
+
+## D461 -- A callee's module found once per string
+
+A relocation names its callee's module by an index into its artifact's string
+table, and `target_module` hashed that string and searched the module index for
+it per relocation -- the reach walk's largest cost after D460, and the copy's
+again. Each artifact now carries `module_of`, one slot per string, and the walk
+records what it found; the copy reads the slot, and looks a module up only for
+a function the walk never reached, which when `main` exists is none. Warm
+`link from artifacts` 22 -> 18 ms.
+
+Tried and dropped: remembering the runtime symbol a reference names on the
+reference itself, so the two linkers' string-compare tables are asked once per
+reference instead of per relocation. The `link` phase went from 15 ms to 16:
+three more words on every `FunctionRef` cost more in the copies the link makes
+of them than the compares saved, since D356 left few relocations that reach
+the runtime. The `link` phase splits as symbol table 7 ms and image 7 ms, both
+linear in their rows; the warm build of the compiler is now bounded by reading
+its artifacts and its text, and the increments here stop.

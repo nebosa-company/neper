@@ -21,6 +21,11 @@ type Artifact = struct {
     // The string table's bounds, walked once when the artifact is taken up (D319).
     string_starts: []usize,
     string_lengths: []usize,
+    // Which artifact each of its strings names as a module, plus one, once the reach
+    // walk has looked it up (D461); zero until then. A relocation names its callee's
+    // module by a string index, and the same few strings were hashed and found again
+    // per relocation, in the walk and in the copy.
+    module_of: []usize,
 }
 
 type Program = struct {
@@ -135,6 +140,7 @@ fn index_modules(a: *mem.Arena, artifacts: []Artifact, module_indices: []usize, 
 }
 
 fn target_module(a: *mem.Arena, modules: *lookup.Index, source: Artifact, target_module_index: usize) -> (usize, err) {
+    if target_module_index < source.module_of.len && source.module_of[target_module_index] != 0usize { ret (source.module_of[target_module_index] - 1usize, ok) }
     let (name, name_error) = artifact_text(a, source, target_module_index)
     if name_error != ok { ret (0usize, name_error) }
     let (at, found) = lookup.find(modules, 0usize, 0usize, name)
@@ -227,6 +233,14 @@ fn link_table_artifact(w: *LinkWorker, artifact_at: usize) -> err {
     if bounds_error != ok { ret bounds_error }
     w.artifacts[artifact_at].string_starts = starts
     w.artifacts[artifact_at].string_lengths = lengths
+    let (module_of, module_of_error) = mem.alloc[usize](&w.arena, starts.len + 1usize)
+    if module_of_error != ok { ret module_of_error }
+    var string_at = 0usize
+    while string_at < starts.len {
+        module_of[string_at] = 0usize
+        string_at += 1usize
+    }
+    w.artifacts[artifact_at].module_of = module_of[0usize..starts.len]
     let table = w.table
     let position = table.base[artifact_at]
     let end = table.base[artifact_at + 1usize]
@@ -572,6 +586,7 @@ fn reachable_from_main(a: *mem.Arena, artifacts: []Artifact, modules: *lookup.In
             if !stored.global {
                 let (module_index, module_error) = target_module(a, modules, artifacts[owner], stored.module_index)
                 if module_error != ok { ret (false, module_error) }
+                artifacts[owner].module_of[stored.module_index] = module_index + 1usize
                 let (callee_name, callee_error) = artifact_text(a, artifacts[owner], stored.name_index)
                 if callee_error != ok { ret (false, callee_error) }
                 let (callee, found) = table_position(table, module_index, callee_name, stored.instance)
@@ -614,7 +629,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         global_count += globals_here
         let (strings_here, strings_error) = em.string_count(artifacts[artifact_at].bytes)
         if strings_error != ok { ret strings_error }
-        needs[artifact_at] = (strings_here + 2usize) * 16usize + (count * 8usize + 64usize) * 64usize + 256usize
+        needs[artifact_at] = (strings_here + 2usize) * 24usize + (count * 8usize + 64usize) * 64usize + 256usize
         need_total += needs[artifact_at]
         if needs[artifact_at] > need_largest { need_largest = needs[artifact_at] }
         artifact_at += 1usize
