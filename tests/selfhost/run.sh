@@ -2335,6 +2335,10 @@ cmp -s "$test_build/conformance-tools-explain-inline.jsonl" "$conformance_root/t
 (cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/contract.e "$repo" x64 linux conformance-tools-progress.out --json --time > "conformance-tools-progress.jsonl")
 grep -q '"record":"progress","phase":"lower and codegen"' "$test_build/conformance-tools-progress.jsonl"
 python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-progress.jsonl"
+# `--stats` as a record (D476, H18): one flat `stats` record before the result.
+(cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/contract.e "$repo" x64 linux conformance-tools-stats.out --json --stats-full > "conformance-tools-stats.jsonl")
+python3 "$repo/scripts/check_stats_record.py" "$test_build/conformance-tools-stats.jsonl"
+python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-stats.jsonl"
 # Per-instance cost (D453, H06): `instance-cost` records after the lowering.
 (cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/instances.e "$repo" x64 linux conformance-tools-explain-instances.out --release --explain --json -j 1 > "conformance-tools-explain-instances.jsonl")
 cmp -s "$test_build/conformance-tools-explain-instances.jsonl" "$conformance_root/tools/explain_instances.x64-linux.expected.jsonl" || { echo "the instance-cost records differ from the conformance corpus" >&2; exit 1; }

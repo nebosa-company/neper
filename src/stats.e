@@ -54,9 +54,13 @@ const POOL_LINE_ENTRIES: usize = 32usize
 const POOL_RELOCATIONS: usize = 33usize
 const POOL_COUNT: usize = 34usize
 
+// The stream rendering (D476): with `--json` the same rows are one `stats` record on
+// stdout, `"key":value` per row, the key the row's name in snake_case with the unit
+// as its suffix; the row helpers below read `Build.json`.
 type Build = struct {
     on: bool,
     full: bool,
+    json: bool,
     release: bool,
     arch: str,
     target_os: str,
@@ -105,9 +109,18 @@ fn record_phase(b: *Build, name: str, ms: usize) {
 
 // --- printing ---------------------------------------------------------------------------
 
-// The table goes to stderr, where `--time` goes, so `run --json`'s stream stays clean.
-fn out(text: str) -> err {
+// The table goes to stderr, where `--time` goes, so `run --json`'s stream stays clean;
+// the record is a line of that stream (D476).
+fn out(b: *Build, text: str) -> err {
+    if b.json {
+        let stream = os.stdout()
+        ret write_text(stream, text)
+    }
     let file = os.stderr()
+    ret write_text(file, text)
+}
+
+fn write_text(file: os.File, text: str) -> err {
     var at = 0usize
     while at < text.len {
         let (written, write_error) = os.write(file, text[at..])
@@ -118,21 +131,21 @@ fn out(text: str) -> err {
     ret ok
 }
 
-fn digit(d: usize) -> err {
-    if d == 0usize { ret out("0") }
-    if d == 1usize { ret out("1") }
-    if d == 2usize { ret out("2") }
-    if d == 3usize { ret out("3") }
-    if d == 4usize { ret out("4") }
-    if d == 5usize { ret out("5") }
-    if d == 6usize { ret out("6") }
-    if d == 7usize { ret out("7") }
-    if d == 8usize { ret out("8") }
-    ret out("9")
+fn digit(b: *Build, d: usize) -> err {
+    if d == 0usize { ret out(b, "0") }
+    if d == 1usize { ret out(b, "1") }
+    if d == 2usize { ret out(b, "2") }
+    if d == 3usize { ret out(b, "3") }
+    if d == 4usize { ret out(b, "4") }
+    if d == 5usize { ret out(b, "5") }
+    if d == 6usize { ret out(b, "6") }
+    if d == 7usize { ret out(b, "7") }
+    if d == 8usize { ret out(b, "8") }
+    ret out(b, "9")
 }
 
 // Thousands apart with an apostrophe: 2'000'000.
-fn number(value: usize) -> err {
+fn number(b: *Build, value: usize) -> err {
     var divisor = 1usize
     var remaining = value
     var digits = 1usize
@@ -143,48 +156,120 @@ fn number(value: usize) -> err {
     }
     remaining = value
     while divisor != 0usize {
-        try digit(remaining / divisor)
+        try digit(b, remaining / divisor)
         remaining = remaining % divisor
         divisor = divisor / 10usize
         digits = digits - 1usize
-        if digits != 0usize && digits % 3usize == 0usize { try out("'") }
+        if digits != 0usize && digits % 3usize == 0usize && !b.json { try out(b, "'") }
     }
     ret ok
 }
 
-fn row(name: str) -> err {
-    try out(name)
-    ret out(" | ")
+// A row's key (D476): the name lowered, a space or dash an underscore, `@` spelled `at_`,
+// anything else dropped, between a prefix and a suffix -- `phase_front_end_ms`.
+fn out_key(b: *Build, prefix: str, name: str, suffix: str) -> err {
+    var storage: [96]u8 = zero
+    var count = 0usize
+    var part = 0usize
+    while part < 3usize {
+        var text = name
+        if part == 0usize { text = prefix }
+        if part == 2usize { text = suffix }
+        var at = 0usize
+        while at < text.len {
+            let byte = text[at]
+            if count + 3usize >= storage.len { ret Stopped }
+            if (byte >= 97u8 && byte <= 122u8) || (byte >= 48u8 && byte <= 57u8) || byte == 95u8 {
+                storage[count] = byte
+                count += 1usize
+            }
+            if byte >= 65u8 && byte <= 90u8 {
+                storage[count] = byte + 32u8
+                count += 1usize
+            }
+            if byte == 32u8 || byte == 45u8 {
+                storage[count] = 95u8
+                count += 1usize
+            }
+            if byte == 64u8 {
+                storage[count] = 97u8
+                storage[count + 1usize] = 116u8
+                storage[count + 2usize] = 95u8
+                count += 3usize
+            }
+            at += 1usize
+        }
+        part += 1usize
+    }
+    ret out(b, storage[0usize..count])
 }
 
-fn row_number(name: str, value: usize) -> err {
-    try row(name)
-    try number(value)
-    ret out("\n")
+// A row's start: the name and a bar, or the record's key with its unit suffix.
+fn row_named(b: *Build, prefix: str, name: str, suffix: str) -> err {
+    if !b.json {
+        try out(b, name)
+        ret out(b, " | ")
+    }
+    try out(b, ",")
+    try out(b, "\"")
+    try out_key(b, prefix, name, suffix)
+    ret out(b, "\":")
 }
 
-fn row_ms(name: str, ms: usize) -> err {
-    try row(name)
-    try number(ms)
-    ret out(" ms\n")
+fn row(b: *Build, name: str) -> err {
+    ret row_named(b, "", name, "")
 }
 
-fn row_bytes(name: str, bytes: usize) -> err {
-    try row(name)
-    try number(bytes / 1048576usize)
-    try out(" MB\n")
+// A row's end: the unit and the line, or nothing -- the next key brings its comma.
+fn end_row(b: *Build, unit: str) -> err {
+    if b.json { ret ok }
+    if unit.len != 0usize {
+        try out(b, " ")
+        try out(b, unit)
+    }
+    ret out(b, "\n")
+}
+
+fn row_number(b: *Build, name: str, value: usize) -> err {
+    try row(b, name)
+    try number(b, value)
+    ret end_row(b, "")
+}
+
+// A row with a unit: the unit after the value in the table, the key's suffix in the record.
+fn row_unit(b: *Build, prefix: str, name: str, value: usize, unit: str, suffix: str) -> err {
+    try row_named(b, prefix, name, suffix)
+    try number(b, value)
+    ret end_row(b, unit)
+}
+
+fn row_ms(b: *Build, name: str, ms: usize) -> err {
+    ret row_unit(b, "", name, ms, "ms", "_ms")
+}
+
+fn row_bytes(b: *Build, name: str, bytes: usize) -> err {
+    ret row_unit(b, "", name, bytes / 1048576usize, "MB", "_mb")
+}
+
+fn row_text(b: *Build, name: str, value: str) -> err {
+    try row(b, name)
+    if b.json { try out(b, "\"") }
+    try out(b, value)
+    if b.json { try out(b, "\"") }
+    ret end_row(b, "")
+}
+
+// A blank cell: `null` under its unit's key in the record.
+fn row_blank(b: *Build, name: str, suffix: str) -> err {
+    try row_named(b, "", name, suffix)
+    if b.json { try out(b, "null") }
+    ret end_row(b, "")
+}
+
+// The record's end (D476); the table has none.
+fn close(b: *Build) -> err {
+    if b.json { ret out(b, "}\n") }
     ret ok
-}
-
-fn row_text(name: str, value: str) -> err {
-    try row(name)
-    try out(value)
-    ret out("\n")
-}
-
-fn row_blank(name: str) -> err {
-    try row(name)
-    ret out("\n")
 }
 
 // --- the post pass ------------------------------------------------------------------------
@@ -330,66 +415,79 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     let (counts, counts_error) = count_nodes(a, r, g)
     if counts_error != ok { ret counts_error }
 
-    try out("Metric | Value\n")
-    try row_number("files", g.count)
-    try row_number("LoC", all.total)
-    try row_number("MLoC", all.code)
-    try row_number("comments", all.comment)
-    try row_number("blank", all.blank)
-    try row("module sizes LoC (min / median / max)")
-    if g.count != 0usize {
-        try number(sizes[0usize])
-        try out(" / ")
-        try number(sizes[g.count / 2usize])
-        try out(" / ")
-        try number(sizes[g.count - 1usize])
+    if b.json { try out(b, "{\"record\":\"stats\"") } else { try out(b, "Metric | Value\n") }
+    try row_number(b, "files", g.count)
+    try row_number(b, "LoC", all.total)
+    try row_number(b, "MLoC", all.code)
+    try row_number(b, "comments", all.comment)
+    try row_number(b, "blank", all.blank)
+    if b.json {
+        var size_min = 0usize
+        var size_median = 0usize
+        var size_max = 0usize
+        if g.count != 0usize {
+            size_min = sizes[0usize]
+            size_median = sizes[g.count / 2usize]
+            size_max = sizes[g.count - 1usize]
+        }
+        try row_number(b, "module size min", size_min)
+        try row_number(b, "module size median", size_median)
+        try row_number(b, "module size max", size_max)
+    } else {
+        try row(b, "module sizes LoC (min / median / max)")
+        if g.count != 0usize {
+            try number(b, sizes[0usize])
+            try out(b, " / ")
+            try number(b, sizes[g.count / 2usize])
+            try out(b, " / ")
+            try number(b, sizes[g.count - 1usize])
+        }
+        try out(b, "\n")
     }
-    try out("\n")
-    try row_number("functions", c.signature_function_count)
-    try row_number("function instances", c.function_count - c.signature_function_count)
-    try row_number("imports", g.import_count)
-    try row_number("types", c.aggregate_count + c.alias_count)
-    try row_number("constants", c.constant_count)
-    try row_number("vars", c.global_count)
-    try row_number("errors", errors)
-    try row_number("nodes", counts.nodes)
-    try row_number("externs", counts.externs)
-    try row_number("@tests", counts.tests)
-    try row_number("@gpus", counts.gpus)
-    try row_number("@imports", counts.imports)
-    try row_number("@nochecks", counts.nochecks)
-    try row("source")
-    try number(g.total_bytes)
-    try out(" bytes\n")
-    try row("largest module")
-    try number(g.largest_bytes)
-    try out(" bytes\n")
-    if b.release { try row_text("compile mode", "RELEASE") } else { try row_text("compile mode", "DEBUG") }
-    try row_text("compiler version", "0.1.0")
-    try row_text("host", host_name(a))
-    try row("target")
-    try out(b.arch)
-    try out(" ")
-    try out(b.target_os)
-    try out("\n")
-    try row_number("reached modules", hot_count)
-    try row_number("unreached modules", g.count - hot_count)
-    try row_number("reached functions", builder.function_count)
-    try row_number("unreached functions", b.unreached_functions)
-    try row("unreached code")
-    try number(b.unreached_bytes)
-    try out(" bytes\n")
-    try row_number("declarations checked", b.declarations_checked)
-    try row_number("bodies checked", b.bodies_checked)
-    try row_number("modules lowered", b.modules_lowered)
-    try row_number("functions lowered", b.functions_lowered)
-    try row_number("bounds checks elided", b.bounds_elided)
-    try row_number("by-value copies", b.snapshots_copied)
-    try row_number("by-value copies elided", b.snapshots_elided)
+    try row_number(b, "functions", c.signature_function_count)
+    try row_number(b, "function instances", c.function_count - c.signature_function_count)
+    try row_number(b, "imports", g.import_count)
+    try row_number(b, "types", c.aggregate_count + c.alias_count)
+    try row_number(b, "constants", c.constant_count)
+    try row_number(b, "vars", c.global_count)
+    try row_number(b, "errors", errors)
+    try row_number(b, "nodes", counts.nodes)
+    try row_number(b, "externs", counts.externs)
+    try row_number(b, "@tests", counts.tests)
+    try row_number(b, "@gpus", counts.gpus)
+    try row_number(b, "@imports", counts.imports)
+    try row_number(b, "@nochecks", counts.nochecks)
+    try row_unit(b, "", "source", g.total_bytes, "bytes", "_bytes")
+    try row_unit(b, "", "largest module", g.largest_bytes, "bytes", "_bytes")
+    if b.release { try row_text(b, "compile mode", "RELEASE") } else { try row_text(b, "compile mode", "DEBUG") }
+    try row_text(b, "compiler version", "0.1.0")
+    try row_text(b, "host", host_name(a))
+    if b.json {
+        try row_text(b, "target arch", b.arch)
+        try row_text(b, "target os", b.target_os)
+    } else {
+        try row(b, "target")
+        try out(b, b.arch)
+        try out(b, " ")
+        try out(b, b.target_os)
+        try out(b, "\n")
+    }
+    try row_number(b, "reached modules", hot_count)
+    try row_number(b, "unreached modules", g.count - hot_count)
+    try row_number(b, "reached functions", builder.function_count)
+    try row_number(b, "unreached functions", b.unreached_functions)
+    try row_unit(b, "", "unreached code", b.unreached_bytes, "bytes", "_bytes")
+    try row_number(b, "declarations checked", b.declarations_checked)
+    try row_number(b, "bodies checked", b.bodies_checked)
+    try row_number(b, "modules lowered", b.modules_lowered)
+    try row_number(b, "functions lowered", b.functions_lowered)
+    try row_number(b, "bounds checks elided", b.bounds_elided)
+    try row_number(b, "by-value copies", b.snapshots_copied)
+    try row_number(b, "by-value copies elided", b.snapshots_elided)
     // Register pressure (D450, H20): what the allocator could not keep in a register.
-    try row_number("values allocated", b.values_allocated)
-    try row_number("values spilled", b.values_spilled)
-    try row_number("functions spilling", b.functions_spilling)
+    try row_number(b, "values allocated", b.values_allocated)
+    try row_number(b, "values spilled", b.values_spilled)
+    try row_number(b, "functions spilling", b.functions_spilling)
     // The worker arenas' high-water marks summed (D339): every phase's workers, what
     // each allocated, rounded to the runtime's chunk -- what the pools were sized to,
     // not what was committed, which is the pages touched and the peak below; the
@@ -400,88 +498,90 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
         worker_bytes += graph.arena_touched(&g.workers[worker_at].arena)
         worker_at += 1usize
     }
-    try row("worker arenas reached")
-    try number(worker_bytes / 1048576usize)
-    try out(" MB\n")
-    try row("executable size")
-    try number(b.image_bytes)
-    try out(" bytes\n")
+    try row_bytes(b, "worker arenas reached", worker_bytes)
+    try row_unit(b, "", "executable size", b.image_bytes, "bytes", "_bytes")
     // Read here, after everything the build allocated: the process's peak so far is its
     // peak (D311).
     let (peak, peak_error) = os.peak_memory()
     if peak_error != ok { ret peak_error }
-    try row_bytes("compiler peak working set", peak)
-    try row_ms("wall time", b.wall_ms)
+    try row_bytes(b, "compiler peak working set", peak)
+    try row_ms(b, "wall time", b.wall_ms)
     var phase = 0usize
     while phase < b.phase_count {
-        try row(b.phase_names[phase])
-        try number(b.phase_ms[phase])
-        try out(" ms\n")
+        try row_unit(b, "phase ", b.phase_names[phase], b.phase_ms[phase], "ms", "_ms")
         phase += 1usize
     }
     if b.ran {
-        try row_ms("execution time", b.run_ms)
-        try row_bytes("executable peak working set", b.run_peak)
-        try row("exit code")
+        try row_ms(b, "execution time", b.run_ms)
+        try row_bytes(b, "executable peak working set", b.run_peak)
+        try row(b, "exit code")
         if b.exit_code < 0i32 {
-            try out("-")
-            try number(usize(0i32 - b.exit_code))
+            try out(b, "-")
+            try number(b, usize(0i32 - b.exit_code))
         } else {
-            try number(usize(b.exit_code))
+            try number(b, usize(b.exit_code))
         }
-        try out("\n")
+        try end_row(b, "")
     } else {
-        try row_blank("execution time")
-        try row_blank("executable peak working set")
-        try row_blank("exit code")
+        try row_blank(b, "execution time", "_ms")
+        try row_blank(b, "executable peak working set", "_mb")
+        try row_blank(b, "exit code", "")
     }
-    if !b.full { ret ok }
+    if !b.full { ret close(b) }
 
-    try out("\nPool | Capacity | Used\n")
-    try pool_row("resolver symbols", b.pools[POOL_SYMBOLS], r.count)
-    try pool_row("resolver tokens (per module)", b.pools[POOL_RESOLVER_TOKENS], 0usize)
-    try pool_row("resolver locals", b.pools[POOL_RESOLVER_LOCALS], 0usize)
-    try pool_row("resolver name index entries", b.pools[POOL_RESOLVER_INDEX], r.names.count)
-    try pool_row("checker functions", b.pools[POOL_FUNCTIONS], c.function_count)
-    try pool_row("checker parameters", b.pools[POOL_PARAMETERS], c.parameter_count)
-    try pool_row("checker return types", b.pools[POOL_RETURN_TYPES], c.return_type_count)
-    try pool_row("checker types", b.pools[POOL_TYPES], c.type_count)
-    try pool_row("checker aggregates", b.pools[POOL_AGGREGATES], c.aggregate_count)
-    try pool_row("checker aggregate fields", b.pools[POOL_AGGREGATE_FIELDS], c.aggregate_field_count)
-    try pool_row("checker aliases", b.pools[POOL_ALIASES], c.alias_count)
-    try pool_row("checker constants", b.pools[POOL_CONSTANTS], c.constant_count)
-    try pool_row("checker constant exprs", b.pools[POOL_CONSTANT_EXPRS], c.constant_expr_count)
-    try pool_row("checker globals", b.pools[POOL_GLOBALS], c.global_count)
-    try pool_row("checker generic arguments", b.pools[POOL_GENERIC_ARGUMENTS], c.generic_argument_count)
-    try pool_row("checker comptime parameters", b.pools[POOL_COMPTIME_PARAMETERS], c.comptime_parameter_count)
-    try pool_row("checker checked switches", b.pools[POOL_CHECKED_SWITCHES], 0usize)
-    try pool_row("checker diagnostics", b.pools[POOL_DIAGNOSTICS], c.diagnostic_count)
-    try pool_row("checker tokens (per module)", b.pools[POOL_CHECKER_TOKENS], 0usize)
-    try pool_row("checker locals", b.pools[POOL_CHECKER_LOCALS], 0usize)
-    try pool_row("checker declaration index entries", b.pools[POOL_CHECKER_INDEX], c.names.count)
-    try pool_row("nir functions", b.pools[POOL_NIR_FUNCTIONS], builder.function_count)
+    if !b.json { try out(b, "\nPool | Capacity | Used\n") }
+    try pool_row(b, "resolver symbols", b.pools[POOL_SYMBOLS], r.count)
+    try pool_row(b, "resolver tokens (per module)", b.pools[POOL_RESOLVER_TOKENS], 0usize)
+    try pool_row(b, "resolver locals", b.pools[POOL_RESOLVER_LOCALS], 0usize)
+    try pool_row(b, "resolver name index entries", b.pools[POOL_RESOLVER_INDEX], r.names.count)
+    try pool_row(b, "checker functions", b.pools[POOL_FUNCTIONS], c.function_count)
+    try pool_row(b, "checker parameters", b.pools[POOL_PARAMETERS], c.parameter_count)
+    try pool_row(b, "checker return types", b.pools[POOL_RETURN_TYPES], c.return_type_count)
+    try pool_row(b, "checker types", b.pools[POOL_TYPES], c.type_count)
+    try pool_row(b, "checker aggregates", b.pools[POOL_AGGREGATES], c.aggregate_count)
+    try pool_row(b, "checker aggregate fields", b.pools[POOL_AGGREGATE_FIELDS], c.aggregate_field_count)
+    try pool_row(b, "checker aliases", b.pools[POOL_ALIASES], c.alias_count)
+    try pool_row(b, "checker constants", b.pools[POOL_CONSTANTS], c.constant_count)
+    try pool_row(b, "checker constant exprs", b.pools[POOL_CONSTANT_EXPRS], c.constant_expr_count)
+    try pool_row(b, "checker globals", b.pools[POOL_GLOBALS], c.global_count)
+    try pool_row(b, "checker generic arguments", b.pools[POOL_GENERIC_ARGUMENTS], c.generic_argument_count)
+    try pool_row(b, "checker comptime parameters", b.pools[POOL_COMPTIME_PARAMETERS], c.comptime_parameter_count)
+    try pool_row(b, "checker checked switches", b.pools[POOL_CHECKED_SWITCHES], 0usize)
+    try pool_row(b, "checker diagnostics", b.pools[POOL_DIAGNOSTICS], c.diagnostic_count)
+    try pool_row(b, "checker tokens (per module)", b.pools[POOL_CHECKER_TOKENS], 0usize)
+    try pool_row(b, "checker locals", b.pools[POOL_CHECKER_LOCALS], 0usize)
+    try pool_row(b, "checker declaration index entries", b.pools[POOL_CHECKER_INDEX], c.names.count)
+    try pool_row(b, "nir functions", b.pools[POOL_NIR_FUNCTIONS], builder.function_count)
     // The body pools hold one module at a time on the executable path (D314): the
     // capacity is per module, the used column is the whole program's.
-    try pool_row("nir blocks", b.pools[POOL_NIR_BLOCKS], builder.block_count + builder.block_total)
-    try pool_row("nir instructions", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_count + builder.instruction_total)
-    try pool_row("nir instructions, largest module", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_peak)
-    try pool_row("nir operands", b.pools[POOL_NIR_OPERANDS], builder.operand_count + builder.operand_total)
-    try pool_row("nir function refs", b.pools[POOL_NIR_REFS], builder.function_ref_count)
-    try pool_row("nir strings", b.pools[POOL_NIR_STRINGS], builder.string_count)
-    try pool_row("nir globals", b.pools[POOL_NIR_GLOBALS], builder.global_count)
-    try pool_row("nir ref index entries", b.pools[POOL_NIR_INDEX], builder.ref_names.count)
-    try pool_row("lowering bindings", b.pools[POOL_BINDINGS], 0usize)
-    try pool_row("machine code buffer bytes", b.pools[POOL_MACHINE], 0usize)
-    try pool_row("image buffer bytes", b.pools[POOL_IMAGE], b.image_bytes)
-    try pool_row("line entries", b.pools[POOL_LINE_ENTRIES], 0usize)
-    try pool_row("relocations", b.pools[POOL_RELOCATIONS], 0usize)
-    ret ok
+    try pool_row(b, "nir blocks", b.pools[POOL_NIR_BLOCKS], builder.block_count + builder.block_total)
+    try pool_row(b, "nir instructions", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_count + builder.instruction_total)
+    try pool_row(b, "nir instructions, largest module", b.pools[POOL_NIR_INSTRUCTIONS], builder.instruction_peak)
+    try pool_row(b, "nir operands", b.pools[POOL_NIR_OPERANDS], builder.operand_count + builder.operand_total)
+    try pool_row(b, "nir function refs", b.pools[POOL_NIR_REFS], builder.function_ref_count)
+    try pool_row(b, "nir strings", b.pools[POOL_NIR_STRINGS], builder.string_count)
+    try pool_row(b, "nir globals", b.pools[POOL_NIR_GLOBALS], builder.global_count)
+    try pool_row(b, "nir ref index entries", b.pools[POOL_NIR_INDEX], builder.ref_names.count)
+    try pool_row(b, "lowering bindings", b.pools[POOL_BINDINGS], 0usize)
+    try pool_row(b, "machine code buffer bytes", b.pools[POOL_MACHINE], 0usize)
+    try pool_row(b, "image buffer bytes", b.pools[POOL_IMAGE], b.image_bytes)
+    try pool_row(b, "line entries", b.pools[POOL_LINE_ENTRIES], 0usize)
+    try pool_row(b, "relocations", b.pools[POOL_RELOCATIONS], 0usize)
+    ret close(b)
 }
 
-fn pool_row(name: str, capacity: usize, used: usize) -> err {
-    try row(name)
-    try number(capacity)
-    try out(" | ")
-    if used != 0usize { try number(used) }
-    ret out("\n")
+// A pool's two columns, or its two keys (D476): `pool_<name>_capacity` and
+// `pool_<name>_used`, the second `null` where the table leaves it blank.
+fn pool_row(b: *Build, name: str, capacity: usize, used: usize) -> err {
+    if b.json {
+        try row_unit(b, "pool ", name, capacity, "", "_capacity")
+        try row_named(b, "pool ", name, "_used")
+        if used != 0usize { try number(b, used) } else { try out(b, "null") }
+        ret ok
+    }
+    try row(b, name)
+    try number(b, capacity)
+    try out(b, " | ")
+    if used != 0usize { try number(b, used) }
+    ret out(b, "\n")
 }

@@ -281,12 +281,17 @@
       "type":"object","additionalProperties":false,"required":["record","process_exit_code","stdout","stderr","trap"],
       "properties":{"record":{"const":"run"},"process_exit_code":{"type":"integer"},"stdout":{"$ref":"#/$defs/captured"},"stderr":{"$ref":"#/$defs/captured"},"trap":{"oneOf":[{"$ref":"#/$defs/trapPayload"},{"type":"null"}]}}
     },
+    "stats": {
+      "type":"object","required":["record","files","wall_time_ms","execution_time_ms","exit_code"],
+      "properties":{"record":{"const":"stats"}},
+      "additionalProperties":{"type":["string","number","integer","boolean","null"]}
+    },
     "disassembly": {
       "type":"object","additionalProperties":false,"required":["record","symbol","target","text"],
       "properties":{"record":{"const":"disassembly"},"symbol":{"type":"string"},"target":{"type":"string"},"text":{"type":"string"}}
     },
     "streamRecord": {
-      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/phase"},{"$ref":"#/$defs/layout"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/inline"},{"$ref":"#/$defs/instance_cost"},{"$ref":"#/$defs/progress"},{"$ref":"#/$defs/impact"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
+      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/phase"},{"$ref":"#/$defs/layout"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/inline"},{"$ref":"#/$defs/instance_cost"},{"$ref":"#/$defs/progress"},{"$ref":"#/$defs/impact"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/stats"},{"$ref":"#/$defs/disassembly"}]
     },
     "sourceMap": {
       "type":"object","required":["schema","version","generated","generated_sha256","mappings"],

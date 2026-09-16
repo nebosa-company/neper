@@ -610,6 +610,19 @@ the stream -- `phase`, `ms` (the phase's own), `arena_mb` and `elapsed_ms`
 the stream sees the build move and can read where a deadline would land;
 without `--json` the same is the text `time` line on stderr.
 
+`--json --stats` on a build (D476, H18) makes the `--stats` table one `stats`
+record of the stream, before the `result`: flat, one key per row, the row's name
+in snake_case with the unit as its suffix (`files`, `loc`, `function_instances`,
+`source_bytes`, `compile_mode`, `target_arch`, `target_os`, `wall_time_ms`,
+`compiler_peak_working_set_mb`), `@tests` and its kind as `at_tests`, the
+module sizes as `module_size_min`, `_median` and `_max`, each phase as
+`phase_<name>_ms`, the run's rows `execution_time_ms`,
+`executable_peak_working_set_mb` and `exit_code` (`null` when nothing ran), and
+`--stats-full`'s pools as `pool_<name>_capacity` and `pool_<name>_used` (`null`
+where the table leaves the column blank). Values are scalars under the rule
+`result.data` has, numbers bare; without `--json` the table on stderr is
+unchanged, and the two are one row list rendered twice.
+
 `--deadline MS` (D399, H16) on a build command (`emit-executable`, `emit-em-all`,
 `run`, with or without `--json`) is a wall-clock deadline: at every checkpoint
 between phases -- after load and parse, resolve, check declarations, settle, check

@@ -8585,6 +8585,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         report.timing = trailing_flags && has_flag(args, "--time")
         report.build.full = trailing_flags && has_flag(args, "--stats-full")
         report.build.on = report.build.full || (trailing_flags && has_flag(args, "--stats"))
+        // With `--json` the table is a `stats` record of the stream (D476).
+        report.build.json = report.json
         report.build.release = release_build
         report.build.arch = args[4usize]
         report.build.target_os = args[5usize]
@@ -9149,6 +9151,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                     ret write_all(&report, ",\"diagnostics\":0}}\n")
                 }
                 if report.json {
+                    if report.build.on { try stats.print(a, &report.build, &loaded, &resolver, &checker, &builder) }
                     try write_all(&report, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"executable\":")
                     try write_json_string(&report, args[6usize])
                     ret write_all(&report, ",\"diagnostics\":0}}\n")

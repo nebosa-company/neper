@@ -10313,3 +10313,22 @@ an `undef`; the reject corpus gains `safety_undef_value`, both suites check it.
 
 Not yet: the representation row itself, bytes read as `bool` or a tag through
 `mem.cast` or a foreign write -- a check per load, whose cost is unmeasured.
+
+## D476 -- `--stats` as a record in the stream
+
+D335 as planned, at last: with `--json`, `--stats` writes one `{"record":"stats",
+...}` line on stdout before the `result`, and `build --json --stats`, which
+returned its result before the table was reached, now carries the record. The
+record is flat -- one key per row, the row's name lowered with spaces as
+underscores and `@` as `at_`, the unit as a suffix (`wall_time_ms`,
+`source_bytes`, `compiler_peak_working_set_mb`), the rows that printed several
+values one key each (`module_size_min`, `target_arch`), phases as
+`phase_<name>_ms`, `--stats-full`'s pools as `pool_<name>_capacity` and
+`pool_<name>_used` -- and scalar-only under `result.data`'s rule, `null` where
+the table leaves a cell blank. One row list, two renderings: the row helpers of
+`stats.e` take the `Build` and read its mode (the bootstrap has no module-scope
+`var` and no `else if` chain), `number` drops its thousands apostrophe under
+it, and the custom rows (sizes, target) branch once. The values are a
+build's own, so no golden pins them; `scripts/check_stats_record.py` checks
+that the stream has exactly one flat `stats` record before its result with the
+keys every build has, and the schema validates it, on both hosts.

@@ -2184,6 +2184,16 @@ if ($LASTEXITCODE -ne 0) { throw "emit-executable --json --time failed" }
 if ((Select-String -LiteralPath $progressActual -Pattern '"record":"progress","phase":"lower and codegen"' -Quiet) -ne $true) { throw 'the build stream under --time carries no progress record for the lowering' }
 & python (Join-Path $repo 'scripts/validate_stream.py') $progressActual
 if ($LASTEXITCODE -ne 0) { throw 'the progress records do not validate against the schema' }
+# `--stats` as a record (D476, H18): under `--json` the table is one flat `stats`
+# record of the stream before the result, a snake_case key per row with the unit
+# as its suffix, `--stats-full`'s pools as `pool_<name>_capacity` and `_used`.
+$statsActual = Join-Path $testBuild 'conformance-tools-stats.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/contract.e `"$repo`" x64 windows conformance-tools-stats.out --json --stats-full > `"$statsActual`""
+if ($LASTEXITCODE -ne 0) { throw "emit-executable --json --stats-full failed" }
+& python (Join-Path $repo 'scripts/check_stats_record.py') $statsActual
+if ($LASTEXITCODE -ne 0) { throw 'the stats record is not one flat record before the result' }
+& python (Join-Path $repo 'scripts/validate_stream.py') $statsActual
+if ($LASTEXITCODE -ne 0) { throw 'the stats record does not validate against the schema' }
 # Per-instance cost (D453, H06): every generic instance's instructions and bytes as
 # `instance-cost` records of the build stream, after the lowering.
 $explainInstancesActual = Join-Path $testBuild 'conformance-tools-explain-instances.jsonl'
