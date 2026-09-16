@@ -2996,6 +2996,14 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
     // row of section 11's table retained in both modes.
     try text(out, "],\"unsafe\":[")
     var written = 0usize
+    // The bytes that can open a site (D383): `@`, and the `e`, `m`, `u` of `extern`,
+    // `mem.` and `union`. One table load per byte, unchecked by the width proof
+    // (D384), and every other byte costs the loop alone.
+    var openers: [256]u8 = zero
+    openers[64usize] = 1u8
+    openers[101usize] = 2u8
+    openers[109usize] = 2u8
+    openers[117usize] = 2u8
     var module_at = 0usize
     while module_at < g.count {
         // An `@` first on its line (after spaces) opens an attribute or a `@nocheck`
@@ -3006,7 +3014,14 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         let lines = g.modules[module_at].lines
         var byte_at = 0usize
         while byte_at < text_bytes.len {
-            if text_bytes[byte_at] == 64u8 && manifest_line_opens(text_bytes, byte_at) {
+            // One load per byte (D383): the loop is the D356 shape, so it carries no check.
+            let opener = text_bytes[byte_at]
+            let opener_class = openers[usize(opener)]
+            if opener_class == 0u8 {
+                byte_at += 1usize
+                continue
+            }
+            if opener_class == 1u8 && manifest_line_opens(text_bytes, byte_at) {
                 let word_end = manifest_word_end(text_bytes, byte_at + 1usize)
                 let word = text_bytes[byte_at + 1usize..word_end]
                 if graph.same(word, "unsafe") || graph.same(word, "nocheck") {
@@ -3030,7 +3045,23 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
                 // The escape hatches the program does not declare (D371, H27): an
                 // `extern fn`, a `mem.cast`, a `mem.bitcast`, a bare `union` -- each a
                 // site the checker trusts and checks nothing at, listed as `trusted`.
-                let (kind, function, site_end) = manifest_trusted_site(text_bytes, byte_at)
+                // Only an `e`, `m` or `u` can open a site: the call per byte cost 115 ms
+                // on the 500k-line workload (D383).
+                var site_end = 0usize
+                var kind = ""
+                var function = ""
+                var candidate = false
+                if opener_class == 2u8 {
+                    if opener == 101u8 && (byte_at == 0usize || text_bytes[byte_at - 1usize] == 10u8) { candidate = true }
+                    if opener == 109u8 && byte_at + 1usize < text_bytes.len && text_bytes[byte_at + 1usize] == 101u8 { candidate = true }
+                    if opener == 117u8 && byte_at >= 2usize && text_bytes[byte_at - 1usize] == 32u8 && text_bytes[byte_at - 2usize] == 61u8 { candidate = true }
+                }
+                if candidate {
+                    let (site_kind, site_function, found_end) = manifest_trusted_site(text_bytes, byte_at)
+                    kind = site_kind
+                    function = site_function
+                    site_end = found_end
+                }
                 if site_end != 0usize {
                     try manifest_unsafe_site(out, written, kind, "trusted", g.modules[module_at].name, function, lex.line_of(text_bytes, lines, byte_at))
                     written += 1usize
@@ -3119,7 +3150,9 @@ fn manifest_trusted_site(text_bytes: str, at: usize) -> (str, str, usize) {
         let name_end = manifest_word_end(text_bytes, at + 10usize)
         ret ("extern", text_bytes[at + 10usize..name_end], name_end)
     }
-    if b == 109u8 && (at == 0usize || !manifest_word_byte(text_bytes[at - 1usize])) && manifest_in_code(text_bytes, at) {
+    // The prefix tests first (D383): a back-scan of the line for every word-initial
+    // `m` cost the manifest 135 ms on the 500k-line workload.
+    if b == 109u8 && manifest_starts(text_bytes, at, "mem.") && (at == 0usize || !manifest_word_byte(text_bytes[at - 1usize])) && manifest_in_code(text_bytes, at) {
         if manifest_starts(text_bytes, at, "mem.cast[") {
             let (name, found) = manifest_fn_before(text_bytes, at)
             var function = ""

@@ -273,6 +273,12 @@ type Builder = struct {
     proof_count: usize,
     proof_function_start: usize,
     proof_function_end: usize,
+    // The identifiers the function takes the address of, as token indices, collected
+    // once when the function is opened (D383): a proof asks this list, not the
+    // function's tokens, so the question is not quadratic in the function.
+    proof_addressed: [256]usize,
+    proof_addressed_count: usize,
+    proof_addressed_overflow: bool,
     bounds_elided: usize,
     // By-value arguments copied for the call (D358, H05), and those passed by the
     // caller's own storage because nothing can write it during the call.

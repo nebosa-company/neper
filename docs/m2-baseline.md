@@ -178,7 +178,11 @@ and the delta, or `missing` -- and exits 1 on any breach, which is what a merge
 reads. Run against `h01-windows-d351.json` it names twelve: the cold and warm
 compiler cells (+27%, +17-27%), the peak resident set everywhere (+24% to +269%),
 and the release cold cells of `sc500k` and `sc1m` (+12-14%) -- the D340 and D355
-breaches the decision rows carry, now in a form nothing drifts past.
+breaches the decision rows carry, now in a form nothing drifts past. Run against
+`h29-windows-d384.json`, the end of M2.5 stage B (D383): the compiler cold +81%
+and warm +178% in release, `sc500k` cold +39% and warm +55%, the resident set
+and the compiler's image as before -- D355's retained checks in the compiler's
+own byte loops, named in D383, with the proofs (D356-D384) as the way back.
 
 ## What this baseline is not
 

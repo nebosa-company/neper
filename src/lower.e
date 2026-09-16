@@ -2993,6 +2993,13 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
         builder.nocheck = true
         builder.bounds_elided += 1usize
     }
+    // An index that cannot reach the array's length (D384): a value widened from a
+    // narrower unsigned type (`table[usize(b)]` with `b: u8` into 256 or more), or a
+    // value masked by a literal below the length (`table[h & 255]`).
+    if !builder.nocheck && base_type.kind == .Array && proof_by_width(c, g, tree, module_index, children[1usize], base_type.array_length) {
+        builder.nocheck = true
+        builder.bounds_elided += 1usize
+    }
     let (address_instruction, address, address_error) = nir.emit(builder, .IndexAddress, element_type, true, element_info.size, c.tokens[usize(node.token_start)])
     builder.nocheck = was_nocheck
     if address_error != ok { ret (0usize, element_type, address_error) }
@@ -4122,6 +4129,90 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     ret ok
 }
 
+// Whether an index expression is bounded below `length` by its shape alone (D384):
+// its bound is at most the length.
+fn proof_by_width(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, index_index: usize, length: usize) -> bool {
+    let (bound, bounded) = proof_bound(c, g, tree, module_index, index_index)
+    ret bounded && bound <= length
+}
+
+// An exclusive upper bound an expression's shape gives its value (D384): `u8(y)` and
+// `usize(b)` with `b: u8` are below 256 (`u16`, 65536); `e & N` with a literal `N` is
+// below `N + 1` whatever `e` is; `K + e` with a literal `K` and a bounded `e` is below
+// `K + bound`; a parenthesised expression is its inside's. Anything else is unbounded.
+fn proof_bound(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, index_index: usize) -> (usize, bool) {
+    let node = tree.nodes[index_index]
+    let text = g.modules[module_index].text
+    if node.kind == .GroupExpr {
+        let (inner_index, has_inner) = check.first_node_child(tree, node)
+        if !has_inner { ret (0usize, false) }
+        let (inner_bound, inner_bounded) = proof_bound(c, g, tree, module_index, inner_index)
+        ret (inner_bound, inner_bounded)
+    }
+    if node.kind == .CallExpr {
+        let (callee_index, has_callee) = check.first_node_child(tree, node)
+        if !has_callee || tree.nodes[callee_index].kind != .NameExpr { ret (0usize, false) }
+        let callee_token = c.tokens[usize(tree.nodes[callee_index].token_start)]
+        let callee_name = text[callee_token.start..callee_token.end]
+        if !check.is_integer_name(callee_name) { ret (0usize, false) }
+        var argument_index = 0usize
+        var arguments = 0usize
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
+        while at < end {
+            if parse.child_is_node_at(tree, at) {
+                let child_index = parse.child_index_at(tree, at)
+                if child_index != callee_index {
+                    argument_index = child_index
+                    arguments += 1usize
+                }
+            }
+            at += 1usize
+        }
+        if arguments != 1usize { ret (0usize, false) }
+        // The conversion's own type bounds a checked narrowing (`u8(y)` traps or fits),
+        // and the argument's type bounds a widening (`usize(b)`); either will do.
+        if check.same(callee_name, "u8") { ret (256usize, true) }
+        if check.same(callee_name, "u16") { ret (65536usize, true) }
+        let (argument_type, argument_error) = check.check_expr(c, g, tree, module_index, argument_index, check.invalid_type())
+        if argument_error != ok || argument_type.kind != .Integer || argument_type.name.len == 0usize || argument_type.name[0usize] != 117u8 { ret (0usize, false) }
+        let width = check.integer_width(argument_type)
+        if width == 8usize { ret (256usize, true) }
+        if width == 16usize { ret (65536usize, true) }
+        ret (0usize, false)
+    }
+    if node.kind == .BinaryExpr {
+        let (left_index, has_left) = check.first_node_child(tree, node)
+        if !has_left { ret (0usize, false) }
+        var operator_at = usize(tree.nodes[left_index].token_end)
+        while operator_at < usize(node.token_end) && c.tokens[operator_at].kind == .Newline { operator_at += 1usize }
+        let operator = c.tokens[operator_at].kind
+        if operator != .PunctAmp && operator != .PunctPlus { ret (0usize, false) }
+        var right_index = left_index
+        let end = usize(node.first_child) + usize(node.child_count)
+        var at = usize(node.first_child)
+        while at < end {
+            if parse.child_is_node_at(tree, at) { right_index = parse.child_index_at(tree, at) }
+            at += 1usize
+        }
+        if right_index == left_index { ret (0usize, false) }
+        var literal_index = right_index
+        var other_index = left_index
+        if tree.nodes[literal_index].kind != .LiteralExpr {
+            literal_index = left_index
+            other_index = right_index
+        }
+        if tree.nodes[literal_index].kind != .LiteralExpr { ret (0usize, false) }
+        let (constant, constant_type, constant_error) = check.integer_literal_value(c, text, tree.nodes[literal_index])
+        if constant_error != ok { ret (0usize, false) }
+        if operator == .PunctAmp { ret (constant + 1usize, true) }
+        let (other_bound, other_bounded) = proof_bound(c, g, tree, module_index, other_index)
+        if !other_bounded { ret (0usize, false) }
+        ret (constant + other_bound, true)
+    }
+    ret (0usize, false)
+}
+
 // The name a node spells when it is a bare local: `i`, or `x` under `x.len`.
 fn proof_name(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, bool) {
     let node = tree.nodes[node_index]
@@ -4240,14 +4331,14 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
         scan += 1usize
     }
     if nested_write || base_written { ret false }
-    // A pointer to `i` taken anywhere in the function could write it from the body.
-    var function_at = builder.proof_function_start
-    while function_at + 1usize < builder.proof_function_end && function_at + 1usize < c.token_count {
-        if c.tokens[function_at].kind == .PunctAmp && c.tokens[function_at + 1usize].kind == .Identifier {
-            let pointed = c.tokens[function_at + 1usize]
-            if check.same(g.modules[module_index].text[pointed.start..pointed.end], index_name) { ret false }
-        }
-        function_at += 1usize
+    // A pointer to `i` taken anywhere in the function could write it from the body:
+    // the addressed names were collected when the function was opened (D383).
+    if builder.proof_addressed_overflow { ret false }
+    var addressed_at = 0usize
+    while addressed_at < builder.proof_addressed_count {
+        let pointed = c.tokens[builder.proof_addressed[addressed_at]]
+        if check.same(g.modules[module_index].text[pointed.start..pointed.end], index_name) { ret false }
+        addressed_at += 1usize
     }
     builder.proof_index[builder.proof_count] = index_name
     builder.proof_base[builder.proof_count] = base_name
@@ -5446,6 +5537,20 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     builder.proof_function_start = usize(node.token_start)
     builder.proof_function_end = usize(node.token_end)
     builder.proof_count = 0usize
+    builder.proof_addressed_count = 0usize
+    builder.proof_addressed_overflow = false
+    var addressed_scan = builder.proof_function_start
+    while addressed_scan + 1usize < builder.proof_function_end && addressed_scan + 1usize < c.token_count {
+        if c.tokens[addressed_scan].kind == .PunctAmp && c.tokens[addressed_scan + 1usize].kind == .Identifier {
+            if builder.proof_addressed_count < builder.proof_addressed.len {
+                builder.proof_addressed[builder.proof_addressed_count] = addressed_scan + 1usize
+                builder.proof_addressed_count += 1usize
+            } else {
+                builder.proof_addressed_overflow = true
+            }
+        }
+        addressed_scan += 1usize
+    }
     c.failure_name = name
     c.failure_token = c.tokens[usize(node.token_start)]
     c.failure_has_token = true
