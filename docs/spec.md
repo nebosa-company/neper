@@ -2957,9 +2957,12 @@ capability. `gpu.has(dev, cap)` lets a program choose a kernel before launching 
 | `@gpu(..., ftz)` | `.Ftz` | `DenormFlushToZero` execution mode | `shaderDenormFlushToZeroFloat32` |
 | `Vec[T, N]` | that of `T` | `OpTypeVector` of 2 to 4 lanes; **`N > 4` is split into `N/4` four-lane vectors** — `Vec[f32, 8]` is two `vec4`, `Vec[u8, 16]` four — the counterpart of §4's split on a narrow CPU; the buffer layout stays §4's | — |
 
-Reported, never required — the device either does it or not, and `gpu.has` says
-which: `.DenormPreserve`, the device keeps `f32` denormals (`shaderDenormPreserveFloat32`;
-every desktop part), which §11's Floating point rule depends on.
+`.DenormPreserve` is inferred by every kernel not marked `ftz` (D367): the module
+carries the `DenormPreserve` execution mode for the float widths it uses, the
+device must support it (`shaderDenormPreserveFloat32`, `...Float64`), and a device
+without it fails at `launch` with `gpu.Unsupported` naming the kernel and the
+capability -- `gpu.has` says which beforehand. There is no silent flush between
+the two modes; §11's Floating point rule and `m25-gpu-contracts.md` §4.1 say why.
 
 On PTX the floor is `sm_50`, where every row above is available except `f16`
 arithmetic (`sm_53`) and native `bf16` (`sm_80`; computed in `f32` below it, as on
@@ -3354,15 +3357,21 @@ kern.e:41:5 that invocation (0,0,0) reached`. That is the bug the device would t
 into a hang. The same check covers a subgroup builtin in divergent code.
 
 **What is identical, stated exactly.** Integer and float results of a kernel on the
-CPU backend and on a device are bit-identical under §11's Floating point rule, with
-these exceptions and no others: the approximate builtins listed there; the width of
-`usize` (32 bits on `spv`, above), which matters only to a kernel that overflows it;
-denormal `f32` results on a device without `.DenormPreserve`; and the order in which
-atomics from different invocations are applied, which the device does not fix
-either. Debug checks (§11) fire in the CPU build and not on the device, which
-carries no checks — so a kernel that would trap on the CPU is a kernel whose device
-result is unspecified, and the CPU build is where it is found. Roadmap M3's criterion
-is written in these terms.
+CPU backend and on a device are bit-identical under §11's Floating point rule
+**for a subgroup-independent kernel** -- one whose result does not depend on
+`gpu.subgroup_size()`, `gpu.sid`, the lane mapping or which lanes are active -- and
+for any kernel under a matching subgroup width and lane mapping, which the CPU
+emulator is configured to (`--subgroup-width`, M3; D367), with these exceptions
+and no others: the approximate builtins listed there; the width of `usize` (32
+bits on `spv`, above), which matters only to a kernel that overflows it; and the
+order in which atomics from different invocations are applied, which the device
+does not fix either. A kernel that stores `subgroup_size()` is the counterexample
+the precondition exists for. Debug-only checks (§11) fire in the CPU build and not
+on the device; the checks a release build retains -- bounds, null, tag, alignment
+(D355) -- are on the device a **fault record** written into the queue's fault
+buffer and an early return of the invocation, reported as `gpu.Fault` by the next
+`sync` or `download` on that queue (`m25-gpu-contracts.md` §1.3, D367). Roadmap
+M3's criterion is written in these terms.
 
 **Subgroups on the CPU** are 32 consecutive invocations in `lid` order, and
 `gpu.subgroup_size()` reports `32`. A workgroup whose size is not a multiple of 32
@@ -3653,9 +3662,12 @@ selecting the number; `min(-0, +0)` is `-0` and `max(-0, +0)` is `+0`, independe
 of operand order.
 
 **Denormals are preserved.** The runtime never sets FTZ or DAZ in `MXCSR` or `FZ`
-in `FPCR`; a SPIR-V module carries no denormal execution mode and a PTX module no
-`.ftz`, so a device preserves `f32` denormals exactly when it does so by default —
-which `gpu.has(dev, .DenormPreserve)` (§10) reports, and every desktop part does.
+in `FPCR`; a SPIR-V module carries the `DenormPreserve` execution mode for every
+float width the kernel uses and a PTX module no `.ftz`, so a kernel not marked
+`ftz` requires `.DenormPreserve` of its device (§10, Capabilities) and is refused
+at launch by a device without it -- `shaderDenormPreserveFloat32` says the mode is
+supported, not that a module carrying none preserves, and no class of hardware is
+assumed (D367).
 `@gpu(N, ftz)` is the opt-in for a kernel that would rather flush: it sets
 `DenormFlushToZero` on SPIR-V (the launch-checked capability `.Ftz`), `.ftz` on
 every PTX instruction, and FTZ and DAZ around the CPU build's run of that kernel, so

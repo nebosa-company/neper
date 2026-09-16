@@ -8058,3 +8058,37 @@ failure of the measurement; it is what a decision row has to name.
 Not yet, of H25: the gate in the suites (a measurement takes minutes and a quiet
 machine, and the suites have neither); Linux measurements after the baseline; the
 H25 report that replaces the budgets with its own.
+
+## D367 -- The GPU contracts frozen before M3: H13, H21, H22 and H23 by design
+
+`m25-gpu-contracts.md` is the design-only closure the four GPU requirements ask
+for; nothing in it is a passing runtime test, and every fixture it names is
+runtime evidence pending. The shape: a device is a region, a queue an in-order
+stream inside it, a buffer storage of the region, and the host's only asynchronous
+accesses to its own memory are ones it has already finished -- `upload`/`write`
+copy before returning, `download` waits before writing -- so H01 and H02 hold
+across the boundary with no lifetime the checker cannot see. What it fixes:
+`*Device` is a resource closed by `gpu.close` and a view of the arena of `open`;
+`Buf[T]` is a resource released on any queue of its device, which needs H01's
+closer declaration extended to a closer whose last parameter is the `own` one;
+device checks are the H03 policy -- bounds, null, tag, alignment retained in
+release -- realised as a **fault record** in a per-queue fault buffer with an
+early return of the invocation, reported as the new `gpu.Fault` by the next
+`sync`/`download`, since the device has no trap that reaches the host and a
+check removed silently is forbidden; tokens `{ owner, queue, serial }` naming
+past submissions, so no dependency cycle is expressible; conservative whole-buffer
+use tracking, with `release` waiting for every use on every queue; no
+cancellation in v1; a timeline record with two clocks never subtracted, a
+cache-key matrix that includes the safety and numerical policy, a bounded staging
+pool that waits rather than grows; and a per-operation numerical matrix with its
+oracles. Two spec corrections: bit-identity is claimed for subgroup-independent
+kernels or under a matching width (a kernel storing `subgroup_size()` was a
+counterexample), and `.DenormPreserve` is a required, inferred capability with the
+execution mode emitted, refused at launch when absent -- `shaderDenormPreserveFloat32`
+never meant "preserved by default", and "every desktop part" was not a contract.
+
+Not yet: everything runtime -- `gpu.Fault`, the fault buffer, tokens, the staging
+pool, the timeline, the pipeline cache, `--subgroup-width`, `--gpu-inventory`,
+the execution mode, the fixtures -- all M3; the H01 closer extension; the H08
+context facts for kernels and the H18 device record, added to the schema with
+their first emitter.
