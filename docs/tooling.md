@@ -200,6 +200,30 @@ Null-span intrinsics sort first by qualified name.
 The stream ends with
 `{"record":"result","ok":true,"exit_code":0,"data":{"symbols":N,"references":N}}`.
 
+### Dispatch and instantiation
+
+`neper explain-file PATH ROOT ARCH OS --json` (D359, H06) checks the program as
+`check-file` does and then emits what the checker decided, one record per site,
+ordered by source identifier, byte offset, kind and decision, a site decided twice
+the same way written once:
+
+- `dispatch` — a protocol call resolved: `protocol` (`eq`, `cmp`, `hash`, `format`,
+  `next`, ...), `receiver` (the type as a program spells it, `module.Name`, `*T`,
+  `[]T`, `[N]T` or a scalar), `selected` — `{"kind":"declared","function":
+  "module.name"}` for the type's own declaration, `{"kind":"supplied","rule":
+  "eq"|"cmp"|"hash"}` for spec §9 rule 4's supplied operation, `{"kind":"none"}`
+  when neither exists (the check then fails, and the record says where) — and
+  `span`, the point where the call was checked, which for a template body is the
+  template's site once per instance.
+- `instance` — a generic function instantiated: `template` (`module.name`),
+  `arguments` (each as a type spelling, a decimal, or a string literal as written),
+  and `span`, the call that first asked for it, in whichever module that was.
+
+The stream ends with `{"record":"result","ok":true,"exit_code":0,"data":{"records":N}}`,
+with `"truncated":true` beside `records` when the checker's table overflowed. A
+program that does not check emits the check diagnostic on stderr and exits 1, as
+`check-file` without `--json` does.
+
 ## 6. Formatting contract
 
 `neper fmt` is a canonical **layout** formatter, not a semantic normalizer. It does

@@ -14,6 +14,7 @@ use project
 use codegen_x64
 use artifact_hash
 use disasm_x64
+use check
 
 error Capacity
 error InvalidSource
@@ -2051,13 +2052,213 @@ fn fmt_result(out: *Out) -> err {
 // path under that root, `toolchain-lib` under the toolchain's `lib`, and otherwise the
 // operand by its basename; separators come out as `/`.
 fn manifest_source(out: *Out, g: *graph.Graph, path: str) -> err {
+    let (root, relative) = source_identity_of(g, path)
+    ret manifest_identity(out, root, relative)
+}
+
+// The root and the path under it, as `manifest_source` writes them, for a caller
+// that wants them as strings (separators still as the host spells them).
+fn source_identity_of(g: *graph.Graph, path: str) -> (str, str) {
     let (src_relative, under_src) = project.relative_under(path, g.project.root, "src")
-    if under_src && g.project.has_sources { ret manifest_identity(out, "project-src", src_relative) }
+    if under_src && g.project.has_sources { ret ("project-src", src_relative) }
     let (lib_relative, under_lib) = project.relative_under(path, g.project.root, "lib")
-    if under_lib && g.project.has_sources { ret manifest_identity(out, "project-lib", lib_relative) }
+    if under_lib && g.project.has_sources { ret ("project-lib", lib_relative) }
     let (toolchain_relative, under_toolchain) = project.relative_under(path, g.toolchain_root, "lib")
-    if under_toolchain { ret manifest_identity(out, "toolchain-lib", toolchain_relative) }
-    ret manifest_identity(out, "operand", manifest_basename(path))
+    if under_toolchain { ret ("toolchain-lib", toolchain_relative) }
+    ret ("operand", manifest_basename(path))
+}
+
+// `explain-file PATH ROOT ARCH OS --json` (D359, H06): what the checker decided
+// across the program, one record per protocol dispatch and per generic
+// instantiation, by module then byte offset: `dispatch` carries the protocol, the
+// receiver type, and the choice -- the declared function, the supplied rule, or
+// none -- and `instance` the template and its arguments. Records the checker made
+// twice for one site (a re-check of the same call) are written once.
+fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    let header_error = header(&out, "explain")
+    if header_error != ok { ret header_error }
+    var written = 0usize
+    var last = c.explains[0usize]
+    var first = true
+    while true {
+        // The least record after the last written, in the order `explain_before`
+        // gives; two records that order equal are one site decided twice.
+        var best = c.explain_count
+        var at = 0usize
+        while at < c.explain_count {
+            let e = c.explains[at]
+            let after = first || explain_before(last, e)
+            if after && (best == c.explain_count || explain_before(e, c.explains[best])) { best = at }
+            at += 1usize
+        }
+        if best == c.explain_count { break }
+        let e = c.explains[best]
+        first = false
+        last = e
+        if e.module_index >= g.count { continue }
+        let module = g.modules[e.module_index]
+        let (root, relative) = source_identity_of(g, module.path)
+        let (path, path_error) = manifest_slashes(a, relative)
+        if path_error != ok { ret path_error }
+        out.lines = module.lines
+        var here: lex.Token = zero
+        here.start = e.offset
+        here.end = e.offset
+        if e.kind == 1u8 {
+            let write_error = text(&out, "{\"record\":\"dispatch\",\"protocol\":")
+            if write_error != ok { ret write_error }
+            try quoted(&out, e.protocol)
+            try text(&out, ",\"receiver\":")
+            try quoted_type(&out, c, g, e.receiver)
+            try text(&out, ",\"selected\":")
+            if e.found {
+                try text(&out, "{\"kind\":\"declared\",\"function\":")
+                try quoted_function(&out, c, g, e.function_index)
+                try byte(&out, 125u8)
+            } else {
+                if e.builtin == .None {
+                    try text(&out, "{\"kind\":\"none\"}")
+                } else {
+                    try text(&out, "{\"kind\":\"supplied\",\"rule\":")
+                    if e.builtin == .Cmp { try text(&out, "\"cmp\"") }
+                    if e.builtin == .Hash { try text(&out, "\"hash\"") }
+                    if e.builtin == .Eq { try text(&out, "\"eq\"") }
+                    try byte(&out, 125u8)
+                }
+            }
+        } else {
+            try text(&out, "{\"record\":\"instance\",\"template\":")
+            try quoted_function(&out, c, g, e.template_index)
+            try text(&out, ",\"arguments\":[")
+            var argument_at = 0usize
+            while argument_at < e.argument_count {
+                if argument_at != 0usize { try byte(&out, 44u8) }
+                let argument = c.generic_arguments[e.first_argument + argument_at]
+                if argument.kind == .Type {
+                    try quoted_type(&out, c, g, argument.ty)
+                } else {
+                    if argument.kind == .Integer {
+                        try byte(&out, 34u8)
+                        try decimal(&out, argument.value)
+                        try byte(&out, 34u8)
+                    } else {
+                        try quoted(&out, argument.text)
+                    }
+                }
+                argument_at += 1usize
+            }
+            try byte(&out, 93u8)
+        }
+        try text(&out, ",\"span\":")
+        try point_span(&out, root, path, module.text, here)
+        try byte(&out, 125u8)
+        try flush(&out)
+        written += 1usize
+    }
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
+    try decimal(&out, written)
+    if c.explain_overflow { try text(&out, ",\"truncated\":true") }
+    try text(&out, "}}")
+    try flush(&out)
+    ret ok
+}
+
+// A total order over the records: module, offset, kind, then what was decided --
+// the receiver, the function or rule, the instance's arguments -- so a site decided
+// twice the same way is one record and a template's site decided per instance is one
+// per instance.
+fn explain_before(a: check.Explain, b: check.Explain) -> bool {
+    if a.module_index != b.module_index { ret a.module_index < b.module_index }
+    if a.offset != b.offset { ret a.offset < b.offset }
+    if a.kind != b.kind { ret a.kind < b.kind }
+    if a.first_argument != b.first_argument { ret a.first_argument < b.first_argument }
+    if a.template_index != b.template_index { ret a.template_index < b.template_index }
+    if a.function_index != b.function_index { ret a.function_index < b.function_index }
+    if a.receiver.module_index != b.receiver.module_index { ret a.receiver.module_index < b.receiver.module_index }
+    ret text_before(a.receiver.name, b.receiver.name)
+}
+
+fn text_before(a: str, b: str) -> bool {
+    var at = 0usize
+    while at < a.len && at < b.len {
+        if a[at] != b[at] { ret a[at] < b[at] }
+        at += 1usize
+    }
+    ret a.len < b.len
+}
+
+fn manifest_slashes(a: *mem.Arena, relative: str) -> (str, err) {
+    let (buffer, buffer_error) = mem.alloc[u8](a, relative.len + 1usize)
+    if buffer_error != ok { ret ("", buffer_error) }
+    var at = 0usize
+    while at < relative.len {
+        var c = relative[at]
+        if c == 92u8 { c = 47u8 }
+        buffer[at] = c
+        at += 1usize
+    }
+    ret (buffer[0usize..relative.len], ok)
+}
+
+// A type as a program spells it: `module.Name`, `*T`, `[]T`, `[N]T`, or the scalar.
+fn quoted_type(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type) -> err {
+    try byte(out, 34u8)
+    try type_text(out, c, g, ty, 0usize)
+    ret byte(out, 34u8)
+}
+
+fn type_text(out: *Out, c: *check.Checker, g: *graph.Graph, ty: check.Type, depth: usize) -> err {
+    if depth > 8usize { ret text(out, "?") }
+    if ty.kind == .Named || ty.kind == .Tag {
+        if ty.module_index < g.count {
+            try text(out, g.modules[ty.module_index].name)
+            try byte(out, 46u8)
+        }
+        ret text(out, ty.name)
+    }
+    if ty.kind == .Pointer {
+        try byte(out, 42u8)
+        if ty.is_const { try text(out, "const ") }
+        if ty.has_element && ty.element < c.type_count { ret type_text(out, c, g, c.types[ty.element], depth + 1usize) }
+        ret text(out, "?")
+    }
+    if ty.kind == .Slice {
+        try text(out, "[]")
+        if ty.is_const { try text(out, "const ") }
+        if ty.has_element && ty.element < c.type_count { ret type_text(out, c, g, c.types[ty.element], depth + 1usize) }
+        ret text(out, "?")
+    }
+    if ty.kind == .Array {
+        try byte(out, 91u8)
+        try decimal(out, ty.array_length)
+        try byte(out, 93u8)
+        if ty.has_element && ty.element < c.type_count { ret type_text(out, c, g, c.types[ty.element], depth + 1usize) }
+        ret text(out, "?")
+    }
+    if ty.kind == .String { ret text(out, "str") }
+    if ty.kind == .Err { ret text(out, "err") }
+    if ty.kind == .Bool { ret text(out, "bool") }
+    if ty.kind == .Void { ret text(out, "void") }
+    if ty.kind == .Function { ret text(out, "fn") }
+    if ty.kind == .TypeParameter { ret text(out, "?") }
+    ret text(out, ty.name)
+}
+
+fn quoted_function(out: *Out, c: *check.Checker, g: *graph.Graph, function_index: usize) -> err {
+    try byte(out, 34u8)
+    if function_index < c.function_count {
+        let function = c.functions[function_index]
+        if function.module_index < g.count {
+            try text(out, g.modules[function.module_index].name)
+            try byte(out, 46u8)
+        }
+        try text(out, function.name)
+    }
+    ret byte(out, 34u8)
 }
 
 fn manifest_identity(out: *Out, root: str, relative: str) -> err {

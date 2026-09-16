@@ -1998,6 +1998,12 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runArgsActual).Hash -ne (Get-F
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/index.expected.jsonl')).Hash) { throw "index --json differs from the conformance corpus" }
+# `explain-file --json` (D359): every dispatch and instantiation the checker decided, byte
+# for byte (target-independent).
+$explainActual = Join-Path $testBuild 'conformance-tools-explain.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file explain.e `"$repo`" x64 windows --json > `"$explainActual`""
+if ($LASTEXITCODE -ne 0) { throw "explain-file --json failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain.expected.jsonl')).Hash) { throw "explain-file --json differs from the conformance corpus" }
 # `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
 $disActual = Join-Path $testBuild 'conformance-tools-dis.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json > `"$disActual`""

@@ -439,6 +439,25 @@ type Constant = struct {
     token: lex.Token,
 }
 
+// What the checker decided at a site (D359, H06), for `explain-file`: a protocol
+// dispatch -- the protocol, the receiver, the declared function chosen or the
+// supplied rule, or neither -- or a generic instantiation -- the template and its
+// arguments. Recorded only while `explains` has room, which the explain command
+// alone gives it.
+type Explain = struct {
+    kind: u8,
+    module_index: usize,
+    offset: usize,
+    protocol: str,
+    receiver: Type,
+    function_index: usize,
+    found: bool,
+    builtin: ProtocolBuiltin,
+    template_index: usize,
+    first_argument: usize,
+    argument_count: usize,
+}
+
 type Diagnostic = struct {
     module_index: usize,
     kind: DiagnosticKind,
@@ -522,6 +541,10 @@ type Checker = struct {
     // The resource pass runs in the body sweep alone (D345): the lowering re-walks
     // bodies in its own order and partially, and states depend on the walk.
     resources_on: bool,
+    // The explain records (D359), when the command asked for them.
+    explains: []Explain,
+    explain_count: usize,
+    explain_overflow: bool,
     // Set while a consumption transfers ownership out of the function -- an `own`
     // argument, a `ret` -- which a borrowed value cannot do (D349).
     resource_transfer: bool,
@@ -6123,6 +6146,7 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     }
     if c.generic_declaration && !function_arguments_concrete(c, template_index, first_argument) { ret (template_index, ok) }
     let (instance_index, instance_error) = instantiate_function(c, instance_owner(c, module_index), template_index, first_argument)
+    if instance_error == ok { record_explain_instance(c, module_index, call, template_index, first_argument, generic.comptime_count) }
     ret (instance_index, instance_error)
 }
 
@@ -8521,6 +8545,30 @@ fn protocol_receiver(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 
 // Spec section 9: the protocol function is `fn <t>_<protocol>` in the module that
 // declares the receiver type, and its first parameter is the type by value.
+fn record_explain_dispatch(c: *Checker, module_index: usize, node: syntax.Node, protocol: str, receiver: Type, function_index: usize, found: bool, builtin: ProtocolBuiltin) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    var offset = 0usize
+    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    c.explains[c.explain_count] = Explain { kind: 1u8, module_index: module_index, offset: offset, protocol: protocol, receiver: receiver, function_index: function_index, found: found, builtin: builtin, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+    c.explain_count += 1usize
+}
+
+fn record_explain_instance(c: *Checker, module_index: usize, node: syntax.Node, template_index: usize, first_argument: usize, argument_count: usize) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    var offset = 0usize
+    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    c.explains[c.explain_count] = Explain { kind: 2u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: template_index, first_argument: first_argument, argument_count: argument_count }
+    c.explain_count += 1usize
+}
+
 fn protocol_function(c: *Checker, receiver: Type, protocol: str) -> (usize, bool, err) {
     let (canonical, canonical_error) = canonical_type(c, receiver)
     if canonical_error != ok { ret (0usize, false, canonical_error) }
@@ -8778,10 +8826,12 @@ fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         // Rule 4: a declaration in the type's own module always wins over the
         // supplied one, so this is only reached when there is none.
         let builtin = supplied_protocol(c, canonical, protocol)
+        record_explain_dispatch(c, module_index, node, protocol, canonical, 0usize, false, builtin)
         if builtin != .None { ret (0usize, builtin, ok) }
         record_failure(c, module_index, node, .ProtocolMissing, canonical.name, protocol)
         ret (0usize, .None, UnknownCallable)
     }
+    record_explain_dispatch(c, module_index, node, protocol, canonical, function_index, true, .None)
     var function = c.functions[function_index]
     if function.generic {
         // A generic type's protocol is generic with it -- `iter_next[T]` for `Iter[T]` -- and

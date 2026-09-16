@@ -6938,6 +6938,38 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module resolve ok\n")
         ret ok
     }
+    // `explain-file PATH ROOT ARCH OS --json` (D359, H06): the program checked as
+    // `check-file` checks it, then what the checker decided -- every protocol
+    // dispatch and generic instantiation -- as records.
+    if args.len == 7usize && same(args[1usize], "explain-file") && same(args[6usize], "--json") {
+        var loaded: graph.Graph = zero
+        try init_cli_graph(a, &loaded)
+        let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        if load_error != ok { ret load_error }
+        var resolver: resolve.Resolver = zero
+        try init_cli_resolver(a, &resolver, &loaded, &report)
+        let resolve_error = resolve.collect(&resolver, &loaded)
+        if resolve_error != ok {
+            try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
+            os.exit(1i32)
+            ret ok
+        }
+        var checker: check.Checker = zero
+        try init_cli_checker(a, &checker, &loaded, &report)
+        checker.arena = a
+        let (explains, explains_error) = mem.alloc[check.Explain](a, 16384usize)
+        if explains_error != ok { ret explains_error }
+        checker.explains = explains
+        let check_error = check.run(&checker, &resolver, &loaded)
+        if check_error != ok {
+            try print_check_diagnostic(&report, &loaded, &checker, check_error)
+            os.exit(1i32)
+            ret ok
+        }
+        try tool.explain_json(a, &checker, &loaded)
+        os.exit(0i32)
+        ret ok
+    }
     // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md
     // -- header, a diagnostic record each, the result -- on stdout (D228).
     if args.len >= 6usize && same(args[1usize], "check-file") && check_flags(a, &report, args) {

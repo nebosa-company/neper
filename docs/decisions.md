@@ -7865,3 +7865,27 @@ Not yet, of H05: the ABI contract's compatibility identity (the format is 9 for
 D355 already; nothing in the interface hash changes here), external ABI wrappers,
 and a proof through the callee's signature -- no pointer parameter and no global
 write -- which would clear most of the 4,238.
+
+## D359 -- `explain-file`: every dispatch and instantiation, from the checker
+
+H06's first obligation is that every implicit dispatch and generic substitution be
+queryable from the real compiler. The index's `protocol` and `instantiate`
+references are lexical -- a name before `[` or a `.eq` -- and say nothing of what
+was chosen. `explain-file PATH ROOT ARCH OS --json` checks the program and emits
+what the checker decided: a `dispatch` record per protocol call, with the receiver
+type, the declared function chosen or the supplied rule (spec section 9 rule 4) or
+neither, at the point the call was checked -- a template's site once per
+instance, since each instance decides for its own receiver; and an `instance`
+record per generic instantiation, with the template, the arguments, and the call
+that first asked for it, in whichever module that was, so `list.push[Point]`'s
+own `reserve[Point]` shows at `list.e:52`. The checker records into a table only
+the explain command allocates, so no other build pays; the writer orders by module,
+offset, kind and decision and drops exact repeats. Types are spelled as a program
+writes them. The corpus pins one program with a declared `eq`, a supplied one and
+four instantiations across two modules, host-independent, validated by the schema.
+
+Not yet, of H06: failed candidates and the reason each failed (the record says
+`none` and the check diagnostic says which name was wanted); dependent
+requirements; explicit strategy selection; the comptime budgets and structured
+exhaustion; target-dependent layout in the output; code size and check time per
+instance.
