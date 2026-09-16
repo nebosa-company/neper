@@ -1,0 +1,95 @@
+# M2.5 stage B: H04 -- scoped concurrency and shared-state contracts
+
+The design H04 of [`post-m2-llm-hardening.md`](post-m2-llm-hardening.md) section 7
+asks for, written against the language after H01 and H02: `os.Thread` is a
+resource owed a join or a detach at every exit (D345), a thread is started over a
+pointer to its context (`os.thread_create[T](entry, &ctx, stack)`,
+`thread.spawn`), and `e.atomic` and `e.sync` are the sharing primitives. Sections
+1-6 are the proposal; section 7 is what each D row delivered.
+
+The shape: **a thread borrows what it is started over, and the parent's frame is
+the scope of that borrow**. The join is the obligation H01 already tracks; H04 adds
+what the borrow forbids while the thread runs and what a thread may not be given.
+
+## 1. The join obligation
+
+A `Thread` is affine and owed: joined or detached on every exit of the block that
+owns it (D345, E-SAFETY-0002), including the `try` exits -- so an early `try` with
+a live worker is refused unless the worker is joined before it, which is H04's
+"joining on error paths must precede reset/cleanup". A thread stored into an array
+and joined by element is the compiler's own shape and stays legal; the array is not
+tracked, and its elements' joins are the program's discipline.
+
+## 2. Stack escape (D357)
+
+A thread started over `&x` where `x` is a local of the frame -- not a slice or a
+pointer, whose storage is elsewhere -- reads the frame while it runs. It can be
+joined in the frame, bound to another name in it, or stored into storage declared
+after `x` (which dies no later); detached, handed to an `own` parameter, returned
+or stored anywhere else it would outlive what it reads (E-SAFETY-0015). A
+detached thread must be given arena storage, which is what the fixtures do. A
+callback that borrows the frame indirectly -- a function value stored in the
+context that reads a frame local through a pointer taken earlier -- is not seen;
+section 5 lists it.
+
+## 3. Sharing while the thread runs (D365)
+
+What a thread was given is lent to it until the join: from the start to the join
+of that thread local, the parent neither reads nor writes `x` (E-SAFETY-0016) --
+a value read (`x.field`, `x[i]`, `x`), a store through the place, a move. What it
+may do is take `&x` or `&x.field` again: that is how an atomic reaches a counter
+(`atomic.load(&x.hits, .SeqCst)`), how a second thread is given the same context,
+and how a lock is taken -- the sanctioned sharing H04 names, each through an
+address, none through a plain read. The lending ends at the join of the thread
+local; it also ends when the thread local is moved anywhere else (into an array
+the loop joins by element), since a local's state cannot follow an element, and
+that is a limit, not a rule. A detached thread's lending never ends: what a
+detached thread was given is read by no one, which is right.
+
+The rule is per statement: a statement that joins and reads in one expression is
+refused, since the uses are checked before the moves; the join is written as its
+own statement, which the one fixture that did otherwise now does.
+
+## 4. Locks, guards and atomics
+
+Not designed in this stage beyond section 3's address rule. The obligations H04
+lists -- a guard that refers to the protected data and lock identity, no borrow
+that survives release, reentrancy, moving guards, condition-variable wait and
+reacquire, cancellation -- need `e.sync`'s lock to be a resource whose guard is a
+region (H02's view rule over the guard's lifetime); the shape is: `let g = try
+sync.lock(&m)` makes `g` a region value of the mutex and a resource owed
+`sync.unlock`; data reached through `g` is a view of `g`, dangling at the unlock.
+That is the next increment, not this one.
+
+## 5. Outside the rule
+
+- A pointer to the frame taken before the thread starts and reached through the
+  context indirectly (a callback environment, a struct of pointers).
+- Storage lent through a slice's elements or a pointer local -- what the parent
+  reads through another alias of the same storage.
+- Globals: a module-scope `var` read by both is not tracked; it is the program's
+  to protect with an atomic or a lock.
+- Partial spawn failure: a loop that starts N threads and fails at the K-th owes
+  the K-1 joins, which H01's exit audit enforces for locals and not for arrays.
+- Schedule perturbation as evidence (H04): `--perturb` (D331) reorders the
+  compiler's own workers and the suites compare the images; no fixture yet
+  perturbs a program's threads.
+
+## 6. Diagnostics and fixtures
+
+| code | violation | sites |
+|---|---|---|
+| E-SAFETY-0015 | a thread over this frame's storage detached, handed on, returned or stored past it | the start, the site |
+| E-SAFETY-0016 | storage lent to a running thread read or written before its join | the start, the use |
+
+Fixtures: `reject/safety_detached_frame` (a detached thread over a stack counter),
+`reject/safety_thread_shared` (the counter read before the join); the link fixtures
+`thread_spawn`, `os_thread`, `sync_threads`, `channel_threads`, `atomic_threads`,
+`concurrent_queue_map` are the valid shapes -- arena storage for a detached thread,
+atomics through addresses while workers run, joins by element.
+
+## 7. Implementation record
+
+**D357** delivered section 2; **D365** section 3 and this document. The
+compiler's own crews pass as written under both. Not delivered: section 4's lock
+and guard model, section 5's cases, the perturbation fixture.

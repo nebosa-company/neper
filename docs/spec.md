@@ -3554,6 +3554,14 @@ none becomes a trap:
   stored into storage declared after `x` (which dies first); detached, handed to
   an `own` parameter, returned or stored elsewhere it would outlive what it reads
   (`E-SAFETY-0015`, D357). A thread over arena storage does as it likes.
+- What a thread was given is lent to it until the join (D365): from the start to
+  the join of that thread local, the parent neither reads nor writes `x` -- a value
+  read, a store, a move -- (`E-SAFETY-0016`); it may take `&x` or `&x.field` again,
+  which is how an atomic, a lock or a second thread reaches it. The lending ends at
+  the join, or when the thread local is moved anywhere else, which a local's state
+  cannot follow; a detached thread's never ends. The rule is per statement: a join
+  and a read of the lent storage in one expression is refused, so the join is its
+  own statement. `m25-h04-concurrency.md` is the design and what is outside it.
 - A container's insert -- `list.push`, `deque.push_back`, `heap.push`, `map.put`'s
   value, `channel.send` and the rest -- takes its element by `own`: what is pushed
   is the container's, and a handle closed after it was pushed is `E-SAFETY-0001`.

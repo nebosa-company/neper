@@ -77,7 +77,9 @@ fn main(a: *mem.Arena, args: []str) -> err {
         sum += value
         i += 1u64
     }
-    if thread.join(worker) != ok || producer.failed { os.exit(16) }
+    // The join is its own statement (D365): what the thread was lent is read after it.
+    let joined = thread.join(worker)
+    if joined != ok || producer.failed { os.exit(16) }
     if sum != 200u64 * 1000u64 + 199u64 * 200u64 / 2u64 { os.exit(17) }
     // --- Close: the buffered item comes out, then Closed.
     let (pushed_last, e12) = queue.try_push[u64](&q, 7u64)

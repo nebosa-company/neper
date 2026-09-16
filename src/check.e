@@ -76,6 +76,7 @@ type DiagnosticKind = enum u8 {
     RegionReset,
     ViewMutated,
     ThreadFrameEscape,
+    ThreadShared,
     AssignmentImmutable,
     IndexedArrayImmutable,
     IndexedElementsImmutable,
@@ -342,6 +343,11 @@ type Resource = struct {
     // A thread started over `&x` of this frame (D357, H04): the local `x`, plus one,
     // or zero. Joined here, bound here, or stored where `x` outlives the store.
     frame_borrow: usize,
+    // Storage lent to a running thread (D365, H04): on the local `x` a thread was
+    // started over, the thread local plus one, until that thread is joined; and the
+    // token the lending started at.
+    lent_to: usize,
+    lent_at: usize,
 }
 
 type Alias = struct {
@@ -690,6 +696,7 @@ fn related_note(kind: DiagnosticKind) -> str {
     if kind == .RegionReset { ret "the region reset here" }
     if kind == .ViewMutated { ret "the container changed here" }
     if kind == .ThreadFrameEscape { ret "the thread started here" }
+    if kind == .ThreadShared { ret "lent to the thread started here" }
     ret "related"
 }
 
@@ -5552,7 +5559,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
     var no_fields: []u8 = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -12253,6 +12260,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .RegionReset { ret "E-SAFETY-0013" }
     if kind == .ViewMutated { ret "E-SAFETY-0014" }
     if kind == .ThreadFrameEscape { ret "E-SAFETY-0015" }
+    if kind == .ThreadShared { ret "E-SAFETY-0016" }
     if kind == .TryInsideDefer || kind == .TryCast || kind == .TryNotFallible || kind == .TryNoPropagate { ret "E-ERROR-9999" }
     // docs/diagnostics.md: section 9's reflection and section 8's atomics under their
     // own categories (D215). A constant cycle stays E-TYPE-9999: the bootstrap says so
@@ -12920,6 +12928,12 @@ fn resource_uses(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize, skip_first_name: bool, parent: syntax.Kind) -> err {
     let node = tree.nodes[node_index]
     if node.kind == .Block { ret ok }
+    // `&x` of a lent local is the sanctioned way to reach it -- an atomic, another
+    // thread -- and not a read (D365).
+    if node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctAmp {
+        let (pointed, is_address) = address_argument_local(c, g, tree, module_index, node_index)
+        if is_address && c.resources[pointed].lent_to != 0usize { ret ok }
+    }
     if node.kind == .FieldExpr {
         let (local_index, at, is_field) = resource_field_of(c, g, tree, module_index, node_index)
         if is_field {
@@ -12944,6 +12958,10 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
         if !is_resource { ret ok }
         let state = c.resources[local_index].state
+        if c.resources[local_index].lent_to != 0usize {
+            record_failure_related(c, module_index, node, .ThreadShared, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].lent_at), c.resources[local_index].lent_at)
+            ret ResourceViolation
+        }
         if state == resource_moved || state == resource_maybe {
             record_failure_related(c, module_index, node, dangling_kind(c, local_index), c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
             ret ResourceViolation
@@ -13028,6 +13046,17 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         c.resources[local_index].acquired = usize(node.token_start)
         ret ok
     }
+    // Joined: what the thread was given is the parent's again (D365). Moved
+    // anywhere else -- into an array of threads the loop joins by element -- the
+    // lending is beyond what one local's state can follow, and ends here too.
+    var lent_at = 0usize
+    while lent_at < c.local_count {
+        if c.resources[lent_at].lent_to == local_index + 1usize {
+            c.resources[lent_at].lent_to = 0usize
+            if c.resources[lent_at].region == 0usize && c.resources[lent_at].view_of == 0usize { c.resources[lent_at].state = resource_plain }
+        }
+        lent_at += 1usize
+    }
     // A pointer to it is live until its block ends: nothing moves out from under it.
     if c.resources[local_index].pinned != 0usize {
         record_failure_related(c, module_index, node, .ResourceMovedWhileBorrowed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].pin_at), c.resources[local_index].pin_at)
@@ -13087,6 +13116,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     c.resources[local_index].borrowed = false
     c.resources[local_index].view = false
     c.resources[local_index].frame_borrow = 0usize
+    c.resources[local_index].lent_to = 0usize
     if contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwUndef) {
         record_failure(c, module_index, statement, .ResourceUndef, c.locals[local_index].name, "")
         ret ResourceViolation
@@ -13101,11 +13131,19 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         // argument `&x` where `x` is a local that is not a slice or a pointer.
         if seeded_handle(c, c.locals[local_index].ty) && same(c.locals[local_index].ty.name, "Thread") {
             var argument_at = 0usize
-            while c.resources[local_index].frame_borrow == 0usize {
+            while true {
                 let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[initializer_index], argument_at)
                 if !has_argument { break }
                 let (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
-                if is_address && c.locals[pointed].ty.kind != .Slice && c.locals[pointed].ty.kind != .Pointer { c.resources[local_index].frame_borrow = pointed + 1usize }
+                if is_address && c.resources[local_index].frame_borrow == 0usize && c.locals[pointed].ty.kind != .Slice && c.locals[pointed].ty.kind != .Pointer { c.resources[local_index].frame_borrow = pointed + 1usize }
+                // What the thread was given is its until the join (D365): the parent
+                // neither reads nor writes it, except through an address, which is how
+                // an atomic or a second thread reaches it.
+                if is_address && pointed != local_index && c.locals[pointed].ty.kind != .Pointer {
+                    if c.resources[pointed].state == resource_plain { region_tag(c, pointed, usize(statement.token_start)) }
+                    c.resources[pointed].lent_to = local_index + 1usize
+                    c.resources[pointed].lent_at = usize(statement.token_start)
+                }
                 argument_at += 1usize
             }
         }
@@ -13523,6 +13561,17 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
             let (base_local, base_found) = find_local(c, g.modules[module_index].text[base_token.start..base_token.end])
             if base_found && c.locals[base_local].ty.kind != .Pointer { c.consuming_store = base_local + 1usize }
         }
+    }
+    // Storage lent to a running thread is not written (D365): the place's local.
+    var lent_local = c.consuming_store
+    if lent_local == 0usize && tree.nodes[place_index].kind == .NameExpr {
+        let (place_local, is_place_local) = resource_local_of(c, g, tree, module_index, place_index)
+        if is_place_local { lent_local = place_local + 1usize }
+    }
+    if lent_local != 0usize && c.resources[lent_local - 1usize].lent_to != 0usize {
+        record_failure_related(c, module_index, statement, .ThreadShared, c.locals[lent_local - 1usize].name, line_detail(c, g, module_index, c.resources[lent_local - 1usize].lent_at), c.resources[lent_local - 1usize].lent_at)
+        c.consuming_store = 0usize
+        ret ResourceViolation
     }
     let assigned = resource_assign_inner(c, g, tree, module_index, statement, place_index, initializer_index, from_call, call, tried)
     c.consuming_store = 0usize

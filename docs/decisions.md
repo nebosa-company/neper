@@ -8015,3 +8015,28 @@ Not yet, of H09: grouping cascades under a primary cause (the checker stops at
 the first failure of a body); expected/actual states as fields rather than
 prose; a bounded instantiation chain for a failure inside an instance; the
 lossless-recovery and structured-fix obligations.
+
+## D365 -- What a thread was given is the thread's until the join, and H04's design
+
+`m25-h04-concurrency.md` is the design: a thread borrows what it is started over,
+and the parent's frame is the scope of that borrow; the join is H01's obligation;
+D357 said what a thread may not be given; this row says what the parent may not
+do while it runs. From the start to the join of the thread local, the storage
+the thread was given -- every `&x` argument of `thread_create` or `thread.spawn`
+-- is lent: the parent's value read, store or move of `x` is E-SAFETY-0016,
+naming the start; `&x` and `&x.field` are not, since an atomic, a lock and a
+second thread reach it so and nothing else does. The lending ends at the join of
+that local, and also when the thread local is moved anywhere else -- the
+compiler's own crews store their threads into an array and join by element,
+which a local's state cannot follow -- so that is a limit the design lists, not a
+rule. A detached thread's lending never ends. The rule is per statement, since
+uses are checked before moves: the one fixture that joined and read in one
+expression writes the join as its own statement now.
+
+Sweep: the compiler, the library and every fixture pass under it, after that one
+idiom. Fixtures: the counter read before the join (reject); the link fixtures'
+atomics through addresses while workers run are the valid shapes.
+
+Not yet, of H04: locks and guards as regions over the mutex (section 4 of the
+design), aliases through slices, pointer locals and globals, partial spawn
+failure over arrays, a perturbation fixture for a program's own threads.

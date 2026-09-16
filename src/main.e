@@ -4025,6 +4025,13 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "): it cannot be closed, moved to an `own` parameter or returned; `os.dup` makes one that can")
     }
+    if checker.failure_kind == .ThreadShared {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` was lent to a thread started at line ")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, " that has not been joined: reading or writing it here races with the thread; reach it through an atomic, or join first")
+    }
     if checker.failure_kind == .ThreadFrameEscape {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)
