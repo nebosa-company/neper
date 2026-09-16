@@ -8566,3 +8566,26 @@ and `slack_shifted` cases are the eliminated and the retained (`items[at +
 
 Not yet: `at + j` where `j` is a local bounded by a loop of its own (`while j <
 8usize`), a field base, a bound through a second local.
+
+## D386 -- The stack object's slot was a rewalk of the function: fifteen per cent of the build
+
+D383's measurement left the compiler's own cold release build at 752 ms against
+the baseline's 416 and named D355 as what stands. A profile of the Linux
+compiler building itself (`benchmarks/scale/profile_own.sh`, perf mapped through the
+image's symbol table) put one function at 14.6% of every sample:
+`codegen_x64.stack_object_slot`, which gave a stack object its slot by walking
+the function's instructions from the first, summing the slots of every `Stack`
+and `ConstString` before it -- once per object, so quadratic in a function's
+objects, and `main`'s dispatch has hundreds, D358's argument snapshots having
+added one per copied argument. The emission loop walks the instructions in
+order, so the sum is a cursor: `function_body` advances it at each object and
+hands `select_string` its slot. The image is the same to the byte (stage 3
+equals stage 4 under the new compiler; the two bytes that differ between
+stages 2 and 3 are the baked arena size, D303). Re-measured
+(`h29-windows-d386.json`): the compiler cold 650 ms in release, from 752 (-14%),
+`lower and codegen` 390 to 263 in the phase split; `sc500k` unchanged, whose
+functions are small.
+
+The warm build stays at 147 ms against 53: the link, the artifact reads and the
+executable write, byte loops under D355's checks; the next profile is of a warm
+build.

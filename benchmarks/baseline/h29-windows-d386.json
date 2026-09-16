@@ -1,0 +1,791 @@
+{
+ "schema": "neper-baseline",
+ "version": 1,
+ "host": "windows",
+ "machine": "AMD64",
+ "platform": "Windows-11-10.0.26200-SP0",
+ "cpu": "Intel64 Family 6 Model 154 Stepping 3, GenuineIntel",
+ "compiler": "D:\\repos\\neper-cot\\build\\neper-big.exe",
+ "runs": 5,
+ "arena": "14g",
+ "jobs": 8,
+ "revision": "e6c01bd72f7d2be5bd6526c6103eae225e4ada76",
+ "cells": [
+  {
+   "workload": "compiler",
+   "lines": 53219,
+   "mode": "debug",
+   "command": "D:/repos/neper-cot/build/neper-big.exe emit-executable src\\main.e D:\\repos\\neper-cot x64 windows D:\\repos\\neper-cot\\baseline-debug.exe --arena 14g --incremental --time",
+   "cold_ms": [
+    580.9879000007641,
+    572.274699996342,
+    578.85289999831,
+    561.0276000079466,
+    584.901299997
+   ],
+   "warm_ms": [
+    141.94509999651928,
+    143.67989999300335,
+    146.44090000365395,
+    140.61339999898337,
+    145.4850999871269
+   ],
+   "cold_phases": [
+    {
+     "load and parse": 71,
+     "resolve": 12,
+     "check declarations": 16,
+     "settle": 0,
+     "check bodies": 84,
+     "lower and codegen": 253,
+     "link from artifacts": 42,
+     "link": 32,
+     "write executable": 18,
+     "manifest": 16
+    },
+    {
+     "load and parse": 64,
+     "resolve": 13,
+     "check declarations": 17,
+     "settle": 0,
+     "check bodies": 90,
+     "lower and codegen": 247,
+     "link from artifacts": 39,
+     "link": 33,
+     "write executable": 17,
+     "manifest": 15
+    },
+    {
+     "load and parse": 65,
+     "resolve": 14,
+     "check declarations": 16,
+     "settle": 0,
+     "check bodies": 83,
+     "lower and codegen": 253,
+     "link from artifacts": 40,
+     "link": 32,
+     "write executable": 19,
+     "manifest": 16
+    },
+    {
+     "load and parse": 67,
+     "resolve": 12,
+     "check declarations": 17,
+     "settle": 0,
+     "check bodies": 81,
+     "lower and codegen": 240,
+     "link from artifacts": 39,
+     "link": 33,
+     "write executable": 18,
+     "manifest": 16
+    },
+    {
+     "load and parse": 63,
+     "resolve": 14,
+     "check declarations": 26,
+     "settle": 0,
+     "check bodies": 83,
+     "lower and codegen": 253,
+     "link from artifacts": 40,
+     "link": 33,
+     "write executable": 18,
+     "manifest": 16
+    }
+   ],
+   "warm_phases": [
+    {
+     "load and parse": 8,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "lower and codegen": 1,
+     "link from artifacts": 37,
+     "link": 32,
+     "write executable": 18,
+     "manifest": 27
+    },
+    {
+     "load and parse": 8,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "lower and codegen": 1,
+     "link from artifacts": 38,
+     "link": 32,
+     "write executable": 18,
+     "manifest": 27
+    },
+    {
+     "load and parse": 8,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "lower and codegen": 2,
+     "link from artifacts": 42,
+     "link": 32,
+     "write executable": 18,
+     "manifest": 27
+    },
+    {
+     "load and parse": 8,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "lower and codegen": 1,
+     "link from artifacts": 37,
+     "link": 31,
+     "write executable": 17,
+     "manifest": 28
+    },
+    {
+     "load and parse": 7,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "lower and codegen": 2,
+     "link from artifacts": 39,
+     "link": 33,
+     "write executable": 18,
+     "manifest": 27
+    }
+   ],
+   "arena_mb": 353,
+   "retries": 0,
+   "peak_mb": 739,
+   "image_bytes": 8211968,
+   "functions": 2172,
+   "worker_reached_mb": 1465,
+   "cold": {
+    "p50": 578.9,
+    "p95": 584.1,
+    "min": 561.0,
+    "max": 584.9,
+    "runs": 5
+   },
+   "warm": {
+    "p50": 143.7,
+    "p95": 146.2,
+    "min": 140.6,
+    "max": 146.4,
+    "runs": 5
+   },
+   "cold_phase_p50": {
+    "load and parse": 65,
+    "resolve": 13,
+    "check declarations": 17,
+    "settle": 0,
+    "check bodies": 83,
+    "lower and codegen": 253,
+    "link from artifacts": 40,
+    "link": 33,
+    "write executable": 18,
+    "manifest": 16
+   },
+   "warm_phase_p50": {
+    "load and parse": 8,
+    "resolve": 0,
+    "check declarations": 3,
+    "settle": 1,
+    "check bodies": 0,
+    "lower and codegen": 1,
+    "link from artifacts": 38,
+    "link": 32,
+    "write executable": 18,
+    "manifest": 27
+   }
+  },
+  {
+   "workload": "compiler",
+   "lines": 53219,
+   "mode": "release",
+   "command": "D:/repos/neper-cot/build/neper-big.exe emit-executable src\\main.e D:\\repos\\neper-cot x64 windows D:\\repos\\neper-cot\\baseline-release.exe --arena 14g --incremental --time --release",
+   "cold_ms": [
+    662.0618000015384,
+    635.9691999969073,
+    649.7587999911048,
+    702.4296000017785,
+    611.0546000127215
+   ],
+   "warm_ms": [
+    149.01490000193007,
+    146.74779999768361,
+    142.13700000254903,
+    142.09150000533555,
+    146.75839999108575
+   ],
+   "cold_phases": [
+    {
+     "load and parse": 66,
+     "resolve": 14,
+     "check declarations": 17,
+     "settle": 0,
+     "check bodies": 121,
+     "inline oracles": 6,
+     "lower and codegen": 284,
+     "link from artifacts": 36,
+     "link": 33,
+     "write executable": 19,
+     "manifest": 17
+    },
+    {
+     "load and parse": 62,
+     "resolve": 14,
+     "check declarations": 17,
+     "settle": 0,
+     "check bodies": 121,
+     "inline oracles": 7,
+     "lower and codegen": 263,
+     "link from artifacts": 38,
+     "link": 33,
+     "write executable": 18,
+     "manifest": 15
+    },
+    {
+     "load and parse": 62,
+     "resolve": 14,
+     "check declarations": 17,
+     "settle": 0,
+     "check bodies": 118,
+     "inline oracles": 6,
+     "lower and codegen": 285,
+     "link from artifacts": 35,
+     "link": 32,
+     "write executable": 19,
+     "manifest": 15
+    },
+    {
+     "load and parse": 66,
+     "resolve": 16,
+     "check declarations": 19,
+     "settle": 0,
+     "check bodies": 146,
+     "inline oracles": 8,
+     "lower and codegen": 295,
+     "link from artifacts": 36,
+     "link": 33,
+     "write executable": 19,
+     "manifest": 16
+    },
+    {
+     "load and parse": 64,
+     "resolve": 12,
+     "check declarations": 17,
+     "settle": 0,
+     "check bodies": 119,
+     "inline oracles": 6,
+     "lower and codegen": 240,
+     "link from artifacts": 38,
+     "link": 33,
+     "write executable": 18,
+     "manifest": 16
+    }
+   ],
+   "warm_phases": [
+    {
+     "load and parse": 9,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "inline oracles": 2,
+     "lower and codegen": 0,
+     "link from artifacts": 37,
+     "link": 34,
+     "write executable": 20,
+     "manifest": 29
+    },
+    {
+     "load and parse": 9,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "inline oracles": 1,
+     "lower and codegen": 0,
+     "link from artifacts": 37,
+     "link": 34,
+     "write executable": 19,
+     "manifest": 27
+    },
+    {
+     "load and parse": 8,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "inline oracles": 1,
+     "lower and codegen": 0,
+     "link from artifacts": 35,
+     "link": 33,
+     "write executable": 18,
+     "manifest": 28
+    },
+    {
+     "load and parse": 7,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "inline oracles": 1,
+     "lower and codegen": 0,
+     "link from artifacts": 36,
+     "link": 32,
+     "write executable": 19,
+     "manifest": 28
+    },
+    {
+     "load and parse": 8,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 1,
+     "check bodies": 0,
+     "inline oracles": 1,
+     "lower and codegen": 0,
+     "link from artifacts": 37,
+     "link": 34,
+     "write executable": 19,
+     "manifest": 27
+    }
+   ],
+   "arena_mb": 354,
+   "retries": 0,
+   "peak_mb": 979,
+   "image_bytes": 8501760,
+   "functions": 2172,
+   "worker_reached_mb": 1969,
+   "cold": {
+    "p50": 649.8,
+    "p95": 694.4,
+    "min": 611.1,
+    "max": 702.4,
+    "runs": 5
+   },
+   "warm": {
+    "p50": 146.7,
+    "p95": 148.6,
+    "min": 142.1,
+    "max": 149.0,
+    "runs": 5
+   },
+   "cold_phase_p50": {
+    "load and parse": 64,
+    "resolve": 14,
+    "check declarations": 17,
+    "settle": 0,
+    "check bodies": 121,
+    "inline oracles": 6,
+    "lower and codegen": 284,
+    "link from artifacts": 36,
+    "link": 33,
+    "write executable": 19,
+    "manifest": 16
+   },
+   "warm_phase_p50": {
+    "load and parse": 8,
+    "resolve": 0,
+    "check declarations": 3,
+    "settle": 1,
+    "check bodies": 0,
+    "inline oracles": 1,
+    "lower and codegen": 0,
+    "link from artifacts": 37,
+    "link": 34,
+    "write executable": 19,
+    "manifest": 28
+   }
+  },
+  {
+   "workload": "sc500k",
+   "lines": 460243,
+   "mode": "debug",
+   "command": "D:/repos/neper-cot/build/neper-big.exe emit-executable src\\main.e D:\\repos\\neper-cot x64 windows D:\\repos\\neper-cot\\build\\baseline-fixtures\\sc500k\\baseline-debug.exe --arena 14g --incremental --time",
+   "cold_ms": [
+    1822.0906000060495,
+    1838.053299987223,
+    1832.2394999995595,
+    1909.5540999987861,
+    1852.4107000121148
+   ],
+   "warm_ms": [
+    188.1851999933133,
+    192.60590001067612,
+    190.3669000021182,
+    188.44140000874177,
+    191.23059998673853
+   ],
+   "cold_phases": [
+    {
+     "load and parse": 253,
+     "resolve": 71,
+     "check declarations": 107,
+     "settle": 1,
+     "check bodies": 223,
+     "lower and codegen": 1025,
+     "link from artifacts": 45,
+     "link": 16,
+     "write executable": 7,
+     "manifest": 24
+    },
+    {
+     "load and parse": 252,
+     "resolve": 63,
+     "check declarations": 107,
+     "settle": 0,
+     "check bodies": 227,
+     "lower and codegen": 1044,
+     "link from artifacts": 46,
+     "link": 16,
+     "write executable": 7,
+     "manifest": 26
+    },
+    {
+     "load and parse": 257,
+     "resolve": 68,
+     "check declarations": 108,
+     "settle": 0,
+     "check bodies": 217,
+     "lower and codegen": 1031,
+     "link from artifacts": 49,
+     "link": 17,
+     "write executable": 7,
+     "manifest": 25
+    },
+    {
+     "load and parse": 275,
+     "resolve": 64,
+     "check declarations": 108,
+     "settle": 0,
+     "check bodies": 216,
+     "lower and codegen": 1089,
+     "link from artifacts": 52,
+     "link": 16,
+     "write executable": 7,
+     "manifest": 25
+    },
+    {
+     "load and parse": 252,
+     "resolve": 68,
+     "check declarations": 109,
+     "settle": 0,
+     "check bodies": 234,
+     "lower and codegen": 1047,
+     "link from artifacts": 44,
+     "link": 15,
+     "write executable": 7,
+     "manifest": 25
+    }
+   ],
+   "warm_phases": [
+    {
+     "load and parse": 49,
+     "resolve": 0,
+     "check declarations": 2,
+     "settle": 14,
+     "check bodies": 0,
+     "lower and codegen": 1,
+     "link from artifacts": 44,
+     "link": 15,
+     "write executable": 7,
+     "manifest": 37
+    },
+    {
+     "load and parse": 52,
+     "resolve": 0,
+     "check declarations": 2,
+     "settle": 16,
+     "check bodies": 0,
+     "lower and codegen": 1,
+     "link from artifacts": 44,
+     "link": 15,
+     "write executable": 7,
+     "manifest": 36
+    },
+    {
+     "load and parse": 49,
+     "resolve": 0,
+     "check declarations": 2,
+     "settle": 16,
+     "check bodies": 0,
+     "lower and codegen": 2,
+     "link from artifacts": 43,
+     "link": 15,
+     "write executable": 8,
+     "manifest": 37
+    },
+    {
+     "load and parse": 50,
+     "resolve": 0,
+     "check declarations": 2,
+     "settle": 14,
+     "check bodies": 0,
+     "lower and codegen": 1,
+     "link from artifacts": 44,
+     "link": 16,
+     "write executable": 7,
+     "manifest": 37
+    },
+    {
+     "load and parse": 50,
+     "resolve": 0,
+     "check declarations": 2,
+     "settle": 15,
+     "check bodies": 0,
+     "lower and codegen": 2,
+     "link from artifacts": 44,
+     "link": 15,
+     "write executable": 7,
+     "manifest": 37
+    }
+   ],
+   "arena_mb": 977,
+   "retries": 0,
+   "peak_mb": 1098,
+   "image_bytes": 2982400,
+   "functions": 41619,
+   "worker_reached_mb": 2205,
+   "cold": {
+    "p50": 1838.1,
+    "p95": 1898.1,
+    "min": 1822.1,
+    "max": 1909.6,
+    "runs": 5
+   },
+   "warm": {
+    "p50": 190.4,
+    "p95": 192.3,
+    "min": 188.2,
+    "max": 192.6,
+    "runs": 5
+   },
+   "cold_phase_p50": {
+    "load and parse": 253,
+    "resolve": 68,
+    "check declarations": 108,
+    "settle": 0,
+    "check bodies": 223,
+    "lower and codegen": 1044,
+    "link from artifacts": 46,
+    "link": 16,
+    "write executable": 7,
+    "manifest": 25
+   },
+   "warm_phase_p50": {
+    "load and parse": 50,
+    "resolve": 0,
+    "check declarations": 2,
+    "settle": 15,
+    "check bodies": 0,
+    "lower and codegen": 1,
+    "link from artifacts": 44,
+    "link": 15,
+    "write executable": 7,
+    "manifest": 37
+   }
+  },
+  {
+   "workload": "sc500k",
+   "lines": 460243,
+   "mode": "release",
+   "command": "D:/repos/neper-cot/build/neper-big.exe emit-executable src\\main.e D:\\repos\\neper-cot x64 windows D:\\repos\\neper-cot\\build\\baseline-fixtures\\sc500k\\baseline-release.exe --arena 14g --incremental --time --release",
+   "cold_ms": [
+    2027.6272999908542,
+    2072.640300000785,
+    2012.8034999943338,
+    2077.2599000047194,
+    2114.8941999999806
+   ],
+   "warm_ms": [
+    168.81329999887384,
+    168.36139999213628,
+    169.2207000014605,
+    178.05329999828245,
+    186.70859999838285
+   ],
+   "cold_phases": [
+    {
+     "load and parse": 248,
+     "resolve": 67,
+     "check declarations": 106,
+     "settle": 0,
+     "check bodies": 504,
+     "inline oracles": 6,
+     "lower and codegen": 959,
+     "link from artifacts": 36,
+     "link": 10,
+     "write executable": 5,
+     "manifest": 25
+    },
+    {
+     "load and parse": 251,
+     "resolve": 64,
+     "check declarations": 107,
+     "settle": 0,
+     "check bodies": 530,
+     "inline oracles": 6,
+     "lower and codegen": 977,
+     "link from artifacts": 36,
+     "link": 9,
+     "write executable": 5,
+     "manifest": 25
+    },
+    {
+     "load and parse": 251,
+     "resolve": 65,
+     "check declarations": 105,
+     "settle": 0,
+     "check bodies": 496,
+     "inline oracles": 6,
+     "lower and codegen": 954,
+     "link from artifacts": 35,
+     "link": 9,
+     "write executable": 5,
+     "manifest": 25
+    },
+    {
+     "load and parse": 279,
+     "resolve": 70,
+     "check declarations": 106,
+     "settle": 0,
+     "check bodies": 524,
+     "inline oracles": 6,
+     "lower and codegen": 957,
+     "link from artifacts": 36,
+     "link": 10,
+     "write executable": 5,
+     "manifest": 24
+    },
+    {
+     "load and parse": 263,
+     "resolve": 68,
+     "check declarations": 108,
+     "settle": 0,
+     "check bodies": 530,
+     "inline oracles": 6,
+     "lower and codegen": 988,
+     "link from artifacts": 39,
+     "link": 11,
+     "write executable": 5,
+     "manifest": 28
+    }
+   ],
+   "warm_phases": [
+    {
+     "load and parse": 47,
+     "resolve": 0,
+     "check declarations": 2,
+     "settle": 15,
+     "check bodies": 0,
+     "inline oracles": 1,
+     "lower and codegen": 0,
+     "link from artifacts": 33,
+     "link": 11,
+     "write executable": 5,
+     "manifest": 36
+    },
+    {
+     "load and parse": 47,
+     "resolve": 0,
+     "check declarations": 2,
+     "settle": 14,
+     "check bodies": 1,
+     "inline oracles": 2,
+     "lower and codegen": 0,
+     "link from artifacts": 34,
+     "link": 9,
+     "write executable": 5,
+     "manifest": 36
+    },
+    {
+     "load and parse": 49,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 15,
+     "check bodies": 0,
+     "inline oracles": 1,
+     "lower and codegen": 0,
+     "link from artifacts": 34,
+     "link": 9,
+     "write executable": 5,
+     "manifest": 37
+    },
+    {
+     "load and parse": 54,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 16,
+     "check bodies": 1,
+     "inline oracles": 2,
+     "lower and codegen": 0,
+     "link from artifacts": 36,
+     "link": 9,
+     "write executable": 5,
+     "manifest": 37
+    },
+    {
+     "load and parse": 54,
+     "resolve": 0,
+     "check declarations": 3,
+     "settle": 22,
+     "check bodies": 0,
+     "inline oracles": 2,
+     "lower and codegen": 0,
+     "link from artifacts": 37,
+     "link": 10,
+     "write executable": 5,
+     "manifest": 36
+    }
+   ],
+   "arena_mb": 789,
+   "retries": 0,
+   "peak_mb": 1355,
+   "image_bytes": 2081792,
+   "functions": 41619,
+   "worker_reached_mb": 2894,
+   "cold": {
+    "p50": 2072.6,
+    "p95": 2107.4,
+    "min": 2012.8,
+    "max": 2114.9,
+    "runs": 5
+   },
+   "warm": {
+    "p50": 169.2,
+    "p95": 185.0,
+    "min": 168.4,
+    "max": 186.7,
+    "runs": 5
+   },
+   "cold_phase_p50": {
+    "load and parse": 251,
+    "resolve": 67,
+    "check declarations": 106,
+    "settle": 0,
+    "check bodies": 524,
+    "inline oracles": 6,
+    "lower and codegen": 959,
+    "link from artifacts": 36,
+    "link": 10,
+    "write executable": 5,
+    "manifest": 25
+   },
+   "warm_phase_p50": {
+    "load and parse": 49,
+    "resolve": 0,
+    "check declarations": 3,
+    "settle": 15,
+    "check bodies": 0,
+    "inline oracles": 2,
+    "lower and codegen": 0,
+    "link from artifacts": 34,
+    "link": 9,
+    "write executable": 5,
+    "manifest": 36
+   }
+  }
+ ]
+}

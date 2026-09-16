@@ -182,7 +182,9 @@ breaches the decision rows carry, now in a form nothing drifts past. Run against
 `h29-windows-d384.json`, the end of M2.5 stage B (D383): the compiler cold +81%
 and warm +178% in release, `sc500k` cold +39% and warm +55%, the resident set
 and the compiler's image as before -- D355's retained checks in the compiler's
-own byte loops, named in D383, with the proofs (D356-D384) as the way back.
+own byte loops, named in D383, with the proofs (D356-D385) as the way back; a profile
+then found a quadratic slot walk in the code generator (D386), and the compiler's
+cold release cell is 650 ms (+56%) in `h29-windows-d386.json`.
 
 ## What this baseline is not
 

@@ -1434,7 +1434,7 @@ fn emit_string_bytes(output: *emit_x64.Buffer, spelling: str) -> (usize, err) {
     ret (output.count - output_start, ok)
 }
 
-fn select_string(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, local_base: usize, output: *emit_x64.Buffer) -> err {
+fn select_string(builder: *nir.Builder, current: nir.Function, instruction: nir.Instruction, allocations: []regalloc.Allocation, slot: usize, output: *emit_x64.Buffer) -> err {
     if !instruction.has_result || instruction.operand_count != 0usize || instruction.immediate >= builder.string_count { ret Unsupported }
     let (skip_displacement, skip_error) = emit_x64.jump(output)
     if skip_error != ok { ret skip_error }
@@ -1445,8 +1445,6 @@ fn select_string(builder: *nir.Builder, current: nir.Function, instruction: nir.
     let (data_displacement, address_error) = emit_x64.relative_address(output, 11usize)
     if address_error != ok { ret address_error }
     try emit_x64.patch_relative32(output, data_displacement, data_offset)
-    let (slot, slot_error) = stack_object_slot(builder, current, instruction.result, local_base)
-    if slot_error != ok { ret slot_error }
     try emit_x64.stack_address(output, 10usize, slot)
     try emit_x64.store_memory(output, 10usize, 11usize, 64usize)
     try emit_x64.mov_immediate(output, 11usize, length)
@@ -1478,24 +1476,13 @@ fn stack_object_count(builder: *nir.Builder, current: nir.Function) -> usize {
     ret count
 }
 
-fn stack_object_slot(builder: *nir.Builder, current: nir.Function, value: usize, base: usize) -> (usize, err) {
-    let end = current.first_instruction + current.instruction_count
-    var count = 0usize
-    var at = current.first_instruction
-    while at < end {
-        let instruction = builder.instructions[at]
-        if instruction.opcode == .Stack || instruction.opcode == .ConstString {
-            var slots = 2usize
-            if instruction.opcode == .Stack {
-                slots = instruction.immediate
-                if slots == 0usize { slots = 1usize }
-            }
-            if instruction.has_result && instruction.result == value { ret (base + count + slots - 1usize, ok) }
-            count += slots
-        }
-        at += 1usize
-    }
-    ret (0usize, Unsupported)
+// The slots a stack object takes (D386): the walk that gave each object its slot by
+// rewalking the function from its start was 15% of the compiler's own build, so
+// `function_body` keeps a cursor instead and every object is met in order.
+fn stack_object_slots(instruction: nir.Instruction) -> usize {
+    if instruction.opcode != .Stack { ret 2usize }
+    if instruction.immediate == 0usize { ret 1usize }
+    ret instruction.immediate
 }
 
 fn save_allocated_registers(output: *emit_x64.Buffer, base: usize, count: usize) -> err {
@@ -1954,8 +1941,10 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
     var fixup_count = 0usize
     var at = current.first_instruction
     // Blocks begin in instruction order, so the next block to start is a cursor, not a
-    // scan of every block per instruction (D305).
+    // scan of every block per instruction (D305); so are the stack objects' slots
+    // (D386), met in the same order `stack_object_count` summed them.
     var next_block = 0usize
+    var stack_cursor = 0usize
     while at < end {
         while next_block < current.block_count && builder.blocks[current.first_block + next_block].first_instruction == at {
             block_offsets[next_block] = output.count
@@ -1995,8 +1984,8 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
         } else {
             if instruction.opcode == .Stack {
                 if !instruction.has_result || instruction.operand_count != 0usize { ret Unsupported }
-                let (slot, slot_error) = stack_object_slot(builder, current, instruction.result, local_base)
-                if slot_error != ok { ret slot_error }
+                let slot = local_base + stack_cursor + stack_object_slots(instruction) - 1usize
+                stack_cursor += stack_object_slots(instruction)
                 let (destination, destination_error) = result_register(allocations, instruction.result, 10usize)
                 if destination_error != ok { ret destination_error }
                 try emit_x64.stack_address(output, destination, slot)
@@ -2016,7 +2005,9 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 try store_result(allocations, instruction.result, destination, output)
             } else {
             if instruction.opcode == .ConstString {
-                try select_string(builder, current, instruction, allocations, local_base, output)
+                let string_slot = local_base + stack_cursor + 1usize
+                stack_cursor += 2usize
+                try select_string(builder, current, instruction, allocations, string_slot, output)
             } else {
             if instruction.opcode == .Store {
                 if instruction.has_result || instruction.operand_count != 2usize { ret Unsupported }
