@@ -9768,3 +9768,16 @@ gains `reject/type_mismatch_fix` (an initializer), and `reject/type_mismatch`
 
 Not yet: a fix for a name the program does not declare (a near miss), and for
 mismatches of aggregates.
+
+## D445 -- An unknown name names its nearest neighbour
+
+H09's fixes for the name codes: `unknown value name` said nothing about what
+was meant, and a model's commonest slip is a name one or two edits off. The
+resolver, where the name fails, now looks for the nearest name in scope -- the
+live locals first, then the module's own values, by Levenshtein distance, two
+the most and a name under three bytes never near anything -- and the diagnostic
+says `did you mean `x`?` and carries `use the nearest name in scope` as a
+`maybe` fix, one edit over the token, with D432's precondition. No neighbour,
+no change: the existing goldens hold. The corpus gains `reject/name_near`.
+
+Not yet: names of other modules (`os.opne`), type names, and field names.

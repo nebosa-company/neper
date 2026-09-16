@@ -63,6 +63,9 @@ type Resolver = struct {
     failure_has_context: bool,
     failure_name: str,
     failure_owner: str,
+    // The nearest name in scope to an unknown one (D445, H09): a local or a value of
+    // the module within two edits, empty for none.
+    failure_near: str,
     // The (module, space, name) index over `symbols` (D303); absent, `find` scans.
     names: lookup.Index,
     // The module whose tokens `tokens` holds (D304).
@@ -517,7 +520,76 @@ fn validate_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: synta
     r.failure_module = module_index
     r.failure_token = token
     r.failure_has_token = true
+    r.failure_near = nearest_name(r, module_index, name)
     ret UnknownName
+}
+
+// The name in scope nearest to `name` (D445): the live locals first, then the
+// module's own values, the least edit distance winning and two the most allowed;
+// a name of one or two bytes is never near anything, since one edit is most of it.
+fn nearest_name(r: *Resolver, module_index: usize, name: str) -> str {
+    var best = ""
+    var best_distance = 3usize
+    if name.len < 3usize { ret best }
+    var local_index = r.local_count
+    while local_index > 0usize {
+        local_index = local_index - 1usize
+        let candidate = r.locals[local_index].name
+        if r.locals[local_index].space == .Value && candidate.len >= 3usize {
+            let distance = edit_distance(candidate, name)
+            if distance < best_distance {
+                best = candidate
+                best_distance = distance
+            }
+        }
+    }
+    var symbol_index = 0usize
+    while symbol_index < r.count {
+        let symbol = r.symbols[symbol_index]
+        if symbol.module_index == module_index && symbol.space == .Value && symbol.name.len >= 3usize {
+            let distance = edit_distance(symbol.name, name)
+            if distance < best_distance {
+                best = symbol.name
+                best_distance = distance
+            }
+        }
+        symbol_index += 1usize
+    }
+    ret best
+}
+
+// Levenshtein over two names of at most sixty-four bytes, two rows; longer names
+// answer three, out of reach.
+fn edit_distance(a: str, b: str) -> usize {
+    if a.len > 64usize || b.len > 64usize { ret 3usize }
+    var previous: [65]usize = zero
+    var current: [65]usize = zero
+    var column = 0usize
+    while column <= b.len {
+        previous[column] = column
+        column += 1usize
+    }
+    var row = 1usize
+    while row <= a.len {
+        current[0usize] = row
+        column = 1usize
+        while column <= b.len {
+            var cost = 1usize
+            if a[row - 1usize] == b[column - 1usize] { cost = 0usize }
+            var best = previous[column] + 1usize
+            if current[column - 1usize] + 1usize < best { best = current[column - 1usize] + 1usize }
+            if previous[column - 1usize] + cost < best { best = previous[column - 1usize] + cost }
+            current[column] = best
+            column += 1usize
+        }
+        column = 0usize
+        while column <= b.len {
+            previous[column] = current[column]
+            column += 1usize
+        }
+        row += 1usize
+    }
+    ret previous[b.len]
 }
 
 fn module_name_owner(r: *Resolver, module_index: usize, name: str) -> (str, bool) {

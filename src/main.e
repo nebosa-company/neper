@@ -3385,8 +3385,11 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             var insert: lex.Token = zero
             insert.start = report.fix_at
             insert.end = report.fix_at
-            if report.fix_kind == 3u8 { insert.end = report.fix_end }
+            if report.fix_kind == 3u8 || report.fix_kind == 4u8 { insert.end = report.fix_end }
             let insert_at = lex.span_of(text, lines, insert)
+            if report.fix_kind == 4u8 {
+                try write_all(report, "[{\"message\":\"use the nearest name in scope\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+            } else {
             if report.fix_kind == 3u8 {
                 try write_all(report, "[{\"message\":\"convert explicitly\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
             } else {
@@ -3395,6 +3398,7 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
                 } else {
                     try write_all(report, "[{\"message\":\"defer the cleanup after the acquisition\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
                 }
+            }
             }
             if report.operand_path.len != 0usize && is_operand {
                 try write_span(report, report.operand_path, insert_at, true)
@@ -5334,6 +5338,21 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
     if resolve_error == resolve.UnknownName && resolver.failure_has_token {
         if resolver.failure_has_context {
             try print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_context_token, "E-TYPE-0002", "initializer type does not match binding")
+        }
+        // The nearest name as a fix (D445, H09): named in the message and offered as
+        // one `maybe` edit over the token.
+        if resolver.failure_near.len != 0usize {
+            var near_storage: [256]u8 = zero
+            var near_at = tool.nptest_copy(near_storage[..], 0usize, "unknown value name; did you mean `")
+            near_at = tool.nptest_copy(near_storage[..], near_at, resolver.failure_near)
+            near_at = tool.nptest_copy(near_storage[..], near_at, "`?")
+            report.fix_text = resolver.failure_near
+            report.fix_at = resolver.failure_token.start
+            report.fix_end = resolver.failure_token.end
+            report.fix_kind = 4u8
+            let near_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", near_storage[0usize..near_at])
+            report.fix_text = ""
+            ret near_emitted
         }
         ret print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
     }
