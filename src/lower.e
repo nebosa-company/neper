@@ -4286,11 +4286,26 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
             if c.tokens[operator_at].kind != .PunctLt { ret false }
         }
     } else {
-        if c.tokens[operator_at].kind == .PunctLtEq {
-            index_side = right_index
-            length_side = left_index
+        // Negated: `i >= x.len`, `x.len <= i`, and the offset forms `i + K > x.len`
+        // (the rest runs under `i + K <= x.len`: slack `K - 1`) and `i + K >= x.len`
+        // (under `i + K < x.len`: slack `K`).
+        let (offset_index, offset_literal, has_offset) = proof_offset_form(c, g, tree, module_index, left_index)
+        if has_offset {
+            index_side = offset_index
+            if c.tokens[operator_at].kind == .PunctGt {
+                if offset_literal == 0usize { ret false }
+                slack = offset_literal - 1usize
+            } else {
+                if c.tokens[operator_at].kind != .PunctGtEq { ret false }
+                slack = offset_literal
+            }
         } else {
-            if c.tokens[operator_at].kind != .PunctGtEq { ret false }
+            if c.tokens[operator_at].kind == .PunctLtEq {
+                index_side = right_index
+                length_side = left_index
+            } else {
+                if c.tokens[operator_at].kind != .PunctGtEq { ret false }
+            }
         }
     }
     let (index_name, has_index) = proof_name(c, g, tree, module_index, index_side)

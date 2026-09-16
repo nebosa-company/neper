@@ -184,7 +184,8 @@ and warm +178% in release, `sc500k` cold +39% and warm +55%, the resident set
 and the compiler's image as before -- D355's retained checks in the compiler's
 own byte loops, named in D383, with the proofs (D356-D385) as the way back; a profile
 then found a quadratic slot walk in the code generator (D386), and the compiler's
-cold release cell is 650 ms (+56%) in `h29-windows-d386.json`.
+cold release cell is 650 ms (+56%) in `h29-windows-d386.json`, 619 ms after the warm
+profile's byte-sink and proof changes (D387, `h29-windows-d387.json`).
 
 ## What this baseline is not
 

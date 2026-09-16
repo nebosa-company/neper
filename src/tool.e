@@ -39,11 +39,10 @@ fn byte(out: *Out, value: u8) -> err {
 }
 
 fn text(out: *Out, value: str) -> err {
-    var at = 0usize
-    while at < value.len {
-        try byte(out, value[at])
-        at += 1usize
-    }
+    let end = out.count + value.len
+    if end > out.bytes.len { ret Capacity }
+    os.copy_bytes(out.bytes[out.count..end], value)
+    out.count = end
     ret ok
 }
 

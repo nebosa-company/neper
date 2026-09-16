@@ -1,4 +1,5 @@
 // Deterministic x64 machine-code byte encoding shared by both host ABIs.
+use e.os
 
 error Capacity
 error InvalidByte
@@ -28,11 +29,7 @@ fn byte(buffer: *Buffer, value: usize) -> err {
 
 fn pack(buffer: *Buffer, destination: []u8) -> err {
     if buffer.count > destination.len { ret Capacity }
-    var at = 0usize
-    while at < buffer.count {
-        destination[at] = buffer.bytes[at]
-        at += 1usize
-    }
+    os.copy_bytes(destination[0usize..buffer.count], buffer.bytes[0usize..buffer.count])
     ret ok
 }
 
@@ -526,13 +523,10 @@ fn store_memory(buffer: *Buffer, address: usize, source: usize, width: usize) ->
 // A byte slice appended whole (D314): a function's code moving from a module's
 // staging buffer to the image's.
 fn append_bytes(buffer: *Buffer, bytes: []const u8) -> err {
-    if buffer.count + bytes.len > buffer.bytes.len { ret Capacity }
-    var at = 0usize
-    while at < bytes.len {
-        buffer.bytes[buffer.count + at] = bytes[at]
-        at += 1usize
-    }
-    buffer.count += bytes.len
+    let end = buffer.count + bytes.len
+    if end > buffer.bytes.len { ret Capacity }
+    os.copy_bytes(buffer.bytes[buffer.count..end], bytes)
+    buffer.count = end
     ret ok
 }
 

@@ -8589,3 +8589,29 @@ functions are small.
 The warm build stays at 147 ms against 53: the link, the artifact reads and the
 executable write, byte loops under D355's checks; the next profile is of a warm
 build.
+
+## D387 -- The warm build profiled: the byte sinks copy whole, and the hash's loads are proven
+
+A profile of a warm release build of the compiler by itself
+(`benchmarks/scale/profile_warm.sh`) put the time where D383 said: byte loops.
+`artifact_hash.read_u64` (10%, the hash's eight loads under `if at + 8usize >
+bytes.len { ret }`), `emit_x64.append_bytes` and `pack` (15% together, byte-by-
+byte copies into and out of the code buffer, each store a checked index through
+a field base), `tool.manifest_write` (6%, a call per byte through `byte`).
+
+Two changes. The negated offset form joins the proofs: `if i + K > x.len {
+ret }` leaves the rest of the block under `i + K <= x.len`, so `x[i + j]` is
+proven for `j` below `K` (`>=`: at most `K`); `read_u64`'s eight loads carry no
+check now. The byte sinks copy whole: `append_bytes`, `pack` and `tool.text`
+slice their destination once -- one check -- and call `os.copy_bytes`, the
+intrinsic memcpy D329 gave the linker, which `mem.copy` in the library is not
+to the bootstrap (it seeds `e.mem` without `copy`, and the stage-1 build of the
+compiler's source goes through it; a `@nocheck` block is likewise beyond its
+parser, which is why the compiler's own loops are proven or intrinsic rather
+than marked). The compiler's own build reports 476 checks elided; measured
+(`h29-windows-d387.json`): the compiler cold 619 ms in release (from 650), warm
+132 (from 147), image 8.41 MB (from 8.50).
+
+What the warm build still spends: the artifact readers (`binary.read_u32_at`,
+`em.code_relocation_raw`, `link_copy_artifact`) and the hashes of every module's
+text and code, which the next profile is for.
