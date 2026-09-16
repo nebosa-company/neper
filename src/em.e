@@ -3518,6 +3518,19 @@ fn dependency_matches(dependent: []const u8, dependency_index: usize, target_art
     let (same_module, module_error) = strings_equal(dependent, dependency.module_index, target_artifact, target_module_index)
     if module_error != ok { ret (false, module_error) }
     if !same_module { ret (false, ok) }
+    // A protocol function's absence (D494): the edge names the aggregate, the
+    // protocol is in the hash field, and it holds while the target declares no
+    // `<snake>_<protocol>`.
+    if dependency.kind == dependency_lookup_kind() && dependency.hash >= 1usize && dependency.hash <= 3usize {
+        let (name_start, name_length, bounds_error) = string_bounds(dependent, dependency.name_index)
+        if bounds_error != ok { ret (false, bounds_error) }
+        var absent_storage: [256]u8 = zero
+        let absent_len = snake_protocol_name(dependent[name_start..name_start + name_length], protocol_name_of(dependency.hash - 1usize), absent_storage[..])
+        if absent_len == 0usize { ret (false, ok) }
+        let (absent, declared, absent_error) = find_declaration(target_artifact, absent_storage[0usize..absent_len])
+        if absent_error != ok { ret (false, absent_error) }
+        ret (!declared, ok)
+    }
     let (declaration, found_declaration, declaration_error) = find_declaration_indexed(target_artifact, dependent, dependency.name_index)
     if declaration_error != ok { ret (false, declaration_error) }
     let (holds, holds_error) = dependency_holds(dependency, declaration, found_declaration)

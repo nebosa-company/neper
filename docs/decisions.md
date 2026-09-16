@@ -10602,7 +10602,8 @@ nothing wrote one. Now every foreign aggregate D493 marks carries, for each of
 aggregate with the protocol in the hash field -- the artifact's string table
 holds slices of live text, so a spelling made at write time could not be
 interned, and the settle side spells `colour_eq` by the checker's own rule for
-the name -- so the declaration's arrival fails the edge and the module is rebuilt
+the name, as does `check-em-edge` over two artifacts -- so the declaration's
+arrival fails the edge and the module is rebuilt
 as `edge-changed`; a declared function that is called is a signature edge
 already, and its removal fails that. `incremental_fallback` pins the case in
 both modes on both hosts: exit 3, the declaration, `edge-changed`, exit 4,
