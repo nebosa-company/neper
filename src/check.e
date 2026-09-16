@@ -8952,6 +8952,20 @@ fn record_explain_move(c: *Checker, module_index: usize, node: syntax.Node, name
     c.explain_count += 1usize
 }
 
+// A view taken (D487, H17): the local bound to `&x`, `x[a..b]`, `x.items` or a
+// literal holding `&x`, and the local it views, for `context-file`'s `borrow` facts.
+fn record_explain_borrow(c: *Checker, module_index: usize, node: syntax.Node, name: str, viewed: str) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    var offset = 0usize
+    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    c.explains[c.explain_count] = Explain { kind: 10u8, module_index: module_index, offset: offset, protocol: viewed, receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: name, reason_type: invalid_type() }
+    c.explain_count += 1usize
+}
+
 // The first request of an instance (D466): kept as its site; later requests of the
 // same instance leave it.
 fn note_instance_site(c: *Checker, instance_index: usize, module_index: usize, node: syntax.Node) {
@@ -13291,6 +13305,10 @@ fn record_alias(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: u
     if c.locals[local_index].ty.kind == .Slice {
         let (viewed, is_place) = place_base_local(c, g, tree, module_index, initializer_index)
         if is_place && viewed != local_index && (c.locals[viewed].ty.kind == .Slice || c.locals[viewed].ty.kind == .Array || c.locals[viewed].ty.kind == .Named) { c.resources[local_index].points_to = viewed + 1usize }
+    }
+    // The view, as a fact (D487): the local and what it views.
+    if c.resources[local_index].points_to != 0usize {
+        record_explain_borrow(c, module_index, tree.nodes[initializer_index], c.locals[local_index].name, c.locals[c.resources[local_index].points_to - 1usize].name)
     }
 }
 

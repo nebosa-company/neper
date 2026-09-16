@@ -1,6 +1,7 @@
 // `context-file` facts of a body (D486, H17): a resource consumed -- rebound into
 // another local, then closed -- is a `move` fact at the site, and an `if` settled at
-// compile time (D463) is a `phase` fact; both compiler-proved.
+// compile time (D463) is a `phase` fact; a local bound to a view of another (D487)
+// -- `&items`, `items[..]` -- is a `borrow` fact naming both; all compiler-proved.
 use e.mem
 use e.meta
 use e.os
@@ -18,7 +19,15 @@ fn open_and_close(a: *mem.Arena) -> err {
     ret os.close(held)
 }
 
+fn views() -> usize {
+    var items: [4]u8 = zero
+    let first = &items[0usize]
+    let part = items[1usize..3usize]
+    ret usize(*first) + part.len + 4usize
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
+    if views() != 6usize { ret mem.Exhausted }
     if width[i64](1i64) != 8usize { ret mem.Exhausted }
     ret open_and_close(a)
 }

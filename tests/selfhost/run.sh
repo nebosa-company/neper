@@ -2404,7 +2404,7 @@ cmp -s "$context_actual" "$conformance_root/tools/context.x64-linux.expected.jso
 # A body's moves and folded ifs as facts (D486, H17).
 moves_actual="$test_build/conformance-tools-context-moves.jsonl"
 : > "$moves_actual"
-for moves_subject in context_moves.open_and_close context_moves.width; do
+for moves_subject in context_moves.open_and_close context_moves.width context_moves.views; do
     (cd "$conformance_root/tools" && $test_build/neper-self context-file context_moves.e "$repo" x64 linux --json --symbol "$moves_subject" --budget 16 >> "$moves_actual")
 done
 cmp -s "$moves_actual" "$conformance_root/tools/context_moves.x64-linux.expected.jsonl" || { echo "context-file --json over moves and a folded if differs from the conformance corpus" >&2; exit 1; }

@@ -329,8 +329,10 @@ about one declared function, under a record budget (64 by default):
   call through a value), `dispatch`, `instance`, `discard`, `value` (a function
   named as a value), `move` (D486, H17: a resource consumed at the site --
   closed, returned, rebound or handed to an `own` parameter -- named in the
-  value) and `phase` (an `if` settled at compile time, D463, saying which arm is
-  taken) -- each with its `span`.
+  value), `phase` (an `if` settled at compile time, D463, saying which arm is
+  taken) and `borrow` (D487, H17: a local bound to a view of another local --
+  `&x`, `x[a..b]`, `x.items`, a literal holding `&x` -- naming both, which is the
+  relation D393's rules hold the body to) -- each with its `span`.
   `provenance` is `compiler-proved` for what the checker established,
   `declared-and-checked` for what the source says and the checker accepted,
   `unknown` for what it cannot know; `trusted-external` and `runtime-observed`

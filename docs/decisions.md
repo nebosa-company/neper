@@ -10498,3 +10498,14 @@ the context page. The `move` facts reach the existing corpus pages too --
 `explain.main` and `contract.main` consume a resource each -- so `context`,
 `contract` and `batch` are re-pinned on both hosts.
 Not yet: borrow uses and address relations as facts.
+
+## D487 -- Views as facts
+
+The other half of H17's ownership facts after D486's moves: when the checker
+records that a local views another -- `let p = &x`, `let s = x[a..b]` or
+`x.items`, a literal holding `&x` (D393, D395, D413) -- it records a `borrow`
+fact too, naming the local and what it views, at the initializer, so a harness
+sees the relation the rules hold the body to before it plans a write or a
+reset of the viewed local. `context_moves.e` gains a `views` subject with a
+pointer to an element and a slice of one array, both hosts; the other context
+pages are unchanged, none of their subjects takes a view.
