@@ -451,6 +451,14 @@ outside its file, or a plan whose result was not `ok`), each file's edits go on 
 the highest offset down and the file is published through `.tmp` and one replace;
 plain, it prints `applied N edits to PATH` per file and the `postcondition`; with
 `--json`, a stream whose result carries `edits`, `files` and `postcondition`.
+`neper compare-manifests A B [--json]` (D482) holds two build manifests against
+each other by what identifies a build -- `target`, `mode`, `root_module`,
+`tool_version`, `options.checks`, every input by path and hash, every dependency
+by module and both hashes, every artifact by kind, target and hash but not its
+path -- and prints one line per difference and `manifests agree` (exit 0) or
+`manifests differ (N)` (exit 1); with `--json`, a `difference` record each
+(`kind`, `name`, `left`, `right`, a side with no such entry `null`) and the
+result's `same` and `differences`, exit 0 either way.
 `scripts/apply_plan.py` (D376) did the same in Python and is retired. What
 `uses-file` does not see (comments, strings, generated registrations) the plan does
 not edit.

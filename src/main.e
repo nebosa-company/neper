@@ -4386,6 +4386,251 @@ fn utf8_append(out: []u8, n: usize, scalar: usize) -> usize {
     ret n + 4usize
 }
 
+// `compare-manifests A B [--json]` (D482): two build manifests held against each
+// other, the reproducible-build check D261 asked for as a command. What is compared
+// is what identifies a build: `target`, `mode`, `root_module`, `tool_version`,
+// `options.checks`; every input by its path and hash; every dependency by its module
+// and both hashes; every artifact by its kind, target and hash -- not its path, which
+// is where the bytes were written and not what they are. Plain, one line per
+// difference and `manifests agree` or `manifests differ (N)`, exit 1 when they
+// differ; with `--json`, a `difference` record each and the result's `same`.
+// ponytail: a key scan over the manifest the compiler writes, as the other readers.
+fn compare_manifests_command(a: *mem.Arena, args: []str) -> err {
+    var out = stderr_sink()
+    out.file = os.stdout()
+    var report = stderr_sink()
+    let json = args.len >= 5usize && same(args[4usize], "--json")
+    var sink = &report
+    if json {
+        out.json = true
+        sink = &out
+        try write_all(&out, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"compare-manifests\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
+    }
+    let (left, left_error) = graph.load_file(a, args[2usize])
+    if left_error != ok { ret compare_refused(sink, "the first manifest cannot be read") }
+    let (right, right_error) = graph.load_file(a, args[3usize])
+    if right_error != ok { ret compare_refused(sink, "the second manifest cannot be read") }
+    if !same(json_str_after(left, "\"schema\":\""), "neper-build-manifest") || !same(json_str_after(right, "\"schema\":\""), "neper-build-manifest") { ret compare_refused(sink, "an operand is not a build manifest") }
+    var differences = 0usize
+    try compare_scalar(&out, &differences, "target", json_str_after(left, "\"target\":\""), json_str_after(right, "\"target\":\""))
+    try compare_scalar(&out, &differences, "mode", json_str_after(left, "\"mode\":\""), json_str_after(right, "\"mode\":\""))
+    try compare_scalar(&out, &differences, "root_module", json_str_after(left, "\"root_module\":\""), json_str_after(right, "\"root_module\":\""))
+    try compare_scalar(&out, &differences, "tool_version", json_str_after(left, "\"tool_version\":\""), json_str_after(right, "\"tool_version\":\""))
+    try compare_scalar(&out, &differences, "options.checks", json_str_after(left, "\"checks\":\""), json_str_after(right, "\"checks\":\""))
+    try compare_entries(a, &out, &differences, "input", json_array_after(left, "\"inputs\":["), json_array_after(right, "\"inputs\":["), "\"path\":\"", "\"sha256\":\"", "")
+    try compare_entries(a, &out, &differences, "dependency", json_array_after(left, "\"dependencies\":["), json_array_after(right, "\"dependencies\":["), "\"module\":\"", "\"interface_sha256\":\"", "\"body_sha256\":\"")
+    try compare_artifacts(a, &out, &differences, json_array_after(left, "\"artifacts\":["), json_array_after(right, "\"artifacts\":["))
+    if json {
+        try write_all(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"same\":")
+        if differences == 0usize { try write_all(&out, "true") } else { try write_all(&out, "false") }
+        try write_all(&out, ",\"differences\":")
+        try write_usize(&out, differences)
+        ret write_all(&out, "}}\n")
+    }
+    if differences == 0usize { ret write_all(&out, "manifests agree\n") }
+    try write_all(&out, "manifests differ (")
+    try write_usize(&out, differences)
+    try write_all(&out, ")\n")
+    os.exit(1i32)
+    ret ok
+}
+
+fn compare_refused(report: *Sink, message: str) -> err {
+    try emit_command_diagnostic(report, "E-CLI-9999", message)
+    if report.json { try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"same\":false,\"differences\":0,\"diagnostics\":1}}\n") }
+    os.exit(2i32)
+    ret ok
+}
+
+// One difference, as a line or a record: `kind` what was compared, `name` which
+// one, and the two values, "" for a side that has no such entry.
+fn difference(out: *Sink, differences: *usize, kind: str, name: str, left: str, right: str) -> err {
+    *differences += 1usize
+    if !out.json {
+        try write_all(out, kind)
+        if name.len != 0usize {
+            try write_all(out, " ")
+            try write_all(out, name)
+        }
+        if left.len == 0usize { ret write_all(out, ": only in the second\n") }
+        if right.len == 0usize { ret write_all(out, ": only in the first\n") }
+        try write_all(out, ": ")
+        try write_all(out, left)
+        try write_all(out, " / ")
+        try write_all(out, right)
+        ret write_all(out, "\n")
+    }
+    try write_all(out, "{\"record\":\"difference\",\"kind\":")
+    try write_json_string(out, kind)
+    try write_all(out, ",\"name\":")
+    try write_json_string(out, name)
+    try write_all(out, ",\"left\":")
+    if left.len == 0usize { try write_all(out, "null") } else { try write_json_string(out, left) }
+    try write_all(out, ",\"right\":")
+    if right.len == 0usize { try write_all(out, "null") } else { try write_json_string(out, right) }
+    ret write_all(out, "}\n")
+}
+
+fn compare_scalar(out: *Sink, differences: *usize, kind: str, left: str, right: str) -> err {
+    if same(left, right) { ret ok }
+    ret difference(out, differences, kind, "", left, right)
+}
+
+// The text of the array after `key`, without its brackets: the depth counts every
+// bracket and brace outside a string, so a nested array is skipped whole.
+fn json_array_after(document: str, key: str) -> str {
+    let from = json_key_at(document, key)
+    if from == document.len { ret "" }
+    var depth = 1usize
+    var in_string = false
+    var at = from
+    while at < document.len {
+        let byte = document[at]
+        if in_string {
+            if byte == 92u8 { at += 1usize }
+            if byte == 34u8 { in_string = false }
+        } else {
+            if byte == 34u8 { in_string = true }
+            if byte == 91u8 || byte == 123u8 { depth += 1usize }
+            if byte == 93u8 || byte == 125u8 {
+                depth = depth - 1usize
+                if depth == 0usize { ret document[from..at] }
+            }
+        }
+        at += 1usize
+    }
+    ret document[from..document.len]
+}
+
+// The object beginning at `at` in an array's text: its end just past the `}`, or
+// `text.len` when none begins there.
+fn json_object_end(text: str, at: usize) -> usize {
+    var depth = 0usize
+    var in_string = false
+    var here = at
+    while here < text.len {
+        let byte = text[here]
+        if in_string {
+            if byte == 92u8 { here += 1usize }
+            if byte == 34u8 { in_string = false }
+        } else {
+            if byte == 34u8 { in_string = true }
+            if byte == 123u8 || byte == 91u8 { depth += 1usize }
+            if byte == 125u8 || byte == 93u8 {
+                if depth == 0usize { ret text.len }
+                depth = depth - 1usize
+                if depth == 0usize { ret here + 1usize }
+            }
+        }
+        here += 1usize
+    }
+    ret text.len
+}
+
+// The next object of an array's text from `at`: its span, or none.
+fn json_next_object(text: str, at: usize) -> (usize, usize, bool) {
+    var start = at
+    while start < text.len && text[start] != 123u8 { start += 1usize }
+    if start == text.len { ret (0usize, 0usize, false) }
+    let end = json_object_end(text, start)
+    ret (start, end, true)
+}
+
+// The object of `array` whose `name_key` is `name`: its text, or "".
+fn json_find_object(array: str, name_key: str, name: str) -> str {
+    var at = 0usize
+    while true {
+        let (start, end, found) = json_next_object(array, at)
+        if !found { ret "" }
+        if same(json_str_after(array[start..end], name_key), name) { ret array[start..end] }
+        at = end
+    }
+    ret ""
+}
+
+// Two arrays of named entries -- inputs by path, dependencies by module -- held
+// against each other by name: an entry on one side only, or one whose hashes
+// differ, is a difference. `second_key` is "" for an entry with one hash.
+fn compare_entries(a: *mem.Arena, out: *Sink, differences: *usize, kind: str, left: str, right: str, name_key: str, hash_key: str, second_key: str) -> err {
+    var at = 0usize
+    while true {
+        let (start, end, found) = json_next_object(left, at)
+        if !found { break }
+        let entry = left[start..end]
+        let name = json_str_after(entry, name_key)
+        let other = json_find_object(right, name_key, name)
+        let (shown, shown_error) = json_unescaped_after(a, entry, name_key)
+        if shown_error != ok { ret shown_error }
+        if other.len == 0usize {
+            try difference(out, differences, kind, shown, json_str_after(entry, hash_key), "")
+        } else {
+            let mine = json_str_after(entry, hash_key)
+            let theirs = json_str_after(other, hash_key)
+            if !same(mine, theirs) { try difference(out, differences, kind, shown, mine, theirs) }
+            if second_key.len != 0usize {
+                let mine_body = json_str_after(entry, second_key)
+                let theirs_body = json_str_after(other, second_key)
+                if same(mine, theirs) && !same(mine_body, theirs_body) { try difference(out, differences, kind, shown, mine_body, theirs_body) }
+            }
+        }
+        at = end
+    }
+    at = 0usize
+    while true {
+        let (start, end, found) = json_next_object(right, at)
+        if !found { break }
+        let entry = right[start..end]
+        let name = json_str_after(entry, name_key)
+        if json_find_object(left, name_key, name).len == 0usize {
+            let (shown, shown_error) = json_unescaped_after(a, entry, name_key)
+            if shown_error != ok { ret shown_error }
+            try difference(out, differences, kind, shown, "", json_str_after(entry, hash_key))
+        }
+        at = end
+    }
+    ret ok
+}
+
+// Artifacts by what they are, not where they were written: an artifact of the
+// first with no artifact of the second of the same kind, target and hash is a
+// difference named by its path, and the other way round.
+fn compare_artifacts(a: *mem.Arena, out: *Sink, differences: *usize, left: str, right: str) -> err {
+    var pass = 0usize
+    while pass < 2usize {
+        var mine = left
+        var theirs = right
+        if pass == 1usize {
+            mine = right
+            theirs = left
+        }
+        var at = 0usize
+        while true {
+            let (start, end, found) = json_next_object(mine, at)
+            if !found { break }
+            let entry = mine[start..end]
+            let hash = json_str_after(entry, "\"sha256\":\"")
+            var matched = false
+            var other_at = 0usize
+            while !matched {
+                let (other_start, other_end, other_found) = json_next_object(theirs, other_at)
+                if !other_found { break }
+                let other = theirs[other_start..other_end]
+                if same(json_str_after(other, "\"sha256\":\""), hash) && same(json_str_after(other, "\"kind\":\""), json_str_after(entry, "\"kind\":\"")) && same(json_str_after(other, "\"target\":\""), json_str_after(entry, "\"target\":\"")) { matched = true }
+                other_at = other_end
+            }
+            if !matched {
+                let (shown, shown_error) = json_unescaped_after(a, entry, "\"path\":\"")
+                if shown_error != ok { ret shown_error }
+                if pass == 0usize { try difference(out, differences, "artifact", shown, hash, "") }
+                if pass == 1usize { try difference(out, differences, "artifact", shown, "", hash) }
+            }
+            at = end
+        }
+        pass += 1usize
+    }
+    ret ok
+}
+
 // Published, not written in place (D343, H24): the bytes go to `<path>.tmp` and the
 // name is taken by one atomic replace, so no reader -- a concurrent build, the next
 // build after a crash -- ever sees a file that is part of one; a write that dies
@@ -8780,6 +9025,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if args.len == 9usize && same(args[1usize], "index-file") && same(args[6usize], "--json") && same(args[7usize], "--path") { ret index_command(a, args) }
     // `apply-plan PLAN --root DIR [--project-src DIR] [--json]` (D481, H29): the plans applied by the compiler.
     if args.len >= 5usize && same(args[1usize], "apply-plan") && same(args[3usize], "--root") { ret apply_plan_command(a, args) }
+    // `compare-manifests A B [--json]` (D482): two build manifests held against each other.
+    if (args.len == 4usize || (args.len == 5usize && same(args[4usize], "--json"))) && same(args[1usize], "compare-manifests") { ret compare_manifests_command(a, args) }
     // `index-project DIR ROOT ARCH OS WORKDIR --json` (D298): every module under DIR/src
     // and DIR/lib, one stream.
     if args.len == 8usize && same(args[1usize], "index-project") && same(args[7usize], "--json") { ret index_project_command(a, args) }

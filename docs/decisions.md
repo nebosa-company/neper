@@ -10417,3 +10417,20 @@ stops at the first quote, right for a hash, wrong for text -- and a `\uXXXX`
 pair as one scalar. Both suites apply every corpus plan with it, eight per host,
 the second apply of an applied plan refused as before; `scripts/apply_plan.py`
 is removed. A harness now proposes, applies and re-checks with one binary.
+
+## D482 -- `compare-manifests`: two builds held against each other
+
+D261 made the manifest a witness two builds can be compared by, and left the
+comparison to whoever read two manifests. `neper compare-manifests A B
+[--json]` is the comparison: the scalars that identify a build (`target`,
+`mode`, `root_module`, `tool_version`, `options.checks`), every input by its
+path and hash, every dependency by its module and both hashes, and every
+artifact by its kind, target and hash -- not its path, which is where the bytes
+went and not what they are, so the suite's two builds of one source into two
+names agree. Plain, a line per difference (`mode: debug / release`,
+`artifact PATH: only in the first`) and `manifests agree` or `manifests differ
+(N)`, exit 1 when they do; `--json`, a `difference` record each and `same` in
+the result. The reader is the key scan the other manifest readers are, with an
+array scanner that skips a nested array or object whole. Both suites: the two
+debug builds agree, and against a release build the mode and the artifact are
+named. Not yet: a cross-host comparison, which differs by design.

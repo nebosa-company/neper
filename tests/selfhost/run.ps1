@@ -2088,8 +2088,29 @@ if ($manifestArtifact -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Pat
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools\build.e')`" `"$repo`" x64 windows conformance-tools-build-again.out > nul"
 if ($LASTEXITCODE -ne 0) { throw "the second build of build.e exited $LASTEXITCODE" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build.out')).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $testBuild 'conformance-tools-build-again.out')).Hash) { throw 'the same source built twice is not the same executable' }
+# `compare-manifests` (D482): the two builds' manifests agree -- the artifact's path is
+# where it was written, not what it is -- and a debug manifest against a release one
+# names the mode and the artifact.
+$manifestFirst = Join-Path $testBuild 'manifest-first.json'
+Copy-Item -LiteralPath $manifestPath -Destination $manifestFirst -Force
 $manifestAgain = [regex]::Match([IO.File]::ReadAllText($manifestPath), '"artifacts":\[\{"path":"build/windows/tests/selfhost/conformance-tools-build-again.out","kind":"executable","target":"x64-windows","sha256":"([0-9a-f]{64})"').Groups[1].Value
 if ($manifestAgain -ne $manifestArtifact) { throw "the second build's manifest does not carry the first build's artifact hash" }
+$compared = & $compiler compare-manifests $manifestFirst $manifestPath
+if ($LASTEXITCODE -ne 0 -or $compared -ne 'manifests agree') { throw "the manifests of two builds of the same source differ: $compared" }
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools\contract.e')`" `"$repo`" x64 windows conformance-tools-compare-debug.out > nul"
+if ($LASTEXITCODE -ne 0) { throw "the debug build of contract.e exited $LASTEXITCODE" }
+$manifestDebug = Join-Path $testBuild 'manifest-debug.json'
+Copy-Item -LiteralPath $manifestPath -Destination $manifestDebug -Force
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot 'tools\contract.e')`" `"$repo`" x64 windows conformance-tools-compare-release.out --release > nul"
+if ($LASTEXITCODE -ne 0) { throw "the release build of contract.e exited $LASTEXITCODE" }
+$comparedModes = Join-Path $testBuild 'conformance-tools-compare-manifests.jsonl'
+cmd /c "`"$compiler`" compare-manifests `"$manifestDebug`" `"$(Join-Path $repo '.neper\release\build-manifest.json')`" --json > `"$comparedModes`""
+if ($LASTEXITCODE -ne 0) { throw "compare-manifests --json exited $LASTEXITCODE" }
+if ((Select-String -LiteralPath $comparedModes -Pattern '"record":"difference","kind":"mode","name":"","left":"debug","right":"release"' -Quiet) -ne $true) { throw 'compare-manifests does not name the mode' }
+if ((Select-String -LiteralPath $comparedModes -Pattern '"record":"difference","kind":"artifact"' -Quiet) -ne $true) { throw 'compare-manifests does not name the artifact' }
+if ((Select-String -LiteralPath $comparedModes -Pattern '"same":false' -Quiet) -ne $true) { throw 'compare-manifests calls two modes the same' }
+& python (Join-Path $repo 'scripts/validate_stream.py') $comparedModes
+if ($LASTEXITCODE -ne 0) { throw 'the difference records do not validate against the schema' }
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 $shortRoot = Join-Path $repo 'build\windows\short'

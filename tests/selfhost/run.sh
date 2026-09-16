@@ -2241,9 +2241,20 @@ manifest_artifact=$(sed -n 's/.*"artifacts":\[{"path":"build\/linux\/tests\/self
 (cd "$test_build" && ./neper-self emit-executable "$conformance_root/tools/build.e" "$repo" x64 linux "conformance-tools-build-again.out" > /dev/null)
 cmp -s "$test_build/conformance-tools-build.out" "$test_build/conformance-tools-build-again.out" || { printf '%s
 ' "the same source built twice is not the same executable" >&2; exit 1; }
+# `compare-manifests` (D482): the two builds' manifests agree; debug against release differs.
+cp "$repo/.neper/debug/build-manifest.json" "$test_build/manifest-first.json"
 manifest_again=$(sed -n 's/.*"artifacts":\[{"path":"build\/linux\/tests\/selfhost\/conformance-tools-build-again.out","kind":"executable","target":"x64-linux","sha256":"\([0-9a-f]*\)".*/\1/p' "$repo/.neper/debug/build-manifest.json")
 [ "$manifest_again" = "$manifest_artifact" ] || { printf '%s
 ' "the second build's manifest does not carry the first build's artifact hash" >&2; exit 1; }
+[ "$("$test_build/neper-self" compare-manifests "$test_build/manifest-first.json" "$repo/.neper/debug/build-manifest.json")" = "manifests agree" ] || { echo "the manifests of two builds of the same source differ" >&2; exit 1; }
+(cd "$test_build" && ./neper-self emit-executable "$conformance_root/tools/contract.e" "$repo" x64 linux "conformance-tools-compare-debug.out" > /dev/null)
+cp "$repo/.neper/debug/build-manifest.json" "$test_build/manifest-debug.json"
+(cd "$test_build" && ./neper-self emit-executable "$conformance_root/tools/contract.e" "$repo" x64 linux "conformance-tools-compare-release.out" --release > /dev/null)
+"$test_build/neper-self" compare-manifests "$test_build/manifest-debug.json" "$repo/.neper/release/build-manifest.json" --json > "$test_build/conformance-tools-compare-manifests.jsonl"
+grep -q '"record":"difference","kind":"mode","name":"","left":"debug","right":"release"' "$test_build/conformance-tools-compare-manifests.jsonl"
+grep -q '"record":"difference","kind":"artifact"' "$test_build/conformance-tools-compare-manifests.jsonl"
+grep -q '"same":false' "$test_build/conformance-tools-compare-manifests.jsonl"
+python3 "$repo/scripts/validate_stream.py" "$test_build/conformance-tools-compare-manifests.jsonl"
 # Spec section 2's spelling (D276): `neper build FILE -o OUT --json` from a binary that
 # has the toolchain's lib/ beside it is the same stream as the positional form.
 rm -rf "$repo/build/linux/short"
