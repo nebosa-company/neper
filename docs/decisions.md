@@ -10588,3 +10588,25 @@ design: an edge to a layout the body never read is an edge that holds, at the
 cost of a hash. `incremental_layout` pins the case in both modes on both
 hosts, the warm image the clean build's. Not yet: a declaration index keyed by
 kind, so a type and a function of one name could not shadow each other's edge.
+
+## D494 -- A protocol function's absence is an edge
+
+H14's acceptance list names "fallback protocol insertion/removal"; the probe
+was the third wrong program from a warm build in three days: `same[dep.Colour]`
+took the supplied `eq`, `dep` then declared `colour_eq`, and the warm build
+kept `main` as `edges-hold` and exited as before. Section 12 has a negative
+edge for this -- a lookup dependency with no hash, which holds while the
+declaration is absent -- and `dependency_holds` read it since D205, but
+nothing wrote one. Now every foreign aggregate D493 marks carries, for each of
+`eq`, `cmp` and `hash` its module does not declare, a lookup edge named by the
+aggregate with the protocol in the hash field -- the artifact's string table
+holds slices of live text, so a spelling made at write time could not be
+interned, and the settle side spells `colour_eq` by the checker's own rule for
+the name -- so the declaration's arrival fails the edge and the module is rebuilt
+as `edge-changed`; a declared function that is called is a signature edge
+already, and its removal fails that. `incremental_fallback` pins the case in
+both modes on both hosts: exit 3, the declaration, `edge-changed`, exit 4,
+the image the clean build's. Found on the way: the bootstrap's neper-try
+miscompiled nothing, but a `[256]u8` local interned as a string outlived its
+frame and the lowering of `main` then failed on a string literal -- the table
+keeps slices, never bytes.

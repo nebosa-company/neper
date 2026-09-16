@@ -1043,6 +1043,24 @@ fn update_spans(c: *check.Checker, builder: *nir.Builder) -> err {
     ret ok
 }
 
+// The strings the aggregate edges need (D493, D494), interned; its own function for
+// the bootstrap's 256 locals a body may hold.
+fn intern_aggregate_strings(c: *check.Checker, g: *graph.Graph, table: *StringTable, aggregate_marks: []u8) -> err {
+    var aggregate_string_at = 0usize
+    while aggregate_string_at < c.aggregate_count && aggregate_string_at < aggregate_marks.len {
+        if aggregate_marks[aggregate_string_at] != 0u8 {
+            let marked = c.aggregates[aggregate_string_at]
+            if marked.module_index >= g.count { ret InvalidArtifact }
+            let (marked_module_name, marked_module_name_error) = intern(table, g.modules[marked.module_index].name)
+            if marked_module_name_error != ok { ret marked_module_name_error }
+            let (marked_name, marked_name_error) = intern(table, marked.name)
+            if marked_name_error != ok { ret marked_name_error }
+        }
+        aggregate_string_at += 1usize
+    }
+    ret ok
+}
+
 fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable) -> err {
     if module_index >= g.count { ret InvalidArtifact }
     try update_spans(c, builder)
@@ -1159,18 +1177,7 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
     }
     var aggregate_marks: [8192]u8 = zero
     mark_aggregate_uses(c, g, builder, module_index, aggregate_marks[..])
-    var aggregate_string_at = 0usize
-    while aggregate_string_at < c.aggregate_count && aggregate_string_at < aggregate_marks.len {
-        if aggregate_marks[aggregate_string_at] != 0u8 {
-            let marked = c.aggregates[aggregate_string_at]
-            if marked.module_index >= g.count { ret InvalidArtifact }
-            let (marked_module_name, marked_module_name_error) = intern(table, g.modules[marked.module_index].name)
-            if marked_module_name_error != ok { ret marked_module_name_error }
-            let (marked_name, marked_name_error) = intern(table, marked.name)
-            if marked_name_error != ok { ret marked_name_error }
-        }
-        aggregate_string_at += 1usize
-    }
+    try intern_aggregate_strings(c, g, table, aggregate_marks[..])
     var string_marks: [8192]u8 = zero
     mark_body_constant_uses(c, g, module_index, string_marks[..])
     constant_at = 0usize
@@ -1818,6 +1825,83 @@ fn mark_aggregate_uses(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder
     }
 }
 
+// The protocol functions a marked aggregate's module does not declare (D494, H14):
+// `T.eq`, `T.cmp` and `T.hash` over such a type take the supplied rule, and the day
+// the module declares `<snake>_eq`, the declared one is selected instead -- so the
+// absence is an edge, a lookup with no hash that holds while the name is absent
+// (section 12's negative edge, which nothing wrote before). A declared one that is
+// called is a signature edge already, and its removal fails that.
+fn snake_protocol_name(type_name: str, protocol: str, out: []u8) -> usize {
+    var n = 0usize
+    var at = 0usize
+    while at < type_name.len {
+        let byte = type_name[at]
+        let upper = byte >= 65u8 && byte <= 90u8
+        var previous_lower = false
+        if at > 0usize {
+            let previous = type_name[at - 1usize]
+            previous_lower = (previous >= 97u8 && previous <= 122u8) || (previous >= 48u8 && previous <= 57u8)
+        }
+        var next_lower = false
+        if at + 1usize < type_name.len {
+            let next = type_name[at + 1usize]
+            next_lower = next >= 97u8 && next <= 122u8
+        }
+        if n + 3usize >= out.len { ret 0usize }
+        if upper && at > 0usize && (previous_lower || next_lower) {
+            out[n] = 95u8
+            n += 1usize
+        }
+        if upper { out[n] = byte + 32u8 } else { out[n] = byte }
+        n += 1usize
+        at += 1usize
+    }
+    if n + 1usize + protocol.len >= out.len { ret 0usize }
+    out[n] = 95u8
+    n += 1usize
+    var suffix_at = 0usize
+    while suffix_at < protocol.len {
+        out[n] = protocol[suffix_at]
+        n += 1usize
+        suffix_at += 1usize
+    }
+    ret n
+}
+
+fn protocol_name_of(which: usize) -> str {
+    if which == 0usize { ret "eq" }
+    if which == 1usize { ret "cmp" }
+    ret "hash"
+}
+
+// Whether the aggregate's module declares the protocol function.
+fn protocol_declared(c: *check.Checker, aggregate_index: usize, protocol: str) -> bool {
+    let aggregate = c.aggregates[aggregate_index]
+    var at = 0usize
+    while at < c.signature_function_count {
+        let function = c.functions[at]
+        if function.module_index == aggregate.module_index && !function.generic && check.protocol_name_matches(aggregate.name, function.name, protocol) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+fn lookup_dependency_count(c: *check.Checker, marks: []u8) -> usize {
+    var count = 0usize
+    var at = 0usize
+    while at < c.aggregate_count && at < marks.len {
+        if marks[at] != 0u8 {
+            var which = 0usize
+            while which < 3usize {
+                if !protocol_declared(c, at, protocol_name_of(which)) { count += 1usize }
+                which += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret count
+}
+
 fn aggregate_dependency_count(c: *check.Checker, marks: []u8) -> usize {
     var count = 0usize
     var at = 0usize
@@ -1926,13 +2010,55 @@ fn value_dependency_count(c: *check.Checker, g: *graph.Graph, module_index: usiz
     ret (count, ok)
 }
 
+// The aggregate edges (D493): a signature edge each, held by its fields; and the
+// protocol functions the module does not declare (D494): negative edges. Its own
+// function, since the bootstrap holds a body to 256 locals and `write_dependencies`
+// was near it.
+fn write_aggregate_dependencies(c: *check.Checker, g: *graph.Graph, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer, aggregate_marks: []u8) -> err {
+    var at = 0usize
+    while at < c.aggregate_count && at < aggregate_marks.len {
+        if aggregate_marks[at] != 0u8 {
+            let aggregate = c.aggregates[at]
+            if aggregate.module_index >= g.count { ret InvalidArtifact }
+            let (hash, hash_error) = aggregate_signature_hash(c, g, at, scratch)
+            if hash_error != ok { ret hash_error }
+            let (target_module, target_module_error) = string_index(table, g.modules[aggregate.module_index].name)
+            if target_module_error != ok { ret target_module_error }
+            let (target_name, target_name_error) = string_index(table, aggregate.name)
+            if target_name_error != ok { ret target_name_error }
+            try binary.byte(output, dependency_signature_kind())
+            try binary.zeroes(output, 3usize)
+            try binary.little_u32(output, target_module)
+            try binary.little_u32(output, target_name)
+            try binary.little_u64(output, hash)
+            // The protocol functions the module does not declare (D494): negative edges.
+            var which = 0usize
+            while which < 3usize {
+                if !protocol_declared(c, at, protocol_name_of(which)) {
+                    // Named by the aggregate, the protocol in the hash field (1 eq, 2
+                    // cmp, 3 hash): the string table holds slices, not copies, so a
+                    // spelling made here could not be interned; the settle side spells it.
+                    try binary.byte(output, dependency_lookup_kind())
+                    try binary.zeroes(output, 3usize)
+                    try binary.little_u32(output, target_module)
+                    try binary.little_u32(output, target_name)
+                    try binary.little_u64(output, which + 1usize)
+                }
+                which += 1usize
+            }
+        }
+        at += 1usize
+    }
+    ret ok
+}
+
 fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     try mark_module_references(builder, c, module_index)
     let (value_count, value_count_error) = value_dependency_count(c, g, module_index)
     if value_count_error != ok { ret value_count_error }
     var aggregate_marks: [8192]u8 = zero
     mark_aggregate_uses(c, g, builder, module_index, aggregate_marks[..])
-    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks[..]))
+    try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count + aggregate_dependency_count(c, aggregate_marks[..]) + lookup_dependency_count(c, aggregate_marks[..]))
     var at = 0usize
     while at < builder.function_ref_count {
         let reference = builder.function_refs[at]
@@ -2007,26 +2133,7 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
         }
         at += 1usize
     }
-    // The aggregate edges (D493): a signature edge each, held by its fields.
-    at = 0usize
-    while at < c.aggregate_count && at < aggregate_marks.len {
-        if aggregate_marks[at] != 0u8 {
-            let aggregate = c.aggregates[at]
-            if aggregate.module_index >= g.count { ret InvalidArtifact }
-            let (hash, hash_error) = aggregate_signature_hash(c, g, at, scratch)
-            if hash_error != ok { ret hash_error }
-            let (target_module, target_module_error) = string_index(table, g.modules[aggregate.module_index].name)
-            if target_module_error != ok { ret target_module_error }
-            let (target_name, target_name_error) = string_index(table, aggregate.name)
-            if target_name_error != ok { ret target_name_error }
-            try binary.byte(output, dependency_signature_kind())
-            try binary.zeroes(output, 3usize)
-            try binary.little_u32(output, target_module)
-            try binary.little_u32(output, target_name)
-            try binary.little_u64(output, hash)
-        }
-        at += 1usize
-    }
+    try write_aggregate_dependencies(c, g, table, scratch, output, aggregate_marks[..])
     var body_marks: [8192]u8 = zero
     mark_body_constant_uses(c, g, module_index, body_marks[..])
     at = 0usize

@@ -1764,6 +1764,28 @@ foreach ($hotMode in @('--release', '--time')) {
     $layoutCleanWritten = & $compiler emit-executable (Join-Path $layoutScratch 'src\main.e') $repo 'x64' 'windows' $layoutClean $hotMode 2>$null
     if ($LASTEXITCODE -ne 0 -or $layoutCleanWritten -ne 'executable written') { throw "the clean build of the edited layout fixture failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $layoutExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $layoutClean).Hash) { throw "the warm build after a read layout's edit is not the clean build ($hotMode)" }
+    # A protocol function's absence is an edge (D494, H14): a warm build after the module
+    # declares the `eq` the supplied rule stood in for rebuilds the instance's module as
+    # `edge-changed`, exits the other way, and is the clean build of the edited tree.
+    $fallbackScratch = Join-Path $testBuild 'fallback-scratch'
+    if (Test-Path -LiteralPath $fallbackScratch) { Remove-Item -LiteralPath $fallbackScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\incremental_fallback') $fallbackScratch
+    $fallbackExe = Join-Path $testBuild "fallback$hotMode.exe"
+    $fallbackFirst = & $compiler emit-executable (Join-Path $fallbackScratch 'src\main.e') $repo 'x64' 'windows' $fallbackExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $fallbackFirst -ne 'executable written') { throw "the cold build of the fallback fixture failed ($hotMode)" }
+    & $fallbackExe
+    if ($LASTEXITCODE -ne 3) { throw "the fallback fixture did not exit 3 before the edit ($hotMode)" }
+    Copy-Item (Join-Path $fallbackScratch 'edits\dep_declared.e') (Join-Path $fallbackScratch 'src\dep.e') -Force
+    $fallbackSecond = & $compiler emit-executable (Join-Path $fallbackScratch 'src\main.e') $repo 'x64' 'windows' $fallbackExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $fallbackSecond -ne 'executable written') { throw "the warm build after the protocol's declaration failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $fallbackScratch ".neper\$hotManifestMode\build-manifest.json") 'main=rebuilt:edge-changed' 'dep=rebuilt:source-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after a protocol's declaration does not say edge-changed ($hotMode)" }
+    & $fallbackExe
+    if ($LASTEXITCODE -ne 4) { throw "the fallback fixture did not exit 4 after the edit ($hotMode)" }
+    $fallbackClean = Join-Path $testBuild "fallback-clean$hotMode.exe"
+    $fallbackCleanWritten = & $compiler emit-executable (Join-Path $fallbackScratch 'src\main.e') $repo 'x64' 'windows' $fallbackClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $fallbackCleanWritten -ne 'executable written') { throw "the clean build of the edited fallback fixture failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fallbackExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $fallbackClean).Hash) { throw "the warm build after a protocol's declaration is not the clean build ($hotMode)" }
     # A cyclic artifact reference (D472, H24): an artifact rewritten to import the module
     # that imports it is distrusted and rebuilt as `invalid-artifact`, the image is the
     # clean build's, and the linker over the forged set refuses or links without crashing.

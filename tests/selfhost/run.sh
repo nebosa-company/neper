@@ -1913,6 +1913,22 @@ for hot_mode in --release --time; do
     [ "$layout_status" -eq 7 ]
     [ "$("$test_build/neper-self" emit-executable "$layout_scratch/src/main.e" "$repo" x64 linux "$test_build/layout-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
     cmp "$test_build/layout$hot_mode" "$test_build/layout-clean$hot_mode"
+    # A protocol function's absence is an edge (D494, H14): the instance's module is rebuilt.
+    fallback_scratch="$test_build/fallback-scratch"
+    rm -rf "$fallback_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/incremental_fallback" "$fallback_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$fallback_scratch/src/main.e" "$repo" x64 linux "$test_build/fallback$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    fallback_status=0
+    "$test_build/fallback$hot_mode" || fallback_status=$?
+    [ "$fallback_status" -eq 3 ]
+    cp "$fallback_scratch/edits/dep_declared.e" "$fallback_scratch/src/dep.e"
+    [ "$("$test_build/neper-self" emit-executable "$fallback_scratch/src/main.e" "$repo" x64 linux "$test_build/fallback$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$fallback_scratch/.neper/$hot_manifest_mode/build-manifest.json" main=rebuilt:edge-changed dep=rebuilt:source-changed
+    fallback_status=0
+    "$test_build/fallback$hot_mode" || fallback_status=$?
+    [ "$fallback_status" -eq 4 ]
+    [ "$("$test_build/neper-self" emit-executable "$fallback_scratch/src/main.e" "$repo" x64 linux "$test_build/fallback-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+    cmp "$test_build/fallback$hot_mode" "$test_build/fallback-clean$hot_mode"
     # A cyclic artifact reference (D472, H24): distrusted, rebuilt as invalid-artifact, the clean image.
     cycle_scratch="$test_build/cycle-scratch"
     rm -rf "$cycle_scratch"

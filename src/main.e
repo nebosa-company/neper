@@ -4844,6 +4844,18 @@ fn settle_edges(a: *mem.Arena, s: *Settle, fresh: [][]const u8, c: *check.Checke
         }
         let (edge_name, edge_name_error) = artifact_string_in(old, strings, dependency.name_index)
         if edge_name_error != ok { ret (false, edge_name_error) }
+        // A protocol function's absence (D494): a lookup edge named by the aggregate,
+        // the protocol in the hash field; it holds while the target declares no
+        // `<snake>_<protocol>`.
+        if dependency.kind == em.dependency_lookup_kind() && dependency.hash >= 1usize && dependency.hash <= 3usize {
+            var absent_storage: [256]u8 = zero
+            let absent_len = em.snake_protocol_name(edge_name, em.protocol_name_of(dependency.hash - 1usize), absent_storage[..])
+            if absent_len == 0usize { ret (false, ok) }
+            let (absent_cursor, declared) = lookup.find(&s.declarations, target_at, 0usize, absent_storage[0usize..absent_len])
+            if declared { ret (false, ok) }
+            edge_at += 1usize
+            continue
+        }
         let (cursor, found_declaration) = lookup.find(&s.declarations, target_at, 0usize, edge_name)
         var declaration: em.Declaration = zero
         if found_declaration {
