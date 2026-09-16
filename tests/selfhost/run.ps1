@@ -1786,6 +1786,23 @@ foreach ($hotMode in @('--release', '--time')) {
     $fallbackCleanWritten = & $compiler emit-executable (Join-Path $fallbackScratch 'src\main.e') $repo 'x64' 'windows' $fallbackClean $hotMode 2>$null
     if ($LASTEXITCODE -ne 0 -or $fallbackCleanWritten -ne 'executable written') { throw "the clean build of the edited fallback fixture failed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fallbackExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $fallbackClean).Hash) { throw "the warm build after a protocol's declaration is not the clean build ($hotMode)" }
+    # A deleted declaration (D495, H14): the warm build after a dependency lost a name the
+    # dependent uses fails as a cold build does -- the resolver's diagnostic naming the
+    # module and the member, exit 1 -- and the executable is the one from before.
+    $deletedScratch = Join-Path $testBuild 'deleted-scratch'
+    if (Test-Path -LiteralPath $deletedScratch) { Remove-Item -LiteralPath $deletedScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\incremental_deleted') $deletedScratch
+    $deletedExe = Join-Path $testBuild "deleted$hotMode.exe"
+    $deletedFirst = & $compiler emit-executable (Join-Path $deletedScratch 'src\main.e') $repo 'x64' 'windows' $deletedExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $deletedFirst -ne 'executable written') { throw "the cold build of the deleted fixture failed ($hotMode)" }
+    & $deletedExe
+    if ($LASTEXITCODE -ne 5) { throw "the deleted fixture did not exit 5 before the edit ($hotMode)" }
+    Copy-Item (Join-Path $deletedScratch 'edits\dep_without.e') (Join-Path $deletedScratch 'src\dep.e') -Force
+    $deletedSecond = & $compiler emit-executable (Join-Path $deletedScratch 'src\main.e') $repo 'x64' 'windows' $deletedExe $hotMode --incremental 2>&1
+    if ($LASTEXITCODE -ne 1) { throw "the warm build after a deleted declaration did not exit 1 ($hotMode): $LASTEXITCODE" }
+    if (($deletedSecond -join "`n") -notmatch "main.e:7:\d+: error\[E-NAME-9999\]: ``dep`` has no member ``extra``") { throw "the warm build after a deleted declaration did not name the lost member ($hotMode): $deletedSecond" }
+    & $deletedExe
+    if ($LASTEXITCODE -ne 5) { throw "the executable from before the deleted declaration was rewritten ($hotMode)" }
     # A cyclic artifact reference (D472, H24): an artifact rewritten to import the module
     # that imports it is distrusted and rebuilt as `invalid-artifact`, the image is the
     # clean build's, and the linker over the forged set refuses or links without crashing.

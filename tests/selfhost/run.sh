@@ -1929,6 +1929,22 @@ for hot_mode in --release --time; do
     [ "$fallback_status" -eq 4 ]
     [ "$("$test_build/neper-self" emit-executable "$fallback_scratch/src/main.e" "$repo" x64 linux "$test_build/fallback-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
     cmp "$test_build/fallback$hot_mode" "$test_build/fallback-clean$hot_mode"
+    # A deleted declaration (D495, H14): the warm build fails as a cold build does.
+    deleted_scratch="$test_build/deleted-scratch"
+    rm -rf "$deleted_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/incremental_deleted" "$deleted_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$deleted_scratch/src/main.e" "$repo" x64 linux "$test_build/deleted$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    deleted_status=0
+    "$test_build/deleted$hot_mode" || deleted_status=$?
+    [ "$deleted_status" -eq 5 ]
+    cp "$deleted_scratch/edits/dep_without.e" "$deleted_scratch/src/dep.e"
+    deleted_status=0
+    deleted_output=$("$test_build/neper-self" emit-executable "$deleted_scratch/src/main.e" "$repo" x64 linux "$test_build/deleted$hot_mode" $hot_mode --incremental 2>&1) || deleted_status=$?
+    [ "$deleted_status" -eq 1 ]
+    echo "$deleted_output" | grep -q 'main.e:7:[0-9]*: error\[E-NAME-9999\]: `dep` has no member `extra`' || { echo "the warm build after a deleted declaration did not name the lost member: $deleted_output" >&2; exit 1; }
+    deleted_status=0
+    "$test_build/deleted$hot_mode" || deleted_status=$?
+    [ "$deleted_status" -eq 5 ]
     # A cyclic artifact reference (D472, H24): distrusted, rebuilt as invalid-artifact, the clean image.
     cycle_scratch="$test_build/cycle-scratch"
     rm -rf "$cycle_scratch"

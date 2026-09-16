@@ -9316,7 +9316,17 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             var settle_mode: em.BuildMode = .Debug
             if release_build { settle_mode = .Release }
             if unchecked_build { settle_mode = .Unchecked }
-            try settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep, held, &hot_load)
+            let settle_error = settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep, held, &hot_load)
+            // A module the edge rule rebuilds is resolved late (D322), and a name it
+            // lost -- a declaration deleted from a dependency -- surfaced as an internal
+            // failure (D495, H14): it is the resolver's diagnostic, as a cold build's.
+            if settle_error != ok && resolver.failure_has_token {
+                try print_resolve_diagnostic(&report, &loaded, &resolver, settle_error)
+                try finish_report(&report)
+                os.exit(1i32)
+                ret ok
+            }
+            if settle_error != ok { ret settle_error }
             report.arena_used = mem.stats(a).used
             try report_phase(&report, "settle")
         }

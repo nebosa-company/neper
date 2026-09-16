@@ -10611,3 +10611,18 @@ the image the clean build's. Found on the way: the bootstrap's neper-try
 miscompiled nothing, but a `[256]u8` local interned as a string outlived its
 frame and the lowering of `main` then failed on a string literal -- the table
 keeps slices, never bytes.
+
+## D495 -- A deleted declaration on the warm path
+
+H14's list has "deleted declaration": `dep` loses `extra`, and the warm build
+of a `main` that calls it must fail as the cold build does. It failed, but as
+`internal compiler failure: resolve.UnknownMember` with no span -- the module
+the edge rule rebuilds is resolved late, after the settle decided it, and that
+resolver error came up through `try` to the driver's last resort. The settle's
+error is now read where the resolver's token is set and printed as the
+resolver's diagnostic, `main.e:7: \`dep\` has no member \`extra\``, exit 1,
+the executable from before untouched. `incremental_deleted` pins it in both
+modes on both hosts. The other two cases of the list -- a broken edit then its
+repair, an edit then its revert -- were probed and hold: the broken build is
+refused at the parse, the repaired warm build is the clean one, and the revert
+rebuilds the dependency as `source-changed` to the image the clean build gives.
