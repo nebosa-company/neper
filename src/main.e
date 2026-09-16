@@ -4824,6 +4824,20 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "` has no member at 0")
     }
+    if checker.failure_kind == .MissingUndefValue {
+        // An array type has no name of its own: it is named by what it holds.
+        if checker.failure_detail.len == 0usize {
+            try write_all(file, "an array holding `")
+            try write_all(file, checker.failure_detail2)
+            try write_all(file, "` has no undefined value because `")
+        } else {
+            try write_all(file, "type `")
+            try write_all(file, checker.failure_detail)
+            try write_all(file, "` has no undefined value because `")
+        }
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "` admits only its members; a read of it would be an `invalid` check")
+    }
     if checker.failure_kind == .IteratorMissing {
         try write_all(file, "protocol iteration needs `fn ")
         try write_snake_name(file, checker.failure_detail)

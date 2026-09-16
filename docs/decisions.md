@@ -10296,3 +10296,20 @@ same in both modes and on both hosts; both suites refuse it under ten and build
 it under a hundred thousand.
 
 Not yet: a keyed integrity for a hostile cache, which no unkeyed check gives.
+
+## D475 -- An invalid `undef` is refused
+
+H03 asks that an invalid `zero` or `undef` value not enter checked code unnoticed,
+and names conservative rejection as one way; the `invalid` check that would
+catch a read of one is the row a release build does not keep, since it is not
+one compare. `= zero` of a type with no member at zero was already refused
+(E-TYPE-9999 by way of `MissingZeroValue`). Now `= undef` of a type that admits
+only its members is refused too, as `E-SAFETY-0017`: `bool`, an enum, a tagged
+union, and a struct or array holding one at any depth, the diagnostic naming
+the declared type and the member-only type it holds. A byte array, a struct of
+integers and pointers, and a type parameter keep their `undef` -- every byte
+pattern is a value of those. Nothing in the compiler or the library wrote such
+an `undef`; the reject corpus gains `safety_undef_value`, both suites check it.
+
+Not yet: the representation row itself, bytes read as `bool` or a tag through
+`mem.cast` or a foreign write -- a check per load, whose cost is unmeasured.

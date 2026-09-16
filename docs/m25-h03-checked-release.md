@@ -70,7 +70,10 @@ made under the old policy is rebuilt rather than linked.
 ## 4. Obligations not yet met
 
 - Check elimination with proofs, and the codegen tests for eliminated checks.
-- `invalid` in release: the `zero`/`undef` and representation rows stay off.
+- `invalid` in release: the representation row (bytes read as `bool`, an enum or a
+  tag through `mem.cast` or a foreign write) stays off. The `zero`/`undef` half is
+  closed at compile time (D475): `= undef` of a type that admits only its members
+  is refused as `E-SAFETY-0017`, as `= zero` of a type with no member at zero was.
 - Definite initialization of fields and elements: not checked beyond `undef` of a
   resource (H01).
 - The arithmetic rows' debug/release divergence (trap against wrap) is unchanged

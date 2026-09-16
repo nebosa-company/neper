@@ -3433,7 +3433,11 @@ release behaviour that varied by target would break the sentence above. The
 (D355, H03): an optimized build is a checked build, and an out-of-range write, a
 `nil` dereference, a wrong-member read or a misaligned vector access traps in it
 with the record a debug build writes. Only `barrier` (the CPU build of a kernel) and
-`invalid` come off in release, since their checks are not one compare. A check is
+`invalid` come off in release, since their checks are not one compare; so a value
+that could only be read as an `invalid` check is not made: `= undef` of a type that
+admits only its members -- `bool`, an enum, a tagged union, or a struct or array
+holding one -- is refused (`E-SAFETY-0017`, D475), as `= zero` of a type with no
+member at zero is, where `[N]u8 = undef` and a struct of integers stay legal. A check is
 left out only where a `@nocheck` block or `--unchecked` says so, both inventoried
 (§13's build manifest), or where the compiler has a proof: under
 `while i < x.len { ... }` with `i` and `x` locals, `x[i]` before the body's first

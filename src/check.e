@@ -99,6 +99,7 @@ type DiagnosticKind = enum u8 {
     EnumValueRange,
     DuplicateEnumValue,
     MissingZeroValue,
+    MissingUndefValue,
     IteratorImmutable,
     IteratorMissing,
     IteratorSignature,
@@ -2875,6 +2876,38 @@ fn type_has_zero_value(c: *Checker, ty: Type, depth: usize) -> bool {
         field_at += 1usize
     }
     ret true
+}
+
+// Whether every byte pattern is a value of the type (D475, H03): `bool` admits two,
+// an enum its members, a tagged union its tags, and a struct or array holding one
+// admits no more -- so `undef` of such a type is a value the checked program could
+// read as an `invalid` check, which release does not keep. The answer names the
+// type that admits only its members, for the diagnostic.
+fn type_has_undef_value(c: *Checker, ty: Type, depth: usize) -> (bool, str) {
+    let (subject, canonical_error) = canonical_type(c, ty)
+    if canonical_error != ok { ret (true, "") }
+    if subject.kind == .Bool { ret (false, subject.name) }
+    if subject.kind == .Array {
+        if !subject.has_element || subject.element >= c.type_count { ret (true, "") }
+        let (element_admits, element_culprit) = type_has_undef_value(c, c.types[subject.element], depth)
+        ret (element_admits, element_culprit)
+    }
+    if subject.kind != .Named { ret (true, "") }
+    let (aggregate_index, found) = aggregate_for_type(c, subject)
+    if !found { ret (true, "") }
+    let aggregate = c.aggregates[aggregate_index]
+    if aggregate.kind == .Enum || aggregate.kind == .TaggedUnion { ret (false, subject.name) }
+    if aggregate.kind != .Struct || depth >= c.aggregate_count { ret (true, "") }
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        let field = c.aggregate_fields[aggregate.first_field + field_at]
+        if field.ty.kind != .Void {
+            let (field_admits, culprit) = type_has_undef_value(c, field.ty, depth + 1usize)
+            if !field_admits { ret (false, culprit) }
+        }
+        field_at += 1usize
+    }
+    ret (true, "")
 }
 
 fn aggregate_parameter(c: *Checker, template_index: usize, name: str) -> (usize, bool) {
@@ -9890,6 +9923,13 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                 record_failure(c, module_index, node, .MissingZeroValue, expected.name, expected.name)
                 ret (invalid_type(), InvalidType)
             }
+            if token.kind == .KwUndef {
+                let (admits, culprit) = type_has_undef_value(c, expected, 0usize)
+                if !admits {
+                    record_failure(c, module_index, node, .MissingUndefValue, expected.name, culprit)
+                    ret (invalid_type(), InvalidType)
+                }
+            }
             ret (expected, ok)
         }
         if token.kind == .KwNil {
@@ -10513,6 +10553,21 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
                 zero_at += 1usize
             }
             ret InvalidType
+        }
+        // `= undef` of a type that admits only its members (D475, H03).
+        if contains_token(c, usize(node.token_start), usize(node.token_end), .KwUndef) {
+            let (admits, culprit) = type_has_undef_value(c, declared, 0usize)
+            if !admits {
+                var undef_at = usize(node.token_start)
+                while undef_at < usize(node.token_end) {
+                    if c.tokens[undef_at].kind == .KwUndef {
+                        record_failure_token(c, module_index, c.tokens[undef_at], .MissingUndefValue, declared.name, culprit)
+                        break
+                    }
+                    undef_at += 1usize
+                }
+                ret InvalidType
+            }
         }
     }
     if is_untyped(result) { ret MissingContext }
@@ -12566,6 +12621,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourcePartialMove { ret "E-SAFETY-0003" }
     if kind == .ResourceOverwrite { ret "E-SAFETY-0006" }
     if kind == .ResourceUndef { ret "E-SAFETY-0007" }
+    if kind == .MissingUndefValue { ret "E-SAFETY-0017" }
     if kind == .ResourceUnchecked { ret "E-SAFETY-0008" }
     if kind == .ResourceDeferredConsumed { ret "E-SAFETY-0009" }
     if kind == .ResourceMovedInLoop { ret "E-SAFETY-0011" }
