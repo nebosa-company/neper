@@ -323,9 +323,16 @@ completion order. They contain `record:"test"`; the last test record is followed
 one `record:"test_summary"`, then the command `result`. The summary contains explicit
 `passed`, `failed`, `crashed`, `timeout`, `total`, and `duration_ms` fields.
 
-`run --json` captures the program's complete stdout and stderr and emits one `run`
-record with `process_exit_code`, `stdout`, `stderr`, and nullable `trap`; captured
-bytes use §2's representation. It does not stream raw child bytes into the JSONL
+`run --json` captures the program's stdout and stderr into files beside the
+executable (`<exe>.stdout`, `<exe>.stderr`) and emits one `run` record with
+`process_exit_code`, `stdout`, `stderr`, and nullable `trap`; captured bytes use
+§2's representation. The record is **bounded** (D370, H18): it holds the first
+`--capture N` bytes of each stream, a mebibyte without the flag, and the command's
+`result.data` carries `stdout_bytes` and `stderr_bytes` (the whole streams' sizes),
+`capture_limit`, and `captured_complete` -- `false` when either stream was cut, in
+which case the files hold the rest. A flooding child therefore costs the harness at
+most two bounds of memory and never a pipe: the streams are files, drained by the
+OS. It does not stream raw child bytes into the JSONL
 channel. `dis --json` emits one `disassembly` record per function with `symbol`,
 `target`, and `text`. These records precede the final command `result`.
 

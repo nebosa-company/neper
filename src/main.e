@@ -775,7 +775,7 @@ fn has_flag(args: []str, name: str) -> bool {
     while at < args.len {
         if same(args[at], "--") { ret false }
         if same(args[at], name) { ret true }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--inline-cap") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture")) { at += 1usize }
         at += 1usize
     }
     ret false
@@ -787,7 +787,7 @@ fn project_flag(args: []str) -> str {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret "" }
         if same(args[at], "--project") { ret args[at + 1usize] }
-        if same(args[at], "--arena") || same(args[at], "-j") || same(args[at], "--inline-cap") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture")) { at += 1usize }
         at += 1usize
     }
     ret ""
@@ -810,9 +810,9 @@ fn flags_known(args: []str) -> bool {
             } else {
                 // `-j N` (D331): a worker count from one up; `--inline-cap N` (D348): a
                 // cap from zero, for a measurement.
-                if same(args[at], "-j") || same(args[at], "--inline-cap") {
+                if same(args[at], "-j") || same(args[at], "--inline-cap") || same(args[at], "--capture") {
                     if at + 1usize >= args.len || (same(args[at], "-j") && jobs_count(args[at + 1usize]) == 0usize) { ret false }
-                    if same(args[at], "--inline-cap") && !decimal_ok(args[at + 1usize]) { ret false }
+                    if (same(args[at], "--inline-cap") || same(args[at], "--capture")) && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
                     if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") { ret false }
@@ -856,7 +856,7 @@ fn arena_flag(args: []str) -> usize {
             let (size, size_ok) = arena_size(args[at + 1usize])
             if size_ok { ret size }
         }
-        if same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--inline-cap") { at += 1usize }
+        if same(args[at], "--project") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture")) { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -887,10 +887,23 @@ fn inline_cap_flag(args: []str) -> usize {
             }
             ret value + 1usize
         }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--capture") { at += 1usize }
         at += 1usize
     }
     ret 0usize
+}
+
+// `--capture N` (D370, H18): how many bytes of each of the child's streams `run --json`
+// carries in its record; a mebibyte without the flag. The rest stays in the files.
+fn capture_flag(args: []str) -> usize {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--") { ret 1048576usize }
+        if same(args[at], "--capture") && decimal_ok(args[at + 1usize]) { ret decimal_value(args[at + 1usize]) }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--inline-cap") { at += 1usize }
+        at += 1usize
+    }
+    ret 1048576usize
 }
 
 fn decimal_ok(spelling: str) -> bool {
@@ -909,7 +922,7 @@ fn jobs_flag(args: []str) -> usize {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret 0usize }
         if same(args[at], "-j") { ret jobs_count(args[at + 1usize]) }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "--inline-cap") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || (same(args[at], "--inline-cap") || same(args[at], "--capture")) { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -1428,10 +1441,14 @@ fn run_program(a: *mem.Arena, report: *Sink, path: str, arguments: []str) -> (i3
     if stdout_close_error != ok { ret (0i32, "", "", stdout_close_error) }
     if stderr_close_error != ok { ret (0i32, "", "", stderr_close_error) }
     if wait_error != ok { ret (0i32, "", "", wait_error) }
-    let (stdout_captured, stdout_load_error) = source.load(a, stdout_path)
+    // Bounded (D370, H18): the record carries a prefix of each stream, the result
+    // record the whole counts, and the files beside the executable the rest.
+    let (stdout_captured, stdout_total, stdout_load_error) = source.load_prefix(a, stdout_path, report.build.capture_limit)
     if stdout_load_error != ok { ret (0i32, "", "", stdout_load_error) }
-    let (stderr_captured, stderr_load_error) = source.load(a, stderr_path)
+    let (stderr_captured, stderr_total, stderr_load_error) = source.load_prefix(a, stderr_path, report.build.capture_limit)
     if stderr_load_error != ok { ret (0i32, "", "", stderr_load_error) }
+    report.build.stdout_bytes = stdout_total
+    report.build.stderr_bytes = stderr_total
     report.build.run_peak = usage.peak_memory
     ret (usage.exit_code, stdout_captured, stderr_captured, ok)
 }
@@ -7679,6 +7696,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 report.build.wall_ms = (nptest_now() - report.build.started) / 1000000usize
                 report.build.image_bytes = packed.len
                 if running {
+                    report.build.capture_limit = capture_flag(args)
                     report.build.started = nptest_now()
                     let (status, stdout_captured, stderr_captured, run_error) = run_program(a, &report, args[6usize], program_arguments(args))
                     report.build.ran = true
@@ -7700,6 +7718,18 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                         try write_usize(&report, usize(0i32 - status))
                     } else {
                         try write_usize(&report, usize(status))
+                    }
+                    // What the run record holds of the child's output, and what there was (D370).
+                    try write_all(&report, ",\"stdout_bytes\":")
+                    try write_usize(&report, report.build.stdout_bytes)
+                    try write_all(&report, ",\"stderr_bytes\":")
+                    try write_usize(&report, report.build.stderr_bytes)
+                    try write_all(&report, ",\"capture_limit\":")
+                    try write_usize(&report, report.build.capture_limit)
+                    if report.build.stdout_bytes > report.build.capture_limit || report.build.stderr_bytes > report.build.capture_limit {
+                        try write_all(&report, ",\"captured_complete\":false")
+                    } else {
+                        try write_all(&report, ",\"captured_complete\":true")
                     }
                     ret write_all(&report, ",\"diagnostics\":0}}\n")
                 }
@@ -7744,7 +7774,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

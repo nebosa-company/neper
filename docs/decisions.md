@@ -8152,3 +8152,30 @@ debugging knob that changes code; the second is not yet a build option of the
 self-hosted compiler), the compiler's own identity in the artifact (a version
 mismatch is a format-version miss today, not a compiler-hash one), in-memory
 overlays, snapshot identifiers on query results, and the transaction boundary.
+
+## D370 -- `run --json` holds a bounded prefix of the child's output, and says what it left
+
+H18 asks that unbounded complete-output capture stop being `run --json`'s only
+contract: bounded memory, byte counts, truncation reported, no pipe deadlock, lost
+output named. The capture was already files, not pipes (D231), so a flooding child
+never deadlocked; but the whole of both files was then loaded into the compiler's
+arena and written into one record, so a child that wrote more than the arena held
+ended the command as E-TYPE-9999 with no run record at all, and a harness reading
+a gigabyte of stdout as one JSON string was the design.
+
+`source.load_prefix` reads the first `limit` bytes of a file and its whole size;
+`run_program` reads each stream through it with `--capture N` (decimal bytes; a
+mebibyte without the flag), the `run` record carries the prefixes, and the
+`result.data` -- the stream's one extension map, so no closed record changes --
+carries `stdout_bytes`, `stderr_bytes`, `capture_limit` and `captured_complete`,
+`false` when either stream was cut. The files beside the executable hold the whole
+output either way; a harness that needs the rest reads them. The conformance corpus
+gains `run_flood` (a 296-byte writer under `--capture 50`), and the three run
+goldens carry the counts.
+
+Not yet, of H18: chunked or streamed capture records, binary chunks, a versioned
+schema with expected-source preconditions on `fix`, machine-readable diagnostic
+reasons beyond the code, cursors that bind a snapshot, sequence IDs and progress
+records, cancellation. `captured_complete: false` is the one place the stream says
+"incomplete" today, and it never turns an incomplete run into a passing one: the
+process exit code is the child's, whatever was captured.

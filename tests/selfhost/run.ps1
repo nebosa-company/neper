@@ -2036,6 +2036,12 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runTrapActual).Hash -ne (Get-F
 $runArgsActual = Join-Path $testBuild 'conformance-tools-run-args.jsonl'
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_args.e `"$repo`" x64 windows conformance-tools-run-args.out --json -- first `"second word`" 3 > `"$runArgsActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runArgsActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_args.expected.jsonl')).Hash) { throw "run --json with program arguments differs from the conformance corpus" }
+# `run --json --capture N` (D370, H18): the record holds the first N bytes of each stream,
+# the result says how many there were and that the capture is not complete.
+$runFloodActual = Join-Path $testBuild 'conformance-tools-run-flood.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" run ../../../../tests/conformance/tools/run_flood.e `"$repo`" x64 windows conformance-tools-run-flood.out --json --capture 50 > `"$runFloodActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $runFloodActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/run_flood.expected.jsonl')).Hash) { throw "run --json --capture differs from the conformance corpus" }
+if ((Get-Item -LiteralPath (Join-Path $testBuild 'conformance-tools-run-flood.out.stdout')).Length -ne 296) { throw 'the whole flood output is not in the file beside the executable' }
 # `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""

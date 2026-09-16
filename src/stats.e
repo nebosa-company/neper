@@ -72,6 +72,10 @@ type Build = struct {
     exit_code: i32,
     // The child's peak working set in bytes (D311), from the same wait as its exit code.
     run_peak: usize,
+    // `run --json` (D370): the child's whole stream sizes and the record's bound.
+    stdout_bytes: usize,
+    stderr_bytes: usize,
+    capture_limit: usize,
     // The link's drop count (D334): functions no call chain from `main` reaches, and their code bytes.
     unreached_functions: usize,
     unreached_bytes: usize,

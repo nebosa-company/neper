@@ -40,6 +40,43 @@ fn load(a: *mem.Arena, path: str) -> (str, err) {
     ret (text, ok)
 }
 
+// The first `limit` bytes of a file and its whole size (D370, H18): what `run --json`
+// holds of a child's output, which is bounded by the harness and not by the child.
+fn load_prefix(a: *mem.Arena, path: str, limit: usize) -> (str, usize, err) {
+    let flags = os.OpenFlags{ read: true, write: false, create: false, truncate: false, append: false }
+    let (file, open_error) = os.open(a, path, flags)
+    if open_error != ok { ret ("", 0usize, open_error) }
+    var text = ""
+    var total = 0usize
+    var read_error = ok
+    let (size, size_error) = os.seek(file, 0i64, .End)
+    if size_error == ok {
+        total = usize(size)
+        let (start, start_error) = os.seek(file, 0i64, .Start)
+        read_error = start_error
+        if start_error == ok {
+            var wanted = total
+            if wanted > limit { wanted = limit }
+            let (buffer, allocation_error) = mem.alloc[u8](a, wanted)
+            read_error = allocation_error
+            var used = 0usize
+            while read_error == ok && used < wanted {
+                let (count, chunk_error) = os.read(file, buffer[used..wanted])
+                read_error = chunk_error
+                if count == 0usize { break }
+                used += count
+            }
+            if read_error == ok { text = buffer[..used] }
+        }
+    } else {
+        read_error = size_error
+    }
+    let close_error = os.close(file)
+    if read_error != ok { ret ("", 0usize, read_error) }
+    if close_error != ok { ret ("", 0usize, close_error) }
+    ret (text, total, ok)
+}
+
 fn read_sized(a: *mem.Arena, file: os.File, size: usize) -> (str, err) {
     let (buffer, allocation_error) = mem.alloc[u8](a, size + 1usize)
     if allocation_error != ok { ret ("", allocation_error) }

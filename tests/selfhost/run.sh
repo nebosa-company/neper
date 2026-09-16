@@ -2184,6 +2184,10 @@ cmp -s "$run_trap_actual" "$conformance_root/tools/run_trap.expected.jsonl" || {
 ' "run --json on a trapping program differs from the conformance corpus" >&2; exit 1; }
 # `run --json -- ARGS...` (D267): what follows `--` reaches the program, spaces and all.
 (cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_args.e "$repo" x64 linux conformance-tools-run-args.out --json -- first "second word" 3 > "conformance-tools-run-args.jsonl")
+# `run --json --capture N` (D370, H18): a bounded record, the whole output in the file.
+(cd "$test_build" && ./neper-self run ../../../../tests/conformance/tools/run_flood.e "$repo" x64 linux conformance-tools-run-flood.out --json --capture 50 > "conformance-tools-run-flood.jsonl")
+cmp -s "$test_build/conformance-tools-run-flood.jsonl" "$conformance_root/tools/run_flood.expected.jsonl" || { echo "run --json --capture differs from the conformance corpus"; exit 1; }
+[ "$(stat -c %s "$test_build/conformance-tools-run-flood.out.stdout")" -eq 296 ]
 cmp -s "$test_build/conformance-tools-run-args.jsonl" "$conformance_root/tools/run_args.expected.jsonl" || { printf '%s
 ' "run --json with program arguments differs from the conformance corpus" >&2; exit 1; }
 # `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
