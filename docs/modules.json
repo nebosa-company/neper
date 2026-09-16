@@ -480,16 +480,15 @@
   {
    "name": "e.cancel",
    "layer": 4,
-   "surface": "planned",
+   "surface": "source",
    "milestone": null,
    "schedule": "later",
    "direct_dependencies": [
     "e.atomic",
+    "e.mem",
     "e.time"
    ],
-   "blocked_by": [
-    "post-m2-library-hardening"
-   ]
+   "blocked_by": []
   },
   {
    "name": "e.channel",

@@ -7498,3 +7498,29 @@ they exist, with this table as the baseline. A cap past about two hundred fills
 the oracle's entry pool on the compiler and is refused as a full table, named as
 such now, along with the other lowering-side errors the diagnostic had reported as
 a bare "lowering failed".
+
+## D347 -- `e.cancel`: the common cancellation primitive, delivered
+
+`stdlib-hardening.md` SL03 and the roadmap's later-waves note make `e.cancel` an
+M2.5 cross-cutting obligation: a core primitive that operations share, independent
+of worker pools, with no ambient value, timer registry or hidden allocation. The
+planned fence is eight declarations; `lib/e/cancel.e` is their source.
+
+A `Token` is one `Atomic[u32]`; `request` stores 1 with release order, thread-safe
+and idempotent, and joins nothing; `requested` loads with acquire order and answers
+false for `nil`. A `Control` borrows a token and carries an explicit monotonic
+deadline behind `has_deadline`, a zero instant being a clock value and never a
+sentinel. `check` takes the `now` it observes -- the caller decides when time is
+looked at, and a test hands it any instant -- and answers `Cancelled` when the token
+is set, `Timeout` when the deadline is at or before `now`, cancellation winning
+when both hold at one observation. The atomic surface takes its pointer mutable,
+so `requested` reads the word through a `mem.cast` view: an atomic read is a read.
+
+`link/cancel` runs SL03's acceptance list in both modes on both hosts: an
+already-cancelled token, no deadline, a zero deadline, an expired one, one ahead, a
+request over an expired deadline, an idempotent second request, `requested(nil)`,
+and one token shared by four threads that each stop at the request and are joined
+by the caller, not by it. The module plan carries `e.cancel` at `surface:source`
+with `e.mem` added to its direct dependencies and its blocker cleared. Not here:
+the operations that will take a `Control` -- process, DNS, connect, byte I/O, TLS --
+are H07/SL05/SL07 work and take it as they are migrated.

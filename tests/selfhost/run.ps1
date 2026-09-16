@@ -2379,6 +2379,14 @@ $ringExecutableWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'f
 if ($LASTEXITCODE -ne 0 -or $ringExecutableWritten -ne 'executable written') { throw 'e.data.ring did not compile into a PE executable' }
 $ringOutput = & $ringExecutablePath
 if ($LASTEXITCODE -ne 0 -or $ringOutput -ne 'data ring ok') { throw 'e.data.ring FIFO, overwrite, iteration, or empty-capacity behavior failed' }
+# `e.cancel` (D347, SL03): tokens, controls, deadlines and a request shared by threads.
+foreach ($cancelMode in @(@(), @('--release'))) {
+    $cancelPath = Join-Path $testBuild ('cancel-selfhost' + $cancelMode.Count + '.exe')
+    $cancelWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\cancel\src\main.e') $repo 'x64' 'windows' $cancelPath @cancelMode
+    if ($LASTEXITCODE -ne 0 -or $cancelWritten -ne 'executable written') { throw 'link/cancel did not compile' }
+    $cancelOutput = & $cancelPath
+    if ($LASTEXITCODE -ne 0 -or $cancelOutput -ne 'cancel ok') { throw "link/cancel failed check $LASTEXITCODE" }
+}
 # D330: a promoted local copied from a later-declared local and reassigned in the same block.
 foreach ($promoteMode in @(@(), @('--release'))) {
     $promotePath = Join-Path $testBuild ('promote-copy-selfhost' + $promoteMode.Count + '.exe')

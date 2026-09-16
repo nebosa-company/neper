@@ -2585,6 +2585,15 @@ ring_executable_written=$($test_build/neper-self emit-executable "$repo/tests/se
 chmod +x "$ring_executable_path"
 ring_output=$("$ring_executable_path")
 [ "$ring_output" = 'data ring ok' ]
+# `e.cancel` (D347, SL03): tokens, controls, deadlines and a request shared by threads.
+for cancel_mode in '' '--release'; do
+    cancel_path="$test_build/cancel-selfhost$cancel_mode"
+    cancel_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/cancel/src/main.e" "$repo" x64 linux "$cancel_path" $cancel_mode)
+    [ "$cancel_written" = 'executable written' ]
+    chmod +x "$cancel_path"
+    cancel_output=$("$cancel_path")
+    [ "$cancel_output" = 'cancel ok' ]
+done
 # D330: a promoted local copied from a later-declared local and reassigned in the same block.
 for promote_mode in '' '--release'; do
     promote_path="$test_build/promote-copy-selfhost$promote_mode"
