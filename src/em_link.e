@@ -180,6 +180,8 @@ type LinkWorker = struct {
     // The copy pass: what layout decided.
     kept: []bool,
     copies: []bool,
+    // Which functions' content hashes the copy verifies (D459): the ones that fold.
+    verify: []bool,
     code_offset: []usize,
     reloc_base: []usize,
     row_base: []usize,
@@ -259,10 +261,15 @@ fn link_copy_artifact(w: *LinkWorker, artifact_at: usize) -> err {
             continue
         }
         let function = table.funcs[position]
-        // The content hash is the artifact's own integrity check, verified for what is
-        // emitted -- after the keep test, so a dropped function is not hashed for nothing.
-        let (content_hash, content_hash_error) = em.code_content_hash_bounded(artifact.bytes, function, artifact.string_starts, artifact.string_lengths, &w.hash_scratch)
-        if content_hash_error != ok || content_hash != function.content_hash { ret InvalidInput }
+        // The content hash is verified where the image depends on it (D459): for a
+        // function that folds onto another, or is folded onto, the stored hash is
+        // the claim that the two are the same code, and it is recomputed to hold it.
+        // A function alone under its hash is copied by its own bytes, which the
+        // artifact's checksum already covers, so its hash is not recomputed.
+        if w.verify[position] {
+            let (content_hash, content_hash_error) = em.code_content_hash_bounded(artifact.bytes, function, artifact.string_starts, artifact.string_lengths, &w.hash_scratch)
+            if content_hash_error != ok || content_hash != function.content_hash { ret InvalidInput }
+        }
         if !w.copies[position] {
             position += 1usize
             continue
@@ -790,6 +797,8 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     // its relocation range, so the copies can be made in any order and land the same.
     let (copies, copies_error) = mem.alloc[bool](a, function_count)
     if copies_error != ok { ret copies_error }
+    let (verify, verify_error) = mem.alloc[bool](a, function_count)
+    if verify_error != ok { ret verify_error }
     let (code_offset, code_offset_error) = mem.alloc[usize](a, function_count)
     if code_offset_error != ok { ret code_offset_error }
     let (reloc_base, reloc_base_error) = mem.alloc[usize](a, function_count)
@@ -810,6 +819,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
     var position = 0usize
     while position < table.count {
         copies[position] = false
+        verify[position] = false
         row_count[position] = 0usize
         if !kept[position] {
             program.unreached_functions += 1usize
@@ -829,14 +839,16 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         assembled_function.module_name = owner_names[owner_at]
         functions[global_function] = assembled_function
         program.builder.function_count += 1usize
-        let (folded_offset, already_folded) = lookup.find(&folded, function.content_hash, 0usize, "")
+        let (folded_position, already_folded) = lookup.find(&folded, function.content_hash, 0usize, "")
         if already_folded {
-            program.function_offsets[global_function] = folded_offset
+            program.function_offsets[global_function] = code_offset[folded_position]
+            verify[folded_position] = true
+            verify[position] = true
             position += 1usize
             continue
         }
         program.function_offsets[global_function] = code_cursor
-        try lookup.insert(&folded, function.content_hash, 0usize, "", code_cursor)
+        try lookup.insert(&folded, function.content_hash, 0usize, "", position)
         copies[position] = true
         code_offset[position] = code_cursor
         code_cursor += function.code_length
@@ -859,6 +871,7 @@ fn assemble(a: *mem.Arena, artifacts: []Artifact, program: *Program, jobs: usize
         workers[worker_at].table = &table
         workers[worker_at].kept = kept
         workers[worker_at].copies = copies
+        workers[worker_at].verify = verify
         workers[worker_at].code_offset = code_offset
         workers[worker_at].reloc_base = reloc_base
         workers[worker_at].row_base = row_base

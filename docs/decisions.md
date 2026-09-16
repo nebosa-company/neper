@@ -9972,3 +9972,19 @@ format 9 are rebuilt once.
 
 Not yet: the warm build's `link from artifacts` (37 ms) and `link` (20 ms),
 the two phases that now bound it.
+
+## D459 -- The content hash verified where the image folds by it
+
+Of the warm build's 34 ms `link from artifacts`, the copy pass was bounded by
+recomputing every kept function's content hash to compare against the one its
+artifact stores (D324), on eight workers -- more than half the pass's work. The
+stored hash decides one thing in the link: that two kept functions are the same
+code and one copy serves both. A function alone under its hash is copied by its
+own bytes, which the artifact's checksum already covers at load, so a wrong hash
+on it could change nothing about the image; it is no longer recomputed. The
+layout now records which functions fold onto another or are folded onto, and the
+copy verifies those, the whole of the claim the image rests on. The compiler's
+own warm build: `link from artifacts` 34 -> 27 ms, the image byte for byte what
+it was. D458 is the other stream's, numbered in the shared tree.
+
+Not yet: the `link` phase (18 ms) and the reach walk, the next bounds.
