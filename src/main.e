@@ -3264,6 +3264,11 @@ type Sink = struct {
     expected_text: str,
     actual_text: str,
     operand_path: str,
+    // The roots a module's identity is spelled under (D427): the graph's, copied when
+    // it is loaded, since the sink is made before the program is.
+    toolchain_root: str,
+    project_root: str,
+    project_has_sources: bool,
     // `--absolute-paths` (section 2, D290): the operand's absolute spelling, written as
     // `absolute_path` beside the operand's identity and no other module's.
     absolute_path: str,
@@ -3349,14 +3354,14 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
                 try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source\",\"span\":")
             }
         }
-        try write_span(report, basename(path), at, false)
+        try write_module_span(report, path, at, false)
         try write_all(report, "}],\"fixes\":[]}")
     } else {
-        let is_operand = same(path, report.operand_source)
+        let is_operand = same_path(path, report.operand_source)
         if report.operand_path.len != 0usize && is_operand {
             try write_span(report, report.operand_path, at, true)
         } else {
-            try write_span(report, basename(path), at, is_operand)
+            try write_module_span(report, path, at, is_operand)
         }
         // The other site the diagnostic is about (D364, H09), in the same module.
         if report.has_related {
@@ -3367,7 +3372,7 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             if report.operand_path.len != 0usize && is_operand {
                 try write_span(report, report.operand_path, related_at, true)
             } else {
-                try write_span(report, basename(path), related_at, is_operand)
+                try write_module_span(report, path, related_at, is_operand)
             }
             try write_all(report, "}],\"fixes\":")
         } else {
@@ -3387,7 +3392,7 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             if report.operand_path.len != 0usize && is_operand {
                 try write_span(report, report.operand_path, insert_at, true)
             } else {
-                try write_span(report, basename(path), insert_at, is_operand)
+                try write_module_span(report, path, insert_at, is_operand)
             }
             try write_all(report, ",\"replacement\":")
             try write_json_string(report, report.fix_text)
@@ -3401,8 +3406,67 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
     ret ok
 }
 
+// A module's span (D427): the operand by its spelling, as before; any other module by
+// the identity the manifest gives it -- `project-src`, `project-lib` or `toolchain-lib`
+// with the path under that root, slashes forward -- so a diagnostic raised inside a
+// toolchain module names the file a harness can open, not a bare basename under
+// `operand`. A module under none of the roots keeps the basename under `operand`.
+fn write_module_span(report: *Sink, path: str, at: lex.Span, is_operand: bool) -> err {
+    if !is_operand {
+        var root = ""
+        var relative = ""
+        let (src_relative, under_src) = project.relative_under(path, report.project_root, "src")
+        let (lib_relative, under_lib) = project.relative_under(path, report.project_root, "lib")
+        let (toolchain_relative, under_toolchain) = project.relative_under(path, report.toolchain_root, "lib")
+        if under_src && report.project_has_sources {
+            root = "project-src"
+            relative = src_relative
+        } else {
+            if under_lib && report.project_has_sources {
+                root = "project-lib"
+                relative = lib_relative
+            } else {
+                if under_toolchain && report.toolchain_root.len != 0usize {
+                    root = "toolchain-lib"
+                    relative = toolchain_relative
+                }
+            }
+        }
+        if root.len != 0usize && relative.len <= 512usize {
+            var slashed: [512]u8 = zero
+            var at_byte = 0usize
+            while at_byte < relative.len {
+                slashed[at_byte] = relative[at_byte]
+                if slashed[at_byte] == 92u8 { slashed[at_byte] = 47u8 }
+                at_byte += 1usize
+            }
+            ret write_rooted_span(report, root, slashed[0usize..relative.len], at, false)
+        }
+    }
+    ret write_span(report, basename(path), at, is_operand)
+}
+
 fn write_span(report: *Sink, identity: str, at: lex.Span, operand: bool) -> err {
-    try write_all(report, "{\"source\":{\"root\":\"operand\",\"path\":")
+    ret write_rooted_span(report, "operand", identity, at, operand)
+}
+
+// Whether a module's path is the operand's (D427): the same bytes, either separator
+// standing for the other, since the graph joins with one and the command line may
+// have spelled the other.
+fn same_path(path: str, operand: str) -> bool {
+    if path.len != operand.len { ret false }
+    var at = 0usize
+    while at < path.len {
+        if !project.path_byte_equal(path[at], operand[at]) { ret false }
+        at += 1usize
+    }
+    ret true
+}
+
+fn write_rooted_span(report: *Sink, root: str, identity: str, at: lex.Span, operand: bool) -> err {
+    try write_all(report, "{\"source\":{\"root\":\"")
+    try write_all(report, root)
+    try write_all(report, "\",\"path\":")
     try write_json_string(report, identity)
     if operand && report.absolute_path.len != 0usize {
         try write_all(report, ",\"absolute_path\":")
@@ -5095,6 +5159,11 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
     } else {
         load_error = graph.load(a, loaded, path, root, arch, target_os, project_root)
     }
+    report.toolchain_root = loaded.toolchain_root
+    report.project_root = loaded.project.root
+    report.project_has_sources = loaded.project.has_sources
+    // The operand is what was loaded (D427), unless a flag already named it.
+    if report.operand_source.len == 0usize { report.operand_source = path }
     if load_error != ok && loaded.has_failure && loaded.failure_module < loaded.count {
         let module = loaded.modules[loaded.failure_module]
         if loaded.failure_barrier {

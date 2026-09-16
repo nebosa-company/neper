@@ -51,7 +51,11 @@ project root; `external` uses a generator-supplied stable URI as `path`. Every o
 `path` uses `/`, is relative to that root, contains no `.` or `..`
 segment, and is NFC-normalized UTF-8. For a file outside all roots, `operand` uses
 the file's basename; a stdin source uses the normalized `--path` spelling. Only one
-such operand exists in a command, so that identity is unambiguous. Machine output contains no absolute
+such operand exists in a command, so that identity is unambiguous. A diagnostic
+raised in a module that is not the operand -- a toolchain module a generic was
+instantiated in, a sibling under the project's `src` -- carries that module's
+identity under its own root, the rule the build manifest uses (D427); the
+operand keeps its spelling. Machine output contains no absolute
 path unless `--absolute-paths` is explicitly passed; then a separate `absolute_path`
 field is added and never replaces the source identifier.
 

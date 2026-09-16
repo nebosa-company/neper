@@ -9447,3 +9447,23 @@ budget of two, built and run under three.
 
 Not yet: the count per module or per template in the stream, a budget on
 aggregate instances, and per-instance cost.
+
+## D427 -- A diagnostic names the module it lands in by the manifest's rule
+
+`check-file --json` spelled every span as `{"root":"operand","path":BASENAME}`,
+the operand's own or not: an E-SAFETY-0005 raised inside `lib/e/mem.e` when
+`mem.copy[os.File]` was instantiated said `operand`/`mem.e`, a file no harness
+could open from that identity. The sink now carries the graph's roots, copied
+when the program is loaded, and a span in a module that is not the operand is
+written under the manifest's rule (`tool.source_identity_of`): `project-src`,
+`project-lib` or `toolchain-lib` with the path under that root, slashes forward;
+a module under none of the roots keeps the basename under `operand`, and the
+operand keeps its spelling exactly, so every golden over an operand is
+byte-identical. One golden changed by design: `reject/module_cycle`, whose
+diagnostic lands in the sibling `beta.e`, now `project-src`. The corpus gains
+`reject/safety_copy_toolchain`: the `mem.copy[os.File]` case, its span
+`e/mem.e` under `project-lib` as the suite runs it (the repository is the
+project, and the manifest's rule tries the project's roots first) and under
+`toolchain-lib` from any other project.
+
+Not yet: the text form, which prints the path as the graph spelled it.
