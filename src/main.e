@@ -6980,10 +6980,13 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     if kind == 1usize { try tool.explain_json(a, &checker, &loaded) }
     if kind == 2usize || kind == 5usize {
         var budget = 64usize
+        var byte_budget = 0usize
         var cursor = 0usize
         var flag_at = 9usize
         while flag_at + 1usize < args.len {
             if same(args[flag_at], "--budget") && decimal_ok(args[flag_at + 1usize]) { budget = decimal_value(args[flag_at + 1usize]) }
+            // `--bytes N` (D400, H08): a budget in serialized bytes beside the record budget.
+            if same(args[flag_at], "--bytes") && decimal_ok(args[flag_at + 1usize]) { byte_budget = decimal_value(args[flag_at + 1usize]) }
             if same(args[flag_at], "--cursor") && decimal_ok(args[flag_at + 1usize]) { cursor = decimal_value(args[flag_at + 1usize]) }
             flag_at += 2usize
         }
@@ -6992,9 +6995,9 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
         target_storage[target_at] = 45u8
         target_at = tool.nptest_copy(target_storage[..], target_at + 1usize, args[5usize])
         let target_text = target_storage[0usize..target_at]
-        if kind == 2usize { try tool.context_json(a, &checker, &loaded, args[8usize], budget, cursor, target_text, "retained") }
+        if kind == 2usize { try tool.context_json(a, &checker, &loaded, args[8usize], budget, byte_budget, cursor, target_text, "retained") }
         // The catalogue (D397): every function of a module, contract facts alone.
-        if kind == 5usize { try tool.catalog_json(a, &checker, &loaded, args[8usize], budget, cursor, target_text, "retained") }
+        if kind == 5usize { try tool.catalog_json(a, &checker, &loaded, args[8usize], budget, byte_budget, cursor, target_text, "retained") }
     }
     if kind == 3usize { try tool.uses_json(a, &checker, &loaded, args[8usize]) }
     if kind == 4usize { try tool.plan_rename_json(a, &checker, &loaded, args[8usize], args[10usize]) }

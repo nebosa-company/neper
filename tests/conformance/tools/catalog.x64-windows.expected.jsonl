@@ -11,4 +11,5 @@
 {"record":"fact","kind":"signature","provenance":"declared-and-checked","value":"fn total(c: *const contract.Counter) -> i64"}
 {"record":"fact","kind":"borrow","provenance":"declared-and-checked","value":"reads c: a const pointer; the argument is not written and the caller's views of it stand"}
 {"record":"fact","kind":"resources","provenance":"compiler-proved","value":"every resource this function owns is consumed on every exit; no view outlives its region or its container's change"}
-{"record":"result","ok":true,"exit_code":0,"data":{"records":12,"omitted":6,"complete":false,"cursor":12}}
+{"record":"subject","subject":"contract.main","kind":"fn","source":{"root":"operand","path":"contract.e"},"source_sha256":"d286ec4151e4d2430c9c7e0ca38618124954f413719988572da6993a70a79edd","target":"x64-windows","checks":"retained","grammar_revision":3,"span":{"source":{"root":"operand","path":"contract.e"},"byte_start":546,"byte_end":546,"line":22,"column":1,"end_line":22,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
+{"record":"result","ok":true,"exit_code":0,"data":{"records":13,"omitted":5,"complete":false,"cursor":13,"bytes":3367}}

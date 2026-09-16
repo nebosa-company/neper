@@ -283,8 +283,13 @@ alike. A page may end inside a function's facts; the next page continues them,
 and they belong to the last subject written. A name no module of the program
 has is an `E-CLI-9999` diagnostic and exit 2.
 
-The result carries `records` (written), `omitted` (past the budget),
-`complete` (nothing omitted and the checker's table did not overflow) and
+Both forms take `--bytes N` beside `--budget` (D400, H08): a budget in serialized
+bytes, measured on what has been flushed; the record that crosses it is the last
+written and the rest is omitted, so a page is at most the budget plus one record.
+The result carries `records` (written), `omitted` (past either budget),
+`complete` (nothing omitted and the checker's table did not overflow), `bytes`
+(the serialized bytes of the records before the result -- what the harness held,
+H18) and
 `cursor`, which passed back as `--cursor` continues from the next fact; the
 pagination is deterministic for identical source, and a source change --
 visible as a different `source_sha256` -- invalidates the cursor. A subject no

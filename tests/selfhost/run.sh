@@ -2293,9 +2293,10 @@ for contract_subject in contract.main contract.bump contract.first contract.tota
 done
 cmp -s "$contract_actual" "$conformance_root/tools/contract.x64-linux.expected.jsonl" || { printf '%s
 ' "context-file --json contract facts differ from the conformance corpus" >&2; exit 1; }
-# The catalogue (D397, H11): every function of the module, subjects and facts under one budget.
+# The catalogue (D397, H11): every function of the module, subjects and facts under one
+# budget; the byte budget (D400, H08) ends the page at the record that crosses it.
 catalog_actual="$test_build/conformance-tools-catalog.jsonl"
-(cd "$conformance_root/tools" && $test_build/neper-self context-file contract.e "$repo" x64 linux --json --module contract --budget 12 > "$catalog_actual")
+(cd "$conformance_root/tools" && $test_build/neper-self context-file contract.e "$repo" x64 linux --json --module contract --budget 64 --bytes 3000 > "$catalog_actual")
 cmp -s "$catalog_actual" "$conformance_root/tools/catalog.x64-linux.expected.jsonl" || { printf '%s
 ' "context-file --module differs from the conformance corpus" >&2; exit 1; }
 # `--deadline MS` (D399, H16): a deadline already passed cancels the build at the first

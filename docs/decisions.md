@@ -8895,3 +8895,21 @@ Not yet: cancellation inside a phase (a body worker or a lowering worker runs
 the module it holds to its end before the checkpoint is reached), a deadline
 on the query commands, and disposal accounting for what a cancelled build had
 allocated beyond the process exit that reclaims it.
+
+## D400 -- `--bytes N`: a context page is bounded in serialized bytes, and says what it held
+
+H08 asks for a bounded context and H18 for measured serialized bytes; the record
+budget of D361 bounded the count and left the size to the record shapes. Both
+`context-file` forms take `--bytes N` beside `--budget`: the writer counts what
+it has flushed, and the record that crosses the byte budget is the last one
+written -- a record is not split, so a page is at most the budget plus one
+record -- with the rest omitted and the cursor continuing from it, exactly as
+under the record budget. The result gains `bytes`, the serialized bytes of the
+records before it, so a harness reads what it held rather than measuring it. The
+catalogue case of the corpus runs under `--budget 64 --bytes 3000` and shows the
+byte budget binding (13 records, 5 omitted, 3359 bytes on Linux) where the record
+budget would not; the `context` and `contract` goldens gain the `bytes` field.
+
+Not yet: a byte budget on the other query commands (`explain-file`, `uses-file`
+write everything), and a bound the harness could set on diagnostic bytes of a
+build.

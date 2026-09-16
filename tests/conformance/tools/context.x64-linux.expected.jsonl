@@ -8,4 +8,4 @@
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"explain.same","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":717,"byte_end":717,"line":23,"column":22,"end_line":23,"end_column":22,"column_utf16":22,"end_column_utf16":22}}
 {"record":"fact","kind":"instance","provenance":"compiler-proved","value":"explain.same","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":756,"byte_end":756,"line":24,"column":22,"end_line":24,"end_column":22,"column_utf16":22,"end_column_utf16":22}}
 {"record":"fact","kind":"call","provenance":"declared-and-checked","value":"explain.same","span":{"source":{"root":"operand","path":"explain.e"},"byte_start":756,"byte_end":756,"line":24,"column":22,"end_line":24,"end_column":22,"column_utf16":22,"end_column_utf16":22}}
-{"record":"result","ok":true,"exit_code":0,"data":{"records":8,"omitted":15,"complete":false,"cursor":8}}
+{"record":"result","ok":true,"exit_code":0,"data":{"records":8,"omitted":15,"complete":false,"cursor":8,"bytes":2260}}

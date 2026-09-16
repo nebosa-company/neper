@@ -2111,9 +2111,10 @@ foreach ($subject in @('contract.main', 'contract.bump', 'contract.first', 'cont
     if ($LASTEXITCODE -ne 0) { throw "context-file --json failed on $subject" }
 }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contractActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/contract.x64-windows.expected.jsonl')).Hash) { throw "context-file --json contract facts differ from the conformance corpus" }
-# The catalogue (D397, H11): every function of the module, subjects and facts under one budget.
+# The catalogue (D397, H11): every function of the module, subjects and facts under one
+# budget; the byte budget (D400, H08) ends the page at the record that crosses it.
 $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'
-cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module contract --budget 12 > `"$catalogActual`""
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module contract --budget 64 --bytes 3000 > `"$catalogActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --module failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $catalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog.x64-windows.expected.jsonl')).Hash) { throw "context-file --module differs from the conformance corpus" }
 # `--deadline MS` (D399, H16): a deadline already passed cancels the build at the first

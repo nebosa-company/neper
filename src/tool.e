@@ -23,6 +23,9 @@ error InvalidSource
 type Out = struct {
     bytes: []u8,
     count: usize,
+    // Every byte flushed so far (D400): what a byte budget is measured against, and
+    // what a result reports as `bytes`.
+    flushed: usize,
     // The operand's line table (D315), built once per command for the spans its
     // records carry; empty means a span counts lines from the start of the source.
     lines: []usize,
@@ -61,6 +64,7 @@ fn flush(out: *Out) -> err {
         if written == 0usize { ret Capacity }
         at += written
     }
+    out.flushed += out.count
     out.count = 0usize
     ret ok
 }
@@ -2193,9 +2197,19 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
 type Page = struct {
     cursor: usize,
     budget: usize,
+    // `--bytes N` (D400, H08): the serialized bytes a page may reach before the rest
+    // is omitted; zero is no byte budget.
+    byte_budget: usize,
     total: usize,
     written: usize,
     omitted: usize,
+}
+
+// Whether the page takes another record: under its record budget, and under its
+// byte budget when it has one.
+fn page_open(page: *Page, out: *Out) -> bool {
+    if page.written >= page.budget { ret false }
+    ret page.byte_budget == 0usize || out.flushed < page.byte_budget
 }
 
 // One function's contract facts (D361, D396), in their fixed order, counted
@@ -2207,7 +2221,7 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
     let function = c.functions[function_index]
     // Signature.
     page.total += 1usize
-    if page.total > page.cursor && page.written < page.budget {
+    if page.total > page.cursor && page_open(page, out) {
         try text(out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":\"fn ")
         try text(out, function.name)
         try byte(out, 40u8)
@@ -2245,7 +2259,7 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
         let parameter = c.parameters[function.first_parameter + own_at]
         if parameter.own {
             page.total += 1usize
-            if page.total > page.cursor && page.written < page.budget {
+            if page.total > page.cursor && page_open(page, out) {
                 try text(out, "{\"record\":\"fact\",\"kind\":\"ownership\",\"provenance\":\"declared-and-checked\",\"value\":\"takes ")
                 try text(out, parameter.name)
                 try text(out, ": the caller's value moves in and this function owes its cleanup on every exit\"}")
@@ -2281,7 +2295,7 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
         if parameter.ty.kind == .Pointer && parameter.ty.has_element && parameter.ty.element < c.type_count {
             let pointee = c.types[parameter.ty.element]
             page.total += 1usize
-            if page.total > page.cursor && page.written < page.budget {
+            if page.total > page.cursor && page_open(page, out) {
                 if check.seeded_arena(c, pointee) {
                     try text(out, "{\"record\":\"fact\",\"kind\":\"allocation\",\"provenance\":\"declared-and-checked\",\"value\":\"allocates from ")
                     try text(out, parameter.name)
@@ -2317,7 +2331,7 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
     }
     if returns_err {
         page.total += 1usize
-        if page.total > page.cursor && page.written < page.budget {
+        if page.total > page.cursor && page_open(page, out) {
             if function.return_count > 1usize {
                 try text(out, "{\"record\":\"fact\",\"kind\":\"errors\",\"provenance\":\"declared-and-checked\",\"value\":\"partial: returns err beside its other results, which stand only when the err is ok; the caller tests it before using them\"}")
             } else {
@@ -2349,7 +2363,7 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
     }
     if starts_thread {
         page.total += 1usize
-        if page.total > page.cursor && page.written < page.budget {
+        if page.total > page.cursor && page_open(page, out) {
             try text(out, "{\"record\":\"fact\",\"kind\":\"threads\",\"provenance\":\"compiler-proved\",\"value\":\"starts a thread: what the start is given by address is that thread's until the join (E-SAFETY-0016 at any other use); the handle is joined or detached on every exit\"}")
             try flush(out)
             page.written += 1usize
@@ -2360,7 +2374,7 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
     // What the checker established for the body: the resource and region rules
     // ran over it, or did not (an `@unsafe` function).
     page.total += 1usize
-    if page.total > page.cursor && page.written < page.budget {
+    if page.total > page.cursor && page_open(page, out) {
         if manifest_is_unsafe(g.modules[function.module_index].text, function.source_start) {
             try text(out, "{\"record\":\"fact\",\"kind\":\"boundary\",\"provenance\":\"declared-and-checked\",\"value\":\"@unsafe: the resource and region rules are not applied inside this function\"}")
         } else {
@@ -2403,7 +2417,7 @@ fn subject_record(out: *Out, subject: str, root: str, relative: str, path: str, 
 // function's facts; the next page continues them, and the last subject written
 // before the cut is theirs. The body's decisions are not listed here: `--symbol`
 // answers those for one function.
-fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: str, budget: usize, cursor: usize, target_name: str, checks: str) -> err {
+fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: str, budget: usize, byte_budget: usize, cursor: usize, target_name: str, checks: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.signature_function_count * 1024usize + 65536usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -2434,6 +2448,7 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
     var page: Page = zero
     page.cursor = cursor
     page.budget = budget
+    page.byte_budget = byte_budget
     let (subject_storage, subject_error) = mem.alloc[u8](a, 4096usize)
     if subject_error != ok { ret subject_error }
     var candidate = 0usize
@@ -2441,7 +2456,7 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
         let function = c.functions[candidate]
         if function.module_index == module_index && !function.generic && function.source_end > function.source_start {
             page.total += 1usize
-            if page.total > page.cursor && page.written < page.budget {
+            if page.total > page.cursor && page_open(&page, &out) {
                 var subject_at = nptest_copy(subject_storage, 0usize, module_name)
                 if subject_at < subject_storage.len { subject_storage[subject_at] = 46u8 }
                 subject_at = nptest_copy(subject_storage, subject_at + 1usize, function.name)
@@ -2462,11 +2477,13 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
     if page.omitted == 0usize { try text(&out, "true") } else { try text(&out, "false") }
     try text(&out, ",\"cursor\":")
     try decimal(&out, page.cursor + page.written)
+    try text(&out, ",\"bytes\":")
+    try decimal(&out, out.flushed)
     try text(&out, "}}")
     ret flush(&out)
 }
 
-fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, budget: usize, cursor: usize, target_name: str, checks: str) -> err {
+fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, budget: usize, byte_budget: usize, cursor: usize, target_name: str, checks: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -2523,6 +2540,7 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
     var page: Page = zero
     page.cursor = cursor
     page.budget = budget
+    page.byte_budget = byte_budget
     try contract_facts(&out, c, g, function_index, &page)
     var written = page.written
     var omitted = page.omitted
@@ -2552,7 +2570,7 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         last_function = e.function_index
         total += 1usize
         if total <= cursor { continue }
-        if written >= budget {
+        if written >= budget || (byte_budget != 0usize && out.flushed >= byte_budget) {
             omitted += 1usize
             continue
         }
@@ -2630,6 +2648,9 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
     if omitted == 0usize && !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
     try text(&out, ",\"cursor\":")
     try decimal(&out, cursor + written)
+    // The serialized bytes before this record (D400, H18): what the harness held.
+    try text(&out, ",\"bytes\":")
+    try decimal(&out, out.flushed)
     try text(&out, "}}")
     ret flush(&out)
 }
