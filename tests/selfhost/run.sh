@@ -2252,6 +2252,9 @@ cmp -s "$manifest_actual" "$conformance_root/tools/manifest.x64-linux.expected.j
 $test_build/neper-self build-manifest-file "$conformance_root/tools/manifest_project/src/main.e" "$repo" x64 linux --json > "$test_build/conformance-tools-manifest-project.jsonl"
 cmp -s "$test_build/conformance-tools-manifest-project.jsonl" "$conformance_root/tools/manifest_project.x64-linux.expected.jsonl" || { printf '%s
 ' "build-manifest --json on a project differs from the conformance corpus" >&2; exit 1; }
+# The `unsafe` inventory (D371, H27): every declared and trusted escape hatch, by kind.
+$test_build/neper-self build-manifest-file "$conformance_root/tools/manifest_unsafe/src/main.e" "$repo" x64 linux --json > "$test_build/conformance-tools-manifest-unsafe.jsonl"
+cmp -s "$test_build/conformance-tools-manifest-unsafe.jsonl" "$conformance_root/tools/manifest_unsafe.x64-linux.expected.jsonl" || { echo "the unsafe inventory differs from the conformance corpus" >&2; exit 1; }
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
 test_actual="$test_build/conformance-tools-test.jsonl"

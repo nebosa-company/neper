@@ -2105,6 +2105,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestActual).Hash -ne (Get-
 $manifestProjectActual = Join-Path $testBuild 'conformance-tools-manifest-project.jsonl'
 cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/manifest_project/src/main.e')`" `"$repo`" x64 windows --json > `"$manifestProjectActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestProjectActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest_project.x64-windows.expected.jsonl')).Hash) { throw "build-manifest --json on a project differs from the conformance corpus" }
+# The `unsafe` inventory (D371, H27): every declared and trusted escape hatch, by kind.
+$manifestUnsafeActual = Join-Path $testBuild 'conformance-tools-manifest-unsafe.jsonl'
+cmd /c "`"$compiler`" build-manifest-file `"$(Join-Path $conformanceRoot 'tools/manifest_unsafe/src/main.e')`" `"$repo`" x64 windows --json > `"$manifestUnsafeActual`""
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $manifestUnsafeActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/manifest_unsafe.x64-windows.expected.jsonl')).Hash) { throw "the unsafe inventory differs from the conformance corpus" }
 # `test --json` (D240): @test discovery, a per-process run of each, section 7's stream; the
 # fixture has a passing and a failing test so the command exits 1. Target-independent golden.
 $testActual = Join-Path $testBuild 'conformance-tools-test.jsonl'

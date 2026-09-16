@@ -8179,3 +8179,31 @@ reasons beyond the code, cursors that bind a snapshot, sequence IDs and progress
 records, cancellation. `captured_complete: false` is the one place the stream says
 "incomplete" today, and it never turns an incomplete run into a passing one: the
 process exit code is the child's, whatever was captured.
+
+## D371 -- The unsafe inventory lists what the program did not declare: extern, cast, bitcast, union
+
+H27 asks that every escape hatch -- `@nocheck`, a bare `union`, `mem.bitcast` and
+`mem.cast`, a raw dereference, an `extern` site -- be enumerable in one bounded
+pass with a provenance, as the precondition of H03's checked-subset claim. D355's
+manifest inventory listed the two the program declares. The same byte scan now
+lists the four it does not: an `extern fn` first on its line (the function is the
+foreign one), `mem.cast[` and `mem.bitcast[` in code -- not in a comment, not in
+a string, not the tail of a longer name -- attributed to the last `fn` before them,
+and a bare `union {` after `=` on a `type` line, attributed to the type. Each
+entry carries `provenance`: `declared` for `@unsafe` and `@nocheck`, which the
+program wrote as a boundary, and `trusted` for the rest, where the checker trusts
+the program and checks nothing. The schema names both fields, and the corpus gains
+`manifest_unsafe`, one program with all six kinds and a comment and a string that
+spell two of them and are not sites.
+
+What the bytes cannot find is the raw dereference: `*p` before a name reads as a
+multiplication does, and the pass that knows the difference is the checker, which
+a warm build does not run. It is the one H27 boundary not listed, and the tooling
+document says so. Also outside the scan: a `use e.mem as m` alias (the sites are
+spelled `m.cast`), which nothing in the tree does.
+
+Not yet, of H27: the dereference sites from the checker on a cold build, merged
+with the scan's; the index marking them; `--unchecked` images as one boundary in
+the context records; the boundaries of an artifact-only module (a warm build
+scans the source it kept, which is right, but a module linked from an artifact
+alone contributes nothing).

@@ -345,10 +345,13 @@ search roots, resolved source identifier or absolute external path, and SHA-256;
 assets carry logical name, source identifier, media type, sorted attributes, byte
 size and SHA-256;
 artifacts carry project-relative paths, kind, target and SHA-256; `unsafe` is the
-inventory of the program's unsafe boundaries (D355, H03/H27) -- one entry per
-`@unsafe` function and `@nocheck` block the build checked, with `kind`, `module`,
-`function` and `line`, read off every module's tokens so a warm build lists them
-too, in module then line order; `incremental` (D363, H14) is what an
+inventory of the program's unsafe boundaries (D355, D371, H03/H27) -- one entry per
+`@unsafe` function and `@nocheck` block (`provenance: "declared"`) and per `extern
+fn`, `mem.cast`, `mem.bitcast` and bare `union` site (`provenance: "trusted"`: the
+checker trusts the program there and checks nothing), with `kind`, `provenance`,
+`module`, `function` (the type, for a `union`) and `line`, read off every module's
+bytes so a warm build lists them too, in module then line order; a raw dereference
+is not enumerable by this pass and is the boundary the inventory does not list; `incremental` (D363, H14) is what an
 `--incremental` build decided per module, in graph order -- `decision` `kept` or
 `rebuilt` and `reason`: `stable` (source and every dependency unchanged),
 `edges-hold` (source unchanged, every imported interface still as recorded),

@@ -2842,18 +2842,28 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
                         // The next `fn` after the attribute.
                         let (name, found) = manifest_fn_after(text_bytes, word_end)
                         if found { function = name }
-                        try manifest_unsafe_site(out, written, "unsafe", g.modules[module_at].name, function, line)
+                        try manifest_unsafe_site(out, written, "unsafe", "declared", g.modules[module_at].name, function, line)
                     } else {
                         // The last `fn` before the block.
                         let (name, found) = manifest_fn_before(text_bytes, byte_at)
                         if found { function = name }
-                        try manifest_unsafe_site(out, written, "nocheck", g.modules[module_at].name, function, line)
+                        try manifest_unsafe_site(out, written, "nocheck", "declared", g.modules[module_at].name, function, line)
                     }
                     written += 1usize
                 }
                 byte_at = word_end
             } else {
-                byte_at += 1usize
+                // The escape hatches the program does not declare (D371, H27): an
+                // `extern fn`, a `mem.cast`, a `mem.bitcast`, a bare `union` -- each a
+                // site the checker trusts and checks nothing at, listed as `trusted`.
+                let (kind, function, site_end) = manifest_trusted_site(text_bytes, byte_at)
+                if site_end != 0usize {
+                    try manifest_unsafe_site(out, written, kind, "trusted", g.modules[module_at].name, function, lex.line_of(text_bytes, lines, byte_at))
+                    written += 1usize
+                    byte_at = site_end
+                } else {
+                    byte_at += 1usize
+                }
             }
         }
         module_at += 1usize
@@ -2924,10 +2934,79 @@ fn manifest_fn_before(text_bytes: str, at: usize) -> (str, bool) {
     ret ("", false)
 }
 
-fn manifest_unsafe_site(out: *Out, written: usize, kind: str, module_name: str, function: str, line: usize) -> err {
+// An undeclared escape hatch at `at`, or an end of zero: `extern fn NAME` first on its
+// line; `mem.cast[` and `mem.bitcast[` in code (not in a comment or a string, not part
+// of a longer name), attributed to the last `fn` before; a bare `union {` after `=`
+// on a `type` line, attributed to the type. A raw dereference is not a site the bytes
+// can find: it is `*` before a name, as a multiplication is.
+fn manifest_trusted_site(text_bytes: str, at: usize) -> (str, str, usize) {
+    let b = text_bytes[at]
+    if b == 101u8 && manifest_starts(text_bytes, at, "extern fn ") && manifest_line_opens(text_bytes, at) {
+        let name_end = manifest_word_end(text_bytes, at + 10usize)
+        ret ("extern", text_bytes[at + 10usize..name_end], name_end)
+    }
+    if b == 109u8 && (at == 0usize || !manifest_word_byte(text_bytes[at - 1usize])) && manifest_in_code(text_bytes, at) {
+        if manifest_starts(text_bytes, at, "mem.cast[") {
+            let (name, found) = manifest_fn_before(text_bytes, at)
+            var function = ""
+            if found { function = name }
+            ret ("cast", function, at + 9usize)
+        }
+        if manifest_starts(text_bytes, at, "mem.bitcast[") {
+            let (name, found) = manifest_fn_before(text_bytes, at)
+            var function = ""
+            if found { function = name }
+            ret ("bitcast", function, at + 12usize)
+        }
+    }
+    if b == 117u8 && manifest_starts(text_bytes, at, "union {") && at >= 2usize && text_bytes[at - 1usize] == 32u8 && text_bytes[at - 2usize] == 61u8 && manifest_in_code(text_bytes, at) {
+        // `type NAME = union {`, or `resource union {` under a `type` line.
+        var line_start = at
+        while line_start > 0usize && text_bytes[line_start - 1usize] != 10u8 { line_start = line_start - 1usize }
+        var name = ""
+        if manifest_starts(text_bytes, line_start, "type ") { name = text_bytes[line_start + 5usize..manifest_word_end(text_bytes, line_start + 5usize)] }
+        ret ("union", name, at + 7usize)
+    }
+    ret ("", "", 0usize)
+}
+
+fn manifest_starts(text_bytes: str, at: usize, prefix: str) -> bool {
+    if at + prefix.len > text_bytes.len { ret false }
+    ret graph.same(text_bytes[at..at + prefix.len], prefix)
+}
+
+fn manifest_word_byte(b: u8) -> bool {
+    let word = (b >= 97u8 && b <= 122u8) || (b >= 65u8 && b <= 90u8) || (b >= 48u8 && b <= 57u8) || b == 95u8 || b == 46u8
+    ret word
+}
+
+// Whether `at` is in code on its line: not after a `//`, not inside a string literal.
+fn manifest_in_code(text_bytes: str, at: usize) -> bool {
+    var line_start = at
+    while line_start > 0usize && text_bytes[line_start - 1usize] != 10u8 { line_start = line_start - 1usize }
+    var scan = line_start
+    var in_string = false
+    while scan < at {
+        let c = text_bytes[scan]
+        if in_string {
+            if c == 92u8 { scan += 1usize } else {
+                if c == 34u8 { in_string = false }
+            }
+        } else {
+            if c == 34u8 { in_string = true }
+            if c == 47u8 && scan + 1usize < at && text_bytes[scan + 1usize] == 47u8 { ret false }
+        }
+        scan += 1usize
+    }
+    ret !in_string
+}
+
+fn manifest_unsafe_site(out: *Out, written: usize, kind: str, provenance: str, module_name: str, function: str, line: usize) -> err {
     if written != 0usize { try byte(out, 44u8) }
     try text(out, "{\"kind\":")
     try quoted(out, kind)
+    try text(out, ",\"provenance\":")
+    try quoted(out, provenance)
     try text(out, ",\"module\":")
     try quoted(out, module_name)
     try text(out, ",\"function\":")
