@@ -9827,3 +9827,21 @@ both suites reads the new message at the member's column.
 
 Not yet: an enum member or a tagged-union arm that is not there, and a method
 call on a type that has none.
+
+## D449 -- Differential execution against an independent oracle
+
+H10 asks for differential execution against an oracle that shares nothing with
+the compiler; the suites compared the compiler with itself (stage 2 against
+stage 3, hot against cold) and fixtures with their own expectations. The link
+fixture `differential` hashes and encodes every line of a file with the
+library -- SHA-256, SHA3-256, base64 -- and `benchmarks/differential/
+differential.py` builds it, feeds it random printable inputs from empty to a
+few kilobytes with the block boundaries of both hashes among them, and holds
+every answer to Python's `hashlib` and `base64`. The compiler is under test
+twice over: the library's arithmetic and the code the compiler makes of it.
+Both suites run sixty cases under a fixed seed; the harness takes `--cases`
+and `--seed` for a longer run.
+
+Not yet: an oracle for the compiler's own codegen -- an interpreter of NIR, or
+the bootstrap's images run against the self-hosted ones on the same inputs --
+and the other codecs.

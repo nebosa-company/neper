@@ -2362,6 +2362,8 @@ cmp -s "$deadline_actual" "$conformance_root/tools/deadline.expected.jsonl" || {
 # Metamorphic tests (D438, H10): comments removed build the same image; declarations
 # reversed behave the same.
 python3 "$repo/benchmarks/metamorphic/metamorphic.py" "$test_build/neper-self" "$repo" x64 linux "$test_build/metamorphic" "$repo/tests/selfhost/fixtures/link/algo_sort/src/main.e" "$repo/tests/selfhost/fixtures/link/algo_bitset/src/main.e" "$repo/tests/selfhost/fixtures/link/control/src/main.e"
+# Differential execution against an independent oracle (D449, H10).
+python3 "$repo/benchmarks/differential/differential.py" "$test_build/neper-self" "$repo" x64 linux "$test_build/differential" --cases 60 --seed 7
 # `--instances N` (D426, H06): a budget over the specializations a build makes.
 instances_status=0
 (cd "$conformance_root/tools" && $test_build/neper-self emit-executable instances.e "$repo" x64 linux "$test_build/instances" --json --instances 2 > "$test_build/conformance-tools-instances.jsonl") || instances_status=$?

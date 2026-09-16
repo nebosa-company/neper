@@ -2296,6 +2296,10 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deadlineActual).Hash -ne (Get-
 $metamorphicOut = Join-Path $testBuild 'metamorphic'
 & python (Join-Path $repo 'benchmarks/metamorphic/metamorphic.py') $compiler $repo 'x64' 'windows' $metamorphicOut (Join-Path $PSScriptRoot 'fixtures\link\algo_sort\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\algo_bitset\src\main.e') (Join-Path $PSScriptRoot 'fixtures\link\control\src\main.e')
 if ($LASTEXITCODE -ne 0) { throw 'a metamorphic transformation changed what a fixture builds or does' }
+# Differential execution against an independent oracle (D449, H10): the library's
+# SHA-256, SHA3-256 and base64 over random inputs against Python's hashlib and base64.
+& python (Join-Path $repo 'benchmarks/differential/differential.py') $compiler $repo 'x64' 'windows' (Join-Path $testBuild 'differential') --cases 60 --seed 7
+if ($LASTEXITCODE -ne 0) { throw 'the library disagrees with the independent oracle' }
 # `--instances N` (D426, H06): a budget over the specializations a build makes -- three
 # instances past a budget of two is E-COMPTIME-0001 and exit 1; a budget of three builds.
 $instancesActual = Join-Path $testBuild 'conformance-tools-instances.jsonl'
