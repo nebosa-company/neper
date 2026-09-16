@@ -1564,7 +1564,7 @@ if (-not $boundsElided -or [int]$Matches[1] -lt 2) { throw "the bounds proof eli
 if ($LASTEXITCODE -ne 0) { throw 'the proven loop summed wrongly' }
 $boundsShifted = & $boundsProofPath shifted 2>&1
 if ($LASTEXITCODE -ne 134 -or ($boundsShifted -join "`n") -notmatch 'main\.e:26:26: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the unproven access did not trap: exit $LASTEXITCODE, $($boundsShifted -join "`n")" }
-foreach ($boundsMode in @('nested', 'reslice', 'guarded', 'conjunct', 'exit_guard')) {
+foreach ($boundsMode in @('nested', 'reslice', 'guarded', 'conjunct', 'exit_guard', 'width')) {
     & $boundsProofPath $boundsMode 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "the $boundsMode loop went wrong under its retained check" }
 }

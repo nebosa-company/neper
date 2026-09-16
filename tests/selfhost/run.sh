@@ -1663,6 +1663,7 @@ esac
 "$bounds_proof_path" guarded
 "$bounds_proof_path" conjunct
 "$bounds_proof_path" exit_guard
+"$bounds_proof_path" width
 bounds_exit_status=0
 bounds_exit=$("$bounds_proof_path" exit_shifted 2>&1) || bounds_exit_status=$?
 [ "$bounds_exit_status" -eq 134 ]

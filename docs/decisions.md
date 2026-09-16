@@ -8499,3 +8499,54 @@ what a harness runs; nothing here applies anything.
 Not yet: `try` as the alternative fix when the value is bound by `let x = try
 ...`'s shape (it is the same line rewritten, not an insertion, and the harness
 may prefer it); fixes for the type and name codes.
+
+## D383 -- The stage measured: two scans that had gone quadratic and per-byte, and the cost that stands
+
+The gate (D366) run on the D382 compiler named twenty breaches of thirty
+measures (`benchmarks/baseline/h29-windows-d382.json`): the compiler's own cold
+release build 772 ms against the baseline's 416 and D351's 528, warm 177 against
+53, `sc500k` cold 2.21 s against 1.49. The phase split found two of the causes
+in this stage's own code. The manifest phase had gone from 3 to 47 ms on the
+compiler and 20 to 155 ms on `sc500k`: D371's unsafe-site scan called a
+three-result function for every byte of every module and back-scanned the line
+for every word-initial `m`. And the bounds proofs of D377-D380 rescanned the
+whole function's tokens for `&i` at every candidate `if`, quadratic in a
+function such as `main`'s dispatch.
+
+Both are fixed. The scan classifies each byte through a 256-entry table (one
+load, unchecked by D384's width proof), tests neighbours only for the three
+openers, and calls out only for a candidate: 155 ms is 24 on `sc500k`, 47 is 16
+on the compiler. The function's address-taken names are collected once when it
+is opened and a proof asks that list. Re-measured (`h29-windows-d384.json`):
+the compiler cold 752 ms, warm 146; `sc500k` cold 2.07 s, warm 172 ms.
+
+What stands is D355's: the byte-heavy phases of the compiler's own build --
+link, link from artifacts, write executable, load and parse, the manifest's
+hashes -- run at half the speed they did before the release compiler kept its
+checks, and lowering at two thirds, since the compiler is itself a release
+build under section 11's retained rows; the image is 8.5 MB against 5.5. The
+proofs so far take 376 checks out of the compiler's own build (D356-D384);
+the byte loops that remain are through field bases and offsets (`out.bytes[at]`,
+`bytes[at + 3usize]` under `while at + 8usize <= bytes.len`) that no proof
+covers yet. The way back is either those proofs or `@nocheck` on the
+linker's and hasher's inner loops, listed in the manifest as the boundaries
+they are; neither is taken in this row, and the breaches stay named.
+
+## D384 -- The width proof: an index that cannot reach the array's length
+
+The fourth proof shape is not about control flow: an index expression whose
+value is bounded by its own shape. `usize(b)` of a `u8` -- or any integer
+conversion of an unsigned 8- or 16-bit value, or a narrowing to `u8`/`u16`,
+which traps or fits -- is below 256 or 65536; `e & N` with a literal `N` is
+below `N + 1` whatever `e` is; `K + e` with a literal `K` and a bounded `e` is
+below `K + bound`; a parenthesised expression is its inside's. When the base is
+an array of known length and the bound is at most that length, the index
+instruction is emitted without its check. It covers the CRC's table lookups
+(`table[1792usize + (low & 255usize)]`), the lexer's and the manifest scan's
+class tables (`classes[usize(byte)]`) and every hash table masked by a power
+of two: the compiler's own build reports 376 checks elided, from 369, and the
+fixture's `width` case holds the four forms.
+
+Not yet: `bytes[at + K]` under `while at + 8usize <= bytes.len` (an offset
+below the loop's slack), a bound through `%` by a literal, and a slice base
+whose length is known from a `let` of an array.

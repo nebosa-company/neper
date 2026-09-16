@@ -95,6 +95,13 @@ fn exit_shifted(items: []const u32, start: usize) -> u32 {
     ret items[at]
 }
 
+// The width form (D384): an index narrowed to `u8`, widened from a `u8`, masked by a
+// literal or offset by one cannot reach a 256-entry table, so no check is emitted.
+fn width(table: [256]u32, key: u8, hash: usize) -> u32 {
+    let narrowed = table[usize(key)] + table[usize(u8(hash % 200usize))]
+    ret narrowed + table[hash & 255usize] + table[128usize + (hash & 127usize)]
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var mode = ""
     if args.len > 1usize { mode = args[1usize] }
@@ -133,6 +140,16 @@ fn main(a: *mem.Arena, args: []str) -> err {
     }
     if str.eq(mode, "exit_shifted") {
         if exit_shifted(values[..], args.len + 2usize) == 0u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "width") {
+        var table: [256]u32 = zero
+        var fill = 0usize
+        while fill < table.len {
+            table[fill] = u32(fill)
+            fill += 1usize
+        }
+        if width(table, u8(args.len + 250usize), args.len * 2654435761usize) == 0u32 { ret mem.Exhausted }
         ret ok
     }
     if str.eq(mode, "guarded_shifted") {

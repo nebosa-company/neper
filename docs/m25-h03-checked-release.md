@@ -31,8 +31,11 @@ body's first write of `i` bounds it as the loop's does; `guarded` and
 compiler's own build reports 336 checks elided with both forms; the leftmost
 conjunct of an `&&` condition opens the same proof over the rest of the condition
 and the block (D378: 354); an early exit under `i >= x.len` proves the rest of its
-block (D380: 369). Further proofs -- a bound through a second local (`while at <
-count` with `count <= x.len`), a field base (`c.tokens[at]`) -- are the follow-up, and the compiler's own hot loops are mostly of
+block (D380: 369); an index bounded by its shape -- a `u8` widened, a literal mask,
+a literal offset of a bounded value -- into an array of known length needs no
+control flow at all (D384: 376). Further proofs -- an offset below a loop's slack
+(`bytes[at + 3usize]` under `while at + 8usize <= bytes.len`), a bound through a
+second local, a field base (`out.bytes[at]`) -- are the follow-up, and the compiler's own hot loops are mostly of
 those shapes, which is why the cost below stands.
 
 ## 2. Unsafe operations
