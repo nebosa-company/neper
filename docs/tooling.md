@@ -228,6 +228,32 @@ with `"truncated":true` beside `records` when the checker's table overflowed. A
 program that does not check emits the check diagnostic on stderr and exits 1, as
 `check-file` without `--json` does.
 
+### Context
+
+`neper context-file PATH ROOT ARCH OS --json --symbol module.name [--budget N]
+[--cursor N]` (D361, H08) checks the program and answers what the compiler knows
+about one declared function, under a record budget (64 by default):
+
+- `subject` — always first: `subject`, `kind` (`fn`), the module's `source`
+  identity and `source_sha256` (the snapshot the answer is bound to), `target`,
+  `checks` (the policy), `grammar_revision`, and the declaration's `span`.
+- `fact` — one per fact, in a fixed order: the `signature`; an `ownership` fact per
+  `own` parameter; `resources` (the checker's rules held for the body) or
+  `boundary` (an `@unsafe` function, where they were not applied); then the body's
+  decisions in source order -- `call` (the resolved target, or `unknown` for a
+  call through a value), `dispatch`, `instance`, `discard` -- each with its `span`.
+  `provenance` is `compiler-proved` for what the checker established,
+  `declared-and-checked` for what the source says and the checker accepted,
+  `unknown` for what it cannot know; `trusted-external` and `runtime-observed`
+  are reserved for facts no command emits yet.
+
+The result carries `records` (written), `omitted` (past the budget),
+`complete` (nothing omitted and the checker's table did not overflow) and
+`cursor`, which passed back as `--cursor` continues from the next fact; the
+pagination is deterministic for identical source, and a source change --
+visible as a different `source_sha256` -- invalidates the cursor. A subject no
+function of the program has is an `E-CLI-9999` diagnostic and exit 2.
+
 ## 6. Formatting contract
 
 `neper fmt` is a canonical **layout** formatter, not a semantic normalizer. It does

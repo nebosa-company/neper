@@ -2011,6 +2011,12 @@ $explainActual = Join-Path $testBuild 'conformance-tools-explain.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file explain.e `"$repo`" x64 windows --json > `"$explainActual`""
 if ($LASTEXITCODE -ne 0) { throw "explain-file --json failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain.expected.jsonl')).Hash) { throw "explain-file --json differs from the conformance corpus" }
+# `context-file --json` (D361): one function's facts with provenance, budgeted; the
+# target names the host, so the golden is per host.
+$contextActual = Join-Path $testBuild 'conformance-tools-context.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file explain.e `"$repo`" x64 windows --json --symbol explain.main --budget 8 > `"$contextActual`""
+if ($LASTEXITCODE -ne 0) { throw "context-file --json failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contextActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/context.x64-windows.expected.jsonl')).Hash) { throw "context-file --json differs from the conformance corpus" }
 # `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
 $disActual = Join-Path $testBuild 'conformance-tools-dis.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json > `"$disActual`""

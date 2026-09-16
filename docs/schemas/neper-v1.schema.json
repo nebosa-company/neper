@@ -60,7 +60,7 @@
       "required":["schema","version","record","command","tool_version","language_version","grammar_revision"],
       "properties":{
         "schema":{"const":"neper-stream"},"version":{"const":1},"record":{"const":"header"},
-        "command":{"enum":["build","check","run","test","fmt","tokens","parse","index","dis","info","explain"]},"tool_version":{"type":"string"},
+        "command":{"enum":["build","check","run","test","fmt","tokens","parse","index","dis","info","explain","context"]},"tool_version":{"type":"string"},
         "language_version":{"type":"string"},"grammar_revision":{"type":"integer","minimum":1}
       }
     },
@@ -139,6 +139,26 @@
         "span":{"$ref":"#/$defs/span"}
       }
     },
+    "subject": {
+      "type":"object","additionalProperties":false,
+      "required":["record","subject","kind","source","source_sha256","target","checks","grammar_revision","span"],
+      "properties":{
+        "record":{"const":"subject"},"subject":{"type":"string"},"kind":{"enum":["fn"]},
+        "source":{"$ref":"#/$defs/source"},"source_sha256":{"$ref":"#/$defs/sha256"},
+        "target":{"type":"string"},"checks":{"enum":["retained","off"]},"grammar_revision":{"type":"integer","minimum":1},
+        "span":{"$ref":"#/$defs/span"}
+      }
+    },
+    "fact": {
+      "type":"object","additionalProperties":false,
+      "required":["record","kind","provenance","value"],
+      "properties":{
+        "record":{"const":"fact"},
+        "kind":{"enum":["signature","ownership","resources","boundary","call","dispatch","instance","discard"]},
+        "provenance":{"enum":["compiler-proved","declared-and-checked","trusted-external","runtime-observed","unknown"]},
+        "value":{"type":"string"},"span":{"$ref":"#/$defs/span"}
+      }
+    },
     "discard": {
       "type":"object","additionalProperties":false,
       "required":["record","function","deferred","span"],
@@ -197,7 +217,7 @@
       "properties":{"record":{"const":"disassembly"},"symbol":{"type":"string"},"target":{"type":"string"},"text":{"type":"string"}}
     },
     "streamRecord": {
-      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
+      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
     },
     "sourceMap": {
       "type":"object","required":["schema","version","generated","generated_sha256","mappings"],

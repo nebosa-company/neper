@@ -48,7 +48,10 @@
 #define MAX_LOCALS 256
 #define MAX_ARGS 16
 #define MAX_USES 256
-#define MAX_STRINGS 4096
+/* Program-wide string literals, held by pointer. Raised from 4096 (D361): the
+   compiler's own JSON writers passed it, and the failure was an undefined label at
+   assembly time rather than a message; now it is a message. */
+#define MAX_STRINGS 16384
 #define MAX_DIAGNOSTICS 4096
 #define MAX_TRAP_SITES 16384
 #define MAX_PATH_LEN 4096
@@ -1474,7 +1477,12 @@ static Expr *parse_primary(Compiler *c) {
         Expr *e = new_expr(EX_STRING, *token);
         decode_string(token, &e->as.string.bytes, &e->as.string.length);
         e->as.string.label = c->program.string_count;
-        if (c->program.string_count < MAX_STRINGS) c->program.strings[c->program.string_count++] = e;
+        if (c->program.string_count < MAX_STRINGS) {
+            c->program.strings[c->program.string_count++] = e;
+        } else {
+            fprintf(stderr, "%s: error[E-TOOL-9999]: string literal limit exceeded\n", c->source_path);
+            exit(2);
+        }
         e->type = type_make(TY_STR, "str");
         return e;
     }

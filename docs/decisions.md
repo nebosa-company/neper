@@ -7914,3 +7914,35 @@ Not yet, of H07: caller-supplied detail on the checked path (`open_with(...,
 detail: *ErrorDetail)`), which would end the thread slot; nested wrappers' detail
 contracts beyond `e.os`; concurrent errors; borrowed label lifetimes; the
 allocation-failure rows per acquisition step.
+
+## D361 -- `context-file`: one function's facts, with provenance, under a budget
+
+H08's query, first cut. `context-file PATH ROOT ARCH OS --json --symbol
+module.name [--budget N] [--cursor N]` checks the program the way `check-file`
+does, with the explain table open, and answers about one declared function: a
+`subject` record binding the answer to the module's SHA-256, the target, the
+check policy and the grammar revision; then facts in a fixed order -- the
+signature, an ownership fact per `own` parameter, whether the resource and region
+rules held for the body or were off (`@unsafe`), and the body's decisions in
+source order: every resolved call (a call through a value is `unknown`), every
+dispatch, instantiation and discard, each with its span. Every fact carries its
+provenance as H08 asks: `compiler-proved`, `declared-and-checked` or `unknown`;
+`trusted-external` and `runtime-observed` are in the contract for what no
+command emits yet, and a comment is never a fact. The budget is a count of
+records; the result says how many were written and omitted, whether the answer is
+complete, and the cursor that continues it -- deterministic for identical source,
+and a changed `source_sha256` is the harness's signal that the cursor is stale.
+Calls are recorded by the checker as explain records only while the table is
+open, so no build pays for them.
+
+On the way, the C bootstrap's program-wide string-literal table (4096) overflowed
+on the compiler's JSON writers, and the failure was an undefined label at assembly
+time; it is 16384 now and a message when it overflows -- the second capacity
+constant this stage has touched (D353), for the same reason and under the same
+policy.
+
+Not yet, of H08: symbols other than functions; borrow origins and invalidations
+as facts (the checker has them per body and does not keep them); effects and
+possible errors; dependency summary hashes; a byte budget beside the record
+budget; partial and broken sources (the command fails closed on a check error
+rather than answering what it could).

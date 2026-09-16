@@ -2194,6 +2194,10 @@ cmp -s "$test_build/conformance-tools-fmt-check.jsonl" "$conformance_root/tools/
 ' "fmt --check --json differs from the conformance corpus" >&2; exit 1; }
 # `build-manifest --json` (D236): the canonical manifest with each input's SHA-256, byte for byte.
 manifest_actual="$test_build/conformance-tools-manifest.jsonl"
+# `context-file --json` (D361): one function's facts with provenance, budgeted.
+context_actual="$test_build/conformance-tools-context.jsonl"
+(cd "$conformance_root/tools" && $test_build/neper-self context-file explain.e "$repo" x64 linux --json --symbol explain.main --budget 8 > "$context_actual")
+cmp -s "$context_actual" "$conformance_root/tools/context.x64-linux.expected.jsonl" || { printf '%s\n' "context-file --json differs from the conformance corpus" >&2; exit 1; }
 # `explain-file --json` (D359): every dispatch and instantiation the checker decided.
 explain_actual="$test_build/conformance-tools-explain.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self explain-file explain.e "$repo" x64 linux --json > "$explain_actual")

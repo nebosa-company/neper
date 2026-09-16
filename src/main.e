@@ -863,6 +863,17 @@ fn arena_flag(args: []str) -> usize {
 }
 
 // `--inline-cap N` (D348): the cap asked for plus one, or zero when the flag is absent.
+// A decimal the flags already vetted with `decimal_ok`.
+fn decimal_value(spelling: str) -> usize {
+    var value = 0usize
+    var digit = 0usize
+    while digit < spelling.len {
+        value = value * 10usize + usize(spelling[digit] - 48u8)
+        digit += 1usize
+    }
+    ret value
+}
+
 fn inline_cap_flag(args: []str) -> usize {
     var at = 7usize
     while at + 1usize < args.len {
@@ -6936,6 +6947,51 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try init_cli_resolver(a, &resolver, &loaded, &report)
         try resolve.collect(&resolver, &loaded)
         try io.print("module resolve ok\n")
+        ret ok
+    }
+    // `context-file PATH ROOT ARCH OS --json --symbol module.name [--budget N]
+    // [--cursor N]` (D361, H08): the program checked, then what the compiler knows
+    // about one function, as facts with provenance, under a record budget.
+    if args.len >= 9usize && same(args[1usize], "context-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") {
+        var budget = 64usize
+        var cursor = 0usize
+        var flag_at = 9usize
+        while flag_at + 1usize < args.len {
+            if same(args[flag_at], "--budget") && decimal_ok(args[flag_at + 1usize]) { budget = decimal_value(args[flag_at + 1usize]) }
+            if same(args[flag_at], "--cursor") && decimal_ok(args[flag_at + 1usize]) { cursor = decimal_value(args[flag_at + 1usize]) }
+            flag_at += 2usize
+        }
+        var loaded: graph.Graph = zero
+        try init_cli_graph(a, &loaded)
+        let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
+        if load_error != ok { ret load_error }
+        var resolver: resolve.Resolver = zero
+        try init_cli_resolver(a, &resolver, &loaded, &report)
+        let resolve_error = resolve.collect(&resolver, &loaded)
+        if resolve_error != ok {
+            try print_resolve_diagnostic(&report, &loaded, &resolver, resolve_error)
+            os.exit(1i32)
+            ret ok
+        }
+        var checker: check.Checker = zero
+        try init_cli_checker(a, &checker, &loaded, &report)
+        checker.arena = a
+        let (explains, explains_error) = mem.alloc[check.Explain](a, 65536usize)
+        if explains_error != ok { ret explains_error }
+        checker.explains = explains
+        let check_error = check.run(&checker, &resolver, &loaded)
+        if check_error != ok {
+            try print_check_diagnostic(&report, &loaded, &checker, check_error)
+            os.exit(1i32)
+            ret ok
+        }
+        var target_storage: [64]u8 = zero
+        var target_at = tool.nptest_copy(target_storage[..], 0usize, args[4usize])
+        target_storage[target_at] = 45u8
+        target_at = tool.nptest_copy(target_storage[..], target_at + 1usize, args[5usize])
+        let target_text = target_storage[0usize..target_at]
+        try tool.context_json(a, &checker, &loaded, args[8usize], budget, cursor, target_text, "retained")
+        os.exit(0i32)
         ret ok
     }
     // `explain-file PATH ROOT ARCH OS --json` (D359, H06): the program checked as

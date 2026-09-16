@@ -7962,6 +7962,20 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if fresh_error == ok && c.call_cache.len != 0usize && c.call_generation != 0usize {
         c.call_cache[slot] = CallCacheEntry { generation: c.call_generation, token_start: usize(node.token_start), token_end: usize(node.token_end), info: fresh }
     }
+    // A resolved direct call, for the context query (D361): the callee, or the
+    // fact that the target is a value and not known here.
+    if fresh_error == ok && c.explains.len != 0usize && !fresh.is_cast && !fresh.protocol_pending && !fresh.is_unreachable {
+        if c.explain_count < c.explains.len {
+            var offset = 0usize
+            if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+            var callee = c.function_count
+            if !fresh.indirect { callee = explain_function_index(c, fresh.function) }
+            c.explains[c.explain_count] = Explain { kind: 4u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: callee, found: fresh.indirect, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+            c.explain_count += 1usize
+        } else {
+            c.explain_overflow = true
+        }
+    }
     ret (fresh, fresh_error)
 }
 

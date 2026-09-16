@@ -2099,7 +2099,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
         let e = c.explains[best]
         first = false
         last = e
-        if e.module_index >= g.count { continue }
+        if e.module_index >= g.count || e.kind == 4u8 { continue }
         let module = g.modules[e.module_index]
         let (root, relative) = source_identity_of(g, module.path)
         let (path, path_error) = manifest_slashes(a, relative)
@@ -2178,6 +2178,266 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
 // the receiver, the function or rule, the instance's arguments -- so a site decided
 // twice the same way is one record and a template's site decided per instance is one
 // per instance.
+// `context-file PATH ROOT ARCH OS --json --symbol module.name [--budget N] [--cursor N]`
+// (D361, H08): what the compiler knows about one function, as facts with their
+// provenance, under a record budget. The subject's declaration comes from the
+// checker's tables; what its body decided comes from the explain records inside
+// its source range -- calls, dispatches, instantiations, discards; the unsafe
+// boundaries from the same byte scan the manifest uses. Every fact says how it
+// is known: `declared-and-checked` for what the source says and the checker
+// accepted, `compiler-proved` for what the checker established on its own,
+// `unknown` for a call whose target is a value. The result says how many records
+// were written, how many the budget left out, whether the answer is complete, and
+// the cursor that continues it.
+fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, budget: usize, cursor: usize, target_name: str, checks: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "context")
+    // The subject: `module.name`, a declared function of the program.
+    var dot = subject.len
+    var at = 0usize
+    while at < subject.len {
+        if subject[at] == 46u8 { dot = at }
+        at += 1usize
+    }
+    var function_index = c.function_count
+    if dot != subject.len {
+        let module_name = subject[0usize..dot]
+        let name = subject[dot + 1usize..subject.len]
+        var candidate = 0usize
+        while candidate < c.signature_function_count {
+            let function = c.functions[candidate]
+            if function.module_index < g.count && graph.same(g.modules[function.module_index].name, module_name) && graph.same(function.name, name) && !function.generic {
+                function_index = candidate
+                break
+            }
+            candidate += 1usize
+        }
+        if function_index == c.function_count {
+            candidate = 0usize
+            while candidate < c.signature_function_count {
+                let function = c.functions[candidate]
+                if function.module_index < g.count && graph.same(g.modules[function.module_index].name, module_name) && graph.same(function.name, name) {
+                    function_index = candidate
+                    break
+                }
+                candidate += 1usize
+            }
+        }
+    }
+    if function_index == c.function_count {
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try flush(&out)
+        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
+        ret flush(&out)
+    }
+    let function = c.functions[function_index]
+    let module = g.modules[function.module_index]
+    let (root, relative) = source_identity_of(g, module.path)
+    let (path, path_error) = manifest_slashes(a, relative)
+    if path_error != ok { ret path_error }
+    let (digest, digest_error) = manifest_sha256(a, module.text)
+    if digest_error != ok { ret digest_error }
+    out.lines = module.lines
+    var written = 0usize
+    var omitted = 0usize
+    var total = 0usize
+    // The subject record: identity of the snapshot and the subject, always written.
+    try text(&out, "{\"record\":\"subject\",\"subject\":")
+    try quoted(&out, subject)
+    try text(&out, ",\"kind\":\"fn\",\"source\":")
+    try manifest_identity(&out, root, relative)
+    try text(&out, ",\"source_sha256\":")
+    try quoted(&out, digest)
+    try text(&out, ",\"target\":")
+    try quoted(&out, target_name)
+    try text(&out, ",\"checks\":")
+    try quoted(&out, checks)
+    try text(&out, ",\"grammar_revision\":3,\"span\":")
+    var declaration: lex.Token = zero
+    declaration.start = function.source_start
+    declaration.end = function.source_start
+    try point_span(&out, root, path, module.text, declaration)
+    try byte(&out, 125u8)
+    try flush(&out)
+    // The facts, in a fixed order, each counted against the cursor and the budget.
+    // Signature.
+    total += 1usize
+    if total > cursor && written < budget {
+        try text(&out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":\"fn ")
+        try text(&out, function.name)
+        try byte(&out, 40u8)
+        var parameter_at = 0usize
+        while parameter_at < function.parameter_count {
+            if parameter_at != 0usize { try text(&out, ", ") }
+            let parameter = c.parameters[function.first_parameter + parameter_at]
+            try text(&out, parameter.name)
+            try text(&out, ": ")
+            if parameter.own { try text(&out, "own ") }
+            try type_text(&out, c, g, parameter.ty, 0usize)
+            parameter_at += 1usize
+        }
+        try byte(&out, 41u8)
+        if function.return_count != 0usize {
+            try text(&out, " -> ")
+            if function.return_count > 1usize { try byte(&out, 40u8) }
+            var return_at = 0usize
+            while return_at < function.return_count {
+                if return_at != 0usize { try text(&out, ", ") }
+                try type_text(&out, c, g, c.return_types[function.first_return + return_at], 0usize)
+                return_at += 1usize
+            }
+            if function.return_count > 1usize { try byte(&out, 41u8) }
+        }
+        try text(&out, "\"}")
+        try flush(&out)
+        written += 1usize
+    } else {
+        if total > cursor { omitted += 1usize }
+    }
+    // Ownership: each `own` parameter is a transfer the caller makes.
+    var own_at = 0usize
+    while own_at < function.parameter_count {
+        let parameter = c.parameters[function.first_parameter + own_at]
+        if parameter.own {
+            total += 1usize
+            if total > cursor && written < budget {
+                try text(&out, "{\"record\":\"fact\",\"kind\":\"ownership\",\"provenance\":\"declared-and-checked\",\"value\":\"takes ")
+                try text(&out, parameter.name)
+                try text(&out, ": the caller's value moves in and this function owes its cleanup on every exit\"}")
+                try flush(&out)
+                written += 1usize
+            } else {
+                if total > cursor { omitted += 1usize }
+            }
+        }
+        own_at += 1usize
+    }
+    // What the checker established for the body: the resource and region rules
+    // ran over it, or did not (an `@unsafe` function).
+    total += 1usize
+    if total > cursor && written < budget {
+        if manifest_is_unsafe(module.text, function.source_start) {
+            try text(&out, "{\"record\":\"fact\",\"kind\":\"boundary\",\"provenance\":\"declared-and-checked\",\"value\":\"@unsafe: the resource and region rules are not applied inside this function\"}")
+        } else {
+            try text(&out, "{\"record\":\"fact\",\"kind\":\"resources\",\"provenance\":\"compiler-proved\",\"value\":\"every resource this function owns is consumed on every exit; no view outlives its region or its container's change\"}")
+        }
+        try flush(&out)
+        written += 1usize
+    } else {
+        if total > cursor { omitted += 1usize }
+    }
+    // The body's decisions, from the explain records inside the source range, in
+    // source order; each a fact with its span.
+    var last_offset = 0usize
+    var last_kind = 0u8
+    var last_function = 0usize
+    var first = true
+    while true {
+        var best = c.explain_count
+        var scan = 0usize
+        while scan < c.explain_count {
+            let e = c.explains[scan]
+            if e.module_index == function.module_index && e.offset >= function.source_start && e.offset < function.source_end {
+                let after = first || e.offset > last_offset || (e.offset == last_offset && (e.kind > last_kind || (e.kind == last_kind && e.function_index > last_function)))
+                if after && (best == c.explain_count || e.offset < c.explains[best].offset || (e.offset == c.explains[best].offset && (e.kind < c.explains[best].kind || (e.kind == c.explains[best].kind && e.function_index < c.explains[best].function_index)))) { best = scan }
+            }
+            scan += 1usize
+        }
+        if best == c.explain_count { break }
+        let e = c.explains[best]
+        first = false
+        last_offset = e.offset
+        last_kind = e.kind
+        last_function = e.function_index
+        total += 1usize
+        if total <= cursor { continue }
+        if written >= budget {
+            omitted += 1usize
+            continue
+        }
+        var here: lex.Token = zero
+        here.start = e.offset
+        here.end = e.offset
+        try text(&out, "{\"record\":\"fact\",\"kind\":")
+        if e.kind == 4u8 {
+            if e.found {
+                try text(&out, "\"call\",\"provenance\":\"unknown\",\"value\":\"a call through a function value; the target is not known here\"")
+            } else {
+                try text(&out, "\"call\",\"provenance\":\"declared-and-checked\",\"value\":")
+                try quoted_function(&out, c, g, e.function_index)
+            }
+        }
+        if e.kind == 1u8 {
+            try text(&out, "\"dispatch\",\"provenance\":\"compiler-proved\",\"value\":\"")
+            try text(&out, e.protocol)
+            try text(&out, " on ")
+            try type_text(&out, c, g, e.receiver, 0usize)
+            if e.found {
+                try text(&out, " is ")
+                if e.function_index < c.function_count {
+                    if c.functions[e.function_index].module_index < g.count {
+                        try text(&out, g.modules[c.functions[e.function_index].module_index].name)
+                        try byte(&out, 46u8)
+                    }
+                    try text(&out, c.functions[e.function_index].name)
+                }
+            } else {
+                if e.builtin == .None { try text(&out, " has no declaration and no supplied rule") } else { try text(&out, " is the supplied rule") }
+            }
+            try byte(&out, 34u8)
+        }
+        if e.kind == 2u8 {
+            try text(&out, "\"instance\",\"provenance\":\"compiler-proved\",\"value\":")
+            try quoted_function(&out, c, g, e.template_index)
+        }
+        if e.kind == 3u8 {
+            try text(&out, "\"discard\",\"provenance\":\"declared-and-checked\",\"value\":\"the err of ")
+            if e.function_index < c.function_count {
+                if c.functions[e.function_index].module_index < g.count {
+                    try text(&out, g.modules[c.functions[e.function_index].module_index].name)
+                    try byte(&out, 46u8)
+                }
+                try text(&out, c.functions[e.function_index].name)
+            }
+            if e.found { try text(&out, " is dropped under defer\"") } else { try text(&out, " is dropped\"") }
+        }
+        try text(&out, ",\"span\":")
+        try point_span(&out, root, path, module.text, here)
+        try byte(&out, 125u8)
+        try flush(&out)
+        written += 1usize
+    }
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
+    try decimal(&out, written)
+    try text(&out, ",\"omitted\":")
+    try decimal(&out, omitted)
+    try text(&out, ",\"complete\":")
+    if omitted == 0usize && !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, ",\"cursor\":")
+    try decimal(&out, cursor + written)
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
+// Whether the declaration at `offset` carries `@unsafe`: the attribute line above it.
+fn manifest_is_unsafe(text_bytes: str, offset: usize) -> bool {
+    var line_start = offset
+    while line_start > 0usize && text_bytes[line_start - 1usize] != 10u8 { line_start = line_start - 1usize }
+    // The line before, if any, after its own spaces.
+    if line_start == 0usize { ret false }
+    var previous_end = line_start - 1usize
+    var previous_start = previous_end
+    while previous_start > 0usize && text_bytes[previous_start - 1usize] != 10u8 { previous_start = previous_start - 1usize }
+    var at = previous_start
+    while at < previous_end && (text_bytes[at] == 32u8 || text_bytes[at] == 9u8) { at += 1usize }
+    if at >= previous_end || text_bytes[at] != 64u8 { ret false }
+    let word_end = manifest_word_end(text_bytes, at + 1usize)
+    ret graph.same(text_bytes[at + 1usize..word_end], "unsafe")
+}
+
 fn explain_before(a: check.Explain, b: check.Explain) -> bool {
     if a.module_index != b.module_index { ret a.module_index < b.module_index }
     if a.offset != b.offset { ret a.offset < b.offset }
