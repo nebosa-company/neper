@@ -8939,3 +8939,27 @@ carry the new ones with the two fields; the corpus gains `reject/type_mismatch`.
 Not yet: the other sixty sites that return `TypeMismatch` with one type or a
 shape at hand rather than two (a cast's operand, a literal's shape, a generic
 argument's kind), instantiation chains, and fixes for the type codes.
+
+## D402 -- A worker sets itself up on its own thread
+
+Measured on the compiler's cold release build (`--time`): the body phase was
+134 ms at eight workers while the longest worker checked bodies for 59 ms, and
+the gap grew with the worker count -- 14 ms at one, 29 at two, 44 at four, 76 at
+eight. It was `init_lower_worker`, run on the main thread for every worker
+before any body was checked: each worker's builder, stages, bindings, oracles
+and forked-checker pools are sized from the program and touched as they are
+zeroed, eight to nine milliseconds apiece, one after the other. Now the first
+worker is set up and forked on the main thread as before, and every other is
+made there -- its reserved arena and its bindings, which come from the program's
+arena -- but set up on its own thread when it starts, from the arguments the
+crew keeps (`WorkerSetup`); its checker's arena is the worker's from the copy on,
+so a set-up on the worker's thread allocates nothing from the program's. A set-up
+that fails stops the worker the way a failed fork does, and the replacement rules
+of D325 apply. The body phase is 69 ms at eight workers and 76 at four (was 134
+and 108); the cold release build of the compiler 600 -> 575 ms; the image is
+byte-identical run to run and stage 2 is stage 3.
+
+What the workers' one shared write is: `declare_globals` records each global's
+NIR index into the program's globals table through the unforked copy; every
+worker writes the same value, and the first worker wrote it on the main thread
+before any other thread ran, so the later writes change nothing.

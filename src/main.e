@@ -5845,6 +5845,8 @@ type LowerWorker = struct {
     // The worker's share of the program's text, which its tails are sized from.
     share: usize,
     forked: bool,
+    // Made on the main thread, set up on its own (D402).
+    setup_pending: bool,
     fork_id: usize,
     // Handed to the generous worker: nothing of this one's is used any more.
     replaced: bool,
@@ -5880,6 +5882,9 @@ type Crew = struct {
     on: bool,
     workers: []LowerWorker,
     count: usize,
+    // What `init_lower_worker` takes (D402): kept so a worker other than the first
+    // sets itself up on its own thread, its pools touched there and in parallel.
+    setup: WorkerSetup,
     generous_made: bool,
     release: bool,
     first_all: []nir.InlineEntry,
@@ -6123,8 +6128,11 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     w.body_skip = body_skip
     w.forked = false
     w.replaced = false
-    // Until forked, the checker is the program's: what `declare_globals` reads.
+    // Until forked, the checker is the program's: what `declare_globals` reads. Its
+    // arena is the worker's from here (D402): a set-up on the worker's thread must
+    // not allocate from the program's.
     w.checker = *checker
+    w.checker.arena = a
     // The builder and its staging, sized as the one-at-a-time path sized its own; its
     // signature types by the worker's share (D326), where the program's count was
     // eight times what eight workers between them needed.
@@ -6292,10 +6300,40 @@ fn body_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, from
 type BodyStart = struct {
     worker: *LowerWorker,
     program: *check.Checker,
+    setup: *WorkerSetup,
 }
 
+// The arguments of a worker's set-up (D402), as the crew was begun with.
+type WorkerSetup = struct {
+    loaded: *graph.Graph,
+    checker: *check.Checker,
+    resolver: *resolve.Resolver,
+    report: *Sink,
+    abi: codegen_x64.Abi,
+    hot: *HotBuild,
+    held: [][]const u8,
+    builder: *nir.Builder,
+    release: bool,
+    body_skip: []bool,
+}
+
+// A worker that was made but not set up (D402) sets itself up first: the pools of
+// its builder, stages and oracles are sized and touched on its own thread, where
+// eight workers' set-ups took eight times as long on the main thread, one after
+// the other, before any body was checked. A set-up that fails stops the worker
+// the way a failed fork does, and the crew's replacement rules apply.
 fn body_worker_entry(start: *BodyStart) {
-    body_worker_run(start.worker, &start.worker.arena, start.program, 0usize)
+    let w = start.worker
+    if w.setup_pending {
+        w.setup_pending = false
+        let s = start.setup
+        let setup_error = init_lower_worker(&w.arena, w, s.checker, s.loaded, s.resolver, s.report, s.abi, s.hot, s.held, w.bindings, s.builder, s.release, s.body_skip)
+        if setup_error != ok {
+            stop_worker(w, 0usize, setup_error, 0usize)
+            ret
+        }
+    }
+    body_worker_run(w, &w.arena, start.program, 0usize)
 }
 
 // The second oracle's share of one worker (D326): its modules' first entries lowered
@@ -6505,11 +6543,14 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         workers[worker_at].scale = 4usize
         workers[worker_at].share = largest_share
         workers[worker_at].fork_id = worker_at + 1usize
-        try init_lower_worker(&workers[worker_at].arena, &workers[worker_at], checker, loaded, resolver, report, abi, hot, held, worker_bindings, builder, release, body_skip)
-        // The first worker's checker is forked here, on the main thread; the others
-        // fork on their own threads.
+        // The first worker is set up and forked here, on the main thread; the others
+        // set up and fork on their own threads (D402), their bindings kept for it.
         if worker_at == 0usize {
+            try init_lower_worker(&workers[worker_at].arena, &workers[worker_at], checker, loaded, resolver, report, abi, hot, held, worker_bindings, builder, release, body_skip)
             try worker_forked(&workers[0usize], &workers[0usize].arena, checker)
+        } else {
+            workers[worker_at].bindings = worker_bindings
+            workers[worker_at].setup_pending = true
         }
         worker_cost = mem.stats(a).used - cost_before
         worker_at += 1usize
@@ -6543,6 +6584,7 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
     }
     crew.count = worker_count
     crew.on = true
+    crew.setup = WorkerSetup { loaded: loaded, checker: checker, resolver: resolver, report: report, abi: abi, hot: hot, held: held, builder: builder, release: release, body_skip: body_skip }
     ret ok
 }
 
@@ -6636,6 +6678,7 @@ fn crew_bodies(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, 
     while worker_at < crew.count {
         starts[worker_at].worker = &crew.workers[worker_at]
         starts[worker_at].program = checker
+        starts[worker_at].setup = &crew.setup
         started[worker_at] = false
         let (thread, spawn_error) = os.thread_create[BodyStart](body_worker_entry, &starts[worker_at], 16777216usize)
         if spawn_error == ok {
@@ -6652,6 +6695,7 @@ fn crew_bodies(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, 
         } else {
             starts[worker_at].worker = &crew.workers[worker_at]
             starts[worker_at].program = checker
+            starts[worker_at].setup = &crew.setup
             body_worker_entry(&starts[worker_at])
         }
         worker_at += 1usize
