@@ -464,6 +464,12 @@ type Diagnostic = struct {
     token: lex.Token,
     detail: str,
     detail2: str,
+    // The other site the diagnostic is about (D364, H09): where the resource was
+    // acquired, moved, borrowed, reset -- as a token of the same module, with the
+    // note the stream carries for it.
+    related: lex.Token,
+    has_related: bool,
+    related_note: str,
 }
 
 type Checker = struct {
@@ -635,11 +641,19 @@ type Checker = struct {
     failure_has_token: bool,
     failure_detail: str,
     failure_detail2: str,
+    failure_related: lex.Token,
+    failure_has_related: bool,
+    failure_related_note: str,
 }
 
 fn append_failure_token(c: *Checker, module_index: usize, token: lex.Token, kind: DiagnosticKind, detail: str, detail2: str) {
+    var none: lex.Token = zero
+    append_failure_related(c, module_index, token, kind, detail, detail2, none, false, "")
+}
+
+fn append_failure_related(c: *Checker, module_index: usize, token: lex.Token, kind: DiagnosticKind, detail: str, detail2: str, related: lex.Token, has_related: bool, note: str) {
     if c.diagnostic_count < c.diagnostics.len {
-        c.diagnostics[c.diagnostic_count] = Diagnostic { module_index: module_index, kind: kind, token: token, detail: detail, detail2: detail2 }
+        c.diagnostics[c.diagnostic_count] = Diagnostic { module_index: module_index, kind: kind, token: token, detail: detail, detail2: detail2, related: related, has_related: has_related, related_note: note }
         c.diagnostic_count += 1usize
     }
     if !c.failure_has_token {
@@ -649,7 +663,34 @@ fn append_failure_token(c: *Checker, module_index: usize, token: lex.Token, kind
         c.failure_has_token = true
         c.failure_detail = detail
         c.failure_detail2 = detail2
+        c.failure_related = related
+        c.failure_has_related = has_related
+        c.failure_related_note = note
     }
+}
+
+// A resource diagnostic with its other site (D364, H09): the acquisition, the
+// move, the borrow, the reset or the mutation it is about, as a related span.
+fn record_failure_related(c: *Checker, module_index: usize, node: syntax.Node, kind: DiagnosticKind, detail: str, detail2: str, related_index: usize) {
+    if c.failure_has_token { ret }
+    if usize(node.token_start) < c.token_count && related_index < c.token_count {
+        append_failure_related(c, module_index, c.tokens[usize(node.token_start)], kind, detail, detail2, c.tokens[related_index], true, related_note(kind))
+    } else {
+        record_failure(c, module_index, node, kind, detail, detail2)
+    }
+}
+
+fn related_note(kind: DiagnosticKind) -> str {
+    if kind == .ResourceUseAfterMove { ret "moved here, or acquired here and never owned" }
+    if kind == .ResourceCleanupForgotten || kind == .ResourceOverwrite || kind == .ResourceUnchecked || kind == .ResourceMovedInLoop { ret "acquired here" }
+    if kind == .ResourcePartialMove { ret "the aggregate was acquired here" }
+    if kind == .ResourceDeferredConsumed { ret "reserved by the deferred call here" }
+    if kind == .ResourceBorrowConsumed { ret "borrowed here" }
+    if kind == .ResourceMovedWhileBorrowed { ret "the pointer taken here" }
+    if kind == .RegionReset { ret "the region reset here" }
+    if kind == .ViewMutated { ret "the container changed here" }
+    if kind == .ThreadFrameEscape { ret "the thread started here" }
+    ret "related"
 }
 
 fn record_failure(c: *Checker, module_index: usize, node: syntax.Node, kind: DiagnosticKind, detail: str, detail2: str) {
@@ -12884,7 +12925,7 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if is_field {
             let state = field_state(c.resources[local_index].fields[at])
             if state == resource_moved || state == resource_maybe {
-                record_failure(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired))
+                record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
                 ret ResourceViolation
             }
         }
@@ -12904,14 +12945,14 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if !is_resource { ret ok }
         let state = c.resources[local_index].state
         if state == resource_moved || state == resource_maybe {
-            record_failure(c, module_index, node, dangling_kind(c, local_index), c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+            record_failure_related(c, module_index, node, dangling_kind(c, local_index), c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
             ret ResourceViolation
         }
         // An unchecked value may be moved whole into another binding, which takes the
         // untested error along, or returned beside its error; it cannot be read.
         let moved_whole = parent == .BindingStmt || parent == .AssignmentStmt || parent == .ReturnStmt
         if state == resource_unchecked && !moved_whole {
-            record_failure(c, module_index, node, .ResourceUnchecked, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+            record_failure_related(c, module_index, node, .ResourceUnchecked, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
             ret ResourceViolation
         }
         ret ok
@@ -12947,13 +12988,13 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         let field_byte = c.resources[local_index].fields[field_at]
         let one = field_state(field_byte)
         if field_byte != 0u8 && (one == resource_moved || one == resource_maybe || one == resource_reserved) {
-            record_failure(c, module_index, node, .ResourcePartialMove, resource_field_name(c, local_index, field_at), line_detail(c, g, module_index, c.resources[local_index].acquired))
+            record_failure_related(c, module_index, node, .ResourcePartialMove, resource_field_name(c, local_index, field_at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
             ret ResourceViolation
         }
         field_at += 1usize
     }
     if state == resource_reserved {
-        record_failure(c, module_index, node, .ResourceDeferredConsumed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure_related(c, module_index, node, .ResourceDeferredConsumed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
         ret ResourceViolation
     }
     // A null resource may be handed on -- `ret (file, Unsupported)` is the contract
@@ -12967,18 +13008,18 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     let frame = c.resources[local_index].frame_borrow
     let stored_inside = c.consuming_store != 0usize && c.consuming_store >= frame
     if frame != 0usize && state == resource_owned && !c.consuming_join && !c.consuming_binding && !stored_inside {
-        record_failure(c, module_index, node, .ThreadFrameEscape, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure_related(c, module_index, node, .ThreadFrameEscape, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
         ret ResourceViolation
     }
     if c.resource_transfer && c.resources[local_index].borrowed && state == resource_owned {
-        record_failure(c, module_index, node, .ResourceBorrowConsumed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure_related(c, module_index, node, .ResourceBorrowConsumed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
         ret ResourceViolation
     }
     // A view -- a borrowed producer's handle, a field read of something that owns it
     // -- owes nothing and is moved by nobody; it is read as often as wanted.
     if state == resource_owned && (c.resources[local_index].view || c.resources[local_index].borrowed) && c.resources[local_index].fields.len == 0usize { ret ok }
     if state != resource_owned {
-        record_failure(c, module_index, node, dangling_kind(c, local_index), c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure_related(c, module_index, node, dangling_kind(c, local_index), c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
         ret ResourceViolation
     }
     // Consumed by a deferred call: reserved, and discharged at the block's exit.
@@ -12989,7 +13030,7 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     }
     // A pointer to it is live until its block ends: nothing moves out from under it.
     if c.resources[local_index].pinned != 0usize {
-        record_failure(c, module_index, node, .ResourceMovedWhileBorrowed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].pin_at))
+        record_failure_related(c, module_index, node, .ResourceMovedWhileBorrowed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].pin_at), c.resources[local_index].pin_at)
         ret ResourceViolation
     }
     c.resources[local_index].state = resource_moved
@@ -13238,7 +13279,7 @@ fn resource_audit(c: *Checker, g: *graph.Graph, module_index: usize, node: synta
                     let b = local.fields[field_at]
                     let one = field_state(b)
                     if field_owed(b) && (one == resource_owned || one == resource_maybe || one == resource_unchecked) {
-                        record_failure(c, module_index, node, exit_kind, resource_field_name(c, at, field_at), line_detail(c, g, module_index, local.acquired))
+                        record_failure_related(c, module_index, node, exit_kind, resource_field_name(c, at, field_at), line_detail(c, g, module_index, local.acquired), local.acquired)
                         ret ResourceViolation
                     }
                     field_at += 1usize
@@ -13246,7 +13287,7 @@ fn resource_audit(c: *Checker, g: *graph.Graph, module_index: usize, node: synta
             }
         } else {
             if local.obligated && live {
-                record_failure(c, module_index, node, exit_kind, c.locals[at].name, line_detail(c, g, module_index, local.acquired))
+                record_failure_related(c, module_index, node, exit_kind, c.locals[at].name, line_detail(c, g, module_index, local.acquired), local.acquired)
                 ret ResourceViolation
             }
         }
@@ -13364,14 +13405,14 @@ fn resource_loop_check(c: *Checker, g: *graph.Graph, module_index: usize, node: 
     while at < c.local_count && cursor < before.len {
         // A view invalidated in the body is not consumed: its next use is the error.
         if c.resources[at].state != before[cursor] && before[cursor] == resource_owned && c.resources[at].dangling == 0u8 {
-            record_failure(c, module_index, node, .ResourceMovedInLoop, c.locals[at].name, line_detail(c, g, module_index, c.resources[at].acquired))
+            record_failure_related(c, module_index, node, .ResourceMovedInLoop, c.locals[at].name, line_detail(c, g, module_index, c.resources[at].acquired), c.resources[at].acquired)
             ret ResourceViolation
         }
         cursor += 1usize
         var field_at = 0usize
         while field_at < c.resources[at].fields.len && cursor < before.len {
             if c.resources[at].fields[field_at] != before[cursor] && field_state(before[cursor]) == resource_owned {
-                record_failure(c, module_index, node, .ResourceMovedInLoop, resource_field_name(c, at, field_at), line_detail(c, g, module_index, c.resources[at].acquired))
+                record_failure_related(c, module_index, node, .ResourceMovedInLoop, resource_field_name(c, at, field_at), line_detail(c, g, module_index, c.resources[at].acquired), c.resources[at].acquired)
                 ret ResourceViolation
             }
             cursor += 1usize
@@ -13495,7 +13536,7 @@ fn resource_assign_inner(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
         let old = c.resources[field_local].fields[field_at]
         let old_state = field_state(old)
         if old_state == resource_reserved || ((old_state == resource_owned || old_state == resource_maybe || old_state == resource_unchecked) && field_owed(old)) {
-            record_failure(c, module_index, statement, .ResourceOverwrite, resource_field_name(c, field_local, field_at), line_detail(c, g, module_index, c.resources[field_local].acquired))
+            record_failure_related(c, module_index, statement, .ResourceOverwrite, resource_field_name(c, field_local, field_at), line_detail(c, g, module_index, c.resources[field_local].acquired), c.resources[field_local].acquired)
             ret ResourceViolation
         }
         let field_type = c.aggregate_fields[resource_field_global(c, field_local, field_at)].ty
@@ -13550,7 +13591,7 @@ fn resource_assign_inner(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module
     let state = c.resources[local_index].state
     if state == resource_owned || state == resource_reserved || state == resource_unchecked || state == resource_maybe {
         if c.resources[local_index].obligated || state == resource_reserved {
-            record_failure(c, module_index, statement, .ResourceOverwrite, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+            record_failure_related(c, module_index, statement, .ResourceOverwrite, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
             ret ResourceViolation
         }
     }
@@ -13653,20 +13694,20 @@ fn resource_consume_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
     let byte = c.resources[local_index].fields[at]
     let state = field_state(byte)
     if state == resource_reserved {
-        record_failure(c, module_index, node, .ResourceDeferredConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure_related(c, module_index, node, .ResourceDeferredConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
         ret ResourceViolation
     }
     if state == resource_null { ret ok }
     if state == resource_unchecked {
-        record_failure(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure_related(c, module_index, node, .ResourceUnchecked, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
         ret ResourceViolation
     }
     if state != resource_owned {
-        record_failure(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure_related(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
         ret ResourceViolation
     }
     if c.resource_transfer && c.resources[local_index].borrowed {
-        record_failure(c, module_index, node, .ResourceBorrowConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure_related(c, module_index, node, .ResourceBorrowConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
         ret ResourceViolation
     }
     // A field that is not owed holds a view of someone else's handle: read as often
@@ -13677,7 +13718,7 @@ fn resource_consume_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
         ret ok
     }
     if c.resources[local_index].pinned != 0usize {
-        record_failure(c, module_index, node, .ResourceMovedWhileBorrowed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].pin_at))
+        record_failure_related(c, module_index, node, .ResourceMovedWhileBorrowed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.resources[local_index].pin_at), c.resources[local_index].pin_at)
         ret ResourceViolation
     }
     c.resources[local_index].fields[at] = field_with(resource_moved, field_owed(byte))

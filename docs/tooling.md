@@ -115,6 +115,12 @@ Replacement text is normalized UTF-8 with LF endings.
 
 Every diagnostic field is present: an error has `parent:null`, a location-free
 command diagnostic has `span:null`, and empty `related` or `fixes` arrays are `[]`.
+Every `E-SAFETY` diagnostic that is about two sites carries the other one as its
+`related` entry (D364, H09): the acquisition for a forgotten cleanup, an overwrite,
+an untested acquisition or a loop consumption; the move for a use after move; the
+`defer` for a consumption it reserved; the borrow, the pointer, the reset, the
+container's change, the thread's start -- with a `message` saying which, and a
+`span` in the same module as the primary.
 
 Codes are allocated from the checked registry `docs/diagnostics.md` and have the
 form `E-<CATEGORY>-<NNNN>`. Categories are stable semantic names, not document

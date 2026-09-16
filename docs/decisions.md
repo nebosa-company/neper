@@ -7998,3 +7998,20 @@ still the unit of checking and emission); the counts of declarations rechecked,
 instances expanded, functions emitted and bytes regenerated; the separation of
 trivia from semantic identity (a comment edit rebuilds its module, and the manifest
 says so); the fallback-protocol and comptime-dependency fixtures.
+
+## D364 -- A safety diagnostic carries its other site as a related span
+
+H09 asks for causal diagnostics with an error origin and related locations, and
+H01's acceptance for diagnostics that identify the acquisition, the conflicting
+use and the exit. The E-SAFETY family named the second site in prose -- "acquired
+at line 12" -- and left the stream's `related` array empty, so a harness had to
+parse the sentence. The checker now records the other site's token beside the
+diagnostic, and the stream's `related` entry carries it with a message that says
+which site it is: the acquisition, the move, the deferred call, the borrow, the
+pointer, the reset, the container's change, the thread's start. The text form is
+unchanged; every reject golden of the family was regenerated and validates.
+
+Not yet, of H09: grouping cascades under a primary cause (the checker stops at
+the first failure of a body); expected/actual states as fields rather than
+prose; a bounded instantiation chain for a failure inside an instance; the
+lossless-recovery and structured-fix obligations.
