@@ -10532,3 +10532,12 @@ segment before it and never climbs past the root -- a drive such as `C:` or
 the leading separator -- and each kept segment keeps the separator that
 preceded it, so a Windows path stays a Windows path. Both suites spell the
 tokens fixture as `./../<dir>/every_kind.e` and require the plain path.
+
+## D490 -- `-` on `check-file`
+
+D488's root text serves `check-file` too: `check-file - ROOT ARCH OS --json
+--path REL` reads stdin in the driver, the loader takes it for module 0 under
+`REL`'s name and directory, and the stream is the file form's byte for byte --
+both suites pipe `reject/scope.e` in and require its golden, exit 1 and all.
+An editor checking an unsaved buffer needs no temporary file for it. No source
+map is looked for beside a piped operand: there is no beside.

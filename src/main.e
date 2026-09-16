@@ -9043,8 +9043,25 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
-        let load_error = load_graph(a, &report, &loaded, args[2usize], args[3usize], args[4usize], args[5usize])
-        if load_error == ok && loaded.count != 0usize { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
+        // `-` is stdin under the `--path` identity (D490), as `index-file` has it (D488).
+        var operand = args[2usize]
+        if same(operand, "-") {
+            if report.operand_path.len == 0usize { ret tool_usage() }
+            let (piped, piped_error) = operand_text(a, "-")
+            if piped_error != ok {
+                if !report.json { ret piped_error }
+                try emit_command_diagnostic(&report, "E-CLI-9999", "the operand cannot be read")
+                try write_all(&report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"diagnostics\":1}}\n")
+                os.exit(2i32)
+                ret ok
+            }
+            loaded.root_text = piped
+            loaded.root_text_given = true
+            operand = report.operand_path
+            report.operand_source = operand
+        }
+        let load_error = load_graph(a, &report, &loaded, operand, args[3usize], args[4usize], args[5usize])
+        if load_error == ok && loaded.count != 0usize && !loaded.root_text_given { try load_source_map(a, &report, args[2usize], loaded.modules[0usize].text) }
         if load_error != ok {
             // Not a diagnostic of the source but of the command: the operand itself.
             if !report.json { ret load_error }

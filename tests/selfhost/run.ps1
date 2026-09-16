@@ -1989,7 +1989,11 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-Fil
 $stdinActual = Join-Path $testBuild 'conformance-stdin-fmt.e'
 cmd /c "`"$compiler`" fmt-file - < `"$(Join-Path $conformanceRoot 'tools\fmt.e')`" > `"$stdinActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\fmt.e')).Hash) { throw 'fmt from stdin is not the canonical source' }
-# `-` on `index` (D488): the module from stdin under its `--path` identity is the file's golden.
+# `-` on `check-file` (D490) and `index` (D488): the module from stdin under its `--path` identity is the file's golden.
+$stdinActual = Join-Path $testBuild 'conformance-stdin-check.jsonl'
+cmd /c "`"$compiler`" check-file - `"$repo`" x64 windows --json --path scope.e < `"$(Join-Path $conformanceRoot 'reject\scope.e')`" > `"$stdinActual`""
+if ($LASTEXITCODE -ne 1) { throw "check-file --json from stdin exited $LASTEXITCODE, not 1" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'reject\scope.expected.jsonl')).Hash) { throw 'check-file --json from stdin differs from the conformance corpus' }
 $stdinActual = Join-Path $testBuild 'conformance-stdin-index.jsonl'
 cmd /c "`"$compiler`" index-file - `"$repo`" x64 windows --json --path index.e < `"$(Join-Path $conformanceRoot 'tools\index.e')`" > `"$stdinActual`""
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stdinActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools\index.expected.jsonl')).Hash) { throw 'index --json from stdin differs from the conformance corpus' }

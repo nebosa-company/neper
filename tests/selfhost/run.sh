@@ -2121,7 +2121,11 @@ for conformance_case in 'tokens every_kind 0' 'tokens hostile 1' 'parse every_ki
 done
 # `-` reads stdin under `--path` (D289): a fixture piped in with its basename as the
 # identity is its own golden, for tokens, parse and fmt; `-` without `--path` is usage.
-# `-` on `index` (D488): the module from stdin under its `--path` identity is the file's golden.
+# `-` on `check-file` (D490) and `index` (D488): the module from stdin under its `--path` identity is the file's golden.
+stdin_check_status=0
+$test_build/neper-self check-file - "$repo" x64 linux --json --path scope.e < "$conformance_root/reject/scope.e" > "$test_build/conformance-stdin-check.jsonl" || stdin_check_status=$?
+[ "$stdin_check_status" -eq 1 ]
+cmp -s "$test_build/conformance-stdin-check.jsonl" "$conformance_root/reject/scope.expected.jsonl" || { echo "check-file --json from stdin differs from the conformance corpus" >&2; exit 1; }
 $test_build/neper-self index-file - "$repo" x64 linux --json --path index.e < "$conformance_root/tools/index.e" > "$test_build/conformance-stdin-index.jsonl"
 cmp -s "$test_build/conformance-stdin-index.jsonl" "$conformance_root/tools/index.expected.jsonl" || { echo "index --json from stdin differs from the conformance corpus" >&2; exit 1; }
 $test_build/neper-self tokens --json --path every_kind.e - < "$conformance_root/tokens/every_kind.e" > "$test_build/conformance-stdin-tokens.jsonl"
