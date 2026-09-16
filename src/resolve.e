@@ -506,7 +506,69 @@ fn validate_named_type(r: *Resolver, g: *graph.Graph, module_index: usize, node:
     }
     let (type_index, has_type) = find(r, module_index, base, .Type)
     if has_type || is_builtin_type(base) { ret ok }
+    // An unknown type name (D485, H09): where, which, and the nearest type in scope.
+    r.failure_module = module_index
+    r.failure_token = first
+    r.failure_has_token = true
+    r.failure_name = base
+    r.failure_near = nearest_type(r, module_index, base)
     ret UnknownType
+}
+
+// The type name nearest to `name` (D485): the type locals, the module's own types
+// and the builtin scalars of three bytes or more, two edits the most allowed.
+fn nearest_type(r: *Resolver, module_index: usize, name: str) -> str {
+    var best = ""
+    var best_distance = 3usize
+    if name.len < 3usize { ret best }
+    var local_index = r.local_count
+    while local_index > 0usize {
+        local_index = local_index - 1usize
+        let candidate = r.locals[local_index].name
+        if r.locals[local_index].space == .Type && candidate.len >= 3usize {
+            let distance = edit_distance(candidate, name)
+            if distance < best_distance {
+                best = candidate
+                best_distance = distance
+            }
+        }
+    }
+    var symbol_index = 0usize
+    while symbol_index < r.count {
+        let symbol = r.symbols[symbol_index]
+        if symbol.module_index == module_index && symbol.space == .Type && symbol.name.len >= 3usize {
+            let distance = edit_distance(symbol.name, name)
+            if distance < best_distance {
+                best = symbol.name
+                best_distance = distance
+            }
+        }
+        symbol_index += 1usize
+    }
+    nearer("i16", name, &best, &best_distance)
+    nearer("i32", name, &best, &best_distance)
+    nearer("i64", name, &best, &best_distance)
+    nearer("isize", name, &best, &best_distance)
+    nearer("u16", name, &best, &best_distance)
+    nearer("u32", name, &best, &best_distance)
+    nearer("u64", name, &best, &best_distance)
+    nearer("usize", name, &best, &best_distance)
+    nearer("f32", name, &best, &best_distance)
+    nearer("f64", name, &best, &best_distance)
+    nearer("bool", name, &best, &best_distance)
+    nearer("void", name, &best, &best_distance)
+    nearer("str", name, &best, &best_distance)
+    nearer("err", name, &best, &best_distance)
+    ret best
+}
+
+fn nearer(candidate: str, name: str, best: *str, best_distance: *usize) {
+    if candidate.len < 3usize { ret }
+    let distance = edit_distance(candidate, name)
+    if distance < *best_distance {
+        *best = candidate
+        *best_distance = distance
+    }
 }
 
 fn validate_name(r: *Resolver, g: *graph.Graph, module_index: usize, node: syntax.Node) -> err {

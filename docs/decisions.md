@@ -10466,3 +10466,16 @@ functions and types, and the name shift the two share is one function. The
 four fixtures build byte-identical images in both modes as before, which is
 also the first consumer's word that D483's references are complete over them:
 a reference the index missed is a name left unrenamed and a build that fails.
+
+## D485 -- An unknown type name, at its token, with the nearest type
+
+`let c: Colr = .Red` was reported as `name resolution failed` at byte zero of
+the module: the resolver's type walk answered `UnknownType` and recorded
+nothing, so the printer had no token and no name. Now it records the type's
+first token and the name, and the nearest type in scope within two edits -- the
+type locals, the module's own types, and the builtin scalars of three bytes or
+more (`strr` is `str`) -- and the diagnostic sits on the name, `unknown type
+\`Colr\`; did you mean \`Colour\`?`, the nearest offered as a `maybe` fix over
+the token, as D445 did for a value name. The corpus's `reject/type_near` pins
+it on both hosts. Not yet: a qualified type's member (`os.Fil`), which D447's
+member path already names.

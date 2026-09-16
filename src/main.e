@@ -6329,6 +6329,26 @@ fn print_resolve_diagnostic(report: *Sink, g: *graph.Graph, resolver: *resolve.R
         }
         ret print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", "unknown value name")
     }
+    // An unknown type name (D485, H09): at its token, the nearest type in scope
+    // named and offered as a `maybe` fix, as an unknown value name is.
+    if resolve_error == resolve.UnknownType && resolver.failure_has_token {
+        var type_storage: [512]u8 = zero
+        var type_at = tool.nptest_copy(type_storage[..], 0usize, "unknown type `")
+        type_at = tool.nptest_copy(type_storage[..], type_at, resolver.failure_name)
+        type_at = tool.nptest_copy(type_storage[..], type_at, "`")
+        if resolver.failure_near.len != 0usize {
+            type_at = tool.nptest_copy(type_storage[..], type_at, "; did you mean `")
+            type_at = tool.nptest_copy(type_storage[..], type_at, resolver.failure_near)
+            type_at = tool.nptest_copy(type_storage[..], type_at, "`?")
+            report.fix_text = resolver.failure_near
+            report.fix_at = resolver.failure_token.start
+            report.fix_end = resolver.failure_token.end
+            report.fix_kind = 4u8
+        }
+        let type_emitted = print_token_diagnostic(report, g, resolver.failure_module, resolver.failure_token, "E-NAME-9999", type_storage[0usize..type_at])
+        report.fix_text = ""
+        ret type_emitted
+    }
     // A module without the member named (D447, H09): the module and the member in
     // the message, the nearest export named and offered as a `maybe` fix.
     if resolve_error == resolve.UnknownMember && resolver.failure_has_token {
