@@ -57,6 +57,7 @@ instantiated in, a sibling under the project's `src` -- carries that module's
 identity under its own root, the rule the build manifest uses (D427); the
 operand keeps its spelling. Machine output contains no absolute
 path unless `--absolute-paths` is explicitly passed; then a separate `absolute_path`
+(its `.` and `..` segments collapsed, D489, never past a drive or the root)
 field is added and never replaces the source identifier.
 
 A span is half-open and has this exact shape:

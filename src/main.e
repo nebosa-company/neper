@@ -2695,12 +2695,12 @@ fn check_flags(a: *mem.Arena, report: *Sink, args: []str) -> bool {
 }
 
 // The operand's absolute spelling for `--absolute-paths` (section 2, D290): as given
-// when it is already absolute, else under the current directory. Empty for `-` or
-// when the directory cannot be read, and then no `absolute_path` is written.
-// ponytail: `.` and `..` segments are kept; collapse them if a consumer compares paths.
+// when it is already absolute, else under the current directory, its `.` and `..`
+// segments collapsed (D489) so two spellings of one file compare equal. Empty for
+// `-` or when the directory cannot be read, and then no `absolute_path` is written.
 fn absolute_operand(a: *mem.Arena, operand: str) -> str {
     if same(operand, "-") || operand.len == 0usize { ret "" }
-    if operand[0usize] == 47u8 || operand[0usize] == 92u8 || (operand.len >= 2usize && operand[1usize] == 58u8) { ret operand }
+    if operand[0usize] == 47u8 || operand[0usize] == 92u8 || (operand.len >= 2usize && operand[1usize] == 58u8) { ret collapse_dots(a, operand) }
     let (dir, dir_error) = os.current_dir(a)
     if dir_error != ok { ret "" }
     var separator = "/"
@@ -2710,7 +2710,46 @@ fn absolute_operand(a: *mem.Arena, operand: str) -> str {
     var n = nptest_append(joined, 0usize, dir)
     n = nptest_append(joined, n, separator)
     n = nptest_append(joined, n, operand)
-    ret joined[0usize..n]
+    ret collapse_dots(a, joined[0usize..n])
+}
+
+// `.` and `..` segments collapsed (D489): `dir/./x` is `dir/x`, `dir/a/../x` is
+// `dir/x`, and `..` never climbs past the root -- a drive `C:` or the leading
+// separator. Either separator splits; each kept segment keeps the one before it.
+// ponytail: 256 segments is the depth; a deeper path is spelled as given.
+fn collapse_dots(a: *mem.Arena, path: str) -> str {
+    let (out, out_error) = mem.alloc[u8](a, path.len + 1usize)
+    if out_error != ok { ret path }
+    var starts: [256]usize = zero
+    var depth = 0usize
+    var root_depth = 0usize
+    var n = 0usize
+    var at = 0usize
+    while at <= path.len {
+        var end = at
+        while end < path.len && path[end] != 47u8 && path[end] != 92u8 { end += 1usize }
+        let segment = path[at..end]
+        let dot = segment.len == 1usize && segment[0usize] == 46u8
+        let dotdot = segment.len == 2usize && segment[0usize] == 46u8 && segment[1usize] == 46u8
+        var keep = !dot && !dotdot
+        if at == 0usize && (segment.len == 0usize || segment[segment.len - 1usize] == 58u8) { root_depth = 1usize }
+        if dotdot && depth > root_depth {
+            depth = depth - 1usize
+            n = starts[depth]
+        }
+        if keep {
+            if depth == starts.len { ret path }
+            starts[depth] = n
+            if at != 0usize {
+                out[n] = path[at - 1usize]
+                n += 1usize
+            }
+            n = nptest_append(out, n, segment)
+            depth += 1usize
+        }
+        at = end + 1usize
+    }
+    ret out[0usize..n]
 }
 
 fn fmt_command(a: *mem.Arena, args: []str) -> err {

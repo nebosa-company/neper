@@ -2155,6 +2155,9 @@ cp "$conformance_root/tokens/every_kind.e" "$test_build/every_kind.e"
 grep -q ",\"absolute_path\":\"$test_build/every_kind.e\"" "$test_build/conformance-absolute-tokens.jsonl" || { printf '%s
 ' "--absolute-paths did not spell a relative operand under the current directory" >&2; exit 1; }
 sed -i "s|,\"absolute_path\":\"$test_build/every_kind.e\"||g" "$test_build/conformance-absolute-tokens.jsonl"
+# `.` and `..` collapsed in `absolute_path` (D489).
+(cd "$test_build" && ./neper-self tokens --json --absolute-paths "./../$(basename "$test_build")/every_kind.e" > "conformance-absolute-dots.jsonl")
+grep -q ",\"absolute_path\":\"$test_build/every_kind.e\"" "$test_build/conformance-absolute-dots.jsonl" || { echo "--absolute-paths did not collapse the . and .. segments of the operand" >&2; exit 1; }
 cmp -s "$test_build/conformance-absolute-tokens.jsonl" "$conformance_root/tokens/every_kind.expected.jsonl" || { printf '%s
 ' "--absolute-paths changed more than absolute_path on tokens" >&2; exit 1; }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per

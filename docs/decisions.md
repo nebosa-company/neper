@@ -10521,3 +10521,14 @@ still name the module and resolve its imports. The stream is the file form's
 byte for byte, so both suites pipe `index.e` in and require `index.expected`.
 `check-file` and the query commands have the same loader and could take `-`
 the same way; they do not yet.
+
+## D489 -- `.` and `..` collapsed in `absolute_path`
+
+D290 spelled a relative operand under the current directory as given, so
+`./x.e` and `../tools/x.e` produced two `absolute_path` strings for one file,
+and a harness comparing paths across commands had to normalise them itself.
+The spelling is collapsed now: a `.` segment is dropped, a `..` removes the
+segment before it and never climbs past the root -- a drive such as `C:` or
+the leading separator -- and each kept segment keeps the separator that
+preceded it, so a Windows path stays a Windows path. Both suites spell the
+tokens fixture as `./../<dir>/every_kind.e` and require the plain path.
