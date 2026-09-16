@@ -7699,3 +7699,33 @@ containers' borrowed inserts, `file_handle`, the `@unsafe` inventory,
 pointer-mediated moves, the lexical pin. Found on the way and recorded there for
 D340's follow-up: commit-on-touch makes every touched page resident, so peak RSS
 against the baseline is +73% on the compiler workload before H01 began.
+
+## D353 -- A container takes what it is given, a flag is tested like an error, and the bootstrap's token table
+
+**Inserts by `own`.** `data.list.push`/`insert`, `deque.push_front`/`push_back`,
+`heap.push`/`push_by`, `linked.push_front`/`push_back`/`insert_before`/
+`insert_after`, `queue.enqueue`, `ring.push`/`push_overwrite`, `slot_map.insert`,
+`stack.push`, `map.put` and `tree.put` (the value), `channel.send`/`try_send`,
+`concurrent.queue.push` and `concurrent.map.put` take their element by `own`, in
+the sources and the fences. Over a copyable `T` nothing changes; over a handle the
+push is a move, and the fixture that pushes a file and then closes it is refused
+where H01's acceptance asks -- duplicate ownership through a generic container.
+What this does not give is a container that holds obligated resources: `List[File]`
+fails in its own instance, at `reserve`'s element relocation (E-SAFETY-0005) and at
+`push`'s `try` after it took the value (E-SAFETY-0002), and both refusals are
+right; a container with a failure story and a frozen backing is H02's, and the spec
+says so.
+
+**Flags.** A value bound beside a `bool` -- every container's `(T, bool)` -- is
+unchecked until the flag is tested, exactly as beside an `err`: `found` narrows as
+`e == ok`, `!found` as `e != ok`, in either arm or with a diverging arm, and a
+`break` or `continue` is now a diverging arm for the narrowing, having audited what
+it leaves already. Pinned by the accept fixture's `maybe_open` shapes.
+
+**The bootstrap.** `src/check.e` reached the C bootstrap's per-file token table
+(131072; D352 landed 210 tokens under it after trimming). `MAX_TOKENS` is 262144
+now: nine more megabytes of a static table, and the one line of `bootstrap/neper.c`
+this revision touches. The alternative -- splitting the checker into modules --
+is the right shape eventually and a large refactor of a file two sessions edit;
+a capacity constant is not feature work on the bootstrap, and the recovery path
+(D95) is a tagged revision either way.

@@ -109,7 +109,7 @@ fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool, err) {
 }
 
 // True when the key was new; a present key takes the value and answers false.
-fn put[K: type, V: type](m: *Map[K, V], key: K, value: V) -> (bool, err) {
+fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     let s = mem.cast[*State[K, V]](m.state)
     if s.closed { ret (false, Closed) }
     let (index, start) = locate[K, V](s, key)

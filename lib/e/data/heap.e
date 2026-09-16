@@ -28,7 +28,7 @@ fn from_slice[T: type](a: *mem.Arena, source: []const T) -> (Heap[T], err) {
 
 fn len[T: type](h: *const Heap[T]) -> usize { ret h.items.len }
 
-fn push[T: type](h: *Heap[T], v: T) -> err {
+fn push[T: type](h: *Heap[T], v: own T) -> err {
     try list.push[T](&h.items, v)
     let items = list.slice[T](&h.items)
     var at = items.len - 1usize
@@ -92,7 +92,7 @@ fn from_slice_by[T: type, Ctx: type](a: *mem.Arena, source: []const T, ctx: *Ctx
 
 fn len_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> usize { ret h.items.len }
 
-fn push_by[T: type, Ctx: type](h: *HeapBy[T, Ctx], value: T) -> err {
+fn push_by[T: type, Ctx: type](h: *HeapBy[T, Ctx], value: own T) -> err {
     try list.push[T](&h.items, value)
     let items = list.slice[T](&h.items)
     var at = items.len - 1usize

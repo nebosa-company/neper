@@ -31,7 +31,7 @@ fn reserve[T: type](d: *Deque[T], capacity: usize) -> err {
     ret ok
 }
 
-fn push_front[T: type](d: *Deque[T], v: T) -> err {
+fn push_front[T: type](d: *Deque[T], v: own T) -> err {
     if d.len == d.items.len {
         var next_capacity = 1usize
         if d.items.len != 0usize { next_capacity = d.items.len * 2usize }
@@ -44,7 +44,7 @@ fn push_front[T: type](d: *Deque[T], v: T) -> err {
     ret ok
 }
 
-fn push_back[T: type](d: *Deque[T], v: T) -> err {
+fn push_back[T: type](d: *Deque[T], v: own T) -> err {
     if d.len == d.items.len {
         var next_capacity = 1usize
         if d.items.len != 0usize { next_capacity = d.items.len * 2usize }

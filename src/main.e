@@ -3946,9 +3946,9 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
     if checker.failure_kind == .ResourceUnchecked {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)
-        try write_all(file, "` was returned beside an err at line ")
+        try write_all(file, "` was returned beside an err or a flag at line ")
         try write_all(file, checker.failure_detail2)
-        ret write_all(file, " that has not been tested: test it with `try` or `if e != ok` first")
+        ret write_all(file, " that has not been tested: test it with `try`, `if e != ok` or `if !found` first")
     }
     if checker.failure_kind == .ResourceDeferredConsumed {
         try write_all(file, "`")

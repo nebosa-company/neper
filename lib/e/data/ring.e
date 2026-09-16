@@ -11,7 +11,7 @@ fn len[T: type](r: *const Ring[T]) -> usize { ret r.len }
 
 fn capacity[T: type](r: *const Ring[T]) -> usize { ret r.items.len }
 
-fn push[T: type](r: *Ring[T], v: T) -> bool {
+fn push[T: type](r: *Ring[T], v: own T) -> bool {
     if r.len == r.items.len { ret false }
     let at = (r.head + r.len) % r.items.len
     r.items[at] = v
@@ -19,7 +19,7 @@ fn push[T: type](r: *Ring[T], v: T) -> bool {
     ret true
 }
 
-fn push_overwrite[T: type](r: *Ring[T], v: T) -> (T, bool) {
+fn push_overwrite[T: type](r: *Ring[T], v: own T) -> (T, bool) {
     if r.items.len == 0usize { ret (zero, false) }
     if r.len < r.items.len {
         let at = (r.head + r.len) % r.items.len

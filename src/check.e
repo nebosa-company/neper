@@ -10003,9 +10003,11 @@ fn check_binding(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree: *pars
         let first_local = c.local_count
         try bind_return_types(c, g, module_index, node, binding, call, result_count, declared, mutable)
         // The resources bound (D345): owned, or unchecked beside the `err` bound last.
+        // A `bool` bound last -- a container's `(T, bool)` -- is tested the same way
+        // (D353): the value is null on the false path.
         var err_local = c.local_count
         var has_err_local = false
-        if !tried && c.local_count > first_local && c.locals[c.local_count - 1usize].ty.kind == .Err {
+        if !tried && c.local_count > first_local && (c.locals[c.local_count - 1usize].ty.kind == .Err || c.locals[c.local_count - 1usize].ty.kind == .Bool) {
             err_local = c.local_count - 1usize
             has_err_local = true
         }
@@ -12983,7 +12985,21 @@ fn resource_loop_check(c: *Checker, g: *graph.Graph, module_index: usize, node: 
 // A condition over an `err` local: which, and its local. 0: neither; 1: `e != ok`;
 // 2: `e == ok`; 3: `e == Error`; 4: `e != Error`, for one particular error.
 fn resource_err_test(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, condition_index: usize) -> (usize, usize) {
-    let condition = tree.nodes[condition_index]
+    var condition = tree.nodes[condition_index]
+    // `found` reads as `e == ok`, `!found` as `e != ok` (D353).
+    var flag_which = 2usize
+    if condition.kind == .UnaryExpr && c.tokens[usize(condition.token_start)].kind == .PunctBang {
+        let (inner_index, has_inner) = first_node_child(tree, condition)
+        if !has_inner { ret (0usize, 0usize) }
+        condition = tree.nodes[inner_index]
+        flag_which = 1usize
+    }
+    if condition.kind == .NameExpr {
+        let flag_token = c.tokens[usize(condition.token_start)]
+        let (flag_index, flag_found) = find_local(c, g.modules[module_index].text[flag_token.start..flag_token.end])
+        if !flag_found || c.locals[flag_index].ty.kind != .Bool { ret (0usize, 0usize) }
+        ret (flag_which, flag_index)
+    }
     if condition.kind != .BinaryExpr { ret (0usize, 0usize) }
     let (left_index, has_left) = first_node_child(tree, condition)
     if !has_left { ret (0usize, 0usize) }
@@ -13131,7 +13147,7 @@ fn resource_err_copied(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if place_token.kind != .Identifier || source_token.kind != .Identifier { ret }
     let (dest, dest_found) = find_local(c, text[place_token.start..place_token.end])
     let (source, source_found) = find_local(c, text[source_token.start..source_token.end])
-    if !dest_found || !source_found || c.locals[dest].ty.kind != .Err || c.locals[source].ty.kind != .Err { ret }
+    if !dest_found || !source_found || c.locals[dest].ty.kind != c.locals[source].ty.kind || (c.locals[dest].ty.kind != .Err && c.locals[dest].ty.kind != .Bool) { ret }
     var at = 0usize
     while at < c.local_count {
         if c.resources[at].has_bound_err && c.resources[at].bound_err == source { c.resources[at].bound_err = dest }
@@ -13162,6 +13178,8 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
         if !found { ret false }
         if last.kind == .Block { ret resource_diverges(c, g, tree, module_index, last) }
     }
+    // `break` and `continue` leave the block too (D353), auditing what they leave.
+    if last.kind == .BreakStmt || last.kind == .ContinueStmt { ret true }
     if last.kind != .CallStmt { ret false }
     let (call_index, has_call) = first_node_child(tree, last)
     if !has_call { ret false }

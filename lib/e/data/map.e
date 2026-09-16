@@ -149,7 +149,7 @@ fn reserve[K: type, V: type](m: *Map[K, V], capacity: usize) -> err {
 
 // `true` when the key was not there before. A key that was keeps its slot and takes the new
 // value, so a map's iteration order does not change under updates.
-fn put[K: type, V: type](m: *Map[K, V], key: K, value: V) -> (bool, err) {
+fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     let s = mem.cast[*State[K, V]](m.state)
     let (found_at, found, hole, has_hole) = locate[K, V](s, key)
     if found {

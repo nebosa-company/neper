@@ -3499,7 +3499,16 @@ none becomes a trap:
 - A resource returned beside an `err` is null when the error is not `ok`. Until that
   error is tested -- by `try`, or by `if e != ok`, `if e == ok`, `if e == Error`
   in either arm or with a diverging arm -- the value cannot be read
-  (`E-SAFETY-0008`); it can be moved whole or returned beside its error.
+  (`E-SAFETY-0008`); it can be moved whole or returned beside its error. A resource
+  returned beside a `bool` -- a container's `(T, bool)` -- is the same with `found`
+  for `e == ok` and `!found` for `e != ok` (D353); `break` and `continue` are
+  diverging arms.
+- A container's insert -- `list.push`, `deque.push_back`, `heap.push`, `map.put`'s
+  value, `channel.send` and the rest -- takes its element by `own`: what is pushed
+  is the container's, and a handle closed after it was pushed is `E-SAFETY-0001`.
+  A container of an obligated resource is not yet instantiable: its growth relocates
+  elements and its insert can fail after taking the value, which the rules refuse
+  inside the instance; the container that can hold handles is H02's.
 - A `defer` that consumes a value reserves it: a later move or close of it is refused
   (`E-SAFETY-0009`).
 - A resource declared outside a loop and consumed inside its body is refused unless

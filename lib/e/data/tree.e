@@ -95,7 +95,7 @@ fn rotate_right[K: type, V: type](s: *State[K, V], n: *Node[K, V]) {
 }
 
 // `true` when the key was new; an existing key's value is replaced.
-fn put[K: type, V: type](m: *Map[K, V], key: K, value: V) -> (bool, err) {
+fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err) {
     if m.state == nil { ret (false, mem.Exhausted) }
     let s = mem.cast[*State[K, V]](m.state)
     let (near, order) = locate[K, V](s, key)

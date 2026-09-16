@@ -17,7 +17,7 @@ fn len[T: type](q: *const Queue[T]) -> usize { ret q.items.len }
 
 fn reserve[T: type](q: *Queue[T], capacity: usize) -> err { ret deque.reserve[T](&q.items, capacity) }
 
-fn enqueue[T: type](q: *Queue[T], value: T) -> err { ret deque.push_back[T](&q.items, value) }
+fn enqueue[T: type](q: *Queue[T], value: own T) -> err { ret deque.push_back[T](&q.items, value) }
 
 fn peek[T: type](q: *const Queue[T]) -> (T, bool) {
     if q.items.len == 0usize { ret (zero, false) }

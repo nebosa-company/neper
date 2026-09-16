@@ -16,7 +16,7 @@ fn len[T: type](s: *const Stack[T]) -> usize { ret s.items.len }
 
 fn reserve[T: type](s: *Stack[T], capacity: usize) -> err { ret list.reserve[T](&s.items, capacity) }
 
-fn push[T: type](s: *Stack[T], value: T) -> err { ret list.push[T](&s.items, value) }
+fn push[T: type](s: *Stack[T], value: own T) -> err { ret list.push[T](&s.items, value) }
 
 fn peek[T: type](s: *const Stack[T]) -> (T, bool) {
     if s.items.len == 0usize { ret (zero, false) }

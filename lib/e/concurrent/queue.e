@@ -70,7 +70,7 @@ fn try_push[T: type](q: *Queue[T], value: T) -> (bool, err) {
     ret (true, ok)
 }
 
-fn push[T: type](q: *Queue[T], value: T) -> err {
+fn push[T: type](q: *Queue[T], value: own T) -> err {
     let s = state_of[T](q)
     sync.mutex_lock(&s.lock)
     while !s.closed && s.count == s.items.len { sync.condition_wait(&s.not_full, &s.lock) }

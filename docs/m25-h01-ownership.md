@@ -386,10 +386,10 @@ follow-up. Cold wall, warm wall and image size are within their budgets
 **Remaining limitations** (each an obligation, none closed by this record):
 reflection and the format codecs are not stopped at a resource's fields
 (E-SAFETY-0005's last case); arrays and slices of resources are not tracked as
-wholes; the generic containers (`data.list`, `deque`, `heap`, `map`, `channel`,
-...) take their element by borrow, so a handle pushed is still the caller's to
-close and the push is a copy the rules do not see -- `own T` on their inserts is
-the next increment; the seeded handles' `raw` stays readable until the fixed
+wholes; the generic containers take their element by `own` (D353), but none can hold an
+obligated resource yet: growth relocates elements and an insert can fail after
+taking the value, which the instance refuses -- the container with a failure story
+is H02's; the seeded handles' `raw` stays readable until the fixed
 surface gains `file_handle`; the `@unsafe` inventory in the manifest and `index`
 (section 8, H27) is not written; pointer-mediated moves (`os.close(*p)`) are not
 seen; the pin rule is lexical, and infers nothing about what a callee keeps

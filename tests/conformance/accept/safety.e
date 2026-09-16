@@ -43,6 +43,30 @@ fn twice(f: os.File) -> (usize, err) {
     ret (n, close_error)
 }
 
+// A handle beside a flag (D353): null on the false path, owned once the flag is
+// tested, the way an `err` is.
+fn maybe_open(a: *mem.Arena, path: str, wanted: bool) -> (os.File, bool) {
+    if !wanted { ret (zero, false) }
+    let flags = os.OpenFlags {
+        read: true,
+        write: false,
+        create: false,
+        truncate: false,
+        append: false,
+    }
+    let (f, open_error) = os.open(a, path, flags)
+    if open_error != ok { ret (zero, false) }
+    ret (f, true)
+}
+
+fn close_if_open(a: *mem.Arena, path: str) -> err {
+    let (first, has_first) = maybe_open(a, path, true)
+    if has_first { try os.close(first) } else { ret os.NotFound }
+    let (second, has_second) = maybe_open(a, path, false)
+    if !has_second { ret ok }
+    ret os.close(second)
+}
+
 fn peek(p: Pair) -> usize {
     let first = p.first
     if first.raw == p.second.raw { ret 0usize }
@@ -77,6 +101,7 @@ fn main(a: *mem.Arena, args: []str) -> err {
         ret os.Failed
     }
     try take(pair.first)
+    try close_if_open(a, args[0usize])
     let (g, open_error) = os.open(a, args[0usize], flags)
     if open_error != ok { ret open_error }
     let (total, count_error) = count_bytes(a, args[0usize])

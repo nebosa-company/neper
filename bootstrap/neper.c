@@ -37,7 +37,9 @@
 #endif
 
 #define NEPER_VERSION "0.0.96-neper0"
-#define MAX_TOKENS 131072
+/* Per source file. Raised from 131072 for src/check.e (D353): the static table grows
+   by 9 MB and nothing else changes. */
+#define MAX_TOKENS 262144
 /* Program-wide, not per module: one table serves every module in a compile, so this
    bounds the whole program. Functions are held by pointer (see Program), so a slot
    costs 8 bytes and this can grow; the struct and error tables are still by value. */

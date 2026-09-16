@@ -49,7 +49,7 @@ fn allocate[T: type](l: *List[T], value: T) -> (NodeId, err) {
     ret (u32(l.nodes.len - 1usize), ok)
 }
 
-fn push_front[T: type](l: *List[T], value: T) -> (NodeId, err) {
+fn push_front[T: type](l: *List[T], value: own T) -> (NodeId, err) {
     if l.first == NONE {
         let (id, allocate_error) = allocate[T](l, value)
         if allocate_error != ok { ret (NONE, allocate_error) }
@@ -62,7 +62,7 @@ fn push_front[T: type](l: *List[T], value: T) -> (NodeId, err) {
     ret (id, insert_error)
 }
 
-fn push_back[T: type](l: *List[T], value: T) -> (NodeId, err) {
+fn push_back[T: type](l: *List[T], value: own T) -> (NodeId, err) {
     if l.last == NONE {
         let (id, push_error) = push_front[T](l, value)
         ret (id, push_error)
@@ -71,7 +71,7 @@ fn push_back[T: type](l: *List[T], value: T) -> (NodeId, err) {
     ret (id, insert_error)
 }
 
-fn insert_before[T: type](l: *List[T], at: NodeId, value: T) -> (NodeId, err) {
+fn insert_before[T: type](l: *List[T], at: NodeId, value: own T) -> (NodeId, err) {
     if usize(at) >= l.nodes.len || !l.nodes.items[usize(at)].live { ret (NONE, InvalidNode) }
     let (id, allocate_error) = allocate[T](l, value)
     if allocate_error != ok { ret (NONE, allocate_error) }
@@ -88,7 +88,7 @@ fn insert_before[T: type](l: *List[T], at: NodeId, value: T) -> (NodeId, err) {
     ret (id, ok)
 }
 
-fn insert_after[T: type](l: *List[T], at: NodeId, value: T) -> (NodeId, err) {
+fn insert_after[T: type](l: *List[T], at: NodeId, value: own T) -> (NodeId, err) {
     if usize(at) >= l.nodes.len || !l.nodes.items[usize(at)].live { ret (NONE, InvalidNode) }
     let (id, allocate_error) = allocate[T](l, value)
     if allocate_error != ok { ret (NONE, allocate_error) }

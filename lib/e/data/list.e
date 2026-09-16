@@ -45,7 +45,7 @@ fn reserve[T: type](l: *List[T], capacity: usize) -> err {
     ret ok
 }
 
-fn push[T: type](l: *List[T], v: T) -> err {
+fn push[T: type](l: *List[T], v: own T) -> err {
     if l.len == l.items.len {
         var next_capacity = 1usize
         if l.items.len != 0usize { next_capacity = l.items.len * 2usize }
@@ -62,7 +62,7 @@ fn pop[T: type](l: *List[T]) -> (T, bool) {
     ret (l.items[l.len], true)
 }
 
-fn insert[T: type](l: *List[T], index: usize, v: T) -> err {
+fn insert[T: type](l: *List[T], index: usize, v: own T) -> err {
     if index > l.len {
         l.items[l.items.len] = v
         ret ok

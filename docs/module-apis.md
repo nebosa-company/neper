@@ -358,9 +358,9 @@ fn from_slice[T: type](a: *mem.Arena, src: []const T) -> (List[T], err)
 fn slice[T: type](l: *List[T]) -> []T
 fn slice_const[T: type](l: *const List[T]) -> []const T
 fn reserve[T: type](l: *List[T], capacity: usize) -> err
-fn push[T: type](l: *List[T], v: T) -> err
+fn push[T: type](l: *List[T], v: own T) -> err
 fn pop[T: type](l: *List[T]) -> (T, bool)
-fn insert[T: type](l: *List[T], index: usize, v: T) -> err
+fn insert[T: type](l: *List[T], index: usize, v: own T) -> err
 fn remove[T: type](l: *List[T], index: usize) -> T
 fn clear[T: type](l: *List[T])
 fn iter[T: type](l: *const List[T]) -> Iter[T]
@@ -376,8 +376,8 @@ type Iter[T: type] = struct { deque: *const Deque[T], index: usize }
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Deque[T], err)
 fn len[T: type](d: *const Deque[T]) -> usize
 fn reserve[T: type](d: *Deque[T], capacity: usize) -> err
-fn push_front[T: type](d: *Deque[T], v: T) -> err
-fn push_back[T: type](d: *Deque[T], v: T) -> err
+fn push_front[T: type](d: *Deque[T], v: own T) -> err
+fn push_back[T: type](d: *Deque[T], v: own T) -> err
 fn pop_front[T: type](d: *Deque[T]) -> (T, bool)
 fn pop_back[T: type](d: *Deque[T]) -> (T, bool)
 fn get[T: type](d: *const Deque[T], index: usize) -> T
@@ -395,7 +395,7 @@ type Iter[T: type] = struct { stack: *const Stack[T], remaining: usize }
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Stack[T], err)
 fn len[T: type](s: *const Stack[T]) -> usize
 fn reserve[T: type](s: *Stack[T], capacity: usize) -> err
-fn push[T: type](s: *Stack[T], value: T) -> err
+fn push[T: type](s: *Stack[T], value: own T) -> err
 fn peek[T: type](s: *const Stack[T]) -> (T, bool)
 fn pop[T: type](s: *Stack[T]) -> (T, bool)
 fn clear[T: type](s: *Stack[T])
@@ -414,7 +414,7 @@ type Iter[T: type] = struct { queue: *const Queue[T], index: usize }
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Queue[T], err)
 fn len[T: type](q: *const Queue[T]) -> usize
 fn reserve[T: type](q: *Queue[T], capacity: usize) -> err
-fn enqueue[T: type](q: *Queue[T], value: T) -> err
+fn enqueue[T: type](q: *Queue[T], value: own T) -> err
 fn peek[T: type](q: *const Queue[T]) -> (T, bool)
 fn dequeue[T: type](q: *Queue[T]) -> (T, bool)
 fn clear[T: type](q: *Queue[T])
@@ -440,10 +440,10 @@ fn len[T: type](l: *const List[T]) -> usize
 fn first[T: type](l: *const List[T]) -> (NodeId, bool)
 fn last[T: type](l: *const List[T]) -> (NodeId, bool)
 fn node[T: type](l: *const List[T], id: NodeId) -> (*const Node[T], err)
-fn push_front[T: type](l: *List[T], value: T) -> (NodeId, err)
-fn push_back[T: type](l: *List[T], value: T) -> (NodeId, err)
-fn insert_before[T: type](l: *List[T], at: NodeId, value: T) -> (NodeId, err)
-fn insert_after[T: type](l: *List[T], at: NodeId, value: T) -> (NodeId, err)
+fn push_front[T: type](l: *List[T], value: own T) -> (NodeId, err)
+fn push_back[T: type](l: *List[T], value: own T) -> (NodeId, err)
+fn insert_before[T: type](l: *List[T], at: NodeId, value: own T) -> (NodeId, err)
+fn insert_after[T: type](l: *List[T], at: NodeId, value: own T) -> (NodeId, err)
 fn remove[T: type](l: *List[T], id: NodeId) -> (T, err)
 fn clear[T: type](l: *List[T])
 fn iter[T: type](l: *const List[T]) -> Iter[T]
@@ -464,8 +464,8 @@ type Iter[T: type] = struct { ring: *const Ring[T], index: usize }
 fn init[T: type](storage: []T) -> Ring[T]
 fn len[T: type](r: *const Ring[T]) -> usize
 fn capacity[T: type](r: *const Ring[T]) -> usize
-fn push[T: type](r: *Ring[T], v: T) -> bool
-fn push_overwrite[T: type](r: *Ring[T], v: T) -> (T, bool)
+fn push[T: type](r: *Ring[T], v: own T) -> bool
+fn push_overwrite[T: type](r: *Ring[T], v: own T) -> (T, bool)
 fn pop[T: type](r: *Ring[T]) -> (T, bool)
 fn peek[T: type](r: *const Ring[T]) -> (T, bool)
 fn clear[T: type](r: *Ring[T])
@@ -484,7 +484,7 @@ type SetIter[K: type] = struct { inner: Iter[K, bool] }
 fn init[K: type, V: type](a: *mem.Arena, capacity: usize) -> (Map[K, V], err)
 fn len[K: type, V: type](m: *const Map[K, V]) -> usize
 fn reserve[K: type, V: type](m: *Map[K, V], capacity: usize) -> err
-fn put[K: type, V: type](m: *Map[K, V], key: K, value: V) -> (bool, err)
+fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err)
 fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool)
 fn get_ptr[K: type, V: type](m: *Map[K, V], key: K) -> (*V, bool)
 fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool)
@@ -509,14 +509,14 @@ type Iter[T: type] = struct { items: []const T, index: usize }
 fn init[T: type](a: *mem.Arena, capacity: usize) -> (Heap[T], err)
 fn from_slice[T: type](a: *mem.Arena, source: []const T) -> (Heap[T], err)
 fn len[T: type](h: *const Heap[T]) -> usize
-fn push[T: type](h: *Heap[T], v: T) -> err
+fn push[T: type](h: *Heap[T], v: own T) -> err
 fn peek[T: type](h: *const Heap[T]) -> (T, bool)
 fn pop[T: type](h: *Heap[T]) -> (T, bool)
 fn clear[T: type](h: *Heap[T])
 fn init_by[T: type, Ctx: type](a: *mem.Arena, capacity: usize, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) -> (HeapBy[T, Ctx], err)
 fn from_slice_by[T: type, Ctx: type](a: *mem.Arena, source: []const T, ctx: *Ctx, cmp: fn(*Ctx, T, T) -> i32) -> (HeapBy[T, Ctx], err)
 fn len_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> usize
-fn push_by[T: type, Ctx: type](h: *HeapBy[T, Ctx], value: T) -> err
+fn push_by[T: type, Ctx: type](h: *HeapBy[T, Ctx], value: own T) -> err
 fn peek_by[T: type, Ctx: type](h: *const HeapBy[T, Ctx]) -> (T, bool)
 fn pop_by[T: type, Ctx: type](h: *HeapBy[T, Ctx]) -> (T, bool)
 fn clear_by[T: type, Ctx: type](h: *HeapBy[T, Ctx])
@@ -540,7 +540,7 @@ type SetIter[K: type] = struct { inner: Iter[K, bool] }
 
 fn init[K: type, V: type](a: *mem.Arena) -> Map[K, V]
 fn len[K: type, V: type](m: *const Map[K, V]) -> usize
-fn put[K: type, V: type](m: *Map[K, V], key: K, value: V) -> (bool, err)
+fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err)
 fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool)
 fn lower_bound[K: type, V: type](m: *const Map[K, V], key: K) -> (K, V, bool)
 fn upper_bound[K: type, V: type](m: *const Map[K, V], key: K) -> (K, V, bool)
@@ -603,7 +603,7 @@ error TooLarge
 fn init[T: type](a: *mem.Arena, initial_capacity: usize) -> (SlotMap[T], err)
 fn len[T: type](m: *const SlotMap[T]) -> usize
 fn capacity[T: type](m: *const SlotMap[T]) -> usize
-fn insert[T: type](m: *SlotMap[T], value: T) -> (Key, err)
+fn insert[T: type](m: *SlotMap[T], value: own T) -> (Key, err)
 fn get[T: type](m: *const SlotMap[T], key: Key) -> (*const T, bool)
 fn get_mut[T: type](m: *SlotMap[T], key: Key) -> (*T, bool)
 fn remove[T: type](m: *SlotMap[T], key: Key) -> (T, bool)
@@ -2107,8 +2107,8 @@ type Channel[T: type] = struct { state: *void }
 error Closed
 
 fn init[T: type](a: *mem.Arena, cap: usize) -> (Channel[T], err)
-fn send[T: type](c: *Channel[T], value: T) -> err
-fn try_send[T: type](c: *Channel[T], value: T) -> (bool, err)
+fn send[T: type](c: *Channel[T], value: own T) -> err
+fn try_send[T: type](c: *Channel[T], value: own T) -> (bool, err)
 fn receive[T: type](c: *Channel[T]) -> (T, err)
 fn try_receive[T: type](c: *Channel[T]) -> (T, bool, err)
 fn close[T: type](c: *Channel[T]) -> err
@@ -2128,7 +2128,7 @@ error Invalid
 
 fn init[T: type](a: *mem.Arena, initial_capacity: usize) -> (Queue[T], err)
 fn try_push[T: type](q: *Queue[T], value: T) -> (bool, err)
-fn push[T: type](q: *Queue[T], value: T) -> err
+fn push[T: type](q: *Queue[T], value: own T) -> err
 fn push_for[T: type](q: *Queue[T], value: T, timeout: time.Duration) -> (bool, err)
 fn try_pop[T: type](q: *Queue[T]) -> (T, bool, err)
 fn pop[T: type](q: *Queue[T]) -> (T, err)
@@ -2152,7 +2152,7 @@ error Invalid
 
 fn init[K: type, V: type](a: *mem.Arena, capacity: usize, shards: u16) -> (Map[K, V], err)
 fn get[K: type, V: type](m: *const Map[K, V], key: K) -> (V, bool, err)
-fn put[K: type, V: type](m: *Map[K, V], key: K, value: V) -> (bool, err)
+fn put[K: type, V: type](m: *Map[K, V], key: K, value: own V) -> (bool, err)
 fn remove[K: type, V: type](m: *Map[K, V], key: K) -> (V, bool, err)
 fn len[K: type, V: type](m: *const Map[K, V]) -> (usize, err)
 fn close[K: type, V: type](m: *Map[K, V]) -> err

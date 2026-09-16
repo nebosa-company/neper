@@ -43,7 +43,7 @@ fn init[T: type](a: *mem.Arena, cap: usize) -> (Channel[T], err) {
     ret (Channel[T] { state: mem.cast[*void](&storage[0usize]) }, ok)
 }
 
-fn send[T: type](c: *Channel[T], value: T) -> err {
+fn send[T: type](c: *Channel[T], value: own T) -> err {
     let s = mem.cast[*ChannelState[T]](c.state)
     sync.mutex_lock(&s.lock)
     while s.count == s.buffer.len && !s.closed {
@@ -61,7 +61,7 @@ fn send[T: type](c: *Channel[T], value: T) -> err {
     ret ok
 }
 
-fn try_send[T: type](c: *Channel[T], value: T) -> (bool, err) {
+fn try_send[T: type](c: *Channel[T], value: own T) -> (bool, err) {
     let s = mem.cast[*ChannelState[T]](c.state)
     sync.mutex_lock(&s.lock)
     if s.closed {

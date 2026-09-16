@@ -61,7 +61,7 @@ fn capacity[T: type](m: *const SlotMap[T]) -> usize {
     ret s.values.len
 }
 
-fn insert[T: type](m: *SlotMap[T], value: T) -> (Key, err) {
+fn insert[T: type](m: *SlotMap[T], value: own T) -> (Key, err) {
     let s = mem.cast[*State[T]](m.state)
     if s.free_head == NO_SLOT { ret (zero, Full) }
     let slot = s.free_head
