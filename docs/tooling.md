@@ -308,7 +308,13 @@ member (a field's type, an enum member's value), the `layout` (size and
 alignment on the target, `compiler-proved`), then what the rules make of a
 value: `resource` (owed its cleanup, moves once, fields read in its module
 alone), `borrow` (holds a pointer: a value views what it points at) or `copy`
-(plain data). A subject that names neither is `E-CLI-9999` and exit 2.
+(plain data). A subject that names a constant or a module-scope variable
+(D437, H08) answers with `kind` `const` or `global`: the `signature` (`const
+NAME: T` or `var NAME: T`), the `value` -- a constant's as the interpreter
+settled it, `compiler-proved`; a global's `zero-initialised` or `initialised by
+its expression before main runs` -- and, for a global, `threads`: every thread
+of the program shares it and no rule tracks it. A subject that names none of
+these is `E-CLI-9999` and exit 2.
 
 `neper context-file PATH ROOT ARCH OS --json --module module.name [--budget N]
 [--cursor N]` (D397, H11) is the catalogue: every declared, non-generic function

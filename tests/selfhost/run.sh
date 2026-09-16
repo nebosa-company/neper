@@ -2315,6 +2315,13 @@ manifest_actual="$test_build/conformance-tools-manifest.jsonl"
 context_actual="$test_build/conformance-tools-context.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self context-file explain.e "$repo" x64 linux --json --symbol explain.main --budget 8 > "$context_actual")
 cmp -s "$context_actual" "$conformance_root/tools/context.x64-linux.expected.jsonl" || { printf '%s\n' "context-file --json differs from the conformance corpus" >&2; exit 1; }
+# A constant and a global as subjects (D437, H08).
+subjects_actual="$test_build/conformance-tools-subjects.jsonl"
+: > "$subjects_actual"
+for subject in subjects.LIMIT subjects.counter; do
+    (cd "$conformance_root/tools" && $test_build/neper-self context-file subjects.e "$repo" x64 linux --json --symbol "$subject" --budget 8 >> "$subjects_actual")
+done
+cmp -s "$subjects_actual" "$conformance_root/tools/subjects.x64-linux.expected.jsonl" || { echo "context-file --json over a constant and a global differs from the conformance corpus" >&2; exit 1; }
 # The caller's contract from a signature (D396, H11): four subjects of one fixture.
 contract_actual="$test_build/conformance-tools-contract.jsonl"
 : > "$contract_actual"

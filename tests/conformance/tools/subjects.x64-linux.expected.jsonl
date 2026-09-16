@@ -1,0 +1,11 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"subject","subject":"subjects.LIMIT","kind":"const","source":{"root":"operand","path":"subjects.e"},"source_sha256":"2ee1509b246332a4f93725127ec6a8f539a73c705cf7b2af0be4257202c10d6e","snapshot":"87c2b91a523ce140","target":"x64-linux","checks":"retained","grammar_revision":3,"span":{"source":{"root":"operand","path":"subjects.e"},"byte_start":161,"byte_end":161,"line":5,"column":1,"end_line":5,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
+{"record":"fact","kind":"signature","provenance":"declared-and-checked","value":"const LIMIT: i64"}
+{"record":"fact","kind":"value","provenance":"compiler-proved","value":"21"}
+{"record":"result","ok":true,"exit_code":0,"data":{"records":2,"omitted":0,"complete":true,"cursor":2,"bytes":783}}
+{"schema":"neper-stream","version":1,"record":"header","command":"context","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"subject","subject":"subjects.counter","kind":"global","source":{"root":"operand","path":"subjects.e"},"source_sha256":"2ee1509b246332a4f93725127ec6a8f539a73c705cf7b2af0be4257202c10d6e","snapshot":"87c2b91a523ce140","target":"x64-linux","checks":"retained","grammar_revision":3,"span":{"source":{"root":"operand","path":"subjects.e"},"byte_start":192,"byte_end":192,"line":6,"column":1,"end_line":6,"end_column":1,"column_utf16":1,"end_column_utf16":1}}
+{"record":"fact","kind":"signature","provenance":"declared-and-checked","value":"var counter: u32"}
+{"record":"fact","kind":"value","provenance":"declared-and-checked","value":"zero-initialised"}
+{"record":"fact","kind":"threads","provenance":"declared-and-checked","value":"shared by every thread of the program: no rule tracks it, so an atomic or a lock is the program's to hold"}
+{"record":"result","ok":true,"exit_code":0,"data":{"records":3,"omitted":0,"complete":true,"cursor":3,"bytes":992}}

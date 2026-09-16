@@ -145,7 +145,7 @@
       "type":"object","additionalProperties":false,
       "required":["record","subject","kind","source","source_sha256","snapshot","target","checks","grammar_revision","span"],
       "properties":{
-        "record":{"const":"subject"},"subject":{"type":"string"},"kind":{"enum":["fn","type"]},
+        "record":{"const":"subject"},"subject":{"type":"string"},"kind":{"enum":["fn","type","const","global"]},
         "source":{"$ref":"#/$defs/source"},"source_sha256":{"$ref":"#/$defs/sha256"},"snapshot":{"type":"string","pattern":"^[0-9a-f]{16}$"},
         "target":{"type":"string"},"checks":{"enum":["retained","off"]},"grammar_revision":{"type":"integer","minimum":1},
         "span":{"$ref":"#/$defs/span"}

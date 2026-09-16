@@ -2466,6 +2466,128 @@ fn context_aggregate(c: *check.Checker, g: *graph.Graph, module_name: str, name:
     ret (0usize, false)
 }
 
+fn context_module(g: *graph.Graph, module_name: str) -> (usize, bool) {
+    var at = 0usize
+    while at < g.count {
+        if graph.same(g.modules[at].name, module_name) { ret (at, true) }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The context of a constant or a module-scope variable (D437, H08): the subject
+// with `kind` `const` or `global`, then the `signature` (the declaration's head),
+// the `value` -- a constant's, as the interpreter settled it, `compiler-proved`; a
+// global's initialiser or its zero, `declared-and-checked` -- and, for a global,
+// `threads`: every thread of the program shares it and no rule tracks it.
+fn value_context_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, subject: str, is_constant: bool, index: usize, budget: usize, byte_budget: usize, cursor: usize, target_name: str, checks: str) -> err {
+    var module_index = 0usize
+    var name = ""
+    var ty: check.Type = zero
+    var token: lex.Token = zero
+    if is_constant {
+        let constant = c.constants[index]
+        module_index = constant.module_index
+        name = constant.name
+        ty = constant.ty
+        token = constant.token
+    } else {
+        let global = c.globals[index]
+        module_index = global.module_index
+        name = global.name
+        ty = global.ty
+        token = global.token
+    }
+    let module = g.modules[module_index]
+    let (root, relative) = source_identity_of(g, module.path)
+    let (path, path_error) = manifest_slashes(a, relative)
+    if path_error != ok { ret path_error }
+    let (digest, digest_error) = manifest_sha256(a, module.text)
+    if digest_error != ok { ret digest_error }
+    out.lines = module.lines
+    try text(out, "{\"record\":\"subject\",\"subject\":")
+    try quoted(out, subject)
+    if is_constant { try text(out, ",\"kind\":\"const\",\"source\":") } else { try text(out, ",\"kind\":\"global\",\"source\":") }
+    try manifest_identity(out, root, relative)
+    try text(out, ",\"source_sha256\":")
+    try quoted(out, digest)
+    try text(out, ",\"snapshot\":")
+    try program_snapshot(out, g)
+    try text(out, ",\"target\":")
+    try quoted(out, target_name)
+    try text(out, ",\"checks\":")
+    try quoted(out, checks)
+    try text(out, ",\"grammar_revision\":3,\"span\":")
+    try point_span(out, root, path, module.text, token)
+    try byte(out, 125u8)
+    try flush(out)
+    var page: Page = zero
+    page.cursor = cursor
+    page.budget = budget
+    page.byte_budget = byte_budget
+    // The declaration.
+    page.total += 1usize
+    if page.total > page.cursor && page_open(&page, out) {
+        if is_constant { try text(out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":\"const ") } else { try text(out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":\"var ") }
+        try text(out, name)
+        try text(out, ": ")
+        try type_text(out, c, g, ty, 0usize)
+        try text(out, "\"}")
+        try flush(out)
+        page.written += 1usize
+    } else {
+        if page.total > page.cursor { page.omitted += 1usize }
+    }
+    // The value.
+    page.total += 1usize
+    if page.total > page.cursor && page_open(&page, out) {
+        if is_constant {
+            let constant = c.constants[index]
+            if constant.state == 2u8 {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"value\",\"provenance\":\"compiler-proved\",\"value\":\"")
+                if constant.value.negative { try byte(out, 45u8) }
+                try decimal(out, constant.value.magnitude)
+                try text(out, "\"}")
+            } else {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"value\",\"provenance\":\"unknown\",\"value\":\"not an integer the interpreter settled\"}")
+            }
+        } else {
+            if c.globals[index].has_expression {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"value\",\"provenance\":\"declared-and-checked\",\"value\":\"initialised by its expression before main runs\"}")
+            } else {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"value\",\"provenance\":\"declared-and-checked\",\"value\":\"zero-initialised\"}")
+            }
+        }
+        try flush(out)
+        page.written += 1usize
+    } else {
+        if page.total > page.cursor { page.omitted += 1usize }
+    }
+    // A global is every thread's.
+    if !is_constant {
+        page.total += 1usize
+        if page.total > page.cursor && page_open(&page, out) {
+            try text(out, "{\"record\":\"fact\",\"kind\":\"threads\",\"provenance\":\"declared-and-checked\",\"value\":\"shared by every thread of the program: no rule tracks it, so an atomic or a lock is the program's to hold\"}")
+            try flush(out)
+            page.written += 1usize
+        } else {
+            if page.total > page.cursor { page.omitted += 1usize }
+        }
+    }
+    try text(out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
+    try decimal(out, page.written)
+    try text(out, ",\"omitted\":")
+    try decimal(out, page.omitted)
+    try text(out, ",\"complete\":")
+    if page.omitted == 0usize { try text(out, "true") } else { try text(out, "false") }
+    try text(out, ",\"cursor\":")
+    try decimal(out, page.cursor + page.written)
+    try text(out, ",\"bytes\":")
+    try decimal(out, out.flushed)
+    try text(out, "}}")
+    ret flush(out)
+}
+
 // The context of a type (D419, H08): the subject, then the facts in a fixed order --
 // the declaration as a signature, one `field` per field or member with its type
 // (a member's value for an enum), the `layout` (size and alignment on the target),
@@ -3041,8 +3163,16 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         if dot != subject.len {
             let (aggregate_index, has_aggregate) = context_aggregate(c, g, subject[0usize..dot], subject[dot + 1usize..subject.len])
             if has_aggregate { ret type_context_json(a, &out, c, g, subject, aggregate_index, budget, byte_budget, cursor, target_name, checks) }
+            // A constant or a module-scope variable (D437, H08).
+            let (subject_module, has_module) = context_module(g, subject[0usize..dot])
+            if has_module {
+                let (constant_index, has_constant) = check.find_constant(c, subject_module, subject[dot + 1usize..subject.len])
+                if has_constant { ret value_context_json(a, &out, c, g, subject, true, constant_index, budget, byte_budget, cursor, target_name, checks) }
+                let (global_index, has_global) = check.find_global(c, subject_module, subject[dot + 1usize..subject.len])
+                if has_global { ret value_context_json(a, &out, c, g, subject, false, global_index, budget, byte_budget, cursor, target_name, checks) }
+            }
         }
-        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function or type of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function, type, constant or global of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
         try flush(&out)
         try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
         try flush(&out)

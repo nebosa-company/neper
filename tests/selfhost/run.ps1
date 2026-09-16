@@ -2228,6 +2228,15 @@ $contextActual = Join-Path $testBuild 'conformance-tools-context.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file explain.e `"$repo`" x64 windows --json --symbol explain.main --budget 8 > `"$contextActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --json failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contextActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/context.x64-windows.expected.jsonl')).Hash) { throw "context-file --json differs from the conformance corpus" }
+# A constant and a global as subjects (D437, H08): the declaration, the value, and
+# for the global that every thread shares it.
+$subjectsActual = Join-Path $testBuild 'conformance-tools-subjects.jsonl'
+if (Test-Path -LiteralPath $subjectsActual) { Remove-Item -LiteralPath $subjectsActual }
+foreach ($subject in @('subjects.LIMIT', 'subjects.counter')) {
+    cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file subjects.e `"$repo`" x64 windows --json --symbol $subject --budget 8 >> `"$subjectsActual`""
+    if ($LASTEXITCODE -ne 0) { throw "context-file --json --symbol $subject failed" }
+}
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $subjectsActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/subjects.x64-windows.expected.jsonl')).Hash) { throw "context-file --json over a constant and a global differs from the conformance corpus" }
 # The caller's contract from a signature (D396, H11): four subjects of one fixture --
 # an allocating, fallible, thread-starting main; a mutation; a borrow; a const read.
 $contractActual = Join-Path $testBuild 'conformance-tools-contract.jsonl'

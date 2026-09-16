@@ -9639,3 +9639,19 @@ files happen to match. The plan goldens are re-pinned per host, as the context
 goldens are, since the target's `e.os` variant is part of the program.
 
 Not yet: an argument per call for the added parameter.
+
+## D437 -- A constant or a global is a context subject
+
+H08 listed constants and globals as subjects `context-file` could not answer;
+a harness reading a `const` had the index's spelling and nothing the checker
+knew. `--symbol module.NAME` over a constant or a module-scope variable now
+answers as a type does: the subject with `kind` `const` or `global`, the
+`signature` (`const NAME: T`, `var NAME: T`), the `value` -- a constant's as
+the interpreter settled it, `compiler-proved`, or `unknown` when it did not; a
+global's `zero-initialised` or `initialised by its expression before main runs`
+-- and for a global a `threads` fact: every thread of the program shares it and
+no rule tracks it, so an atomic or a lock is the program's to hold. The corpus
+gains `tools/subjects`, a constant and a global, per host.
+
+Not yet: a constant's non-integer values (strings, floats, arrays) spelled, and
+the uses of a global as `uses-file` answers a function's.
