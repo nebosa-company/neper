@@ -51,21 +51,45 @@ resource -- a handle, a `resource` type, a struct holding one -- is owed its cle
 on every exit and moves at most once (`E-SAFETY-*`, spec §11). `ret (a) || b` reads
 as a tuple: bind the value first.
 
-For the common edit shapes:
+The examples are programs the suites check with the compiler (`scripts/card_examples.py`):
+a ```` ```neper ```` fence checks clean, and a ```` ```neper reject E-CODE ```` fence is
+refused with that code. The common edit shapes -- a parameter added, every call site
+given it, a struct and its literal:
 
-```text
-fn adjust(reading: f32, offset: f32) -> f32 {
-    ret reading + offset
-}
+```neper
+use e.mem
 
-// after adding gain
+type Sensor = struct { id: u64, temp: f32 }
+
+// after adding `gain`: every call passes it, there are no defaults and no overloads
 fn adjust(reading: f32, gain: f32, offset: f32) -> f32 {
     ret reading * gain + offset
 }
 
-let x = calibration.adjust(41.7, 1.0, 0.25)
-type Sensor = struct { id: u64, temp: f32, }
-let sensor = Sensor{ id: u64(13), temp: 41.8 }
+fn main(a: *mem.Arena, args: []str) -> err {
+    let sensor = Sensor { id: 13u64, temp: 41.8 }
+    let adjusted = adjust(sensor.temp, 1.0, 0.25)
+    if adjusted < 0.0 { ret mem.Exhausted }
+    ret ok
+}
+```
+
+The near miss: a value of one width where another is expected does not convert; the
+diagnostic names both types (`expected`, `actual`) and the cast is written out:
+
+```neper reject E-TYPE-0002
+use e.mem
+
+fn scale(reading: f32, gain: f32) -> f32 {
+    ret reading * gain
+}
+
+fn main(a: *mem.Arena, args: []str) -> err {
+    let reading: f64 = 41.8
+    let scaled = scale(reading, 2.0)
+    if scaled < 0.0 { ret mem.Exhausted }
+    ret ok
+}
 ```
 
 ## Diagnostics

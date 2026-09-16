@@ -2213,6 +2213,10 @@ if ($LASTEXITCODE -ne 0) { throw "the runner's source map does not validate agai
 # the render of grammar.ebnf's revision is drift, and the suite refuses it.
 & python (Join-Path $repo 'scripts/render_card.py') --check | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'docs/llm-neper-card.md is not the render of docs/grammar.ebnf; run python scripts/render_card.py' }
+# The card's examples are checked by the compiler (D404, H11): every ```neper fence
+# checks clean, every ```neper reject E-CODE fence is refused with that code.
+& python (Join-Path $repo 'scripts/card_examples.py') $compiler $repo x64 windows (Join-Path $testBuild 'card-examples') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'an example of docs/llm-neper-card.src.md does not do what its fence says' }
 # A stale source map beside the operand is E-TOOL-0001 and no artifact (D264).
 $staleActual = Join-Path $testBuild 'conformance-tools-stale-map.jsonl'
 Remove-Item -ErrorAction SilentlyContinue -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map.out')

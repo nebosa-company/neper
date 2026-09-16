@@ -2385,6 +2385,8 @@ stale_error_status=0
 [ ! -e "$test_build/conformance-tools-stale-map-error.out" ]
 # The language card is the render of the grammar (D374, H28).
 python3 "$repo/scripts/render_card.py" --check > /dev/null
+# The card's examples are checked by the compiler (D404, H11).
+python3 "$repo/scripts/card_examples.py" "$test_build/neper-self" "$repo" x64 linux "$test_build/card-examples" > /dev/null
 # `plan-rename-file --json` (D376, H29): the plan byte for byte; applied to a copy it
 # re-checks, the new name has uses at the old sites, and a second apply is refused.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-rename-file explain.e "$repo" x64 linux --json --symbol explain.same --to alike > "$test_build/conformance-tools-plan-rename.jsonl")

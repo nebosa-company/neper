@@ -8990,3 +8990,24 @@ What the same synthetic showed and this does not touch: the checker's body
 sweep and the lowering are superlinear in the number of locals of one function
 (4,000 locals: check 117 ms, lower 217 ms), from name lookups that walk the
 function's locals; real functions have a hundredth of that.
+
+## D404 -- The card's examples are programs the suites check
+
+H11 asks that shipped examples compile or be labelled rejection tests with their
+expected diagnostic; the card's one example was a `text` fence of fragments, and
+it was wrong -- `Sensor{ id: u64(13), ... }` casts an untyped literal, which is
+E-TYPE-9999 `MissingContext`; the spelling is `13u64`. The card now carries two
+complete programs: the edit shapes -- a parameter added and every call site given
+it, a struct and its literal -- as a ```` ```neper ```` fence that must check
+clean, and the near miss -- an `f64` where an `f32` is expected -- as a ```` ```neper
+reject E-TYPE-0002 ```` fence that must be refused with that code, beside the
+`expected`/`actual` fields D401 gave the diagnostic. `scripts/card_examples.py`
+extracts every such fence of `docs/llm-neper-card.src.md` into
+`<build>/card-examples/src/example<N>.e`, runs `check-file --json` on each with the
+suite's compiler and fails on any fence that does not do what it says, naming
+the fence's line and the first diagnostic; both suites run it after the card's
+render check, so an example cannot drift from the language and the rendered
+card carries what was checked.
+
+Not yet: examples that run (a `run --json` fence with an expected exit code),
+and the planned / present / verified marking of the API records.
