@@ -164,7 +164,7 @@
       "type":"object","additionalProperties":false,
       "required":["record","relation","provenance","in","span"],
       "properties":{
-        "record":{"const":"use"},"relation":{"enum":["call","dispatch","instance","value"]},
+        "record":{"const":"use"},"relation":{"enum":["call","dispatch","instance","value","field"]},
         "provenance":{"enum":["compiler-proved"]},"in":{"type":"string"},"span":{"$ref":"#/$defs/span"}
       }
     },

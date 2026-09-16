@@ -2137,6 +2137,26 @@ $signatureRefused = Join-Path $testBuild 'conformance-tools-plan-signature-refus
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature.e `"$repo`" x64 windows --json --symbol signature.adjust --order 0,0 > `"$signatureRefused`""
 if ($LASTEXITCODE -ne 2) { throw "a plan with a repeated index did not exit 2 (got $LASTEXITCODE)" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $signatureRefused).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_signature_refused.expected.jsonl')).Hash) { throw "a refused plan-change-signature-file differs from the conformance corpus" }
+# A field's uses and rename (D420, H17): every access and literal naming it, byte for
+# byte; the rename applied to a copy checks, and the new name has the five uses.
+$fieldUsesActual = Join-Path $testBuild 'conformance-tools-uses-field.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file contract.e `"$repo`" x64 windows --json --symbol contract.Counter.hits > `"$fieldUsesActual`""
+if ($LASTEXITCODE -ne 0) { throw "uses-file --json on a field failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fieldUsesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses_field.expected.jsonl')).Hash) { throw "uses-file --json on a field differs from the conformance corpus" }
+$fieldPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-field.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-rename-file contract.e `"$repo`" x64 windows --json --symbol contract.Counter.hits --to count > `"$fieldPlanActual`""
+if ($LASTEXITCODE -ne 0) { throw "plan-rename-file --json on a field failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fieldPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_field.expected.jsonl')).Hash) { throw "plan-rename-file --json on a field differs from the conformance corpus" }
+$fieldScratch = Join-Path $testBuild 'plan-rename-field-scratch'
+if (Test-Path -LiteralPath $fieldScratch) { Remove-Item -LiteralPath $fieldScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $fieldScratch 'src') | Out-Null
+Copy-Item (Join-Path $conformanceRoot 'tools/contract.e') (Join-Path $fieldScratch 'src')
+& python (Join-Path $repo 'scripts/apply_plan.py') $fieldPlanActual --root (Join-Path $fieldScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the field rename plan did not apply' }
+$fieldChecked = & $compiler check-file (Join-Path $fieldScratch 'src/contract.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $fieldChecked -ne 'module check ok') { throw "the program with the renamed field does not check: $fieldChecked" }
+$fieldUses = & $compiler uses-file (Join-Path $fieldScratch 'src/contract.e') $repo 'x64' 'windows' --json --symbol contract.Counter.count
+if ($LASTEXITCODE -ne 0 -or @($fieldUses | Where-Object { $_ -match '"record":"use"' }).Count -ne 5) { throw 'the renamed field is not used at the five sites' }
 # The subject's snapshot (D407, H15): the renamed program's differs from the original's.
 $snapshotBefore = (& $compiler context-file (Join-Path $conformanceRoot 'tools/explain.e') $repo 'x64' 'windows' --json --symbol explain.main --budget 1 | Select-String -Pattern '"snapshot":"([0-9a-f]{16})"').Matches[0].Groups[1].Value
 $snapshotAfter = (& $compiler context-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows' --json --symbol explain.main --budget 1 | Select-String -Pattern '"snapshot":"([0-9a-f]{16})"').Matches[0].Groups[1].Value

@@ -9317,3 +9317,24 @@ before, with the message saying both. The batch corpus case gains a type line.
 
 Not yet: constants, globals and errors as subjects, an instance of a generic by
 its arguments, and the type facts in the catalogue.
+
+## D420 -- A field's uses, and its rename
+
+H17 lists field relations among what `uses-file` did not see: the index knew a
+field's declaration and nothing of its accesses, so a field could not be found
+or renamed with the certainty a function could. The checker now records, when
+its explain table is open, every field access it types -- `x.field`, at the
+member's own token -- and every field a struct literal names, as records of a
+new kind carrying the field's global index; the table is sized to half a
+million records, since the compiler's own accesses pass sixty thousand.
+`uses-file --symbol module.Type.field` lists them by module and offset with
+relation `field` and the enclosing function; `plan-rename-file` over the same
+subject plans the rename: the declaration's token and every recorded
+spelling, the rename's records otherwise. The module of a dotted name is
+everything before the last two dots, so `e.os.OpenFlags.read` names what it
+should. The corpus gains `tools/uses_field` and `tools/plan_rename_field`
+over `contract.Counter.hits`; both suites apply the plan to a copy, check it,
+and find the new name at the five sites.
+
+Not yet: a store told from a read (the record is the access), a field of a
+generic instance by its arguments, and address relations (`&x.field`).

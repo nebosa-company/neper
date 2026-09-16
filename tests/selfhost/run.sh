@@ -2443,6 +2443,19 @@ signature_refused=0
 (cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature.e "$repo" x64 linux --json --symbol signature.adjust --order 0,0 > "$test_build/conformance-tools-plan-signature-refused.jsonl") || signature_refused=$?
 [ "$signature_refused" -eq 2 ]
 cmp -s "$test_build/conformance-tools-plan-signature-refused.jsonl" "$conformance_root/tools/plan_signature_refused.expected.jsonl" || { echo "a refused plan-change-signature-file differs from the conformance corpus" >&2; exit 1; }
+# A field's uses and rename (D420, H17): the uses byte for byte; the rename applied to a
+# copy checks, and the new name has the five uses.
+(cd "$conformance_root/tools" && $test_build/neper-self uses-file contract.e "$repo" x64 linux --json --symbol contract.Counter.hits > "$test_build/conformance-tools-uses-field.jsonl")
+cmp -s "$test_build/conformance-tools-uses-field.jsonl" "$conformance_root/tools/uses_field.expected.jsonl" || { echo "uses-file --json on a field differs from the conformance corpus" >&2; exit 1; }
+(cd "$conformance_root/tools" && $test_build/neper-self plan-rename-file contract.e "$repo" x64 linux --json --symbol contract.Counter.hits --to count > "$test_build/conformance-tools-plan-rename-field.jsonl")
+cmp -s "$test_build/conformance-tools-plan-rename-field.jsonl" "$conformance_root/tools/plan_rename_field.expected.jsonl" || { echo "plan-rename-file --json on a field differs from the conformance corpus" >&2; exit 1; }
+field_scratch="$test_build/plan-rename-field-scratch"
+rm -rf "$field_scratch" && mkdir -p "$field_scratch/src" && cp "$conformance_root/tools/contract.e" "$field_scratch/src/"
+python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename-field.jsonl" --root "$field_scratch/src" > /dev/null
+field_checked=$($test_build/neper-self check-file "$field_scratch/src/contract.e" "$repo" x64 linux)
+[ "$field_checked" = 'module check ok' ]
+field_uses=$($test_build/neper-self uses-file "$field_scratch/src/contract.e" "$repo" x64 linux --json --symbol contract.Counter.count | grep -c '"record":"use"')
+[ "$field_uses" -eq 5 ]
 # The subject's snapshot (D407, H15): the renamed program's differs from the original's.
 snapshot_before=$($test_build/neper-self context-file "$conformance_root/tools/explain.e" "$repo" x64 linux --json --symbol explain.main --budget 1 | grep -o '"snapshot":"[0-9a-f]*"' | head -1)
 snapshot_after=$($test_build/neper-self context-file "$plan_scratch/src/explain.e" "$repo" x64 linux --json --symbol explain.main --budget 1 | grep -o '"snapshot":"[0-9a-f]*"' | head -1)

@@ -8686,6 +8686,20 @@ fn explain_function_index(c: *Checker, function: Function) -> usize {
     ret c.function_count
 }
 
+// A field accessed or named (D420, H17): the explain record of kind 6 carries the
+// field's global index as its `function_index` and the member token's offset, so
+// `uses-file --symbol module.Type.field` lists every access and a rename plan edits
+// every spelling.
+fn record_explain_field(c: *Checker, module_index: usize, offset: usize, field_index: usize) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    c.explains[c.explain_count] = Explain { kind: 6u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: field_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+    c.explain_count += 1usize
+}
+
 // A function named as a value (D362, H17): a root a deletion has to know about.
 fn record_explain_value(c: *Checker, module_index: usize, node: syntax.Node, function_index: usize) {
     if c.explains.len == 0usize { ret }
@@ -9344,6 +9358,8 @@ fn check_named_aggregate_literal(c: *Checker, g: *graph.Graph, tree: *parse.Tree
                 if literal_name_seen(c, text, tree, node, at, name) { ret (invalid_type(), ArgumentCount) }
                 let (field_index, found_field) = aggregate_field_for_name(c, aggregate, name)
                 if !found_field { ret (invalid_type(), InvalidType) }
+                // The literal's naming of the field, for the uses query (D420).
+                if usize(item.token_start) < c.token_count { record_explain_field(c, module_index, c.tokens[usize(item.token_start)].start, field_index) }
                 let field = c.aggregate_fields[field_index]
                 let (expression, has_expression) = literal_item_expression(tree, item)
                 let named = literal_item_named(c, tree, item)
@@ -9839,6 +9855,8 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             }
             ret (invalid_type(), InvalidType)
         }
+        // The access, for the uses query (D420, H17): the member's own token.
+        if usize(node.token_end) > usize(node.token_start) && usize(node.token_end) - 1usize < c.token_count { record_explain_field(c, module_index, c.tokens[usize(node.token_end) - 1usize].start, field_index) }
         let (field_type, context_error) = apply_context(c, c.aggregate_fields[field_index].ty, expected)
         ret (field_type, context_error)
     }

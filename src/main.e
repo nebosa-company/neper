@@ -7118,7 +7118,9 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     var checker: check.Checker = zero
     try init_cli_checker(a, &checker, &loaded, report)
     checker.arena = a
-    let (explains, explains_error) = mem.alloc[check.Explain](a, 65536usize)
+    // Sized for a program's field accesses too (D420): the compiler's own are past
+    // sixty thousand, and an overflow makes every answer incomplete.
+    let (explains, explains_error) = mem.alloc[check.Explain](a, 524288usize)
     if explains_error != ok { ret explains_error }
     checker.explains = explains
     let check_error = check.run(&checker, &resolver, &loaded)

@@ -338,7 +338,11 @@ anywhere in the program, by module then byte offset: a `use` record with
 `relation` -- `call` (a direct call, of the function or of one of its instances),
 `dispatch` (a protocol call that chose it), `instance` (an instantiation of it),
 `value` (its name taken as a function value) -- `provenance` (`compiler-proved`),
-`in` (the function the use lies in), and `span`. Then a `root` record per reason
+`in` (the function the use lies in), and `span`. A subject `module.Type.field`
+(D420, H17) names a field: its uses are every access `x.field` and every literal
+`{ field: .. }` the checker typed, relation `field`, and `plan-rename-file` over
+the same subject plans the field's rename -- the declaration's token and every
+such spelling. Then a `root` record per reason
 the function is alive without a use: `entry` (`main` of the root module), `test`
 (`@test`), `export` (`@export`). The result carries `uses`, `roots`,
 `indirect_calls` -- how many calls through function values the program has, each a
