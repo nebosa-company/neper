@@ -3677,6 +3677,18 @@ fn list_items(tokens: []const lex.Token, name_at: usize) -> ListItems {
 // `, ` -- as one edit per site over the text between the parentheses. A function
 // named as a value or chosen by a protocol is refused as D406 refuses it; so is a
 // list with more items than the order names or more than sixteen.
+// Whether an identifier token spelled `name` lies in a module's text between two
+// byte offsets (D439): a function body's use of a parameter, read from the tokens.
+fn body_names(module: graph.Module, from: usize, to: usize, name: str) -> bool {
+    var at = 0usize
+    while at < module.tokens.len {
+        let token = module.tokens[at]
+        if token.start >= from && token.end <= to && token.kind == .Identifier && graph.same(module.text[token.start..token.end], name) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
 fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, order_text: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 1024usize + 65536usize)
     if storage_error != ok { ret storage_error }
@@ -3741,6 +3753,40 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
         let items = list_items(g.modules[sites.modules[probe]].tokens, sites.offsets[probe])
         if !items.found || items.count != function.parameter_count { ret plan_refused(&out, "a site's list could not be read as the function's parameters or arguments") }
         probe += 1usize
+    }
+    // A parameter the order leaves out is removed (D439, H17): refused when the body
+    // still names it, since the plan would then be an edit the check refuses.
+    var removed = 0usize
+    while removed < function.parameter_count {
+        var kept = false
+        var kept_at = 0usize
+        while kept_at < order_count {
+            if order[kept_at] == removed { kept = true }
+            kept_at += 1usize
+        }
+        if !kept && function.module_index < g.count {
+            let parameter_name = c.parameters[function.first_parameter + removed].name
+            let declaration = g.modules[function.module_index]
+            var declared_at = 0usize
+            var declared_found = false
+            var site_at = 0usize
+            while site_at < sites.count {
+                if sites.kinds[site_at] == 0u8 {
+                    declared_at = sites.offsets[site_at]
+                    declared_found = true
+                }
+                site_at += 1usize
+            }
+            let declared = list_items(declaration.tokens, declared_at)
+            if declared_found && declared.found && body_names(declaration, declared.inner_end, function.source_end, parameter_name) {
+                var message_storage: [256]u8 = zero
+                var message_at = nptest_copy(message_storage[..], 0usize, "the parameter `")
+                message_at = nptest_copy(message_storage[..], message_at, parameter_name)
+                message_at = nptest_copy(message_storage[..], message_at, "` is left out of the order but the body names it: no change is planned")
+                ret plan_refused(&out, message_storage[0usize..message_at])
+            }
+        }
+        removed += 1usize
     }
     let (files, preconditions_error) = plan_preconditions(a, &out, g, sites)
     if preconditions_error != ok { ret preconditions_error }

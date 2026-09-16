@@ -9674,3 +9674,19 @@ order-independent. Both suites run it over `algo_sort`, `algo_bitset` and
 Not yet: locals renamed (the index carries no locals to rename by), fields
 reordered (a layout change the program may observe), and a corpus wider than
 three.
+
+## D439 -- A removed parameter must be unused
+
+D415's change-signature plan removes a parameter the order leaves out, and said
+so; nothing checked that the body had stopped naming it, so the plan could be
+an edit the re-check refuses, which is what H29's preconditions exist to
+prevent. The plan now reads the declaration's body from the module's tokens
+and refuses, naming the parameter, when an identifier spelled as a left-out
+parameter lies between the parameter list and the function's end. The corpus
+gains `tools/signature_remove`: `--order 0,1` drops the unused `scale` from the
+declaration and every call, applied and re-checked by both suites; `--order
+0,2` would drop `gain`, which the body reads, and is refused with exit 2.
+The H17 row is corrected: reordering and removal were D415's.
+
+Not yet: a parameter shadowed by a local of the same name, which the token scan
+counts as a use (a refusal, never a wrong plan), and moves and error renames.

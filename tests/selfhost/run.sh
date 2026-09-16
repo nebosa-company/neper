@@ -2507,6 +2507,21 @@ python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-signat
 signature_checked=$($test_build/neper-self check-file "$signature_scratch/src/signature.e" "$repo" x64 linux)
 [ "$signature_checked" = 'module check ok' ]
 grep -q 'fn adjust(offset: f32, reading: f32, gain: f32)' "$signature_scratch/src/signature.e"
+# A parameter removed (D439, H17): `0,1` drops the unused `scale`; `0,2` is refused.
+remove_actual="$test_build/conformance-tools-plan-signature-remove.jsonl"
+(cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature_remove.e "$repo" x64 linux --json --symbol signature_remove.adjust --order 0,1 > "$remove_actual")
+cmp -s "$remove_actual" "$conformance_root/tools/plan_signature_remove.x64-linux.expected.jsonl" || { echo "plan-change-signature-file with a removal differs from the conformance corpus" >&2; exit 1; }
+remove_scratch="$test_build/plan-signature-remove-scratch"
+rm -rf "$remove_scratch"
+mkdir -p "$remove_scratch/src"
+cp "$conformance_root/tools/signature_remove.e" "$remove_scratch/src/signature_remove.e"
+python3 "$repo/scripts/apply_plan.py" "$remove_actual" --root "$remove_scratch/src" > /dev/null
+[ "$($test_build/neper-self check-file "$remove_scratch/src/signature_remove.e" "$repo" x64 linux)" = 'module check ok' ]
+grep -q 'fn adjust(reading: f32, gain: f32)' "$remove_scratch/src/signature_remove.e"
+remove_refused=0
+(cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature_remove.e "$repo" x64 linux --json --symbol signature_remove.adjust --order 0,2 > "$test_build/conformance-tools-plan-signature-remove-refused.jsonl") || remove_refused=$?
+[ "$remove_refused" -eq 2 ]
+grep -q 'the body names it' "$test_build/conformance-tools-plan-signature-remove-refused.jsonl"
 signature_refused=0
 (cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature.e "$repo" x64 linux --json --symbol signature.adjust --order 0,0 > "$test_build/conformance-tools-plan-signature-refused.jsonl") || signature_refused=$?
 [ "$signature_refused" -eq 2 ]

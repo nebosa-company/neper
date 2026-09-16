@@ -436,8 +436,9 @@ order lists the parameters kept as indices into the old list, none repeated;
 the declaration's list and every resolved call's argument list are re-rendered
 from the texts of their items in that order, one `change-signature` edit per
 site over the text between the parentheses; a function named as a value or
-chosen by a protocol, a repeated or out-of-range index, or a list of more than
-sixteen items is refused. Every refused query (a subject that names nothing, a
+chosen by a protocol, a repeated or out-of-range index, a list of more than
+sixteen items, or a parameter left out of the order that the body still names
+(D439) is refused. Every refused query (a subject that names nothing, a
 plan that cannot be made) exits 2 as its result says.
 `m25-h29-structured-edits.md` fixes the plan shape for the operations to come.
 

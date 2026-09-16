@@ -2159,6 +2159,24 @@ if ($LASTEXITCODE -ne 0) { throw 'the change-signature plan did not apply' }
 $signatureChecked = & $compiler check-file (Join-Path $signatureScratch 'src/signature.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $signatureChecked -ne 'module check ok') { throw "the program with the changed signature does not check: $signatureChecked" }
 if (-not (Select-String -LiteralPath (Join-Path $signatureScratch 'src/signature.e') -Pattern 'fn adjust\(offset: f32, reading: f32, gain: f32\)' -Quiet)) { throw 'the signature was not reordered' }
+# A parameter removed (D439, H17): `0,1` drops `scale`, which the body never names,
+# from the declaration and every call; `0,2` would drop `gain`, which it reads, refused.
+$removeActual = Join-Path $testBuild 'conformance-tools-plan-signature-remove.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature_remove.e `"$repo`" x64 windows --json --symbol signature_remove.adjust --order 0,1 > `"$removeActual`""
+if ($LASTEXITCODE -ne 0) { throw "plan-change-signature-file with a removal failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $removeActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_signature_remove.x64-windows.expected.jsonl')).Hash) { throw "plan-change-signature-file with a removal differs from the conformance corpus" }
+$removeScratch = Join-Path $testBuild 'plan-signature-remove-scratch'
+if (Test-Path -LiteralPath $removeScratch) { Remove-Item -LiteralPath $removeScratch -Recurse -Force }
+New-Item -ItemType Directory -Force -Path (Join-Path $removeScratch 'src') | Out-Null
+Copy-Item (Join-Path $conformanceRoot 'tools\signature_remove.e') (Join-Path $removeScratch 'src\signature_remove.e')
+& python (Join-Path $repo 'scripts/apply_plan.py') $removeActual --root (Join-Path $removeScratch 'src') | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the removal plan could not be applied' }
+$removeChecked = & $compiler check-file (Join-Path $removeScratch 'src/signature_remove.e') $repo 'x64' 'windows'
+if ($LASTEXITCODE -ne 0 -or $removeChecked -ne 'module check ok') { throw "the program with the removed parameter does not check: $removeChecked" }
+if (-not (Select-String -LiteralPath (Join-Path $removeScratch 'src/signature_remove.e') -Pattern 'fn adjust\(reading: f32, gain: f32\)' -Quiet)) { throw 'the parameter was not removed' }
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature_remove.e `"$repo`" x64 windows --json --symbol signature_remove.adjust --order 0,2 > `"$(Join-Path $testBuild 'conformance-tools-plan-signature-remove-refused.jsonl')`""
+if ($LASTEXITCODE -ne 2) { throw "removing a parameter the body names did not exit 2 (got $LASTEXITCODE)" }
+if (-not (Select-String -LiteralPath (Join-Path $testBuild 'conformance-tools-plan-signature-remove-refused.jsonl') -Pattern 'the body names it' -Quiet)) { throw 'the refusal did not name the parameter the body reads' }
 $signatureRefused = Join-Path $testBuild 'conformance-tools-plan-signature-refused.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature.e `"$repo`" x64 windows --json --symbol signature.adjust --order 0,0 > `"$signatureRefused`""
 if ($LASTEXITCODE -ne 2) { throw "a plan with a repeated index did not exit 2 (got $LASTEXITCODE)" }
