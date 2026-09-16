@@ -7793,3 +7793,26 @@ until then. Also found: a `[512]` array inside the `Checker` crashed the
 bootstrap-built compiler (its frames do not cover a struct that size), so the
 inventory that was to ride the checker rides the manifest writer instead, and is
 the more correct for it.
+
+## D356 -- The first bounds proof, and the inlined bodies that had lost their checks
+
+Under `while i < x.len { ... }` with `i` and `x` locals, `x[i]` before the body's
+first write of `i` is in range: the condition read the length the access sees.
+The lowering reads that off the tokens when it opens the loop -- the operator is
+`<`, the sides are a local and a local's `.len`, the body's first write of `i` is
+found, no nested loop writes `i` (its back edge would repeat the access after the
+change), the body never writes `x`, and the function never takes `&i` -- pushes
+the proof for the body, and emits the index instruction without its check when
+the proof covers it. `--stats` reports `bounds checks elided`: 312 in the
+compiler, 31 in the fixture program with its library. The fixture `bounds_proof`
+holds the eliminated shape and three retained ones, and its retained `shifted`
+case -- the index read after its increment, past the end on the last iteration --
+found that the inline oracle lowered its bodies with `nocheck` set, the old
+release mode (D212), so a function inlined into a release build ran without its
+checks since D355; the oracle keeps them now, and the image grew by them. The
+measurements are in `m25-h03-checked-release.md` section 5: the proof's 312
+sites are not measurable against the noise, and the budgets stay breached.
+
+**Not yet:** a bound through a second local (`while at < count`, `count <=
+x.len`), a field base (`c.tokens[at]`), a prior check on the same operand -- the
+shapes the compiler's own hot loops have.

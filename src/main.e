@@ -5130,13 +5130,16 @@ fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loade
     ret check.finish_bodies(checker, resolver, loaded)
 }
 
-// The first oracle's builder (D212): no copies in its bodies, `nocheck` like every
-// release lowering, and its own record of what it inlined, which is nothing.
+// The first oracle's builder (D212): no copies in its bodies, its checks kept as
+// every release lowering's are (D355), and its own record of what it inlined,
+// which is nothing.
 fn init_first_oracle(a: *mem.Arena, oracle: *nir.Builder, signatures: *nir.Signatures, checker: *check.Checker, loaded: *graph.Graph) -> err {
     // Built before the bodies are checked (D313), so the signature types are sized by
     // the checker's pools rather than by what the bodies will have added to them.
     try init_oracle_nir(a, oracle, signatures, checker.parameters.len + checker.return_types.len + 1usize, loaded.total_bytes)
-    oracle.nocheck = true
+    // The oracle lowers what the release build inlines (D355): the checks stay in
+    // its bodies, since they are the bodies.
+    oracle.nocheck = false
     oracle.release = true
     let (inlined, inlined_error) = mem.alloc[nir.InlinedRef](a, sized(8192usize, loaded.total_bytes, 64usize))
     if inlined_error != ok { ret inlined_error }
@@ -5869,7 +5872,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     if release {
         let oracle_bytes = w.share * 2usize + loaded.largest_bytes
         try init_oracle_nir(a, &w.oracle, &w.oracle_signatures, signature_types, oracle_bytes)
-        w.oracle.nocheck = true
+        w.oracle.nocheck = false
         w.oracle.release = true
         w.oracle.inline_cap = program.inline_cap
         w.oracle.explain = program.explain
@@ -5881,7 +5884,7 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         w.first_entries = first_entries
         w.first_count = 0usize
         try init_oracle_nir(a, &w.second, &w.second_signatures, signature_types, oracle_bytes)
-        w.second.nocheck = true
+        w.second.nocheck = false
         w.second.release = true
         w.second.inline_cap = program.inline_cap
         w.second.explain = program.explain
@@ -6622,10 +6625,12 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     try link_hot_artifacts(a, report, loaded, builder, hot, held, code)
     report.arena_used = mem.stats(a).used
     try report_phase(report, "link from artifacts")
-    // What the crew's arenas committed (D339), for `--stats`.
+    // What the crew's arenas committed (D339), for `--stats`; and the bounds checks
+    // the workers' lowerings proved away (D356).
     var touched_at = 0usize
     while touched_at < crew.count {
         loaded.worker_bytes += graph.arena_touched(&crew.workers[touched_at].arena)
+        report.build.bounds_elided += crew.workers[touched_at].builder.bounds_elided + crew.workers[touched_at].oracle.bounds_elided
         touched_at += 1usize
     }
     ret ok
@@ -7313,7 +7318,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 }
             }
             try init_oracle_nir(a, &oracle, &oracle_signatures, checker.parameter_count + checker.return_type_count + 1usize, loaded.total_bytes)
-            oracle.nocheck = true
+            oracle.nocheck = false
             oracle.release = true
             oracle.oracle = &first_oracle
             oracle.oracle_signatures = &first_signatures

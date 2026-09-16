@@ -1553,6 +1553,21 @@ foreach ($releaseCheck in @(@('bounds', 'main\.e:22:9: trap\[bounds\]: index 9 o
 }
 $releaseChecksQuiet = & $releaseChecksPath quiet 2>&1
 if ($LASTEXITCODE -ne 0 -or ($releaseChecksQuiet -join "`n") -ne '') { throw "a check fired inside @nocheck in release: exit $LASTEXITCODE, $($releaseChecksQuiet -join "`n")" }
+# Bounds checks under a proof (D356): `--stats` counts the ones left out, the
+# unproven access past the end still traps, and the other shapes keep their checks.
+$boundsProofPath = Join-Path $testBuild 'bounds-proof-selfhost.exe'
+$boundsProofStats = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\bounds_proof\src\main.e') $repo 'x64' 'windows' $boundsProofPath --release --stats 2>&1
+if ($LASTEXITCODE -ne 0) { throw 'bounds proof fixture executable emission failed' }
+$boundsElided = ($boundsProofStats -join "`n") -match 'bounds checks elided \| (\d+)'
+if (-not $boundsElided -or [int]$Matches[1] -lt 2) { throw "the bounds proof elided no check: $($boundsProofStats -join "`n")" }
+& $boundsProofPath none 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'the proven loop summed wrongly' }
+$boundsShifted = & $boundsProofPath shifted 2>&1
+if ($LASTEXITCODE -ne 134 -or ($boundsShifted -join "`n") -notmatch 'main\.e:26:26: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the unproven access did not trap: exit $LASTEXITCODE, $($boundsShifted -join "`n")" }
+foreach ($boundsMode in @('nested', 'reslice')) {
+    & $boundsProofPath $boundsMode 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "the $boundsMode loop went wrong under its retained check" }
+}
 # The release build: the same program traps on its first `+` in debug and, built with
 # `--release`, wraps, truncates, masks and saturates through to exit 0.
 $releaseSource = Join-Path $PSScriptRoot 'fixtures\link\release_build\src\main.e'

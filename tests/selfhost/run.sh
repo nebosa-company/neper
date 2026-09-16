@@ -1643,6 +1643,23 @@ for release_check in 'bounds main.e:22:9: trap[bounds]: index 9 out of bounds fo
 done
 release_checks_quiet=$("$release_checks_path" quiet 2>&1)
 [ "$release_checks_quiet" = '' ]
+# Bounds checks under a proof (D356): `--stats` counts the ones left out, the
+# unproven access past the end still traps, and the other shapes keep their checks.
+bounds_proof_path="$test_build/bounds-proof-selfhost"
+bounds_proof_stats=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/bounds_proof/src/main.e" "$repo" x64 linux "$bounds_proof_path" --release --stats 2>&1)
+chmod +x "$bounds_proof_path"
+bounds_elided=$(printf '%s\n' "$bounds_proof_stats" | sed -n 's/^bounds checks elided | \([0-9]*\)$/\1/p')
+[ -n "$bounds_elided" ] && [ "$bounds_elided" -ge 2 ]
+"$bounds_proof_path" none
+bounds_shifted_status=0
+bounds_shifted=$("$bounds_proof_path" shifted 2>&1) || bounds_shifted_status=$?
+[ "$bounds_shifted_status" -eq 134 ]
+case "$bounds_shifted" in
+    *'main.e:26:26: trap[bounds]: index 5 out of bounds for len 5'*) ;;
+    *) printf '%s\n' "the unproven access did not trap: $bounds_shifted" >&2; exit 1 ;;
+esac
+"$bounds_proof_path" nested
+"$bounds_proof_path" reslice
 nocheck_path="$test_build/nocheck-selfhost"
 nocheck_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/nocheck/src/main.e" "$repo" x64 linux "$nocheck_path")
 [ "$nocheck_written" = 'executable written' ]

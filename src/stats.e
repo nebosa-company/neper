@@ -75,6 +75,8 @@ type Build = struct {
     // The link's drop count (D334): functions no call chain from `main` reaches, and their code bytes.
     unreached_functions: usize,
     unreached_bytes: usize,
+    // Index checks the lowering left out under a `while i < x.len` proof (D356).
+    bounds_elided: usize,
 }
 
 fn record_phase(b: *Build, name: str, ms: usize) {
@@ -354,6 +356,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row("unreached code")
     try number(b.unreached_bytes)
     try out(" bytes\n")
+    try row_number("bounds checks elided", b.bounds_elided)
     // The worker arenas' high-water marks summed (D339): every phase's workers, what
     // each allocated, rounded to the runtime's chunk -- what the pools were sized to,
     // not what was committed, which is the pages touched and the peak below; the

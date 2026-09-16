@@ -3389,9 +3389,12 @@ release behaviour that varied by target would break the sentence above. The
 `nil` dereference, a wrong-member read or a misaligned vector access traps in it
 with the record a debug build writes. Only `barrier` (the CPU build of a kernel) and
 `invalid` come off in release, since their checks are not one compare. A check is
-left out only where a `@nocheck` block or `--unchecked` says so, and both are
-inventoried (§13's build manifest): no check is eliminated by the compiler's own
-reasoning yet, and when one is, its proof is the decision that removes it. Arena
+left out only where a `@nocheck` block or `--unchecked` says so, both inventoried
+(§13's build manifest), or where the compiler has a proof: under
+`while i < x.len { ... }` with `i` and `x` locals, `x[i]` before the body's first
+write of `i` is in range, provided no nested loop in the body writes `i` and the
+body never writes `x` or takes the address of either (D356) -- the one proof so
+far, and `--stats` counts what it removed. Arena
 exhaustion is an ordinary error in every mode, not a check — running out of memory
 is a normal condition.
 

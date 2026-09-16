@@ -14,11 +14,20 @@ label is not "safe release": section 11 says which rows are kept, and H01 and H0
 say what the checks cannot establish -- a null check is not liveness, a bounds
 check is not a validly constructed slice.
 
-No check is eliminated by the compiler's own reasoning in this stage. When one is,
-the proof -- a loop bound, a prior check on the same operand, a slice's known length
--- is a recorded decision with a codegen fixture for the eliminated and the retained
-case, as H03's acceptance asks. That is the follow-up, and the reason the cost
-below is what it is.
+One check is eliminated by the compiler's own reasoning (D356): under
+`while i < x.len { ... }` with `i` and `x` locals of the function, `x[i]` before the
+body's first write of `i` is in range -- the condition read the length the access
+sees -- provided no nested loop in the body writes `i` (its back edge would repeat
+the access after the change), the body never writes `x`, and the function never
+takes the address of `i`. The proof is read off the tokens when the loop is
+lowered; the index instruction is emitted without its check; `--stats` reports
+`bounds checks elided`. The fixture `bounds_proof` holds the eliminated case and
+three retained ones -- the index read after its increment (which traps at the
+end), an increment inside a nested loop, and the slice reassigned in the body --
+as H03's acceptance asks. Further proofs -- a prior check on the same operand, a
+bound through a second local (`while at < count` with `count <= x.len`), a field
+base (`c.tokens[at]`) -- are the follow-up, and the compiler's own hot loops are
+mostly of those shapes, which is why the cost below stands.
 
 ## 2. Unsafe operations
 
@@ -64,17 +73,22 @@ made under the old policy is rebuilt rather than linked.
 The compiler, built with the memory rows retained, against itself built without
 them (the D344 release build), eight workers, five runs, p50, Windows:
 
-| workload | mode | before | after | delta | budget |
+| workload | mode | before | after (D355) | after (D356) | budget |
 |---|---|---|---|---|---|
-| sc500k (cold wall) | debug | 1477 ms | 1771 ms | +20% | +10% |
-| sc500k (cold wall) | release | 1650 ms | 1959 ms | +19% | +10% |
-| compiler (cold wall) | debug | 433 ms | 550 ms | +27% | +10% |
-| compiler (cold wall) | release | 472 ms | 632 ms | +34% | +10% |
-| compiler image | release | 5,513,728 B | 7,476,736 B | +36% | +5% |
+| sc500k (cold wall) | debug | 1477 ms | 1771 ms (+20%) | 1794 ms (+22%) | +10% |
+| sc500k (cold wall) | release | 1650 ms | 1959 ms (+19%) | 1967 ms (+16%) | +10% |
+| compiler (cold wall) | debug | 433 ms | 550 ms (+27%) | 536 ms (+23%) | +10% |
+| compiler (cold wall) | release | 472 ms | 632 ms (+34%) | 620 ms (+29%) | +10% |
+| compiler image | release | 5,513,728 B | 7,476,736 B (+36%) | 7,742,976 B (+40%) | +5% |
 
-The release image is now the size of the debug one, since the checks are the
-difference between them. **The M2 budgets for cold wall and image size are not
-met** under this policy; the breach is recorded rather than the policy narrowed,
-because H03 asks for the policy and the way back under budget is section 1's
-elimination work, not check removal. `--unchecked` reproduces the old numbers for
-a measurement or a build that accepts the boundary.
+The image grew again at D356 for a reason that is a correction: the inline
+oracle lowered its bodies with every check off (the old release mode), so a
+function inlined into a release build ran unchecked -- the `bounds_proof`
+fixture's `shifted` case found it by not trapping -- and now keeps its checks
+like any body. The 312 checks the proof removes from the compiler are not
+measurable against the run-to-run noise. **The M2 budgets for cold wall and
+image size are not met** under this policy; the breach is recorded rather than
+the policy narrowed, because H03 asks for the policy and the way back under
+budget is section 1's further proofs, not check removal. `--unchecked`
+reproduces the old numbers for a measurement or a build that accepts the
+boundary.

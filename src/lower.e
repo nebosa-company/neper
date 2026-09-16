@@ -2946,7 +2946,15 @@ fn lower_index_address(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, mo
     }
     let (element_info, element_info_error) = layout.type_info(c, element_type)
     if element_info_error != ok { ret (0usize, element_type, element_info_error) }
+    // `x[i]` under an open `while i < x.len` proof (D356): the check is left out of
+    // this one instruction, and counted.
+    let was_nocheck = builder.nocheck
+    if !was_nocheck && proof_covers(c, g, tree, module_index, node, children[0usize], children[1usize], builder) {
+        builder.nocheck = true
+        builder.bounds_elided += 1usize
+    }
     let (address_instruction, address, address_error) = nir.emit(builder, .IndexAddress, element_type, true, element_info.size, c.tokens[usize(node.token_start)])
+    builder.nocheck = was_nocheck
     if address_error != ok { ret (0usize, element_type, address_error) }
     let data_operand_error = nir.add_operand(builder, address_instruction, data)
     if data_operand_error != ok { ret (0usize, element_type, data_operand_error) }
@@ -4062,6 +4070,137 @@ fn lower_if(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index:
     ret ok
 }
 
+// The name a node spells when it is a bare local: `i`, or `x` under `x.len`.
+fn proof_name(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .NameExpr { ret ("", false) }
+    let token = c.tokens[usize(node.token_start)]
+    if token.kind != .Identifier { ret ("", false) }
+    ret (g.modules[module_index].text[token.start..token.end], true)
+}
+
+// Whether the token at `at` starts an assignment to the name (`i = `, `i += `,
+// ...) or takes its address (`&i` just before it).
+fn proof_token_writes(c: *check.Checker, at: usize, end: usize) -> bool {
+    if at > 0usize && c.tokens[at - 1usize].kind == .PunctAmp { ret true }
+    if at + 1usize >= end { ret false }
+    let next = c.tokens[at + 1usize].kind
+    ret next == .PunctAssign || next == .PunctAddAssign || next == .PunctSubAssign || next == .PunctMulAssign || next == .PunctDivAssign || next == .PunctRemAssign || next == .PunctAddWrapAssign || next == .PunctSubWrapAssign || next == .PunctMulWrapAssign || next == .PunctShiftLeftAssign || next == .PunctShiftRightAssign || next == .PunctBitAndAssign || next == .PunctBitOrAssign || next == .PunctBitXorAssign
+}
+
+// A `while i < x.len { ... }` with `i` and `x` locals opens a bounds proof (D356,
+// H03): inside the body, before the first token that assigns `i` or takes its
+// address, `x[i]` is in range -- provided no nested loop in the body assigns `i`
+// (its back edge would repeat the access after the change), and nothing in the body
+// assigns `x` or takes its address, so the length the condition read is the length
+// the access sees. The proof is pushed for the body's lowering; true when it was.
+fn proof_open(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, condition_index: usize, body_index: usize, builder: *nir.Builder, bindings: []Binding, binding_count: usize) -> bool {
+    if builder.proof_count >= builder.proof_index.len { ret false }
+    let condition = tree.nodes[condition_index]
+    if condition.kind != .BinaryExpr { ret false }
+    var left_index = 0usize
+    var right_index = 0usize
+    var side = 0usize
+    let condition_end = usize(condition.first_child) + usize(condition.child_count)
+    var at = usize(condition.first_child)
+    while at < condition_end {
+        if parse.child_is_node_at(tree, at) {
+            if side == 0usize { left_index = parse.child_index_at(tree, at) }
+            if side == 1usize { right_index = parse.child_index_at(tree, at) }
+            side += 1usize
+        }
+        at += 1usize
+    }
+    if side != 2usize { ret false }
+    // The operator between the sides is `<` and nothing else.
+    var operator_at = usize(tree.nodes[left_index].token_end)
+    while operator_at < usize(tree.nodes[right_index].token_start) && c.tokens[operator_at].kind == .Newline { operator_at += 1usize }
+    if c.tokens[operator_at].kind != .PunctLt { ret false }
+    let (index_name, has_index) = proof_name(c, g, tree, module_index, left_index)
+    if !has_index { ret false }
+    let right = tree.nodes[right_index]
+    if right.kind != .FieldExpr { ret false }
+    let member = c.tokens[usize(right.token_end) - 1usize]
+    if member.kind != .Identifier || !check.same(g.modules[module_index].text[member.start..member.end], "len") { ret false }
+    let (base_node_index, has_base) = check.first_node_child(tree, right)
+    if !has_base { ret false }
+    let (base_name, has_base_name) = proof_name(c, g, tree, module_index, base_node_index)
+    if !has_base_name { ret false }
+    // Both are locals of this body: a global could change under another thread.
+    let (index_binding, index_bound) = find_binding(bindings, binding_count, index_name)
+    let (base_binding, base_bound) = find_binding(bindings, binding_count, base_name)
+    if !index_bound || !base_bound { ret false }
+    if base_binding.ty.kind != .Slice && base_binding.ty.kind != .Array && base_binding.ty.kind != .String { ret false }
+    // The body's tokens: the first write of `i`, whether one lies in a nested loop,
+    // and whether `x` is written at all.
+    let body = tree.nodes[body_index]
+    let body_end = usize(body.token_end)
+    var first_assign = body_end
+    var nested_write = false
+    var base_written = false
+    var loop_pending = false
+    var depth = 0usize
+    var loop_depth = 0usize
+    var loop_marks: [64]bool = zero
+    var scan = usize(body.token_start) + 1usize
+    while scan < body_end {
+        let token = c.tokens[scan]
+        if token.kind == .KwWhile || token.kind == .KwFor { loop_pending = true }
+        if token.kind == .PunctLBrace {
+            if depth < loop_marks.len {
+                loop_marks[depth] = loop_pending
+                if loop_pending { loop_depth += 1usize }
+            }
+            depth += 1usize
+            loop_pending = false
+        }
+        if token.kind == .PunctRBrace && depth > 0usize {
+            depth = depth - 1usize
+            if depth < loop_marks.len && loop_marks[depth] { loop_depth = loop_depth - 1usize }
+        }
+        if token.kind == .Identifier {
+            let word = g.modules[module_index].text[token.start..token.end]
+            if check.same(word, index_name) && proof_token_writes(c, scan, body_end) {
+                if scan < first_assign { first_assign = scan }
+                if loop_depth != 0usize { nested_write = true }
+            }
+            if check.same(word, base_name) && proof_token_writes(c, scan, body_end) { base_written = true }
+        }
+        scan += 1usize
+    }
+    if nested_write || base_written { ret false }
+    // A pointer to `i` taken anywhere in the function could write it from the body.
+    var function_at = builder.proof_function_start
+    while function_at + 1usize < builder.proof_function_end && function_at + 1usize < c.token_count {
+        if c.tokens[function_at].kind == .PunctAmp && c.tokens[function_at + 1usize].kind == .Identifier {
+            let pointed = c.tokens[function_at + 1usize]
+            if check.same(g.modules[module_index].text[pointed.start..pointed.end], index_name) { ret false }
+        }
+        function_at += 1usize
+    }
+    builder.proof_index[builder.proof_count] = index_name
+    builder.proof_base[builder.proof_count] = base_name
+    builder.proof_first_assign[builder.proof_count] = first_assign
+    builder.proof_ok[builder.proof_count] = true
+    builder.proof_count += 1usize
+    ret true
+}
+
+// Whether an open proof covers `x[i]` at this node: the same names, before the
+// index's first write in that loop's body.
+fn proof_covers(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, base_index: usize, index_index: usize, builder: *nir.Builder) -> bool {
+    if builder.proof_count == 0usize { ret false }
+    let (base_name, has_base) = proof_name(c, g, tree, module_index, base_index)
+    let (index_name, has_index) = proof_name(c, g, tree, module_index, index_index)
+    if !has_base || !has_index { ret false }
+    var at = builder.proof_count
+    while at > 0usize {
+        at = at - 1usize
+        if builder.proof_ok[at] && check.same(builder.proof_index[at], index_name) && check.same(builder.proof_base[at], base_name) && usize(node.token_start) < builder.proof_first_assign[at] { ret true }
+    }
+    ret false
+}
+
 fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
     var condition_index = 0usize
     var body_index = 0usize
@@ -4101,7 +4240,10 @@ fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
     if body_block_error != ok || body_block_index != body_block { ret nir.InvalidControlFlow }
     var break_storage: [256]usize = zero
     var control = LoopControl { active: true, continue_target: condition_block, break_defer_base: defers.count, continue_defer_base: defers.count, breaks: break_storage[..], break_count: 0usize }
-    try lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
+    let proved = proof_open(c, g, tree, module_index, condition_index, body_index, builder, bindings, *binding_count)
+    let body_error = lower_block(c, g, tree, module_index, function, tree.nodes[body_index], builder, bindings, binding_count, &control, defers)
+    if proved { builder.proof_count = builder.proof_count - 1usize }
+    if body_error != ok { ret body_error }
     if !builder.blocks[builder.current_block].terminated {
         let (back_edge, back_edge_error) = emit_branch(builder, c.tokens[usize(node.token_start)])
         if back_edge_error != ok { ret back_edge_error }
@@ -5164,6 +5306,9 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
     let (name, name_error) = declaration_name(c, text, node)
     if name_error != ok { ret name_error }
     c.failure_module = module_index
+    builder.proof_function_start = usize(node.token_start)
+    builder.proof_function_end = usize(node.token_end)
+    builder.proof_count = 0usize
     c.failure_name = name
     c.failure_token = c.tokens[usize(node.token_start)]
     c.failure_has_token = true

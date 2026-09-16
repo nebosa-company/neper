@@ -262,6 +262,18 @@ type Builder = struct {
     runtime_prefix: usize,
     // Set while lowering a `@nocheck` block; every instruction emitted carries it.
     nocheck: bool,
+    // Bounds proofs (D356, H03): the `while i < x.len` loops open around the point
+    // being lowered, innermost last -- the index and the slice by name, the first
+    // token in the body that assigns the index, and whether the proof holds at all
+    // -- and how many index checks they let the lowering leave out.
+    proof_index: [8]str,
+    proof_base: [8]str,
+    proof_first_assign: [8]usize,
+    proof_ok: [8]bool,
+    proof_count: usize,
+    proof_function_start: usize,
+    proof_function_end: usize,
+    bounds_elided: usize,
     // The release build (D217): `nocheck` is that too, but `@nocheck` sets it for a
     // block, and section 11's debug fills do not come off with the checks.
     release: bool,
