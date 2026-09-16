@@ -9279,3 +9279,20 @@ detail untouched. `docs/module-apis.md` lists the three, so the readiness of
 Not yet: the `_detail` form for the rest of the surface (a wrapper per
 operation is the shape; the callers decide which ones earn one), wrappers
 beyond `e.os`, and concurrent errors.
+
+## D418 -- A hand edit of a generated file, told from a stale map
+
+H19 asks for hand-edit detection; a version 2 map (D373) records the generated
+file's hash and the generator's input's, and the compiler reported every
+mismatch of the first as a stale map. The two hashes together say more: a
+generated file that is not what the map recorded while the input still is was
+not regenerated -- someone edited the output -- and that is now `E-TOOL-0002`,
+"the generated source was edited after generation: regenerate it, or drop the
+map to own the edit", where a mismatch with the input changed too stays
+`E-TOOL-0001`, a stale map. The command fails and writes no artifact under
+either, as before; what differs is what the harness is told to do. The corpus
+gains `tools/hand_edited` -- a map whose input hash holds and whose generated
+hash does not -- beside the stale-generator case, run by both suites.
+
+Not yet: a hand edit inside a `direct` mapping's span, which the map declares
+editable and which should not be refused; today the file's whole hash decides.

@@ -3401,6 +3401,24 @@ fn json_str_after(line: str, key: str) -> str {
 // command fails before analysis (D264). ponytail: a key scan over the one document shape
 // this compiler's own generator writes, not a JSON reader; e.fmt.json would cost the
 // bootstrap decls it has no room for.
+// Whether a version 2 map's generator input is present and has the hash the map
+// recorded (D418): what tells a hand edit of the generated file from a stale map.
+fn map_input_unchanged(a: *mem.Arena, document: str, operand: str) -> bool {
+    let generator_at = json_key_at(document, "\"generator\":{")
+    if generator_at >= document.len { ret false }
+    let generator = document[generator_at..document.len]
+    let input_name = json_str_after(generator, "\"input\":\"")
+    let input_hash = json_str_after(generator, "\"input_sha256\":\"")
+    if input_name.len == 0usize || input_hash.len != 64usize { ret false }
+    let (input_path, input_path_error) = with_suffix(a, dirname(operand), input_name)
+    if input_path_error != ok { ret false }
+    let (input_text, input_error) = source.load(a, input_path)
+    if input_error != ok { ret false }
+    let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
+    if input_digest_error != ok { ret false }
+    ret same(input_digest, input_hash)
+}
+
 fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err {
     let (map_path, map_path_error) = with_suffix(a, operand, ".map.json")
     if map_path_error != ok { ret map_path_error }
@@ -3414,7 +3432,14 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
         // Reported now, unmapped analysis after (D300): the caller ends the command.
         report.map_stale = true
         if stale {
-            try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is stale: its hash is not the operand's")
+            // A hand edit, told from a stale map (D418, H19): the generated file is
+            // not what the map recorded while the generator's input still is, so
+            // nothing regenerated it -- someone edited the output.
+            if map_input_unchanged(a, document, operand) {
+                try emit_command_diagnostic(report, "E-TOOL-0002", "the generated source was edited after generation: its hash is not the map's while the generator's input is unchanged; regenerate it, or drop the map to own the edit")
+            } else {
+                try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is stale: its hash is not the operand's")
+            }
         } else {
             try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source map is malformed")
         }

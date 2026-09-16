@@ -2464,7 +2464,7 @@ parameter_refused=0
 cmp -s "$test_build/conformance-tools-plan-parameter-refused.jsonl" "$conformance_root/tools/plan_parameter_refused.expected.jsonl" || { echo "a refused plan-add-parameter-file differs from the conformance corpus" >&2; exit 1; }
 # A version 2 map (D373, H19): the generator's input is hashed, a regeneration-owned
 # mapping says so in the related location, and a changed input is E-TOOL-0001.
-for map_case in generated_map stale_generator; do
+for map_case in generated_map stale_generator hand_edited; do
     map_status=0
     (cd "$test_build" && rm -f "conformance-tools-$map_case.out" && ./neper-self emit-executable "$conformance_root/tools/$map_case.e" "$repo" x64 linux "conformance-tools-$map_case.out" --json > "conformance-tools-$map_case.jsonl") || map_status=$?
     [ "$map_status" -eq 1 ]

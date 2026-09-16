@@ -524,7 +524,11 @@ generated file's directory) and `input_sha256` -- and the compiler checks the
 input: a missing input, or one whose hash is not the recorded one, is `E-TOOL-0001`
 ("the generated source is stale: the generator's input changed") under the same
 rule as a stale map, so a generated file is stale when its *input* moved, not only
-when it did. Each mapping may carry `edit`: `direct` (the generated output may be
+when it did. The two hashes together tell a hand edit apart (D418, H19): a
+generated file that is not what the map recorded while the input still is was
+edited after generation, and that is `E-TOOL-0002` ("regenerate it, or drop the
+map to own the edit"), not a stale map -- the harness knows which of the two to
+do. Each mapping may carry `edit`: `direct` (the generated output may be
 edited in place), `generator` (regeneration-owned: an edit targets the original,
 and a hand edit of the generated span is overwritten by the next generation) or
 `unknown`; the related location's message says which, and a mapping without `edit`
