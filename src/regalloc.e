@@ -48,7 +48,181 @@ fn extend_back_edge(function: nir.Function, ranges: []LiveRange, source_instruct
     ret ok
 }
 
-fn extend_loop_liveness(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange) -> err {
+// Loop liveness by the values inside each loop (D403): the back edges sorted by
+// their source, the values by their last use, and each edge visits the values whose
+// last use lies in its body -- a value is visited once per loop that encloses that
+// use, where `extend_loop_liveness_slow` visited every value for every back edge and
+// made a function with a thousand loops cost a hundred times one with two hundred.
+// The rule is the same one, applied to a fixed point in passes as before, so the
+// ranges are the ranges the slow walk found; the scratch is the heaps the allocation
+// fills afterwards, and a function the scratch cannot hold takes the slow walk.
+fn extend_loop_liveness(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange, scratch: []usize) -> err {
+    let value_count = function.value_count
+    let block_count = function.block_count
+    if scratch.len < value_count * 2usize + block_count * 4usize { ret extend_loop_liveness_slow(builder, function, ranges) }
+    let order = scratch[0usize..value_count]
+    let keys = scratch[value_count..value_count * 2usize]
+    let edges_start = value_count * 2usize
+    let edges = scratch[edges_start..edges_start + block_count * 4usize]
+    // The back edges: (target instruction, source instruction), two per block at most.
+    var edge_count = 0usize
+    var block_at = function.first_block
+    while block_at < function.first_block + function.block_count {
+        let block = builder.blocks[block_at]
+        if block.instruction_count == 0usize { ret InvalidIR }
+        let terminator_index = block.first_instruction + block.instruction_count - 1usize
+        if terminator_index >= builder.instruction_count { ret InvalidIR }
+        let terminator = builder.instructions[terminator_index]
+        if terminator.opcode == .Branch || terminator.opcode == .BranchIf {
+            try add_back_edge(builder, function, edges, &edge_count, terminator_index, terminator.target)
+            if terminator.opcode == .BranchIf { try add_back_edge(builder, function, edges, &edge_count, terminator_index, terminator.target2) }
+        }
+        block_at += 1usize
+    }
+    if edge_count == 0usize { ret ok }
+    // A function with few loops is cheaper to walk whole: the slow walk costs the
+    // edges times the values per pass, the sort the values times their logarithm.
+    if edge_count <= 16usize { ret extend_loop_liveness_slow(builder, function, ranges) }
+    sort_edges_by_source(edges, edge_count)
+    var pass = 0usize
+    while pass < function.block_count {
+        // The values by their last use, the keys a snapshot: an extension during the
+        // pass moves a value's last past the edge, and the walk still reads the order.
+        var value_at = 0usize
+        while value_at < value_count {
+            order[value_at] = value_at
+            keys[value_at] = ranges[value_at].last
+            value_at += 1usize
+        }
+        sort_values_by_key(order, keys, value_count)
+        var changed = false
+        var edge_at = 0usize
+        while edge_at < edge_count {
+            let target_instruction = edges[edge_at * 2usize]
+            let source_instruction = edges[edge_at * 2usize + 1usize]
+            // The first value whose last use is at or after the target.
+            var low = 0usize
+            var high = value_count
+            while low < high {
+                let mid = low + (high - low) / 2usize
+                if keys[mid] < target_instruction { low = mid + 1usize } else { high = mid }
+            }
+            var at = low
+            while at < value_count && keys[at] < source_instruction {
+                let value = order[at]
+                let range = ranges[value]
+                if range.defined && range.first < target_instruction && range.last >= target_instruction && range.last < source_instruction {
+                    ranges[value].last = source_instruction
+                    changed = true
+                }
+                at += 1usize
+            }
+            edge_at += 1usize
+        }
+        if !changed { ret ok }
+        pass += 1usize
+    }
+    ret ok
+}
+
+fn add_back_edge(builder: *nir.Builder, function: nir.Function, edges: []usize, edge_count: *usize, source_instruction: usize, target_block: usize) -> err {
+    if target_block < function.first_block || target_block >= function.first_block + function.block_count { ret InvalidIR }
+    let target_instruction = builder.blocks[target_block].first_instruction
+    if target_instruction > source_instruction { ret ok }
+    if *edge_count * 2usize + 2usize > edges.len { ret Capacity }
+    edges[*edge_count * 2usize] = target_instruction
+    edges[*edge_count * 2usize + 1usize] = source_instruction
+    *edge_count = *edge_count + 1usize
+    ret ok
+}
+
+// Heap sort of the edge pairs by source, then target: in place, no allocation.
+fn sort_edges_by_source(edges: []usize, count: usize) {
+    var heap_size = count
+    var build = count / 2usize
+    while build > 0usize {
+        build = build - 1usize
+        sift_edges(edges, build, heap_size)
+    }
+    while heap_size > 1usize {
+        heap_size = heap_size - 1usize
+        swap_edges(edges, 0usize, heap_size)
+        sift_edges(edges, 0usize, heap_size)
+    }
+}
+
+fn edge_greater(edges: []usize, a: usize, b: usize) -> bool {
+    if edges[a * 2usize + 1usize] != edges[b * 2usize + 1usize] { ret edges[a * 2usize + 1usize] > edges[b * 2usize + 1usize] }
+    ret edges[a * 2usize] > edges[b * 2usize]
+}
+
+fn swap_edges(edges: []usize, a: usize, b: usize) {
+    let target_at = edges[a * 2usize]
+    let source_at = edges[a * 2usize + 1usize]
+    edges[a * 2usize] = edges[b * 2usize]
+    edges[a * 2usize + 1usize] = edges[b * 2usize + 1usize]
+    edges[b * 2usize] = target_at
+    edges[b * 2usize + 1usize] = source_at
+}
+
+fn sift_edges(edges: []usize, start: usize, heap_size: usize) {
+    var at = start
+    while true {
+        var largest = at
+        let left = at * 2usize + 1usize
+        let right = left + 1usize
+        if left < heap_size && edge_greater(edges, left, largest) { largest = left }
+        if right < heap_size && edge_greater(edges, right, largest) { largest = right }
+        if largest == at { ret }
+        swap_edges(edges, at, largest)
+        at = largest
+    }
+}
+
+// Heap sort of the value order by key, then value: in place, no allocation.
+fn sort_values_by_key(order: []usize, keys: []usize, count: usize) {
+    var heap_size = count
+    var build = count / 2usize
+    while build > 0usize {
+        build = build - 1usize
+        sift_values(order, keys, build, heap_size)
+    }
+    while heap_size > 1usize {
+        heap_size = heap_size - 1usize
+        swap_values(order, keys, 0usize, heap_size)
+        sift_values(order, keys, 0usize, heap_size)
+    }
+}
+
+fn value_greater(order: []usize, keys: []usize, a: usize, b: usize) -> bool {
+    if keys[a] != keys[b] { ret keys[a] > keys[b] }
+    ret order[a] > order[b]
+}
+
+fn swap_values(order: []usize, keys: []usize, a: usize, b: usize) {
+    let value = order[a]
+    let key = keys[a]
+    order[a] = order[b]
+    keys[a] = keys[b]
+    order[b] = value
+    keys[b] = key
+}
+
+fn sift_values(order: []usize, keys: []usize, start: usize, heap_size: usize) {
+    var at = start
+    while true {
+        var largest = at
+        let left = at * 2usize + 1usize
+        let right = left + 1usize
+        if left < heap_size && value_greater(order, keys, left, largest) { largest = left }
+        if right < heap_size && value_greater(order, keys, right, largest) { largest = right }
+        if largest == at { ret }
+        swap_values(order, keys, at, largest)
+        at = largest
+    }
+}
+
+fn extend_loop_liveness_slow(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange) -> err {
     var pass = 0usize
     while pass < function.block_count {
         var changed = false
@@ -333,17 +507,30 @@ fn promote_locals_walked(builder: *nir.Builder, function: nir.Function) -> err {
 }
 
 // One past the last instruction of the block holding `instruction_index`.
+// A function's blocks are begun in order, each at the instruction count of its
+// moment (`nir.begin_block`), so their ranges ascend with their index and the block
+// of an instruction is a binary search (D403): this was a walk over every block per
+// promoted load, quadratic in a function with thousands of both.
 fn block_end_of(builder: *nir.Builder, function: nir.Function, instruction_index: usize) -> (usize, err) {
-    var block_at = function.first_block
-    while block_at < function.first_block + function.block_count {
-        let block = builder.blocks[block_at]
-        if instruction_index >= block.first_instruction && instruction_index < block.first_instruction + block.instruction_count { ret (block.first_instruction + block.instruction_count, ok) }
-        block_at += 1usize
+    var low = function.first_block
+    var high = function.first_block + function.block_count
+    while low < high {
+        let mid = low + (high - low) / 2usize
+        let block = builder.blocks[mid]
+        if instruction_index < block.first_instruction {
+            high = mid
+        } else {
+            if instruction_index >= block.first_instruction + block.instruction_count {
+                low = mid + 1usize
+            } else {
+                ret (block.first_instruction + block.instruction_count, ok)
+            }
+        }
     }
     ret (0usize, InvalidIR)
 }
 
-fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange) -> err {
+fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRange, scratch: []usize) -> err {
     if function.value_count > ranges.len { ret Capacity }
     var value_at = 0usize
     while value_at < function.value_count {
@@ -382,7 +569,7 @@ fn build_ranges(builder: *nir.Builder, function: nir.Function, ranges: []LiveRan
         if !ranges[value_at].defined { ret InvalidIR }
         value_at += 1usize
     }
-    ret extend_loop_liveness(builder, function, ranges)
+    ret extend_loop_liveness(builder, function, ranges, scratch)
 }
 
 // --- The allocation (D305) ------------------------------------------------------------
@@ -469,7 +656,8 @@ fn allocate(builder: *nir.Builder, function_index: usize, register_count: usize,
 fn allocate_with(builder: *nir.Builder, function: nir.Function, register_count: usize, ranges: []LiveRange, allocations: []Allocation, heaps: []usize, capacity: usize) -> (usize, err) {
     let promotion_error = promote_locals(builder, function, heaps)
     if promotion_error != ok { ret (0usize, promotion_error) }
-    let ranges_error = build_ranges(builder, function, ranges)
+    // The heaps are the ranges' scratch until the allocation below fills them.
+    let ranges_error = build_ranges(builder, function, ranges, heaps)
     if ranges_error != ok { ret (0usize, ranges_error) }
     var counts: [16]usize = zero
     var value_at = 0usize

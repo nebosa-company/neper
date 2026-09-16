@@ -8963,3 +8963,30 @@ What the workers' one shared write is: `declare_globals` records each global's
 NIR index into the program's globals table through the unforked copy; every
 worker writes the same value, and the first worker wrote it on the main thread
 before any other thread ran, so the later writes change nothing.
+
+## D403 -- Two quadratic walks in the register allocator
+
+A synthetic function of N small loops measured the allocator's scaling: 250
+loops (5,290 instructions) 10 ms, 1,000 (21,040) 134 ms, 4,000 (84,040) 2,082
+ms -- thirteen to fifteen times the cost for four times the size. Two walks were
+quadratic. `extend_loop_liveness` visited every value of the function for every
+back edge on every pass; now, when a function has more than sixteen back edges,
+the edges are sorted by their source, the values by their last use (a heap sort
+in the allocation's own heap storage, which is free until the allocation fills
+it), and each edge visits the values whose last use lies in its body -- a value
+is visited once per loop that encloses the use, and a pass costs the values
+times their logarithm rather than times the edges. The rule and its fixed point
+are the same, so the ranges are the same ranges; a function of sixteen back edges
+or fewer keeps the whole walk, which is cheaper there. `block_end_of`, asked for
+the block of every promoted load, walked the function's blocks from the first;
+since `nir.begin_block` begins blocks in order at the instruction count of the
+moment, their ranges ascend with their index and the block is a binary search.
+Together: 4,000 loops 2,082 -> 74 ms, 1,000 loops 134 -> 15 ms. The compiler's
+own build is unchanged within noise -- its functions have few loops and its cost
+lies in code generation -- and its image is byte-identical from the compiler
+before and after, as are the synthetic programs'.
+
+What the same synthetic showed and this does not touch: the checker's body
+sweep and the lowering are superlinear in the number of locals of one function
+(4,000 locals: check 117 ms, lower 217 ms), from name lookups that walk the
+function's locals; real functions have a hundredth of that.
