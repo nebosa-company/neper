@@ -1807,7 +1807,17 @@ for hot_mode in --release --time; do
         hot_damaged=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
         [ "$hot_damaged" = 'executable written' ]
         cmp "$hot_exe" "$hot_clean"
+        # The manifest names the damage (D368, H24): `invalid-artifact`, not `no-artifact`.
+        python3 "$repo/scripts/check_incremental.py" "$hot_manifest" dep=rebuilt:invalid-artifact
     done
+    # A corrupt artifact named on the command line is E-LINK-0001, exit 1 (D368, H24).
+    hot_corrupt="$hot_scratch/corrupt.em"
+    cp "$hot_artifact" "$hot_corrupt"
+    python3 "$repo/benchmarks/fuzz/corrupt.py" truncate "$hot_corrupt"
+    hot_corrupt_status=0
+    hot_corrupt_out=$($test_build/neper-self validate-em "$hot_corrupt" 2>&1) || hot_corrupt_status=$?
+    [ "$hot_corrupt_status" -eq 1 ]
+    case "$hot_corrupt_out" in *E-LINK-0001*) ;; *) echo "corrupt artifact not refused as E-LINK-0001: $hot_corrupt_out"; exit 1;; esac
     cp "$hot_fixture/edits/dep_body.e" "$hot_source/dep.e"
     hot_edited=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)
     [ "$hot_edited" = 'executable written' ]

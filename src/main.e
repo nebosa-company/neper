@@ -4362,12 +4362,16 @@ fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     w.reason[module_index] = 0u8
     let (old, old_error) = load_artifact(&w.arena, w.paths[at])
     if old_error == mem.Exhausted { ret old_error }
+    // A file that is there and is not an artifact -- a failed checksum, a bad layout
+    // -- is rebuilt like a missing one, and the manifest says which (D368, H24).
+    if old_error == em.InvalidArtifact { w.reason[module_index] = 6u8 }
     if old_error != ok { ret ok }
     let (old_hash, old_hash_error) = em.artifact_source_hash(old)
     let (new_hash, new_hash_error) = em.source_text_hash(w.texts[at])
     let (old_mode, old_mode_error) = em.artifact_mode(old)
     w.reason[module_index] = 1u8
     if old_mode_error == ok && old_mode != w.mode_id { w.reason[module_index] = 2u8 }
+    if old_hash_error != ok || old_mode_error != ok { w.reason[module_index] = 6u8 }
     if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == w.mode_id {
         w.unchanged[module_index] = true
         w.held[module_index] = old
@@ -4485,12 +4489,14 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
                 hot.unchanged[module_index] = false
                 hot.reason[module_index] = 0u8
                 let (old, old_error) = load_artifact(a, workers[worker_at].paths[remaining])
+                if old_error == em.InvalidArtifact { hot.reason[module_index] = 6u8 }
                 if old_error == ok {
                     let (old_hash, old_hash_error) = em.artifact_source_hash(old)
                     let (new_hash, new_hash_error) = em.source_text_hash(loaded.modules[module_index].text)
                     let (old_mode, old_mode_error) = em.artifact_mode(old)
                     hot.reason[module_index] = 1u8
                     if old_mode_error == ok && old_mode != mode_id { hot.reason[module_index] = 2u8 }
+                    if old_hash_error != ok || old_mode_error != ok { hot.reason[module_index] = 6u8 }
                     if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
                         hot.unchanged[module_index] = true
                         held[module_index] = old
@@ -6798,6 +6804,13 @@ fn main(a: *mem.Arena, args: []str) -> err {
     if result == nir.Capacity || result == graph.Capacity || result == check.Capacity || result == resolve.Capacity || result == lookup.Capacity || result == em.Capacity || result == regalloc.Capacity {
         code = "E-TYPE-9999"
         message = "resource limit: a compiler table is full; the program is larger than this compiler was built to hold"
+        status = 1i32
+    }
+    // A corrupt artifact named on the command line is the input's failure, not the
+    // compiler's (D368, H24): it is refused and never linked.
+    if result == em.InvalidArtifact {
+        code = "E-LINK-0001"
+        message = "a compiled module is malformed or its checksum does not match: the artifact was not read; rebuild it"
         status = 1i32
     }
     var json = false

@@ -1678,7 +1678,16 @@ foreach ($hotMode in @('--release', '--time')) {
         if ($LASTEXITCODE -ne 0 -or $hotDamaged -ne 'executable written') { throw "the hot build over a $damage artifact failed ($hotMode)" }
         if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the hot build over a $damage artifact is not the clean build ($hotMode)" }
         if ((Get-Item -LiteralPath $hotArtifact.FullName).Length -lt 64) { throw "the $damage artifact was not rebuilt ($hotMode)" }
+        # The manifest names the damage (D368, H24): `invalid-artifact`, not `no-artifact`.
+        & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'dep=rebuilt:invalid-artifact'
+        if ($LASTEXITCODE -ne 0) { throw "the manifest after a $damage artifact does not say invalid-artifact ($hotMode)" }
     }
+    # A corrupt artifact named on the command line is E-LINK-0001, exit 1 (D368, H24).
+    $hotCorrupt = Join-Path $hotScratch 'corrupt.em'
+    Copy-Item $hotArtifact.FullName $hotCorrupt
+    & python (Join-Path $repo 'benchmarks/fuzz/corrupt.py') truncate $hotCorrupt
+    $hotCorruptOut = & $compiler validate-em $hotCorrupt 2>&1 | Out-String
+    if ($LASTEXITCODE -ne 1 -or $hotCorruptOut -notmatch 'E-LINK-0001') { throw "a corrupt artifact was not refused as E-LINK-0001: $hotCorruptOut" }
     Copy-Item (Join-Path $hotFixture 'edits\dep_body.e') (Join-Path $hotSource 'dep.e')
     $hotEdited = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
     if ($LASTEXITCODE -ne 0 -or $hotEdited -ne 'executable written') { throw "the hot build after a body edit failed ($hotMode)" }

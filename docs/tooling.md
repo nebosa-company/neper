@@ -346,7 +346,9 @@ too, in module then line order; `incremental` (D363, H14) is what an
 `rebuilt` and `reason`: `stable` (source and every dependency unchanged),
 `edges-hold` (source unchanged, every imported interface still as recorded),
 `edge-changed` (an imported interface differs), `source-changed`, `mode-changed`,
-`no-artifact` -- empty for a build that read no artifacts; `options.checks` is the
+`no-artifact`, `invalid-artifact` (a file that failed its checksum or layout
+validation, rebuilt like a missing one) -- empty for a build that read no artifacts;
+`options.checks` is the
 check policy the image was built under, `retained` (spec section 11: every row
 kept in both modes). Arrays use the
 deterministic order in which their corresponding compiler operation is specified,

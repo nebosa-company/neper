@@ -49,6 +49,7 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-MODULE-0001` | module is missing or defined by multiple roots | spec §2 |
 | `E-MODULE-0002` | import graph contains a cycle | spec §2 |
 | `E-MODULE-9999` | other module/source-root violation | spec §§2, 12 |
+| `E-LINK-0001` | a compiled module named as an input is malformed or fails its checksum | spec §12 |
 | `E-LINK-9999` | link input, symbol or artifact violation | spec §§12–13 |
 | `E-TEST-9999` | invalid test declaration or runner option | spec §13 |
 | `E-FORMAT-0001` | source is not in canonical layout | spec §13 and tooling §6 |

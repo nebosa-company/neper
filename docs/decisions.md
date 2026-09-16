@@ -8092,3 +8092,29 @@ pool, the timeline, the pipeline cache, `--subgroup-width`, `--gpu-inventory`,
 the execution mode, the fixtures -- all M3; the H01 closer extension; the H08
 context facts for kernels and the H18 device record, added to the schema with
 their first emitter.
+
+## D368 -- A corrupt artifact is named: E-LINK-0001 on the command line, `invalid-artifact` in the manifest
+
+H24 asks that a mandatory corrupt input produce an explicit failure and that a
+disposable corrupt cache be quarantined and rebuilt, and D341 and D343 gave the
+readers, the fuzzer and the atomic publish. Two things were still unnamed. A
+corrupt artifact given to `validate-em`, `check-em-edge`, `check-em-errors` or
+`link-em` escaped as `em.InvalidArtifact` and was reported by D344's wrapper as
+E-TOOL-9999 "internal compiler failure" -- the compiler blaming itself for the
+input's bytes. It is E-LINK-0001 now, exit 1: "a compiled module is malformed or
+its checksum does not match: the artifact was not read; rebuild it". And an
+incremental build over a damaged cache entry rebuilt the module and said
+`no-artifact` (a failed checksum) or `source-changed` (bytes flipped behind a
+recomputed checksum, so the source-hash reader failed) in the manifest; the
+reason is `invalid-artifact` in both cases, so a harness reading the manifest
+can tell a cache that was damaged from one that was empty. Both suites check
+both, on the hot fixture's damaged artifacts (`benchmarks/fuzz/corrupt.py`).
+
+The H24 readiness row is new and carries D341, D343, D344 and this: mutation
+fuzzing of the front end and the artifact readers, the nesting bound, atomic
+publish, resource limits as E-TYPE-9999, corrupt inputs as E-LINK-0001, damaged
+caches rebuilt and named. Not yet, of H24: a strong content integrity for
+imported artifacts beyond the CRC (the `.em` is a trusted local cache today, and
+nothing imports one from elsewhere), whole-build budgets across workers and
+instantiations, fault injection into the cache writes themselves, and cyclic
+references in an artifact's graph as a fuzz target of its own.

@@ -2874,6 +2874,7 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         if reason == 3u8 { try text(out, "\"stable\"") }
         if reason == 4u8 { try text(out, "\"edges-hold\"") }
         if reason == 5u8 { try text(out, "\"edge-changed\"") }
+        if reason == 6u8 { try text(out, "\"invalid-artifact\"") }
         try byte(out, 125u8)
         reason_at += 1usize
     }
