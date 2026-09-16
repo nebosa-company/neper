@@ -2046,6 +2046,9 @@ fn spawn_piped(a: *mem.Arena, command: Command) -> (Child, err)
 fn wait(child: *Child) -> (i32, err)
 fn kill(child: *Child) -> err
 fn output(a: *mem.Arena, command: Command, limit: usize) -> (Output, err)
+fn spawn_detail(a: *mem.Arena, command: Command, streams: Streams, detail: *os.ErrorDetail) -> (Child, err)
+fn spawn_piped_detail(a: *mem.Arena, command: Command, detail: *os.ErrorDetail) -> (Child, err)
+fn output_detail(a: *mem.Arena, command: Command, limit: usize, detail: *os.ErrorDetail) -> (Output, err)
 type Outcome = enum u8 { Exited, Cancelled, TimedOut, OutputLimit }
 type RunOptions = struct { control: cancel.Control, stdout_limit: usize, stderr_limit: usize, terminate_grace: time.Duration, contain_tree: bool }
 type RunResult = struct { outcome: Outcome, status: i32, status_known: bool, stdout: []const u8, stderr: []const u8, stdout_bytes: u64, stderr_bytes: u64, truncated: bool }

@@ -194,5 +194,12 @@ fn main(a: *mem.Arena) -> err {
     let (missing, missing_error) = proc.output(a, command, 0usize)
     if missing_error == ok && missing.status == 0i32 { os.exit(80i32) }
     if missing_error == ok && missing.status != 127i32 { os.exit(81i32) }
+    // The same in the `_detail` form (D480, H07): where the spawn is the failure,
+    // the detail names it and the program; where the child exits 127, nothing is written.
+    var detail: os.ErrorDetail = zero
+    let (missing_again, missing_again_error) = proc.output_detail(a, command, 0usize, &detail)
+    if missing_again_error != missing_error { os.exit(82i32) }
+    if missing_again_error != ok && (detail.kind != .NotFound || detail.native_code == 0i32 || !mem.eq[u8](detail.operation, "spawn") || !mem.eq[u8](detail.subject, "np-no-such-program-anywhere")) { os.exit(83i32) }
+    if missing_again_error == ok && (detail.native_code != 0i32 || missing_again.status != 127i32) { os.exit(84i32) }
     ret ok
 }

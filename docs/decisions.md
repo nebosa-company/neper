@@ -10385,3 +10385,17 @@ that could not be made, and a component that is there and is not a directory is
 `write_file` read the detail at a failing `read`, `write` or final `close` too.
 The error-detail fixture takes seven more exits, both hosts. `e.io` and `e.proc`
 are the wrappers still without the form.
+
+## D480 -- `e.proc` in the `_detail` form
+
+The second wrapper after `e.fs` (D479): `spawn_detail`, `spawn_piped_detail` and
+`output_detail` write the host's account of the failing call into the caller's
+`os.ErrorDetail` at that call -- `spawn` with the program as the subject, `pipe`
+-- before the closes of the child's ends on the way out, and answer the plain
+form's error. The plain forms are the same code under a flag, so the two cannot
+drift. The hosts differ as `e.os` chose not to hide (D141): Windows refuses a
+program it cannot find at `CreateProcess`, so the detail is `NotFound` under
+`spawn`; Linux forks first and the child's `execve` fails with nothing to
+report to, so the child exits 127, the spawn succeeded, and nothing is written
+-- the fixture asserts each host's answer. `e.io` is the wrapper still without
+the form.

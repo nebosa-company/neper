@@ -111,11 +111,32 @@ fn options_of(a: *mem.Arena, command: Command, streams: Streams) -> (os.SpawnOpt
 }
 
 fn spawn(a: *mem.Arena, command: Command, streams: Streams) -> (Child, err) {
+    var unread: os.ErrorDetail = zero
+    let (child, spawn_error) = spawn_in(a, command, streams, &unread, false)
+    ret (child, spawn_error)
+}
+
+// The checked path with the caller's detail (D480, H07), as `e.os` and `e.fs` have
+// it: the host's account of the failing call is written into `detail` at that call,
+// before the closes on the way out, naming the `e.os` operation -- `spawn` with the
+// program as its subject, `pipe` -- and the same `err` comes back as from the plain
+// form. On success `detail` is not written. A host that forks first cannot report a
+// program it could not run as the spawn's failure (the child exits 127), and then
+// nothing is written either.
+fn spawn_detail(a: *mem.Arena, command: Command, streams: Streams, detail: *os.ErrorDetail) -> (Child, err) {
+    let (child, spawn_error) = spawn_in(a, command, streams, detail, true)
+    ret (child, spawn_error)
+}
+
+fn spawn_in(a: *mem.Arena, command: Command, streams: Streams, detail: *os.ErrorDetail, record: bool) -> (Child, err) {
     var child: Child = zero
     let (options, options_error) = options_of(a, command, streams)
     if options_error != ok { ret (child, options_error) }
     let (process, spawn_error) = os.spawn_with_options(a, options)
-    if spawn_error != ok { ret (child, spawn_error) }
+    if spawn_error != ok {
+        if record { *detail = os.last_error_detail("spawn", command.program) }
+        ret (child, spawn_error)
+    }
     child.process = process
     child.streams = streams
     ret (child, ok)
@@ -125,17 +146,33 @@ fn spawn(a: *mem.Arena, command: Command, streams: Streams) -> (Child, err) {
 // closed here once it has them: a write end the parent still held would keep the child's stdout
 // open after the child was gone, and the caller's read would never see the end of it.
 fn spawn_piped(a: *mem.Arena, command: Command) -> (Child, err) {
+    var unread: os.ErrorDetail = zero
+    let (child, spawn_error) = spawn_piped_in(a, command, &unread, false)
+    ret (child, spawn_error)
+}
+
+fn spawn_piped_detail(a: *mem.Arena, command: Command, detail: *os.ErrorDetail) -> (Child, err) {
+    let (child, spawn_error) = spawn_piped_in(a, command, detail, true)
+    ret (child, spawn_error)
+}
+
+fn spawn_piped_in(a: *mem.Arena, command: Command, detail: *os.ErrorDetail, record: bool) -> (Child, err) {
     var child: Child = zero
     let (in_read, in_write, in_error) = os.pipe()
-    if in_error != ok { ret (child, in_error) }
+    if in_error != ok {
+        if record { *detail = os.last_error_detail("pipe", command.program) }
+        ret (child, in_error)
+    }
     let (out_read, out_write, out_error) = os.pipe()
     if out_error != ok {
+        if record { *detail = os.last_error_detail("pipe", command.program) }
         let closed_in_read = os.close(in_read)
         let closed_in_write = os.close(in_write)
         ret (child, out_error)
     }
     let (err_read, err_write, err_error) = os.pipe()
     if err_error != ok {
+        if record { *detail = os.last_error_detail("pipe", command.program) }
         let closed_in_read = os.close(in_read)
         let closed_in_write = os.close(in_write)
         let closed_out_read = os.close(out_read)
@@ -153,6 +190,7 @@ fn spawn_piped(a: *mem.Arena, command: Command) -> (Child, err) {
         let (started, spawn_error) = os.spawn_with_options(a, options)
         process = started
         failure = spawn_error
+        if spawn_error != ok && record { *detail = os.last_error_detail("spawn", command.program) }
     }
     // Whether or not the child exists, its ends are not the caller's to keep: they
     // went into `theirs`, and are closed from there.
@@ -213,10 +251,23 @@ fn drain(d: *Drain) {
 // Run to completion and bring back what it printed. The child is always reaped before this
 // returns, whatever happened -- a process left behind is worse than any error.
 fn output(a: *mem.Arena, command: Command, limit: usize) -> (Output, err) {
+    var unread: os.ErrorDetail = zero
+    let (result, output_error) = output_in(a, command, limit, &unread, false)
+    ret (result, output_error)
+}
+
+// The spawn's detail, as `spawn_piped_detail` writes it; what the child then did is
+// its status and its streams, which are the answer, not a failure.
+fn output_detail(a: *mem.Arena, command: Command, limit: usize, detail: *os.ErrorDetail) -> (Output, err) {
+    let (result, output_error) = output_in(a, command, limit, detail, true)
+    ret (result, output_error)
+}
+
+fn output_in(a: *mem.Arena, command: Command, limit: usize, detail: *os.ErrorDetail, record: bool) -> (Output, err) {
     var result: Output = zero
     var bound = limit
     if bound == 0usize { bound = DEFAULT_OUTPUT_LIMIT }
-    let (child, spawn_error) = spawn_piped(a, command)
+    let (child, spawn_error) = spawn_piped_in(a, command, detail, record)
     if spawn_error != ok { ret (result, spawn_error) }
     // Nothing is sent, so the child sees the end of its input at once rather than waiting on it.
     let closed_stdin = os.close(child.streams.stdin)
