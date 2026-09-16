@@ -250,9 +250,9 @@ def table(items):
 
 def meter(label, pct, sub):
     return ('<div class="tile"><div class="lab">' + label + '</div>'
-            '<div class="val">' + ('%.0f' % pct) + '<span class="pc">%</span></div>'
+            '<div class="val">' + ('%.2f' % pct) + '<span class="pc">%</span></div>'
             '<div class="track" role="img" aria-label="' + label + ': '
-            + ('%.0f' % pct) + ' percent complete"><i style="width:'
+            + ('%.2f' % pct) + ' percent complete"><i style="width:'
             + ('%.1f' % pct) + '%"></i></div>'
             '<div class="sub">' + sub + '</div></div>')
 
@@ -573,13 +573,13 @@ for key, val in [
     ('__GROUPS__', groups),
     ('__MODTABLE__', mod_table),
     ('__TTABLE__', table(tooling)),
-    ('__CSUM__', '%.2f' % c_sum), ('__CN__', str(c_n)), ('__CPCT__', '%.0f' % C),
-    ('__TSUM__', '%.2f' % t_sum), ('__TN__', str(t_n)), ('__TPCT__', '%.0f' % T),
-    ('__DGOT__', str(dgot)), ('__DTOT__', str(dtot)), ('__MPCT__', '%.0f' % M),
+    ('__CSUM__', '%.2f' % c_sum), ('__CN__', str(c_n)), ('__CPCT__', '%.2f' % C),
+    ('__TSUM__', '%.2f' % t_sum), ('__TN__', str(t_n)), ('__TPCT__', '%.2f' % T),
+    ('__DGOT__', str(dgot)), ('__DTOT__', str(dtot)), ('__MPCT__', '%.2f' % M),
     ('__NMOD__', str(len(blocks))), ('__NPLAN__', str(len(plan))),
     ('__NWRITTEN__', str(written_modules)),
     ('__NSRC__', str(surf.get(SRC, 0))), ('__NPART__', str(surf.get(PART, 0))),
-    ('__MODPCT__', '%.0f' % mod_pct),
+    ('__MODPCT__', '%.2f' % mod_pct),
     ('__COS__', count_of('e.os')), ('__CIO__', count_of('e.io')),
     ('__CSTR__', count_of('e.str')),
     ('__DATE__', when), ('__REV__', rev),
@@ -588,4 +588,4 @@ for key, val in [
 
 open('docs/progress.html', 'w', encoding='utf-8', newline='\n').write(html)
 print('wrote docs/progress.html')
-print('compiler %.1f  modules %.1f  tooling %.1f' % (C, M, T))
+print('compiler %.2f  modules %.2f  tooling %.2f' % (C, M, T))
