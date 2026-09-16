@@ -655,6 +655,10 @@ type Checker = struct {
     // that is owed at an exit.
     failure_fix_text: str,
     failure_fix_at: usize,
+    // Which fix (D382): 1 a deferred cleanup, 2 an error test.
+    failure_fix_kind: u8,
+    // Whether the body being checked returns a bare `err` (D382): what `ret e` needs.
+    body_returns_err: bool,
 }
 
 fn append_failure_token(c: *Checker, module_index: usize, token: lex.Token, kind: DiagnosticKind, detail: str, detail2: str) {
@@ -11852,6 +11856,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
     c.block_depth = 0usize
     c.pins_live = 0usize
     c.affine_answer_valid = false
+    c.body_returns_err = function.return_count == 1usize && c.return_types[function.first_return].kind == .Err
     var parameter_index = 0usize
     while parameter_index < function.parameter_count {
         let parameter = c.parameters[function.first_parameter + parameter_index]
@@ -12976,6 +12981,7 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         let moved_whole = parent == .BindingStmt || parent == .AssignmentStmt || parent == .ReturnStmt
         if state == resource_unchecked && !moved_whole {
             record_failure_related(c, module_index, node, .ResourceUnchecked, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired), c.resources[local_index].acquired)
+            resource_fix_test(c, g, module_index, local_index)
             ret ResourceViolation
         }
         ret ok
@@ -13376,8 +13382,54 @@ fn resource_fix_defer(c: *Checker, g: *graph.Graph, module_index: usize, local_i
     while line_start + indent < text.len && (text[line_start + indent] == 32u8 || text[line_start + indent] == 9u8) { indent += 1usize }
     var line_end = acquired.end
     while line_end < text.len && text[line_end] != 10u8 { line_end += 1usize }
-    let name = c.locals[local_index].name
-    let (buffer, buffer_error) = mem.alloc[u8](c.arena, indent + qualifier.len + closer.len + name.len + 12usize)
+    var pieces: [8]str = zero
+    pieces[0usize] = "defer "
+    pieces[1usize] = qualifier
+    if qualifier.len != 0usize { pieces[2usize] = "." }
+    pieces[3usize] = closer
+    pieces[4usize] = "("
+    pieces[5usize] = c.locals[local_index].name
+    pieces[6usize] = ")"
+    resource_fix_line(c, text, line_start, indent, line_end, pieces[..])
+    c.failure_fix_kind = 1u8
+}
+
+// The fix for an untested acquisition (D382, H09): `if e != ok { ret e }` after the
+// acquiring statement, when it was returned beside an `err` and the function
+// returns a bare `err`; a flag, or another result shape, gets no fix.
+fn resource_fix_test(c: *Checker, g: *graph.Graph, module_index: usize, local_index: usize) {
+    c.failure_fix_text = ""
+    if !c.resources[local_index].has_bound_err || !c.body_returns_err { ret }
+    let err_local = c.resources[local_index].bound_err
+    if err_local >= c.local_count || c.locals[err_local].ty.kind != .Err { ret }
+    let text = g.modules[module_index].text
+    let acquired = c.tokens[c.resources[local_index].acquired]
+    var line_start = acquired.start
+    while line_start > 0usize && text[line_start - 1usize] != 10u8 { line_start = line_start - 1usize }
+    var indent = 0usize
+    while line_start + indent < text.len && (text[line_start + indent] == 32u8 || text[line_start + indent] == 9u8) { indent += 1usize }
+    var line_end = acquired.end
+    while line_end < text.len && text[line_end] != 10u8 { line_end += 1usize }
+    var pieces: [8]str = zero
+    pieces[0usize] = "if "
+    pieces[1usize] = c.locals[err_local].name
+    pieces[2usize] = " != ok { ret "
+    pieces[3usize] = c.locals[err_local].name
+    pieces[4usize] = " }"
+    resource_fix_line(c, text, line_start, indent, line_end, pieces[..])
+    c.failure_fix_kind = 2u8
+}
+
+// A fix that is one inserted line: a newline, the acquiring line's indentation, the
+// pieces; inserted at the end of that line.
+fn resource_fix_line(c: *Checker, text: str, line_start: usize, indent: usize, line_end: usize, pieces: []str) {
+    var total = indent + 1usize
+    var piece = 0usize
+    while piece < pieces.len {
+        total += pieces[piece].len
+        piece += 1usize
+    }
+    let (buffer, buffer_error) = mem.alloc[u8](c.arena, total)
     if buffer_error != ok { ret }
     var at = 0usize
     buffer[at] = 10u8
@@ -13388,18 +13440,11 @@ fn resource_fix_defer(c: *Checker, g: *graph.Graph, module_index: usize, local_i
         at += 1usize
         pad += 1usize
     }
-    at = fix_append(buffer, at, "defer ")
-    if qualifier.len != 0usize {
-        at = fix_append(buffer, at, qualifier)
-        buffer[at] = 46u8
-        at += 1usize
+    piece = 0usize
+    while piece < pieces.len {
+        at = fix_append(buffer, at, pieces[piece])
+        piece += 1usize
     }
-    at = fix_append(buffer, at, closer)
-    buffer[at] = 40u8
-    at += 1usize
-    at = fix_append(buffer, at, name)
-    buffer[at] = 41u8
-    at += 1usize
     c.failure_fix_text = buffer[0usize..at]
     c.failure_fix_at = line_end
 }

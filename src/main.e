@@ -3107,6 +3107,7 @@ type Sink = struct {
     // A fix to insert (D381): text at a byte offset, or empty.
     fix_text: str,
     fix_at: usize,
+    fix_kind: u8,
     operand_path: str,
     // `--absolute-paths` (section 2, D290): the operand's absolute spelling, written as
     // `absolute_path` beside the operand's identity and no other module's.
@@ -3217,7 +3218,11 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             insert.start = report.fix_at
             insert.end = report.fix_at
             let insert_at = lex.span_of(text, lines, insert)
-            try write_all(report, "[{\"message\":\"defer the cleanup after the acquisition\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+            if report.fix_kind == 2u8 {
+                try write_all(report, "[{\"message\":\"test the error before the value is used\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+            } else {
+                try write_all(report, "[{\"message\":\"defer the cleanup after the acquisition\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+            }
             if report.operand_path.len != 0usize && is_operand {
                 try write_span(report, report.operand_path, insert_at, true)
             } else {
@@ -4337,6 +4342,7 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     report.related_note = checker.failure_related_note
     report.fix_text = checker.failure_fix_text
     report.fix_at = checker.failure_fix_at
+    report.fix_kind = checker.failure_fix_kind
     let emitted = emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, check.diagnostic_code(checker.failure_kind), message_storage[..message.count])
     report.has_related = false
     report.fix_text = ""

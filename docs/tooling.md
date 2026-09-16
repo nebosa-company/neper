@@ -130,8 +130,11 @@ type's declared cleanup qualified as the module imports it (`sync.release`,
 `os.thread_join`). It is `maybe` because it changes what the program does and
 because an explicit cleanup later in the block then becomes a second consumption
 (`E-SAFETY-0009`): the harness applies it, re-checks, and removes the explicit
-one when the checker says so. A diagnostic mapped through a source map carries no
-fix (section 8). No other diagnostic carries a fix yet.
+one when the checker says so. `E-SAFETY-0008`, a resource used before the error it
+was returned beside was tested, carries `if e != ok { ret e }` on the line after the
+acquisition (D382) -- when the second result is an `err` and the function returns a
+bare `err`; a flag, or another result shape, gets no fix. A diagnostic mapped through
+a source map carries no fix (section 8). No other diagnostic carries a fix yet.
 
 Codes are allocated from the checked registry `docs/diagnostics.md` and have the
 form `E-<CATEGORY>-<NNNN>`. Categories are stable semantic names, not document

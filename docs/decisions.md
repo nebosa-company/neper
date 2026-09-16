@@ -8480,3 +8480,22 @@ single edit; an untested acquisition wants `try`, which is the next), fixes for
 type and name errors, cascades marked as such (`parent` is always null), and the
 `fix`-with-precondition record H18 asks for -- a fix is applied against the file
 as the harness has it, and the D376 plan shape is where the precondition lives.
+
+## D382 -- The second fix: an untested acquisition offers its test
+
+E-SAFETY-0008 -- a resource used before the `err` it was returned beside was
+tested -- is the other diagnostic whose repair is one line the checker can
+spell: `if e != ok { ret e }` after the acquiring statement, indented as it is,
+when the second result is an `err` (a `bool` flag has no value to return) and
+the function being checked returns a bare `err` (`ret e` needs it; the checker
+records that once per body). The two fixes share one builder -- a newline, the
+line's indentation, the pieces, inserted at the end of the acquiring line -- and
+a kind the printer names its message by. Applied to the corpus fixture, the fix
+makes the re-check say the next true thing: the fixture's own late test is now
+an exit with the handle still owned, E-SAFETY-0002, whose fix is D381's. That
+chain -- apply, re-check, apply -- is what H09's transactional repair is, and
+what a harness runs; nothing here applies anything.
+
+Not yet: `try` as the alternative fix when the value is bound by `let x = try
+...`'s shape (it is the same line rewritten, not an insertion, and the harness
+may prefer it); fixes for the type and name codes.
