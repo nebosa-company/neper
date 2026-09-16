@@ -2141,6 +2141,10 @@ if ($LASTEXITCODE -ne 2) { throw "test --json on a test that does not compile ex
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $compileErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/test_compile_error.expected.jsonl')).Hash) { throw "test --json on a test that does not compile differs from the conformance corpus" }
 & python (Join-Path $repo 'scripts/validate_stream.py') (Join-Path $testBuild 'nptest-runner.e.map.json') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "the runner's source map does not validate against the v1 schema" }
+# The language card is the render of the grammar (D374, H28): a card whose hash is not
+# the render of grammar.ebnf's revision is drift, and the suite refuses it.
+& python (Join-Path $repo 'scripts/render_card.py') --check | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'docs/llm-neper-card.md is not the render of docs/grammar.ebnf; run python scripts/render_card.py' }
 # A stale source map beside the operand is E-TOOL-0001 and no artifact (D264).
 $staleActual = Join-Path $testBuild 'conformance-tools-stale-map.jsonl'
 Remove-Item -ErrorAction SilentlyContinue -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map.out')

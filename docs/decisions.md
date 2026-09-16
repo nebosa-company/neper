@@ -8272,3 +8272,32 @@ map-only change refreshes diagnostics because nothing is cached across commands,
 which D372 keeps); a hand-edited generated output detected against its
 generator's determinism; a `missing generator` fixture (nothing runs one, so
 nothing is missing).
+
+## D374 -- The language card is rendered from the grammar, stamped and hashed
+
+H28 asks that the language cards be generated from `grammar.ebnf` and the closed
+registries with a grammar-revision stamp and a content hash, so that a card and
+the grammar cannot drift and an old card cannot be confused with a revised one
+(H11's acceptance). `docs/llm-neper-card.md` was hand-written: fifty lines of
+prose and examples with no revision on them, whose syntax section was a
+paraphrase.
+
+`scripts/render_card.py` writes it now. The syntax sections are the grammar's
+own productions -- declarations, types, statements, expressions -- copied
+verbatim from `grammar.ebnf`; the keyword list is every alphabetic terminal of
+the productions; the diagnostic families are `diagnostics.md`'s registry with a
+count and the catch-all per family; the language and tool versions are the ones
+the compiler writes in every stream header, read from `src/main.e`. The prose
+around them is `docs/llm-neper-card.src.md`, with placeholders. The rendered
+card opens with a comment naming the grammar revision, the versions and the
+SHA-256 of its body, and its title carries the revision; `--check` renders and
+compares, and both suites run it, so a grammar edit without a re-render fails
+the suite. The three comparison cards (JavaScript, Rust, TypeScript) stay
+hand-written: they describe other languages.
+
+Not yet, of H28 and H11: per-symbol API records with ownership, invalidation and
+thread facts from the checked library sources (the index and `context-file`
+carry the signatures and the resource facts; a card-shaped projection is the
+next step); planned/present/verified marking of APIs (`modules.json` knows it,
+the card does not); examples compiled by the suite (the card's examples are
+prose today); a card per language version once there are two.

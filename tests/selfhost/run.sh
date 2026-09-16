@@ -2306,6 +2306,8 @@ stale_error_status=0
 (cd "$test_build" && rm -f conformance-tools-stale-map-error.out && ./neper-self emit-executable "$conformance_root/tools/stale_map_error.e" "$repo" x64 linux conformance-tools-stale-map-error.out --json > "conformance-tools-stale-map-error.jsonl") || stale_error_status=$?
 [ "$stale_error_status" -eq 1 ]
 [ ! -e "$test_build/conformance-tools-stale-map-error.out" ]
+# The language card is the render of the grammar (D374, H28).
+python3 "$repo/scripts/render_card.py" --check > /dev/null
 # A version 2 map (D373, H19): the generator's input is hashed, a regeneration-owned
 # mapping says so in the related location, and a changed input is E-TOOL-0001.
 for map_case in generated_map stale_generator; do
