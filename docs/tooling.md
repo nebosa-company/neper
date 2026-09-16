@@ -659,7 +659,10 @@ unchanged, and the two are one row list rendered twice.
 `--deadline MS` (D399, H16) on a build command (`emit-executable`, `emit-em-all`,
 `run`, with or without `--json`) is a wall-clock deadline: at every checkpoint
 between phases -- after load and parse, resolve, check declarations, settle, check
-bodies, inline oracles, lower, regalloc and codegen, link -- a build past it stops.
+bodies, inline oracles, lower, regalloc and codegen, link -- a build past it stops;
+inside the interpreter too (D496, H16), every 65536 steps of a constant's
+evaluation, so a constant that would run for seconds stops within milliseconds
+of the deadline.
 One `E-CLI-0001` diagnostic names the deadline and the phase that finished last,
 the `result` has `exit_code` 3 and `data.cancelled_after`, and no image and no
 manifest are written; an artifact a hot build's worker had already published is

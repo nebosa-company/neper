@@ -10626,3 +10626,19 @@ modes on both hosts. The other two cases of the list -- a broken edit then its
 repair, an edit then its revert -- were probed and hold: the broken build is
 refused at the parse, the repaired warm build is the clean one, and the revert
 rebuilds the dependency as `source-changed` to the image the clean build gives.
+
+## D496 -- The deadline inside an evaluation
+
+H16 asked for cancellation finer than the checkpoints between phases (D399),
+between a worker's modules (D422) and between functions (D441); the one place
+a build could still run for seconds past its deadline was the interpreter: a
+constant of ten million steps -- section 9's budget -- is some seven seconds,
+and a `--deadline 50` build of four such constants ended after 5.8 s. The
+interpreter now reads the clock every 65536 steps of the whole build's count
+(a few milliseconds of interpretation, the clock read once per 65536 steps
+costing nothing) and answers `Cancelled`, which the declaration phase's
+checkpoint turns into the build's cancellation as D441's between-functions one
+is: exit 3, `cancelled_after` the declarations, no image. The corpus's
+`comptime_long.e` is four such constants, never evaluated to the end by the
+suites, which require exit 3 in under two seconds on both hosts. Not yet:
+a deadline inside one function's lowering.

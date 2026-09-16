@@ -2579,6 +2579,15 @@ cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-ex
 if ($LASTEXITCODE -ne 0) { throw "a build within its comptime step budget failed ($LASTEXITCODE)" }
 & $stepsImage
 if ($LASTEXITCODE -ne 0) { throw "the comptime steps fixture exited $LASTEXITCODE" }
+# A deadline inside an evaluation (D496, H16): a constant of seconds under a deadline
+# of fifty milliseconds is cancelled in well under a second, exit 3, the declarations
+# named as the phase.
+$longActual = Join-Path $testBuild 'conformance-tools-comptime-long.jsonl'
+$longStarted = Get-Date
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-executable comptime_long.e `"$repo`" x64 windows `"$(Join-Path $testBuild 'comptime-long.exe')`" --json --deadline 50 > `"$longActual`""
+if ($LASTEXITCODE -ne 3) { throw "a build whose deadline passed inside an evaluation did not exit 3 (got $LASTEXITCODE)" }
+if (((Get-Date) - $longStarted).TotalMilliseconds -gt 2000) { throw 'a deadline inside an evaluation was not honoured until the evaluation ended' }
+if ((Select-String -LiteralPath $longActual -Pattern '"cancelled_after":"check declarations"' -Quiet) -ne $true) { throw 'the cancellation inside an evaluation does not name the declarations' }
 # A deadline inside a phase (D422, H16): the compiler's own build under a deadline
 # it cannot meet is cancelled by a worker between two modules -- exit 3, no image.
 $deadlineInside = Join-Path $testBuild 'deadline-inside.exe'

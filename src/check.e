@@ -4822,6 +4822,10 @@ fn interp_fail(c: *Checker, module_index: usize, node: syntax.Node, reason: str)
 fn interp_step(c: *Checker, module_index: usize, node: syntax.Node) -> err {
     c.interp_steps += 1usize
     c.interp_total += 1usize
+    // The deadline inside an evaluation (D496, H16): the clock every 65536 steps --
+    // a few milliseconds of interpretation -- so a constant that runs for seconds
+    // stops when the build's deadline passes, not when it finishes.
+    if (c.interp_total & 65535usize) == 0usize && past_deadline(c) { ret Cancelled }
     if c.interp_steps > 10000000usize {
         record_failure(c, module_index, node, .ComptimeEvaluation, c.interp_constant, "ten million steps")
         ret ComptimeBudget

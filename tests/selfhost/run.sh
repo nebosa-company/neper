@@ -2547,6 +2547,13 @@ steps_status=0
 cmp -s "$test_build/conformance-tools-comptime-steps.jsonl" "$conformance_root/tools/comptime_steps.expected.jsonl" || { echo "the refused build's stream differs from the conformance corpus" >&2; exit 1; }
 (cd "$conformance_root/tools" && $test_build/neper-self emit-executable comptime_steps.e "$repo" x64 linux "$test_build/comptime-steps" --release --comptime-steps 100000 > /dev/null)
 "$test_build/comptime-steps"
+# A deadline inside an evaluation (D496, H16): cancelled in milliseconds, exit 3.
+long_started=$(date +%s%N)
+long_status=0
+(cd "$conformance_root/tools" && $test_build/neper-self emit-executable comptime_long.e "$repo" x64 linux "$test_build/comptime-long" --json --deadline 50 > "$test_build/conformance-tools-comptime-long.jsonl") || long_status=$?
+[ "$long_status" = 3 ] || { echo "a build whose deadline passed inside an evaluation did not exit 3 (got $long_status)" >&2; exit 1; }
+[ $(( ($(date +%s%N) - long_started) / 1000000 )) -lt 2000 ] || { echo "a deadline inside an evaluation was not honoured until the evaluation ended" >&2; exit 1; }
+grep -q '"cancelled_after":"check declarations"' "$test_build/conformance-tools-comptime-long.jsonl"
 # A deadline inside a phase (D422, H16): the compiler's own build under a deadline it
 # cannot meet is cancelled by a worker between two modules -- exit 3, no image.
 deadline_inside="$test_build/deadline-inside"
