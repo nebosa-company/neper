@@ -3731,6 +3731,13 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
 // The declarations sweep is reopened for them: signatures are not ready while a module
 // is declared, and `finish_declarations` evaluates its constants.
 fn declare_late(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_index: usize, list: []usize, listed: []bool) -> err {
+    // A module rebuilt from a header tree (D392) is parsed again with its bodies,
+    // on the main thread before any worker asks for them; its declarations stand.
+    if g.modules[module_index].has_tree && g.modules[module_index].headers_only {
+        g.want_headers[module_index] = false
+        g.modules[module_index].has_tree = false
+        try graph.parse_into_pool(a, g, module_index)
+    }
     var count = 0usize
     if !g.modules[module_index].has_tree {
         list[count] = module_index
@@ -4764,6 +4771,10 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
         if !loaded.modules[list[queue_at]].has_tree {
             list[unparsed] = list[queue_at]
             unparsed += 1usize
+            // An unchanged import of a changed module is parsed for its declarations
+            // alone (D392): a header tree, in a debug build. A release build's oracle
+            // wants every body of the closure and parses in full.
+            if !hot.release && hot.unchanged[list[queue_at]] && list[queue_at] < loaded.want_headers.len { loaded.want_headers[list[queue_at]] = true }
         }
         queue_at += 1usize
     }

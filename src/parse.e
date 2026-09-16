@@ -85,6 +85,11 @@ type Parser = struct {
     failure_frozen: bool,
     last_node: usize,
     tree: *Tree,
+    // A header tree (D392, H14): the body of a non-generic function is skipped at the
+    // tokens and no node is built for it, so a module that is only declared -- an
+    // unchanged import of a changed module -- costs its signatures and nothing more.
+    // A generic function keeps its body: an instance elsewhere reads it.
+    headers_only: bool,
     // The token before `current`, and the token that opened each soft delimiter
     // still open, so a barrier crossing can be reported at the opener (D275).
     previous: lex.Token,
@@ -1599,7 +1604,9 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     if is_extern { try require(p, .KwExtern) }
     try require(p, .KwFn)
     try require(p, .Identifier)
+    var generic = false
     if p.current.kind == .PunctLBracket {
+        generic = true
         try advance(p)
         enter_soft(p)
         try skip_separators(p)
@@ -1641,7 +1648,11 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
     if is_extern {
         if p.current.kind == .PunctLBrace { ret InvalidSyntax }
     } else {
-        try parse_block_node(p)
+        if p.headers_only && !generic {
+            try skip_body(p)
+        } else {
+            try parse_block_node(p)
+        }
     }
     let token_end = p.token_index
     if is_extern {
@@ -1650,6 +1661,20 @@ fn parse_function(p: *Parser, is_extern: bool) -> err {
         try add_top_parent_since(p, .FnDecl, token_start, token_end, node_start)
     }
     try finish_line(p)
+    ret ok
+}
+
+// A function body passed over at the tokens (D392): from its `{` to the `}` that
+// closes it, braces counted, nothing built.
+fn skip_body(p: *Parser) -> err {
+    try require(p, .PunctLBrace)
+    var depth = 1usize
+    while depth != 0usize {
+        if p.current.kind == .Eof { ret InvalidSyntax }
+        if p.current.kind == .PunctLBrace { depth += 1usize }
+        if p.current.kind == .PunctRBrace { depth = depth - 1usize }
+        try advance(p)
+    }
     ret ok
 }
 
@@ -2006,6 +2031,16 @@ fn parse(tree: *Tree, source: str) -> err {
 fn parse_tokens(tree: *Tree, source: str, tokens: []const lex.Token) -> err {
     if tree.nodes.len == 0usize || tree.children.len == 0usize { ret InvalidSyntax }
     var p = init(tree, source)
+    p.scanner = lex.init_tokens(source, tokens)
+    p.current = lex.next(&p.scanner)
+    ret parse_file(&p)
+}
+
+// The header parse (D392): declarations with the non-generic function bodies skipped.
+fn parse_tokens_headers(tree: *Tree, source: str, tokens: []const lex.Token) -> err {
+    if tree.nodes.len == 0usize || tree.children.len == 0usize { ret InvalidSyntax }
+    var p = init(tree, source)
+    p.headers_only = true
     p.scanner = lex.init_tokens(source, tokens)
     p.current = lex.next(&p.scanner)
     ret parse_file(&p)

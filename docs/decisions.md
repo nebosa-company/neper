@@ -8710,3 +8710,34 @@ declarations from a kept module's Interface into the checker instead of from
 its tree: signatures, aggregates, constants and errors as the artifact already
 records them. That is H14's declaration-level reuse proper, a project of its own,
 and the entry cache is not a step toward it; it was dropped.)
+
+## D392 -- Header trees: an unchanged import of a changed module is parsed for its declarations alone
+
+D391's amendment said what an edited debug build pays: the parse of the changed
+module's import closure, needed only for its declarations. The parser has a
+header mode now (`parse_tokens_headers`): a non-generic function's body is passed
+over at the tokens -- from its `{` to the `}` that closes it, braces counted,
+nothing built -- and the declaration stands without a block; a generic function
+keeps its body, since an instance elsewhere reads it. The hot loader asks for
+header trees for the unchanged modules of the closure in a debug build (a
+release build's oracle wants every body of the closure and parses in full, as
+D391 left it); the graph marks such a tree `headers_only`; the resolver and the
+checker declare from it as from any tree. A header module that turns out to be
+rebuilt -- an edge changed -- is parsed again in full on the main thread in
+`declare_late`, before any worker asks for its bodies, and its declarations
+stand; the comptime interpreter, which may run a callee of a header module for a
+rebuilt module's constant, parses that module for itself into storage of its
+own. What it saves on the compiler's own source, debug, eight workers: an edit
+to `tool.e` loads and parses in 40 ms from 53, resolves in 5 from 11, declares in
+9 from 11; an edit to `main.e` 53 from 64. Every image is the clean build's, on
+three edited modules and the cold build.
+
+The first attempt returned a header tree from `parse_module` only for callers
+that wanted bodies, parsing again into the shared pool otherwise; the resolver's
+validation workers then parsed concurrently into one pool and the build failed
+with a name that did not resolve. The stored tree is what `parse_module` returns,
+header or not, and every pass that reads bodies is one that only sees full trees.
+
+Not yet: the lexer still scans every byte of the closure, which is now most of
+the phase (a header module is lexed whole); declarations from the Interface
+would spare that too, and is the larger H14 step this row does not take.

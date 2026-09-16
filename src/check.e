@@ -4701,10 +4701,24 @@ fn interp_module(c: *Checker, g: *graph.Graph, module_index: usize) -> (usize, e
         c.interp_ready = true
     }
     if c.interp_parsed[module_index] { ret (module_index, ok) }
-    // The module's tree is the one the graph keeps (D317).
+    // The module's tree is the one the graph keeps (D317), unless that is a header
+    // tree (D392) with the callee's body skipped: then the tokens are parsed again
+    // into storage of the interpreter's own.
     var kept: parse.Tree = zero
-    let kept_error = graph.parse_module(g, module_index, &kept)
-    if kept_error != ok { ret (0usize, kept_error) }
+    if g.modules[module_index].has_tree && g.modules[module_index].headers_only {
+        let text_length = g.modules[module_index].text.len
+        let (nodes, nodes_error) = mem.alloc[syntax.Node](c.arena, text_length / 2usize + 4096usize)
+        if nodes_error != ok { ret (0usize, nodes_error) }
+        let (children, children_error) = mem.alloc[u32](c.arena, text_length + 4096usize)
+        if children_error != ok { ret (0usize, children_error) }
+        let init_error = parse.init_tree(&kept, nodes, children)
+        if init_error != ok { ret (0usize, init_error) }
+        let full_error = parse.parse_tokens(&kept, g.modules[module_index].text, g.modules[module_index].tokens)
+        if full_error != ok { ret (0usize, full_error) }
+    } else {
+        let kept_error = graph.parse_module(g, module_index, &kept)
+        if kept_error != ok { ret (0usize, kept_error) }
+    }
     c.interp_trees[module_index] = kept
     // The tokens likewise are the module's own (D316).
     c.interp_tokens[module_index] = g.modules[module_index].tokens

@@ -35,6 +35,11 @@ type Module = struct {
     // own size (D317): every pass reads it, none re-parses.
     tree: parse.Tree,
     has_tree: bool,
+    // The tree is a header tree (D392): its non-generic functions have no bodies.
+    // Only a module that is declared and never lowered has one -- a rebuilt module
+    // is parsed again in full before any pass reads its bodies (`declare_late`), and
+    // the comptime interpreter parses a callee's module for itself.
+    headers_only: bool,
     first_import: usize,
     import_count: usize,
     visit_state: u8,
@@ -141,6 +146,8 @@ type Graph = struct {
     workers: []Worker,
     assignment: []usize,
     list: []usize,
+    // Which modules the next front wave parses as headers only (D392); empty means none.
+    want_headers: []bool,
     scanned: usize,
     // `-j N` (D331): how many workers any phase may run, none asked is the phase's
     // own count; and `--perturb`, the schedule turned around so the harness can ask
@@ -408,8 +415,17 @@ fn parse_into_pool(a: *mem.Arena, g: *Graph, module_index: usize) -> err {
     try ensure_tree_pool(a, g, g.modules[module_index].text.len)
     g.has_parsed = false
     try parse.init_tree(&tree, g.nodes, g.children)
-    let parse_error = parse.parse_tokens(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
-    if parse_error == ok { try keep_tree(a, g, module_index, &tree) }
+    let headers = module_index < g.want_headers.len && g.want_headers[module_index]
+    var parse_error = ok
+    if headers {
+        parse_error = parse.parse_tokens_headers(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
+    } else {
+        parse_error = parse.parse_tokens(&tree, g.modules[module_index].text, g.modules[module_index].tokens)
+    }
+    if parse_error == ok {
+        try keep_tree(a, g, module_index, &tree)
+        g.modules[module_index].headers_only = headers
+    }
     if parse_error != ok {
         // Every module is parsed here first, so this is where a syntax error is
         // seen with the module still in hand to name it.
@@ -495,7 +511,7 @@ fn add_module(a: *mem.Arena, g: *Graph, name: str, path: str) -> (usize, err) {
     var no_tree: parse.Tree = zero
     let (spelling, spelling_error) = spelling_of(a, g, path)
     if spelling_error != ok { ret (0usize, spelling_error) }
-    g.modules[index] = Module { name: name, path: path, text: "", lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
+    g.modules[index] = Module { name: name, path: path, text: "", lines: no_lines[0usize..0usize], tokens: no_tokens[0usize..0usize], has_invalid: false, tree: no_tree, has_tree: false, headers_only: false, first_import: 0usize, import_count: 0usize, visit_state: 0u8, sha256: "", interface_sha256: "", spelling: spelling }
     g.count += 1usize
     ret (index, ok)
 }
@@ -565,7 +581,14 @@ fn worker_module(w: *Worker, module_index: usize) -> err {
     w.g.modules[module_index].has_invalid = invalid
     var tree: parse.Tree = zero
     try parse.init_tree(&tree, w.nodes, w.children)
-    let parse_error = parse.parse_tokens(&tree, text, tokens)
+    // A module wanted as headers only (D392) is parsed without its function bodies.
+    let headers = module_index < w.g.want_headers.len && w.g.want_headers[module_index]
+    var parse_error = ok
+    if headers {
+        parse_error = parse.parse_tokens_headers(&tree, text, tokens)
+    } else {
+        parse_error = parse.parse_tokens(&tree, text, tokens)
+    }
     if parse_error != ok {
         if tree.has_failure {
             w.syntax_failure = true
@@ -573,7 +596,9 @@ fn worker_module(w: *Worker, module_index: usize) -> err {
         }
         ret parse_error
     }
-    ret keep_tree(&w.arena, w.g, module_index, &tree)
+    try keep_tree(&w.arena, w.g, module_index, &tree)
+    w.g.modules[module_index].headers_only = headers
+    ret ok
 }
 
 fn worker_entry(w: *Worker) {
@@ -822,6 +847,14 @@ fn begin(a: *mem.Arena, g: *Graph, root_path: str, toolchain_root: str, arch: st
     let (list, list_error) = mem.alloc[usize](a, g.modules.len)
     if list_error != ok { ret list_error }
     g.list = list
+    let (want_headers, want_headers_error) = mem.alloc[bool](a, g.modules.len)
+    if want_headers_error != ok { ret want_headers_error }
+    var headers_at = 0usize
+    while headers_at < want_headers.len {
+        want_headers[headers_at] = false
+        headers_at += 1usize
+    }
+    g.want_headers = want_headers
     ret ok
 }
 
