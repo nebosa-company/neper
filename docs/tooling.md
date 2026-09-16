@@ -685,6 +685,15 @@ is `unknown`. An original span is a location, not a fix: nothing in the stream
 offers an edit to an original span, since the mapping may be many-to-one. The
 compiler never runs a generator; the map's metadata is data.
 
+A generator that read several inputs lists them (D464, H19): `generator.inputs`
+is an array of `{"path", "sha256"}`, each path relative to the generated file's
+directory, checked in order after `input` (which may be absent when `inputs` is
+present); the first that is missing or whose hash is not the recorded one is
+`E-TOOL-0001` naming it, and the hand-edit rule (D418) holds only when every
+listed input is unchanged. One input that became several declarations is several
+mappings to one original span, each diagnostic mapped to it; the corpus's
+`combined_inputs.e` is the shape.
+
 ## 9. Conformance and compatibility
 
 `tests/conformance/` is a normative corpus shipped with the specification. It has

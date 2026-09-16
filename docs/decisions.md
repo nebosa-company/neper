@@ -10072,3 +10072,22 @@ on the two x64 hosts and the golden is one.
 
 Not yet: the phase of a `const` and of expressions the lowering folds, and the
 layouts of the instances a program makes of another module's generics.
+
+## D464 -- A generator's combined inputs
+
+H19 accepts a generator that read several inputs and one input that became
+several declarations; a version 2 map named one input. `generator.inputs` is
+now an array of `path` and `sha256`, each checked in order after the one
+`input`, which may be absent when the array is present: the first missing or
+changed input is `E-TOOL-0001` naming it -- a harness regenerates from the
+right place -- and D418's hand-edit rule holds only when every listed input is
+as recorded. The corpus gains `combined_inputs.e`, whose map names two inputs
+and maps two generated declarations to the one line of the first, the
+diagnostic landing on the original with the generated span related; and
+`combined_stale.e`, whose second input's hash is not the recorded one, which
+names it and still analyses the file. The checker reports one error per check,
+so the second mapping is data the map carries, read and unexercised. Both
+suites; the schema takes `inputs` and no longer requires `input`.
+
+Not yet: nested maps -- a generated file whose input is itself generated --
+and provenance through specialisation and inlining.

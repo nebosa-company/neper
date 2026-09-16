@@ -3662,14 +3662,66 @@ fn map_input_unchanged(a: *mem.Arena, document: str, operand: str) -> bool {
     let generator = document[generator_at..document.len]
     let input_name = json_str_after(generator, "\"input\":\"")
     let input_hash = json_str_after(generator, "\"input_sha256\":\"")
-    if input_name.len == 0usize || input_hash.len != 64usize { ret false }
-    let (input_path, input_path_error) = with_suffix(a, dirname(operand), input_name)
-    if input_path_error != ok { ret false }
-    let (input_text, input_error) = source.load(a, input_path)
-    if input_error != ok { ret false }
-    let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
-    if input_digest_error != ok { ret false }
-    ret same(input_digest, input_hash)
+    let inputs_key = "\"inputs\":["
+    let has_single = input_name.len != 0usize
+    if !has_single && json_key_at(generator, inputs_key) >= generator.len { ret false }
+    if has_single {
+        if input_hash.len != 64usize { ret false }
+        let (input_path, input_path_error) = with_suffix(a, dirname(operand), input_name)
+        if input_path_error != ok { ret false }
+        let (input_text, input_error) = source.load(a, input_path)
+        if input_error != ok { ret false }
+        let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
+        if input_digest_error != ok { ret false }
+        if !same(input_digest, input_hash) { ret false }
+    }
+    // Every combined input as recorded too (D464).
+    let (inputs_status, ignored_name) = map_inputs_status(a, generator, operand)
+    ret inputs_status == 0usize
+}
+
+// A version 2 map's combined inputs (D464, H19): `generator.inputs`, each a `path`
+// and a `sha256`, checked as the one `input` is, in order. The answer is 0 when
+// every input is as recorded, 1 when one is missing, 2 when one changed or is
+// malformed, with the input's path; a map without `inputs` is 0.
+fn map_inputs_status(a: *mem.Arena, generator: str, operand: str) -> (usize, str) {
+    let inputs_key = "\"inputs\":["
+    let inputs_at = json_key_at(generator, inputs_key)
+    if inputs_at >= generator.len { ret (0usize, "") }
+    var end = inputs_at
+    while end < generator.len && generator[end] != 93u8 { end += 1usize }
+    let array = generator[inputs_at..end]
+    var scan = 0usize
+    while scan < array.len {
+        if array[scan] == 123u8 {
+            var close = scan
+            while close < array.len && array[close] != 125u8 { close += 1usize }
+            let entry = array[scan..close]
+            let name = json_str_after(entry, "\"path\":\"")
+            let hash = json_str_after(entry, "\"sha256\":\"")
+            if name.len == 0usize || hash.len != 64usize { ret (2usize, name) }
+            let (input_path, input_path_error) = with_suffix(a, dirname(operand), name)
+            if input_path_error != ok { ret (1usize, name) }
+            let (input_text, input_error) = source.load(a, input_path)
+            if input_error != ok { ret (1usize, name) }
+            let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
+            if input_digest_error != ok || !same(input_digest, hash) { ret (2usize, name) }
+            scan = close
+        }
+        scan += 1usize
+    }
+    ret (0usize, "")
+}
+
+// The diagnostic for a combined input that is not as the map recorded it (D464).
+fn emit_map_input_diagnostic(a: *mem.Arena, report: *Sink, status: usize, name: str) -> err {
+    let (opened, opened_error) = with_suffix(a, "the generator's input `", name)
+    if opened_error != ok { ret opened_error }
+    var tail = "` named by the source map is missing"
+    if status == 2usize { tail = "` changed since the source was generated" }
+    let (message, message_error) = with_suffix(a, opened, tail)
+    if message_error != ok { ret message_error }
+    ret emit_command_diagnostic(report, "E-TOOL-0001", message)
 }
 
 fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err {
@@ -3706,19 +3758,29 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
         let generator = document[generator_at..document.len]
         let input_name = json_str_after(generator, "\"input\":\"")
         let input_hash = json_str_after(generator, "\"input_sha256\":\"")
-        let (input_path, input_path_error) = with_suffix(a, dirname(operand), input_name)
-        if input_path_error != ok { ret input_path_error }
-        let (input_text, input_error) = source.load(a, input_path)
-        if input_error != ok {
-            report.map_stale = true
-            try emit_command_diagnostic(report, "E-TOOL-0001", "the generator's input named by the source map is missing")
-            ret ok
+        if input_name.len != 0usize {
+            let (input_path, input_path_error) = with_suffix(a, dirname(operand), input_name)
+            if input_path_error != ok { ret input_path_error }
+            let (input_text, input_error) = source.load(a, input_path)
+            if input_error != ok {
+                report.map_stale = true
+                try emit_command_diagnostic(report, "E-TOOL-0001", "the generator's input named by the source map is missing")
+                ret ok
+            }
+            let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
+            if input_digest_error != ok { ret input_digest_error }
+            if !same(input_digest, input_hash) {
+                report.map_stale = true
+                try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source is stale: the generator's input changed since it was generated")
+                ret ok
+            }
         }
-        let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
-        if input_digest_error != ok { ret input_digest_error }
-        if !same(input_digest, input_hash) {
+        // Combined inputs (D464, H19): a generator that read several, each checked,
+        // the first that is missing or changed named.
+        let (inputs_status, inputs_name) = map_inputs_status(a, generator, operand)
+        if inputs_status != 0usize {
             report.map_stale = true
-            try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source is stale: the generator's input changed since it was generated")
+            try emit_map_input_diagnostic(a, report, inputs_status, inputs_name)
             ret ok
         }
     }

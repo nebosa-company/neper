@@ -1,0 +1,4 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"build","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-TOOL-0001","message":"the generator's input `combined_stale.extra` changed since the source was generated","span":null,"parent":null,"related":[],"fixes":[]}
+{"record":"diagnostic","severity":"error","code":"E-TYPE-0002","message":"type mismatch: expected `i32`, found `bool`","expected":"i32","actual":"bool","span":{"source":{"root":"operand","path":"combined_stale.e"},"byte_start":268,"byte_end":271,"line":7,"column":5,"end_line":7,"end_column":8,"column_utf16":5,"end_column_utf16":8},"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":2}}

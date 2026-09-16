@@ -2519,7 +2519,9 @@ if (Test-Path -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map-er
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $staleErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/stale_map_error.expected.jsonl')).Hash) { throw 'analysis under a stale source map differs from the conformance corpus' }
 # A version 2 map (D373, H19): the generator's input is hashed, a regeneration-owned
 # mapping says so in the related location, and a changed input is E-TOOL-0001.
-foreach ($mapCase in @(@('generated_map', 'a regeneration-owned mapping'), @('stale_generator', 'a changed generator input'), @('hand_edited', 'a hand-edited generated file'))) {
+# Combined inputs (D464, H19): every `generator.inputs` entry is checked and the first changed
+# one is named; one input's line became two declarations, each mapped to the one original span.
+foreach ($mapCase in @(@('generated_map', 'a regeneration-owned mapping'), @('stale_generator', 'a changed generator input'), @('hand_edited', 'a hand-edited generated file'), @('combined_inputs', 'a generator with combined inputs'), @('combined_stale', 'a changed combined input'))) {
     $mapActual = Join-Path $testBuild "conformance-tools-$($mapCase[0]).jsonl"
     Remove-Item -ErrorAction SilentlyContinue -LiteralPath (Join-Path $testBuild "conformance-tools-$($mapCase[0]).out")
     cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot "tools/$($mapCase[0]).e")`" `"$repo`" x64 windows conformance-tools-$($mapCase[0]).out --json > `"$mapActual`""
