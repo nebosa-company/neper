@@ -2314,6 +2314,106 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         }
         own_at += 1usize
     }
+    // The contract the signature declares and the checker applies at every caller
+    // (D396, H11): an arena parameter is an allocation, whose pointer-holding
+    // results belong to the caller's region; a `*T` parameter is a borrow when
+    // something holding a pointer comes back (a view of the argument) and a
+    // mutation otherwise (the caller's views of the argument dangle, D354); a
+    // `*const T` parameter is read alone; an `err` result is fallible, and partial
+    // when other results ride with it (D353).
+    var returns_pointer = false
+    var returns_err = false
+    var return_scan = 0usize
+    while return_scan < function.return_count {
+        let return_index = function.first_return + return_scan
+        if return_index < c.return_type_count {
+            if check.holds_pointer(c, c.return_types[return_index], 0usize) { returns_pointer = true }
+            if c.return_types[return_index].kind == .Err { returns_err = true }
+        }
+        return_scan += 1usize
+    }
+    var contract_at = 0usize
+    while contract_at < function.parameter_count {
+        let parameter = c.parameters[function.first_parameter + contract_at]
+        if parameter.ty.kind == .Pointer && parameter.ty.has_element && parameter.ty.element < c.type_count {
+            let pointee = c.types[parameter.ty.element]
+            total += 1usize
+            if total > cursor && written < budget {
+                if check.seeded_arena(c, pointee) {
+                    try text(&out, "{\"record\":\"fact\",\"kind\":\"allocation\",\"provenance\":\"declared-and-checked\",\"value\":\"allocates from ")
+                    try text(&out, parameter.name)
+                    if returns_pointer {
+                        try text(&out, ": what it returns that can hold a pointer belongs to the caller's region of the arena, and dangles at a reset to a mark taken before the call\"}")
+                    } else {
+                        try text(&out, ": nothing it returns holds a pointer\"}")
+                    }
+                } else {
+                    if parameter.ty.is_const {
+                        try text(&out, "{\"record\":\"fact\",\"kind\":\"borrow\",\"provenance\":\"declared-and-checked\",\"value\":\"reads ")
+                        try text(&out, parameter.name)
+                        try text(&out, ": a const pointer; the argument is not written and the caller's views of it stand\"}")
+                    } else {
+                        if returns_pointer {
+                            try text(&out, "{\"record\":\"fact\",\"kind\":\"borrow\",\"provenance\":\"declared-and-checked\",\"value\":\"borrows ")
+                            try text(&out, parameter.name)
+                            try text(&out, ": what it returns that can hold a pointer is a view of the argument, dangling when the argument is next mutated\"}")
+                        } else {
+                            try text(&out, "{\"record\":\"fact\",\"kind\":\"mutation\",\"provenance\":\"declared-and-checked\",\"value\":\"mutates ")
+                            try text(&out, parameter.name)
+                            try text(&out, ": the caller's views of the argument dangle after this call (E-SAFETY-0014 at their next use)\"}")
+                        }
+                    }
+                }
+                try flush(&out)
+                written += 1usize
+            } else {
+                if total > cursor { omitted += 1usize }
+            }
+        }
+        contract_at += 1usize
+    }
+    if returns_err {
+        total += 1usize
+        if total > cursor && written < budget {
+            if function.return_count > 1usize {
+                try text(&out, "{\"record\":\"fact\",\"kind\":\"errors\",\"provenance\":\"declared-and-checked\",\"value\":\"partial: returns err beside its other results, which stand only when the err is ok; the caller tests it before using them\"}")
+            } else {
+                try text(&out, "{\"record\":\"fact\",\"kind\":\"errors\",\"provenance\":\"declared-and-checked\",\"value\":\"fallible: returns err; the caller tests it or propagates it with try\"}")
+            }
+            try flush(&out)
+            written += 1usize
+        } else {
+            if total > cursor { omitted += 1usize }
+        }
+    }
+    // A thread started in the body (D365): what the call is given by address is
+    // that thread's until the join.
+    var starts_thread = false
+    var thread_scan = 0usize
+    while thread_scan < c.explain_count {
+        let e = c.explains[thread_scan]
+        if e.kind == 4u8 && !e.found && e.module_index == function.module_index && e.offset >= function.source_start && e.offset < function.source_end {
+            if e.function_index >= c.function_count && e.template_index < g.count && graph.same(g.modules[e.template_index].name, "e.os") && check.same(e.protocol, "thread_create") { starts_thread = true }
+            if e.function_index < c.function_count {
+                let callee = c.functions[e.function_index]
+                if callee.return_count != 0usize && callee.first_return < c.return_type_count {
+                    let handle = c.return_types[callee.first_return]
+                    if check.seeded_handle(c, handle) && check.same(handle.name, "Thread") { starts_thread = true }
+                }
+            }
+        }
+        thread_scan += 1usize
+    }
+    if starts_thread {
+        total += 1usize
+        if total > cursor && written < budget {
+            try text(&out, "{\"record\":\"fact\",\"kind\":\"threads\",\"provenance\":\"compiler-proved\",\"value\":\"starts a thread: what the start is given by address is that thread's until the join (E-SAFETY-0016 at any other use); the handle is joined or detached on every exit\"}")
+            try flush(&out)
+            written += 1usize
+        } else {
+            if total > cursor { omitted += 1usize }
+        }
+    }
     // What the checker established for the body: the resource and region rules
     // ran over it, or did not (an `@unsafe` function).
     total += 1usize
@@ -2366,7 +2466,17 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
                 try text(&out, "\"call\",\"provenance\":\"unknown\",\"value\":\"a call through a function value; the target is not known here\"")
             } else {
                 try text(&out, "\"call\",\"provenance\":\"declared-and-checked\",\"value\":")
-                try quoted_function(&out, c, g, e.function_index)
+                if e.function_index < c.function_count {
+                    try quoted_function(&out, c, g, e.function_index)
+                } else {
+                    try byte(&out, 34u8)
+                    if e.template_index < g.count {
+                        try text(&out, g.modules[e.template_index].name)
+                        try byte(&out, 46u8)
+                    }
+                    try text(&out, e.protocol)
+                    try byte(&out, 34u8)
+                }
             }
         }
         if e.kind == 1u8 {
@@ -2391,6 +2501,10 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         if e.kind == 2u8 {
             try text(&out, "\"instance\",\"provenance\":\"compiler-proved\",\"value\":")
             try quoted_function(&out, c, g, e.template_index)
+        }
+        if e.kind == 5u8 {
+            try text(&out, "\"value\",\"provenance\":\"compiler-proved\",\"value\":")
+            try quoted_function(&out, c, g, e.function_index)
         }
         if e.kind == 3u8 {
             try text(&out, "\"discard\",\"provenance\":\"declared-and-checked\",\"value\":\"the err of ")

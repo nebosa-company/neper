@@ -258,10 +258,17 @@ about one declared function, under a record budget (64 by default):
   identity and `source_sha256` (the snapshot the answer is bound to), `target`,
   `checks` (the policy), `grammar_revision`, and the declaration's `span`.
 - `fact` — one per fact, in a fixed order: the `signature`; an `ownership` fact per
-  `own` parameter; `resources` (the checker's rules held for the body) or
+  `own` parameter; the caller's contract per pointer parameter (D396, H11) --
+  `allocation` for a `*mem.Arena` (what comes back holding a pointer is the caller's
+  region's), `borrow` for a `*const T` or a `*T` whose call gives back a view,
+  `mutation` for a `*T` whose call gives back nothing holding a pointer (the
+  caller's views dangle); `errors` when a result is `err` (`fallible`, or `partial`
+  beside other results); `threads` when the body starts a thread; then
+  `resources` (the checker's rules held for the body) or
   `boundary` (an `@unsafe` function, where they were not applied); then the body's
   decisions in source order -- `call` (the resolved target, or `unknown` for a
-  call through a value), `dispatch`, `instance`, `discard` -- each with its `span`.
+  call through a value), `dispatch`, `instance`, `discard`, `value` (a function
+  named as a value) -- each with its `span`.
   `provenance` is `compiler-proved` for what the checker established,
   `declared-and-checked` for what the source says and the checker accepted,
   `unknown` for what it cannot know; `trusted-external` and `runtime-observed`

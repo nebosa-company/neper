@@ -2273,6 +2273,14 @@ manifest_actual="$test_build/conformance-tools-manifest.jsonl"
 context_actual="$test_build/conformance-tools-context.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self context-file explain.e "$repo" x64 linux --json --symbol explain.main --budget 8 > "$context_actual")
 cmp -s "$context_actual" "$conformance_root/tools/context.x64-linux.expected.jsonl" || { printf '%s\n' "context-file --json differs from the conformance corpus" >&2; exit 1; }
+# The caller's contract from a signature (D396, H11): four subjects of one fixture.
+contract_actual="$test_build/conformance-tools-contract.jsonl"
+: > "$contract_actual"
+for contract_subject in contract.main contract.bump contract.first contract.total; do
+    (cd "$conformance_root/tools" && $test_build/neper-self context-file contract.e "$repo" x64 linux --json --symbol $contract_subject --budget 16 >> "$contract_actual")
+done
+cmp -s "$contract_actual" "$conformance_root/tools/contract.x64-linux.expected.jsonl" || { printf '%s
+' "context-file --json contract facts differ from the conformance corpus" >&2; exit 1; }
 # `uses-file --json` (D362): every resolved use of one function.
 uses_actual="$test_build/conformance-tools-uses.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file explain.e "$repo" x64 linux --json --symbol explain.same > "$uses_actual")

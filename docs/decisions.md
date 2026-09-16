@@ -8793,3 +8793,32 @@ storage is not this frame's local. The corpus gains
 
 Not yet: pointers and slices stored into aggregates, and an alias whose target
 is rebound under it (`let s = x[..]; x = other`), which keeps pointing at `x`.
+
+## D396 -- `context-file` states the caller's contract from the signature
+
+H11 asks every API record for ownership, borrowing, invalidation, mutation,
+allocation, error and thread facts; `context-file` had the ownership of `own`
+parameters and the body's resource verdict. The rest was already the checker's
+reading of a signature at every call site, unstated: a `*mem.Arena` parameter
+is an allocation whose pointer-holding results are the caller's region's
+(D354); a `*T` parameter is a borrow when something holding a pointer comes
+back -- a view of the argument -- and a mutation otherwise, after which the
+caller's views dangle (D354); a `*const T` is read alone; an `err` result is
+fallible, partial beside other results (D353); a body that starts a thread
+lends what it passes by address until the join (D365). Each is now a fact --
+`allocation`, `borrow`, `mutation`, `errors`, `threads` -- between the
+ownership facts and the resource verdict, `declared-and-checked` for what the
+signature says and the checker enforces at callers, `compiler-proved` for the
+thread start the body was seen to make.
+
+Two D361 gaps closed on the way: a function named as a value (an explain
+record of kind 5) was written as `"kind":,` -- invalid JSON -- and is a `value`
+fact now; a synthesized intrinsic call (`os.thread_create`, `mem.alloc`) has
+no declaration to index and printed an empty callee, so the record carries the
+intrinsic's module and name. The corpus gains `tools/contract.e` -- an
+allocating, fallible, thread-starting `main`, a mutation, a borrow and a const
+read, four subjects in one golden per host -- and the `context` golden is
+regenerated with the two facts `explain.main` earns.
+
+Not yet: the same facts as a catalogue over a module (one query per symbol
+today), and the planned / present / verified marking H11 asks for.

@@ -8045,7 +8045,15 @@ fn check_call_cached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
             if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
             var callee = c.function_count
             if !fresh.indirect { callee = explain_function_index(c, fresh.function) }
-            c.explains[c.explain_count] = Explain { kind: 4u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: callee, found: fresh.indirect, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+            // A synthesized intrinsic (`mem.alloc`, `os.thread_create`) has no
+            // declaration to index (D396): the record carries its module and name.
+            var intrinsic_name = ""
+            var intrinsic_module = 0usize
+            if !fresh.indirect && callee == c.function_count {
+                intrinsic_name = fresh.function.name
+                intrinsic_module = fresh.function.module_index
+            }
+            c.explains[c.explain_count] = Explain { kind: 4u8, module_index: module_index, offset: offset, protocol: intrinsic_name, receiver: invalid_type(), function_index: callee, found: fresh.indirect, builtin: .None, template_index: intrinsic_module, first_argument: 0usize, argument_count: 0usize }
             c.explain_count += 1usize
         } else {
             c.explain_overflow = true
@@ -8640,6 +8648,13 @@ fn explain_function_index(c: *Checker, function: Function) -> usize {
     var at = 0usize
     while at < c.function_count {
         if c.functions[at].module_index == function.module_index && c.functions[at].first_parameter == function.first_parameter && same(c.functions[at].name, function.name) { ret at }
+        at += 1usize
+    }
+    // An instance of a generic (D396): its parameters are its own, and the
+    // template of that name in that module is the function the fact names.
+    at = 0usize
+    while at < c.signature_function_count {
+        if c.functions[at].module_index == function.module_index && same(c.functions[at].name, function.name) { ret at }
         at += 1usize
     }
     ret c.function_count
