@@ -9812,3 +9812,18 @@ record it. The corpus gains `reject/member_near`.
 
 Not yet: a field of a struct that is not there, and the members a module
 declares but does not export, named as such.
+
+## D448 -- A field the aggregate does not declare says which
+
+`p.dept` was `type checking failed: check.InvalidType` at the statement: the
+field access returned `InvalidType` with no failure recorded, and the
+statement's default named nothing. The checker now records `FieldMissing` at
+the member's token with the aggregate's name and the field, looks for the
+nearest declared field within two edits, and the diagnostic is ``Point` has no
+field `dept`; did you mean `depth`?` with the same `maybe` fix over the token as
+D445's. A generic declaration whose shape is unknown is left as it was. The
+corpus gains `reject/field_near`, and the `generic_instance_field_leak` pin of
+both suites reads the new message at the member's column.
+
+Not yet: an enum member or a tagged-union arm that is not there, and a method
+call on a type that has none.

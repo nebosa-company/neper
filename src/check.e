@@ -130,6 +130,8 @@ type DiagnosticKind = enum u8 {
     ExternWithoutImport,
     ExternType,
     VariadicArgument,
+    // A field the aggregate does not declare (D448, H09).
+    FieldMissing,
 }
 
 type Kind = enum u8 {
@@ -2106,6 +2108,46 @@ fn find_aggregate(c: *Checker, module_index: usize, name: str) -> (usize, bool) 
         at += 1usize
     }
     ret (0usize, false)
+}
+
+// A field the aggregate does not declare (D448): the diagnostic at the member's
+// token naming the type and the field, and the nearest field within two edits as
+// a fix over the token (kind 4, the name a slice of the declaration).
+fn note_missing_field(c: *Checker, module_index: usize, node: syntax.Node, base: Type, field: str) {
+    if c.failure_has_token { ret }
+    var subject = base
+    while subject.kind == .Pointer {
+        if !subject.has_element || subject.element >= c.type_count { ret }
+        subject = c.types[subject.element]
+    }
+    if subject.kind != .Named { ret }
+    if usize(node.token_end) == 0usize || usize(node.token_end) > c.token_count { ret }
+    let member_token = c.tokens[usize(node.token_end) - 1usize]
+    append_failure_token(c, module_index, member_token, .FieldMissing, subject.name, field)
+    let (aggregate_index, found) = aggregate_for_type(c, subject)
+    if !found || field.len < 3usize { ret }
+    let aggregate = c.aggregates[aggregate_index]
+    var best = ""
+    var best_distance = 3usize
+    var at = 0usize
+    while at < aggregate.field_count {
+        let field_index = aggregate.first_field + at
+        if field_index < c.aggregate_field_count {
+            let candidate = c.aggregate_fields[field_index].name
+            let distance = resolve.edit_distance(candidate, field)
+            if candidate.len >= 1usize && distance < best_distance {
+                best = candidate
+                best_distance = distance
+            }
+        }
+        at += 1usize
+    }
+    if best.len != 0usize {
+        c.failure_fix_text = best
+        c.failure_fix_kind = 4u8
+        c.failure_fix_at = member_token.start
+        c.failure_mismatch_end = member_token.end
+    }
 }
 
 fn find_aggregate_field(c: *Checker, ty: Type, name: str) -> (usize, bool) {
@@ -9977,6 +10019,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                 }
                 ret (dependent_expression_type(base, expected, module_index), ok)
             }
+            note_missing_field(c, module_index, node, base, field)
             ret (invalid_type(), InvalidType)
         }
         // The access, for the uses query (D420, H17): the member's own token.

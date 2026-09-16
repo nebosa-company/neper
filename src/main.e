@@ -4490,6 +4490,19 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail)
         ret write_all(file, "` was moved out of its aggregate, which cannot then move whole; move every field, or none")
     }
+    if checker.failure_kind == .FieldMissing {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` has no field `")
+        try write_all(file, checker.failure_detail2)
+        try write_all(file, "`")
+        if checker.failure_fix_kind == 4u8 && checker.failure_fix_text.len != 0usize {
+            try write_all(file, "; did you mean `")
+            try write_all(file, checker.failure_fix_text)
+            try write_all(file, "`?")
+        }
+        ret ok
+    }
     if checker.failure_kind == .MissingZeroValue {
         try write_all(file, "type `")
         try write_all(file, checker.failure_detail)
@@ -4678,6 +4691,7 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     report.fix_text = checker.failure_fix_text
     report.fix_at = checker.failure_fix_at
     report.fix_kind = checker.failure_fix_kind
+    if checker.failure_fix_kind == 4u8 { report.fix_end = checker.failure_mismatch_end }
     // A conversion as the fix (D444, H09): a mismatch of two scalar numbers at a
     // one-token expression -- a name or a literal -- is wrapped in the expected type,
     // `maybe`, since a narrowing conversion changes what the program computes.
