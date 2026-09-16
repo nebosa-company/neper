@@ -6154,18 +6154,21 @@ fn body_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, from
     var at = from
     while at < w.count {
         let module_index = w.modules[at]
+        // A kept module's bodies are not checked (D224); in release its inline
+        // candidates are still lowered for the oracle (D391), which needs no body
+        // check to have run: the candidates are small and call no instance.
         if body_wanted(w, module_index) {
             let check_error = check.bodies_module(&w.checker, w.resolver, w.loaded, module_index)
             if check_error != ok {
                 stop_worker(w, at, check_error, 0usize)
                 ret
             }
-            if w.release {
-                let oracle_error = lower.oracle_module(&w.checker, w.loaded, &w.oracle, &w.oracle_signatures, w.bindings, w.first_entries, &w.first_count, module_index, &w.cursor, &w.defers)
-                if oracle_error != ok {
-                    stop_worker(w, at, oracle_error, 1usize)
-                    ret
-                }
+        }
+        if w.release && w.loaded.modules[module_index].has_tree {
+            let oracle_error = lower.oracle_module(&w.checker, w.loaded, &w.oracle, &w.oracle_signatures, w.bindings, w.first_entries, &w.first_count, module_index, &w.cursor, &w.defers)
+            if oracle_error != ok {
+                stop_worker(w, at, oracle_error, 1usize)
+                ret
             }
         }
         at += 1usize
@@ -6200,7 +6203,7 @@ fn second_worker_run(w: *LowerWorker, from: usize) {
     var at = from
     while at < w.count {
         let module_index = w.modules[at]
-        if body_wanted(w, module_index) {
+        if w.loaded.modules[module_index].has_tree {
             let oracle_error = lower.oracle_module(&w.checker, w.loaded, &w.second, &w.second_signatures, w.bindings, w.second_entries, &w.second_count, module_index, &w.cursor, &defers)
             if oracle_error != ok {
                 stop_worker(w, at, oracle_error, 2usize)
@@ -6296,7 +6299,10 @@ fn crew_begin(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, c
         owner[module_at] = generous_slot() + 1usize
         let body = loaded.modules[module_at].has_tree && !(module_at < body_skip.len && body_skip[module_at])
         let lowered = loaded.modules[module_at].has_tree && !(hot.on && hot.keep[module_at])
-        if body || lowered {
+        // A kept module in release is still listed: its inline candidates go through
+        // the oracle (D391), though its bodies are neither checked nor lowered.
+        let oracled = release && loaded.modules[module_at].has_tree
+        if body || lowered || oracled {
             list[pending] = module_at
             pending += 1usize
         }
@@ -7458,7 +7464,6 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // A release build checks every body, kept or not: the oracle inlines from
         // all of them, and a hot release image is then the cold one's (D319).
         var body_skip = keep
-        if release_build { body_skip = keep[0usize..0usize] }
         // The executable path's crew (D326): the workers that check the bodies, build
         // the oracles and lower, made now so a module's instances stay with the
         // checker that made them.

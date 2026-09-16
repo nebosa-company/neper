@@ -8668,3 +8668,31 @@ D383-D390 between -- and `sc500k` warm 148 from 305.
 
 Not yet: a length carried by a `let` (`let n = a.len`, then `while i < n`), and
 the two-locals bound; the field base stays out.
+
+## D391 -- A kept module's bodies are not checked in a release build either
+
+D319 had a release build check every body, kept or not, because the inline
+oracle lowers its candidates from every module and a hot release image is the
+cold one's. The candidates need no body check: they are small (a hundred tokens
+at most, D346), call no generic instance (D346), and the lowering asks the
+checker for every type it needs as it goes. So the body sweep now checks only
+the rebuilt modules in release too (`body_skip` is `keep` in both modes), while
+the oracles still visit every module with a tree -- a kept module is listed for
+its candidates alone. Verified on the compiler's own source: cold hot equals
+clean, warm hot equals clean, and a one-line body edit in `tool.e` rebuilds
+`tool` alone to an image byte-equal to the clean build. The body phase of that
+edited build goes from 111 to 92 ms on eight workers.
+
+What the profile of that build says (`benchmarks/scale/profile_edit.sh`): what
+remains is the oracle parsing every kept module to find its candidates (`lex.next`
+first, the parser behind it) and a checker fork per worker. The way out is the
+artifact carrying the oracle's entries -- the NIR section D320 left unwritten,
+for the candidates alone -- so a kept module is neither lexed nor parsed in a
+warm release build; that is H14's declaration-level reuse, and the next rows.
+Also measured, by worker count: the body phase of that edited build is 35 ms on
+one worker and 88 on eight, and the compiler's own cold build 621 ms on four
+workers against 638 on eight; each worker touches some 120 MB of fresh arena
+(`worker arenas reached` 1,969 MB, peak working set 972 MB on eight), and the
+page faults of eight workers touching at once are what the eighth worker buys.
+The builder's instruction is 180 bytes with a `check.Type` inside it and a
+token is 120: the sizes D306 named, and the next memory row's subject.
