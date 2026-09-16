@@ -2239,7 +2239,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
         first = false
         last = e
         // Calls, values and field accesses (D420) are `uses-file`'s and `context-file`'s.
-        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 || e.kind == 6u8 || e.kind == 7u8 { continue }
+        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 || e.kind == 6u8 || e.kind == 7u8 || e.kind == 9u8 { continue }
         let module = g.modules[e.module_index]
         let (root, relative) = source_identity_of(g, module.path)
         let (path, path_error) = manifest_slashes(a, relative)
@@ -3519,6 +3519,17 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
         if e.kind == 5u8 {
             try text(&out, "\"value\",\"provenance\":\"compiler-proved\",\"value\":")
             try quoted_function(&out, c, g, e.function_index)
+        }
+        // A folded `if` (D463) as a fact of the body (D486): the record was written
+        // with no kind before, which was not a record at all.
+        if e.kind == 8u8 {
+            if e.found { try text(&out, "\"phase\",\"provenance\":\"compiler-proved\",\"value\":\"an if settled at compile time: the true arm is taken\"") } else { try text(&out, "\"phase\",\"provenance\":\"compiler-proved\",\"value\":\"an if settled at compile time: the false arm is taken\"") }
+        }
+        // A resource consumed (D486, H17): where the checker moved it out.
+        if e.kind == 9u8 {
+            try text(&out, "\"move\",\"provenance\":\"compiler-proved\",\"value\":\"")
+            try text(&out, e.reason_name)
+            try text(&out, " is consumed here: closed, returned, rebound or handed to an own parameter\"")
         }
         if e.kind == 3u8 {
             try text(&out, "\"discard\",\"provenance\":\"declared-and-checked\",\"value\":\"the err of ")

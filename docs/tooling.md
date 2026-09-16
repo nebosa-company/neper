@@ -327,7 +327,10 @@ about one declared function, under a record budget (64 by default):
   `boundary` (an `@unsafe` function, where they were not applied); then the body's
   decisions in source order -- `call` (the resolved target, or `unknown` for a
   call through a value), `dispatch`, `instance`, `discard`, `value` (a function
-  named as a value) -- each with its `span`.
+  named as a value), `move` (D486, H17: a resource consumed at the site --
+  closed, returned, rebound or handed to an `own` parameter -- named in the
+  value) and `phase` (an `if` settled at compile time, D463, saying which arm is
+  taken) -- each with its `span`.
   `provenance` is `compiler-proved` for what the checker established,
   `declared-and-checked` for what the source says and the checker accepted,
   `unknown` for what it cannot know; `trusted-external` and `runtime-observed`

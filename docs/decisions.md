@@ -10479,3 +10479,19 @@ more (`strr` is `str`) -- and the diagnostic sits on the name, `unknown type
 the token, as D445 did for a value name. The corpus's `reject/type_near` pins
 it on both hosts. Not yet: a qualified type's member (`os.Fil`), which D447's
 member path already names.
+
+## D486 -- Moves as facts, and the folded `if` that was no record
+
+H17 asks that a harness see ownership move: `context-file` now writes a `move`
+fact, compiler-proved, at every site the checker consumed a resource local --
+`resource_consume` (closed, returned, handed to an `own` parameter), a binding
+that takes an unchecked resource from another local, and the return of one --
+naming the local, so a harness planning an edit knows where a value stops being
+the function's. Found on the way: a folded `if` (D463) was written into the
+context page as `{"record":"fact","kind":,...}`, a record with no kind, since
+the explain kind was new and the context writer had no arm for it; the corpus
+had no folded `if` under a context subject, so nothing caught it. It is a
+`phase` fact now, saying which arm is taken. The schema's fact kinds gain
+`move` and `phase`; `context_moves.e` pins both per host, the second subject a
+generic instance whose body folds. `explain-file` leaves the move records to
+the context page. Not yet: borrow uses and address relations as facts.

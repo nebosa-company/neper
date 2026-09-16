@@ -156,7 +156,7 @@
       "required":["record","kind","provenance","value"],
       "properties":{
         "record":{"const":"fact"},
-        "kind":{"enum":["signature","ownership","allocation","borrow","mutation","errors","threads","resources","boundary","call","dispatch","instance","discard","value","field","layout","resource","copy"]},
+        "kind":{"enum":["signature","ownership","allocation","borrow","mutation","errors","threads","resources","boundary","call","dispatch","instance","discard","value","field","layout","resource","copy","phase","move"]},
         "provenance":{"enum":["compiler-proved","declared-and-checked","trusted-external","runtime-observed","unknown"]},
         "value":{"type":"string"},"span":{"$ref":"#/$defs/span"}
       }

@@ -2394,6 +2394,14 @@ $contextActual = Join-Path $testBuild 'conformance-tools-context.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file explain.e `"$repo`" x64 windows --json --symbol explain.main --budget 8 > `"$contextActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --json failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contextActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/context.x64-windows.expected.jsonl')).Hash) { throw "context-file --json differs from the conformance corpus" }
+# A body's moves and folded ifs as facts (D486, H17): two subjects of one fixture.
+$movesActual = Join-Path $testBuild 'conformance-tools-context-moves.jsonl'
+if (Test-Path -LiteralPath $movesActual) { Remove-Item -LiteralPath $movesActual }
+foreach ($movesSubject in @('context_moves.open_and_close', 'context_moves.width')) {
+    cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file context_moves.e `"$repo`" x64 windows --json --symbol $movesSubject --budget 16 >> `"$movesActual`""
+    if ($LASTEXITCODE -ne 0) { throw "context-file --json --symbol $movesSubject exited $LASTEXITCODE" }
+}
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $movesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/context_moves.x64-windows.expected.jsonl')).Hash) { throw 'context-file --json over moves and a folded if differs from the conformance corpus' }
 # A constant and a global as subjects (D437, H08): the declaration, the value, and
 # for the global that every thread shares it.
 $subjectsActual = Join-Path $testBuild 'conformance-tools-subjects.jsonl'

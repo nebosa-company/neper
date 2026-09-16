@@ -8938,6 +8938,20 @@ fn record_explain_fold(c: *Checker, module_index: usize, node: syntax.Node, take
     c.explain_count += 1usize
 }
 
+// A resource consumed (D486, H17): the local's name at the site -- closed, returned,
+// rebound or handed to an `own` parameter -- for `context-file`'s `move` facts.
+fn record_explain_move(c: *Checker, module_index: usize, node: syntax.Node, name: str) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    var offset = 0usize
+    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    c.explains[c.explain_count] = Explain { kind: 9u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize, candidate_index: 0usize, reason_kind: 0u8, reason_name: name, reason_type: invalid_type() }
+    c.explain_count += 1usize
+}
+
 // The first request of an instance (D466): kept as its site; later requests of the
 // same instance leave it.
 fn note_instance_site(c: *Checker, instance_index: usize, module_index: usize, node: syntax.Node) {
@@ -13575,6 +13589,7 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     c.resources[local_index].state = resource_moved
     c.resources[local_index].acquired = usize(node.token_start)
     resource_set_fields(c, local_index, resource_moved)
+    record_explain_move(c, module_index, node, c.locals[local_index].name)
     ret ok
 }
 
@@ -13699,6 +13714,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             try resource_copy_fields(c, local_index, source_index)
             c.resources[source_index].state = resource_moved
             resource_set_fields(c, source_index, resource_moved)
+            record_explain_move(c, module_index, initializer, c.locals[source_index].name)
             ret ok
         }
         // The fields come across as they stood, before the source is moved whole.
@@ -14399,6 +14415,7 @@ fn resource_return_transfer(c: *Checker, g: *graph.Graph, tree: *parse.Tree, mod
     if !is_resource { ret ok }
     if c.resources[local_index].state == resource_unchecked {
         c.resources[local_index].state = resource_moved
+        record_explain_move(c, module_index, tree.nodes[node_index], c.locals[local_index].name)
         ret ok
     }
     ret resource_consume(c, g, tree, module_index, node_index)

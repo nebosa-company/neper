@@ -2401,6 +2401,13 @@ manifest_actual="$test_build/conformance-tools-manifest.jsonl"
 context_actual="$test_build/conformance-tools-context.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self context-file explain.e "$repo" x64 linux --json --symbol explain.main --budget 8 > "$context_actual")
 cmp -s "$context_actual" "$conformance_root/tools/context.x64-linux.expected.jsonl" || { printf '%s\n' "context-file --json differs from the conformance corpus" >&2; exit 1; }
+# A body's moves and folded ifs as facts (D486, H17).
+moves_actual="$test_build/conformance-tools-context-moves.jsonl"
+: > "$moves_actual"
+for moves_subject in context_moves.open_and_close context_moves.width; do
+    (cd "$conformance_root/tools" && $test_build/neper-self context-file context_moves.e "$repo" x64 linux --json --symbol "$moves_subject" --budget 16 >> "$moves_actual")
+done
+cmp -s "$moves_actual" "$conformance_root/tools/context_moves.x64-linux.expected.jsonl" || { echo "context-file --json over moves and a folded if differs from the conformance corpus" >&2; exit 1; }
 # A constant and a global as subjects (D437, H08).
 subjects_actual="$test_build/conformance-tools-subjects.jsonl"
 : > "$subjects_actual"
