@@ -348,6 +348,8 @@ too, in module then line order; `incremental` (D363, H14) is what an
 `edge-changed` (an imported interface differs), `source-changed`, `mode-changed`,
 `no-artifact`, `invalid-artifact` (a file that failed its checksum or layout
 validation, rebuilt like a missing one) -- empty for a build that read no artifacts;
+`mode-changed` covers `--unchecked` too, whose artifacts share `.neper/release/`
+with checked ones and carry their own mode (D369);
 `options.checks` is the
 check policy the image was built under, `retained` (spec section 11: every row
 kept in both modes). Arrays use the

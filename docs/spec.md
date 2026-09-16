@@ -3751,7 +3751,9 @@ both as a module and as the Windows variant of `thing`.
 
 The file is little-endian regardless of target. Its fixed 32-byte header is: bytes
 `0..3` magic `NEPM`; `u16` format version; `u16` header size; `u32` target-triple
-string-table index; `u32` flags; `u8` build mode; three reserved zero bytes; `u32`
+string-table index; `u32` flags; `u8` build mode (0 debug, 1 release, 2 release
+`--unchecked` -- a policy that changes the code is a mode of its own, D369); three
+reserved zero bytes; `u32`
 section count; `u32` section-directory offset; and `u32` whole-file CRC32C with that
 field zeroed. The directory has one 24-byte entry per section: `u32` kind, `u32`
 flags, `u64` offset, `u64` length. Sections are ordered by kind, eight-byte aligned,

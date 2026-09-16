@@ -19,6 +19,10 @@ error UnsupportedVersion
 type BuildMode = enum u8 {
     Debug,
     Release,
+    // `--release --unchecked` (D355): the memory rows left out, so different code
+    // under the same directory; its own identity (D369, H15) or a warm build keeps
+    // the other policy's artifacts.
+    Unchecked,
 }
 
 type Section = struct {
@@ -137,6 +141,7 @@ fn dependency_lookup_kind() -> usize { ret 4usize }
 
 fn mode_id(mode: BuildMode) -> usize {
     if mode == .Release { ret 1usize }
+    if mode == .Unchecked { ret 2usize }
     ret 0usize
 }
 

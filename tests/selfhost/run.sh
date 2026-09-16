@@ -1810,6 +1810,21 @@ for hot_mode in --release --time; do
         # The manifest names the damage (D368, H24): `invalid-artifact`, not `no-artifact`.
         python3 "$repo/scripts/check_incremental.py" "$hot_manifest" dep=rebuilt:invalid-artifact
     done
+    # A policy is an identity (D369, H15): a warm `--unchecked` build over checked
+    # artifacts rebuilds every module (`mode-changed`) and is the clean unchecked build.
+    if [ "$hot_mode" = --release ]; then
+        hot_unchecked="$test_build/hot-unchecked"
+        hot_unchecked_clean="$test_build/hot-unchecked-clean"
+        hot_unchecked_warm=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_unchecked" --release --unchecked --incremental 2>/dev/null)
+        [ "$hot_unchecked_warm" = 'executable written' ]
+        python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:mode-changed dep=rebuilt:mode-changed
+        hot_unchecked_clean_written=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_unchecked_clean" --release --unchecked 2>/dev/null)
+        [ "$hot_unchecked_clean_written" = 'executable written' ]
+        cmp "$hot_unchecked" "$hot_unchecked_clean"
+        hot_rechecked=$($test_build/neper-self emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" --release --incremental 2>/dev/null)
+        [ "$hot_rechecked" = 'executable written' ]
+        cmp "$hot_exe" "$hot_clean"
+    fi
     # A corrupt artifact named on the command line is E-LINK-0001, exit 1 (D368, H24).
     hot_corrupt="$hot_scratch/corrupt.em"
     cp "$hot_artifact" "$hot_corrupt"

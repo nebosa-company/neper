@@ -1682,6 +1682,22 @@ foreach ($hotMode in @('--release', '--time')) {
         & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'dep=rebuilt:invalid-artifact'
         if ($LASTEXITCODE -ne 0) { throw "the manifest after a $damage artifact does not say invalid-artifact ($hotMode)" }
     }
+    # A policy is an identity (D369, H15): a warm `--unchecked` build over checked
+    # artifacts rebuilds every module (`mode-changed`) and is the clean unchecked build.
+    if ($hotMode -eq '--release') {
+        $hotUnchecked = Join-Path $testBuild 'hot-unchecked.exe'
+        $hotUncheckedClean = Join-Path $testBuild 'hot-unchecked-clean.exe'
+        $hotUncheckedWarm = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotUnchecked --release --unchecked --incremental 2>$null
+        if ($LASTEXITCODE -ne 0 -or $hotUncheckedWarm -ne 'executable written') { throw 'the warm unchecked hot build failed' }
+        & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:mode-changed' 'dep=rebuilt:mode-changed'
+        if ($LASTEXITCODE -ne 0) { throw 'an unchecked build over checked artifacts did not rebuild them as mode-changed' }
+        $hotUncheckedCleanWritten = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotUncheckedClean --release --unchecked 2>$null
+        if ($LASTEXITCODE -ne 0 -or $hotUncheckedCleanWritten -ne 'executable written') { throw 'the clean unchecked build failed' }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotUnchecked).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotUncheckedClean).Hash) { throw 'a warm unchecked build over checked artifacts is not the clean unchecked build' }
+        $hotRechecked = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe --release --incremental 2>$null
+        if ($LASTEXITCODE -ne 0 -or $hotRechecked -ne 'executable written') { throw 'the checked hot build after an unchecked one failed' }
+        if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw 'a checked build over unchecked artifacts is not the clean build' }
+    }
     # A corrupt artifact named on the command line is E-LINK-0001, exit 1 (D368, H24).
     $hotCorrupt = Join-Path $hotScratch 'corrupt.em'
     Copy-Item $hotArtifact.FullName $hotCorrupt

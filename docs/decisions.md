@@ -8118,3 +8118,37 @@ imported artifacts beyond the CRC (the `.em` is a trusted local cache today, and
 nothing imports one from elsewhere), whole-build budgets across workers and
 instantiations, fault injection into the cache writes themselves, and cyclic
 references in an artifact's graph as a fuzz target of its own.
+
+## D369 -- A check policy is a build identity: `--unchecked` artifacts carry their own mode
+
+H15 asks that a cache separate targets, CPU features and policies even where the
+filename would collide, and measuring found the collision: `--release --unchecked`
+(D355) writes its artifacts under `.neper/release/em/` beside the checked ones, with
+the same mode byte, so a warm `--unchecked --incremental` build after a checked
+one kept every checked module -- `kept: stable`, `options.checks: off` in the
+manifest -- and linked a checked image under an unchecked label; the other way
+round, an unchecked image under a checked one. On the `release_checks` fixture the
+warm unchecked build differed from the clean unchecked build byte for byte.
+
+`em.BuildMode` gains `Unchecked`, mode byte 2 (spec section 12's header), and every
+site that chose `.Release` for an artifact -- the hot writer, the early settle, the
+lowering's artifact mode, the hot loader's identity -- chooses `.Unchecked` under
+the flag, so a warm build over the other policy's artifacts rebuilds every module
+as `mode-changed` and the image is the clean one, which both suites now check in
+both directions. The directory stays shared: the identity, not the path, is what
+keeps them apart, and the flip-flop's cost is a full rebuild each way, which is
+what a policy change is.
+
+This is also H20's "expose supported modes in build identities": the three
+policies -- debug, release with section 11's memory checks, release unchecked --
+are the three mode bytes, and the manifest's `options.checks` names the policy of
+an image. H20's other M2.5 items are D346 (the cap re-evaluated and retained,
+every inlining decision explained), D355 and D356 (retained checks, the bounds
+proof, the `--stats` rows for elided checks and copies) and D338/D366 (measured
+budgets and the gate); the readiness row for H20 is new and carries them.
+
+Not yet, of H15: `--inline-cap` and `--cpu` in the identity (the first is a
+debugging knob that changes code; the second is not yet a build option of the
+self-hosted compiler), the compiler's own identity in the artifact (a version
+mismatch is a format-version miss today, not a compiler-hash one), in-memory
+overlays, snapshot identifiers on query results, and the transaction boundary.

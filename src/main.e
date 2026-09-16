@@ -3572,8 +3572,7 @@ fn settle_early(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, directory: st
     try settle_init(a, &s, c, g, held, triple, mode, strings, scratch)
     let (fresh, fresh_error) = mem.alloc[[]const u8](a, g.count)
     if fresh_error != ok { ret fresh_error }
-    var mode_id = 0usize
-    if mode == .Release { mode_id = 1usize }
+    let mode_id = em.mode_id(mode)
     var module_at = 0usize
     while module_at < g.count {
         keep[module_at] = false
@@ -4321,6 +4320,7 @@ fn load_graph(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, path: str, roo
 type HotLoad = struct {
     on: bool,
     release: bool,
+    unchecked: bool,
     triple: str,
     directory: str,
     scratch: *binary.Buffer,
@@ -4518,6 +4518,7 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
     hot.directory = directory
     var mode_id = 0usize
     if hot.release { mode_id = 1usize }
+    if hot.unchecked { mode_id = 2usize }
     let (list, list_error) = mem.alloc[usize](a, loaded.modules.len)
     if list_error != ok { ret list_error }
     var module_at = 0usize
@@ -4645,9 +4646,10 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
     ret graph.front_modules(a, loaded, list[0usize..unparsed])
 }
 
-fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: *graph.Graph, args: []str, on: bool, release: bool) -> err {
+fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: *graph.Graph, args: []str, on: bool, release: bool, unchecked: bool) -> err {
     hot.on = on
     hot.release = release
+    hot.unchecked = unchecked
     hot.scratch = scratch
     if !on { ret ok }
     let (triple, triple_error) = target_triple(a, args[4usize], args[5usize])
@@ -5433,6 +5435,7 @@ type HotBuild = struct {
     directory: str,
     triple: str,
     release: bool,
+    unchecked: bool,
     strings: em.StringTable,
     sections: []em.Section,
     scratch: binary.Buffer,
@@ -5482,6 +5485,7 @@ fn init_hot_writer(a: *mem.Arena, hot: *HotBuild, largest_bytes: usize) -> err {
 fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, builder: *nir.Builder, module_index: usize, context: *codegen_x64.FunctionContext, stage_offsets: []usize, hot: *HotBuild, held_all: [][]const u8) -> err {
     var mode: em.BuildMode = .Debug
     if hot.release { mode = .Release }
+    if hot.unchecked { mode = .Unchecked }
     hot.artifact.count = 0usize
     try em.write_module(checker, loaded, builder, module_index, hot.triple, mode, context.output, stage_offsets, context.relocations, *context.relocation_count, context.lines, *context.line_count, &hot.strings, hot.sections, &hot.scratch, &hot.artifact)
     let (held, held_error) = mem.alloc[u8](a, hot.artifact.count)
@@ -7220,7 +7224,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         // helper: `main` is at the bootstrap's cap of locals.
         var hot_load: HotLoad = zero
         var hot_scratch: binary.Buffer = zero
-        try init_hot_load(a, &hot_load, &hot_scratch, &loaded, args, hot_build, release_build)
+        try init_hot_load(a, &hot_load, &hot_scratch, &loaded, args, hot_build, release_build, unchecked_build)
         let (held_all, held_all_error) = mem.alloc[[]const u8](a, loaded.modules.len)
         if held_all_error != ok { ret held_all_error }
         clear_held(held_all)
@@ -7302,6 +7306,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             if settle_triple_error != ok { ret settle_triple_error }
             var settle_mode: em.BuildMode = .Debug
             if release_build { settle_mode = .Release }
+            if unchecked_build { settle_mode = .Unchecked }
             try settle_early(a, &checker, &loaded, artifact_dir, settle_triple, settle_mode, &settle_table, &settle_scratch, keep, held, &hot_load)
             report.arena_used = mem.stats(a).used
             try report_phase(&report, "settle")
@@ -7344,6 +7349,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             hot.keep = keep
             hot.directory = artifact_dir
             hot.release = release_build
+            hot.unchecked = unchecked_build
             let (hot_triple, hot_triple_error) = target_triple(a, args[4usize], args[5usize])
             if hot_triple_error != ok { ret hot_triple_error }
             hot.triple = hot_triple
@@ -7497,6 +7503,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         var artifact_mode: em.BuildMode = .Debug
         if release_build { artifact_mode = .Release }
+        if unchecked_build { artifact_mode = .Unchecked }
         // The executable path lowers and selects a module at a time (D314); the rest
         // lower the program whole, since an artifact or an object keeps every function.
         let per_module = writes_executable
