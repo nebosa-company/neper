@@ -2050,11 +2050,14 @@ does not promise descendant cleanup. See SL05 for platform limits and test cases
 
 ```neper
 type Thread = os.Thread
+type Group = resource(join_all) struct { threads: []Thread, count: usize }
 const DEFAULT_STACK: usize = 1048576
 
 fn spawn[Ctx: type](entry: fn(*Ctx), ctx: *Ctx, stack: usize) -> (Thread, err)
 fn join(thread: own Thread) -> err
 fn detach(thread: own Thread) -> err
+fn spawn_all[Ctx: type](a: *mem.Arena, entry: fn(*Ctx), contexts: []Ctx, stack: usize) -> (Group, err)
+fn join_all(g: own Group) -> err
 ```
 
 ### `e.sync`

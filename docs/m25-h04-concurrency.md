@@ -86,6 +86,9 @@ view rule exists), cancellation.
   to protect with an atomic or a lock.
 - Partial spawn failure: a loop that starts N threads and fails at the K-th owes
   the K-1 joins, which H01's exit audit enforces for locals and not for arrays.
+  `thread.Group` (D434) is the library's answer: `spawn_all` starts one thread
+  per context, joins what it started when a start fails, and the group is one
+  resource owed to `join_all`, so the array's joins are audited as a local's are.
 - Schedule perturbation as evidence (H04): `--perturb` (D331) reorders the
   compiler's own workers and the suites compare the images; no fixture yet
   perturbs a program's threads.

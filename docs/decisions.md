@@ -9591,3 +9591,21 @@ the fixture what it is for.
 
 Not yet: the data as a view of the guard, and a guard that can be downgraded
 from write to read without a release between.
+
+## D434 -- A group of threads is one resource
+
+H04's design left partial spawn failure open: a loop that starts N threads and
+fails at the K-th owes the K-1 joins, which H01's exit audit enforces for locals
+and not for an array of threads. `e.thread` gains `Group`, a `resource(join_all)`
+over a slice of threads and a count: `spawn_all[Ctx](a, entry, contexts, stack)`
+starts one thread per context, each over the address of its own element, and a
+start that fails joins what it started before it answers, so the caller is owed
+nothing on the err path; `join_all` joins every thread in start order and
+answers the first join error. The group is a local the audit reads, so an exit
+with it unjoined is E-SAFETY-0002 and `defer let _ = thread.join_all(group)` is
+the usual shape. The link fixture `thread_group` runs eight slots twice, once
+under an early return, and a group of none; `reject/safety_thread_group_leak`
+pins the leak.
+
+Not yet: a fixture that makes a start fail part way (no host fails a start on
+demand), and a group whose threads return values.
