@@ -871,6 +871,13 @@ milestone or a progress row until it is picked up.
 - **`run --watch`.** Rebuild and rerun on a source change, the hot-restart loop a
   sub-second build makes near enough to hot reload; a shell loop does it today.
   Needs `e.fs.watch`.
+- **A TextMate grammar.** The one editor-side item that earns its keep: a
+  `neper.tmLanguage.json` generated from `grammar.ebnf` by a script beside
+  `render_progress.py`, so the keyword list, the literal suffixes and the `//`
+  trivia rule cannot drift from the parser. Lands in VS Code, Helix, Zed and
+  GitHub as-is; no extension code, no runtime, no LSP (which stays deliberately
+  not scheduled). Checked by tokenising the conformance corpus and comparing
+  scope spans against `tokens --json`.
 
 ## Deliberately not scheduled
 
