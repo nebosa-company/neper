@@ -64,7 +64,7 @@ type ByHandleFileInformation = struct {
 // stands for.
 type FileAttributeTagInfo = struct { attributes: u32, reparse_tag: u32 }
 
-type Dir = struct { raw: usize }
+type Dir = resource(dir_close) struct { raw: usize }
 type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
 // `UNICODE_STRING`, `OBJECT_ATTRIBUTES` and `IO_STATUS_BLOCK` as the native call takes
@@ -85,7 +85,7 @@ type ObjectAttributes = struct {
 
 type IoStatusBlock = struct { status: usize, information: usize }
 
-type Watch = struct { state: *void }
+type Watch = resource(watch_close) struct { state: *void }
 type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
 type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
 
@@ -117,9 +117,9 @@ type ErrorKind = enum u8 {
 // its subject, and nothing here needs them to outlive the call that supplied them.
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 
-type Lib = struct { raw: usize }
+type Lib = resource(dlclose) struct { raw: usize }
 
-type ProcGroup = struct { raw: usize }
+type ProcGroup = resource(proc_group_close) struct { raw: usize }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
 
 // `STARTUPINFOW`: the padding is written out because the three standard handles are at the end
@@ -303,14 +303,14 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
 
 // The outstanding read is cancelled before the handle goes, so the host is not left writing
 // into a buffer nothing is waiting for.
-fn watch_close(w: Watch) -> err {
+fn watch_close(w: own Watch) -> err {
     let state = mem.cast[*WatchState](w.state)
     let cancelled = raw_cancel_io(state.directory)
     if raw_close_handle(state.directory) == 0i32 { ret from_last_error() }
     ret ok
 }
 
-type Mapping = struct { raw: usize, address: *u8, len: usize }
+type Mapping = resource(mapping_close) struct { raw: usize, address: *u8, len: usize }
 
 // `raw` carries whether the mapping may be written and nothing else. The mapping object is
 // closed as soon as the view exists -- the view holds its own reference, so the handle is not
@@ -373,12 +373,12 @@ fn mapping_flush(m: Mapping) -> err {
     ret ok
 }
 
-fn mapping_close(m: Mapping) -> err {
+fn mapping_close(m: own Mapping) -> err {
     if raw_unmap_view(m.address) == 0i32 { ret from_last_error() }
     ret ok
 }
 
-type Poller = struct { state: *void }
+type Poller = resource(poller_close) struct { state: *void }
 type PollInterest = struct { readable: bool, writable: bool }
 type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
 
@@ -578,12 +578,12 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
     ret (produced, ok)
 }
 
-fn poller_close(p: Poller) -> err {
+fn poller_close(p: own Poller) -> err {
     let state = mem.cast[*PollerState](p.state)
     ret socket_close(state.wake)
 }
 
-type Socket = struct { raw: usize }
+type Socket = resource(socket_close) struct { raw: usize }
 type SocketFamily = enum u8 { Ip4, Ip6 }
 type SocketKind = enum u8 { Stream, Datagram }
 type SocketShutdown = enum u8 { Read, Write, Both }
@@ -1423,7 +1423,7 @@ fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
     ret (dir, ok)
 }
 
-fn dir_close(dir: Dir) -> err {
+fn dir_close(dir: own Dir) -> err {
     if raw_close_handle(dir.raw) == 0i32 { ret from_last_error() }
     ret ok
 }
@@ -1509,7 +1509,10 @@ fn open_parent(a: *mem.Arena, dir: Dir, relative_path: str) -> (Dir, str, err) {
     ret (parent, tail, ok)
 }
 
-fn release_parent(parent: Dir, dir: Dir) {
+// The parent is the caller's own directory or one opened for the walk (D350): it is
+// taken either way, and closed by raw means only when it is the latter.
+@unsafe
+fn release_parent(parent: own Dir, dir: Dir) {
     if parent.raw != dir.raw {
         let closed = raw_close_handle(parent.raw)
     }
@@ -1975,12 +1978,12 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
 
 // The job handle goes; what is in it does not, because nothing asked for that. A job that should
 // end with its owner needs a limit set on it, which is not in the fence.
-fn proc_group_close(group: ProcGroup) -> err {
+fn proc_group_close(group: own ProcGroup) -> err {
     if raw_close_handle(group.raw) == 0i32 { ret from_last_error() }
     ret ok
 }
 
-type FileLock = struct { raw: usize }
+type FileLock = resource(file_unlock) struct { raw: usize }
 
 // The whole file, however long it is: offset zero and a length of every byte there could be.
 // Locking a range is not in the fence, so there is nothing for a caller to get wrong here.
@@ -2025,7 +2028,7 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
     ret (lock, Failed)
 }
 
-fn file_unlock(lock: FileLock) -> err {
+fn file_unlock(lock: own FileLock) -> err {
     var region: Overlapped = zero
     if raw_unlock_file(lock.raw, 0u32, 4294967295u32, 4294967295u32, &region) == 0i32 { ret from_last_error() }
     ret ok
@@ -2208,7 +2211,7 @@ fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) {
     ret (address, ok)
 }
 
-fn dlclose(l: Lib) -> err {
+fn dlclose(l: own Lib) -> err {
     if raw_free_library(l.raw) == 0i32 { ret from_last_error() }
     ret ok
 }
@@ -2225,7 +2228,7 @@ fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
     ret (socket, ok)
 }
 
-fn socket_close(s: Socket) -> err {
+fn socket_close(s: own Socket) -> err {
     if raw_socket_close(s.raw) != 0i32 { ret from_socket_error() }
     ret ok
 }

@@ -7615,3 +7615,26 @@ library beyond the `*void` shape, which is the rule's exception rather than a fi
 **Not yet:** E-SAFETY-0004 (a move while a borrow is live), reflection and the
 format codecs over resource fields, `mem.Arena` as an affine type, arrays and slices
 as tracked wholes, and the fixed surface's `file_handle`.
+
+## D350 -- The rest of `e.os`'s handles are resources
+
+The proposal's migration list, done: `Dir`, `Lib`, `ProcGroup`, `Watch`, `Mapping`,
+`Poller`, `Socket` and `FileLock` are `resource(closer)` types in both host variants,
+their closers -- `dir_close`, `dlclose`, `proc_group_close`, `watch_close`,
+`mapping_close`, `poller_close`, `socket_close`, `file_unlock` -- take `own`, and
+the fences say so. The variants are the self-hosted compiler's alone (the bootstrap
+reads the fixed surface and ignores them, D97), so the spelling is D348's, not a
+seeded table; `Handle` stays plain, being a view of a file or a socket that owns it.
+
+What the rules found: the directory walk on both hosts opens a parent that is
+either the caller's directory or a fresh handle, and `release_parent` closed by raw
+means only in the second case -- conditional ownership the model does not say, so
+the function is the `@unsafe` taker of an `own Dir`, which is what it was. `fs.mmap`
+read the mapping's address and length from outside `e.os` for its fallback view;
+`os.mapping_region` is that view. Two fixtures compared the raw bits of a library
+handle and a socket to learn what `dlopen` and `socket_handle` already say. Every
+other library module and fixture passed as written: the earlier increments' migration
+of the wrappers had left nothing open.
+
+Fixture: a directory opened and left at a `try` exit (reject). `fs.mmap.close` and
+`fs.watch.close` take `own`; `e.net`'s planned `close` says `own` in its fence.

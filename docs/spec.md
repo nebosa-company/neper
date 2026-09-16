@@ -3465,6 +3465,9 @@ type Cursor = resource struct { at: usize }              // affine, owed nothing
 
 `resource(name)` names the cleanup, which must be `fn name(x: own T)` in the same
 module (`E-SAFETY-9999` otherwise); the cleanup owes nothing for the value it takes.
+`e.os`'s other handles are declared so (D350): `Dir`, `Lib`, `ProcGroup`, `Watch`,
+`Mapping`, `Poller`, `Socket` and `FileLock`, each owed to its closer, its fields the
+module's alone; `Handle` is a view of a file or a socket and stays plain.
 A struct that holds a resource is affine by containment, and its owed fields are
 followed one by one: a field moved out of a local struct leaves the rest; the struct
 cannot then move whole (`E-SAFETY-0003`); its owed fields are audited at every exit

@@ -150,8 +150,9 @@ fn main(a: *mem.Arena) -> err {
     if arrive_again_error != ok { os.exit(65i32) }
     if arrived_again != 5usize { os.exit(66i32) }
 
-    // The handle is the socket under another name, which is what lets a poller take it.
-    if os.socket_handle(receiver).raw != receiver.raw { os.exit(70i32) }
+    // The handle is the socket under another name, which is what lets a poller take it;
+    // the socket's own bits are `e.os`'s alone (D350).
+    if os.socket_handle(receiver).raw == 0usize { os.exit(70i32) }
 
     if os.socket_close(sender) != ok { os.exit(71i32) }
     if os.socket_close(receiver) != ok { os.exit(72i32) }

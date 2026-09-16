@@ -795,7 +795,7 @@ fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> er
     ret from_errno(result)
 }
 
-type Dir = struct { raw: usize }
+type Dir = resource(dir_close) struct { raw: usize }
 type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
 // `openat2` reads this rather than taking flags in registers, which is what lets it grow
@@ -803,7 +803,7 @@ type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 // both, so the layout is the ABI.
 type OpenHow = struct { flags: u64, mode: u64, resolve: u64 }
 
-type Watch = struct { state: *void }
+type Watch = resource(watch_close) struct { state: *void }
 type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
 type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
 
@@ -920,12 +920,12 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
     ret (produced, ok)
 }
 
-fn watch_close(w: Watch) -> err {
+fn watch_close(w: own Watch) -> err {
     let state = mem.cast[*WatchState](w.state)
     ret from_errno(syscall(SYS_CLOSE, state.descriptor, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
 
-type Mapping = struct { raw: usize, address: *u8, len: usize }
+type Mapping = resource(mapping_close) struct { raw: usize, address: *u8, len: usize }
 
 // `raw` carries whether the mapping may be written and nothing else. This host needs no
 // handle to keep a mapping alive, and the other closes its mapping object as soon as the
@@ -987,11 +987,11 @@ fn mapping_flush(m: Mapping) -> err {
     ret from_errno(syscall(SYS_MSYNC, mem.address_of(m.address), m.len, MS_SYNC, 0usize, 0usize, 0usize))
 }
 
-fn mapping_close(m: Mapping) -> err {
+fn mapping_close(m: own Mapping) -> err {
     ret from_errno(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
 }
 
-type Poller = struct { state: *void }
+type Poller = resource(poller_close) struct { state: *void }
 type PollInterest = struct { readable: bool, writable: bool }
 type PollEvent = struct { token: usize, readable: bool, writable: bool, closed: bool, failed: bool }
 
@@ -1116,7 +1116,7 @@ fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err) 
     ret (produced, ok)
 }
 
-fn poller_close(p: Poller) -> err {
+fn poller_close(p: own Poller) -> err {
     let state = mem.cast[*PollerState](p.state)
     let wake_result = syscall(SYS_CLOSE, state.wake, 0usize, 0usize, 0usize, 0usize, 0usize)
     let epoll_result = syscall(SYS_CLOSE, state.epoll, 0usize, 0usize, 0usize, 0usize, 0usize)
@@ -1124,7 +1124,7 @@ fn poller_close(p: Poller) -> err {
     ret from_errno(wake_result)
 }
 
-type Socket = struct { raw: usize }
+type Socket = resource(socket_close) struct { raw: usize }
 type SocketFamily = enum u8 { Ip4, Ip6 }
 type SocketKind = enum u8 { Stream, Datagram }
 type SocketShutdown = enum u8 { Read, Write, Both }
@@ -1241,9 +1241,9 @@ type ErrorKind = enum u8 {
 // its subject, and nothing here needs them to outlive the call that supplied them.
 type ErrorDetail = struct { kind: ErrorKind, native_code: i32, operation: str, subject: str }
 
-type Lib = struct { raw: usize }
+type Lib = resource(dlclose) struct { raw: usize }
 
-type ProcGroup = struct { raw: usize }
+type ProcGroup = resource(proc_group_close) struct { raw: usize }
 type SpawnOptions = struct { argv: []const str, env: []const str, inherit_env: bool, cwd: str, stdio: Stdio }
 
 // `execve` wants an array of addresses ending in a zero, which is what this builds: each string
@@ -1435,11 +1435,11 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
 
 // A group identifier is not a handle here, so there is nothing to give back. The call exists
 // because on the other host there is.
-fn proc_group_close(group: ProcGroup) -> err {
+fn proc_group_close(group: own ProcGroup) -> err {
     ret ok
 }
 
-type FileLock = struct { raw: usize }
+type FileLock = resource(file_unlock) struct { raw: usize }
 
 // `flock` is per open file description, so two `open` calls on one path contend and two
 // handles from one call do not -- which is what makes a lock worth having between processes
@@ -1484,7 +1484,7 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
     ret (lock, Failed)
 }
 
-fn file_unlock(lock: FileLock) -> err {
+fn file_unlock(lock: own FileLock) -> err {
     ret from_errno(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
 }
 
@@ -1656,7 +1656,7 @@ fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) {
     ret (address, ok)
 }
 
-fn dlclose(l: Lib) -> err {
+fn dlclose(l: own Lib) -> err {
     if raw_dlclose(l.raw) != 0i32 { ret Failed }
     ret ok
 }
@@ -1671,7 +1671,7 @@ fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
     ret (socket, ok)
 }
 
-fn socket_close(s: Socket) -> err {
+fn socket_close(s: own Socket) -> err {
     ret from_errno(syscall(SYS_CLOSE, s.raw, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
 
@@ -2353,7 +2353,7 @@ fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
     ret (dir, ok)
 }
 
-fn dir_close(dir: Dir) -> err {
+fn dir_close(dir: own Dir) -> err {
     let result = syscall(SYS_CLOSE, dir.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
     ret from_errno(result)
 }
@@ -2437,9 +2437,12 @@ fn open_parent(a: *mem.Arena, dir: Dir, relative_path: str) -> (Dir, str, err) {
     ret (parent, tail, ok)
 }
 
-fn release_parent(parent: Dir, dir: Dir) {
+// The parent is the caller's own directory or one opened for the walk (D350): it is
+// taken either way, and closed by raw means only when it is the latter.
+@unsafe
+fn release_parent(parent: own Dir, dir: Dir) {
     if parent.raw != dir.raw {
-        let closed = dir_close(parent)
+        let closed = syscall(SYS_CLOSE, parent.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
     }
 }
 

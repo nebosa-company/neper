@@ -38,14 +38,10 @@ fn open(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (M
 fn bytes(m: Mapping) -> []u8 {
     let (writable, writable_error) = os.mapping_bytes_mut(m.raw)
     if writable_error == ok { ret writable }
-    // The same view `e.os` takes: the mapped address as the base of a region.
-    var region: mem.Arena = zero
-    region.base = m.raw.address
-    region.cap = m.raw.len
-    region.off = 0usize
-    ret mem.view(&region, 0usize, m.raw.len)
+    // The same view `e.os` takes of its own mapping (D350: the fields are its alone).
+    ret os.mapping_region(m.raw)
 }
 
 fn flush(m: Mapping) -> err { ret os.mapping_flush(m.raw) }
 
-fn close(m: Mapping) -> err { ret os.mapping_close(m.raw) }
+fn close(m: own Mapping) -> err { ret os.mapping_close(m.raw) }

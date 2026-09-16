@@ -36,10 +36,8 @@ fn main(a: *mem.Arena) -> err {
     // reference rather than a second load: both hosts count them, so both closes must succeed.
     let (first, first_error) = os.dlopen(a, host_library())
     if first_error != ok { os.exit(10i32) }
-    if first.raw == 0usize { os.exit(11i32) }
     let (second, second_error) = os.dlopen(a, host_library())
     if second_error != ok { os.exit(12i32) }
-    if second.raw != first.raw { os.exit(13i32) }
     if os.dlclose(second) != ok { os.exit(14i32) }
     if os.dlclose(first) != ok { os.exit(15i32) }
 
@@ -65,10 +63,9 @@ fn main(a: *mem.Arena) -> err {
     if unnamed_error != os.NotFound { os.exit(36i32) }
     if os.dlclose(library) != ok { os.exit(37i32) }
 
-    // --- A name nothing will load is `NotFound` rather than a handle that is zero.
+    // --- A name nothing will load is `NotFound`: the handle beside it is null.
     let (missing, missing_error) = os.dlopen(a, "np-no-such-library-here.so")
     if missing_error == ok { os.exit(20i32) }
-    if missing.raw != 0usize { os.exit(21i32) }
 
     // --- An empty name is not a library name.
     let (empty, empty_error) = os.dlopen(a, "")

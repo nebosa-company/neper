@@ -1508,12 +1508,12 @@ type File = struct { raw: usize }
 type Proc = struct { raw: usize }
 type ProcUsage = struct { exit_code: i32, peak_memory: usize }
 type Thread = struct { raw: usize }
-type Lib = struct { raw: usize }
+type Lib = resource(dlclose) struct { raw: usize }
 type Handle = struct { raw: usize }
-type Socket = struct { raw: usize }
-type Poller = struct { state: *void }
-type Mapping = struct { raw: usize, address: *u8, len: usize }
-type Watch = struct { state: *void }
+type Socket = resource(socket_close) struct { raw: usize }
+type Poller = resource(poller_close) struct { state: *void }
+type Mapping = resource(mapping_close) struct { raw: usize, address: *u8, len: usize }
+type Watch = resource(watch_close) struct { state: *void }
 type WatchAction = enum u8 { Added, Removed, Modified, Renamed, Overflow }
 type WatchEvent = struct { action: WatchAction, path: str, old_path: str }
 type Clock = enum u8 { Wall, Monotonic }
@@ -1605,7 +1605,7 @@ fn socket_send(s: Socket, src: []const u8) -> (usize, err)
 fn socket_receive_from(s: Socket, dst: []u8) -> (usize, SocketAddress, err)
 fn socket_send_to(s: Socket, dst: SocketAddress, src: []const u8) -> (usize, err)
 fn socket_shutdown(s: Socket, how: SocketShutdown) -> err
-fn socket_close(s: Socket) -> err
+fn socket_close(s: own Socket) -> err
 fn socket_resolve(a: *mem.Arena, host: str, port: u16, family: SocketFamily) -> ([]SocketAddress, err)
 fn file_handle(f: File) -> Handle
 fn socket_handle(s: Socket) -> Handle
@@ -1615,35 +1615,35 @@ fn poller_modify(p: Poller, handle: Handle, token: usize, interest: PollInterest
 fn poller_unregister(p: Poller, handle: Handle) -> err
 fn poller_wait(p: Poller, events: []PollEvent, timeout_ns: i64) -> (usize, err)
 fn poller_wake(p: Poller) -> err
-fn poller_close(p: Poller) -> err
+fn poller_close(p: own Poller) -> err
 fn map_file(f: File, offset: u64, len: usize, writable: bool) -> (Mapping, err)
 fn mapping_bytes(m: Mapping) -> []const u8
 fn mapping_bytes_mut(m: Mapping) -> ([]u8, err)
 fn mapping_flush(m: Mapping) -> err
-fn mapping_close(m: Mapping) -> err
+fn mapping_close(m: own Mapping) -> err
 fn watch_open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err)
 fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err)
-fn watch_close(w: Watch) -> err
+fn watch_close(w: own Watch) -> err
 fn dlopen(a: *mem.Arena, name: str) -> (Lib, err)
 fn dlsym[F: type](a: *mem.Arena, l: Lib, sym: str) -> (F, err)
-fn dlclose(l: Lib) -> err
+fn dlclose(l: own Lib) -> err
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)
-type Dir = struct { raw: usize }
-type FileLock = struct { raw: usize }
-type ProcGroup = struct { raw: usize }
+type Dir = resource(dir_close) struct { raw: usize }
+type FileLock = resource(file_unlock) struct { raw: usize }
+type ProcGroup = resource(proc_group_close) struct { raw: usize }
 type ResolvePolicy = enum u8 { NoSymlinks, Beneath }
 
 fn dir_open(a: *mem.Arena, path: str) -> (Dir, err)
-fn dir_close(dir: Dir) -> err
+fn dir_close(dir: own Dir) -> err
 fn open_at(a: *mem.Arena, dir: Dir, relative_path: str, flags: OpenFlags, policy: ResolvePolicy) -> (File, err)
 fn remove_at(a: *mem.Arena, dir: Dir, relative_path: str, directory: bool) -> err
 fn rename_at(a: *mem.Arena, src_dir: Dir, src_path: str, dst_dir: Dir, dst_path: str, overwrite: bool, durable: bool) -> err
 fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err)
-fn file_unlock(lock: FileLock) -> err
+fn file_unlock(lock: own FileLock) -> err
 fn proc_group_spawn(a: *mem.Arena, options: SpawnOptions) -> (ProcGroup, Proc, err)
 fn proc_group_terminate(group: ProcGroup, force: bool) -> err
-fn proc_group_close(group: ProcGroup) -> err
+fn proc_group_close(group: own ProcGroup) -> err
 
 ```
 
@@ -1970,7 +1970,7 @@ error Invalid
 fn open(a: *mem.Arena, path: str, writable: bool, offset: u64, len: usize) -> (Mapping, err)
 fn bytes(m: Mapping) -> []u8
 fn flush(m: Mapping) -> err
-fn close(m: Mapping) -> err
+fn close(m: own Mapping) -> err
 ```
 
 Offset and length are byte values; the implementation performs page alignment
@@ -1988,7 +1988,7 @@ error Unsupported
 
 fn open(a: *mem.Arena, path: str, recursive: bool) -> (Watch, err)
 fn read(a: *mem.Arena, watch: Watch, events: []Event) -> (usize, err)
-fn close(watch: Watch) -> err
+fn close(watch: own Watch) -> err
 ```
 
 Paths are relative to the watched root. `Renamed` supplies both paths when the host
@@ -2680,7 +2680,7 @@ fn send(socket: Socket, src: []const u8) -> (usize, err)
 fn receive_from(socket: Socket, dst: []u8) -> (usize, Endpoint, err)
 fn send_to(socket: Socket, dst: Endpoint, src: []const u8) -> (usize, err)
 fn shutdown(socket: Socket, how: Shutdown) -> err
-fn close(socket: Socket) -> err
+fn close(socket: own Socket) -> err
 fn reader(socket: *Socket) -> io.Reader
 fn writer(socket: *Socket) -> io.Writer
 fn resolve_with_control(a: *mem.Arena, host: str, port: u16, family: Family, control: cancel.Control) -> ([]Endpoint, err)

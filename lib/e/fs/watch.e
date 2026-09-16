@@ -46,4 +46,4 @@ fn read(a: *mem.Arena, watch: Watch, events: []Event) -> (usize, err) {
     ret (count, ok)
 }
 
-fn close(watch: Watch) -> err { ret os.watch_close(watch.raw) }
+fn close(watch: own Watch) -> err { ret os.watch_close(watch.raw) }
