@@ -2108,6 +2108,18 @@ $explainInlineActual = Join-Path $testBuild 'conformance-tools-explain-inline.js
 cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/contract.e `"$repo`" x64 windows conformance-tools-explain-inline.out --release --explain --json -j 1 > `"$explainInlineActual`""
 if ($LASTEXITCODE -ne 0) { throw "emit-executable --explain --json failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInlineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_inline.x64-windows.expected.jsonl')).Hash) { throw "emit-executable --explain --json differs from the conformance corpus" }
+# Per-instance cost (D453, H06): every generic instance's instructions and bytes as
+# `instance-cost` records of the build stream, after the lowering.
+$explainInstancesActual = Join-Path $testBuild 'conformance-tools-explain-instances.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/instances.e `"$repo`" x64 windows conformance-tools-explain-instances.out --release --explain --json -j 1 > `"$explainInstancesActual`""
+if ($LASTEXITCODE -ne 0) { throw "emit-executable --explain --json over instances failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInstancesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_instances.x64-windows.expected.jsonl')).Hash) { throw "the instance-cost records differ from the conformance corpus" }
+# Per-instance cost (D453, H06): every generic instance's instructions and bytes as
+# `instance-cost` records of the build stream, after the lowering.
+$explainInstancesActual = Join-Path $testBuild 'conformance-tools-explain-instances.jsonl'
+cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable ../../../../tests/conformance/tools/instances.e `"$repo`" x64 windows conformance-tools-explain-instances.out --release --explain --json -j 1 > `"$explainInstancesActual`""
+if ($LASTEXITCODE -ne 0) { throw "emit-executable --explain --json over instances failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainInstancesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_instances.x64-windows.expected.jsonl')).Hash) { throw "the instance-cost records differ from the conformance corpus" }
 # `index --json` (D232): the operand module's symbol records, byte for byte (target-independent).
 $indexActual = Join-Path $testBuild 'conformance-tools-index.jsonl'
 cmd /c "`"$compiler`" index-file `"$(Join-Path $conformanceRoot 'tools/index.e')`" `"$repo`" x64 windows --json > `"$indexActual`""

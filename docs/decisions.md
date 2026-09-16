@@ -9893,3 +9893,22 @@ base, which is next.
 
 Not yet: `var n = x.len` (a `let` alone is never reassigned), a field base
 (`while i < s.items.len` proving `s.items[i]`), and an alias of a slack form.
+
+## D453 -- A generic instance's cost is a record of the build stream
+
+H06 asks for per-instance cost; the explain stream said which instances a
+program made (D359) and the build said nothing of what each came to. The
+codegen loop now appends, for every function that is an instance, an
+`instance-cost` record to its builder's explanations -- the template as
+`module.name`, the instance's number, its NIR instructions and the bytes of
+its machine code before folding -- and the crew flushes each worker's
+lowering builder after the phase, in worker order, as D408 flushes the
+oracles'. The lowering builders get the explanations' storage the oracles
+had (reserved, touched only under `--explain`); without it the records
+overflowed into nothing, which is how the first draft went. The corpus gains
+`tools/explain_instances` per host: three instances of `twice`, three
+instructions each, 42, 39 and 43 bytes on Windows.
+
+Not yet: the instance's arguments in the record (the explain-file's `instance`
+record has them, keyed by the same template and site), and the cost of an
+instance the fold removed as a duplicate.

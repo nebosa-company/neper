@@ -2276,6 +2276,9 @@ cmp -s "$test_build/conformance-tools-run-flood.jsonl" "$conformance_root/tools/
 # `--explain --json` (D408, H20): every inlining decision a record of the build stream.
 (cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/contract.e "$repo" x64 linux conformance-tools-explain-inline.out --release --explain --json -j 1 > "conformance-tools-explain-inline.jsonl")
 cmp -s "$test_build/conformance-tools-explain-inline.jsonl" "$conformance_root/tools/explain_inline.x64-linux.expected.jsonl" || { echo "emit-executable --explain --json differs from the conformance corpus"; exit 1; }
+# Per-instance cost (D453, H06): `instance-cost` records after the lowering.
+(cd "$test_build" && ./neper-self emit-executable ../../../../tests/conformance/tools/instances.e "$repo" x64 linux conformance-tools-explain-instances.out --release --explain --json -j 1 > "conformance-tools-explain-instances.jsonl")
+cmp -s "$test_build/conformance-tools-explain-instances.jsonl" "$conformance_root/tools/explain_instances.x64-linux.expected.jsonl" || { echo "the instance-cost records differ from the conformance corpus" >&2; exit 1; }
 [ "$(stat -c %s "$test_build/conformance-tools-run-flood.out.stdout")" -eq 296 ]
 cmp -s "$test_build/conformance-tools-run-args.jsonl" "$conformance_root/tools/run_args.expected.jsonl" || { printf '%s
 ' "run --json with program arguments differs from the conformance corpus" >&2; exit 1; }

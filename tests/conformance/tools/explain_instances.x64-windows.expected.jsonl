@@ -1,0 +1,7 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"build","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"inline","symbol":"instances.twice","decision":"not-a-candidate","reason":"generic, an instance is its instantiating module's own","pass":1}
+{"record":"inline","symbol":"instances.main","decision":"not-a-candidate","reason":"the program root","pass":1}
+{"record":"instance-cost","symbol":"instances.twice","instance":1,"instructions":3,"bytes":42}
+{"record":"instance-cost","symbol":"instances.twice","instance":2,"instructions":3,"bytes":39}
+{"record":"instance-cost","symbol":"instances.twice","instance":3,"instructions":3,"bytes":43}
+{"record":"result","ok":true,"exit_code":0,"data":{"executable":"conformance-tools-explain-instances.out","diagnostics":0}}

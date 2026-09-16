@@ -593,6 +593,15 @@ be cancelled on another, which is what a harness's deadline means. `--deadline 0
 is a deadline already passed and cancels at the first checkpoint, the corpus's
 `tools/deadline` case.
 
+`--explain` on a build (D408) also lists, after the lowering, every generic
+instance the build made as an `instance-cost` record (D453, H06): `symbol` (the
+template, `module.name`), `instance` (which of the template's instances, from
+one), `instructions` (its NIR) and `bytes` (its machine code before folding) --
+gathered per worker and written in worker order, so a given worker count gives
+the same order run to run; under `--json` a record of the build stream, a text
+line on stderr otherwise. A harness weighing a specialization reads its cost
+here rather than guessing it from the template.
+
 `--instances N` (D426, H06) on a build command is a budget over the
 specializations the build makes: after the bodies are checked, the instances of
 generic functions they asked for are counted -- each worker's own, since a

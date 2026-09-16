@@ -3117,6 +3117,54 @@ fn init_oracle_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signat
     ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
+// A generic instance's cost (D453, H06): the template's name, which instance of
+// it, its NIR instructions and the bytes its code came to, appended to the
+// builder's explanations for the flush after the lowering.
+fn explain_instance_cost(builder: *nir.Builder, function_at: usize, bytes: usize) {
+    let function = builder.functions[function_at]
+    if builder.explain_json {
+        lower.explain_append(builder, "{\"record\":\"instance-cost\",\"symbol\":\"")
+        lower.explain_append(builder, function.module_name)
+        lower.explain_append(builder, ".")
+        lower.explain_append(builder, function.name)
+        lower.explain_append(builder, "\",\"instance\":")
+        explain_append_decimal(builder, function.instance)
+        lower.explain_append(builder, ",\"instructions\":")
+        explain_append_decimal(builder, function.instruction_count)
+        lower.explain_append(builder, ",\"bytes\":")
+        explain_append_decimal(builder, bytes)
+        lower.explain_append(builder, "}\n")
+    } else {
+        lower.explain_append(builder, "instance: ")
+        lower.explain_append(builder, function.module_name)
+        lower.explain_append(builder, ".")
+        lower.explain_append(builder, function.name)
+        lower.explain_append(builder, " #")
+        explain_append_decimal(builder, function.instance)
+        lower.explain_append(builder, ": ")
+        explain_append_decimal(builder, function.instruction_count)
+        lower.explain_append(builder, " instructions, ")
+        explain_append_decimal(builder, bytes)
+        lower.explain_append(builder, " bytes\n")
+    }
+}
+
+fn explain_append_decimal(builder: *nir.Builder, value: usize) {
+    var digits: [24]u8 = zero
+    var at = digits.len
+    var rest = value
+    if rest == 0usize {
+        at = at - 1usize
+        digits[at] = 48u8
+    }
+    while rest > 0usize {
+        at = at - 1usize
+        digits[at] = 48u8 + u8(rest % 10usize)
+        rest = rest / 10usize
+    }
+    lower.explain_append(builder, digits[at..digits.len])
+}
+
 // The explanations an oracle gathered (D408), written where they belong: the JSON
 // stream's records to stdout under `--json`, the text lines to stderr otherwise.
 fn flush_explanations(report: *Sink, oracle: *nir.Builder) -> err {
@@ -3220,6 +3268,13 @@ fn init_cli_nir(a: *mem.Arena, builder: *nir.Builder, signatures: *nir.Signature
     if type_capacity == 0usize { type_capacity = 1usize }
     let (signature_types, signature_types_error) = mem.alloc[check.Type](a, type_capacity)
     if signature_types_error != ok { ret signature_types_error }
+    // The lowering's explanations (D453): the instances' costs under `--explain`;
+    // reserved, touched only when written (D340), as the oracles' storage is.
+    let (explain_bytes, explain_error) = mem.alloc[u8](a, sized(65536usize, total, 8usize))
+    if explain_error != ok { ret explain_error }
+    builder.explain_bytes = explain_bytes
+    builder.explain_count = 0usize
+    builder.explain_overflow = false
     ret nir.init_signatures(signatures, signature_entries, signature_types)
 }
 
@@ -5888,6 +5943,9 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
                 os.exit(1i32)
                 ret ok
             }
+            // Per-instance cost (D453, H06): a generic instance's instructions and bytes,
+            // an `instance-cost` record of the build's `--explain` stream.
+            if builder.explain && builder.functions[function_at].instance != 0usize { explain_instance_cost(builder, function_at, context.output.count - function_start) }
             if fold.wanted {
                 if report.timing { report.fold_ns = report.fold_ns -% nptest_now() }
                 let (folded_at, folded) = fold_function(loaded, builder, context.output, function_start, context.output.count, context.relocations, *context.relocation_count, function_start, fold)
@@ -6507,6 +6565,9 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
     w.builder.release = program.release
     w.builder.nocheck = program.nocheck
     w.builder.arena_bytes = program.arena_bytes
+    // The lowering's explanations (D453): the cost of every generic instance.
+    w.builder.explain = program.explain
+    w.builder.explain_json = program.explain_json
     w.builder.has_oracle = program.has_oracle
     w.builder.oracle = program.oracle
     w.builder.oracle_signatures = program.oracle_signatures
@@ -7368,6 +7429,13 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
     }
     report.arena_used = mem.stats(a).used
     try report_phase(report, "lower and codegen")
+    // The lowering's explanations (D453): the instances' costs, in worker order.
+    var cost_worker = 0usize
+    while cost_worker < crew.count {
+        try flush_explanations(report, &crew.workers[cost_worker].builder)
+        cost_worker += 1usize
+    }
+    if crew.generous_made { try flush_explanations(report, &crew.workers[LOWER_WORKERS].builder) }
     if report.timing {
         try stderr_text("  of which regalloc: ")
         try report_ms(report.regalloc_ns)
