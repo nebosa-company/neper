@@ -3351,16 +3351,26 @@ type Sink = struct {
     // analysis still run for its own diagnostics, and the command failing with no artifact.
     map_stale: bool,
     map_source: str,
+    // The tables hold the operand's mappings in the first eight slots and, from
+    // `nest_base`, the nested map's (D465); the bootstrap mistypes a slice of a
+    // struct's array field, so the two are one table indexed by a base.
     map_count: usize,
-    map_generated_start: [8]usize,
-    map_generated_end: [8]usize,
-    map_generated_line: [8]usize,
-    map_original_path: [8]str,
-    map_original_start: [8]usize,
-    map_original_line: [8]usize,
+    map_generated_start: [16]usize,
+    map_generated_end: [16]usize,
+    map_generated_line: [16]usize,
+    map_original_path: [16]str,
+    map_original_start: [16]usize,
+    map_original_line: [16]usize,
     // What may be edited (D373, H19): 0 unknown, 1 the generated output directly,
     // 2 the generator's input only -- the mapping's `edit`, absent in a version 1 map.
-    map_edit: [8]u8,
+    map_edit: [16]u8,
+    // A nested map (D465, H19): the original the mappings name may itself be
+    // generated, with a map of its own beside it; its mappings are followed one
+    // level further, to the root original. `nest_source` is that original's path as
+    // the outer map spells it; `nest_stale` says its map was there and not usable.
+    nest_source: str,
+    nest_stale: bool,
+    nest_count: usize,
 }
 
 // One diagnostic, as the human line `path:line:col: error[CODE]: message` or as the
@@ -3415,17 +3425,51 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
         original.end = at.end - report.map_generated_start[mapping] + report.map_original_start[mapping]
         original.line = at.line - report.map_generated_line[mapping] + report.map_original_line[mapping]
         original.end_line = at.end_line - report.map_generated_line[mapping] + report.map_original_line[mapping]
-        try write_span(report, report.map_original_path[mapping], original, false)
-        // Which of the two spans an edit may target (D373, H19), from the mapping.
-        if report.map_edit[mapping] == 1u8 {
-            try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source, which may be edited directly\",\"span\":")
-        } else {
-            if report.map_edit[mapping] == 2u8 {
-                try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source, which is regenerated from its input: edit the original\",\"span\":")
-            } else {
-                try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source\",\"span\":")
+        // The original's own map (D465, H19): when the original is generated too,
+        // the root original is primary and the intermediate is related first.
+        let nest_end = nest_base() + report.nest_count
+        var nested = nest_end
+        if same(report.map_original_path[mapping], report.nest_source) {
+            var scan = nest_base()
+            while scan < nest_end {
+                if original.start >= report.map_generated_start[scan] && original.end <= report.map_generated_end[scan] {
+                    nested = scan
+                    scan = nest_end
+                } else {
+                    scan += 1usize
+                }
             }
         }
+        if nested < nest_end {
+            var root_span = original
+            root_span.start = original.start - report.map_generated_start[nested] + report.map_original_start[nested]
+            root_span.end = original.end - report.map_generated_start[nested] + report.map_original_start[nested]
+            root_span.line = original.line - report.map_generated_line[nested] + report.map_original_line[nested]
+            root_span.end_line = original.end_line - report.map_generated_line[nested] + report.map_original_line[nested]
+            try write_span(report, report.map_original_path[nested], root_span, false)
+            try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated input, itself regenerated from the original\",\"span\":")
+            try write_span(report, report.map_original_path[mapping], original, false)
+            try write_all(report, "},{\"message\":")
+        } else {
+            try write_span(report, report.map_original_path[mapping], original, false)
+            try write_all(report, ",\"parent\":null,\"related\":[{\"message\":")
+        }
+        // Which of the two spans an edit may target (D373, H19), from the mapping.
+        if report.map_edit[mapping] == 1u8 {
+            try write_all(report, "\"in the generated source, which may be edited directly")
+        } else {
+            if report.map_edit[mapping] == 2u8 {
+                try write_all(report, "\"in the generated source, which is regenerated from its input: edit the original")
+            } else {
+                try write_all(report, "\"in the generated source")
+            }
+        }
+        // The omission stated (D465): the original has a map of its own that could
+        // not be followed, so the original shown is not the root.
+        if report.nest_stale && same(report.map_original_path[mapping], report.nest_source) {
+            try write_all(report, "; the original is generated too, and its own map is stale")
+        }
+        try write_all(report, "\",\"span\":")
         try write_module_span(report, path, at, false)
         try write_all(report, "}],\"fixes\":[]}")
     } else {
@@ -3785,12 +3829,53 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
         }
     }
     report.map_source = operand
+    report.map_count = read_mappings(report, document, 0usize)
+    // The original's own map (D465, H19): followed one level, to the root original.
+    if report.map_count != 0usize { try load_nested_map(a, report, operand) }
+    ret ok
+}
+
+// The original's own map (D465, H19): the first mapping's original stands for the
+// map's; a map of it beside it that names the original's bytes is read into the
+// nested tables, one that does not is stated and not followed.
+fn load_nested_map(a: *mem.Arena, report: *Sink, operand: str) -> err {
+    report.nest_source = report.map_original_path[0usize]
+    let (nest_file, nest_file_error) = with_suffix(a, dirname(operand), report.nest_source)
+    if nest_file_error != ok { ret nest_file_error }
+    let (nest_map_path, nest_map_path_error) = with_suffix(a, nest_file, ".map.json")
+    if nest_map_path_error != ok { ret nest_map_path_error }
+    let (nest_document, nest_load_error) = source.load(a, nest_map_path)
+    if nest_load_error == ok {
+        let (nest_text, nest_text_error) = source.load(a, nest_file)
+        var nest_usable = nest_text_error == ok && same(json_str_after(nest_document, "\"schema\":\""), "neper-source-map")
+        if nest_usable {
+            let (nest_digest, nest_digest_error) = tool.manifest_sha256(a, nest_text)
+            if nest_digest_error != ok { ret nest_digest_error }
+            nest_usable = same(json_str_after(nest_document, "\"generated_sha256\":\""), nest_digest)
+        }
+        if nest_usable {
+            report.nest_count = read_mappings(report, nest_document, nest_base())
+        } else {
+            report.nest_stale = true
+        }
+    }
+    ret ok
+}
+
+// Where the nested map's mappings begin in the tables (D465): after the operand's eight.
+fn nest_base() -> usize { ret 8usize }
+
+// A map's mappings into the tables from `base` (D264, D465): each `generated_span`'s
+// start, end and line, the `original_span`'s path, start and line, and the
+// mapping's `edit`; eight at most. The count read.
+fn read_mappings(report: *Sink, document: str, base: usize) -> usize {
+    var count = 0usize
     var at = 0usize
     let generated_key = "\"generated_span\":{"
-    while at + generated_key.len <= document.len && report.map_count < 8usize {
+    while at + generated_key.len <= document.len && count < nest_base() {
         if same(document[at..at + generated_key.len], generated_key) {
             let rest = document[at..document.len]
-            let index = report.map_count
+            let index = base + count
             report.map_generated_start[index] = json_usize_after(rest, "\"byte_start\":")
             report.map_generated_end[index] = json_usize_after(rest, "\"byte_end\":")
             report.map_generated_line[index] = json_usize_after(rest, "\"line\":")
@@ -3808,13 +3893,13 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
             report.map_edit[index] = 0u8
             if same(edit, "direct") { report.map_edit[index] = 1u8 }
             if same(edit, "generator") { report.map_edit[index] = 2u8 }
-            report.map_count += 1usize
+            count += 1usize
             at += generated_key.len
         } else {
             at += 1usize
         }
     }
-    ret ok
+    ret count
 }
 
 

@@ -10091,3 +10091,26 @@ suites; the schema takes `inputs` and no longer requires `input`.
 
 Not yet: nested maps -- a generated file whose input is itself generated --
 and provenance through specialisation and inlining.
+
+## D465 -- A nested source map, followed one level
+
+H19 accepts nested maps: a generated file whose input is itself generated. The
+outer map's original is now looked for a map of its own beside it; one whose
+recorded hash is the original's bytes is read into the same tables, in the
+slots past the operand's eight, and a diagnostic whose original span falls in
+one of its mappings lands on the root original, with the intermediate related
+first and the generated source second. The chain stops there: a root that is
+itself generated is shown as the root, which is the bound. A nested map that is
+present but not usable -- stale, or not a map -- is not followed, and the
+related message says the original is generated too and its map is stale, so
+the omission is stated where the location is read. The corpus gains
+`nested_map.e` (three files, two maps, the diagnostic on the root) and
+`nested_stale.e` (the intermediate's map records other bytes), both suites.
+
+Found on the way: the bootstrap mistypes a slice of a struct's array field
+(`report.table[..]`) as a call argument -- which argument fails moves when
+another changes -- so the nested mappings share the operand's tables through a
+base index rather than being read through slices.
+
+Not yet: chains deeper than one level, and provenance through specialisation
+and inlining.

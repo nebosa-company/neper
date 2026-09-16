@@ -694,6 +694,19 @@ listed input is unchanged. One input that became several declarations is several
 mappings to one original span, each diagnostic mapped to it; the corpus's
 `combined_inputs.e` is the shape.
 
+A **nested map** (D465, H19): when the original a mapping names is itself a
+generated file with a map of its own beside it (`<original>.map.json`, whose
+`generated_sha256` is the original's bytes), the compiler follows it one level:
+the primary span is the root original's, and `related` carries the intermediate
+first ("in the generated input, itself regenerated from the original") and the
+generated source second, with the edit rule as before. The chain is bounded at
+one level -- a root that is itself generated is shown as the root. A nested map
+that is present but stale or malformed is not followed, and the related message
+says so ("the original is generated too, and its own map is stale"), so a
+harness knows the span shown is not the root. Paths in a nested map are
+resolved as the outer map's are, relative to the operand's directory; the
+corpus's `nested_map.e` and `nested_stale.e` are the two shapes.
+
 ## 9. Conformance and compatibility
 
 `tests/conformance/` is a normative corpus shipped with the specification. It has
