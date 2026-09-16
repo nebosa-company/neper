@@ -648,6 +648,14 @@ program under the same budget and worker count answers the same way on every
 machine. `--stats` reports the count as `function instances`; the corpus's
 `tools/instances` case makes three.
 
+`--comptime-steps N` (D474, H24) is the same kind of budget over the interpreter:
+every step it took in the whole build -- the constants the main checker settled,
+the settled conditions in each worker's bodies -- is summed after the bodies are
+checked, and a total past `N` is one `E-COMPTIME-0002` naming the count and the
+budget, exit 1, no image and no manifest. Spec §9's ten million steps per
+evaluation stand as they are; this is the whole. The corpus's
+`tools/comptime_steps` case takes 1210.
+
 The manifest's `unsafe` inventory of a kept module comes from its artifact
 (D457): the sites are rendered when the artifact is written, on the worker that
 lowered the module, and a warm build copies them -- the manifest phase of the

@@ -10278,3 +10278,21 @@ here: D472's suite block had landed twice in each runner, and is once.
 
 Not yet: a keyed integrity a hostile cache cannot satisfy by rewriting the
 manifest, and a whole-build comptime step budget.
+
+## D474 -- A whole-build budget over the interpreter's steps
+
+H24 asked for a whole-build comptime step budget beside D426's instance
+budget; spec section 9's ten million steps were per evaluation, so a program
+of many modest constants had no bound at all. `--comptime-steps N` on a build
+command sums every step the interpreter took -- the main checker's, which
+settled the constants in the declarations, and each worker's, which settled
+the conditions in its bodies, a worker's count starting at zero when its
+checker is forked -- and a total past `N` is `E-COMPTIME-0002` with the count,
+exit 1, no image. The per-evaluation limit stands. The checker was at the
+bootstrap's 128 fields: `failure_has_types` was `failure_expected.kind !=
+.Invalid` all along, and its slot is the running total. The corpus's
+`comptime_steps.e` sums to a hundred in a constant and takes 1210 steps, the
+same in both modes and on both hosts; both suites refuse it under ten and build
+it under a hundred thousand.
+
+Not yet: a keyed integrity for a hostile cache, which no unkeyed check gives.

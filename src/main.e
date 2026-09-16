@@ -770,7 +770,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--fault-write")
+    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--comptime-steps") || same(flag, "--fault-write")
 }
 
 // A flag with a decimal after it: the value, and whether the flag was given at all.
@@ -1833,6 +1833,35 @@ fn check_instance_budget(report: *Sink, args: []str, checker: *check.Checker, cr
     try write_usize(&message, budget)
     try write_all(&message, " (--instances); no image was written")
     try emit_command_diagnostic(report, "E-COMPTIME-0001", message_storage[..message.count])
+    try finish_report(report)
+    os.exit(1i32)
+    ret ok
+}
+
+// `--comptime-steps N` (D474, H24): a budget over the interpreter's steps in the
+// whole build -- the main checker's, which settled the constants, and each worker's,
+// which settled the conditions in its bodies -- refused as E-COMPTIME-0002 with the
+// count. A work budget, like `--instances`: the same on every machine.
+fn check_comptime_budget(report: *Sink, args: []str, checker: *check.Checker, crew: *Crew, with_crew: bool) -> err {
+    let (budget, given) = decimal_flag(args, "--comptime-steps")
+    if !given { ret ok }
+    var steps = checker.interp_total
+    if with_crew {
+        var worker_at = 0usize
+        while worker_at < crew.count {
+            steps += crew.workers[worker_at].checker.interp_total
+            worker_at += 1usize
+        }
+    }
+    if steps <= budget { ret ok }
+    var message_storage: [256]u8 = zero
+    var message = capture_sink(message_storage[..])
+    try write_all(&message, "the program's compile-time evaluation took ")
+    try write_usize(&message, steps)
+    try write_all(&message, " steps, past the budget of ")
+    try write_usize(&message, budget)
+    try write_all(&message, " (--comptime-steps); no image was written")
+    try emit_command_diagnostic(report, "E-COMPTIME-0002", message_storage[..message.count])
     try finish_report(report)
     os.exit(1i32)
     ret ok
@@ -4950,7 +4979,7 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     var expected_storage: [256]u8 = zero
     var actual_storage: [256]u8 = zero
     let mismatch = checker.failure_kind == .InitializerType || checker.failure_kind == .ReturnType || (checker.failure_kind == .Generic && check_error == check.TypeMismatch)
-    if mismatch && checker.failure_has_types {
+    if mismatch && checker.failure_expected.kind != .Invalid {
         var expected_out: tool.Out = zero
         expected_out.bytes = expected_storage[..]
         try tool.type_text(&expected_out, checker, g, checker.failure_expected, 0usize)
@@ -4988,7 +5017,7 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     var conversion_storage: [512]u8 = zero
     let scalar_expected = checker.failure_expected.kind == .Integer || checker.failure_expected.kind == .Float
     let scalar_actual = checker.failure_actual.kind == .Integer || checker.failure_actual.kind == .Float
-    if mismatch && checker.failure_has_types && checker.failure_fix_kind == 3u8 && checker.failure_mismatch_end != 0usize && scalar_expected && scalar_actual && checker.failure_module < g.count {
+    if mismatch && checker.failure_expected.kind != .Invalid && checker.failure_fix_kind == 3u8 && checker.failure_mismatch_end != 0usize && scalar_expected && scalar_actual && checker.failure_module < g.count {
         let failing_text = module_text(g, checker.failure_module)
         if checker.failure_mismatch_end <= failing_text.len && checker.failure_fix_at < checker.failure_mismatch_end && report.expected_text.len + checker.failure_mismatch_end - checker.failure_fix_at + 2usize <= conversion_storage.len {
             var conversion_at = tool.nptest_copy(conversion_storage[..], 0usize, report.expected_text)
@@ -6730,6 +6759,8 @@ type Crew = struct {
 fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share: usize, largest: usize, fork_id: usize) -> err {
     *into = *from
     into.fork_id = fork_id
+    // A worker's steps are its own (D474): the sum over the workers is the build's.
+    into.interp_total = 0usize
     let bytes = share * 2usize + largest
     let (functions, functions_error) = mem.alloc[check.Function](a, from.function_count + sized(1024usize, bytes, 128usize))
     if functions_error != ok { ret functions_error }
@@ -8734,6 +8765,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             ret ok
         }
         if trailing_flags { try check_instance_budget(&report, args, &checker, &crew, with_crew) }
+        if trailing_flags { try check_comptime_budget(&report, args, &checker, &crew, with_crew) }
         var error_conflict: error_table.Conflict = zero
         var error_validation_error = error_table.validate_declarations(&resolver, &loaded, &error_conflict)
         if error_validation_error == ok && writes_executable {

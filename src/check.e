@@ -689,7 +689,10 @@ type Checker = struct {
     // asked for and what the expression had, recorded where they part.
     failure_expected: Type,
     failure_actual: Type,
-    failure_has_types: bool,
+    // Every interpreter step the checker took (D474, H24): never reset, summed over
+    // the workers for `--comptime-steps`. (`failure_has_types` was here: it is
+    // `failure_expected.kind != .Invalid`, and the bootstrap holds a struct to 128.)
+    interp_total: usize,
     // The expression the mismatch surfaced at (D444, H09), when the outermost frame
     // to see it is one token -- a name or a literal a conversion can wrap without a
     // reading: `failure_fix_at` holds its start under fix kind 3 and this its end,
@@ -847,7 +850,7 @@ fn init(c: *Checker, functions: []Function, parameters: []Parameter, return_type
     c.failure_has_token = false
     c.failure_detail = ""
     c.failure_detail2 = ""
-    c.failure_has_types = false
+    c.failure_expected = invalid_type()
     c.failure_mismatch_end = 0usize
     ret ok
 }
@@ -1150,7 +1153,6 @@ fn types_may_match_after_instantiation(c: *Checker, actual: Type, expected: Type
 fn mismatch(c: *Checker, expected: Type, actual: Type) -> err {
     c.failure_expected = expected
     c.failure_actual = actual
-    c.failure_has_types = true
     ret TypeMismatch
 }
 
@@ -1159,12 +1161,12 @@ fn apply_context(c: *Checker, actual: Type, expected: Type) -> (Type, err) {
     if actual.kind == .UntypedInteger && expected.kind == .Integer { ret (expected, ok) }
     if actual.kind == .UntypedFloat && expected.kind == .Float { ret (expected, ok) }
     if type_assignable(c, actual, expected) {
-        c.failure_has_types = false
+        c.failure_expected = invalid_type()
         c.failure_mismatch_end = 0usize
         ret (expected, ok)
     }
     if c.generic_declaration && types_may_match_after_instantiation(c, actual, expected) {
-        c.failure_has_types = false
+        c.failure_expected = invalid_type()
         c.failure_mismatch_end = 0usize
         ret (expected, ok)
     }
@@ -4786,6 +4788,7 @@ fn interp_fail(c: *Checker, module_index: usize, node: syntax.Node, reason: str)
 
 fn interp_step(c: *Checker, module_index: usize, node: syntax.Node) -> err {
     c.interp_steps += 1usize
+    c.interp_total += 1usize
     if c.interp_steps > 10000000usize {
         record_failure(c, module_index, node, .ComptimeEvaluation, c.interp_constant, "ten million steps")
         ret ComptimeBudget
@@ -9857,7 +9860,7 @@ fn check_expr(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usi
 // records itself, so the outermost wins -- a name or a literal keeps its span, a
 // wider expression clears it, since which of its parts to convert is a reading.
 fn note_mismatch_expression(c: *Checker, tree: *parse.Tree, node_index: usize) {
-    if !c.failure_has_types { ret }
+    if c.failure_expected.kind == .Invalid { ret }
     let node = tree.nodes[node_index]
     let first = usize(node.token_start)
     let last = usize(node.token_end)

@@ -2432,6 +2432,18 @@ cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-ex
 if ($LASTEXITCODE -ne 0) { throw "a build within its instance budget failed ($LASTEXITCODE)" }
 & $instancesImage
 if ($LASTEXITCODE -ne 0) { throw "the instances fixture exited $LASTEXITCODE" }
+# `--comptime-steps N` (D474, H24): a budget over the interpreter's steps in the whole
+# build -- 1210 for a constant summed over a hundred iterations -- refused as
+# E-COMPTIME-0002 under a budget of ten, built under one of a hundred thousand.
+$stepsActual = Join-Path $testBuild 'conformance-tools-comptime-steps.jsonl'
+$stepsImage = Join-Path $testBuild 'comptime-steps.exe'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-executable comptime_steps.e `"$repo`" x64 windows `"$stepsImage`" --json --comptime-steps 10 > `"$stepsActual`""
+if ($LASTEXITCODE -ne 1) { throw "a build past its comptime step budget did not exit 1 (got $LASTEXITCODE)" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $stepsActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/comptime_steps.expected.jsonl')).Hash) { throw "the refused build's stream differs from the conformance corpus" }
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-executable comptime_steps.e `"$repo`" x64 windows `"$stepsImage`" --release --comptime-steps 100000 > nul"
+if ($LASTEXITCODE -ne 0) { throw "a build within its comptime step budget failed ($LASTEXITCODE)" }
+& $stepsImage
+if ($LASTEXITCODE -ne 0) { throw "the comptime steps fixture exited $LASTEXITCODE" }
 # A deadline inside a phase (D422, H16): the compiler's own build under a deadline
 # it cannot meet is cancelled by a worker between two modules -- exit 3, no image.
 $deadlineInside = Join-Path $testBuild 'deadline-inside.exe'
