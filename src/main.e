@@ -3325,6 +3325,12 @@ type Sink = struct {
     related_token: lex.Token,
     has_related: bool,
     related_note: str,
+    // A related location in another module (D466, H19): the instance's request
+    // site, with that module's path, text and line table for the span.
+    related_foreign: bool,
+    related_path: str,
+    related_text: str,
+    related_lines: []usize,
     // A fix to insert (D381): text at a byte offset, or empty; kind 3 (D444) replaces
     // the bytes up to `fix_end` instead.
     fix_text: str,
@@ -3479,16 +3485,27 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
         } else {
             try write_module_span(report, path, at, is_operand)
         }
-        // The other site the diagnostic is about (D364, H09), in the same module.
+        // The other site the diagnostic is about (D364, H09), in the same module --
+        // or in another (D466), the instance's request site.
         if report.has_related {
-            let related_at = lex.span_of(text, lines, report.related_token)
             try write_all(report, ",\"parent\":null,\"related\":[{\"message\":")
             try write_json_string(report, report.related_note)
             try write_all(report, ",\"span\":")
-            if report.operand_path.len != 0usize && is_operand {
-                try write_span(report, report.operand_path, related_at, true)
+            if report.related_foreign {
+                let foreign_at = lex.span_of(report.related_text, report.related_lines, report.related_token)
+                let foreign_operand = same_path(report.related_path, report.operand_source)
+                if report.operand_path.len != 0usize && foreign_operand {
+                    try write_span(report, report.operand_path, foreign_at, true)
+                } else {
+                    try write_module_span(report, report.related_path, foreign_at, foreign_operand)
+                }
             } else {
-                try write_module_span(report, path, related_at, is_operand)
+                let related_at = lex.span_of(text, lines, report.related_token)
+                if report.operand_path.len != 0usize && is_operand {
+                    try write_span(report, report.operand_path, related_at, true)
+                } else {
+                    try write_module_span(report, path, related_at, is_operand)
+                }
             }
             try write_all(report, "}],\"fixes\":")
         } else {
@@ -4905,6 +4922,11 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     report.related_token = checker.failure_related
     report.has_related = checker.failure_has_related
     report.related_note = checker.failure_related_note
+    // A failure in an instance's body (D466, H19): the instance is the last one
+    // checked with the template's name in the failing module -- `checked` is set
+    // before its body is walked -- and its first request site is related, in
+    // whichever module asked, when nothing else is.
+    if !report.has_related { try relate_instance_site(report, g, checker) }
     report.fix_text = checker.failure_fix_text
     report.fix_at = checker.failure_fix_at
     report.fix_kind = checker.failure_fix_kind
@@ -5770,6 +5792,55 @@ fn print_error_table_diagnostic(report: *Sink, g: *graph.Graph, conflict: *error
     var path = "<unknown>"
     if g.count > 0usize { path = g.modules[0usize].path }
     ret emit_diagnostic(report, path, "", no_lines[0usize..0usize], origin, false, code, message_storage[..message.count])
+}
+
+// The instance a template-body failure belongs to, and its request site as the
+// diagnostic's related location (D466): "in the instance `module.name[T]`, requested here".
+fn relate_instance_site(report: *Sink, g: *graph.Graph, checker: *check.Checker) -> err {
+    var found = checker.function_count
+    var at = checker.function_count
+    while at > checker.signature_function_count && found == checker.function_count {
+        at = at - 1usize
+        let generic = checker.function_generics[at]
+        if generic.instance && generic.checked && generic.has_site && checker.functions[at].module_index == checker.failure_module && same(checker.functions[at].name, checker.failure_name) { found = at }
+    }
+    if found == checker.function_count { ret ok }
+    let generic = checker.function_generics[found]
+    if generic.site_module >= g.count { ret ok }
+    var note_storage: [512]u8 = zero
+    var note: tool.Out = zero
+    note.bytes = note_storage[..]
+    try tool.text(&note, "in the instance `")
+    try tool.text(&note, g.modules[checker.failure_module].name)
+    try tool.byte(&note, 46u8)
+    try tool.text(&note, checker.failure_name)
+    try tool.byte(&note, 91u8)
+    var argument_at = 0usize
+    while argument_at < generic.comptime_count {
+        if argument_at != 0usize { try tool.text(&note, ", ") }
+        let argument = checker.generic_arguments[generic.first_argument + argument_at]
+        if argument.kind == .Type {
+            try tool.type_text(&note, checker, g, argument.ty, 0usize)
+        } else {
+            if argument.kind == .Integer { try tool.decimal(&note, argument.value) } else { try tool.text(&note, argument.text) }
+        }
+        argument_at += 1usize
+    }
+    try tool.text(&note, "]`, requested here")
+    let (kept, kept_error) = mem.alloc[u8](checker.arena, note.count)
+    if kept_error != ok { ret kept_error }
+    os.copy_bytes(kept, note_storage[..note.count])
+    report.related_note = kept
+    var site: lex.Token = zero
+    site.start = generic.site_offset
+    site.end = generic.site_offset
+    report.related_token = site
+    report.has_related = true
+    report.related_foreign = true
+    report.related_path = g.modules[generic.site_module].path
+    report.related_text = g.modules[generic.site_module].text
+    report.related_lines = g.modules[generic.site_module].lines
+    ret ok
 }
 
 fn select_check_diagnostic(checker: *check.Checker, diagnostic: check.Diagnostic) {

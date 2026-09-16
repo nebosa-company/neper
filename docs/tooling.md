@@ -707,6 +707,15 @@ harness knows the span shown is not the root. Paths in a nested map are
 resolved as the outer map's are, relative to the operand's directory; the
 corpus's `nested_map.e` and `nested_stale.e` are the two shapes.
 
+Provenance through specialisation (D466, H19): a diagnostic inside a generic
+function's body belongs to one instance, and when the checker fails there the
+record's `related` carries the site that first asked for that instance --
+"in the instance `module.name[T, ...]`, requested here", the arguments as the
+`instance` record spells them -- in whichever module asked, as a §2 span of
+that module. The template body's span stays primary: it is where the text
+that failed is. A diagnostic that already carries a related location (a
+resource's other site, D364) keeps it. `reject/instance_site.e` is the shape.
+
 ## 9. Conformance and compatibility
 
 `tests/conformance/` is a normative corpus shipped with the specification. It has

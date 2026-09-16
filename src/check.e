@@ -266,6 +266,12 @@ type FunctionGeneric = struct {
     // shape no `e.io` declaration has. The compiler generates that function too, and
     // this marks the one instance that is it rather than an expansion.
     formatter_sink: bool,
+    // Where the instance was first asked for (D466, H19): the module and the byte
+    // offset of the call or protocol use, so a diagnostic in the instance's body can
+    // say which use of the template produced it.
+    site_module: usize,
+    site_offset: usize,
+    has_site: bool,
 }
 
 type ProtocolBuiltin = enum u8 {
@@ -6329,7 +6335,10 @@ fn specialize_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     }
     if c.generic_declaration && !function_arguments_concrete(c, template_index, first_argument) { ret (template_index, ok) }
     let (instance_index, instance_error) = instantiate_function(c, instance_owner(c, module_index), template_index, first_argument)
-    if instance_error == ok { record_explain_instance(c, module_index, call, template_index, first_argument, generic.comptime_count) }
+    if instance_error == ok {
+        record_explain_instance(c, module_index, call, template_index, first_argument, generic.comptime_count)
+        note_instance_site(c, instance_index, module_index, call)
+    }
     ret (instance_index, instance_error)
 }
 
@@ -8893,6 +8902,16 @@ fn record_explain_fold(c: *Checker, module_index: usize, node: syntax.Node, take
     c.explain_count += 1usize
 }
 
+// The first request of an instance (D466): kept as its site; later requests of the
+// same instance leave it.
+fn note_instance_site(c: *Checker, instance_index: usize, module_index: usize, node: syntax.Node) {
+    if instance_index >= c.function_count || c.function_generics[instance_index].has_site { ret }
+    if usize(node.token_start) >= c.token_count { ret }
+    c.function_generics[instance_index].site_module = module_index
+    c.function_generics[instance_index].site_offset = c.tokens[usize(node.token_start)].start
+    c.function_generics[instance_index].has_site = true
+}
+
 fn record_explain_instance(c: *Checker, module_index: usize, node: syntax.Node, template_index: usize, first_argument: usize, argument_count: usize) {
     if c.explains.len == 0usize { ret }
     if c.explain_count >= c.explains.len {
@@ -9191,6 +9210,7 @@ fn check_protocol_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         }
         let (instance_index, instance_error) = instantiate_function(c, instance_owner(c, module_index), function_index, aggregate.first_argument)
         if instance_error != ok { ret (0usize, .None, instance_error) }
+        note_instance_site(c, instance_index, module_index, node)
         function_index = instance_index
         function = c.functions[instance_index]
     }

@@ -10114,3 +10114,28 @@ base index rather than being read through slices.
 
 Not yet: chains deeper than one level, and provenance through specialisation
 and inlining.
+
+## D466 -- The instance's request site on a template-body failure
+
+H19 asks that provenance follow specialisation. A failure inside a generic
+function's body was reported at the template's text alone, and which
+instance had failed -- and from where it was asked for -- was nowhere.
+`FunctionGeneric` now keeps an instance's first request site (the module and
+the offset of the call or protocol use that made it), and when the checker
+fails in an instance body the diagnostic relates that site: "in the instance
+`module.name[T]`, requested here", the arguments spelled as the explain
+stream spells them. The instance is found in `main` from what the checker
+already records -- the failing module and template name, and `checked`,
+which is set before an instance's body is walked, so the failing one is the
+last checked instance of that template -- since the checker is at the
+bootstrap's 128-field cap and could not hold another. The related span may be
+in another module than the primary: the Sink learned a foreign related
+location, with that module's path, text and line table. A diagnostic with a
+related site of its own keeps it. `reject/instance_site.e` calls `widen[i32]`
+then `widen[bool]`, and the record relates the second call; the corpus's
+`safety_copy_toolchain` now relates the operand's call from a failure in
+`e/mem.e`, and `explain_none` and `explain_arm` the `least[...]` calls whose
+dispatch found nothing; both suites.
+
+Not yet: provenance through inlining, where the lowering has the site and the
+diagnostic (a trap's backtrace) has only the frame.
