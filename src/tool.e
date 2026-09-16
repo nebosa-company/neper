@@ -2390,15 +2390,41 @@ fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index:
     ret ok
 }
 
+// The program's snapshot identity (D407, H15/H18): every module's source hash folded
+// in graph order, as sixteen hex digits. An edit to any module of the program changes
+// it, so a cursor, a plan or a fact that carries it is known stale when it differs --
+// where `source_sha256` names one module's text, this names the program the answer
+// was computed against.
+fn program_snapshot(out: *Out, g: *graph.Graph) -> err {
+    var folded = 2870177450012600261usize
+    var module_at = 0usize
+    while module_at < g.count {
+        let (module_hash, hash_error) = artifact_hash.xxhash64(g.modules[module_at].text)
+        if hash_error != ok { ret hash_error }
+        folded = artifact_hash.round(folded, module_hash)
+        module_at += 1usize
+    }
+    folded = artifact_hash.round(folded, g.count)
+    try byte(out, 34u8)
+    var shift = 64usize
+    while shift > 0usize {
+        shift = shift - 4usize
+        try byte(out, hex_digit((folded >> shift) & 15usize))
+    }
+    ret byte(out, 34u8)
+}
+
 // The subject record of a context answer (D361): the snapshot's identity and the
 // function's declaration point.
-fn subject_record(out: *Out, subject: str, root: str, relative: str, path: str, source: str, digest: str, target_name: str, checks: str, declared_at: usize) -> err {
+fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative: str, path: str, source: str, digest: str, target_name: str, checks: str, declared_at: usize) -> err {
     try text(out, "{\"record\":\"subject\",\"subject\":")
     try quoted(out, subject)
     try text(out, ",\"kind\":\"fn\",\"source\":")
     try manifest_identity(out, root, relative)
     try text(out, ",\"source_sha256\":")
     try quoted(out, digest)
+    try text(out, ",\"snapshot\":")
+    try program_snapshot(out, g)
     try text(out, ",\"target\":")
     try quoted(out, target_name)
     try text(out, ",\"checks\":")
@@ -2465,7 +2491,7 @@ fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: 
                 var subject_at = nptest_copy(subject_storage, 0usize, module_name)
                 if subject_at < subject_storage.len { subject_storage[subject_at] = 46u8 }
                 subject_at = nptest_copy(subject_storage, subject_at + 1usize, function.name)
-                try subject_record(&out, subject_storage[0usize..subject_at], root, relative, path, module.text, digest, target_name, checks, function.source_start)
+                try subject_record(&out, g, subject_storage[0usize..subject_at], root, relative, path, module.text, digest, target_name, checks, function.source_start)
                 page.written += 1usize
             } else {
                 if page.total > page.cursor { page.omitted += 1usize }
@@ -2544,7 +2570,7 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
     if digest_error != ok { ret digest_error }
     out.lines = module.lines
     // The subject record: identity of the snapshot and the subject, always written.
-    try subject_record(&out, subject, root, relative, path, module.text, digest, target_name, checks, function.source_start)
+    try subject_record(&out, g, subject, root, relative, path, module.text, digest, target_name, checks, function.source_start)
     var page: Page = zero
     page.cursor = cursor
     page.budget = budget

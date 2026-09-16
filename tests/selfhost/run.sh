@@ -2401,6 +2401,10 @@ plan_sites=$($test_build/neper-self uses-file "$plan_scratch/src/explain.e" "$re
 plan_again=0
 python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null 2>&1 || plan_again=$?
 [ "$plan_again" -ne 0 ]
+# The subject's snapshot (D407, H15): the renamed program's differs from the original's.
+snapshot_before=$($test_build/neper-self context-file "$conformance_root/tools/explain.e" "$repo" x64 linux --json --symbol explain.main --budget 1 | grep -o '"snapshot":"[0-9a-f]*"' | head -1)
+snapshot_after=$($test_build/neper-self context-file "$plan_scratch/src/explain.e" "$repo" x64 linux --json --symbol explain.main --budget 1 | grep -o '"snapshot":"[0-9a-f]*"' | head -1)
+[ "${#snapshot_before}" -eq 29 ] && [ "$snapshot_before" != "$snapshot_after" ]
 # `plan-add-parameter-file --json` (D406, H17): the signature-change plan byte for byte;
 # applied to a copy it checks with the parameter last; a function named as a value is
 # refused with exit 2 and the diagnostic naming the site.

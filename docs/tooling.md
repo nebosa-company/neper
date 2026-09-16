@@ -262,8 +262,11 @@ program that does not check emits the check diagnostic on stderr and exits 1, as
 about one declared function, under a record budget (64 by default):
 
 - `subject` — always first: `subject`, `kind` (`fn`), the module's `source`
-  identity and `source_sha256` (the snapshot the answer is bound to), `target`,
-  `checks` (the policy), `grammar_revision`, and the declaration's `span`.
+  identity and `source_sha256` (the module's text), `snapshot` (D407, H15: the
+  program's identity -- every module's source hash folded in graph order, sixteen
+  hex digits; an edit anywhere in the program changes it, and a cursor or a fact
+  that carries a different one is stale), `target`, `checks` (the policy),
+  `grammar_revision`, and the declaration's `span`.
 - `fact` — one per fact, in a fixed order: the `signature`; an `ownership` fact per
   `own` parameter; the caller's contract per pointer parameter (D396, H11) --
   `allocation` for a `*mem.Arena` (what comes back holding a pointer is the caller's

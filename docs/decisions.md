@@ -9061,3 +9061,25 @@ suites apply the plan to a copy, check it, and confirm the parameter is last.
 Not yet: `change-signature` (reordering, removal), a `replace-expression`, an
 argument expression per call rather than one for all, and the plan's snapshot
 identity.
+
+## D407 -- A context answer names the program it was computed against
+
+H15 asks for snapshot identifiers on query results and H18 for cursors bound to
+snapshots; a context answer carried `source_sha256`, the subject module's text,
+while its facts -- the calls resolved, the instances made -- depend on every
+module of the program, so a cursor could be continued after an edit elsewhere
+without anything saying so. The `subject` record gains `snapshot`: every
+module's xxHash64 source hash folded in graph order with the module count, as
+sixteen hex digits -- a few microseconds, since the hashes are the ones the
+incremental identity already computes. An edit to any module of the program
+changes it; `--module`'s catalogue carries it on every subject. The plans keep
+the identity they had -- the preconditions, one hash per touched file, which is
+the exact set a plan is bound to -- and `uses-file` gains nothing here, because
+its golden and the plans' are one file for both hosts while the program differs
+per host by its `e.os` variant, which the snapshot rightly sees. The six subject
+goldens are regenerated; the catalogue page under `--bytes 3000` now cuts one
+record earlier, the subjects being longer. Both suites check that the renamed
+copy of the plan fixture has a different snapshot from the original.
+
+Not yet: the snapshot on the plans' and `uses-file`'s results (per-host goldens
+first), and the transaction boundary that would make a snapshot pinnable.

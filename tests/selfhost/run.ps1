@@ -2090,6 +2090,10 @@ $planUses = & $compiler uses-file (Join-Path $planScratch 'src/explain.e') $repo
 if ($LASTEXITCODE -ne 0 -or (($planUses | Where-Object { $_ -match '"record":"use"' }) | ForEach-Object { ($_ -replace '.*"byte_start":(\d+).*', '$1') } | Sort-Object -Unique).Count -ne 2) { throw 'the renamed function is not used at the two sites' }
 & python (Join-Path $repo 'scripts/apply_plan.py') $planActual --root (Join-Path $planScratch 'src') 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
+# The subject's snapshot (D407, H15): the renamed program's differs from the original's.
+$snapshotBefore = (& $compiler context-file (Join-Path $conformanceRoot 'tools/explain.e') $repo 'x64' 'windows' --json --symbol explain.main --budget 1 | Select-String -Pattern '"snapshot":"([0-9a-f]{16})"').Matches[0].Groups[1].Value
+$snapshotAfter = (& $compiler context-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows' --json --symbol explain.main --budget 1 | Select-String -Pattern '"snapshot":"([0-9a-f]{16})"').Matches[0].Groups[1].Value
+if ($snapshotBefore.Length -ne 16 -or $snapshotBefore -eq $snapshotAfter) { throw "the snapshot did not change with the program ($snapshotBefore / $snapshotAfter)" }
 # `plan-add-parameter-file --json` (D406, H17): the signature-change plan byte for byte;
 # applied to a copy it checks with the parameter last; a function named as a value is
 # refused with exit 2 and the diagnostic naming the site.
