@@ -3,6 +3,7 @@
 // second close, a cleanup, and `last_error_detail` still answers the `stat`. Once
 // that detail is read, the next failing cleanup is recorded like any failure. The
 // double close is the audited exception the fixture needs, so `main` is `@unsafe`.
+use e.fs
 use e.mem
 use e.os
 
@@ -58,5 +59,30 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (info, info_error) = os.lstat_detail(a, ".", &present)
     if info_error != ok { ret info_error }
     if present.native_code != 0i32 { os.exit(30i32) }
+    // `e.fs` in the same form (D479): its errors are the fence's five, and the detail
+    // is the host call that failed -- `stat` under `read_file`, `rename` under `move`.
+    var fs_missing: os.ErrorDetail = zero
+    let (fs_entry, fs_entry_error) = fs.stat_detail(a, "np-no-such-file-anywhere", &fs_missing)
+    if fs_entry_error != fs.NotFound { os.exit(31i32) }
+    if fs_missing.kind != .NotFound || fs_missing.native_code != primary_code || !mem.eq[u8](fs_missing.operation, "stat") { os.exit(32i32) }
+    var fs_read: os.ErrorDetail = zero
+    let (fs_bytes, fs_read_error) = fs.read_file_detail(a, "np-no-such-file-anywhere", 0usize, &fs_read)
+    if fs_read_error != fs.NotFound || !mem.eq[u8](fs_read.operation, "stat") || !mem.eq[u8](fs_read.subject, "np-no-such-file-anywhere") { os.exit(33i32) }
+    var fs_moved: os.ErrorDetail = zero
+    if fs.move_detail(a, "np-no-such-file-anywhere", "np-no-such-file-either", &fs_moved) != fs.NotFound { os.exit(34i32) }
+    if fs_moved.kind != .NotFound || !mem.eq[u8](fs_moved.operation, "rename") { os.exit(35i32) }
+    var fs_removed: os.ErrorDetail = zero
+    if fs.remove_dir_detail(a, "np-no-such-file-anywhere", &fs_removed) != fs.NotFound { os.exit(36i32) }
+    if !mem.eq[u8](fs_removed.operation, "remove_dir") { os.exit(37i32) }
+    var fs_resolved: os.ErrorDetail = zero
+    let (fs_canon, fs_canon_error) = fs.canonical_detail(a, "np-no-such-file-anywhere", &fs_resolved)
+    if fs_canon_error == ok || fs_resolved.native_code == 0i32 || !mem.eq[u8](fs_resolved.operation, "canonical") { os.exit(38i32) }
+    var fs_present: os.ErrorDetail = zero
+    let (fs_meta, fs_meta_error) = fs.metadata_detail(a, ".", false, &fs_present)
+    if fs_meta_error != ok { ret fs_meta_error }
+    if fs_present.native_code != 0i32 || fs_meta.kind != .Directory { os.exit(39i32) }
+    var fs_dirs: os.ErrorDetail = zero
+    if fs.make_dirs_detail(a, ".", &fs_dirs) != ok { os.exit(40i32) }
+    if fs_dirs.native_code != 0i32 { os.exit(41i32) }
     ret os.dir_close(here)
 }

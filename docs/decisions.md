@@ -10367,3 +10367,21 @@ byte-identical in both modes over the four fixtures; the program behaves the
 same. Over these fixtures the index's references were complete.
 
 Not yet: reordered parameters, an expression extracted to a constant.
+
+## D479 -- `e.fs` in the `_detail` form
+
+H07's detail transport reached `e.os` in D417 and D443 and stopped at the fence:
+`e.fs` maps every host error to its five and kept `last_error_detail` as "a
+legacy M2 bridge pending H07". Now its path-taking surface has the `_detail`
+form -- `stat`, `metadata`, `make_dir`, `make_dirs`, `remove_file`, `remove_dir`,
+`move`, `read_link`, `canonical`, `read_file`, `write_file` -- each calling the
+`e.os` form under it so the caller's value is written at the failing host call,
+before the close on the way out, and answering the fence's error as the plain
+form does. `operation` is the host call, not the wrapper: `stat` under a
+`read_file` of a missing name, `rename` under `move`, which is what a caller
+diagnosing the failure wants to know. `make_dirs_detail` names the component
+that could not be made, and a component that is there and is not a directory is
+`Exists` with no native code -- the host refused nothing. `read_file` and
+`write_file` read the detail at a failing `read`, `write` or final `close` too.
+The error-detail fixture takes seven more exits, both hosts. `e.io` and `e.proc`
+are the wrappers still without the form.

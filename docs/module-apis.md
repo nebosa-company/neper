@@ -1955,6 +1955,17 @@ fn write_file(a: *mem.Arena, path_text: str, data: []const u8) -> err
 fn walk(a: *mem.Arena, root_path: str, options: WalkOptions) -> (Walk, err)
 fn walk_next_err(it: *Walk) -> (Entry, bool, err)
 fn last_error_detail(operation: str, subject: str) -> os.ErrorDetail
+fn stat_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> (Entry, err)
+fn metadata_detail(a: *mem.Arena, path_text: str, follow_symlinks: bool, detail: *os.ErrorDetail) -> (Metadata, err)
+fn make_dir_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> err
+fn make_dirs_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> err
+fn remove_file_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> err
+fn remove_dir_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> err
+fn move_detail(a: *mem.Arena, src: str, dst: str, detail: *os.ErrorDetail) -> err
+fn read_link_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> (str, err)
+fn canonical_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> (str, err)
+fn read_file_detail(a: *mem.Arena, path_text: str, limit: usize, detail: *os.ErrorDetail) -> ([]u8, err)
+fn write_file_detail(a: *mem.Arena, path_text: str, data: []const u8, detail: *os.ErrorDetail) -> err
 type Root = struct { dir: os.Dir }
 
 fn root(a: *mem.Arena, path_text: str) -> (Root, err)
@@ -1979,8 +1990,12 @@ Root owns its directory handle and follows H01; its methods retain the SL06
 handle-relative semantics rather than normalizing strings then using path APIs.
 walk_close releases an abandoned traversal and is required on early exit; exhaustion
 releases OS traversal handles. Path functions remain convenience APIs, not sandboxes.
-last_error_detail is a legacy M2 bridge pending H07, not the revised checked API's
-error-detail transport. H07 migration must preserve partial effects and cleanup errors.
+last_error_detail is a legacy M2 bridge; the `_detail` forms (D479, H07) are the
+checked API's transport: each writes the host's account of its own failing call into
+the caller's `os.ErrorDetail` at that call, before any cleanup, naming the `e.os`
+operation that failed (`stat` under `read_file`, `rename` under `move`) and its path;
+`make_dirs_detail` names the component that could not be made. Partial effects are
+the plain form's: what was made before the failing step stays made.
 
 ### `e.fs.mmap`
 

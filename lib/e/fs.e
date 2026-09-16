@@ -665,3 +665,186 @@ fn walk_close(it: *Walk) -> err {
     state.depth = 0usize
     ret ok
 }
+
+// The checked path with the caller's detail (D479, H07), as `e.os` has it (D417,
+// D443): each form writes the host's account of its own failing call into `detail`
+// at that call -- before the close on the way out, which is a cleanup that could
+// record over it -- and answers the same `err` as the plain call, mapped by
+// `from_os`, so `try` and the affine rules see nothing new. On success `detail` is
+// not written. `operation` names the `e.os` call that failed, `subject` its path.
+fn stat_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> (Entry, err) {
+    var entry: Entry = zero
+    let (info, stat_error) = os.stat_detail(a, path_text, detail)
+    if stat_error != ok { ret (entry, from_os(stat_error)) }
+    entry.path = path_text
+    entry.kind = kind_from_os(info.kind)
+    entry.size = info.size
+    ret (entry, ok)
+}
+
+fn metadata_detail(a: *mem.Arena, path_text: str, follow_symlinks: bool, detail: *os.ErrorDetail) -> (Metadata, err) {
+    var described: Metadata = zero
+    var info: os.FileInfo = zero
+    var info_error = ok
+    if follow_symlinks {
+        let (followed, followed_error) = os.stat_detail(a, path_text, detail)
+        info = followed
+        info_error = followed_error
+    } else {
+        let (direct, direct_error) = os.lstat_detail(a, path_text, detail)
+        info = direct
+        info_error = direct_error
+    }
+    if info_error != ok { ret (described, from_os(info_error)) }
+    described.kind = kind_from_os(info.kind)
+    described.size = info.size
+    described.modified_ns = info.modified_ns
+    described.accessed_ns = info.accessed_ns
+    described.created_ns = info.created_ns
+    described.permissions = permissions_from_mode(info.mode)
+    described.file_id = info.file_id
+    described.link_count = info.link_count
+    ret (described, ok)
+}
+
+fn make_dir_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> err {
+    ret from_os(os.mkdir_detail(a, path_text, detail))
+}
+
+// The failing component is the subject: the prefix whose `mkdir` or `stat` failed,
+// or, for a component that is there and is not a directory, that prefix under
+// `Exists` with no native code -- the host refused nothing, the path cannot be made.
+fn make_dirs_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> err {
+    let style = host_style()
+    let checkpoint = mem.mark(a)
+    let (normalized, normalize_error) = path.normalize(a, path_text, style)
+    if normalize_error != ok {
+        mem.reset(a, checkpoint)
+        ret from_os(normalize_error)
+    }
+    var at = path.root_length(normalized, style)
+    while at <= normalized.len {
+        if at == normalized.len || path.is_separator(normalized[at], style) {
+            if at != 0usize {
+                let prefix = normalized[0usize..at]
+                // A component that is there is not a failure, so its `Exists` is
+                // not recorded; anything else is, at the call.
+                let step_error = os.mkdir(a, prefix)
+                if step_error != ok && step_error != os.Exists {
+                    *detail = os.last_error_detail("mkdir", prefix)
+                    mem.reset(a, checkpoint)
+                    ret from_os(step_error)
+                }
+                if step_error == os.Exists {
+                    let (info, stat_error) = os.stat_detail(a, prefix, detail)
+                    if stat_error != ok {
+                        mem.reset(a, checkpoint)
+                        ret from_os(stat_error)
+                    }
+                    if info.kind != .Dir {
+                        detail.kind = .Exists
+                        detail.native_code = 0i32
+                        detail.operation = "mkdir"
+                        detail.subject = path_text
+                        mem.reset(a, checkpoint)
+                        ret Exists
+                    }
+                }
+            }
+        }
+        at += 1usize
+    }
+    mem.reset(a, checkpoint)
+    ret ok
+}
+
+fn remove_file_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> err {
+    ret from_os(os.remove_file_detail(a, path_text, detail))
+}
+
+fn remove_dir_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> err {
+    ret from_os(os.remove_dir_detail(a, path_text, detail))
+}
+
+fn move_detail(a: *mem.Arena, src: str, dst: str, detail: *os.ErrorDetail) -> err {
+    ret from_os(os.rename_detail(a, src, dst, detail))
+}
+
+fn read_link_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> (str, err) {
+    let (target_text, read_error) = os.read_link_detail(a, path_text, detail)
+    if read_error != ok { ret ("", from_os(read_error)) }
+    ret (target_text, ok)
+}
+
+fn canonical_detail(a: *mem.Arena, path_text: str, detail: *os.ErrorDetail) -> (str, err) {
+    let (resolved, resolve_error) = os.canonical_detail(a, path_text, detail)
+    if resolve_error != ok { ret ("", from_os(resolve_error)) }
+    ret (resolved, ok)
+}
+
+// `read_file` and `write_file` are several host calls: the detail is the first one
+// that failed -- `stat`, `open`, `read`, `write` or the final `close` -- read at that
+// call, before the close that follows a failure.
+fn read_file_detail(a: *mem.Arena, path_text: str, limit: usize, detail: *os.ErrorDetail) -> ([]u8, err) {
+    var nothing: []u8 = zero
+    let (info, stat_error) = os.stat_detail(a, path_text, detail)
+    if stat_error != ok { ret (nothing, from_os(stat_error)) }
+    if info.kind == .Dir { ret (nothing, Invalid) }
+    let size = usize(info.size)
+    if limit != 0usize && size > limit { ret (nothing, Invalid) }
+    var flags: os.OpenFlags = zero
+    flags.read = true
+    let (file, open_error) = os.open_detail(a, path_text, flags, detail)
+    if open_error != ok { ret (nothing, from_os(open_error)) }
+    let (bytes, allocation_error) = mem.alloc[u8](a, size)
+    if allocation_error != ok {
+        let ignored = os.close(file)
+        ret (nothing, allocation_error)
+    }
+    var filled = 0usize
+    while filled < size {
+        let (read_count, read_error) = os.read(file, bytes[filled..size])
+        if read_error != ok {
+            *detail = os.last_error_detail("read", path_text)
+            let ignored = os.close(file)
+            ret (nothing, from_os(read_error))
+        }
+        if read_count == 0usize { break }
+        filled += read_count
+    }
+    let close_error = os.close(file)
+    if close_error != ok {
+        *detail = os.last_error_detail("close", path_text)
+        ret (nothing, from_os(close_error))
+    }
+    ret (bytes[0usize..filled], ok)
+}
+
+fn write_file_detail(a: *mem.Arena, path_text: str, data: []const u8, detail: *os.ErrorDetail) -> err {
+    var flags: os.OpenFlags = zero
+    flags.write = true
+    flags.create = true
+    flags.truncate = true
+    let (file, open_error) = os.open_detail(a, path_text, flags, detail)
+    if open_error != ok { ret from_os(open_error) }
+    var sent = 0usize
+    while sent < data.len {
+        let (written, write_error) = os.write(file, data[sent..data.len])
+        if write_error != ok {
+            *detail = os.last_error_detail("write", path_text)
+            let ignored = os.close(file)
+            ret from_os(write_error)
+        }
+        if written == 0usize {
+            let ignored = os.close(file)
+            ret Io
+        }
+        sent += written
+    }
+    let close_error = os.close(file)
+    if close_error != ok {
+        *detail = os.last_error_detail("close", path_text)
+        ret from_os(close_error)
+    }
+    ret ok
+}
