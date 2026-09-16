@@ -9690,3 +9690,20 @@ The H17 row is corrected: reordering and removal were D415's.
 
 Not yet: a parameter shadowed by a local of the same name, which the token scan
 counts as a use (a refusal, never a wrong plan), and moves and error renames.
+
+## D440 -- The card marks each diagnostic code verified, present or planned
+
+H11 and H28 ask that what the card promises be marked by its standing, so a
+model does not build an edit loop on a code the registry names and nothing
+emits. `render_card.py` now classifies every code of `diagnostics.md` when it
+renders: `verified` when a conformance golden carries `"code":"E-..."` or a
+suite names it, `present` when `src/*.e` emits it and nothing pins it,
+`planned` when the registry alone names it; the card's Diagnostics section
+counts each family by standing and lists the codes that are not verified.
+At this revision forty-six of forty-nine are verified, `E-LINK-9999` and
+`E-TOOL-9999` present, `E-GPU-9999` planned. The standing is read from the
+files at render time and never declared, so a golden added or a code removed
+changes the card and `--check` says so.
+
+Not yet: the marking on the card's rules and commands, and on the API
+catalogue.

@@ -95,7 +95,11 @@ fn main(a: *mem.Arena, args: []str) -> err {
 ## Diagnostics
 
 Codes are `E-<FAMILY>-<NNNN>`; the registry is `diagnostics.md`, and the code, not
-the message, is the machine discriminator:
+the message, is the machine discriminator. Each code's standing is read from the
+repository when the card is rendered: `verified` -- a conformance golden or a suite
+pins it; `present` -- the compiler emits it and nothing pins it yet; `planned` --
+the registry alone names it. A verified code is the only kind an edit loop should
+rely on:
 
 {{diagnostics}}
 

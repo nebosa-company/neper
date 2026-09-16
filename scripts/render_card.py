@@ -11,7 +11,7 @@ docs/llm-neper-card.src.md. The rendered card carries the grammar revision, the
 language and tool versions and a content hash, so a card and the grammar cannot
 drift: the suites run --check.
 """
-import hashlib, json, os, re, sys
+import glob, hashlib, json, os, re, sys
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def read(*parts):
@@ -57,12 +57,32 @@ production_text = '\n'.join(line for line in grammar.splitlines() if not line.st
 keywords = sorted(k for k in set(re.findall(r'`([a-z][a-z_]+)`', production_text)) if len(k) > 1)
 
 codes = re.findall(r'^\| `(E-([A-Z]+)-(\d{4}))` \| ([^|]+) \|', read('docs', 'diagnostics.md'), re.M)
+# Each code's standing (D440, H11/H28): `verified` when a conformance golden or a
+# suite pins it, `present` when the compiler's source emits it and nothing pins it,
+# `planned` when the registry alone names it. Read from the files, never declared.
+goldens = ''.join(read(p) for p in sorted(glob.glob(os.path.join(root, 'tests', 'conformance', '**', '*.expected.jsonl'), recursive=True)))
+suites = read('tests', 'selfhost', 'run.ps1') + read('tests', 'selfhost', 'run.sh')
+sources = ''.join(read(p) for p in sorted(glob.glob(os.path.join(root, 'src', '*.e'))))
+def standing(code):
+    if '"code":"%s"' % code in goldens or code in suites:
+        return 'verified'
+    if code in sources:
+        return 'present'
+    return 'planned'
 families = {}
 for code, family, number, meaning in codes:
-    families.setdefault(family, []).append((code, meaning.strip()))
-diagnostics = '\n'.join(
-    '- `E-%s-*`: %d codes; `%s` is the catch-all' % (family, len(entries), entries[-1][0])
-    for family, entries in sorted(families.items()))
+    families.setdefault(family, []).append((code, meaning.strip(), standing(code)))
+def family_line(family, entries):
+    counts = {}
+    for code, meaning, state in entries:
+        counts[state] = counts.get(state, 0) + 1
+    parts = ', '.join('%d %s' % (counts[s], s) for s in ('verified', 'present', 'planned') if s in counts)
+    unverified = ', '.join('`%s` %s' % (code, state) for code, meaning, state in entries if state != 'verified')
+    line = '- `E-%s-*`: %d codes (%s); `%s` is the catch-all' % (family, len(entries), parts, entries[-1][0])
+    if unverified:
+        line += '; ' + unverified
+    return line
+diagnostics = '\n'.join(family_line(family, entries) for family, entries in sorted(families.items()))
 
 # The token cost of the grammar's terminals per public tokenizer (D429, H26), from the
 # profiles D375 writes: every profile must be of this grammar revision, or the card
