@@ -91,6 +91,9 @@ type Build = struct {
     // By-value arguments copied for their call, and passed by address (D358).
     snapshots_copied: usize,
     snapshots_elided: usize,
+    values_allocated: usize,
+    values_spilled: usize,
+    functions_spilling: usize,
 }
 
 fn record_phase(b: *Build, name: str, ms: usize) {
@@ -383,6 +386,10 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
     try row_number("bounds checks elided", b.bounds_elided)
     try row_number("by-value copies", b.snapshots_copied)
     try row_number("by-value copies elided", b.snapshots_elided)
+    // Register pressure (D450, H20): what the allocator could not keep in a register.
+    try row_number("values allocated", b.values_allocated)
+    try row_number("values spilled", b.values_spilled)
+    try row_number("functions spilling", b.functions_spilling)
     // The worker arenas' high-water marks summed (D339): every phase's workers, what
     // each allocated, rounded to the runtime's chunk -- what the pools were sized to,
     // not what was committed, which is the pages touched and the peak below; the

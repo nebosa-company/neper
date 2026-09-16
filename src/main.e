@@ -5870,6 +5870,10 @@ fn codegen_functions(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builder
         let (stack_slots, allocation_error) = regalloc.allocate(builder, function_at, codegen_x64.register_pool_count(), context.ranges, context.allocations, a)
         if report.timing { report.regalloc_ns = report.regalloc_ns +% nptest_now() }
         if allocation_error != ok { ret allocation_error }
+        // Register pressure (D450, H20): counted on the builder, summed for `--stats`.
+        builder.values_allocated += builder.functions[function_at].value_count
+        builder.values_spilled += stack_slots
+        if stack_slots != 0usize { builder.functions_spilling += 1usize }
         if emit {
             let function_start = context.output.count
             function_offsets[function_at] = function_start
@@ -7410,6 +7414,9 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         report.build.bounds_elided += crew.workers[touched_at].builder.bounds_elided + crew.workers[touched_at].oracle.bounds_elided
         report.build.snapshots_copied += crew.workers[touched_at].builder.snapshots_copied + crew.workers[touched_at].oracle.snapshots_copied
         report.build.snapshots_elided += crew.workers[touched_at].builder.snapshots_elided + crew.workers[touched_at].oracle.snapshots_elided
+        report.build.values_allocated += crew.workers[touched_at].builder.values_allocated
+        report.build.values_spilled += crew.workers[touched_at].builder.values_spilled
+        report.build.functions_spilling += crew.workers[touched_at].builder.functions_spilling
         touched_at += 1usize
     }
     ret ok

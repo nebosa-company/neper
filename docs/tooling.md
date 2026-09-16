@@ -547,7 +547,11 @@ each, and a build after an edit the modules the edit reached -- and
 declaration pass: the seeded surface and every parsed module's, a kept module's
 coming from its artifact -- so a warm build over a stable cache reports the
 seeds alone (28 on the incremental fixture, against 403 cold) and a build after
-an edit the edited modules' too; `--stats` prints the same four rows. Arrays use the
+an edit the edited modules' too; `--stats` prints the same four rows, and (D450, H20) three of register pressure:
+`values allocated` (the NIR values the allocator placed), `values spilled` (the
+ones it put on the stack) and `functions spilling` (the functions with any) --
+the measurement H20 asks for, so a change to the allocator or to what the
+lowering emits is a number before it is a wall-clock figure. Arrays use the
 deterministic order in which their corresponding compiler operation is specified,
 and object keys use the order listed here.
 

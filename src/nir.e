@@ -293,6 +293,12 @@ type Builder = struct {
     // caller's own storage because nothing can write it during the call.
     snapshots_copied: usize,
     snapshots_elided: usize,
+    // Register pressure (D450, H20): the values the allocator placed, the ones it
+    // put on the stack, and the functions with any on the stack, over the functions
+    // this builder's code was generated from.
+    values_allocated: usize,
+    values_spilled: usize,
+    functions_spilling: usize,
     // The release build (D217): `nocheck` is that too, but `@nocheck` sets it for a
     // block, and section 11's debug fills do not come off with the checks.
     release: bool,

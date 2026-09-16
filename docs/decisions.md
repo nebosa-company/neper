@@ -9845,3 +9845,17 @@ and `--seed` for a longer run.
 Not yet: an oracle for the compiler's own codegen -- an interpreter of NIR, or
 the bootstrap's images run against the self-hosted ones on the same inputs --
 and the other codecs.
+
+## D450 -- Register pressure is a `--stats` row
+
+H20 lists register-pressure measurements among what the compilation policy
+should report; the allocator returned each function's stack slots to the
+codegen loop and nobody counted them. The loop now sums, on the builder the
+code is generated from, the values it placed, the values it put on the stack
+and the functions with any, and the crew's builders sum into three `--stats`
+rows: `values allocated`, `values spilled`, `functions spilling`. On the
+compiler's own release build: 292,368 values allocated, 3,718 spilled (1.3%),
+630 functions spilling -- the numbers a change to the allocator or to the
+lowering is measured by before the wall clock is.
+
+Not yet: the rows per function, and the count of allocations a build makes.
