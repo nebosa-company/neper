@@ -8207,3 +8207,35 @@ with the scan's; the index marking them; `--unchecked` images as one boundary in
 the context records; the boundaries of an artifact-only module (a warm build
 scans the source it kept, which is right, but a module linked from an artifact
 alone contributes nothing).
+
+## D372 -- No persistent server before the measurement says so: H10 and H16 dispositions
+
+H10 and H16 both say the same thing about a resident compiler: batch queries
+before adding a persistent server, and introduce a versioned cancellable session
+only if measured startup and reparse costs justify its state and its invalidation
+complexity. The measurement, on the M2 machine with the D371 compiler (medians of
+seven one-shot runs): `info --json` 5 ms; `check-file` of a fifteen-line program
+25 ms; `check-file` of the compiler's own root -- 48k lines, every module parsed,
+resolved and checked on eight workers -- 269 ms; `context-file --symbol check.run`
+on the compiler 163 ms. A warm build of the compiler is 200-260 ms on the
+baseline. Process start is a few milliseconds of that, and the rest is the work
+a resident process would have to redo or prove unchanged. So the decision is: no
+daemon, no session, no cursors bound to a resident snapshot in M2.5. Every query
+is one process over one snapshot -- the files as read at its start, hashed into
+the manifest -- reclaimed whole at exit, which is spec section 15's model and the
+right one at these latencies. H16's accounting is `--stats` (arena high-water,
+peak resident set, per-phase time, worker bytes, D311/D338) and the baseline's
+budgets (D366); its bounds are D341's nesting limit, D344's deterministic limit
+codes, and the pools' capacities named as E-TYPE-9999 rather than a crash.
+
+What H10 has beyond this: the phase split (parse, interface, bodies, lowering,
+link) with `check-file` linking and generating nothing (D314, D320); immutable
+artifacts keyed by source, mode and interface hashes (D205-D214, D369);
+mutation fuzzing and the nesting bound (D341); stage-2/stage-3 equality in the
+suites; deterministic images across worker counts under `--perturb` (D331);
+clean/incremental equivalence as a required oracle (D343, both suites). Not yet:
+IR verifiers at the NIR and lowering boundaries, differential execution against
+an independent oracle, metamorphic formatting and alpha-renaming tests, test
+impact queries, cancellation (a one-shot process is cancelled by killing it, and
+the atomic publish of D343 is what makes that safe). The readiness rows for H10
+and H16 are new and carry these.
