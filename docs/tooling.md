@@ -583,8 +583,10 @@ inventory of the program's unsafe boundaries (D355, D371, H03/H27) -- one entry 
 fn`, `mem.cast`, `mem.bitcast` and bare `union` site (`provenance: "trusted"`: the
 checker trusts the program there and checks nothing), with `kind`, `provenance`,
 `module`, `function` (the type, for a `union`) and `line`, read off every module's
-bytes so a warm build lists them too, in module then line order; a raw dereference
-is not enumerable by this pass and is the boundary the inventory does not list; `incremental` (D363, H14) is what an
+bytes so a warm build lists them too, in module then line order; every
+dereference inside a `@nocheck` block is a `deref` site of its own (D497), the
+read whose null check the block left out, at its line under the block's
+function -- a `*` before a name or a `(`, not after `:`, `[` or `->`; `incremental` (D363, H14) is what an
 `--incremental` build decided per module, in graph order -- `decision` `kept` or
 `rebuilt` and `reason`: `stable` (source and every dependency unchanged),
 `edges-hold` (source unchanged, every imported interface still as recorded),

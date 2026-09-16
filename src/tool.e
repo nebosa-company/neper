@@ -4878,6 +4878,12 @@ fn manifest_module_sites(out: *Out, written: *usize, module_name: str, text_byte
                     let (name, found) = manifest_fn_before(text_bytes, byte_at)
                     if found { function = name }
                     try manifest_unsafe_site(out, *written, "nocheck", "declared", module_name, function, line)
+                    *written += 1usize
+                    // The block's raw dereferences (D497, H27): every `*p` inside it is
+                    // read with no null check, and each is a `deref` site of its own.
+                    try manifest_nocheck_derefs(out, written, module_name, function, text_bytes, word_end, line)
+                    byte_at = word_end
+                    continue
                 }
                 *written += 1usize
             }
@@ -4915,6 +4921,71 @@ fn manifest_module_sites(out: *Out, written: *usize, module_name: str, text_byte
                 byte_at += 1usize
             }
         }
+    }
+    ret ok
+}
+
+// The raw dereferences of a `@nocheck` block (D497, H27): from the block's `{` to
+// its `}`, a `*` that begins a dereference -- one followed by a name or a `(`, and
+// not after a `:`, a `[` or a `->`, which begin a pointer type -- is a site with no
+// null check, listed as `deref` under the block's function. A `*` with a space
+// after it is a product. Strings and comments inside the block are skipped.
+// ponytail: a byte scan over the block, as the other sites are (D371); the checker's
+// own record of a skipped null check would need the lowering, which
+// `build-manifest-file` does not run.
+fn manifest_nocheck_derefs(out: *Out, written: *usize, module_name: str, function: str, text_bytes: str, from: usize, line_in: usize) -> err {
+    var at = from
+    while at < text_bytes.len && text_bytes[at] != 123u8 { at += 1usize }
+    if at == text_bytes.len { ret ok }
+    var line = line_in
+    var line_at = from
+    var depth = 0usize
+    while at < text_bytes.len {
+        let here = text_bytes[at]
+        if here == 10u8 {
+            at += 1usize
+            continue
+        }
+        if here == 34u8 {
+            // A string: to its closing quote, an escaped one skipped.
+            at += 1usize
+            while at < text_bytes.len && text_bytes[at] != 34u8 && text_bytes[at] != 10u8 {
+                if text_bytes[at] == 92u8 { at += 1usize }
+                at += 1usize
+            }
+            at += 1usize
+            continue
+        }
+        if here == 47u8 && at + 1usize < text_bytes.len && text_bytes[at + 1usize] == 47u8 {
+            while at < text_bytes.len && text_bytes[at] != 10u8 { at += 1usize }
+            continue
+        }
+        if here == 123u8 { depth += 1usize }
+        if here == 125u8 {
+            depth = depth - 1usize
+            if depth == 0usize { ret ok }
+        }
+        if here == 42u8 && at + 1usize < text_bytes.len {
+            let next = text_bytes[at + 1usize]
+            let starts_name = (next >= 97u8 && next <= 122u8) || (next >= 65u8 && next <= 90u8) || next == 95u8 || next == 40u8
+            var before = at
+            while before > 0usize && text_bytes[before - 1usize] == 32u8 { before = before - 1usize }
+            var type_position = false
+            if before > 0usize {
+                let previous = text_bytes[before - 1usize]
+                if previous == 58u8 || previous == 91u8 { type_position = true }
+                if previous == 62u8 && before > 1usize && text_bytes[before - 2usize] == 45u8 { type_position = true }
+            }
+            if starts_name && !type_position {
+                while line_at < at {
+                    if text_bytes[line_at] == 10u8 { line += 1usize }
+                    line_at += 1usize
+                }
+                try manifest_unsafe_site(out, *written, "deref", "declared", module_name, function, line)
+                *written += 1usize
+            }
+        }
+        at += 1usize
     }
     ret ok
 }

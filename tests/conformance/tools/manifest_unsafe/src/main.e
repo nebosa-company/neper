@@ -1,8 +1,10 @@
 // `build-manifest --json`'s `unsafe` inventory (D355, D371, H27): every escape hatch
 // of the program, declared or trusted -- an `@unsafe` function, a `@nocheck` block,
 // an `extern fn`, a `mem.cast`, a `mem.bitcast` and a bare `union` -- with its kind,
-// provenance, module, function and line. The comment and the string on the last
-// lines spell two of them and are not sites.
+// provenance, module, function and line, and (D497) every dereference inside the
+// `@nocheck` block as a `deref` site, whose null check the block left out. The
+// comment and the string on the last lines spell two of them and are not sites; the
+// product and the pointer type inside the block are not dereferences.
 use e.mem
 
 type Bits = union { whole: u32, halves: [2]u16 }
@@ -26,8 +28,11 @@ fn erase(p: *u32) -> *void {
 fn main() {
     var cell = 7u32
     var seen = peek(&cell)
+    var raw: *u32 = &cell
     @nocheck {
         seen = seen + reinterpret(1.5)
+        let doubled: *u32 = raw
+        seen = seen + *raw * 2u32 + *doubled
     }
     let gone = erase(&cell)
     // not a site: mem.cast[*void](gone)

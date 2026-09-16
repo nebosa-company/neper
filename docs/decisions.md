@@ -10642,3 +10642,18 @@ is: exit 3, `cancelled_after` the declarations, no image. The corpus's
 `comptime_long.e` is four such constants, never evaluated to the end by the
 suites, which require exit 3 in under two seconds on both hosts. Not yet:
 a deadline inside one function's lowering.
+
+## D497 -- Raw dereferences as sites
+
+H27's inventory listed a `@nocheck` block as one site; what a harness wants to
+know is where inside it a pointer is read with no null check, since that is
+the raw dereference checked code otherwise has none of (the null row is kept
+in release, D355; `@unsafe` leaves it in place too). Each `*p` inside a
+`@nocheck` block is now a `deref` site, `declared`, under the block's
+function and at its own line. The sites are read off the block's bytes as the
+others are (D371): a `*` followed by a name or a `(`, and not after `:`, `[`
+or `->` -- which begin a pointer type -- is a dereference; a `*` followed by a
+space is a product; strings and comments are skipped. The checker's own
+record of the skipped check would need the lowering, which `build-manifest-file`
+does not run, and the two paths must list the same sites (D457). The corpus
+fixture gains a product, a pointer type and two dereferences in its block.
