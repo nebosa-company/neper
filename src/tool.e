@@ -2441,6 +2441,23 @@ fn subject_record(out: *Out, g: *graph.Graph, subject: str, root: str, relative:
     ret flush(out)
 }
 
+// The `memory` line of a batch (D410, H16): the arena's bytes in use and its
+// capacity, as a stream of its own. Asked before and after a run of queries,
+// the two `arena_used` are equal when the batch retains nothing between lines.
+fn batch_memory(a: *mem.Arena) -> err {
+    let stats = mem.stats(a)
+    var storage: [1024]u8 = zero
+    var out: Out = zero
+    out.bytes = storage[..]
+    try header(&out, "context")
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"arena_used\":")
+    try decimal(&out, stats.used)
+    try text(&out, ",\"arena_capacity\":")
+    try decimal(&out, stats.capacity)
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
 // A batch line no query reads (D409): a stream of its own, refused.
 fn batch_line_refused(a: *mem.Arena, line: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, line.len * 2usize + 1024usize)

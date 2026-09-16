@@ -9128,3 +9128,22 @@ per host.
 Not yet: plans in a batch (a plan's preconditions are the snapshot it binds to,
 and a batch that edits between lines would need them re-read), pinned
 snapshots and eviction, and the retained-memory report after warmup.
+
+## D410 -- A batch line is a request of its own, and the arena says so
+
+H16 asks that request storage be separate from the snapshot's and that retained
+memory be reported after warmup; D409's batch answered every line from the one
+arena and kept what each answer allocated -- its output storage, its site
+tables -- until the process ended, a thousand lines holding a thousand answers.
+Each line now runs between a mark and a reset of the arena: the snapshot -- the
+graph, the resolver, the checker and its explain table -- lies below the mark and
+stays, and what the line allocated is given back when it is answered. A `memory`
+line reports `arena_used` and `arena_capacity` as a stream of its own, so a
+harness can watch what a batch retains; asked before and after three queries it
+reports the same use, which both suites assert, and five hundred and fifty
+`context` queries over the compiler's own source run in 3.2 s with the arena
+where it started (232 MB used, the snapshot).
+
+Not yet: eviction and pinning (there is one snapshot, held for the process), and
+the pages a request touched, which the arena commits and does not give back --
+`arena_used` is what is live, not what was reached.

@@ -7140,7 +7140,8 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
 // `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): the batch file --
 // `-` for standard input -- holds one query per line, words separated by spaces:
 // `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET [BYTES [CURSOR]]]`,
-// `uses SYMBOL`. Each line's answer is a whole stream (header to result), written in
+// `uses SYMBOL`, `memory` (D410: the arena's use and capacity, for a harness
+// that watches what a batch retains). Each line's answer is a whole stream (header to result), written in
 // the line's order, so a harness splits the output at the headers; a blank line is
 // passed over, a line no query reads gets a diagnostic stream of its own. A refused
 // query or an unreadable line makes the process exit 2 once every line is answered.
@@ -7185,6 +7186,16 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
         if word_count > 4usize && decimal_ok(words[4usize]) { cursor = decimal_value(words[4usize]) }
         var line_error = ok
         var known = false
+        // A request arena of its own (D410, H16): what a query allocates -- its
+        // output storage, its site tables -- is given back when the line is answered,
+        // so a batch of a thousand lines holds what one line holds. The snapshot --
+        // the graph, the resolver, the checker and its explain table -- lies below the
+        // mark and stays.
+        let request_mark = mem.mark(a)
+        if word_count >= 1usize && same(words[0usize], "memory") {
+            known = true
+            line_error = tool.batch_memory(a)
+        }
         if word_count >= 2usize && same(words[0usize], "context") {
             known = true
             line_error = tool.context_json(a, checker, loaded, words[1usize], budget, byte_budget, cursor, target_text, "retained")
@@ -7201,6 +7212,7 @@ fn query_batch(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph, bat
             try tool.batch_line_refused(a, line)
             line_error = tool.Refused
         }
+        mem.reset(a, request_mark)
         if line_error == tool.Refused { refused = true } else { if line_error != ok { ret line_error } }
     }
     if refused { ret tool.Refused }

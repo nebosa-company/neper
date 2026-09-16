@@ -1,0 +1,5 @@
+memory
+context contract.main 8
+catalog contract 8
+uses contract.total
+memory

@@ -296,12 +296,17 @@ has is an `E-CLI-9999` diagnostic and exit 2.
 `neper query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16) answers many
 queries from one check: the batch file (`-` for standard input) holds one query
 per line -- `context SYMBOL [BUDGET [BYTES [CURSOR]]]`, `catalog MODULE [BUDGET
-[BYTES [CURSOR]]]`, `uses SYMBOL` -- and each line's answer is a whole stream,
+[BYTES [CURSOR]]]`, `uses SYMBOL`, `memory` (the arena's `arena_used` and
+`arena_capacity`) -- and each line's answer is a whole stream,
 header to result, written in the line's order, so a harness splits the output
 at the headers. A blank line is passed over; a line no query reads gets a
 diagnostic stream of its own. A refused query or an unreadable line makes the
-process exit 2 once every line is answered. Measured on the compiler's own
-source: twenty `context` queries in one batch 447 ms, as twenty processes 6.6 s.
+process exit 2 once every line is answered. Each line is a request of its own
+(D410): what it allocates is given back when it is answered, and `memory` asked
+before and after a run of queries reports the same `arena_used`, which both
+suites assert. Measured on the compiler's own source: twenty `context` queries
+in one batch 447 ms, as twenty processes 6.6 s; five hundred and fifty lines 3.2
+s with the arena where it started.
 
 Both forms take `--bytes N` beside `--budget` (D400, H08): a budget in serialized
 bytes, measured on what has been flushed; the record that crosses it is the last

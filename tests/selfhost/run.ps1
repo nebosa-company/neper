@@ -2147,6 +2147,12 @@ $batchActual = Join-Path $testBuild 'conformance-tools-batch.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" query-batch contract.e `"$repo`" x64 windows --json --batch batch.txt > `"$batchActual`""
 if ($LASTEXITCODE -ne 2) { throw "query-batch with refused lines did not exit 2 (got $LASTEXITCODE)" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $batchActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/batch.x64-windows.expected.jsonl')).Hash) { throw "query-batch --json differs from the conformance corpus" }
+# A batch retains nothing between lines (D410, H16): `memory` before and after three
+# queries reports the same arena use.
+$batchMemory = & $compiler query-batch (Join-Path $conformanceRoot 'tools/contract.e') $repo 'x64' 'windows' --json --batch (Join-Path $conformanceRoot 'tools/batch_memory.txt')
+if ($LASTEXITCODE -ne 0) { throw "query-batch with memory lines failed" }
+$batchUsed = @($batchMemory | Select-String -Pattern '"arena_used":(\d+)' -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value })
+if ($batchUsed.Count -ne 2 -or $batchUsed[0] -ne $batchUsed[1]) { throw "the batch retained memory between lines ($($batchUsed -join ' / '))" }
 # The catalogue (D397, H11): every function of the module, subjects and facts under one
 # budget; the byte budget (D400, H08) ends the page at the record that crosses it.
 $catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'
