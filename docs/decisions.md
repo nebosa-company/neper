@@ -9415,3 +9415,16 @@ of the test fixture, the crashing one left out.
 
 Not yet: `--only` on `test-project`, and a refusal for a bare name no module of
 the project declares.
+
+## D425 -- The card names the edit loop
+
+The language card's tool section (D374) named `index`, `tokens`, `parse`, `fmt
+--check` and three queries; since then the compiler gained the contract facts,
+the type and module subjects, field uses, four plans, the impact query, the
+batch, the deadline and the typed mismatch fields, and the card -- the one
+document a model is meant to read first -- said nothing of them. The section
+now lists each with its arguments in one line, and states the loop they make:
+index or `uses-file`, then `context-file` on what the change touches, a plan
+where one exists or an edit at the exact spans, apply, `check-file` and `fmt
+--check`, `test-impact-file`, `test-file --only`. Rendered and checked as
+before; the examples still compile. A documentation change alone: no suite run.
