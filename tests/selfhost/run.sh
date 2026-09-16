@@ -1855,6 +1855,18 @@ for hot_mode in --release --time; do
     [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed
     cmp "$hot_exe" "$hot_clean"
+    # A write that dies (D435, H24): the second module's artifact write dies after
+    # staging; the warm build after it rebuilds that module alone and is the clean build.
+    cp "$hot_fixture/src/dep.e" "$hot_source/dep.e"
+    rm -rf "$hot_scratch/.neper"
+    hot_fault_status=0
+    hot_fault_output=$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --fault-write 1 2>&1) || hot_fault_status=$?
+    [ "$hot_fault_status" -eq 1 ] || { echo "a build with an injected write fault exited $hot_fault_status, not 1" >&2; exit 1; }
+    case "$hot_fault_output" in *"made to fail by --fault-write"*) ;; *) echo "a build with an injected write fault did not say so: $hot_fault_output" >&2; exit 1 ;; esac
+    [ -n "$(find "$hot_scratch/.neper" -name '*.tmp')" ] || { echo "the injected write fault left no staged file" >&2; exit 1; }
+    [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:edges-hold dep=rebuilt:no-artifact
+    cmp "$hot_exe" "$hot_clean"
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
     # or ignored, and the build is the clean build; the `.tmp` is never read.

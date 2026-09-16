@@ -564,6 +564,13 @@ program under the same budget and worker count answers the same way on every
 machine. `--stats` reports the count as `function instances`; the corpus's
 `tools/instances` case makes three.
 
+`--fault-write N` (D435, H24) on a hot build makes the artifact write of module
+`N` (by load order, the root 0) die after its `.tmp` is staged and before the
+replace, as a crash there would: the build stops with one `E-CLI-9999`, exit 1,
+no image, the staged file left and every artifact published before it whole. A
+harness reads what the next build finds -- the module rebuilt as `no-artifact`,
+the rest `stable`, the image the clean build's -- which the suites do.
+
 `emit-executable ... --release --unchecked` (D355) builds the release image with
 spec section 11's memory rows left out, which the manifest records as
 `options.checks: "off"`; without it a release build keeps them.

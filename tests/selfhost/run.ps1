@@ -1708,6 +1708,20 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:options-changed' 'dep=rebuilt:options-changed'
     if ($LASTEXITCODE -ne 0) { throw "the manifest after a capped build's artifacts does not say options-changed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after an inline cap is not the clean build ($hotMode)" }
+    # A write that dies (D435, H24): `--fault-write 1` makes the second module's artifact
+    # write die after staging, so the build fails with its `.tmp` left; the warm build
+    # after it finds every published artifact whole, rebuilds that module alone as
+    # `no-artifact`, and is the clean build.
+    Copy-Item (Join-Path $hotFixture 'src\dep.e') (Join-Path $hotSource 'dep.e')
+    Remove-Item -LiteralPath (Join-Path $hotScratch '.neper') -Recurse -Force
+    $hotFaultBuild = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --fault-write 1 2>&1
+    if ($LASTEXITCODE -ne 1 -or ($hotFaultBuild -join "`n") -notmatch 'made to fail by --fault-write') { throw "a build with an injected write fault did not fail as one ($hotMode): $hotFaultBuild" }
+    if (-not (Get-ChildItem -LiteralPath (Join-Path $hotScratch ".neper\$hotManifestMode") -Filter '*.tmp' -Recurse)) { throw "the injected write fault left no staged file ($hotMode)" }
+    $hotAfterFault = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotAfterFault -ne 'executable written') { throw "the warm hot build after an injected write fault failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:edges-hold' 'dep=rebuilt:no-artifact'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after an injected write fault does not say the faulted module alone was rebuilt ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after an injected write fault is not the clean build ($hotMode)" }
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
     # or ignored, and the build is the clean build; the `.tmp` is never read.

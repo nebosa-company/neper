@@ -9609,3 +9609,20 @@ pins the leak.
 
 Not yet: a fixture that makes a start fail part way (no host fails a start on
 demand), and a group whose threads return values.
+
+## D435 -- A fault injected into the cache writes
+
+H24 asks for fault injection into the cache writes; D343's publish-by-replace
+was argued and its damaged-cache cases planted files by hand, never a write
+that died mid-way. `--fault-write N` on a hot build makes the artifact write of
+module `N` (by load order) die after its `.tmp` is staged and before the
+replace, the way a crash there would: the worker stops with `ArtifactWriteFault`,
+the crew reports one `E-CLI-9999` naming the flag, exit 1, no image, the staged
+file left and every artifact published before it whole. Both suites, in both
+modes, run the hot fixture under it, read the stray `.tmp`, and build warm: the
+manifest says the faulted module alone was rebuilt as `no-artifact` and the
+root kept (`edges-hold`: its import was rebuilt to the same interface), and the
+image is the clean build's.
+
+Not yet: a fault in the manifest's own write, and a fault in the replace itself
+rather than before it.

@@ -770,7 +770,7 @@ fn self_test() -> err {
 
 // The flags that take the argument after them (D426): one list, every scanner's.
 fn takes_value(flag: str) -> bool {
-    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances")
+    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances") || same(flag, "--fault-write")
 }
 
 // A flag with a decimal after it: the value, and whether the flag was given at all.
@@ -5927,6 +5927,11 @@ fn emit_whole_program(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, builde
 type HotBuild = struct {
     on: bool,
     keep: []bool,
+    // `--fault-write N` (D435, H24): the module, by load order, whose artifact write
+    // is made to die after staging and before the replace -- as a crash would --
+    // so a suite can read what the next build finds; `fault_on` false for none.
+    fault_on: bool,
+    fault_module: usize,
     directory: str,
     triple: str,
     release: bool,
@@ -5991,8 +5996,19 @@ fn write_hot_artifact(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Gra
     if !hot.on { ret ok }
     let (artifact_path, artifact_path_error) = compiled_module_path(a, hot.directory, loaded.modules[module_index].name, hot.triple)
     if artifact_path_error != ok { ret artifact_path_error }
+    if hot.fault_on && hot.fault_module == module_index {
+        // The write dies between the staging and the replace (D435): the `.tmp` is
+        // left, the previous artifact if any is whole, and the build stops here.
+        let (staged, staged_error) = with_suffix(a, artifact_path, ".tmp")
+        if staged_error != ok { ret staged_error }
+        try write_file(a, staged, held)
+        ret ArtifactWriteFault
+    }
     ret save_bytes(a, artifact_path, held)
 }
+
+// An artifact write made to fail by `--fault-write` (D435).
+error ArtifactWriteFault
 
 // The link over every module's artifact, kept and fresh alike, in module order with
 // the root first: what `link-em` does with the artifacts named in that order, which
@@ -6906,6 +6922,13 @@ fn crew_failure(report: *Sink, loaded: *graph.Graph, w: *LowerWorker) -> err {
     if w.failure == Cancelled {
         if w.failed_lowering { ret cancel_build(report, "lowering, between modules") }
         ret cancel_build(report, "the body sweep, between modules")
+    }
+    // The injected fault (D435, H24): the build dies as a crash would, no image.
+    if w.failure == ArtifactWriteFault {
+        try emit_command_diagnostic(report, "E-CLI-9999", "an artifact write was made to fail by --fault-write: the build stops as a crash would, its staged file left and every published artifact whole; no image was written")
+        try finish_report(report)
+        os.exit(1i32)
+        ret ok
     }
     if w.failed_lowering {
         var builder = &w.builder
@@ -8067,6 +8090,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             hot.directory = artifact_dir
             hot.release = release_build
             hot.unchecked = unchecked_build
+            if trailing_flags {
+                let (fault_module, fault_on) = decimal_flag(args, "--fault-write")
+                hot.fault_on = fault_on
+                hot.fault_module = fault_module
+            }
             let (hot_triple, hot_triple_error) = target_triple(a, args[4usize], args[5usize])
             if hot_triple_error != ok { ret hot_triple_error }
             hot.triple = hot_triple
@@ -8492,7 +8520,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--fault-write N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }
