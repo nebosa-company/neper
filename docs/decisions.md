@@ -7461,3 +7461,40 @@ generics, `mem.bitcast` and reflection (E-SAFETY-0005), the move-while-borrowed 
 (E-SAFETY-0004), user-declared `resource` types with a named cleanup, `os.dup`, and
 `mem.Arena` as an affine type. The bootstrap is untouched: `own` appears in library
 and fixture sources only, and the compiler's own sources restructure instead.
+
+## D346 -- The inlining cap re-evaluated and retained, and every decision explained
+
+H20 asks that the permanent forty-instruction cross-module inlining cap (spec
+section 12, D207) be re-evaluated against a representative workload and retained
+only if justified, and that the compiler give structured reasons for the
+transformations it performs and declines.
+
+`--inline-cap N` sets the cap for one build (a measurement flag: the artifacts do
+not record it, so a hot build mixes caps; use it on cold builds), zero meaning no
+inlining; `--explain` prints every oracle decision to stderr as `inline:
+module.function: <reason>` -- not a candidate (generic, no body of its own, the
+program root, more than one result, a result through a slot), rejected (over the
+cap, calls a generic instance), or inlinable. The record form waits on the
+transport's version step (H18); the human form is what a reader of a build gets
+today.
+
+Measured: the compiler built at each cap, the image's size, and the median of five
+cold release builds of the 500k-line program by that compiler --
+
+| cap | image | build |
+|---|---|---|
+| 0 | 5,084,672 B | 1.95 s |
+| 20 | 5,237,760 B | 1.82 s |
+| 40 | 5,523,968 B | 1.82 s |
+| 80 | 6,772,736 B | 1.86 s |
+| 160 | 7,416,320 B | 1.88 s |
+
+Inlining is worth seven per cent on this workload; twenty buys all of it at five
+per cent less image than forty; eighty and beyond buy nothing and cost a third
+more image. Forty is retained: one workload on one machine is not the evidence to
+move a normative constant by, and the margin over twenty is where a workload with
+larger leaves would sit. The next re-evaluation is against the GP workloads when
+they exist, with this table as the baseline. A cap past about two hundred fills
+the oracle's entry pool on the compiler and is refused as a full table, named as
+such now, along with the other lowering-side errors the diagnostic had reported as
+a bare "lowering failed".

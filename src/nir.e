@@ -265,6 +265,11 @@ type Builder = struct {
     // The release build (D217): `nocheck` is that too, but `@nocheck` sets it for a
     // block, and section 11's debug fills do not come off with the checks.
     release: bool,
+    // The inlining cap (D346, H20): section 12's forty by default, `--inline-cap N`
+    // for a measurement; and whether every decision is explained on stderr
+    // (`--explain`), as "inline: module.function: <decision>".
+    inline_cap: usize,
+    explain: bool,
     // `--arena` (D225): the root arena's size the linker patches into the image, or
     // zero for the runtime's default.
     arena_bytes: usize,

@@ -775,7 +775,7 @@ fn has_flag(args: []str, name: str) -> bool {
     while at < args.len {
         if same(args[at], "--") { ret false }
         if same(args[at], name) { ret true }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--inline-cap") { at += 1usize }
         at += 1usize
     }
     ret false
@@ -787,7 +787,7 @@ fn project_flag(args: []str) -> str {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret "" }
         if same(args[at], "--project") { ret args[at + 1usize] }
-        if same(args[at], "--arena") || same(args[at], "-j") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "-j") || same(args[at], "--inline-cap") { at += 1usize }
         at += 1usize
     }
     ret ""
@@ -808,12 +808,14 @@ fn flags_known(args: []str) -> bool {
                 if at + 1usize >= args.len { ret false }
                 at += 1usize
             } else {
-                // `-j N` (D331): a worker count from one up.
-                if same(args[at], "-j") {
-                    if at + 1usize >= args.len || jobs_count(args[at + 1usize]) == 0usize { ret false }
+                // `-j N` (D331): a worker count from one up; `--inline-cap N` (D346): a
+                // cap from zero, for a measurement.
+                if same(args[at], "-j") || same(args[at], "--inline-cap") {
+                    if at + 1usize >= args.len || (same(args[at], "-j") && jobs_count(args[at + 1usize]) == 0usize) { ret false }
+                    if same(args[at], "--inline-cap") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") { ret false }
                 }
             }
         }
@@ -854,10 +856,40 @@ fn arena_flag(args: []str) -> usize {
             let (size, size_ok) = arena_size(args[at + 1usize])
             if size_ok { ret size }
         }
-        if same(args[at], "--project") || same(args[at], "-j") { at += 1usize }
+        if same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--inline-cap") { at += 1usize }
         at += 1usize
     }
     ret 0usize
+}
+
+// `--inline-cap N` (D346): the cap asked for plus one, or zero when the flag is absent.
+fn inline_cap_flag(args: []str) -> usize {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--") { ret 0usize }
+        if same(args[at], "--inline-cap") {
+            var value = 0usize
+            var digit = 0usize
+            while digit < args[at + 1usize].len {
+                value = value * 10usize + usize(args[at + 1usize][digit] - 48u8)
+                digit += 1usize
+            }
+            ret value + 1usize
+        }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") { at += 1usize }
+        at += 1usize
+    }
+    ret 0usize
+}
+
+fn decimal_ok(spelling: str) -> bool {
+    if spelling.len == 0usize || spelling.len > 6usize { ret false }
+    var at = 0usize
+    while at < spelling.len {
+        if spelling[at] < 48u8 || spelling[at] > 57u8 { ret false }
+        at += 1usize
+    }
+    ret true
 }
 
 // `-j N` (D331): the worker count asked for, none when the flag is absent.
@@ -866,7 +898,7 @@ fn jobs_flag(args: []str) -> usize {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret 0usize }
         if same(args[at], "-j") { ret jobs_count(args[at + 1usize]) }
-        if same(args[at], "--arena") || same(args[at], "--project") { at += 1usize }
+        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "--inline-cap") { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -4750,6 +4782,13 @@ fn print_lower_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
                             try write_all(&message, "lowering failed: invalid NIR value")
                         } else {
                             try write_all(&message, "lowering failed")
+                            if lower_error == nir.TooLong { try write_all(&message, ": a body over the oracle's cap") }
+                            if lower_error == check.Capacity { try write_all(&message, ": the checker's tables are full") }
+                            if lower_error == regalloc.Capacity { try write_all(&message, ": the allocator's tables are full") }
+                            if lower_error == regalloc.InvalidIR { try write_all(&message, ": the allocator refused the NIR") }
+                            if lower_error == regalloc.NoRegisters { try write_all(&message, ": the allocator ran out of registers") }
+                            if lower_error == lower.FunctionNotFound { try write_all(&message, ": a function was not found") }
+                            if lower_error == codegen_x64.Unsupported { try write_all(&message, ": the selector does not support the instruction") }
                         }
                     }
                 }
@@ -5766,6 +5805,8 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         try init_oracle_nir(a, &w.oracle, &w.oracle_signatures, signature_types, oracle_bytes)
         w.oracle.nocheck = true
         w.oracle.release = true
+        w.oracle.inline_cap = program.inline_cap
+        w.oracle.explain = program.explain
         let (oracle_inlined, oracle_inlined_error) = mem.alloc[nir.InlinedRef](a, sized(1024usize, oracle_bytes, 64usize))
         if oracle_inlined_error != ok { ret oracle_inlined_error }
         w.oracle.inlined = oracle_inlined
@@ -5776,6 +5817,8 @@ fn init_lower_worker(a: *mem.Arena, w: *LowerWorker, checker: *check.Checker, lo
         try init_oracle_nir(a, &w.second, &w.second_signatures, signature_types, oracle_bytes)
         w.second.nocheck = true
         w.second.release = true
+        w.second.inline_cap = program.inline_cap
+        w.second.explain = program.explain
         w.second.oracle = &w.oracle
         w.second.oracle_signatures = &w.oracle_signatures
         w.second.has_oracle = true
@@ -7071,6 +7114,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         var hot: HotBuild = zero
         // What the workers copy the build mode from until the program builder exists.
         var early_builder: nir.Builder = zero
+        // The cap and the explanations (D346) ride the builder the oracles copy from.
+        if trailing_flags {
+            early_builder.inline_cap = inline_cap_flag(args)
+            early_builder.explain = has_flag(args, "--explain")
+        }
         if writes_executable {
             hot.on = hot_build
             hot.keep = keep
@@ -7084,7 +7132,11 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if with_crew {
             try crew_begin(a, &crew, &report, &loaded, &checker, &resolver, &early_builder, bindings, machine_abi_of(args), &hot, held, release_build, body_skip)
         }
-        if release_build && !with_crew { try init_first_oracle(a, &first_oracle, &first_signatures, &checker, &loaded) }
+        if release_build && !with_crew {
+            try init_first_oracle(a, &first_oracle, &first_signatures, &checker, &loaded)
+            first_oracle.inline_cap = early_builder.inline_cap
+            first_oracle.explain = early_builder.explain
+        }
         if fused {
             if with_crew {
                 try crew_bodies(a, &crew, &report, &loaded, &checker, &resolver, machine_abi_of(args), &hot, held, bindings, &early_builder, body_skip)
@@ -7460,7 +7512,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

@@ -4,6 +4,7 @@
 use artifact_hash
 use check
 use e.mem
+use e.os
 use decimal
 use graph
 use layout
@@ -2009,8 +2010,25 @@ fn emit_atomic(c: *check.Checker, call: check.CallInfo, arguments: []usize, argu
 }
 
 // Section 12's cross-module inlining cap: a callee of at most this many NIR instructions
-// is copied into its caller rather than called.
-fn inline_cap() -> usize { ret 40usize }
+// is copied into its caller rather than called. Forty, unless the build says otherwise
+// (D346, `--inline-cap N`).
+fn inline_cap(builder: *nir.Builder) -> usize {
+    // The builder holds the cap plus one, so that zero means unset and `--inline-cap 0`
+    // means no inlining at all.
+    if builder.inline_cap != 0usize { ret builder.inline_cap - 1usize }
+    ret 40usize
+}
+
+// One inlining decision explained (D346, H20): "inline: module.function: <reason>".
+fn explain_inline(g: *graph.Graph, module_index: usize, name: str, reason: str) {
+    let (w1, e1) = os.write(os.stderr(), "inline: ")
+    let (w2, e2) = os.write(os.stderr(), g.modules[module_index].name)
+    let (w3, e3) = os.write(os.stderr(), ".")
+    let (w4, e4) = os.write(os.stderr(), name)
+    let (w5, e5) = os.write(os.stderr(), ": ")
+    let (w6, e6) = os.write(os.stderr(), reason)
+    let (w7, e7) = os.write(os.stderr(), "\n")
+}
 
 fn find_inline_entry(builder: *nir.Builder, module_index: usize, name: str, instance: usize) -> (usize, bool) {
     var at = 0usize
@@ -2092,6 +2110,12 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         }
                     }
                 }
+                if oracle.explain && wanted && (function.generic || function.external || function.intrinsic || check.same(name, "main") || function.return_count > 1usize) {
+                    if function.generic { explain_inline(g, module_index, name, "not a candidate: generic, an instance is its instantiating module's own") }
+                    if function.external || function.intrinsic { explain_inline(g, module_index, name, "not a candidate: no body of its own") }
+                    if check.same(name, "main") { explain_inline(g, module_index, name, "not a candidate: the program root") }
+                    if function.return_count > 1usize { explain_inline(g, module_index, name, "not a candidate: more than one result") }
+                }
                 if wanted && !function.generic && !function.external && !function.intrinsic && !check.same(name, "main") && function.return_count <= 1usize {
                     // A result that comes back through a slot is decided before any lowering.
                     var hidden = false
@@ -2103,6 +2127,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         hidden = return_layout.via_slot
                     }
                     if hidden {
+                        if oracle.explain { explain_inline(g, module_index, name, "not a candidate: its result comes back through a slot") }
                         node_index += 1usize
                         continue
                     }
@@ -2110,7 +2135,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     let checkpoint = nir.mark(oracle)
                     let local_checkpoint = c.local_count
                     oracle.limit_base = oracle.instruction_count
-                    oracle.instruction_limit = inline_cap() + 1usize
+                    oracle.instruction_limit = inline_cap(oracle) + 1usize
                     let lower_error = lower_function_index(c, g, &tree, module_index, node, function_index, oracle, signatures, bindings, oracle_defers)
                     oracle.instruction_limit = 0usize
                     // The lowering arms the checker's failure position at every statement it
@@ -2120,6 +2145,7 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                     if lower_error == ok || lower_error == nir.TooLong { c.failure_has_token = false }
                     if lower_error == nir.TooLong {
                         // Past the cap: what was lowered so far goes, and so does the function.
+                        if oracle.explain { explain_inline(g, module_index, name, "rejected: its body is over the cap") }
                         nir.reset(oracle, checkpoint)
                         c.local_count = local_checkpoint
                         node_index += 1usize
@@ -2137,7 +2163,10 @@ fn oracle_module(c: *check.Checker, g: *graph.Graph, oracle: *nir.Builder, signa
                         if (scanned.opcode == .Call || scanned.opcode == .FunctionAddress) && scanned.immediate < oracle.function_ref_count && oracle.function_refs[scanned.immediate].instance != 0usize { calls_instance = true }
                         scan_at += 1usize
                     }
-                    if lowered.instruction_count <= inline_cap() && !calls_instance {
+                    if oracle.explain {
+                        if calls_instance { explain_inline(g, module_index, name, "rejected: it calls a generic instance") } else { explain_inline(g, module_index, name, "inlinable: at or under the cap") }
+                    }
+                    if lowered.instruction_count <= inline_cap(oracle) && !calls_instance {
                         let entry_at = *entry_count
                         if entry_at == entries.len { ret check.Capacity }
                         var entry: nir.InlineEntry = zero
