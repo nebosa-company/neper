@@ -2333,6 +2333,13 @@ deadline_status=0
 ' "a build past its deadline wrote an image" >&2; exit 1; }
 cmp -s "$deadline_actual" "$conformance_root/tools/deadline.expected.jsonl" || { printf '%s
 ' "the cancelled build's stream differs from the conformance corpus" >&2; exit 1; }
+# `--instances N` (D426, H06): a budget over the specializations a build makes.
+instances_status=0
+(cd "$conformance_root/tools" && $test_build/neper-self emit-executable instances.e "$repo" x64 linux "$test_build/instances" --json --instances 2 > "$test_build/conformance-tools-instances.jsonl") || instances_status=$?
+[ "$instances_status" = 1 ] || { echo "a build past its instance budget did not exit 1 (got $instances_status)" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-instances.jsonl" "$conformance_root/tools/instances.expected.jsonl" || { echo "the refused build's stream differs from the conformance corpus" >&2; exit 1; }
+(cd "$conformance_root/tools" && $test_build/neper-self emit-executable instances.e "$repo" x64 linux "$test_build/instances" --release --instances 3 > /dev/null)
+"$test_build/instances"
 # A deadline inside a phase (D422, H16): the compiler's own build under a deadline it
 # cannot meet is cancelled by a worker between two modules -- exit 3, no image.
 deadline_inside="$test_build/deadline-inside"

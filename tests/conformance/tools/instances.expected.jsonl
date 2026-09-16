@@ -1,0 +1,3 @@
+{"schema":"neper-stream","version":1,"record":"header","command":"build","tool_version":"0.1.0","language_version":"0.1","grammar_revision":3}
+{"record":"diagnostic","severity":"error","code":"E-COMPTIME-0001","message":"the program makes 3 instances of generic functions, past the budget of 2 (--instances); no image was written","span":null,"parent":null,"related":[],"fixes":[]}
+{"record":"result","ok":false,"exit_code":1,"data":{"diagnostics":1}}

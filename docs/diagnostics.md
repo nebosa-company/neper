@@ -25,6 +25,7 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-TYPE-0003` | argument type does not match its parameter | spec §§4–6 |
 | `E-TYPE-0004` | value is not representable in the required type | spec §4 |
 | `E-TYPE-9999` | other typing, layout or operation violation | spec §§4–6, 8–10 |
+| `E-COMPTIME-0001` | the build made more instances of generic functions than `--instances N` allows (D426) | tooling §5 |
 | `E-COMPTIME-9999` | invalid or failed compile-time evaluation | spec §9 |
 | `E-ERROR-9999` | invalid error declaration, use or propagation | spec §7 |
 | `E-MEM-9999` | invalid memory, arena, pointer or representation operation | spec §8 |

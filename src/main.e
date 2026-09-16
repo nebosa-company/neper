@@ -768,6 +768,23 @@ fn self_test() -> err {
     ret ok
 }
 
+// The flags that take the argument after them (D426): one list, every scanner's.
+fn takes_value(flag: str) -> bool {
+    ret same(flag, "--arena") || same(flag, "--project") || same(flag, "-j") || same(flag, "--inline-cap") || same(flag, "--capture") || same(flag, "--deadline") || same(flag, "--instances")
+}
+
+// A flag with a decimal after it: the value, and whether the flag was given at all.
+fn decimal_flag(args: []str, name: str) -> (usize, bool) {
+    var at = 7usize
+    while at + 1usize < args.len {
+        if same(args[at], "--") { ret (0usize, false) }
+        if same(args[at], name) && decimal_ok(args[at + 1usize]) { ret (decimal_value(args[at + 1usize]), true) }
+        if takes_value(args[at]) { at += 1usize }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
 // The flags after an emit command's five positional arguments; `--arena` takes the
 // size after it (D225).
 fn has_flag(args: []str, name: str) -> bool {
@@ -775,7 +792,7 @@ fn has_flag(args: []str, name: str) -> bool {
     while at < args.len {
         if same(args[at], "--") { ret false }
         if same(args[at], name) { ret true }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) { at += 1usize }
+        if takes_value(args[at]) { at += 1usize }
         at += 1usize
     }
     ret false
@@ -787,7 +804,7 @@ fn project_flag(args: []str) -> str {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret "" }
         if same(args[at], "--project") { ret args[at + 1usize] }
-        if same(args[at], "--arena") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) { at += 1usize }
+        if takes_value(args[at]) { at += 1usize }
         at += 1usize
     }
     ret ""
@@ -810,9 +827,9 @@ fn flags_known(args: []str) -> bool {
             } else {
                 // `-j N` (D331): a worker count from one up; `--inline-cap N` (D348): a
                 // cap from zero, for a measurement.
-                if same(args[at], "-j") || same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline") {
+                if takes_value(args[at]) {
                     if at + 1usize >= args.len || (same(args[at], "-j") && jobs_count(args[at + 1usize]) == 0usize) { ret false }
-                    if (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) && !decimal_ok(args[at + 1usize]) { ret false }
+                    if !same(args[at], "-j") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
                     if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") { ret false }
@@ -856,7 +873,7 @@ fn arena_flag(args: []str) -> usize {
             let (size, size_ok) = arena_size(args[at + 1usize])
             if size_ok { ret size }
         }
-        if same(args[at], "--project") || same(args[at], "-j") || (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) { at += 1usize }
+        if takes_value(args[at]) { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -875,34 +892,16 @@ fn decimal_value(spelling: str) -> usize {
 }
 
 fn inline_cap_flag(args: []str) -> usize {
-    var at = 7usize
-    while at + 1usize < args.len {
-        if same(args[at], "--") { ret 0usize }
-        if same(args[at], "--inline-cap") {
-            var value = 0usize
-            var digit = 0usize
-            while digit < args[at + 1usize].len {
-                value = value * 10usize + usize(args[at + 1usize][digit] - 48u8)
-                digit += 1usize
-            }
-            ret value + 1usize
-        }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--capture") || same(args[at], "--deadline") { at += 1usize }
-        at += 1usize
-    }
+    let (cap, given) = decimal_flag(args, "--inline-cap")
+    if given { ret cap + 1usize }
     ret 0usize
 }
 
 // `--capture N` (D370, H18): how many bytes of each of the child's streams `run --json`
 // carries in its record; a mebibyte without the flag. The rest stays in the files.
 fn capture_flag(args: []str) -> usize {
-    var at = 7usize
-    while at + 1usize < args.len {
-        if same(args[at], "--") { ret 1048576usize }
-        if same(args[at], "--capture") && decimal_ok(args[at + 1usize]) { ret decimal_value(args[at + 1usize]) }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--inline-cap") { at += 1usize }
-        at += 1usize
-    }
+    let (count, given) = decimal_flag(args, "--capture")
+    if given { ret count }
     ret 1048576usize
 }
 
@@ -910,14 +909,8 @@ fn capture_flag(args: []str) -> usize {
 // next checkpoint between phases, and whether the flag was given at all -- zero with
 // the flag is a deadline that has already passed.
 fn deadline_flag(args: []str) -> (usize, bool) {
-    var at = 7usize
-    while at + 1usize < args.len {
-        if same(args[at], "--") { ret (0usize, false) }
-        if same(args[at], "--deadline") && decimal_ok(args[at + 1usize]) { ret (decimal_value(args[at + 1usize]), true) }
-        if same(args[at], "--arena") || same(args[at], "--project") || same(args[at], "-j") || same(args[at], "--inline-cap") || same(args[at], "--capture") { at += 1usize }
-        at += 1usize
-    }
-    ret (0usize, false)
+    let (deadline, given) = decimal_flag(args, "--deadline")
+    ret (deadline, given)
 }
 
 // A `snake_case` value name: letters, digits and underscores, not starting with a digit.
@@ -949,7 +942,7 @@ fn jobs_flag(args: []str) -> usize {
     while at + 1usize < args.len {
         if same(args[at], "--") { ret 0usize }
         if same(args[at], "-j") { ret jobs_count(args[at + 1usize]) }
-        if same(args[at], "--arena") || same(args[at], "--project") || (same(args[at], "--inline-cap") || same(args[at], "--capture") || same(args[at], "--deadline")) { at += 1usize }
+        if takes_value(args[at]) { at += 1usize }
         at += 1usize
     }
     ret 0usize
@@ -1800,6 +1793,36 @@ fn past_deadline(report: *Sink) -> bool {
 // reached the disk, since both come after the last checkpoint. An artifact a hot
 // build's worker had already published is complete and valid on its own (D343) and
 // stays; the manifest that would have made the set a snapshot is not written.
+// `--instances N` (D426, H06): a budget over the specializations a build makes -- the
+// instances of generic functions the bodies asked for, each worker's counted, since a
+// module's instances stay with the checker that made them. Past it, the build is
+// refused with the count and the budget in the message, no image written.
+fn check_instance_budget(report: *Sink, args: []str, checker: *check.Checker, crew: *Crew, with_crew: bool) -> err {
+    let (budget, given) = decimal_flag(args, "--instances")
+    if !given { ret ok }
+    var instances = checker.function_count - checker.signature_function_count
+    if with_crew {
+        instances = 0usize
+        var worker_at = 0usize
+        while worker_at < crew.count {
+            instances += crew.workers[worker_at].checker.function_count - crew.workers[worker_at].checker.signature_function_count
+            worker_at += 1usize
+        }
+    }
+    if instances <= budget { ret ok }
+    var message_storage: [256]u8 = zero
+    var message = capture_sink(message_storage[..])
+    try write_all(&message, "the program makes ")
+    try write_usize(&message, instances)
+    try write_all(&message, " instances of generic functions, past the budget of ")
+    try write_usize(&message, budget)
+    try write_all(&message, " (--instances); no image was written")
+    try emit_command_diagnostic(report, "E-COMPTIME-0001", message_storage[..message.count])
+    try finish_report(report)
+    os.exit(1i32)
+    ret ok
+}
+
 fn cancel_build(report: *Sink, phase: str) -> err {
     var message_storage: [256]u8 = zero
     var message = capture_sink(message_storage[..])
@@ -7947,6 +7970,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
             os.exit(1i32)
             ret ok
         }
+        if trailing_flags { try check_instance_budget(&report, args, &checker, &crew, with_crew) }
         var error_conflict: error_table.Conflict = zero
         var error_validation_error = error_table.validate_declarations(&resolver, &loaded, &error_conflict)
         if error_validation_error == ok && writes_executable {
@@ -8331,7 +8355,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         try io.print("module nir ok\n")
         ret ok
     }
-    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
+    try stderr_text("error[E-CLI-9999]: usage: neper-self self-test | validate-em ARTIFACT | check-em-edge DEPENDENT TARGET | check-em-errors ARTIFACT... | link-em OUTPUT ARTIFACT... | scan|parse SOURCE | scan-file|parse-file PATH | project-file PATH ROOT MODULE | select-file ROOT SOURCE_ROOT MODULE ARCH OS PATH | graph-file PATH TOOLCHAIN_ROOT ARCH OS MODULE... | resolve-file|check-file|nir-file|codegen-file|object-file PATH TOOLCHAIN_ROOT ARCH OS | emit-object|emit-executable|emit-em|emit-em-all PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--incremental] [--arena SIZE] [-j N] [--perturb] [--inline-cap N] [--deadline MS] [--instances N] [--explain] [--json] [--time] [--stats|--stats-full] | run PATH TOOLCHAIN_ROOT ARCH OS OUTPUT [--release] [--arena SIZE] [-j N] [--capture N] [--deadline MS] --json [--time] [--stats|--stats-full] [-- ARGS...]\n")
     os.exit(1i32)
     ret ok
 }

@@ -535,6 +535,17 @@ be cancelled on another, which is what a harness's deadline means. `--deadline 0
 is a deadline already passed and cancels at the first checkpoint, the corpus's
 `tools/deadline` case.
 
+`--instances N` (D426, H06) on a build command is a budget over the
+specializations the build makes: after the bodies are checked, the instances of
+generic functions they asked for are counted -- each worker's own, since a
+module's instances stay with the checker that made them, so a program whose
+modules share an instantiation counts it once per worker -- and a count past
+`N` is one `E-COMPTIME-0001` diagnostic naming the count and the budget, exit 1,
+no image and no manifest. Unlike a deadline it is a work budget: the same
+program under the same budget and worker count answers the same way on every
+machine. `--stats` reports the count as `function instances`; the corpus's
+`tools/instances` case makes three.
+
 `emit-executable ... --release --unchecked` (D355) builds the release image with
 spec section 11's memory rows left out, which the manifest records as
 `options.checks: "off"`; without it a release build keeps them.

@@ -2229,6 +2229,17 @@ cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-ex
 if ($LASTEXITCODE -ne 3) { throw "a build past its deadline did not exit 3 (got $LASTEXITCODE)" }
 if (Test-Path -LiteralPath $deadlineImage) { throw "a build past its deadline wrote an image" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deadlineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/deadline.expected.jsonl')).Hash) { throw "the cancelled build's stream differs from the conformance corpus" }
+# `--instances N` (D426, H06): a budget over the specializations a build makes -- three
+# instances past a budget of two is E-COMPTIME-0001 and exit 1; a budget of three builds.
+$instancesActual = Join-Path $testBuild 'conformance-tools-instances.jsonl'
+$instancesImage = Join-Path $testBuild 'instances.exe'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-executable instances.e `"$repo`" x64 windows `"$instancesImage`" --json --instances 2 > `"$instancesActual`""
+if ($LASTEXITCODE -ne 1) { throw "a build past its instance budget did not exit 1 (got $LASTEXITCODE)" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $instancesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/instances.expected.jsonl')).Hash) { throw "the refused build's stream differs from the conformance corpus" }
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-executable instances.e `"$repo`" x64 windows `"$instancesImage`" --release --instances 3 > nul"
+if ($LASTEXITCODE -ne 0) { throw "a build within its instance budget failed ($LASTEXITCODE)" }
+& $instancesImage
+if ($LASTEXITCODE -ne 0) { throw "the instances fixture exited $LASTEXITCODE" }
 # A deadline inside a phase (D422, H16): the compiler's own build under a deadline
 # it cannot meet is cancelled by a worker between two modules -- exit 3, no image.
 $deadlineInside = Join-Path $testBuild 'deadline-inside.exe'

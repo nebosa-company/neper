@@ -126,7 +126,8 @@ a JSONL stream bound to the program's `snapshot`:
 - `test-impact-file --changed m1,m2` -- the `@test` functions an edit reaches;
   `test-file ... --json --only n1,n2` runs those alone.
 - `query-batch --batch FILE` -- many context, catalogue and uses queries over one
-  check; a build takes `--deadline MS` and is cancelled between modules past it.
+  check; a build takes `--deadline MS` and is cancelled between modules past it,
+  and `--instances N`, a budget over the generic instances it may make.
 
 For a surgical change: index or `uses-file` → `context-file` on what the change
 touches → a plan where one exists, else edit the exact spans → apply → `check-file`,

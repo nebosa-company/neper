@@ -9428,3 +9428,22 @@ index or `uses-file`, then `context-file` on what the change touches, a plan
 where one exists or an edit at the exact spans, apply, `check-file` and `fmt
 --check`, `test-impact-file`, `test-file --only`. Rendered and checked as
 before; the examples still compile. A documentation change alone: no suite run.
+
+## D426 -- `--instances N`: a specialization budget
+
+H06 asks for a specialization-count budget of its own; D218's budgets bound one
+comptime evaluation and D344's limits are the compiler's tables, neither a
+number a harness chooses. `--instances N` on a build command counts, after the
+bodies are checked, the instances of generic functions the program asked for --
+each worker's own, since a module's instances stay with the checker that made
+them (D326), so a shared instantiation counts once per worker that made it --
+and refuses a count past `N` with one `E-COMPTIME-0001` diagnostic naming the
+count and the budget, exit 1, no image and no manifest. It is a work budget, not
+a deadline: the same program, budget and worker count answer the same way on
+every machine. The flag scanners that each carried their own copy of the flags
+that take a value now share `takes_value` and `decimal_flag`. The corpus gains
+`tools/instances`: three instances of one generic function, refused under a
+budget of two, built and run under three.
+
+Not yet: the count per module or per template in the stream, a budget on
+aggregate instances, and per-instance cost.
