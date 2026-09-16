@@ -102,6 +102,28 @@ fn width(table: [256]u32, key: u8, hash: usize) -> u32 {
     ret narrowed + table[hash & 255usize] + table[128usize + (hash & 127usize)]
 }
 
+// The slack form (D385): `while at + 4usize <= items.len` proves `items[at + j]` for
+// `j` below 4; `slack_shifted` reads `items[at + 4usize]` and keeps its check.
+fn slack(items: []const u32) -> u32 {
+    var total = 0u32
+    var at = 0usize
+    while at + 4usize <= items.len {
+        total = total +% items[at] +% items[at + 1usize] +% items[at + 2usize] +% items[at + 3usize]
+        at += 4usize
+    }
+    ret total
+}
+
+fn slack_shifted(items: []const u32) -> u32 {
+    var total = 0u32
+    var at = 0usize
+    while at + 4usize <= items.len {
+        total = total +% items[at + 4usize]
+        at += 4usize
+    }
+    ret total
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     var mode = ""
     if args.len > 1usize { mode = args[1usize] }
@@ -150,6 +172,21 @@ fn main(a: *mem.Arena, args: []str) -> err {
             fill += 1usize
         }
         if width(table, u8(args.len + 250usize), args.len * 2654435761usize) == 0u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "slack") {
+        var eight: [8]u32 = zero
+        var fill = 0usize
+        while fill < eight.len {
+            eight[fill] = u32(fill + 1usize)
+            fill += 1usize
+        }
+        if slack(eight[..]) != 36u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "slack_shifted") {
+        var four: [4]u32 = zero
+        if slack_shifted(four[..]) != 0u32 { ret mem.Exhausted }
         ret ok
     }
     if str.eq(mode, "guarded_shifted") {

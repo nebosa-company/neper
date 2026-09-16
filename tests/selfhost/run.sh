@@ -1664,6 +1664,15 @@ esac
 "$bounds_proof_path" conjunct
 "$bounds_proof_path" exit_guard
 "$bounds_proof_path" width
+"$bounds_proof_path" slack
+bounds_slack_status=0
+bounds_slack=$("$bounds_proof_path" slack_shifted 2>&1) || bounds_slack_status=$?
+[ "$bounds_slack_status" -eq 134 ]
+case "$bounds_slack" in
+    *'main.e:121:26: trap[bounds]: index 4 out of bounds for len 4'*) ;;
+    *) printf '%s
+' "the access past the slack did not trap: $bounds_slack" >&2; exit 1 ;;
+esac
 bounds_exit_status=0
 bounds_exit=$("$bounds_proof_path" exit_shifted 2>&1) || bounds_exit_status=$?
 [ "$bounds_exit_status" -eq 134 ]

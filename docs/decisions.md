@@ -8550,3 +8550,19 @@ fixture's `width` case holds the four forms.
 Not yet: `bytes[at + K]` under `while at + 8usize <= bytes.len` (an offset
 below the loop's slack), a bound through `%` by a literal, and a slice base
 whose length is known from a `let` of an array.
+
+## D385 -- The slack form of the bounds proof: `while at + K <= x.len` proves `x[at + j]`
+
+The byte loops that D383 named -- the hasher's `while at + 8usize <= bytes.len`
+reading `bytes[at]` through `bytes[at + 7usize]` -- are the loop form with an
+offset on both sides: the condition bounds `at + K`, so `at + j` is in range for
+every literal `j` below `K` (`<=`) or at most `K` (`<`). `proof_open_over` reads
+`i + K` off the condition's left side and records the slack with the proof;
+`proof_covers` accepts an index `i + j` with a literal `j` at most the slack, the
+same side conditions as ever. The compiler's own build reports 447 checks
+elided, from 376 -- the largest step of the five forms; the fixture's `slack`
+and `slack_shifted` cases are the eliminated and the retained (`items[at +
+4usize]` under a slack of three, which trips on a four-element slice).
+
+Not yet: `at + j` where `j` is a local bounded by a loop of its own (`while j <
+8usize`), a field base, a bound through a second local.

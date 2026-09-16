@@ -269,6 +269,9 @@ type Builder = struct {
     proof_index: [8]str,
     proof_base: [8]str,
     proof_first_assign: [8]usize,
+    // The slack of the proof (D385): `while i + K <= x.len` proves `x[i + j]` for
+    // `j` below `K`, `while i + K < x.len` for `j` at most `K`; the plain forms have none.
+    proof_slack: [8]usize,
     proof_ok: [8]bool,
     proof_count: usize,
     proof_function_start: usize,

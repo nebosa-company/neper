@@ -4269,8 +4269,22 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     while operator_at < usize(tree.nodes[right_index].token_start) && c.tokens[operator_at].kind == .Newline { operator_at += 1usize }
     var index_side = left_index
     var length_side = right_index
+    // The slack form (D385): `i + K < x.len` or `i + K <= x.len` with a literal `K`,
+    // read off the left side before the operator.
+    var slack = 0usize
     if !negated {
-        if c.tokens[operator_at].kind != .PunctLt { ret false }
+        let (offset_index, offset_literal, has_offset) = proof_offset_form(c, g, tree, module_index, left_index)
+        if has_offset {
+            index_side = offset_index
+            if c.tokens[operator_at].kind == .PunctLt { slack = offset_literal }
+            if c.tokens[operator_at].kind == .PunctLtEq {
+                if offset_literal == 0usize { ret false }
+                slack = offset_literal - 1usize
+            }
+            if c.tokens[operator_at].kind != .PunctLt && c.tokens[operator_at].kind != .PunctLtEq { ret false }
+        } else {
+            if c.tokens[operator_at].kind != .PunctLt { ret false }
+        }
     } else {
         if c.tokens[operator_at].kind == .PunctLtEq {
             index_side = right_index
@@ -4341,6 +4355,7 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
         addressed_at += 1usize
     }
     builder.proof_index[builder.proof_count] = index_name
+    builder.proof_slack[builder.proof_count] = slack
     builder.proof_base[builder.proof_count] = base_name
     builder.proof_first_assign[builder.proof_count] = first_assign
     builder.proof_ok[builder.proof_count] = true
@@ -4411,14 +4426,47 @@ fn proof_leftmost_conjunct(c: *check.Checker, tree: *parse.Tree, node_index: usi
 fn proof_covers(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, base_index: usize, index_index: usize, builder: *nir.Builder) -> bool {
     if builder.proof_count == 0usize { ret false }
     let (base_name, has_base) = proof_name(c, g, tree, module_index, base_index)
-    let (index_name, has_index) = proof_name(c, g, tree, module_index, index_index)
-    if !has_base || !has_index { ret false }
+    if !has_base { ret false }
+    // `x[i]`, or `x[i + j]` with a literal `j` within the proof's slack (D385).
+    var index_node = index_index
+    var offset = 0usize
+    let (plain_name, is_plain) = proof_name(c, g, tree, module_index, index_index)
+    if !is_plain {
+        let (offset_index, offset_literal, has_offset) = proof_offset_form(c, g, tree, module_index, index_index)
+        if !has_offset { ret false }
+        index_node = offset_index
+        offset = offset_literal
+    }
+    let (index_name, has_index) = proof_name(c, g, tree, module_index, index_node)
+    if !has_index { ret false }
     var at = builder.proof_count
     while at > 0usize {
         at = at - 1usize
-        if builder.proof_ok[at] && check.same(builder.proof_index[at], index_name) && check.same(builder.proof_base[at], base_name) && usize(node.token_start) < builder.proof_first_assign[at] { ret true }
+        if builder.proof_ok[at] && check.same(builder.proof_index[at], index_name) && check.same(builder.proof_base[at], base_name) && usize(node.token_start) < builder.proof_first_assign[at] && offset <= builder.proof_slack[at] { ret true }
     }
     ret false
+}
+
+// `i + K` with `i` a bare name and `K` an integer literal: the name's node and `K`.
+fn proof_offset_form(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, usize, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind != .BinaryExpr { ret (0usize, 0usize, false) }
+    let (left_index, has_left) = check.first_node_child(tree, node)
+    if !has_left { ret (0usize, 0usize, false) }
+    var operator_at = usize(tree.nodes[left_index].token_end)
+    while operator_at < usize(node.token_end) && c.tokens[operator_at].kind == .Newline { operator_at += 1usize }
+    if c.tokens[operator_at].kind != .PunctPlus { ret (0usize, 0usize, false) }
+    var right_index = left_index
+    let end = usize(node.first_child) + usize(node.child_count)
+    var at = usize(node.first_child)
+    while at < end {
+        if parse.child_is_node_at(tree, at) { right_index = parse.child_index_at(tree, at) }
+        at += 1usize
+    }
+    if right_index == left_index || tree.nodes[left_index].kind != .NameExpr || tree.nodes[right_index].kind != .LiteralExpr { ret (0usize, 0usize, false) }
+    let (constant, constant_type, constant_error) = check.integer_literal_value(c, g.modules[module_index].text, tree.nodes[right_index])
+    if constant_error != ok { ret (0usize, 0usize, false) }
+    ret (left_index, constant, true)
 }
 
 fn lower_while(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, function: check.Function, node: syntax.Node, builder: *nir.Builder, bindings: []Binding, binding_count: *usize, defers: *DeferState) -> err {
