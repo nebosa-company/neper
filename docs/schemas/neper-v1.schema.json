@@ -235,9 +235,10 @@
     "sourceMap": {
       "type":"object","required":["schema","version","generated","generated_sha256","mappings"],
       "properties":{
-        "schema":{"const":"neper-source-map"},"version":{"const":1},
+        "schema":{"const":"neper-source-map"},"version":{"enum":[1,2]},
         "generated":{"$ref":"#/$defs/source"},"generated_sha256":{"$ref":"#/$defs/sha256"},
-        "mappings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["generated_span","original_span","name"],"properties":{"generated_span":{"$ref":"#/$defs/span"},"original_span":{"$ref":"#/$defs/span"},"name":{"type":["string","null"]}}}}
+        "generator":{"type":"object","additionalProperties":false,"required":["name","input","input_sha256"],"properties":{"name":{"type":"string"},"input":{"type":"string"},"input_sha256":{"$ref":"#/$defs/sha256"}}},
+        "mappings":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["generated_span","original_span","name"],"properties":{"generated_span":{"$ref":"#/$defs/span"},"original_span":{"$ref":"#/$defs/span"},"name":{"type":["string","null"]},"edit":{"enum":["direct","generator","unknown"]}}}}
       },
       "additionalProperties":false
     },

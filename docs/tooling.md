@@ -390,6 +390,20 @@ source errors, but the command fails and writes no final artifact until the map 
 updated or removed. Source maps never affect parsing, type checking, code generation
 or cache identity.
 
+A **version 2** map (D373, H19) adds two optional things. `generator` names the
+generator and the one input it read -- `name`, `input` (a path relative to the
+generated file's directory) and `input_sha256` -- and the compiler checks the
+input: a missing input, or one whose hash is not the recorded one, is `E-TOOL-0001`
+("the generated source is stale: the generator's input changed") under the same
+rule as a stale map, so a generated file is stale when its *input* moved, not only
+when it did. Each mapping may carry `edit`: `direct` (the generated output may be
+edited in place), `generator` (regeneration-owned: an edit targets the original,
+and a hand edit of the generated span is overwritten by the next generation) or
+`unknown`; the related location's message says which, and a mapping without `edit`
+is `unknown`. An original span is a location, not a fix: nothing in the stream
+offers an edit to an original span, since the mapping may be many-to-one. The
+compiler never runs a generator; the map's metadata is data.
+
 ## 9. Conformance and compatibility
 
 `tests/conformance/` is a normative corpus shipped with the specification. It has

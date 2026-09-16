@@ -3109,6 +3109,9 @@ type Sink = struct {
     map_original_path: [8]str,
     map_original_start: [8]usize,
     map_original_line: [8]usize,
+    // What may be edited (D373, H19): 0 unknown, 1 the generated output directly,
+    // 2 the generator's input only -- the mapping's `edit`, absent in a version 1 map.
+    map_edit: [8]u8,
 }
 
 // One diagnostic, as the human line `path:line:col: error[CODE]: message` or as the
@@ -3158,7 +3161,16 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
         original.line = at.line - report.map_generated_line[mapping] + report.map_original_line[mapping]
         original.end_line = at.end_line - report.map_generated_line[mapping] + report.map_original_line[mapping]
         try write_span(report, report.map_original_path[mapping], original, false)
-        try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source\",\"span\":")
+        // Which of the two spans an edit may target (D373, H19), from the mapping.
+        if report.map_edit[mapping] == 1u8 {
+            try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source, which may be edited directly\",\"span\":")
+        } else {
+            if report.map_edit[mapping] == 2u8 {
+                try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source, which is regenerated from its input: edit the original\",\"span\":")
+            } else {
+                try write_all(report, ",\"parent\":null,\"related\":[{\"message\":\"in the generated source\",\"span\":")
+            }
+        }
         try write_span(report, basename(path), at, false)
         try write_all(report, "}],\"fixes\":[]}")
     } else {
@@ -3227,6 +3239,27 @@ fn map_index(report: *Sink, path: str, at: lex.Span, has_token: bool) -> usize {
 }
 
 // The string after `key` in a JSON line, up to its closing quote; "" when absent.
+// The offset just past `key` in `line`, or `line.len`.
+fn json_key_at(line: str, key: str) -> usize {
+    var at = 0usize
+    while at + key.len <= line.len {
+        if same(line[at..at + key.len], key) { ret at + key.len }
+        at += 1usize
+    }
+    ret line.len
+}
+
+// The directory of a path, separator included; empty for a bare name.
+fn dirname(path: str) -> str {
+    var end = 0usize
+    var at = 0usize
+    while at < path.len {
+        if path[at] == 47u8 || path[at] == 92u8 { end = at + 1usize }
+        at += 1usize
+    }
+    ret path[0usize..end]
+}
+
 fn json_str_after(line: str, key: str) -> str {
     var at = 0usize
     while at + key.len <= line.len {
@@ -3264,6 +3297,30 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
         }
         ret ok
     }
+    // A version 2 map names its generator and the input it read (D373, H19): the
+    // input's hash is checked, so a generated file whose input changed underneath it
+    // is stale before its own hash says otherwise, and a missing input is named.
+    let generator_at = json_key_at(document, "\"generator\":{")
+    if generator_at < document.len {
+        let generator = document[generator_at..document.len]
+        let input_name = json_str_after(generator, "\"input\":\"")
+        let input_hash = json_str_after(generator, "\"input_sha256\":\"")
+        let (input_path, input_path_error) = with_suffix(a, dirname(operand), input_name)
+        if input_path_error != ok { ret input_path_error }
+        let (input_text, input_error) = source.load(a, input_path)
+        if input_error != ok {
+            report.map_stale = true
+            try emit_command_diagnostic(report, "E-TOOL-0001", "the generator's input named by the source map is missing")
+            ret ok
+        }
+        let (input_digest, input_digest_error) = tool.manifest_sha256(a, input_text)
+        if input_digest_error != ok { ret input_digest_error }
+        if !same(input_digest, input_hash) {
+            report.map_stale = true
+            try emit_command_diagnostic(report, "E-TOOL-0001", "the generated source is stale: the generator's input changed since it was generated")
+            ret ok
+        }
+    }
     report.map_source = operand
     var at = 0usize
     let generated_key = "\"generated_span\":{"
@@ -3281,6 +3338,13 @@ fn load_source_map(a: *mem.Arena, report: *Sink, operand: str, text: str) -> err
             report.map_original_path[index] = json_str_after(original, "\"path\":\"")
             report.map_original_start[index] = json_usize_after(original, "\"byte_start\":")
             report.map_original_line[index] = json_usize_after(original, "\"line\":")
+            // The mapping's `edit` (D373), read before the next mapping begins.
+            var object_end = json_key_at(rest[generated_key.len..rest.len], generated_key) + generated_key.len
+            if object_end > rest.len { object_end = rest.len }
+            let edit = json_str_after(rest[0usize..object_end], "\"edit\":\"")
+            report.map_edit[index] = 0u8
+            if same(edit, "direct") { report.map_edit[index] = 1u8 }
+            if same(edit, "generator") { report.map_edit[index] = 2u8 }
             report.map_count += 1usize
             at += generated_key.len
         } else {

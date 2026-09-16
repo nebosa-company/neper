@@ -8239,3 +8239,36 @@ an independent oracle, metamorphic formatting and alpha-renaming tests, test
 impact queries, cancellation (a one-shot process is cancelled by killing it, and
 the atomic publish of D343 is what makes that safe). The readiness rows for H10
 and H16 are new and carry these.
+
+## D373 -- A version 2 source map names its generator, and a mapping says what may be edited
+
+H19 asks that generated output be marked directly editable, regeneration-owned or
+unknown; that stale output be detected from the generator's side; that an origin
+location never be taken for a fix span; and that the compiler never run a
+generator from metadata. The version 1 map (D264) carried the generated file's
+hash and its mappings, so a generated file was stale only when *it* changed: an
+input edited after generation left a map that still matched, and a diagnostic
+mapped back to a line of the input that no longer said that.
+
+Version 2 adds `generator` -- `name`, `input` (relative to the generated file's
+directory), `input_sha256` -- and the compiler hashes the input at load: missing
+or changed is E-TOOL-0001 under the stale-map rule, the analysis still runs and
+no artifact is written. Each mapping may carry `edit`: `direct`, `generator` or
+`unknown` (the default, and what a version 1 map is), and the mapped diagnostic's
+related location says which -- "in the generated source, which is regenerated
+from its input: edit the original", or "which may be edited directly". A
+version 1 map stays valid; the schema admits both. The stream offers no fix on an
+original span, and this row records why it must not: a mapping is a location
+correspondence, many-to-one and not invertible in general, so an original span
+is where to look, not what to replace. Two corpus fixtures: `generated_map` (the
+diagnostic at the input's span, the generated span regeneration-owned) and
+`stale_generator` (a changed input under a matching generated hash).
+
+Not yet, of H19: several declarations from one input and nested maps (the
+eight-mapping cap of the reader stands, D264); provenance through
+specialisation, inlining and cleanup generation (the explain records of D359
+carry the instance, not its origin); maps in the tooling cache identity (a
+map-only change refreshes diagnostics because nothing is cached across commands,
+which D372 keeps); a hand-edited generated output detected against its
+generator's determinism; a `missing generator` fixture (nothing runs one, so
+nothing is missing).

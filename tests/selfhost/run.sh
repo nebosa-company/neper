@@ -2306,6 +2306,15 @@ stale_error_status=0
 (cd "$test_build" && rm -f conformance-tools-stale-map-error.out && ./neper-self emit-executable "$conformance_root/tools/stale_map_error.e" "$repo" x64 linux conformance-tools-stale-map-error.out --json > "conformance-tools-stale-map-error.jsonl") || stale_error_status=$?
 [ "$stale_error_status" -eq 1 ]
 [ ! -e "$test_build/conformance-tools-stale-map-error.out" ]
+# A version 2 map (D373, H19): the generator's input is hashed, a regeneration-owned
+# mapping says so in the related location, and a changed input is E-TOOL-0001.
+for map_case in generated_map stale_generator; do
+    map_status=0
+    (cd "$test_build" && rm -f "conformance-tools-$map_case.out" && ./neper-self emit-executable "$conformance_root/tools/$map_case.e" "$repo" x64 linux "conformance-tools-$map_case.out" --json > "conformance-tools-$map_case.jsonl") || map_status=$?
+    [ "$map_status" -eq 1 ]
+    [ ! -e "$test_build/conformance-tools-$map_case.out" ]
+    cmp -s "$test_build/conformance-tools-$map_case.jsonl" "$conformance_root/tools/$map_case.expected.jsonl" || { echo "$map_case differs from the conformance corpus" >&2; exit 1; }
+done
 cmp -s "$test_build/conformance-tools-stale-map-error.jsonl" "$conformance_root/tools/stale_map_error.expected.jsonl" || { printf '%s
 ' "analysis under a stale source map differs from the conformance corpus" >&2; exit 1; }
 # An operand that defines `main` and carries tests (D281): the runner renames the

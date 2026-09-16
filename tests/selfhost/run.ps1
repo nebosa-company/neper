@@ -2156,6 +2156,16 @@ cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $con
 if ($LASTEXITCODE -ne 1) { throw "a stale source map over a rejected operand exited $LASTEXITCODE, not 1" }
 if (Test-Path -LiteralPath (Join-Path $testBuild 'conformance-tools-stale-map-error.out')) { throw 'a stale source map over a rejected operand wrote an artifact' }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $staleErrorActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/stale_map_error.expected.jsonl')).Hash) { throw 'analysis under a stale source map differs from the conformance corpus' }
+# A version 2 map (D373, H19): the generator's input is hashed, a regeneration-owned
+# mapping says so in the related location, and a changed input is E-TOOL-0001.
+foreach ($mapCase in @(@('generated_map', 'a regeneration-owned mapping'), @('stale_generator', 'a changed generator input'))) {
+    $mapActual = Join-Path $testBuild "conformance-tools-$($mapCase[0]).jsonl"
+    Remove-Item -ErrorAction SilentlyContinue -LiteralPath (Join-Path $testBuild "conformance-tools-$($mapCase[0]).out")
+    cmd /c "cd /d `"$testBuild`" && `"$compiler`" emit-executable `"$(Join-Path $conformanceRoot "tools/$($mapCase[0]).e")`" `"$repo`" x64 windows conformance-tools-$($mapCase[0]).out --json > `"$mapActual`""
+    if ($LASTEXITCODE -ne 1) { throw "$($mapCase[1]) exited $LASTEXITCODE, not 1" }
+    if (Test-Path -LiteralPath (Join-Path $testBuild "conformance-tools-$($mapCase[0]).out")) { throw "$($mapCase[1]) still wrote an artifact" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $mapActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot "tools/$($mapCase[0]).expected.jsonl")).Hash) { throw "$($mapCase[1]) differs from the conformance corpus" }
+}
 # An operand that defines `main` and carries tests (D281): the runner renames the
 # operand's `main`, both tests run, and a compile error after the rename still maps back.
 $testMainActual = Join-Path $testBuild 'conformance-tools-test-main.jsonl'
