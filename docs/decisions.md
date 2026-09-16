@@ -9734,3 +9734,19 @@ build the module in hand was `check.e`, a quarter second of one worker, which
 a deadline now cuts at the function.
 
 Not yet: the clock inside one function's lowering or codegen.
+
+## D443 -- The `_detail` form for the rest of the path-taking surface
+
+D417 gave `stat`, `dir_open` and `open` a form that writes the failure into the
+caller's `ErrorDetail` at the call; the other path-taking operations still made
+the caller read `last_error_detail` before anything else failed. `e.os` gains,
+on both hosts, `lstat_detail`, `mkdir_detail`, `remove_file_detail`,
+`remove_dir_detail`, `rename_detail` (the source path its subject),
+`create_new_detail`, `read_link_detail` and `canonical_detail`, each the
+operation over its plain form with the detail written on failure and nothing
+written on success. The error-detail fixture reads each operation's name and
+subject from the caller's value on a missing file, a directory that exists,
+and an `lstat` that succeeds.
+
+Not yet: `watch_open`, `set_mode`, `set_times` and `set_current_dir`, and the
+wrappers beyond `e.os` (`e.fs`, `e.proc`).

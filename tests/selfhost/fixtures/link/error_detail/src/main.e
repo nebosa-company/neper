@@ -40,5 +40,23 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let (here, here_error) = os.dir_open_detail(a, ".", &untouched)
     if here_error != ok { ret here_error }
     if untouched.native_code != 0i32 { os.exit(22i32) }
+    // The rest of the path-taking surface (D443): each `_detail` form names its own
+    // operation in the caller's value, and a call that succeeds writes nothing.
+    var removed: os.ErrorDetail = zero
+    if os.remove_file_detail(a, "np-no-such-file-anywhere", &removed) == ok { os.exit(23i32) }
+    if removed.kind != .NotFound || !mem.eq[u8](removed.operation, "remove_file") { os.exit(24i32) }
+    var renamed: os.ErrorDetail = zero
+    if os.rename_detail(a, "np-no-such-file-anywhere", "np-no-such-file-either", &renamed) == ok { os.exit(25i32) }
+    if renamed.kind != .NotFound || !mem.eq[u8](renamed.subject, "np-no-such-file-anywhere") { os.exit(26i32) }
+    var linked: os.ErrorDetail = zero
+    let (points_to, link_error) = os.read_link_detail(a, "np-no-such-file-anywhere", &linked)
+    if link_error == ok || linked.native_code == 0i32 || !mem.eq[u8](linked.operation, "read_link") { os.exit(27i32) }
+    var made: os.ErrorDetail = zero
+    if os.mkdir_detail(a, ".", &made) == ok { os.exit(28i32) }
+    if made.native_code == 0i32 || !mem.eq[u8](made.operation, "mkdir") { os.exit(29i32) }
+    var present: os.ErrorDetail = zero
+    let (info, info_error) = os.lstat_detail(a, ".", &present)
+    if info_error != ok { ret info_error }
+    if present.native_code != 0i32 { os.exit(30i32) }
     ret os.dir_close(here)
 }

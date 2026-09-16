@@ -7,4 +7,4 @@
 {"record":"edit","op":"rename-symbol","symbol":"contract.Counter.hits","site":"use","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":513,"byte_end":517,"line":19,"column":11,"end_line":19,"end_column":15,"column_utf16":11,"end_column_utf16":15},"replacement":"count"}
 {"record":"edit","op":"rename-symbol","symbol":"contract.Counter.hits","site":"use","span":{"source":{"root":"operand","path":"contract.e"},"byte_start":530,"byte_end":534,"line":19,"column":28,"end_line":19,"end_column":32,"column_utf16":28,"end_column_utf16":32},"replacement":"count"}
 {"record":"postcondition","check":"check-file passes; uses-file --symbol contract.Counter.count reports uses at 5 sites and contract.Counter.hits names no field"}
-{"record":"result","ok":true,"exit_code":0,"data":{"edits":6,"files":1,"complete":true,"snapshot":"6186a035242a32d6"}}
+{"record":"result","ok":true,"exit_code":0,"data":{"edits":6,"files":1,"complete":true,"snapshot":"f7ddfb74cb933ed2"}}

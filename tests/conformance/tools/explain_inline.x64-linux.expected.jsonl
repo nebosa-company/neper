@@ -12,6 +12,14 @@
 {"record":"inline","symbol":"e.os.stat_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
 {"record":"inline","symbol":"e.os.dir_open_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
 {"record":"inline","symbol":"e.os.open_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.lstat_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.mkdir_detail","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.remove_file_detail","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.remove_dir_detail","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.rename_detail","decision":"inlinable","reason":"at or under the cap","pass":1}
+{"record":"inline","symbol":"e.os.create_new_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.read_link_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
+{"record":"inline","symbol":"e.os.canonical_detail","decision":"not-a-candidate","reason":"more than one result","pass":1}
 {"record":"inline","symbol":"e.os.from_errno","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.from_errno_cleanup","decision":"inlinable","reason":"at or under the cap","pass":1}
 {"record":"inline","symbol":"e.os.kind_from_mode","decision":"inlinable","reason":"at or under the cap","pass":1}
@@ -78,6 +86,10 @@
 {"record":"inline","symbol":"contract.total","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.current_thread_id","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.record_error_detail","decision":"rejected","reason":"its body is over the cap","pass":2}
+{"record":"inline","symbol":"e.os.mkdir_detail","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.remove_file_detail","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.remove_dir_detail","decision":"inlinable","reason":"at or under the cap","pass":2}
+{"record":"inline","symbol":"e.os.rename_detail","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.from_errno","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.from_errno_cleanup","decision":"inlinable","reason":"at or under the cap","pass":2}
 {"record":"inline","symbol":"e.os.kind_from_mode","decision":"inlinable","reason":"at or under the cap","pass":2}

@@ -1257,6 +1257,69 @@ fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail)
     ret (file, ok)
 }
 
+// The rest of the path-taking surface in the `_detail` form (D443, H07): each
+// writes its own failure into the caller's value at the call, as `stat_detail`
+// does, so no order with a later failing operation is the caller's to keep.
+fn lstat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
+    let (info, stat_error) = lstat(a, path)
+    if stat_error != ok {
+        *detail = last_error_detail("lstat", path)
+        ret (info, stat_error)
+    }
+    ret (info, ok)
+}
+
+fn mkdir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    let made = mkdir(a, path)
+    if made != ok { *detail = last_error_detail("mkdir", path) }
+    ret made
+}
+
+fn remove_file_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    let removed = remove_file(a, path)
+    if removed != ok { *detail = last_error_detail("remove_file", path) }
+    ret removed
+}
+
+fn remove_dir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err {
+    let removed = remove_dir(a, path)
+    if removed != ok { *detail = last_error_detail("remove_dir", path) }
+    ret removed
+}
+
+fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err {
+    let renamed = rename(a, src, dst)
+    if renamed != ok { *detail = last_error_detail("rename", src) }
+    ret renamed
+}
+
+fn create_new_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (File, err) {
+    let (file, create_error) = create_new(a, path)
+    if create_error != ok {
+        *detail = last_error_detail("create_new", path)
+        ret (file, create_error)
+    }
+    ret (file, ok)
+}
+
+fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
+    let (points_to, link_error) = read_link(a, path)
+    if link_error != ok {
+        *detail = last_error_detail("read_link", path)
+        ret (points_to, link_error)
+    }
+    ret (points_to, ok)
+}
+
+fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err) {
+    let (resolved, canonical_error) = canonical(a, path)
+    if canonical_error != ok {
+        *detail = last_error_detail("canonical", path)
+        ret (resolved, canonical_error)
+    }
+    ret (resolved, ok)
+}
+
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     var detail: ErrorDetail = zero
     detail.kind = .Other

@@ -1633,6 +1633,14 @@ fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)
 fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err)
 fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err)
 fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err)
+fn lstat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err)
+fn mkdir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err
+fn remove_file_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err
+fn remove_dir_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> err
+fn rename_detail(a: *mem.Arena, src: str, dst: str, detail: *ErrorDetail) -> err
+fn create_new_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (File, err)
+fn read_link_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err)
+fn canonical_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (str, err)
 type Dir = resource(dir_close) struct { raw: usize }
 type FileLock = resource(file_unlock) struct { raw: usize }
 type ProcGroup = resource(proc_group_close) struct { raw: usize }
@@ -1733,7 +1741,9 @@ value and marks it read; a failing cleanup (`dir_close`, `socket_close`,
 `file_unlock`, `wait_usage`) records over it only once it has been read (D360), so
 the detail an acquire-fail-close path leaves is the acquisition's. It must be called
 before another failing non-cleanup `e.os` operation on that thread. The `_detail`
-forms (D417) remove that order: `stat_detail`, `dir_open_detail` and `open_detail`
+forms (D417, D443) remove that order: `stat_detail`, `dir_open_detail`, `open_detail`,
+`lstat_detail`, `mkdir_detail`, `remove_file_detail`, `remove_dir_detail`,
+`rename_detail`, `create_new_detail`, `read_link_detail` and `canonical_detail`
 take the caller's `*ErrorDetail` and write the failure into it at the failing
 call, before any cleanup or later failure on the thread, and leave it untouched on
 success; the caller then holds the detail as ordinary data. Higher-level APIs may
