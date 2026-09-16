@@ -25,5 +25,20 @@ fn main(a: *mem.Arena, args: []str) -> err {
     let later = os.last_error_detail("dir_close", ".")
     if later.native_code == 0i32 || later.native_code == primary_code { os.exit(15i32) }
     if later.kind == .NotFound { os.exit(16i32) }
-    ret ok
+    // The caller's detail on the checked path (D417): `stat_detail` writes the
+    // failure into the caller's value at the call, so a failing cleanup after it and
+    // another failing operation after that change nothing the caller holds.
+    var held: os.ErrorDetail = zero
+    let (absent, absent_error) = os.stat_detail(a, "np-no-such-file-anywhere", &held)
+    if absent_error != os.NotFound { os.exit(17i32) }
+    if held.kind != .NotFound || held.native_code == 0i32 { os.exit(18i32) }
+    if os.dir_close(dir) == ok { os.exit(19i32) }
+    let (twice, twice_error) = os.stat(a, "np-no-such-file-either")
+    if twice_error != os.NotFound { os.exit(20i32) }
+    if held.kind != .NotFound || held.native_code != primary_code { os.exit(21i32) }
+    var untouched: os.ErrorDetail = zero
+    let (here, here_error) = os.dir_open_detail(a, ".", &untouched)
+    if here_error != ok { ret here_error }
+    if untouched.native_code != 0i32 { os.exit(22i32) }
+    ret os.dir_close(here)
 }

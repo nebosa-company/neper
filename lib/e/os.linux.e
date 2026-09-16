@@ -369,6 +369,39 @@ fn record_cleanup_error_detail(code: i32) {
     record_error_detail(code)
 }
 
+// The checked path with the caller's detail (D417, H07): the failure's detail is
+// written into `detail` at the failing call, before any cleanup on the way out can
+// record over it, and the caller holds it as ordinary data -- `kind`,
+// `native_code`, the operation and the subject -- with no slot to read later and no
+// order to keep. On success `detail` is not written. The same `err` comes back
+// as from the plain call, so `try` and the affine rules see nothing new.
+fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err) {
+    let (info, stat_error) = stat(a, path)
+    if stat_error != ok {
+        *detail = last_error_detail("stat", path)
+        ret (info, stat_error)
+    }
+    ret (info, ok)
+}
+
+fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err) {
+    let (dir, open_error) = dir_open(a, path)
+    if open_error != ok {
+        *detail = last_error_detail("dir_open", path)
+        ret (dir, open_error)
+    }
+    ret (dir, ok)
+}
+
+fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err) {
+    let (file, open_error) = open(a, path, flags)
+    if open_error != ok {
+        *detail = last_error_detail("open", path)
+        ret (file, open_error)
+    }
+    ret (file, ok)
+}
+
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     var detail: ErrorDetail = zero
     detail.kind = .Other

@@ -1629,6 +1629,9 @@ fn dlsym[F: type](a: *mem.Arena, l: Lib, sym: str) -> (F, err)
 fn dlclose(l: own Lib) -> err
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail
 fn error_message(a: *mem.Arena, detail: ErrorDetail) -> (str, err)
+fn stat_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (FileInfo, err)
+fn dir_open_detail(a: *mem.Arena, path: str, detail: *ErrorDetail) -> (Dir, err)
+fn open_detail(a: *mem.Arena, path: str, flags: OpenFlags, detail: *ErrorDetail) -> (File, err)
 type Dir = resource(dir_close) struct { raw: usize }
 type FileLock = resource(file_unlock) struct { raw: usize }
 type ProcGroup = resource(proc_group_close) struct { raw: usize }
@@ -1728,8 +1731,12 @@ value and marks it read; a failing cleanup (`dir_close`, `socket_close`,
 `mapping_close`, `watch_close`, `poller_close`, `dlclose`, `proc_group_close`,
 `file_unlock`, `wait_usage`) records over it only once it has been read (D360), so
 the detail an acquire-fail-close path leaves is the acquisition's. It must be called
-before another failing non-cleanup `e.os` operation on that thread. Higher-level
-APIs may expose a detail snapshot while ordinary callers retain cheap `err`/`try`.
+before another failing non-cleanup `e.os` operation on that thread. The `_detail`
+forms (D417) remove that order: `stat_detail`, `dir_open_detail` and `open_detail`
+take the caller's `*ErrorDetail` and write the failure into it at the failing
+call, before any cleanup or later failure on the thread, and leave it untouched on
+success; the caller then holds the detail as ordinary data. Higher-level APIs may
+expose a detail snapshot while ordinary callers retain cheap `err`/`try`.
 `operation` and `subject` are borrowed caller strings, never inferred global state;
 `error_message` is the only locale-dependent rendering operation in `e.os`. A `Watch` carries a
 pointer for the same reason a `Poller` does: the host reports a change by a name relative to

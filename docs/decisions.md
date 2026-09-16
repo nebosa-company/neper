@@ -9256,3 +9256,26 @@ elsewhere check clean.
 
 Not yet: `x = x[1..]`, which ends others' aliases of `x` although the storage is
 the same (a loss, never a refusal), and a struct with addresses in two fields.
+
+## D417 -- Caller-supplied error detail on the checked path
+
+H07 asks that the temporal rule around `last_error_detail` -- read it before
+another failing operation on the thread -- give way to detail returned or
+supplied explicitly on the checked path, as ordinary data. `e.os` gains, on
+both hosts, `stat_detail`, `dir_open_detail` and `open_detail`: the plain call
+with one more parameter, the caller's `*ErrorDetail`, written at the failing
+call from the slot the call just filled -- before any cleanup on the way out
+and before any later failure on the thread -- and left untouched on success;
+the `err` that comes back is the plain call's, so `try` and the affine rules
+see nothing new, and a failure returns the unowned handle beside its error as
+the plain call does. The caller holds the detail as a value with no slot to
+read later and no order to keep. The error-detail fixture (D360) gains the
+case: a `stat_detail` of a missing name, a failing cleanup and another failing
+`stat` after it, and the held detail is the first failure's, its native code the
+one `last_error_detail` had given; a `dir_open_detail` that succeeds leaves its
+detail untouched. `docs/module-apis.md` lists the three, so the readiness of
+`e.os` counts them.
+
+Not yet: the `_detail` form for the rest of the surface (a wrapper per
+operation is the shape; the callers decide which ones earn one), wrappers
+beyond `e.os`, and concurrent errors.
