@@ -2214,13 +2214,13 @@ $planScratch = Join-Path $testBuild 'plan-scratch'
 if (Test-Path -LiteralPath $planScratch) { Remove-Item -LiteralPath $planScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $planScratch 'src') | Out-Null
 Copy-Item (Join-Path $conformanceRoot 'tools/explain.e') (Join-Path $planScratch 'src')
-& python (Join-Path $repo 'scripts/apply_plan.py') $planActual --root (Join-Path $planScratch 'src') | Out-Null
+& $compiler apply-plan $planActual --root (Join-Path $planScratch 'src') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the rename plan did not apply' }
 $planChecked = & $compiler check-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $planChecked -ne 'module check ok') { throw "the renamed program does not check: $planChecked" }
 $planUses = & $compiler uses-file (Join-Path $planScratch 'src/explain.e') $repo 'x64' 'windows' --json --symbol explain.alike
 if ($LASTEXITCODE -ne 0 -or (($planUses | Where-Object { $_ -match '"record":"use"' }) | ForEach-Object { ($_ -replace '.*"byte_start":(\d+).*', '$1') } | Sort-Object -Unique).Count -ne 2) { throw 'the renamed function is not used at the two sites' }
-& python (Join-Path $repo 'scripts/apply_plan.py') $planActual --root (Join-Path $planScratch 'src') 2>&1 | Out-Null
+& $compiler apply-plan $planActual --root (Join-Path $planScratch 'src') 2>&1 | Out-Null
 if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan byte for byte,
 # applied to a copy it checks; a span that is not one expression is refused with exit 2.
@@ -2232,7 +2232,7 @@ $replaceScratch = Join-Path $testBuild 'plan-replace-scratch'
 if (Test-Path -LiteralPath $replaceScratch) { Remove-Item -LiteralPath $replaceScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $replaceScratch 'src') | Out-Null
 Copy-Item (Join-Path $conformanceRoot 'tools/contract.e') (Join-Path $replaceScratch 'src')
-& python (Join-Path $repo 'scripts/apply_plan.py') $replaceActual --root (Join-Path $replaceScratch 'src') | Out-Null
+& $compiler apply-plan $replaceActual --root (Join-Path $replaceScratch 'src') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the replace-expression plan did not apply' }
 $replaceChecked = & $compiler check-file (Join-Path $replaceScratch 'src/contract.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $replaceChecked -ne 'module check ok') { throw "the program with the replaced expression does not check: $replaceChecked" }
@@ -2250,7 +2250,7 @@ $signatureScratch = Join-Path $testBuild 'plan-signature-scratch'
 if (Test-Path -LiteralPath $signatureScratch) { Remove-Item -LiteralPath $signatureScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $signatureScratch 'src') | Out-Null
 Copy-Item (Join-Path $conformanceRoot 'tools/signature.e') (Join-Path $signatureScratch 'src')
-& python (Join-Path $repo 'scripts/apply_plan.py') $signatureActual --root (Join-Path $signatureScratch 'src') | Out-Null
+& $compiler apply-plan $signatureActual --root (Join-Path $signatureScratch 'src') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the change-signature plan did not apply' }
 $signatureChecked = & $compiler check-file (Join-Path $signatureScratch 'src/signature.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $signatureChecked -ne 'module check ok') { throw "the program with the changed signature does not check: $signatureChecked" }
@@ -2265,7 +2265,7 @@ $removeScratch = Join-Path $testBuild 'plan-signature-remove-scratch'
 if (Test-Path -LiteralPath $removeScratch) { Remove-Item -LiteralPath $removeScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $removeScratch 'src') | Out-Null
 Copy-Item (Join-Path $conformanceRoot 'tools\signature_remove.e') (Join-Path $removeScratch 'src\signature_remove.e')
-& python (Join-Path $repo 'scripts/apply_plan.py') $removeActual --root (Join-Path $removeScratch 'src') | Out-Null
+& $compiler apply-plan $removeActual --root (Join-Path $removeScratch 'src') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the removal plan could not be applied' }
 $removeChecked = & $compiler check-file (Join-Path $removeScratch 'src/signature_remove.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $removeChecked -ne 'module check ok') { throw "the program with the removed parameter does not check: $removeChecked" }
@@ -2291,7 +2291,7 @@ $errorScratch = Join-Path $testBuild 'plan-rename-error-scratch'
 if (Test-Path -LiteralPath $errorScratch) { Remove-Item -LiteralPath $errorScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $errorScratch 'src') | Out-Null
 Copy-Item (Join-Path $conformanceRoot 'tools\errors_project\src\*.e') (Join-Path $errorScratch 'src')
-& python (Join-Path $repo 'scripts/apply_plan.py') $errorPlanActual --root (Join-Path $errorScratch 'src') | Out-Null
+& $compiler apply-plan $errorPlanActual --root (Join-Path $errorScratch 'src') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the error rename plan could not be applied' }
 $errorChecked = & $compiler check-file (Join-Path $errorScratch 'src/main.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $errorChecked -ne 'module check ok') { throw "the program with the renamed error does not check: $errorChecked" }
@@ -2310,7 +2310,7 @@ $fieldScratch = Join-Path $testBuild 'plan-rename-field-scratch'
 if (Test-Path -LiteralPath $fieldScratch) { Remove-Item -LiteralPath $fieldScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $fieldScratch 'src') | Out-Null
 Copy-Item (Join-Path $conformanceRoot 'tools/contract.e') (Join-Path $fieldScratch 'src')
-& python (Join-Path $repo 'scripts/apply_plan.py') $fieldPlanActual --root (Join-Path $fieldScratch 'src') | Out-Null
+& $compiler apply-plan $fieldPlanActual --root (Join-Path $fieldScratch 'src') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the field rename plan did not apply' }
 $fieldChecked = & $compiler check-file (Join-Path $fieldScratch 'src/contract.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $fieldChecked -ne 'module check ok') { throw "the program with the renamed field does not check: $fieldChecked" }
@@ -2331,7 +2331,7 @@ $parameterScratch = Join-Path $testBuild 'plan-parameter-scratch'
 if (Test-Path -LiteralPath $parameterScratch) { Remove-Item -LiteralPath $parameterScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $parameterScratch 'src') | Out-Null
 Copy-Item (Join-Path $conformanceRoot 'tools/contract.e') (Join-Path $parameterScratch 'src')
-& python (Join-Path $repo 'scripts/apply_plan.py') $parameterActual --root (Join-Path $parameterScratch 'src') | Out-Null
+& $compiler apply-plan $parameterActual --root (Join-Path $parameterScratch 'src') | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the add-parameter plan did not apply' }
 $parameterChecked = & $compiler check-file (Join-Path $parameterScratch 'src/contract.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $parameterChecked -ne 'module check ok') { throw "the program with the added parameter does not check: $parameterChecked" }

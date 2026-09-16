@@ -444,8 +444,16 @@ token (qualified uses edit the name after the qualifier) and `replacement`; then
 `postcondition` record whose `check` says what re-checking must find; then the
 result with `edits`, `files` and `complete`. A harness applies the edits to files
 whose hashes still match -- all of them or none -- from the highest offset down, and
-re-checks; `scripts/apply_plan.py` is the reference applier. What `uses-file` does
-not see (comments, strings, generated registrations) the plan does not edit.
+re-checks; `neper apply-plan PLAN.jsonl --root DIR [--project-src DIR] [--json]`
+(D481) is the applier: every precondition's file must hash as recorded or nothing is
+written (`E-TOOL-0003`, exit 2, and the same for an edit with no precondition or
+outside its file, or a plan whose result was not `ok`), each file's edits go on from
+the highest offset down and the file is published through `.tmp` and one replace;
+plain, it prints `applied N edits to PATH` per file and the `postcondition`; with
+`--json`, a stream whose result carries `edits`, `files` and `postcondition`.
+`scripts/apply_plan.py` (D376) did the same in Python and is retired. What
+`uses-file` does not see (comments, strings, generated registrations) the plan does
+not edit.
 `neper plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name
 --parameter "name: T" --argument EXPR` (D406, H17) is the signature-change plan in
 the same shape: the `edit` records carry `op` `add-parameter-and-migrate`, the

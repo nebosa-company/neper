@@ -64,7 +64,8 @@ throughout, the operation in `op`, no new record per operation.
 
 **D376** delivered `rename-symbol`: `plan-rename-file PATH ROOT ARCH OS --json
 --symbol module.name --to NEW` in the compiler, over the checker's explain table
-(D359-D362); `scripts/apply_plan.py` as the reference applier, which checks every
+(D359-D362); `scripts/apply_plan.py` as the reference applier (retired by D481's
+`neper apply-plan`, the same rules in the compiler), which checks every
 precondition before writing anything and applies each file's edits from the
 highest offset down through a temporary and a replace; the corpus fixture
 `plan_rename` (a generic function, its declaration and two instantiating calls)

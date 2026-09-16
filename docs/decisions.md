@@ -10399,3 +10399,21 @@ program it cannot find at `CreateProcess`, so the detail is `NotFound` under
 report to, so the child exits 127, the spawn succeeded, and nothing is written
 -- the fixture asserts each host's answer. `e.io` is the wrapper still without
 the form.
+
+## D481 -- `apply-plan`: the compiler applies its own plans
+
+Since D376 the compiler wrote edit plans -- rename, add-parameter,
+change-signature, replace-expression -- and nothing but `scripts/apply_plan.py`
+applied them, so a harness needed Python to act on what the compiler proposed.
+`neper apply-plan PLAN.jsonl --root DIR [--project-src DIR] [--json]` is the
+applier in the compiler, under the script's rules: every `precondition`'s file
+must hash as recorded (SHA-256, the manifest's) or nothing is written; an edit
+with no precondition, or outside its file, or a plan whose result was not `ok`,
+is refused the same way, `E-TOOL-0003` and exit 2; each file's edits are spliced
+from the highest offset down so the earlier spans stay where the plan put them,
+and the file is published as an artifact is (D343), `.tmp` and one replace. The
+replacement is a JSON string read with its escapes undone -- `json_str_after`
+stops at the first quote, right for a hash, wrong for text -- and a `\uXXXX`
+pair as one scalar. Both suites apply every corpus plan with it, eight per host,
+the second apply of an applied plan refused as before; `scripts/apply_plan.py`
+is removed. A harness now proposes, applies and re-checks with one binary.

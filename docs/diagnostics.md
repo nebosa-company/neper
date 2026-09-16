@@ -59,6 +59,7 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-FORMAT-9999` | other formatter input or contract violation | tooling §6 |
 | `E-TOOL-0001` | stale or malformed generated source map | tooling §8 |
 | `E-TOOL-0002` | a generated source edited after generation: its hash is not the map's while the generator's input is unchanged (D418) | tooling §8 |
+| `E-TOOL-0003` | an edit plan that cannot be applied as it stands: a file changed since the plan was made, an edit with no precondition or outside its file, or a plan that did not succeed; nothing is written (D481) | tooling §7 |
 | `E-TOOL-9999` | other machine-protocol or tooling violation | tooling protocol |
 
 The most-specific listed code applies. A violation without a more-specific entry uses

@@ -4116,6 +4116,276 @@ fn save_executable(a: *mem.Arena, path: str, bytes: []u8, os_name: str) -> err {
     ret ok
 }
 
+// `apply-plan PLAN --root DIR [--project-src DIR] [--json]` (D481, H29): the plans the
+// compiler writes -- `plan-rename-file`, `plan-add-parameter-file`,
+// `plan-change-signature-file`, `plan-replace-expression-file` -- applied by the
+// compiler. Every `precondition`'s file must hash as recorded, or nothing is written
+// (E-TOOL-0003, exit 2); the edits go on per file from the highest offset down, so
+// the earlier spans stay valid; each file is published whole through `.tmp` and one
+// replace. The `postcondition` is printed for the caller to check. Sources resolve by
+// root: `operand` under --root, `project-src` under --project-src (default --root).
+// `scripts/apply_plan.py` (D376) was the only applier before this.
+const PLAN_FILES: usize = 64usize
+const PLAN_EDITS: usize = 4096usize
+
+fn apply_plan_command(a: *mem.Arena, args: []str) -> err {
+    var out = stderr_sink()
+    out.file = os.stdout()
+    var report = stderr_sink()
+    var root = ""
+    var project_src = ""
+    var has_root = false
+    var json = false
+    var at = 3usize
+    while at < args.len {
+        if same(args[at], "--json") { json = true }
+        if same(args[at], "--root") && at + 1usize < args.len {
+            root = args[at + 1usize]
+            has_root = true
+            at += 1usize
+        }
+        if same(args[at], "--project-src") && at + 1usize < args.len {
+            project_src = args[at + 1usize]
+            at += 1usize
+        }
+        at += 1usize
+    }
+    if !has_root { ret tool_usage() }
+    if project_src.len == 0usize { project_src = root }
+    // Refusals go to stderr as text, or into the stream as records.
+    var sink = &report
+    if json {
+        out.json = true
+        sink = &out
+        try write_all(&out, "{\"schema\":\"neper-stream\",\"version\":1,\"record\":\"header\",\"command\":\"apply-plan\",\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3}\n")
+    }
+    let (plan, plan_error) = graph.load_file(a, args[2usize])
+    if plan_error != ok { ret apply_plan_refused(sink, "E-CLI-9999", "the plan cannot be read") }
+    let (file_paths, file_paths_error) = mem.alloc[str](a, PLAN_FILES)
+    if file_paths_error != ok { ret file_paths_error }
+    let (file_texts, file_texts_error) = mem.alloc[str](a, PLAN_FILES)
+    if file_texts_error != ok { ret file_texts_error }
+    let (edit_file, edit_file_error) = mem.alloc[usize](a, PLAN_EDITS)
+    if edit_file_error != ok { ret edit_file_error }
+    let (edit_start, edit_start_error) = mem.alloc[usize](a, PLAN_EDITS)
+    if edit_start_error != ok { ret edit_start_error }
+    let (edit_end, edit_end_error) = mem.alloc[usize](a, PLAN_EDITS)
+    if edit_end_error != ok { ret edit_end_error }
+    let (edit_text, edit_text_error) = mem.alloc[str](a, PLAN_EDITS)
+    if edit_text_error != ok { ret edit_text_error }
+    var file_count = 0usize
+    var edit_count = 0usize
+    var succeeded = false
+    var postcondition = ""
+    var line_start = 0usize
+    while line_start < plan.len {
+        var line_end = line_start
+        while line_end < plan.len && plan[line_end] != 10u8 { line_end += 1usize }
+        let line = plan[line_start..line_end]
+        line_start = line_end + 1usize
+        let kind = json_str_after(line, "\"record\":\"")
+        if same(kind, "result") {
+            if json_key_at(line, "\"ok\":true") != line.len { succeeded = true }
+        }
+        if same(kind, "precondition") {
+            if PLAN_FILES == file_count { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan names more files than apply-plan holds") }
+            let (path, path_error) = plan_source_path(a, line, root, project_src)
+            if path_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "a precondition names a source root apply-plan has no directory for") }
+            let (text, read_error) = graph.load_file(a, path)
+            if read_error != ok { ret apply_plan_refused(sink, "E-TOOL-0003", "a precondition's file cannot be read; nothing applied") }
+            let (digest, digest_error) = artifact_hash.sha256_hex(a, text)
+            if digest_error != ok { ret digest_error }
+            if !same(digest, json_str_after(line, "\"sha256\":\"")) { ret apply_plan_refused(sink, "E-TOOL-0003", "a file changed since the plan was made; nothing applied") }
+            file_paths[file_count] = path
+            file_texts[file_count] = text
+            file_count += 1usize
+        }
+        if same(kind, "edit") {
+            if PLAN_EDITS == edit_count { ret apply_plan_refused(sink, "E-TOOL-9999", "the plan has more edits than apply-plan holds") }
+            let (path, path_error) = plan_source_path(a, line, root, project_src)
+            if path_error != ok { ret apply_plan_refused(sink, "E-TOOL-9999", "an edit names a source root apply-plan has no directory for") }
+            var file_at = 0usize
+            while file_at < file_count && !same(file_paths[file_at], path) { file_at += 1usize }
+            if file_at == file_count { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit names a file with no precondition; nothing applied") }
+            let start = json_usize_after(line, "\"byte_start\":")
+            let end = json_usize_after(line, "\"byte_end\":")
+            if start > end || end > file_texts[file_at].len { ret apply_plan_refused(sink, "E-TOOL-0003", "an edit's span lies outside its file; nothing applied") }
+            let (replacement, replacement_error) = json_unescaped_after(a, line, "\"replacement\":\"")
+            if replacement_error != ok { ret replacement_error }
+            edit_file[edit_count] = file_at
+            edit_start[edit_count] = start
+            edit_end[edit_count] = end
+            edit_text[edit_count] = replacement
+            edit_count += 1usize
+        }
+        if same(kind, "postcondition") { postcondition = json_str_after(line, "\"check\":\"") }
+    }
+    if !succeeded { ret apply_plan_refused(sink, "E-TOOL-0003", "the plan did not succeed; nothing applied") }
+    // Per file, the edits from the highest offset down: each is spliced into a fresh
+    // copy, so an earlier span is where the plan said it was.
+    var file_at = 0usize
+    while file_at < file_count {
+        var text = file_texts[file_at]
+        var applied = 0usize
+        while true {
+            // The unapplied edit of this file with the highest start.
+            var best = edit_count
+            var edit_at = 0usize
+            while edit_at < edit_count {
+                if edit_file[edit_at] == file_at && edit_start[edit_at] != PLAN_APPLIED && (best == edit_count || edit_start[edit_at] > edit_start[best]) { best = edit_at }
+                edit_at += 1usize
+            }
+            if best == edit_count { break }
+            let (spliced, splice_error) = mem.alloc[u8](a, text.len - (edit_end[best] - edit_start[best]) + edit_text[best].len)
+            if splice_error != ok { ret splice_error }
+            var n = nptest_append(spliced, 0usize, text[0usize..edit_start[best]])
+            n = nptest_append(spliced, n, edit_text[best])
+            n = nptest_append(spliced, n, text[edit_end[best]..text.len])
+            text = spliced[0usize..n]
+            edit_start[best] = PLAN_APPLIED
+            applied += 1usize
+        }
+        if applied != 0usize {
+            let (bytes, bytes_error) = mem.alloc[u8](a, text.len)
+            if bytes_error != ok { ret bytes_error }
+            let n = nptest_append(bytes, 0usize, text)
+            try save_bytes(a, file_paths[file_at], bytes[0usize..n])
+            if !json {
+                try write_all(&out, "applied ")
+                try write_usize(&out, applied)
+                try write_all(&out, " edits to ")
+                try write_all(&out, file_paths[file_at])
+                try write_all(&out, "\n")
+            }
+        }
+        file_at += 1usize
+    }
+    if !json {
+        if postcondition.len != 0usize {
+            try write_all(&out, "postcondition: ")
+            try write_all(&out, postcondition)
+            try write_all(&out, "\n")
+        }
+        ret ok
+    }
+    try write_all(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":")
+    try write_usize(&out, edit_count)
+    try write_all(&out, ",\"files\":")
+    try write_usize(&out, file_count)
+    try write_all(&out, ",\"postcondition\":")
+    try write_json_string(&out, postcondition)
+    ret write_all(&out, "}}\n")
+}
+
+// An edit's start once it is spliced in: no span reaches this.
+const PLAN_APPLIED: usize = 4294967295usize
+
+fn apply_plan_refused(report: *Sink, code: str, message: str) -> err {
+    try emit_command_diagnostic(report, code, message)
+    if report.json { try write_all(report, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"edits\":0,\"files\":0,\"diagnostics\":1}}\n") }
+    os.exit(2i32)
+    ret ok
+}
+
+// A record's source -- the first `"root"`/`"path"` pair of the line, the span's on
+// an edit -- under the directory its root names.
+fn plan_source_path(a: *mem.Arena, line: str, root: str, project_src: str) -> (str, err) {
+    let source_root = json_str_after(line, "\"root\":\"")
+    let path = json_str_after(line, "\"path\":\"")
+    var dir = root
+    if same(source_root, "project-src") { dir = project_src }
+    if !same(source_root, "operand") && !same(source_root, "project-src") { ret ("", os.Unsupported) }
+    let (joined, join_error) = mem.alloc[u8](a, dir.len + 1usize + path.len)
+    if join_error != ok { ret ("", join_error) }
+    var n = nptest_append(joined, 0usize, dir)
+    if n != 0usize && joined[n - 1usize] != 47u8 && joined[n - 1usize] != 92u8 { n = nptest_append(joined, n, "/") }
+    n = nptest_append(joined, n, path)
+    ret (joined[0usize..n], ok)
+}
+
+// The JSON string after `key`, its escapes undone -- `\"`, `\\`, `\/`, `\n`, `\r`,
+// `\t`, `\b`, `\f` and `\uXXXX` as UTF-8, a surrogate pair as one scalar; "" when
+// the key is absent. `json_str_after` stops at the first quote, escaped or not, which
+// is right for a hash and wrong for a replacement.
+fn json_unescaped_after(a: *mem.Arena, line: str, key: str) -> (str, err) {
+    let from = json_key_at(line, key)
+    if from == line.len { ret ("", ok) }
+    let (out, out_error) = mem.alloc[u8](a, line.len)
+    if out_error != ok { ret ("", out_error) }
+    var n = 0usize
+    var at = from
+    while at < line.len && line[at] != 34u8 {
+        if line[at] != 92u8 || at + 1usize >= line.len {
+            out[n] = line[at]
+            n += 1usize
+            at += 1usize
+        } else {
+            let escaped = line[at + 1usize]
+            at += 2usize
+            var plain = escaped
+            if escaped == 110u8 { plain = 10u8 }
+            if escaped == 114u8 { plain = 13u8 }
+            if escaped == 116u8 { plain = 9u8 }
+            if escaped == 98u8 { plain = 8u8 }
+            if escaped == 102u8 { plain = 12u8 }
+            if escaped != 117u8 {
+                out[n] = plain
+                n += 1usize
+            } else {
+                var scalar = json_hex4(line, at)
+                at += 4usize
+                if scalar >= 55296usize && scalar < 56320usize && at + 6usize <= line.len && line[at] == 92u8 && line[at + 1usize] == 117u8 {
+                    let low = json_hex4(line, at + 2usize)
+                    if low >= 56320usize && low < 57344usize {
+                        scalar = 65536usize + ((scalar - 55296usize) << 10usize) + (low - 56320usize)
+                        at += 6usize
+                    }
+                }
+                n = utf8_append(out, n, scalar)
+            }
+        }
+    }
+    ret (out[0usize..n], ok)
+}
+
+fn json_hex4(line: str, at: usize) -> usize {
+    var value = 0usize
+    var digit_at = 0usize
+    while digit_at < 4usize && at + digit_at < line.len {
+        let ch = usize(line[at + digit_at])
+        var nibble = 0usize
+        if ch >= 48usize && ch <= 57usize { nibble = ch - 48usize }
+        if ch >= 97usize && ch <= 102usize { nibble = ch - 87usize }
+        if ch >= 65usize && ch <= 70usize { nibble = ch - 55usize }
+        value = (value << 4usize) | nibble
+        digit_at += 1usize
+    }
+    ret value
+}
+
+fn utf8_append(out: []u8, n: usize, scalar: usize) -> usize {
+    if scalar < 128usize {
+        out[n] = u8(scalar)
+        ret n + 1usize
+    }
+    if scalar < 2048usize {
+        out[n] = u8(192usize | (scalar >> 6usize))
+        out[n + 1usize] = u8(128usize | (scalar & 63usize))
+        ret n + 2usize
+    }
+    if scalar < 65536usize {
+        out[n] = u8(224usize | (scalar >> 12usize))
+        out[n + 1usize] = u8(128usize | ((scalar >> 6usize) & 63usize))
+        out[n + 2usize] = u8(128usize | (scalar & 63usize))
+        ret n + 3usize
+    }
+    out[n] = u8(240usize | (scalar >> 18usize))
+    out[n + 1usize] = u8(128usize | ((scalar >> 12usize) & 63usize))
+    out[n + 2usize] = u8(128usize | ((scalar >> 6usize) & 63usize))
+    out[n + 3usize] = u8(128usize | (scalar & 63usize))
+    ret n + 4usize
+}
+
 // Published, not written in place (D343, H24): the bytes go to `<path>.tmp` and the
 // name is taken by one atomic replace, so no reader -- a concurrent build, the next
 // build after a crash -- ever sees a file that is part of one; a write that dies
@@ -8508,6 +8778,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     if (args.len == 7usize || (args.len == 8usize && same(args[7usize], "--absolute-paths"))) && same(args[1usize], "index-file") && same(args[6usize], "--json") { ret index_command(a, args) }
     // `... --json --path REL` (D298): the operand's identity under its project's src.
     if args.len == 9usize && same(args[1usize], "index-file") && same(args[6usize], "--json") && same(args[7usize], "--path") { ret index_command(a, args) }
+    // `apply-plan PLAN --root DIR [--project-src DIR] [--json]` (D481, H29): the plans applied by the compiler.
+    if args.len >= 5usize && same(args[1usize], "apply-plan") && same(args[3usize], "--root") { ret apply_plan_command(a, args) }
     // `index-project DIR ROOT ARCH OS WORKDIR --json` (D298): every module under DIR/src
     // and DIR/lib, one stream.
     if args.len == 8usize && same(args[1usize], "index-project") && same(args[7usize], "--json") { ret index_project_command(a, args) }

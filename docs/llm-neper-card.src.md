@@ -135,7 +135,7 @@ a JSONL stream bound to the program's `snapshot`:
   a field), `plan-add-parameter-file --symbol m.f --parameter "name: T" --argument
   EXPR`, `plan-change-signature-file --symbol m.f --order 2,0,1`,
   `plan-replace-expression-file --span START:END --with EXPR`;
-  `scripts/apply_plan.py` is the reference applier.
+  `apply-plan PLAN.jsonl --root DIR` applies one, all files hashing as recorded or none.
 - `test-impact-file --changed m1,m2` -- the `@test` functions an edit reaches;
   `test-file ... --json --only n1,n2` runs those alone.
 - `query-batch --batch FILE` -- many context, catalogue and uses queries over one

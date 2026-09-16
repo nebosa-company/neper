@@ -2568,13 +2568,13 @@ python3 "$repo/scripts/card_examples.py" "$test_build/neper-self" "$repo" x64 li
 cmp -s "$test_build/conformance-tools-plan-rename.jsonl" "$conformance_root/tools/plan_rename.x64-linux.expected.jsonl" || { echo "plan-rename-file --json differs from the conformance corpus" >&2; exit 1; }
 plan_scratch="$test_build/plan-scratch"
 rm -rf "$plan_scratch" && mkdir -p "$plan_scratch/src" && cp "$conformance_root/tools/explain.e" "$plan_scratch/src/"
-python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null
 plan_checked=$($test_build/neper-self check-file "$plan_scratch/src/explain.e" "$repo" x64 linux)
 [ "$plan_checked" = 'module check ok' ]
 plan_sites=$($test_build/neper-self uses-file "$plan_scratch/src/explain.e" "$repo" x64 linux --json --symbol explain.alike | grep '"record":"use"' | sed 's/.*"byte_start":\([0-9]*\).*/\1/' | sort -u | wc -l)
 [ "$plan_sites" -eq 2 ]
 plan_again=0
-python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null 2>&1 || plan_again=$?
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null 2>&1 || plan_again=$?
 [ "$plan_again" -ne 0 ]
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan, applied and
 # checked; a span that is not one expression is refused with exit 2.
@@ -2582,7 +2582,7 @@ python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename
 cmp -s "$test_build/conformance-tools-plan-replace.jsonl" "$conformance_root/tools/plan_replace.x64-linux.expected.jsonl" || { echo "plan-replace-expression-file --json differs from the conformance corpus" >&2; exit 1; }
 replace_scratch="$test_build/plan-replace-scratch"
 rm -rf "$replace_scratch" && mkdir -p "$replace_scratch/src" && cp "$conformance_root/tools/contract.e" "$replace_scratch/src/"
-python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-replace.jsonl" --root "$replace_scratch/src" > /dev/null
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-replace.jsonl" --root "$replace_scratch/src" > /dev/null
 replace_checked=$($test_build/neper-self check-file "$replace_scratch/src/contract.e" "$repo" x64 linux)
 [ "$replace_checked" = 'module check ok' ]
 replace_refused=0
@@ -2595,7 +2595,7 @@ cmp -s "$test_build/conformance-tools-plan-replace-refused.jsonl" "$conformance_
 cmp -s "$test_build/conformance-tools-plan-signature.jsonl" "$conformance_root/tools/plan_signature.x64-linux.expected.jsonl" || { echo "plan-change-signature-file --json differs from the conformance corpus" >&2; exit 1; }
 signature_scratch="$test_build/plan-signature-scratch"
 rm -rf "$signature_scratch" && mkdir -p "$signature_scratch/src" && cp "$conformance_root/tools/signature.e" "$signature_scratch/src/"
-python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-signature.jsonl" --root "$signature_scratch/src" > /dev/null
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-signature.jsonl" --root "$signature_scratch/src" > /dev/null
 signature_checked=$($test_build/neper-self check-file "$signature_scratch/src/signature.e" "$repo" x64 linux)
 [ "$signature_checked" = 'module check ok' ]
 grep -q 'fn adjust(offset: f32, reading: f32, gain: f32)' "$signature_scratch/src/signature.e"
@@ -2607,7 +2607,7 @@ remove_scratch="$test_build/plan-signature-remove-scratch"
 rm -rf "$remove_scratch"
 mkdir -p "$remove_scratch/src"
 cp "$conformance_root/tools/signature_remove.e" "$remove_scratch/src/signature_remove.e"
-python3 "$repo/scripts/apply_plan.py" "$remove_actual" --root "$remove_scratch/src" > /dev/null
+"$test_build/neper-self" apply-plan "$remove_actual" --root "$remove_scratch/src" > /dev/null
 [ "$($test_build/neper-self check-file "$remove_scratch/src/signature_remove.e" "$repo" x64 linux)" = 'module check ok' ]
 grep -q 'fn adjust(reading: f32, gain: f32)' "$remove_scratch/src/signature_remove.e"
 remove_refused=0
@@ -2627,7 +2627,7 @@ error_scratch="$test_build/plan-rename-error-scratch"
 rm -rf "$error_scratch"
 mkdir -p "$error_scratch/src"
 cp "$conformance_root/tools/errors_project/src/"*.e "$error_scratch/src/"
-python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename-error.jsonl" --root "$error_scratch/src" > /dev/null
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename-error.jsonl" --root "$error_scratch/src" > /dev/null
 [ "$($test_build/neper-self check-file "$error_scratch/src/main.e" "$repo" x64 linux)" = 'module check ok' ]
 ! grep -q 'Stalled' "$error_scratch/src/"*.e
 grep -q 'error Blocked' "$error_scratch/src/faults.e"
@@ -2639,7 +2639,7 @@ cmp -s "$test_build/conformance-tools-uses-field.jsonl" "$conformance_root/tools
 cmp -s "$test_build/conformance-tools-plan-rename-field.jsonl" "$conformance_root/tools/plan_rename_field.x64-linux.expected.jsonl" || { echo "plan-rename-file --json on a field differs from the conformance corpus" >&2; exit 1; }
 field_scratch="$test_build/plan-rename-field-scratch"
 rm -rf "$field_scratch" && mkdir -p "$field_scratch/src" && cp "$conformance_root/tools/contract.e" "$field_scratch/src/"
-python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename-field.jsonl" --root "$field_scratch/src" > /dev/null
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-rename-field.jsonl" --root "$field_scratch/src" > /dev/null
 field_checked=$($test_build/neper-self check-file "$field_scratch/src/contract.e" "$repo" x64 linux)
 [ "$field_checked" = 'module check ok' ]
 field_uses=$($test_build/neper-self uses-file "$field_scratch/src/contract.e" "$repo" x64 linux --json --symbol contract.Counter.count | grep -c '"record":"use"')
@@ -2655,7 +2655,7 @@ snapshot_after=$($test_build/neper-self context-file "$plan_scratch/src/explain.
 cmp -s "$test_build/conformance-tools-plan-parameter.jsonl" "$conformance_root/tools/plan_parameter.x64-linux.expected.jsonl" || { echo "plan-add-parameter-file --json differs from the conformance corpus" >&2; exit 1; }
 parameter_scratch="$test_build/plan-parameter-scratch"
 rm -rf "$parameter_scratch" && mkdir -p "$parameter_scratch/src" && cp "$conformance_root/tools/contract.e" "$parameter_scratch/src/"
-python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-parameter.jsonl" --root "$parameter_scratch/src" > /dev/null
+"$test_build/neper-self" apply-plan "$test_build/conformance-tools-plan-parameter.jsonl" --root "$parameter_scratch/src" > /dev/null
 parameter_checked=$($test_build/neper-self check-file "$parameter_scratch/src/contract.e" "$repo" x64 linux)
 [ "$parameter_checked" = 'module check ok' ]
 grep -q 'fn total(c: \*const Counter, scale: i64) -> i64' "$parameter_scratch/src/contract.e"
