@@ -7570,3 +7570,48 @@ partly moved struct, and the cleanup's own parameter.
 through generics, `mem.bitcast`, reflection), E-SAFETY-0012 (closing a borrowed
 handle), `os.dup`, `mem.Arena` as an affine type, arrays of resources, and the
 fixed surface's `file_handle`.
+
+## D349 -- A borrow is given to no one, a copy is not a duplicate, and `os.dup` is
+
+The third cut of H01 over D348: the two ways a second owner could be made without
+the OS, and the one way with it.
+
+**Borrows.** A parameter not declared `own`, a standard stream, a binding from
+either and a field of a borrowed struct are borrowed: the checker's view with one
+more bit, and the rule that a borrowed value goes to nobody. Closing it, handing it
+to an `own` parameter, or returning it -- each of which would leave the caller, or
+the caller's caller, owing a handle it never acquired -- is E-SAFETY-0012 at the
+site, naming the line the borrow was taken. A view that is not borrowed -- a field
+of a struct that came back from a call, an element -- stays consumable, since the
+callee's business (D348) has to be closable by someone. Storing a borrow into a
+field or a literal is not a transfer: the field is a view, owed by nobody, as
+before. The proposal's `@borrowed` attribute is not added: the three producers are
+borrowed by table, as the seeded closers consume by table, and the signatures say
+so in `module-apis.md` instead.
+
+**Copies.** `mem.bitcast` into or out of a resource type is refused, as is
+`mem.cast` to a pointer to a resource from anything but a pointer to that type or
+the `*void` a callback's context was erased to (`e.io`'s readers are that shape),
+and `dst[i] = src[j]` over a resource type, which is what `mem.copy[T]` writes out
+and what its instance over a handle now fails at. All three are E-SAFETY-0005,
+naming the type and the way. A generic that returns its borrowed parameter or moves
+an `own` one twice fails in the instance under D345's rules already. Reflection and
+the codecs are not yet stopped at a resource's fields; that stays listed.
+
+**`os.dup`.** `fn dup(f: File) -> (File, err)`, `dup(2)` on Linux and
+`DuplicateHandle` with the same access on Windows: the OS's second identity, owed its
+own close, sharing the description's offset -- the fixture reads four bytes through
+the duplicate and two more through the original. On both hosts, in the library
+alone: the fixed surface is unchanged.
+
+Fixtures: a borrowed parameter closed; a borrowed handle returned; a pun of a
+handle; an element copied to an element; a template that copies its `T`
+instantiated over handles, which is where instances first ran under the rules
+(reject); a duplicate read and closed, a
+borrowed parameter read, and a field of a borrowed struct read (accept); `os_dup`
+linked and run on both hosts. The rules found nothing new in the compiler or the
+library beyond the `*void` shape, which is the rule's exception rather than a fix.
+
+**Not yet:** E-SAFETY-0004 (a move while a borrow is live), reflection and the
+format codecs over resource fields, `mem.Arena` as an affine type, arrays and slices
+as tracked wholes, and the fixed surface's `file_handle`.

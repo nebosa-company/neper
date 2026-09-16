@@ -3503,9 +3503,21 @@ none becomes a trap:
   applied, since it discharges obligations by means the checker cannot see -- the
   `e.os` implementations are such functions. The three standard streams from
   `os.stdin`/`os.stdout`/`os.stderr` are borrowed: owned by the process, never owed.
+- What is **borrowed** -- a parameter not declared `own`, a standard stream, a
+  binding from either, a field of a borrowed struct -- is read as wanted and given
+  to no one: it cannot be closed, passed to an `own` parameter, or returned
+  (`E-SAFETY-0012`). A second identity comes from the OS alone: `os.dup(f)` is a new
+  handle with its own obligation, sharing the file's offset (D349).
+- Copying the bits of a resource is not duplicating it, and nothing else becomes
+  one: `mem.bitcast` into or out of a resource type, `mem.cast` to a pointer to a
+  resource from anything but a pointer to that type or the `*void` it was erased
+  to, and an element stored from an element read (`dst[i] = src[j]`, which is what
+  `mem.copy[T]` over a resource type writes out) are refused (`E-SAFETY-0005`). An
+  instance of a template is checked under these rules as any body is.
 
-Arrays and slices of resources are not tracked: a store into an element moves the
-value in, and an element read is a view.
+Arrays and slices of resources are not tracked as wholes: a store into an element
+moves the value in, and an element read is a view. Reflection and the format
+codecs are not yet told a resource has no fields outside its module.
 
 ### Debug fills
 

@@ -841,6 +841,9 @@ extern fn raw_cancel_io(handle: usize) -> i32
 @import("kernel32.dll", "CreatePipe")
 extern fn raw_create_pipe(reading: *usize, writing: *usize, security: usize, size: u32) -> i32
 
+@import("kernel32.dll", "DuplicateHandle")
+extern fn raw_duplicate_handle(source_process: usize, source: usize, target_process: usize, duplicate: *usize, access: u32, inherit: i32, options: u32) -> i32
+
 @import("kernel32.dll", "TerminateProcess")
 extern fn raw_terminate_process(process: usize, code: u32) -> i32
 
@@ -2051,6 +2054,19 @@ fn pipe() -> (File, File, err) {
     writing.raw = write_handle
     ret (reading, writing, ok)
 }
+
+// A second identity for the same open file (D349): the OS's duplication, owed its own
+// close; copying the bits of `f` would not be. Same access, not inheritable.
+fn dup(f: File) -> (File, err) {
+    var second: File = zero
+    var handle = 0usize
+    let process = raw_current_process()
+    if raw_duplicate_handle(process, f.raw, process, &handle, 0u32, 0i32, DUPLICATE_SAME_ACCESS) == 0i32 { ret (second, from_last_error()) }
+    second.raw = handle
+    ret (second, ok)
+}
+
+const DUPLICATE_SAME_ACCESS: u32 = 2u32
 
 // `PROCESS_MEMORY_COUNTERS`: the size first, then a page-fault count, then eight sizes of
 // which the peak working set is the first. The layout is the ABI.

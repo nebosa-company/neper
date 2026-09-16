@@ -32,12 +32,14 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-SAFETY-0001` | a resource used after it was moved, or never owned | spec §11 |
 | `E-SAFETY-0002` | a resource still owned at an exit: its cleanup was forgotten | spec §11 |
 | `E-SAFETY-0003` | an aggregate moved whole after a field was moved out of it | spec §11 |
+| `E-SAFETY-0005` | a resource copied: `mem.bitcast`, a pointer cast, an element copied to an element | spec §11 |
 | `E-SAFETY-0006` | an owned resource overwritten by assignment | spec §11 |
 | `E-SAFETY-0007` | `undef` of a resource type | spec §11 |
 | `E-SAFETY-0008` | a resource used before the error it was returned beside was tested | spec §11 |
 | `E-SAFETY-0009` | a resource consumed after a deferred call reserved it | spec §11 |
 | `E-SAFETY-0010` | a declared resource's field read outside its module | spec §11 |
 | `E-SAFETY-0011` | a resource declared outside a loop consumed inside it | spec §11 |
+| `E-SAFETY-0012` | a borrowed resource closed, moved to an `own` parameter, or returned | spec §11 |
 | `E-SAFETY-9999` | statically diagnosed safety-contract violation | spec §11 |
 | `E-MODULE-0001` | module is missing or defined by multiple roots | spec §2 |
 | `E-MODULE-0002` | import graph contains a cycle | spec §2 |

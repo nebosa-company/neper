@@ -1,7 +1,7 @@
 use e.mem
 use e.os
 
-// The resource rules' valid shapes (D341): a `try`d acquisition closed on every exit,
+// The resource rules' valid shapes (D345): a `try`d acquisition closed on every exit,
 // an `own` parameter that takes the handle and its obligation, a `defer` that
 // reserves, an error test against one error and against ok, each narrowing,
 // and a handle moved into an array a loop closes.
@@ -30,6 +30,25 @@ fn count_bytes(a: *mem.Arena, path: str) -> (usize, err) {
     ret (total, ok)
 }
 
+// A duplicate is a second handle with its own obligation (D349); the borrowed
+// parameter is read, never closed, and a field of a borrowed struct is a view.
+type Pair = struct { first: os.File, second: os.File }
+
+fn twice(f: os.File) -> (usize, err) {
+    let d = try os.dup(f)
+    var buffer: [16]u8 = zero
+    let (n, read_error) = os.read(d, buffer[..])
+    let close_error = os.close(d)
+    if read_error != ok { ret (0usize, read_error) }
+    ret (n, close_error)
+}
+
+fn peek(p: Pair) -> usize {
+    let first = p.first
+    if first.raw == p.second.raw { ret 0usize }
+    ret 1usize
+}
+
 fn main(a: *mem.Arena, args: []str) -> err {
     let flags = os.OpenFlags {
         read: true,
@@ -39,7 +58,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         append: false,
     }
     let f = try os.open(a, args[0usize], flags)
-    try take(f)
+    let (dup_read, dup_error) = twice(f)
+    if dup_error != ok {
+        let _ = os.close(f)
+        ret dup_error
+    }
+    let (second, second_error) = os.open(a, args[0usize], flags)
+    if second_error != ok {
+        let _ = os.close(f)
+        ret second_error
+    }
+    let pair = Pair { first: f, second: second }
+    let distinct = peek(pair)
+    let second_close = os.close(pair.second)
+    if distinct != 1usize || second_close != ok {
+        let _ = os.close(pair.first)
+        if second_close != ok { ret second_close }
+        ret os.Failed
+    }
+    try take(pair.first)
     let (g, open_error) = os.open(a, args[0usize], flags)
     if open_error != ok { ret open_error }
     let (total, count_error) = count_bytes(a, args[0usize])

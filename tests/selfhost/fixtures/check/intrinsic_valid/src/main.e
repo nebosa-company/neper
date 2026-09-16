@@ -1,7 +1,7 @@
 use e.mem as mem
 use e.os as os
 
-fn run(a: *mem.Arena, file: os.File, pointer: *u8, count: usize) {
+fn run(a: *mem.Arena, file: own os.File, pointer: *u8, count: usize) {
     let output: os.File = os.stdout()
     let failure: os.File = os.stderr()
     let mark: usize = mem.mark(a)

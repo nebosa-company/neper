@@ -61,6 +61,8 @@ type DiagnosticKind = enum u8 {
     ResourceMovedInLoop,
     ResourceOpaque,
     ResourceCleanupSignature,
+    ResourceBorrowConsumed,
+    ResourceCopy,
     AssignmentImmutable,
     IndexedArrayImmutable,
     IndexedElementsImmutable,
@@ -304,6 +306,10 @@ type Local = struct {
     // A struct local's fields (D348): a state per field, the low four bits, and
     // whether it is owed, the fifth; zero for a field that is not affine.
     fields: []u8,
+    // Whether the value is someone else's (D349): a parameter not declared `own`, a
+    // borrowed producer's handle, or a binding from either. Read as wanted; never
+    // closed, moved to an `own` parameter, or returned.
+    borrowed: bool,
 }
 
 type Alias = struct {
@@ -483,6 +489,9 @@ type Checker = struct {
     // The resource pass runs in the body sweep alone (D345): the lowering re-walks
     // bodies in its own order and partially, and states depend on the walk.
     resources_on: bool,
+    // Set while a consumption transfers ownership out of the function -- an `own`
+    // argument, a `ret` -- which a borrowed value cannot do (D349).
+    resource_transfer: bool,
     // The interpreter's state (D218): set once the signatures are collected, the per-module
     // trees and tokens it keeps, the constant being evaluated for its reports, its budget.
     signatures_ready: bool,
@@ -5399,7 +5408,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     var state = 0u8
     if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
     var no_fields: []u8 = zero
-    c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable, state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields }
+    c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable, state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false }
     c.local_count += 1usize
     ret ok
 }
@@ -8215,6 +8224,17 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         let (source, source_error) = check_expr(c, g, tree, module_index, child_index, invalid_type())
                         if source_error != ok { ret (info, source_error) }
                         if source.kind != .Pointer { ret (info, TypeMismatch) }
+                        // A pointer to a resource is made from a pointer to that
+                        // resource, or from the `*void` one was erased to for a
+                        // callback's context (D349): no other bytes become a handle.
+                        if c.resources_on && info.cast.has_element && info.cast.element < c.type_count && affine_kind(c, c.types[info.cast.element], 0usize) != 0u8 {
+                            var same_pointee = false
+                            if source.has_element && source.element < c.type_count { same_pointee = type_equal(c, c.types[source.element], c.types[info.cast.element]) || c.types[source.element].kind == .Void }
+                            if !same_pointee {
+                                record_failure(c, module_index, node, .ResourceCopy, c.types[info.cast.element].name, "a pointer cast")
+                                ret (info, ResourceViolation)
+                            }
+                        }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -8268,6 +8288,16 @@ fn check_call_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                         // read as another type.
                         if is_untyped(punned) { ret (info, MissingContext) }
                         if !punnable_type(c, punned, 0usize) { ret (info, TypeMismatch) }
+                        // Neither side of a pun is a resource (D349): the bits of a
+                        // handle are not a second handle, and no bytes become one.
+                        if c.resources_on && affine_kind(c, punned, 0usize) != 0u8 {
+                            record_failure(c, module_index, node, .ResourceCopy, punned.name, "`mem.bitcast`")
+                            ret (info, ResourceViolation)
+                        }
+                        if c.resources_on && affine_kind(c, info.cast, 0usize) != 0u8 {
+                            record_failure(c, module_index, node, .ResourceCopy, info.cast.name, "`mem.bitcast`")
+                            ret (info, ResourceViolation)
+                        }
                         child_position += 1usize
                         at += 1usize
                         continue
@@ -11207,6 +11237,12 @@ fn check_assignment(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
         if place_error != ok { ret place_error }
         let (actual, expression_error) = check_expr(c, g, tree, module_index, initializer_index, place_type)
         if expression_error != ok { ret expression_error }
+        // `dst[i] = src[j]` over a resource type copies the bits of a handle (D349):
+        // an element read is a view, and a view stored is a second owner.
+        if c.resources_on && tree.nodes[first_index].kind == .BracketPostfix && initializer.kind == .BracketPostfix && affine_kind(c, place_type, 0usize) != 0u8 {
+            record_failure(c, module_index, node, .ResourceCopy, place_type.name, "an element copied to an element")
+            ret ResourceViolation
+        }
         var no_call: CallInfo = zero
         ret resource_assign(c, g, tree, module_index, node, first_index, initializer_index, false, no_call, false)
     }
@@ -11554,6 +11590,7 @@ fn check_function_body(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, tree:
                 if resource_cleanup_of(c, parameter.ty, function) { c.locals[c.local_count - 1usize].obligated = false }
             } else {
                 resource_disown_fields(c, c.local_count - 1usize)
+                c.locals[c.local_count - 1usize].borrowed = true
             }
         }
         parameter_index += 1usize
@@ -11646,7 +11683,12 @@ fn check_instance(c: *Checker, r: *resolve.Resolver, g: *graph.Graph, instance_i
             let (name, name_error) = function_name(c, g.modules[instance.module_index].text, node)
             if name_error != ok { result = name_error }
             if name_error == ok && same(name, template.name) {
+                // An instance is checked as any body is (D349): a template that
+                // copies its `T` fails here when `T` is a resource.
+                let resources_before = c.resources_on
+                c.resources_on = !declaration_has_attribute(c, g, &tree, instance.module_index, node_index, "unsafe")
                 result = check_function_body(c, r, g, &tree, instance.module_index, node, instance)
+                c.resources_on = resources_before
                 break
             }
         }
@@ -11938,6 +11980,8 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourceMovedInLoop { ret "E-SAFETY-0011" }
     if kind == .ResourceOpaque { ret "E-SAFETY-0010" }
     if kind == .ResourceCleanupSignature { ret "E-SAFETY-9999" }
+    if kind == .ResourceBorrowConsumed { ret "E-SAFETY-0012" }
+    if kind == .ResourceCopy { ret "E-SAFETY-0005" }
     if kind == .TryInsideDefer || kind == .TryCast || kind == .TryNotFallible || kind == .TryNoPropagate { ret "E-ERROR-9999" }
     // docs/diagnostics.md: section 9's reflection and section 8's atomics under their
     // own categories (D215). A constant cycle stays E-TYPE-9999: the bootstrap says so
@@ -12386,6 +12430,12 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     // A null resource may be handed on -- `ret (file, Unsupported)` is the contract
     // for a failed acquisition -- and nothing is owed for it.
     if state == resource_null() { ret ok }
+    // What is borrowed cannot be given away: closed, handed to an `own` parameter,
+    // or returned as the caller's to close.
+    if c.resource_transfer && c.locals[local_index].borrowed && state == resource_owned() {
+        record_failure(c, module_index, node, .ResourceBorrowConsumed, c.locals[local_index].name, line_detail(c, g, module_index, c.locals[local_index].acquired))
+        ret ResourceViolation
+    }
     // A view -- a borrowed producer's handle, a field read of something that owns it
     // -- owes nothing and is moved by nobody; it is read as often as wanted.
     if state == resource_owned() && !c.locals[local_index].obligated && c.locals[local_index].fields.len == 0usize { ret ok }
@@ -12415,7 +12465,10 @@ fn resource_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     while at < end {
         if parse.child_is_node_at(tree, at) {
             if child_position != 0usize && parameter_consumes(c, info.function, child_position - 1usize) {
-                try resource_consume(c, g, tree, module_index, parse.child_index_at(tree, at))
+                c.resource_transfer = true
+                let consumed = resource_consume(c, g, tree, module_index, parse.child_index_at(tree, at))
+                c.resource_transfer = false
+                if consumed != ok { ret consumed }
             }
             child_position += 1usize
         }
@@ -12434,6 +12487,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if kind == 0u8 { ret ok }
     c.locals[local_index].acquired = usize(statement.token_start)
     c.locals[local_index].obligated = kind == 2u8
+    c.locals[local_index].borrowed = false
     if contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwUndef) {
         record_failure(c, module_index, statement, .ResourceUndef, c.locals[local_index].name, "")
         ret ResourceViolation
@@ -12447,6 +12501,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if producer_borrowed(c, call.function) {
             c.locals[local_index].state = resource_owned()
             c.locals[local_index].obligated = false
+            c.locals[local_index].borrowed = true
             try resource_init_fields(c, local_index, resource_owned())
             resource_disown_fields(c, local_index)
             ret ok
@@ -12486,6 +12541,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         c.locals[local_index].state = resource_owned()
         if source_is_resource {
             if !c.locals[source_index].obligated { c.locals[local_index].obligated = false }
+            if c.locals[source_index].borrowed { c.locals[local_index].borrowed = true }
         }
         if !source_is_resource { try resource_init_fields(c, local_index, resource_owned()) }
         ret ok
@@ -12496,6 +12552,11 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if is_field {
             try resource_consume(c, g, tree, module_index, initializer_index)
             c.locals[local_index].state = resource_owned()
+            // A field of a borrowed struct is as borrowed as the struct.
+            if c.locals[source_index].borrowed {
+                c.locals[local_index].borrowed = true
+                c.locals[local_index].obligated = false
+            }
             ret resource_init_fields(c, local_index, resource_owned())
         }
         c.locals[local_index].state = resource_owned()
@@ -12948,6 +13009,13 @@ fn resource_diverges(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 // its state but moved -- an unchecked one goes with the error it was bound beside.
 fn resource_return_value(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     if !c.resources_on { ret ok }
+    c.resource_transfer = true
+    let returned = resource_return_transfer(c, g, tree, module_index, node_index)
+    c.resource_transfer = false
+    ret returned
+}
+
+fn resource_return_transfer(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> err {
     if tree.nodes[node_index].kind == .FieldExpr { ret resource_consume(c, g, tree, module_index, node_index) }
     let (local_index, is_resource) = resource_local_of(c, g, tree, module_index, node_index)
     if !is_resource { ret ok }
@@ -12988,6 +13056,10 @@ fn resource_consume_field(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
     }
     if state != resource_owned() {
         record_failure(c, module_index, node, .ResourceUseAfterMove, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.locals[local_index].acquired))
+        ret ResourceViolation
+    }
+    if c.resource_transfer && c.locals[local_index].borrowed {
+        record_failure(c, module_index, node, .ResourceBorrowConsumed, resource_field_name(c, local_index, at), line_detail(c, g, module_index, c.locals[local_index].acquired))
         ret ResourceViolation
     }
     // A field that is not owed holds a view of someone else's handle: read as often

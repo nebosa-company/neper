@@ -8,6 +8,5 @@ fn run(file: os.File, bytes: []u8) -> err {
     (third_count, third_error) = os.read(file, bytes)
     var fourth_count = 0usize
     fourth_count = try os.read(file, bytes)
-    let _ = os.close(file)
     ret third_error
 }

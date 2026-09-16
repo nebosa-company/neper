@@ -1571,6 +1571,7 @@ fn canonical(a: *mem.Arena, path: str) -> (str, err)
 fn set_mode(a: *mem.Arena, path: str, mode: u32) -> err
 fn set_times(a: *mem.Arena, path: str, accessed_ns: i64, modified_ns: i64) -> err
 fn pipe() -> (File, File, err)
+fn dup(f: File) -> (File, err)
 fn spawn(a: *mem.Arena, argv: []const str, stdio: Stdio) -> (Proc, err)
 fn spawn_with_options(a: *mem.Arena, options: SpawnOptions) -> (Proc, err)
 fn wait(p: own Proc) -> (i32, err)

@@ -118,6 +118,7 @@ const SYS_WAIT4: usize = 61usize
 const SYS_GETRUSAGE: usize = 98usize
 const RUSAGE_SELF: usize = 0usize
 const SYS_FLOCK: usize = 73usize
+const SYS_DUP: usize = 32usize
 const SYS_DUP2: usize = 33usize
 const SYS_FORK: usize = 57usize
 const SYS_EXECVE: usize = 59usize
@@ -1503,6 +1504,17 @@ fn pipe() -> (File, File, err) {
     reading.raw = usize(pair[0usize])
     writing.raw = usize(pair[1usize])
     ret (reading, writing, ok)
+}
+
+// A second identity for the same open file (D349): the OS's duplication, owed its own
+// close; copying the bits of `f` would not be. The duplicate inherits the description's
+// offset and flags, as `dup(2)` says, and is not close-on-exec.
+fn dup(f: File) -> (File, err) {
+    var second: File = zero
+    let result = syscall(SYS_DUP, f.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
+    if result < 0isize { ret (second, from_errno(result)) }
+    second.raw = usize(result)
+    ret (second, ok)
 }
 
 // `struct rusage`: two `timeval`s and then fourteen longs, of which `ru_maxrss` is the first

@@ -3978,6 +3978,20 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail)
         ret write_all(file, ")` in the same module")
     }
+    if checker.failure_kind == .ResourceBorrowConsumed {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` is borrowed (line ")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, "): it cannot be closed, moved to an `own` parameter or returned; `os.dup` makes one that can")
+    }
+    if checker.failure_kind == .ResourceCopy {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` is a resource, which ")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, " would copy; move it, or `os.dup` it")
+    }
     if checker.failure_kind == .ResourcePartialMove {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)
