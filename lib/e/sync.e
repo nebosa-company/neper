@@ -98,6 +98,34 @@ fn mutex_unlock(m: *Mutex) {
     if previous == 2u32 { os.wake_one_u32(&m.state) }
 }
 
+// ---- Guard ----------------------------------------------------------------
+//
+// A lock held as a value (D379, H04): `guard` takes the mutex and returns a resource
+// owed to `release`, so the checker requires the release on every exit of the block
+// that holds it -- an early `ret` or `try` with the lock held is E-SAFETY-0002, a
+// second release E-SAFETY-0001 -- and `defer sync.release(g)` is the usual shape.
+// The guard is the mutex's, not the data's: what the lock protects is the program's
+// discipline still, and a `defer` releases at the block's end, not before.
+
+type Guard = resource(release) struct { m: *Mutex }
+
+fn guard(m: *Mutex) -> Guard {
+    mutex_lock(m)
+    ret Guard { m: m }
+}
+
+// The lock or `Invalid`, and on `Invalid` nothing is owed: the err convention of
+// every acquiring call (D345), so a failed try holds no guard to release.
+fn try_guard(m: *Mutex) -> (Guard, err) {
+    var g = Guard { m: m }
+    if mutex_try_lock(m) { ret (g, ok) }
+    ret (g, Invalid)
+}
+
+fn release(g: own Guard) {
+    mutex_unlock(g.m)
+}
+
 // ---- RwLock ---------------------------------------------------------------
 //
 // ponytail: a writer can be starved by a stream of readers, because a reader joins

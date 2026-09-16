@@ -8409,3 +8409,29 @@ The compiler's own build reports 354 checks elided, from 336; the fixture's
 Not yet: a prior check on the same operand (`if i >= x.len { ret } ... x[i]`),
 a bound through a second local, a field base (`c.tokens[at]`, which is most of
 the compiler's remaining checks), and a `||` of negations.
+
+## D379 -- A lock held as a value: `sync.Guard` is a resource, and H01 is the lock discipline
+
+H04 asks for lock capabilities and guards -- a guard tied to the lock's identity,
+released on every path, never released twice -- and the design (`m25-h04-
+concurrency.md` section 4) said the lock had to become a resource first. It
+does, in the library and nowhere in the checker: `type Guard = resource(release)
+struct { m: *Mutex }`, `guard(m)` locks and returns one, `try_guard(m)` returns
+`(Guard, err)` -- `Invalid` and nothing owed when the lock was not taken, the
+convention of every acquiring call -- `release(g: own Guard)` unlocks. Everything
+H04 wanted of a guard is then H01's existing rule over an existing kind of
+value: an early `ret` or `try` with the guard live is E-SAFETY-0002 naming the
+guard, a second release is E-SAFETY-0001, `defer sync.release(g)` releases at
+the block's end, and a guard handed to an `own` parameter is that function's to
+release. `mutex_lock`/`mutex_unlock` stay for the code that pairs them by hand
+and for `condition_wait`, which takes the mutex.
+
+Fixtures: `link/sync_guard` (two workers over guards exclude each other, a
+deferred release survives a failed `ret`, a failed `try_guard` owes nothing, and
+the lock is free afterwards), `reject/safety_guard_leak` (an early return with
+the lock held). The compiler's own crews do not use guards yet; nothing changes
+for them.
+
+Not yet, of H04 section 4: the protected data as a view of the guard, so a
+borrow cannot survive the release; reentrancy; wait-and-reacquire through a
+guard; the reader and writer guards of `RwLock`.

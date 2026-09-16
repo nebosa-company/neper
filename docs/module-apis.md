@@ -2059,6 +2059,7 @@ type Semaphore = struct { state: Atomic[u32] }
 type Event = struct { state: Atomic[u32], manual_reset: bool }
 type Once = struct { state: Atomic[u32] }
 type Barrier = struct { state: *void }
+type Guard = resource(release) struct { m: *Mutex }
 error Invalid
 
 fn mutex() -> Mutex
@@ -2066,6 +2067,9 @@ fn mutex_lock(m: *Mutex)
 fn mutex_try_lock(m: *Mutex) -> bool
 fn mutex_lock_for(m: *Mutex, timeout: time.Duration) -> bool
 fn mutex_unlock(m: *Mutex)
+fn guard(m: *Mutex) -> Guard
+fn try_guard(m: *Mutex) -> (Guard, err)
+fn release(g: own Guard)
 fn rwlock() -> RwLock
 fn rwlock_read_lock(l: *RwLock)
 fn rwlock_try_read_lock(l: *RwLock) -> bool

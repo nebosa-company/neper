@@ -52,14 +52,21 @@ own statement, which the one fixture that did otherwise now does.
 
 ## 4. Locks, guards and atomics
 
-Not designed in this stage beyond section 3's address rule. The obligations H04
-lists -- a guard that refers to the protected data and lock identity, no borrow
-that survives release, reentrancy, moving guards, condition-variable wait and
-reacquire, cancellation -- need `e.sync`'s lock to be a resource whose guard is a
-region (H02's view rule over the guard's lifetime); the shape is: `let g = try
-sync.lock(&m)` makes `g` a region value of the mutex and a resource owed
-`sync.unlock`; data reached through `g` is a view of `g`, dangling at the unlock.
-That is the next increment, not this one.
+The first half (D379): a lock held as a value. `sync.guard(&m)` takes the mutex
+and returns a `sync.Guard`, a `resource(release)` struct, so H01 makes the
+release an obligation of every exit of the block that holds it -- an early `ret`
+or `try` with the lock held is E-SAFETY-0002, a second `release` E-SAFETY-0001,
+a guard moved into `defer sync.release(g)` released at the block's end --
+without a rule of its own: the guard is a handle like a file. `try_guard`
+returns `(Guard, err)`, `Invalid` when the lock was not taken, and on the err
+path nothing is owed -- the convention of every acquiring call. The guard refers to the lock's
+identity (`g.m`), not to the data it protects.
+
+Not designed yet, the second half: the data as a view of the guard (H02's view
+rule over the guard's lifetime, so a borrow of the protected data cannot survive
+the release), reentrancy, condition-variable wait and reacquire through a guard
+(`condition_wait` takes the mutex, not the guard, and stays that way until the
+view rule exists), cancellation.
 
 ## 5. Outside the rule
 
@@ -90,6 +97,8 @@ atomics through addresses while workers run, joins by element.
 
 ## 7. Implementation record
 
-**D357** delivered section 2; **D365** section 3 and this document. The
-compiler's own crews pass as written under both. Not delivered: section 4's lock
-and guard model, section 5's cases, the perturbation fixture.
+**D357** delivered section 2; **D365** section 3 and this document; **D379**
+section 4's first half (`sync.Guard`, the fixtures `sync_guard` and
+`reject/safety_guard_leak`). The compiler's own crews pass as written under
+all three. Not delivered: section 4's second half, section 5's cases, the
+perturbation fixture.

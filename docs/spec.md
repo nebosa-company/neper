@@ -3571,6 +3571,10 @@ none becomes a trap:
   cannot follow; a detached thread's never ends. The rule is per statement: a join
   and a read of the lent storage in one expression is refused, so the join is its
   own statement. `m25-h04-concurrency.md` is the design and what is outside it.
+- A lock held as a value is a resource (D379): `sync.guard(&m)` returns a
+  `sync.Guard` owed to `sync.release` on every exit, so the lock discipline is
+  the resource discipline -- an early return with the lock held is
+  `E-SAFETY-0002`, `defer sync.release(g)` releases at the block's end.
 - A container's insert -- `list.push`, `deque.push_back`, `heap.push`, `map.put`'s
   value, `channel.send` and the rest -- takes its element by `own`: what is pushed
   is the container's, and a handle closed after it was pushed is `E-SAFETY-0001`.

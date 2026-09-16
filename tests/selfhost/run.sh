@@ -2032,7 +2032,7 @@ cmp -s "$test_build/conformance-absolute-tokens.jsonl" "$conformance_root/tokens
 ' "--absolute-paths changed more than absolute_path on tokens" >&2; exit 1; }
 # `check-file ... --json` (D228) against accept/ and reject/: a diagnostic record per
 # error with its span, the result with the exit status, nothing on stderr.
-for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1' 'reject module_missing 1' 'reject qualifier_collision 1' 'reject reserved_local 1' 'reject try_not_fallible 1' 'reject return_count 1' 'reject generic_inference 1' 'reject condition_type 1' 'reject atomic_ordering 1' 'reject nesting 1' 'accept safety 0' 'reject safety_use_after_move 1' 'reject safety_cleanup_forgotten 1' 'reject safety_overwrite 1' 'reject safety_undef 1' 'reject safety_unchecked 1' 'reject safety_deferred_consumed 1' 'reject safety_moved_in_loop 1' 'reject safety_partial_move 1' 'reject safety_cleanup_signature 1' 'reject safety_borrowed 1' 'reject safety_borrowed_return 1' 'reject safety_copy 1' 'reject safety_copy_elements 1' 'reject safety_copy_generic 1' 'reject safety_handle_leak 1' 'reject safety_moved_while_borrowed 1' 'reject safety_arena_moved 1' 'reject safety_pushed_twice 1' 'accept regions 0' 'reject regions_reset 1' 'reject regions_view 1' 'reject regions_join 1' 'reject safety_detached_frame 1' 'reject safety_thread_shared 1'; do
+for conformance_case in 'accept scalar 0' 'accept aggregate 0' 'reject enum_values 1' 'reject lexical 1' 'reject when_local 1' 'reject scope 1' 'reject barrier 1' 'reject module_missing 1' 'reject qualifier_collision 1' 'reject reserved_local 1' 'reject try_not_fallible 1' 'reject return_count 1' 'reject generic_inference 1' 'reject condition_type 1' 'reject atomic_ordering 1' 'reject nesting 1' 'accept safety 0' 'reject safety_use_after_move 1' 'reject safety_cleanup_forgotten 1' 'reject safety_overwrite 1' 'reject safety_undef 1' 'reject safety_unchecked 1' 'reject safety_deferred_consumed 1' 'reject safety_moved_in_loop 1' 'reject safety_partial_move 1' 'reject safety_cleanup_signature 1' 'reject safety_borrowed 1' 'reject safety_borrowed_return 1' 'reject safety_copy 1' 'reject safety_copy_elements 1' 'reject safety_copy_generic 1' 'reject safety_handle_leak 1' 'reject safety_moved_while_borrowed 1' 'reject safety_arena_moved 1' 'reject safety_pushed_twice 1' 'accept regions 0' 'reject regions_reset 1' 'reject regions_view 1' 'reject regions_join 1' 'reject safety_detached_frame 1' 'reject safety_thread_shared 1' 'reject safety_guard_leak 1'; do
     set -- $conformance_case
     conformance_actual="$test_build/conformance-$1-$2.jsonl"
     conformance_stderr="$test_build/conformance-$1-$2.stderr"
@@ -2471,6 +2471,12 @@ sync_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixt
 [ "$sync_written" = 'executable written' ]
 chmod +x "$sync_path"
 "$sync_path"
+# A lock as a resource (D379, H04): guards released on every exit, workers excluded.
+sync_guard_path="$test_build/sync-guard-selfhost"
+sync_guard_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/sync_guard/src/main.e" "$repo" x64 linux "$sync_guard_path")
+[ "$sync_guard_written" = 'executable written' ]
+chmod +x "$sync_guard_path"
+"$sync_guard_path"
 sync_threads_path="$test_build/sync-threads-selfhost"
 sync_threads_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/sync_threads/src/main.e" "$repo" x64 linux "$sync_threads_path")
 [ "$sync_threads_written" = 'executable written' ]
