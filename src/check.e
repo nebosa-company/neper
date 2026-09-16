@@ -650,6 +650,11 @@ type Checker = struct {
     failure_related: lex.Token,
     failure_has_related: bool,
     failure_related_note: str,
+    // A fix for the diagnostic (D381, H09): text to insert at a byte offset of the
+    // failing module, or empty. The first is `defer <closer>(x)` after an acquisition
+    // that is owed at an exit.
+    failure_fix_text: str,
+    failure_fix_at: usize,
 }
 
 fn append_failure_token(c: *Checker, module_index: usize, token: lex.Token, kind: DiagnosticKind, detail: str, detail2: str) {
@@ -13326,12 +13331,86 @@ fn resource_audit(c: *Checker, g: *graph.Graph, module_index: usize, node: synta
         } else {
             if local.obligated && live {
                 record_failure_related(c, module_index, node, exit_kind, c.locals[at].name, line_detail(c, g, module_index, local.acquired), local.acquired)
+                if exit_kind == .ResourceCleanupForgotten { resource_fix_defer(c, g, module_index, at) }
                 ret ResourceViolation
             }
         }
         at += 1usize
     }
     ret ok
+}
+
+// The fix for a forgotten cleanup (D381, H09): `defer <closer>(x)` on its own line
+// after the acquiring statement, indented as that line is. The closer is the type's
+// declared cleanup, qualified as this module imports its module, or the seeded
+// closer of an `os` handle; a type with neither gets no fix.
+fn resource_fix_defer(c: *Checker, g: *graph.Graph, module_index: usize, local_index: usize) {
+    c.failure_fix_text = ""
+    let ty = c.locals[local_index].ty
+    if ty.kind != .Named { ret }
+    var closer = ""
+    let (aggregate_index, has_aggregate) = find_aggregate(c, ty.module_index, ty.name)
+    if has_aggregate && c.aggregates[aggregate_index].cleanup.len != 0usize { closer = c.aggregates[aggregate_index].cleanup }
+    if closer.len == 0usize && module_is_os(c, ty.module_index) {
+        if same(ty.name, "File") { closer = "close" }
+        if same(ty.name, "Process") { closer = "wait" }
+        if same(ty.name, "Thread") { closer = "thread_join" }
+    }
+    if closer.len == 0usize { ret }
+    var qualifier = ""
+    if ty.module_index != module_index {
+        var import_at = g.modules[module_index].first_import
+        let import_end = import_at + g.modules[module_index].import_count
+        while import_at < import_end {
+            if g.imports[import_at].target == ty.module_index { qualifier = g.imports[import_at].qualifier }
+            import_at += 1usize
+        }
+        if qualifier.len == 0usize { ret }
+    }
+    // The acquiring line: its indentation, and the newline that ends it.
+    let text = g.modules[module_index].text
+    let acquired = c.tokens[c.resources[local_index].acquired]
+    var line_start = acquired.start
+    while line_start > 0usize && text[line_start - 1usize] != 10u8 { line_start = line_start - 1usize }
+    var indent = 0usize
+    while line_start + indent < text.len && (text[line_start + indent] == 32u8 || text[line_start + indent] == 9u8) { indent += 1usize }
+    var line_end = acquired.end
+    while line_end < text.len && text[line_end] != 10u8 { line_end += 1usize }
+    let name = c.locals[local_index].name
+    let (buffer, buffer_error) = mem.alloc[u8](c.arena, indent + qualifier.len + closer.len + name.len + 12usize)
+    if buffer_error != ok { ret }
+    var at = 0usize
+    buffer[at] = 10u8
+    at += 1usize
+    var pad = 0usize
+    while pad < indent {
+        buffer[at] = text[line_start + pad]
+        at += 1usize
+        pad += 1usize
+    }
+    at = fix_append(buffer, at, "defer ")
+    if qualifier.len != 0usize {
+        at = fix_append(buffer, at, qualifier)
+        buffer[at] = 46u8
+        at += 1usize
+    }
+    at = fix_append(buffer, at, closer)
+    buffer[at] = 40u8
+    at += 1usize
+    at = fix_append(buffer, at, name)
+    buffer[at] = 41u8
+    at += 1usize
+    c.failure_fix_text = buffer[0usize..at]
+    c.failure_fix_at = line_end
+}
+
+fn fix_append(buffer: []u8, at: usize, piece: str) -> usize {
+    var i = 0usize
+    while i < piece.len {
+        buffer[at + i] = piece[i]
+        i += 1usize
+    }
+    ret at + piece.len
 }
 
 // The states of the locals below `count`, kept for a join.

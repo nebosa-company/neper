@@ -3104,6 +3104,9 @@ type Sink = struct {
     related_token: lex.Token,
     has_related: bool,
     related_note: str,
+    // A fix to insert (D381): text at a byte offset, or empty.
+    fix_text: str,
+    fix_at: usize,
     operand_path: str,
     // `--absolute-paths` (section 2, D290): the operand's absolute spelling, written as
     // `absolute_path` beside the operand's identity and no other module's.
@@ -3204,9 +3207,27 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             } else {
                 try write_span(report, basename(path), related_at, is_operand)
             }
-            try write_all(report, "}],\"fixes\":[]}")
+            try write_all(report, "}],\"fixes\":")
         } else {
-            try write_all(report, ",\"parent\":null,\"related\":[],\"fixes\":[]}")
+            try write_all(report, ",\"parent\":null,\"related\":[],\"fixes\":")
+        }
+        // The fix (D381, H09): one insertion, `maybe` -- it changes what the program does.
+        if report.fix_text.len != 0usize {
+            var insert: lex.Token = zero
+            insert.start = report.fix_at
+            insert.end = report.fix_at
+            let insert_at = lex.span_of(text, lines, insert)
+            try write_all(report, "[{\"message\":\"defer the cleanup after the acquisition\",\"applicability\":\"maybe\",\"edits\":[{\"span\":")
+            if report.operand_path.len != 0usize && is_operand {
+                try write_span(report, report.operand_path, insert_at, true)
+            } else {
+                try write_span(report, basename(path), insert_at, is_operand)
+            }
+            try write_all(report, ",\"replacement\":")
+            try write_json_string(report, report.fix_text)
+            try write_all(report, "}]}]}")
+        } else {
+            try write_all(report, "[]}")
         }
     }
     try write_all(report, "\n")
@@ -4314,8 +4335,11 @@ fn print_check_diagnostic(report: *Sink, g: *graph.Graph, checker: *check.Checke
     report.related_token = checker.failure_related
     report.has_related = checker.failure_has_related
     report.related_note = checker.failure_related_note
+    report.fix_text = checker.failure_fix_text
+    report.fix_at = checker.failure_fix_at
     let emitted = emit_diagnostic(report, path, module_text(g, checker.failure_module), module_lines(g, checker.failure_module), checker.failure_token, checker.failure_has_token, check.diagnostic_code(checker.failure_kind), message_storage[..message.count])
     report.has_related = false
+    report.fix_text = ""
     ret emitted
 }
 

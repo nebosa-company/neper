@@ -8456,3 +8456,27 @@ name of the fix edit's definition, a duplicate key that replaced it; it is
 What remains is mostly the field base: `c.tokens[at]` under `if at >= c.token_count
 { ret }` is the compiler's commonest guard, and neither side is a local. Not yet,
 with it: a bound through a second local, and a guard over `x.len - 1`.
+
+## D381 -- The first fix: a forgotten cleanup offers its `defer`
+
+H09 asks for transactional repair, and section 3 of the tooling protocol has
+carried a `fixes` array on every diagnostic since D227 -- always empty. The
+first diagnostic to fill it is E-SAFETY-0002, a resource still owned at an exit:
+the checker knows the local, its type and the token it was acquired at, and the
+type knows its closer -- the declared cleanup of a `resource(cleanup)` type,
+qualified as the failing module imports the type's module, or the seeded closer
+of an `os` handle (`close`, `wait`, `thread_join`). The fix is one insertion at
+the end of the acquiring line: a newline, the line's indentation, `defer
+<closer>(x)`; `maybe`, since it changes the program and an explicit cleanup
+later in the block becomes a second consumption the next check names
+(E-SAFETY-0009), which is the transactional shape -- apply, re-check, act on
+what the re-check says. The checker records the text and the offset beside the
+related site; the printer's JSON branch writes the `fixes` entry with a point
+span; the human form is unchanged. The three reject goldens with E-SAFETY-0002
+carry their fixes (`os.dir_close(dir)`, `sync.release(g)`, `os.close(f)`).
+
+Not yet, of H09: fixes for the other safety codes (a use after move has no
+single edit; an untested acquisition wants `try`, which is the next), fixes for
+type and name errors, cascades marked as such (`parent` is always null), and the
+`fix`-with-precondition record H18 asks for -- a fix is applied against the file
+as the harness has it, and the D376 plan shape is where the precondition lives.

@@ -122,6 +122,17 @@ an untested acquisition or a loop consumption; the move for a use after move; th
 container's change, the thread's start -- with a `message` saying which, and a
 `span` in the same module as the primary.
 
+The first fix (D381, H09): `E-SAFETY-0002`, a resource still owned at an exit,
+carries one `maybe` fix -- an insertion of `defer <closer>(x)` on its own line
+after the acquiring statement, indented as that line is, the closer being the
+type's declared cleanup qualified as the module imports it (`sync.release`,
+`os.dir_close`) or the seeded closer of an `os` handle (`os.close`, `os.wait`,
+`os.thread_join`). It is `maybe` because it changes what the program does and
+because an explicit cleanup later in the block then becomes a second consumption
+(`E-SAFETY-0009`): the harness applies it, re-checks, and removes the explicit
+one when the checker says so. A diagnostic mapped through a source map carries no
+fix (section 8). No other diagnostic carries a fix yet.
+
 Codes are allocated from the checked registry `docs/diagnostics.md` and have the
 form `E-<CATEGORY>-<NNNN>`. Categories are stable semantic names, not document
 section numbers. A code is never reused, even after its diagnostic is retired.
