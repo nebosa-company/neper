@@ -1696,6 +1696,18 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:compiler-changed' 'dep=rebuilt:compiler-changed'
     if ($LASTEXITCODE -ne 0) { throw "the manifest after another compiler's artifacts does not say compiler-changed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after another compiler is not the clean build ($hotMode)" }
+    # The options are part of the identity (D431, H15): a warm build under another
+    # `--inline-cap` rebuilds every module as `options-changed`, and the plain warm
+    # build after it rebuilds them back and is the clean build.
+    $hotCapped = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --inline-cap 0 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotCapped -ne 'executable written') { throw "the warm hot build under an inline cap failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:options-changed' 'dep=rebuilt:options-changed' 'e.os=rebuilt:options-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest of a build under an inline cap does not say options-changed ($hotMode)" }
+    $hotUncapped = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotUncapped -ne 'executable written') { throw "the warm hot build after an inline cap failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:options-changed' 'dep=rebuilt:options-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after a capped build's artifacts does not say options-changed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after an inline cap is not the clean build ($hotMode)" }
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
     # or ignored, and the build is the clean build; the `.tmp` is never read.

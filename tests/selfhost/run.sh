@@ -1848,6 +1848,13 @@ for hot_mode in --release --time; do
     [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:compiler-changed dep=rebuilt:compiler-changed
     cmp "$hot_exe" "$hot_clean"
+    # The options are part of the identity (D431, H15): another `--inline-cap` rebuilds
+    # every module as `options-changed`; the plain warm build after it is the clean one.
+    [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental --inline-cap 0 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed e.os=rebuilt:options-changed
+    [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed
+    cmp "$hot_exe" "$hot_clean"
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
     # or ignored, and the build is the clean build; the `.tmp` is never read.

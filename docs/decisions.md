@@ -9540,3 +9540,19 @@ struct); the schema admits the two fields.
 Not yet: every failed dispatch in one run (the checker stops at the first), a
 candidate whose signature is wrong rather than its module, and the reason for a
 `format` or `next` dispatch.
+
+## D431 -- The inline cap is part of the artifact identity
+
+H15 lists `--inline-cap` among what the cache identity must carry: a release
+artifact written under a cap holds the code that cap produced, and a warm build
+without the flag kept it and linked an image that was not the clean build. The
+compiler identity every artifact carries (D398, D411) now holds the options in
+its top byte -- the inline cap as N + 1, zero without the flag, 254 the most a
+byte distinguishes -- with the CRC-32C and the size below it; `artifact_identity`
+tells the two apart, `compiler-changed` when the low fifty-six bits differ and
+`options-changed` when only the byte does. Both suites build the hot fixture warm
+under `--inline-cap 0`, read `options-changed` on every module, build warm again,
+read it again and compare the image with the clean build.
+
+Not yet: CPU features in the identity, and `--arena`, which changes the image's
+patched word and nothing an artifact holds.

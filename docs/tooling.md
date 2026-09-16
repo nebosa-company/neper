@@ -504,7 +504,9 @@ is not enumerable by this pass and is the boundary the inventory does not list; 
 `edge-changed` (an imported interface differs), `source-changed`, `mode-changed`,
 `no-artifact`, `invalid-artifact` (a file that failed its checksum or layout
 validation, rebuilt like a missing one), `compiler-changed` (written by another
-compiler executable, D398) -- empty for a build that read no artifacts;
+compiler executable, D398), `options-changed` (written by this compiler under
+another `--inline-cap`, which rides in the identity's top byte, D431) -- empty for
+a build that read no artifacts;
 `mode-changed` covers `--unchecked` too, whose artifacts share `.neper/release/`
 with checked ones and carry their own mode (D369);
 `options.checks` is the

@@ -4803,9 +4803,17 @@ fn artifact_identity(old: []const u8, old_error: err, text_now: str, mode_id: us
     if old_hash != new_hash { ret (1u8, false) }
     // The compiler that wrote it is not this one (D398, H15): its code generation may
     // differ, so the artifact is rebuilt, whatever its source says.
-    if compiler_identity != 0usize && old_compiler != compiler_identity { ret (7u8, false) }
+    if compiler_identity != 0usize && old_compiler != compiler_identity {
+        // The same compiler under other options (D431, H15): the top byte of the
+        // identity is the inline cap, so a cap's artifacts are that cap's.
+        if (old_compiler & OPTIONS_MASK) == (compiler_identity & OPTIONS_MASK) { ret (8u8, false) }
+        ret (7u8, false)
+    }
     ret (3u8, true)
 }
+
+// The identity below its options byte (D431): CRC-32C in the low word, size above.
+const OPTIONS_MASK: usize = 72057594037927935usize
 
 fn artifact_worker_entry(w: *ArtifactWorker) {
     var at = 0usize
@@ -5074,7 +5082,7 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
 // (`os.executable_path` is outside the bootstrap's fixed surface); a compiler that
 // cannot find or read itself that way leaves zero, which compares as nothing -- the
 // behaviour before the field.
-fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str) {
+fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str, args: []str) {
     if self_path.len == 0usize { ret }
     let (self_bytes, self_error) = source.load(a, self_path)
     if self_error != ok { ret }
@@ -5082,7 +5090,14 @@ fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str) 
     // makes the eight megabytes of the compiler a fraction of a millisecond, where
     // xxHash64 in its own code was a sixth of a warm build's CPU.
     let (self_crc, self_crc_error) = artifact_hash.crc32c(self_bytes, 0usize, 0usize)
-    if self_crc_error == ok { loaded.compiler_identity = self_crc | (self_bytes.len << 32usize) }
+    if self_crc_error != ok { ret }
+    // The options that change what the compiler writes ride in the top byte (D431,
+    // H15): `--inline-cap N` as N + 1, zero without the flag, so a warm build under
+    // another cap rebuilds every module as `options-changed`; a cap past 254 counts
+    // as 254, the caps a measurement uses being small.
+    var options = inline_cap_flag(args)
+    if options > 255usize { options = 255usize }
+    loaded.compiler_identity = ((self_crc | (self_bytes.len << 32usize)) & OPTIONS_MASK) | (options << 56usize)
 }
 
 fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: *graph.Graph, args: []str, on: bool, release: bool, unchecked: bool) -> err {
@@ -7873,7 +7888,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
         // Every command that writes or reads artifacts knows which compiler it is (D398).
-        if writes_em || writes_all_em || hot_build { learn_compiler_identity(a, &loaded, args[0usize]) }
+        if writes_em || writes_all_em || hot_build { learn_compiler_identity(a, &loaded, args[0usize], args) }
         if trailing_flags {
             loaded.jobs = jobs_flag(args)
             loaded.perturb = has_flag(args, "--perturb")
