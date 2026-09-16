@@ -139,6 +139,14 @@
         "span":{"$ref":"#/$defs/span"}
       }
     },
+    "discard": {
+      "type":"object","additionalProperties":false,
+      "required":["record","function","deferred","span"],
+      "properties":{
+        "record":{"const":"discard"},"function":{"type":"string"},"deferred":{"type":"boolean"},
+        "span":{"$ref":"#/$defs/span"}
+      }
+    },
     "instance": {
       "type":"object","additionalProperties":false,
       "required":["record","template","arguments","span"],
@@ -189,7 +197,7 @@
       "properties":{"record":{"const":"disassembly"},"symbol":{"type":"string"},"target":{"type":"string"},"text":{"type":"string"}}
     },
     "streamRecord": {
-      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
+      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
     },
     "sourceMap": {
       "type":"object","required":["schema","version","generated","generated_sha256","mappings"],

@@ -218,6 +218,10 @@ the same way written once:
 - `instance` — a generic function instantiated: `template` (`module.name`),
   `arguments` (each as a type spelling, a decimal, or a string literal as written),
   and `span`, the call that first asked for it, in whichever module that was.
+- `discard` (D360, H07) — an `err` bound to `_`: `function` (`module.name` of the
+  call whose error is dropped), `deferred` (true under `defer`), and `span`, the
+  binding. Dropping an error is an explicit source choice, and this is where a
+  harness reads the choices a program made.
 
 The stream ends with `{"record":"result","ok":true,"exit_code":0,"data":{"records":N}}`,
 with `"truncated":true` beside `records` when the checker's table overflowed. A

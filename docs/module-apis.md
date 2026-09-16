@@ -1724,7 +1724,11 @@ as a failed event rather than being ignored.
 
 Every failing `e.os` call records the native code and portable classification in
 thread-local runtime state. `last_error_detail` copies that state into an explicit
-value and must be called before another `e.os` operation on that thread. Higher-level
+value and marks it read; a failing cleanup (`dir_close`, `socket_close`,
+`mapping_close`, `watch_close`, `poller_close`, `dlclose`, `proc_group_close`,
+`file_unlock`, `wait_usage`) records over it only once it has been read (D360), so
+the detail an acquire-fail-close path leaves is the acquisition's. It must be called
+before another failing non-cleanup `e.os` operation on that thread. Higher-level
 APIs may expose a detail snapshot while ordinary callers retain cheap `err`/`try`.
 `operation` and `subject` are borrowed caller strings, never inferred global state;
 `error_message` is the only locale-dependent rendering operation in `e.os`. A `Watch` carries a

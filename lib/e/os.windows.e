@@ -306,7 +306,7 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
 fn watch_close(w: own Watch) -> err {
     let state = mem.cast[*WatchState](w.state)
     let cancelled = raw_cancel_io(state.directory)
-    if raw_close_handle(state.directory) == 0i32 { ret from_last_error() }
+    if raw_close_handle(state.directory) == 0i32 { ret from_last_error_cleanup() }
     ret ok
 }
 
@@ -374,7 +374,7 @@ fn mapping_flush(m: Mapping) -> err {
 }
 
 fn mapping_close(m: own Mapping) -> err {
-    if raw_unmap_view(m.address) == 0i32 { ret from_last_error() }
+    if raw_unmap_view(m.address) == 0i32 { ret from_last_error_cleanup() }
     ret ok
 }
 
@@ -1195,6 +1195,10 @@ const ERROR_SLOTS: usize = 64usize
 var error_slot_thread: [64]usize
 var error_slot_code: [64]i32
 var error_slot_used: [64]u8
+// Set when a failure was recorded and not yet read (D360, H07): a failing cleanup
+// then leaves the slot alone, so the primary failure's detail is what
+// `last_error_detail` finds after the cleanup.
+var error_slot_fresh: [64]u8
 
 // The code is written first and the identifier last, so a reader that sees its own identifier is
 // looking at a slot whose code was already stored. Without atomics that is the most that can be
@@ -1205,6 +1209,15 @@ fn record_error_detail(code: i32) {
     error_slot_code[slot] = code
     error_slot_used[slot] = 1u8
     error_slot_thread[slot] = thread
+    error_slot_fresh[slot] = 1u8
+}
+
+// A cleanup's failure is recorded only when no primary failure waits to be read.
+fn record_cleanup_error_detail(code: i32) {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] == 1u8 && error_slot_thread[slot] == thread { ret }
+    record_error_detail(code)
 }
 
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
@@ -1218,6 +1231,7 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     if error_slot_used[slot] == 0u8 { ret detail }
     if error_slot_thread[slot] != thread { ret detail }
     let code = error_slot_code[slot]
+    error_slot_fresh[slot] = 0u8
     detail.native_code = code
     detail.kind = error_kind_of(code)
     ret detail
@@ -1226,6 +1240,18 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
 fn from_last_error() -> err {
     let code = raw_last_error()
     record_error_detail(i32(code))
+    ret error_of_code(code)
+}
+
+// A cleanup's failure (D360): classified the same, recorded only over no unread
+// primary failure.
+fn from_last_error_cleanup() -> err {
+    let code = raw_last_error()
+    record_cleanup_error_detail(i32(code))
+    ret error_of_code(code)
+}
+
+fn error_of_code(code: u32) -> err {
     // ERROR_FILE_NOT_FOUND, ERROR_PATH_NOT_FOUND, ERROR_INVALID_NAME: a name that
     // cannot exist and a name that does not are the same answer to a caller.
     if code == 2u32 { ret NotFound }
@@ -1424,7 +1450,7 @@ fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
 }
 
 fn dir_close(dir: own Dir) -> err {
-    if raw_close_handle(dir.raw) == 0i32 { ret from_last_error() }
+    if raw_close_handle(dir.raw) == 0i32 { ret from_last_error_cleanup() }
     ret ok
 }
 
@@ -1979,7 +2005,7 @@ fn proc_group_terminate(group: ProcGroup, force: bool) -> err {
 // The job handle goes; what is in it does not, because nothing asked for that. A job that should
 // end with its owner needs a limit set on it, which is not in the fence.
 fn proc_group_close(group: own ProcGroup) -> err {
-    if raw_close_handle(group.raw) == 0i32 { ret from_last_error() }
+    if raw_close_handle(group.raw) == 0i32 { ret from_last_error_cleanup() }
     ret ok
 }
 
@@ -2030,7 +2056,7 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
 
 fn file_unlock(lock: own FileLock) -> err {
     var region: Overlapped = zero
-    if raw_unlock_file(lock.raw, 0u32, 4294967295u32, 4294967295u32, &region) == 0i32 { ret from_last_error() }
+    if raw_unlock_file(lock.raw, 0u32, 4294967295u32, 4294967295u32, &region) == 0i32 { ret from_last_error_cleanup() }
     ret ok
 }
 
@@ -2108,9 +2134,9 @@ fn peak_memory() -> (usize, err) {
 fn wait_usage(p: own Proc) -> (ProcUsage, err) {
     var usage: ProcUsage = zero
     usage.exit_code = -1i32
-    if raw_wait_for_single_object(p.raw, WAIT_INFINITE) != WAIT_OBJECT_0 { ret (usage, from_last_error()) }
+    if raw_wait_for_single_object(p.raw, WAIT_INFINITE) != WAIT_OBJECT_0 { ret (usage, from_last_error_cleanup()) }
     var code = 0u32
-    if raw_exit_code_process(p.raw, &code) == 0i32 { ret (usage, from_last_error()) }
+    if raw_exit_code_process(p.raw, &code) == 0i32 { ret (usage, from_last_error_cleanup()) }
     let (peak, peak_error) = peak_of(p.raw)
     let unused_close = raw_close_handle(p.raw)
     if peak_error != ok { ret (usage, peak_error) }
@@ -2212,7 +2238,7 @@ fn dl_lookup(a: *mem.Arena, l: Lib, sym: str) -> (usize, err) {
 }
 
 fn dlclose(l: own Lib) -> err {
-    if raw_free_library(l.raw) == 0i32 { ret from_last_error() }
+    if raw_free_library(l.raw) == 0i32 { ret from_last_error_cleanup() }
     ret ok
 }
 

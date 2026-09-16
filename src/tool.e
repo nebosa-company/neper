@@ -2131,6 +2131,12 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
                 }
             }
         } else {
+            if e.kind == 3u8 {
+                try text(&out, "{\"record\":\"discard\",\"function\":")
+                try quoted_function(&out, c, g, e.function_index)
+                try text(&out, ",\"deferred\":")
+                if e.found { try text(&out, "true") } else { try text(&out, "false") }
+            } else {
             try text(&out, "{\"record\":\"instance\",\"template\":")
             try quoted_function(&out, c, g, e.template_index)
             try text(&out, ",\"arguments\":[")
@@ -2152,6 +2158,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
                 argument_at += 1usize
             }
             try byte(&out, 93u8)
+            }
         }
         try text(&out, ",\"span\":")
         try point_span(&out, root, path, module.text, here)

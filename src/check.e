@@ -8545,6 +8545,17 @@ fn protocol_receiver(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_ind
 
 // Spec section 9: the protocol function is `fn <t>_<protocol>` in the module that
 // declares the receiver type, and its first parameter is the type by value.
+// The index of a call's function, for a record that names it: the declared or
+// instance record with the same module and name and parameter range.
+fn explain_function_index(c: *Checker, function: Function) -> usize {
+    var at = 0usize
+    while at < c.function_count {
+        if c.functions[at].module_index == function.module_index && c.functions[at].first_parameter == function.first_parameter && same(c.functions[at].name, function.name) { ret at }
+        at += 1usize
+    }
+    ret c.function_count
+}
+
 fn record_explain_dispatch(c: *Checker, module_index: usize, node: syntax.Node, protocol: str, receiver: Type, function_index: usize, found: bool, builtin: ProtocolBuiltin) {
     if c.explains.len == 0usize { ret }
     if c.explain_count >= c.explains.len {
@@ -9944,6 +9955,17 @@ fn bind_return_types(c: *Checker, g: *graph.Graph, module_index: usize, statemen
             if token.kind == .Identifier {
                 let name = g.modules[module_index].text[token.start..token.end]
                 try add_local(c, name, result, mutable)
+            }
+            // An `err` bound to `_` is a discard (D360, H07): an explicit choice,
+            // and one the explain stream lists, deferred or not.
+            if token.kind == .PunctUnderscore && result.kind == .Err && c.explains.len != 0usize && c.explain_count < c.explains.len {
+                var offset = 0usize
+                if usize(statement.token_start) < c.token_count { offset = c.tokens[usize(statement.token_start)].start }
+                var deferred = 0usize
+                if c.defer_depth != 0usize { deferred = 1usize }
+                c.explains[c.explain_count] = Explain { kind: 3u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: 0usize, found: deferred != 0usize, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+                c.explains[c.explain_count].function_index = explain_function_index(c, call.function)
+                c.explain_count += 1usize
             }
             result_index += 1usize
         }

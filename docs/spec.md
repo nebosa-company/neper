@@ -1428,12 +1428,29 @@ intentionally indistinguishable. Windows exceptions map to `128 +` the low seven
 bits of the exception code and leave the full code in the error detail.
 
 Error detail state is per OS thread. A failed `os.*` call sets it before returning; a
-successful call leaves it unchanged. `last_error_detail` must be called before the
-next failing OS operation on that thread and copies the state into an ordinary value.
-A wrapper preserves the detail from the primitive that determines its returned
-`err`; it does not perform cleanup first. `operation` and `subject` are explicit
-borrowed labels, so neither exceptions nor a process-global message payload are
-introduced. `error_message` is the only locale-dependent rendering step.
+successful call leaves it unchanged. `last_error_detail` copies the state into an
+ordinary value and marks it read. A failing **cleanup** -- a closer, a join, a wait,
+an unlock -- records its detail only when no unread failure is waiting (D360, H07):
+the primary operation's detail survives the cleanup that follows it on an error
+path, and once read, the next failing cleanup is the last error like any other. So
+`last_error_detail` must be called before the next failing *non-cleanup* operation
+on the thread, and a wrapper that acquires, fails and closes still hands the caller
+the acquisition's detail. `operation` and `subject` are explicit borrowed labels,
+so neither exceptions nor a process-global message payload are introduced.
+`error_message` is the only locale-dependent rendering step.
+
+**Outputs on failure.** Every `(T, err)` of the fixed surface says what `T` holds
+when `err` is not `ok`: a handle -- `open`, `create_new`, `pipe`, `spawn`,
+`thread_create` and the variants' openers -- is null, owned by nobody, and §11's
+rules keep it from being read before the error is tested; `read` and `write`
+return the bytes done before the failure, which may be more than zero (partial
+progress) and are the caller's to account for; `seek` returns `0`; `stat`,
+`current_dir`, `env`, `args` and every other value result is `zero`. Ownership
+across a failure: a consuming call (`close`, `wait`, `thread_join`) has consumed
+whatever it answers, and a retry with the same handle is §11's use after move; a
+borrowing call leaves its handle owned. Retry is valid after `Interrupted`,
+`WouldBlock` and `Timeout` on the same handle; after any other error the operation
+is not retried blindly.
 
 `reserve`, `commit` and `release` accept page-aligned addresses and page-rounded
 lengths after the documented rounding of `reserve`; zero length is `Failed`.

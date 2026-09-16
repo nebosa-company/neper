@@ -344,6 +344,10 @@ const ERROR_SLOTS: usize = 64usize
 var error_slot_thread: [64]usize
 var error_slot_code: [64]i32
 var error_slot_used: [64]u8
+// Set when a failure was recorded and not yet read (D360, H07): a failing cleanup
+// then leaves the slot alone, so the primary failure's detail is what
+// `last_error_detail` finds after the cleanup.
+var error_slot_fresh: [64]u8
 
 // The code is written first and the identifier last, so a reader that sees its own identifier is
 // looking at a slot whose code was already stored. Without atomics that is the most that can be
@@ -354,6 +358,15 @@ fn record_error_detail(code: i32) {
     error_slot_code[slot] = code
     error_slot_used[slot] = 1u8
     error_slot_thread[slot] = thread
+    error_slot_fresh[slot] = 1u8
+}
+
+// A cleanup's failure is recorded only when no primary failure waits to be read.
+fn record_cleanup_error_detail(code: i32) {
+    let thread = current_thread_id()
+    let slot = thread % ERROR_SLOTS
+    if error_slot_fresh[slot] == 1u8 && error_slot_used[slot] == 1u8 && error_slot_thread[slot] == thread { ret }
+    record_error_detail(code)
 }
 
 fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
@@ -367,6 +380,7 @@ fn last_error_detail(operation: str, subject: str) -> ErrorDetail {
     if error_slot_used[slot] == 0u8 { ret detail }
     if error_slot_thread[slot] != thread { ret detail }
     let code = error_slot_code[slot]
+    error_slot_fresh[slot] = 0u8
     detail.native_code = code
     detail.kind = error_kind_of(code)
     ret detail
@@ -377,6 +391,18 @@ fn from_errno(result: isize) -> err {
     // Every failing syscall in this file is classified here, which is why the detail is kept here
     // and not at forty call sites.
     record_error_detail(i32(0isize - result))
+    ret error_of_result(result)
+}
+
+// A cleanup's failure (D360): classified the same, recorded only over no unread
+// primary failure.
+fn from_errno_cleanup(result: isize) -> err {
+    if result >= 0isize { ret ok }
+    record_cleanup_error_detail(i32(0isize - result))
+    ret error_of_result(result)
+}
+
+fn error_of_result(result: isize) -> err {
     if result == -1isize { ret Denied }
     if result == -2isize { ret NotFound }
     if result == -4isize { ret Interrupted }
@@ -922,7 +948,7 @@ fn watch_read(a: *mem.Arena, w: Watch, events: []WatchEvent) -> (usize, err) {
 
 fn watch_close(w: own Watch) -> err {
     let state = mem.cast[*WatchState](w.state)
-    ret from_errno(syscall(SYS_CLOSE, state.descriptor, 0usize, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_CLOSE, state.descriptor, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
 
 type Mapping = resource(mapping_close) struct { raw: usize, address: *u8, len: usize }
@@ -988,7 +1014,7 @@ fn mapping_flush(m: Mapping) -> err {
 }
 
 fn mapping_close(m: own Mapping) -> err {
-    ret from_errno(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_MUNMAP, mem.address_of(m.address), m.len, 0usize, 0usize, 0usize, 0usize))
 }
 
 type Poller = resource(poller_close) struct { state: *void }
@@ -1120,8 +1146,8 @@ fn poller_close(p: own Poller) -> err {
     let state = mem.cast[*PollerState](p.state)
     let wake_result = syscall(SYS_CLOSE, state.wake, 0usize, 0usize, 0usize, 0usize, 0usize)
     let epoll_result = syscall(SYS_CLOSE, state.epoll, 0usize, 0usize, 0usize, 0usize, 0usize)
-    if epoll_result < 0isize { ret from_errno(epoll_result) }
-    ret from_errno(wake_result)
+    if epoll_result < 0isize { ret from_errno_cleanup(epoll_result) }
+    ret from_errno_cleanup(wake_result)
 }
 
 type Socket = resource(socket_close) struct { raw: usize }
@@ -1485,7 +1511,7 @@ fn file_lock(file: File, exclusive: bool, timeout_ns: i64) -> (FileLock, err) {
 }
 
 fn file_unlock(lock: own FileLock) -> err {
-    ret from_errno(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_FLOCK, lock.raw, LOCK_UN, 0usize, 0usize, 0usize, 0usize))
 }
 
 fn page_size() -> usize {
@@ -1537,7 +1563,7 @@ fn wait_usage(p: own Proc) -> (ProcUsage, err) {
     var status = 0u32
     var used: Rusage = zero
     let result = syscall(SYS_WAIT4, p.raw, mem.address_of(&status), 0usize, mem.address_of(&used), 0usize, 0usize)
-    if result < 0isize { ret (usage, from_errno(result)) }
+    if result < 0isize { ret (usage, from_errno_cleanup(result)) }
     if status & 127u32 == 0u32 {
         usage.exit_code = i32((status >> 8u32) & 255u32)
     } else {
@@ -1672,7 +1698,7 @@ fn socket_open(family: SocketFamily, kind: SocketKind) -> (Socket, err) {
 }
 
 fn socket_close(s: own Socket) -> err {
-    ret from_errno(syscall(SYS_CLOSE, s.raw, 0usize, 0usize, 0usize, 0usize, 0usize))
+    ret from_errno_cleanup(syscall(SYS_CLOSE, s.raw, 0usize, 0usize, 0usize, 0usize, 0usize))
 }
 
 // Read the flags before changing them: setting the whole word would drop whatever else the
@@ -2355,7 +2381,7 @@ fn dir_open(a: *mem.Arena, path: str) -> (Dir, err) {
 
 fn dir_close(dir: own Dir) -> err {
     let result = syscall(SYS_CLOSE, dir.raw, 0usize, 0usize, 0usize, 0usize, 0usize)
-    ret from_errno(result)
+    ret from_errno_cleanup(result)
 }
 
 // The policy is the kernel's to enforce, not this file's. `RESOLVE_BENEATH` refuses any

@@ -1568,6 +1568,13 @@ foreach ($boundsMode in @('nested', 'reslice')) {
     & $boundsProofPath $boundsMode 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "the $boundsMode loop went wrong under its retained check" }
 }
+# Error detail across a cleanup (D360, H07): a failing close after a failed stat
+# leaves the stat's detail to be read, and the next failing cleanup after that read.
+$errorDetailPath = Join-Path $testBuild 'error-detail-selfhost.exe'
+$errorDetailWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\error_detail\src\main.e') $repo 'x64' 'windows' $errorDetailPath
+if ($LASTEXITCODE -ne 0 -or $errorDetailWritten -ne 'executable written') { throw 'error detail fixture emission failed' }
+& $errorDetailPath 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "a cleanup's failure overwrote the primary error's detail: exit $LASTEXITCODE" }
 # By-value snapshots (D358, H05): `f(x, &x)` reads the old `x`, in both modes.
 foreach ($snapshotMode in @(@('debug', @()), @('release', @('--release')))) {
     $snapshotPath = Join-Path $testBuild "by-value-snapshot-$($snapshotMode[0])-selfhost.exe"

@@ -7889,3 +7889,28 @@ Not yet, of H06: failed candidates and the reason each failed (the record says
 requirements; explicit strategy selection; the comptime budgets and structured
 exhaustion; target-dependent layout in the output; code size and check time per
 instance.
+
+## D360 -- A cleanup's failure does not overwrite the primary's detail, and a dropped error is listed
+
+H07's first cut, inside the multiple-return model it asks to keep. The temporal
+rule -- `last_error_detail` before the next failing `os.*` call -- broke on the
+commonest error path there is: acquire, fail, close, where the close's failure
+replaced the acquisition's detail before anyone read it. The thread's detail slot
+now carries a read flag: a failure sets it, `last_error_detail` clears it, and a
+failing cleanup -- the variants' nine closers, waits and unlocks -- records only
+over a read slot. So the detail an acquire-fail-close path leaves is the
+acquisition's, and once read the next failing cleanup is the last error like any
+other. The runtime's own `close`, `wait` and `thread_join` record no detail and
+never did. The fixture stats a missing name, closes a directory twice, and reads
+the stat's detail after the second close; against the old library it exits 12.
+
+The spec's `e.os` section says what every `(T, err)` of the fixed surface holds on
+failure -- null handles, the bytes done for `read`/`write`, zero for the rest --
+what a failed consuming call has consumed, and after which errors a retry is
+valid. And an `err` bound to `_`, deferred or not, is a `discard` record in
+`explain-file`'s stream (D359), which is where H07 asks the choice to be visible.
+
+Not yet, of H07: caller-supplied detail on the checked path (`open_with(...,
+detail: *ErrorDetail)`), which would end the thread slot; nested wrappers' detail
+contracts beyond `e.os`; concurrent errors; borrowed label lifetimes; the
+allocation-failure rows per acquisition step.

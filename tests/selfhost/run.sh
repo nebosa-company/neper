@@ -1660,6 +1660,13 @@ case "$bounds_shifted" in
 esac
 "$bounds_proof_path" nested
 "$bounds_proof_path" reslice
+# Error detail across a cleanup (D360, H07): a failing close after a failed stat
+# leaves the stat's detail to be read, and the next failing cleanup after that read.
+error_detail_path="$test_build/error-detail-selfhost"
+error_detail_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/error_detail/src/main.e" "$repo" x64 linux "$error_detail_path")
+[ "$error_detail_written" = 'executable written' ]
+chmod +x "$error_detail_path"
+"$error_detail_path"
 # By-value snapshots (D358, H05): `f(x, &x)` reads the old `x`, in both modes.
 for snapshot_mode in debug release; do
     snapshot_flag=''
