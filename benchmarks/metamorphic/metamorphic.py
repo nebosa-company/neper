@@ -12,9 +12,9 @@ fixture's root module and checked against the untouched build:
   order; spec section 14 makes module scope order-independent, so the image may
   differ (functions are laid out in declaration order) but the program must exit
   with the same code and write the same bytes to stdout.
-- `renamed` (D477): every local -- a parameter, a `let`, a `var`, a `for`
-  binding -- is renamed to a name of the same length through the token stream,
-  so the columns are unchanged and the image must be byte-identical.
+- `renamed` (D477, D484): every local and parameter is renamed to a name of
+  the same length through the index's symbols and references, so the columns
+  are unchanged and the image must be byte-identical.
 - `fields` (D477): every `struct { ... }` has its fields reversed; the layout
   changes, so the image may differ, but the program must behave the same.
 - `symbols` (D478): every function but `main` and every type is renamed to a
@@ -100,102 +100,50 @@ enum true false nil ok zero undef extern unreachable shared own try defer switch
 and or not import pub mut static comptime test gpu when is do loop'''.split())
 
 
-def renamed(main, tokens_json_lines):
-    """Every local -- a parameter, a `let`, a `var`, a `for` binding -- renamed to a
-    name of the same length, so the columns the line tables carry are unchanged and
-    the image must be byte-identical (D477, H10). The rename shifts each letter by
-    one (`z` to `a`), again if the result is a keyword or a name the module spells.
+def renamed(main, index_json_lines, keywords, spelled):
+    """Every local and parameter of the root module renamed to a name of the same
+    length through the index's `local` and `parameter` symbols and the references
+    that target them (D477, D484): the columns are unchanged, so the image must be
+    byte-identical. A reference the index missed is a build that fails.
     """
     import json
     text = open(main, 'rb').read()
-    toks = []
-    for line in tokens_json_lines:
+    symbols, spans = {}, []
+    for line in index_json_lines:
         record = json.loads(line)
-        if record.get('record') == 'token':
-            toks.append((record['kind'], record['span']['byte_start'], record['span']['byte_end']))
-    spelled = set(text[s:e] for k, s, e in toks if k == 'IDENTIFIER')
+        if record.get('record') == 'symbol' and record['kind'] in ('local', 'parameter') and record['module'] == 'main' and record.get('selection_span'):
+            symbols[record['id']] = record['name'].encode()
+            s = record['selection_span']
+            spans.append((s['byte_start'], s['byte_end'], record['id']))
+        if record.get('record') == 'reference' and record.get('target_id') in symbols and record['role'] in ('read', 'write', 'call', 'address'):
+            s = record['source_span']
+            if text[s['byte_start']:s['byte_end']] == symbols[record['target_id']]:
+                spans.append((s['byte_start'], s['byte_end'], record['target_id']))
+    new_names = {sid: same_length_name(name, keywords, spelled) for sid, name in symbols.items()}
+    out = bytearray(text)
+    for s, e, sid in sorted(set(spans), reverse=True):
+        if new_names[sid] != symbols[sid]:
+            out[s:e] = new_names[sid]
+    return bytes(out)
 
-    def shifted(name, times):
+
+def same_length_name(name, keywords, spelled):
+    """`name` with each letter shifted, again past a keyword or a name the module
+    spells; the result is reserved so no two symbols meet."""
+    for times in range(1, 26):
         out = bytearray()
         for ch in name:
             if 97 <= ch <= 122:
                 out.append((ch - 97 + times) % 26 + 97)
+            elif 65 <= ch <= 90:
+                out.append((ch - 65 + times) % 26 + 65)
             else:
                 out.append(ch)
-        return bytes(out)
-
-    def new_name(name):
-        for times in range(1, 26):
-            candidate = shifted(name, times)
-            if candidate != name and candidate.decode() not in KEYWORDS and candidate not in spelled:
-                spelled.add(candidate)
-                return candidate
-        return name
-
-    def spelling(i):
-        k, s, e = toks[i]
-        return text[s:e]
-
-    edits = []
-    i = 0
-    while i < len(toks):
-        if spelling(i) != b'fn':
-            i += 1
-            continue
-        # The function runs to the `}` in column 1 that closes it.
-        end = i + 1
-        while end < len(toks) and not (spelling(end) == b'}' and text.rfind(b'\n', 0, toks[end][1]) == toks[end][1] - 1):
-            end += 1
-        locals_ = {}
-        body_start = end
-        j = i + 1
-        # Parameters: `name:` inside the signature's parentheses, and `let`/`var`/`for` bindings.
-        depth = 0
-        while j < end:
-            sp = spelling(j)
-            kind = toks[j][0]
-            if sp == b'(':
-                depth += 1
-            elif sp == b')':
-                depth -= 1
-            elif sp == b'{' and depth == 0 and j > i:
-                body_start = j
-                break
-            elif kind == 'IDENTIFIER' and depth >= 1 and j + 1 < end and spelling(j + 1) == b':' and spelling(j - 1) in (b'(', b','):
-                locals_[sp] = None
-            j += 1
-        while j < end:
-            sp = spelling(j)
-            if sp in (b'let', b'var', b'for'):
-                k = j + 1
-                if spelling(k) == b'(':
-                    k += 1
-                    while k < end and spelling(k) != b')':
-                        if toks[k][0] == 'IDENTIFIER':
-                            locals_[spelling(k)] = None
-                        k += 1
-                elif toks[k][0] == 'IDENTIFIER':
-                    locals_[spelling(k)] = None
-            j += 1
-        for name in locals_:
-            locals_[name] = new_name(name)
-        j = i + 1
-        while j < end:
-            k, s, e = toks[j]
-            sp = text[s:e]
-            if k == 'IDENTIFIER' and sp in locals_ and locals_[sp] != sp:
-                before = spelling(j - 1)
-                after = spelling(j + 1) if j + 1 < len(toks) else b''
-                field_access = before == b'.'
-                literal_field = j > body_start and after == b':' and before in (b'{', b',')
-                if not field_access and not literal_field:
-                    edits.append((s, e, locals_[sp]))
-            j += 1
-        i = end + 1
-    out = bytearray(text)
-    for s, e, new in sorted(edits, reverse=True):
-        out[s:e] = new
-    return bytes(out)
+        candidate = bytes(out)
+        if candidate != name and candidate.decode() not in keywords and candidate not in spelled:
+            spelled.add(candidate)
+            return candidate
+    return name
 
 
 def fields_reversed(main, tokens_json_lines):
@@ -306,20 +254,9 @@ def symbols_renamed(main, index_json_lines, keywords, spelled):
     for sid, (kind, name) in symbols.items():
         if sid in bound:
             continue
-        for times in range(1, 26):
-            out = bytearray()
-            for ch in name:
-                if 97 <= ch <= 122:
-                    out.append((ch - 97 + times) % 26 + 97)
-                elif 65 <= ch <= 90:
-                    out.append((ch - 65 + times) % 26 + 65)
-                else:
-                    out.append(ch)
-            candidate = bytes(out)
-            if candidate != name and candidate.decode() not in keywords and candidate not in spelled:
-                spelled.add(candidate)
-                new_names[sid] = candidate
-                break
+        candidate = same_length_name(name, keywords, spelled)
+        if candidate != name:
+            new_names[sid] = candidate
     out = bytearray(text)
     for s, e, sid in sorted(set(spans), reverse=True):
         if sid in new_names:
@@ -365,9 +302,16 @@ for main in fixtures:
             sys.exit('metamorphic: %s reordered behaves differently (%d vs %d)' % (name, ran_a.returncode, ran_b.returncode))
     # renamed: byte-identical images.
     tokens = tokens_of(original_main)
+    index = index_of(original_main)
+    text = open(original_main, 'rb').read()
+    spelled = set()
+    for line in tokens:
+        record = json.loads(line)
+        if record.get('record') == 'token' and record['kind'] == 'IDENTIFIER':
+            spelled.add(text[record['span']['byte_start']:record['span']['byte_end']])
     aliased = variant_dir(fixture_dir, name + '-renamed')
     aliased_main = os.path.join(aliased, 'src', 'main.e')
-    open(aliased_main, 'wb').write(renamed(original_main, tokens))
+    open(aliased_main, 'wb').write(renamed(original_main, index, KEYWORDS, set(spelled)))
     for release in (False, True):
         image = build(aliased_main, os.path.join(outdir, '%s-renamed-%d%s' % (name, release, exe)), release)
         if image != images[release]:
@@ -384,15 +328,9 @@ for main in fixtures:
         if (ran_a.returncode, ran_a.stdout) != (ran_b.returncode, ran_b.stdout):
             sys.exit('metamorphic: %s with reversed fields behaves differently (%d vs %d)' % (name, ran_a.returncode, ran_b.returncode))
     # symbols: byte-identical images once the names are put back, the same behaviour.
-    text = open(original_main, 'rb').read()
-    spelled = set()
-    for line in tokens:
-        record = json.loads(line)
-        if record.get('record') == 'token' and record['kind'] == 'IDENTIFIER':
-            spelled.add(text[record['span']['byte_start']:record['span']['byte_end']])
     resymbolled = variant_dir(fixture_dir, name + '-symbols')
     resymbolled_main = os.path.join(resymbolled, 'src', 'main.e')
-    rewritten, renames = symbols_renamed(original_main, index_of(original_main), KEYWORDS, spelled)
+    rewritten, renames = symbols_renamed(original_main, index, KEYWORDS, set(spelled))
     open(resymbolled_main, 'wb').write(rewritten)
     for release in (False, True):
         a = os.path.join(outdir, '%s-original-%d%s' % (name, release, exe))

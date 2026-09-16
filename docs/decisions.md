@@ -10452,3 +10452,17 @@ gains three locals and four references, `index_project` one and two; the
 symbol ids after a function's first local shift accordingly. Not yet: comptime
 parameters as symbols, and locals in the rename plan (D376 renames module-scope
 names only).
+
+## D484 -- The local rename reads the index
+
+D477's `renamed` transformation found a function's locals by scanning the
+tokens for `let`, `var`, `for` and the signature's `name:` pairs and skipped a
+field access or a literal's field by the tokens around a name -- a second
+parser, and one that would take a comptime parameter or a labelled argument
+for a local the day the language has one. With locals in the index (D483) it
+reads the `local` and `parameter` symbols and the `read`, `write`, `call` and
+`address` references that target them, as the `symbols` transformation reads
+functions and types, and the name shift the two share is one function. The
+four fixtures build byte-identical images in both modes as before, which is
+also the first consumer's word that D483's references are complete over them:
+a reference the index missed is a name left unrenamed and a build that fails.
