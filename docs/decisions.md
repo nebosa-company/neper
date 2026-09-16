@@ -10026,3 +10026,28 @@ of them than the compares saved, since D356 left few relocations that reach
 the runtime. The `link` phase splits as symbol table 7 ms and image 7 ms, both
 linear in their rows; the warm build of the compiler is now bounded by reading
 its artifacts and its text, and the increments here stop.
+
+## D462 -- The bounds proof through a field base
+
+H03's proofs named the slice by a local; `while i < s.items.len` proving
+`s.items[i]` -- the base a field of a local struct, or of a struct a local
+points to -- kept every check. The proof's base is now a path: a name, or a
+field of one to any depth, spelled as written (`s.items`, `w.table.funcs`), the
+field's type checked to be a slice, an array or a string. The root is a local
+struct or a local pointer to one. A local struct is the body's own, and the
+existing rules carry: no token of the body assigns any name of the path or
+takes its address, and no `&s` anywhere in the function. Through a pointer the
+struct may be reached by another pointer, and a call in the body could give the
+field a new length between the condition and the access, so the pointer form
+holds only when the body calls nothing -- spelled calls, and the `for`, `==`
+and `!=` that may dispatch to a protocol. The spec's rule that a race on a
+non-atomic location is undefined (section 8) is what lets the pointer form
+stand at all. The fixture gains `field` and `field_pointer` (elided: 76 -> 80,
+each counted again where it inlines), `field_shifted` (retained, trips at the
+end) and `field_call_shrinks` (a call before the access empties the slice; the
+retained check trips at index 0 for length 0), pinned by both suites. The
+compiler's own count 552 -> 576.
+
+Not yet: the pointer form across a call, which is most of the compiler's loops;
+and `c.tokens[at]` under `if at >= c.token_count`, a count that is not the
+slice's length.

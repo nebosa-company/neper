@@ -235,6 +235,25 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if aliased_shifted(values[..]) == 0u32 { ret mem.Exhausted }
         ret ok
     }
+    if str.eq(mode, "field") {
+        var bag: Bag = zero
+        bag.items = values[..]
+        if field(bag) != 15u32 { ret mem.Exhausted }
+        if field_pointer(&bag) != 15u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "field_shifted") {
+        var bag: Bag = zero
+        bag.items = values[..]
+        if field_shifted(bag) == 0u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "field_call_shrinks") {
+        var bag: Bag = zero
+        bag.items = values[..]
+        if field_call_shrinks(&bag) == 0u32 { ret mem.Exhausted }
+        ret ok
+    }
     if sum(values[..]) != 29u32 { ret mem.Exhausted }
     ret ok
 }
@@ -259,6 +278,61 @@ fn aliased_shifted(items: []const u32) -> u32 {
     var at = 0usize
     while at < n {
         total = total +% items[at + 1usize]
+        at += 1usize
+    }
+    ret total
+}
+
+// The field base (D462): `while at < bag.items.len` proves `bag.items[at]` through
+// a local struct, and through a pointer to one when the body calls nothing;
+// `field_call_shrinks` calls between the condition and the access, so its check
+// stays and trips when the call empties the slice; `field_shifted` reads past
+// the proof and keeps its check, which trips at the end.
+type Bag = struct {
+    items: []const u32,
+    count: usize,
+}
+
+fn field(bag: Bag) -> u32 {
+    var total = 0u32
+    var at = 0usize
+    while at < bag.items.len {
+        total = total +% bag.items[at]
+        at += 1usize
+    }
+    ret total
+}
+
+fn field_pointer(bag: *Bag) -> u32 {
+    var total = 0u32
+    var at = 0usize
+    while at < bag.items.len {
+        total = total +% bag.items[at]
+        at += 1usize
+    }
+    ret total
+}
+
+fn shrink_to(bag: *Bag, n: usize) {
+    bag.items = bag.items[..n]
+}
+
+fn field_call_shrinks(bag: *Bag) -> u32 {
+    var total = 0u32
+    var at = 0usize
+    while at < bag.items.len {
+        shrink_to(bag, at)
+        total = total +% bag.items[at]
+        at += 1usize
+    }
+    ret total
+}
+
+fn field_shifted(bag: Bag) -> u32 {
+    var total = 0u32
+    var at = 0usize
+    while at < bag.items.len {
+        total = total +% bag.items[at + 1usize]
         at += 1usize
     }
     ret total

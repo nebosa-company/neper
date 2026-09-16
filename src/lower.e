@@ -4263,6 +4263,51 @@ fn proof_name(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     ret (g.modules[module_index].text[token.start..token.end], true)
 }
 
+// A base that is a name, or a field of one through any depth (D462, H03): `x`,
+// `s.items` or `w.table.funcs`, spelled as written -- the text from the root's
+// token to the member's, with nothing but the names and dots between -- and the
+// root's name. An index, a call or a newline inside the path is no path.
+fn proof_path(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (str, str, bool) {
+    let node = tree.nodes[node_index]
+    if node.kind == .NameExpr {
+        let (name, has_name) = proof_name(c, g, tree, module_index, node_index)
+        ret (name, name, has_name)
+    }
+    if node.kind != .FieldExpr { ret ("", "", false) }
+    let member = c.tokens[usize(node.token_end) - 1usize]
+    if member.kind != .Identifier { ret ("", "", false) }
+    let (inner_index, has_inner) = check.first_node_child(tree, node)
+    if !has_inner { ret ("", "", false) }
+    let (inner_path, root, has_path) = proof_path(c, g, tree, module_index, inner_index)
+    if !has_path { ret ("", "", false) }
+    let text = g.modules[module_index].text
+    let start = c.tokens[usize(node.token_start)].start
+    if start >= member.end || member.end > text.len { ret ("", "", false) }
+    var at = start
+    while at < member.end {
+        let ch = text[at]
+        let is_word = (ch >= 97u8 && ch <= 122u8) || (ch >= 65u8 && ch <= 90u8) || (ch >= 48u8 && ch <= 57u8) || ch == 95u8 || ch == 46u8
+        if !is_word { ret ("", "", false) }
+        at += 1usize
+    }
+    ret (text[start..member.end], root, true)
+}
+
+// Whether `word` is one of the path's dot-separated names: a write to any of them
+// may change what the path reaches.
+fn proof_path_names(path: str, word: str) -> bool {
+    var segment_start = 0usize
+    var at = 0usize
+    while at <= path.len {
+        if at == path.len || path[at] == 46u8 {
+            if check.same(path[segment_start..at], word) { ret true }
+            segment_start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret false
+}
+
 // Whether the token at `at` starts an assignment to the name (`i = `, `i += `,
 // ...) or takes its address (`&i` just before it).
 fn proof_token_writes(c: *check.Checker, at: usize, end: usize) -> bool {
@@ -4377,7 +4422,14 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     if !has_index { ret false }
     let right = tree.nodes[length_side]
     var base_name = ""
+    var root_name = ""
     var has_base_name = false
+    // The field base (D462): `s.items.len` with `s` a local struct, or a local
+    // pointer to one -- through the pointer only when the body calls nothing, since
+    // a call could reach the struct by another pointer and give the field a new
+    // length; a local struct is the body's own.
+    var field_base = false
+    var pointer_root = false
     if right.kind == .NameExpr {
         // The second-local form (D452): `n` bound by `let n = x.len` in this function
         // stands for `x.len` when `x` is written nowhere in the function.
@@ -4386,6 +4438,7 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
         let (aliased, has_aliased) = proof_alias_base(c, g, module_index, builder, alias_name)
         if !has_aliased { ret false }
         base_name = aliased
+        root_name = aliased
         has_base_name = true
     } else {
         if right.kind != .FieldExpr { ret false }
@@ -4393,23 +4446,36 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
         if member.kind != .Identifier || !check.same(g.modules[module_index].text[member.start..member.end], "len") { ret false }
         let (base_node_index, has_base) = check.first_node_child(tree, right)
         if !has_base { ret false }
-        let (named, has_named) = proof_name(c, g, tree, module_index, base_node_index)
-        if !has_named { ret false }
-        base_name = named
+        let (path, path_root, has_path) = proof_path(c, g, tree, module_index, base_node_index)
+        if !has_path { ret false }
+        base_name = path
+        root_name = path_root
         has_base_name = true
+        if !check.same(path, path_root) {
+            field_base = true
+            let (field_type, field_type_error) = check.check_expr(c, g, tree, module_index, base_node_index, check.invalid_type())
+            if field_type_error != ok { ret false }
+            if field_type.kind != .Slice && field_type.kind != .Array && field_type.kind != .String { ret false }
+        }
     }
     if !has_base_name { ret false }
     // Both are locals of this body: a global could change under another thread.
     let (index_binding, index_bound) = find_binding(bindings, binding_count, index_name)
-    let (base_binding, base_bound) = find_binding(bindings, binding_count, base_name)
+    let (base_binding, base_bound) = find_binding(bindings, binding_count, root_name)
     if !index_bound || !base_bound { ret false }
-    if base_binding.ty.kind != .Slice && base_binding.ty.kind != .Array && base_binding.ty.kind != .String { ret false }
+    if field_base {
+        if base_binding.ty.kind != .Named && base_binding.ty.kind != .Pointer { ret false }
+        pointer_root = base_binding.ty.kind == .Pointer
+    } else {
+        if base_binding.ty.kind != .Slice && base_binding.ty.kind != .Array && base_binding.ty.kind != .String { ret false }
+    }
     // The range's tokens: the first write of `i`, whether one lies in a nested loop,
     // and whether `x` is written at all.
     let body_end = scan_end
     var first_assign = body_end
     var nested_write = false
     var base_written = false
+    var body_calls = false
     var loop_pending = false
     var depth = 0usize
     var loop_depth = 0usize
@@ -4436,11 +4502,16 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
                 if scan < first_assign { first_assign = scan }
                 if loop_depth != 0usize { nested_write = true }
             }
-            if check.same(word, base_name) && proof_token_writes(c, scan, body_end) { base_written = true }
+            if proof_path_names(base_name, word) && proof_token_writes(c, scan, body_end) { base_written = true }
         }
+        // A call in the body, spelled or not: `f(`, `x.f(`, `g[T](`, a `for` over a
+        // protocol, `==` and `!=` that may dispatch to a supplied `eq`.
+        if token.kind == .PunctLParen && scan > scan_start && (c.tokens[scan - 1usize].kind == .Identifier || c.tokens[scan - 1usize].kind == .PunctRBracket) { body_calls = true }
+        if token.kind == .KwFor || token.kind == .PunctEqEq || token.kind == .PunctBangEq { body_calls = true }
         scan += 1usize
     }
     if nested_write || base_written { ret false }
+    if pointer_root && body_calls { ret false }
     // A pointer to `i` taken anywhere in the function could write it from the body:
     // the addressed names were collected when the function was opened (D383).
     if builder.proof_addressed_overflow { ret false }
@@ -4448,6 +4519,9 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     while addressed_at < builder.proof_addressed_count {
         let pointed = c.tokens[builder.proof_addressed[addressed_at]]
         if check.same(g.modules[module_index].text[pointed.start..pointed.end], index_name) { ret false }
+        // A pointer to the struct taken anywhere (D462) is a way for a call to
+        // reach the field.
+        if field_base && check.same(g.modules[module_index].text[pointed.start..pointed.end], root_name) { ret false }
         addressed_at += 1usize
     }
     builder.proof_index[builder.proof_count] = index_name
@@ -4594,7 +4668,7 @@ fn proof_leftmost_conjunct(c: *check.Checker, tree: *parse.Tree, node_index: usi
 // index's first write in that loop's body.
 fn proof_covers(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, base_index: usize, index_index: usize, builder: *nir.Builder) -> bool {
     if builder.proof_count == 0usize { ret false }
-    let (base_name, has_base) = proof_name(c, g, tree, module_index, base_index)
+    let (base_name, base_root, has_base) = proof_path(c, g, tree, module_index, base_index)
     if !has_base { ret false }
     // `x[i]`, or `x[i + j]` with a literal `j` within the proof's slack (D385).
     var index_node = index_index

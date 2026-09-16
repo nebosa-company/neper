@@ -1667,13 +1667,30 @@ esac
 "$bounds_proof_path" slack
 "$bounds_proof_path" equal
 "$bounds_proof_path" aliased
+"$bounds_proof_path" field
 # The second-local form (D452): the shifted read past the aliased length traps.
 bounds_aliased_status=0
 bounds_aliased=$("$bounds_proof_path" aliased_shifted 2>&1) || bounds_aliased_status=$?
 [ "$bounds_aliased_status" -eq 134 ]
 case "$bounds_aliased" in
-    *'main.e:261:26: trap[bounds]: index 5 out of bounds for len 5'*) ;;
+    *'main.e:280:26: trap[bounds]: index 5 out of bounds for len 5'*) ;;
     *) printf '%s\n' "the access past the aliased length did not trap: $bounds_aliased" >&2; exit 1 ;;
+esac
+# The field base (D462): the shifted read past the field's length traps, and the loop
+# through a pointer that calls before the access keeps its check.
+bounds_field_status=0
+bounds_field=$("$bounds_proof_path" field_shifted 2>&1) || bounds_field_status=$?
+[ "$bounds_field_status" -eq 134 ]
+case "$bounds_field" in
+    *'main.e:335:26: trap[bounds]: index 5 out of bounds for len 5'*) ;;
+    *) printf '%s\n' "the access past the field length did not trap: $bounds_field" >&2; exit 1 ;;
+esac
+bounds_field_call_status=0
+bounds_field_call=$("$bounds_proof_path" field_call_shrinks 2>&1) || bounds_field_call_status=$?
+[ "$bounds_field_call_status" -eq 134 ]
+case "$bounds_field_call" in
+    *'main.e:325:26: trap[bounds]: index 0 out of bounds for len 0'*) ;;
+    *) printf '%s\n' "the field access after a call kept no check: $bounds_field_call" >&2; exit 1 ;;
 esac
 bounds_equal_status=0
 bounds_equal=$("$bounds_proof_path" equal_shifted 2>&1) || bounds_equal_status=$?

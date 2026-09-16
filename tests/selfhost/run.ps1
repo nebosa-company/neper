@@ -1564,7 +1564,7 @@ if (-not $boundsElided -or [int]$Matches[1] -lt 2) { throw "the bounds proof eli
 if ($LASTEXITCODE -ne 0) { throw 'the proven loop summed wrongly' }
 $boundsShifted = & $boundsProofPath shifted 2>&1
 if ($LASTEXITCODE -ne 134 -or ($boundsShifted -join "`n") -notmatch 'main\.e:26:26: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the unproven access did not trap: exit $LASTEXITCODE, $($boundsShifted -join "`n")" }
-foreach ($boundsMode in @('nested', 'reslice', 'guarded', 'conjunct', 'exit_guard', 'width', 'slack', 'equal', 'aliased')) {
+foreach ($boundsMode in @('nested', 'reslice', 'guarded', 'conjunct', 'exit_guard', 'width', 'slack', 'equal', 'aliased', 'field')) {
     & $boundsProofPath $boundsMode 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "the $boundsMode loop went wrong under its retained check" }
 }
@@ -1575,7 +1575,14 @@ if ($LASTEXITCODE -ne 134 -or ($boundsGuarded -join "`n") -notmatch 'main\.e:70:
 # The second-local form (D452): `let n = x.len` then `while at < n` proves `x[at]`; the
 # shifted read keeps its check, which trips at the end.
 $boundsAliased = & $boundsProofPath aliased_shifted 2>&1
-if ($LASTEXITCODE -ne 134 -or ($boundsAliased -join "`n") -notmatch 'main\.e:261:26: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the access past the aliased length did not trap: exit $LASTEXITCODE, $($boundsAliased -join "`n")" }
+if ($LASTEXITCODE -ne 134 -or ($boundsAliased -join "`n") -notmatch 'main\.e:280:26: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the access past the aliased length did not trap: exit $LASTEXITCODE, $($boundsAliased -join "`n")" }
+# The field base (D462): `while at < bag.items.len` proves `bag.items[at]`; the shifted
+# read keeps its check, and so does the loop through a pointer that calls before the
+# access -- the call empties the slice and the check trips at index 0.
+$boundsField = & $boundsProofPath field_shifted 2>&1
+if ($LASTEXITCODE -ne 134 -or ($boundsField -join "`n") -notmatch 'main\.e:335:26: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the access past the field length did not trap: exit $LASTEXITCODE, $($boundsField -join "`n")" }
+$boundsFieldCall = & $boundsProofPath field_call_shrinks 2>&1
+if ($LASTEXITCODE -ne 134 -or ($boundsFieldCall -join "`n") -notmatch 'main\.e:325:26: trap\[bounds\]: index 0 out of bounds for len 0') { throw "the field access after a call kept no check: exit $LASTEXITCODE, $($boundsFieldCall -join "`n")" }
 $boundsEqual = & $boundsProofPath equal_shifted 2>&1
 if ($LASTEXITCODE -ne 134 -or ($boundsEqual -join "`n") -notmatch 'main\.e:145:30: trap\[bounds\]: index 5 out of bounds for len 5') { throw "the access past the equal length did not trap: exit $LASTEXITCODE, $($boundsEqual -join "`n")" }
 $boundsSlack = & $boundsProofPath slack_shifted 2>&1
