@@ -6887,7 +6887,8 @@ fn emit_per_module(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, checker: 
 
 // The query commands' shared pipeline (D362): the program loaded, resolved and
 // checked with the checker's explain table open, then the command's writer.
-// `kind` is 1 for `explain-file`, 2 for `context-file`, 3 for `uses-file`.
+// `kind` is 1 for `explain-file`, 2 for `context-file --symbol`, 3 for `uses-file`,
+// 4 for `plan-rename-file`, 5 for `context-file --module` (D397).
 fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     var loaded: graph.Graph = zero
     try init_cli_graph(a, &loaded)
@@ -6914,7 +6915,7 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
         ret ok
     }
     if kind == 1usize { try tool.explain_json(a, &checker, &loaded) }
-    if kind == 2usize {
+    if kind == 2usize || kind == 5usize {
         var budget = 64usize
         var cursor = 0usize
         var flag_at = 9usize
@@ -6928,7 +6929,9 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
         target_storage[target_at] = 45u8
         target_at = tool.nptest_copy(target_storage[..], target_at + 1usize, args[5usize])
         let target_text = target_storage[0usize..target_at]
-        try tool.context_json(a, &checker, &loaded, args[8usize], budget, cursor, target_text, "retained")
+        if kind == 2usize { try tool.context_json(a, &checker, &loaded, args[8usize], budget, cursor, target_text, "retained") }
+        // The catalogue (D397): every function of a module, contract facts alone.
+        if kind == 5usize { try tool.catalog_json(a, &checker, &loaded, args[8usize], budget, cursor, target_text, "retained") }
     }
     if kind == 3usize { try tool.uses_json(a, &checker, &loaded, args[8usize]) }
     if kind == 4usize { try tool.plan_rename_json(a, &checker, &loaded, args[8usize], args[10usize]) }
@@ -7219,6 +7222,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `query_file`, which keeps `main`'s own locals few.
     if args.len == 7usize && same(args[1usize], "explain-file") && same(args[6usize], "--json") { ret query_file(a, &report, args, 1usize) }
     if args.len >= 9usize && same(args[1usize], "context-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") { ret query_file(a, &report, args, 2usize) }
+    if args.len >= 9usize && same(args[1usize], "context-file") && same(args[6usize], "--json") && same(args[7usize], "--module") { ret query_file(a, &report, args, 5usize) }
     if args.len == 9usize && same(args[1usize], "uses-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") { ret query_file(a, &report, args, 3usize) }
     // `plan-rename-file PATH ROOT ARCH OS --json --symbol module.name --to NEW` (D376, H29).
     if args.len == 11usize && same(args[1usize], "plan-rename-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--to") && identifier_ok(args[10usize]) { ret query_file(a, &report, args, 4usize) }

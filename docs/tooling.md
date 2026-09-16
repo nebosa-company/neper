@@ -274,6 +274,15 @@ about one declared function, under a record budget (64 by default):
   `unknown` for what it cannot know; `trusted-external` and `runtime-observed`
   are reserved for facts no command emits yet.
 
+`neper context-file PATH ROOT ARCH OS --json --module module.name [--budget N]
+[--cursor N]` (D397, H11) is the catalogue: every declared, non-generic function
+of the module in declaration order, each a `subject` record followed by its
+contract facts (the signature through `resources`/`boundary`; the body's
+decisions are `--symbol`'s), under one budget that counts subjects and facts
+alike. A page may end inside a function's facts; the next page continues them,
+and they belong to the last subject written. A name no module of the program
+has is an `E-CLI-9999` diagnostic and exit 2.
+
 The result carries `records` (written), `omitted` (past the budget),
 `complete` (nothing omitted and the checker's table did not overflow) and
 `cursor`, which passed back as `--cursor` continues from the next fact; the

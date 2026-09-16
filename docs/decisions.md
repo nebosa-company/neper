@@ -8822,3 +8822,23 @@ regenerated with the two facts `explain.main` earns.
 
 Not yet: the same facts as a catalogue over a module (one query per symbol
 today), and the planned / present / verified marking H11 asks for.
+
+## D397 -- `context-file --module`: the contract facts as a catalogue
+
+H11 asks for per-symbol API records; D396 gave them one query at a time, a
+process per function. `context-file PATH ROOT ARCH OS --json --module NAME`
+writes every declared, non-generic function of one module in declaration
+order -- a `subject` record and the contract facts D361 and D396 defined, the
+signature through the resource verdict -- under one budget that counts
+subjects and facts alike, with the cursor continuing across functions. The
+body's decisions stay with `--symbol`: a catalogue is what a caller needs to
+know, not what a body did. The facts writer and the subject record are one
+piece of code for both forms (`contract_facts`, `subject_record`, a `Page`
+carrying the cursor, the budget and the counts), and the `--symbol` output is
+byte-identical to before. The corpus gains `tools/catalog` over `contract.e`,
+one golden per host.
+
+A page may end inside a function's facts; the next page continues them and
+they belong to the last subject written. The alternative -- a function's
+records all or nothing -- would write nothing forever under a budget smaller
+than one function's facts, so the cut is documented instead.

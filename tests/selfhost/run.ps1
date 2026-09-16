@@ -2095,6 +2095,11 @@ foreach ($subject in @('contract.main', 'contract.bump', 'contract.first', 'cont
     if ($LASTEXITCODE -ne 0) { throw "context-file --json failed on $subject" }
 }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contractActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/contract.x64-windows.expected.jsonl')).Hash) { throw "context-file --json contract facts differ from the conformance corpus" }
+# The catalogue (D397, H11): every function of the module, subjects and facts under one budget.
+$catalogActual = Join-Path $testBuild 'conformance-tools-catalog.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file contract.e `"$repo`" x64 windows --json --module contract --budget 12 > `"$catalogActual`""
+if ($LASTEXITCODE -ne 0) { throw "context-file --module failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $catalogActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/catalog.x64-windows.expected.jsonl')).Hash) { throw "context-file --module differs from the conformance corpus" }
 # `uses-file --json` (D362): every resolved use of one function, target-independent.
 $usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""

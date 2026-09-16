@@ -2188,6 +2188,284 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
 // `unknown` for a call whose target is a value. The result says how many records
 // were written, how many the budget left out, whether the answer is complete, and
 // the cursor that continues it.
+// A page of facts (D397): the cursor and the budget, and what a writer has
+// counted, written and left out against them.
+type Page = struct {
+    cursor: usize,
+    budget: usize,
+    total: usize,
+    written: usize,
+    omitted: usize,
+}
+
+// One function's contract facts (D361, D396), in their fixed order, counted
+// against the page: the signature, an ownership fact per `own` parameter, the
+// caller's contract per pointer parameter, the errors, the thread start, then the
+// body's resource verdict or its `@unsafe` boundary. `context-file --symbol`
+// follows them with the body's decisions; `--module` writes them per function.
+fn contract_facts(out: *Out, c: *check.Checker, g: *graph.Graph, function_index: usize, page: *Page) -> err {
+    let function = c.functions[function_index]
+    // Signature.
+    page.total += 1usize
+    if page.total > page.cursor && page.written < page.budget {
+        try text(out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":\"fn ")
+        try text(out, function.name)
+        try byte(out, 40u8)
+        var parameter_at = 0usize
+        while parameter_at < function.parameter_count {
+            if parameter_at != 0usize { try text(out, ", ") }
+            let parameter = c.parameters[function.first_parameter + parameter_at]
+            try text(out, parameter.name)
+            try text(out, ": ")
+            if parameter.own { try text(out, "own ") }
+            try type_text(out, c, g, parameter.ty, 0usize)
+            parameter_at += 1usize
+        }
+        try byte(out, 41u8)
+        if function.return_count != 0usize {
+            try text(out, " -> ")
+            if function.return_count > 1usize { try byte(out, 40u8) }
+            var return_at = 0usize
+            while return_at < function.return_count {
+                if return_at != 0usize { try text(out, ", ") }
+                try type_text(out, c, g, c.return_types[function.first_return + return_at], 0usize)
+                return_at += 1usize
+            }
+            if function.return_count > 1usize { try byte(out, 41u8) }
+        }
+        try text(out, "\"}")
+        try flush(out)
+        page.written += 1usize
+    } else {
+        if page.total > page.cursor { page.omitted += 1usize }
+    }
+    // Ownership: each `own` parameter is a transfer the caller makes.
+    var own_at = 0usize
+    while own_at < function.parameter_count {
+        let parameter = c.parameters[function.first_parameter + own_at]
+        if parameter.own {
+            page.total += 1usize
+            if page.total > page.cursor && page.written < page.budget {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"ownership\",\"provenance\":\"declared-and-checked\",\"value\":\"takes ")
+                try text(out, parameter.name)
+                try text(out, ": the caller's value moves in and this function owes its cleanup on every exit\"}")
+                try flush(out)
+                page.written += 1usize
+            } else {
+                if page.total > page.cursor { page.omitted += 1usize }
+            }
+        }
+        own_at += 1usize
+    }
+    // The contract the signature declares and the checker applies at every caller
+    // (D396, H11): an arena parameter is an allocation, whose pointer-holding
+    // results belong to the caller's region; a `*T` parameter is a borrow when
+    // something holding a pointer comes back (a view of the argument) and a
+    // mutation otherwise (the caller's views of the argument dangle, D354); a
+    // `*const T` parameter is read alone; an `err` result is fallible, and partial
+    // when other results ride with it (D353).
+    var returns_pointer = false
+    var returns_err = false
+    var return_scan = 0usize
+    while return_scan < function.return_count {
+        let return_index = function.first_return + return_scan
+        if return_index < c.return_type_count {
+            if check.holds_pointer(c, c.return_types[return_index], 0usize) { returns_pointer = true }
+            if c.return_types[return_index].kind == .Err { returns_err = true }
+        }
+        return_scan += 1usize
+    }
+    var contract_at = 0usize
+    while contract_at < function.parameter_count {
+        let parameter = c.parameters[function.first_parameter + contract_at]
+        if parameter.ty.kind == .Pointer && parameter.ty.has_element && parameter.ty.element < c.type_count {
+            let pointee = c.types[parameter.ty.element]
+            page.total += 1usize
+            if page.total > page.cursor && page.written < page.budget {
+                if check.seeded_arena(c, pointee) {
+                    try text(out, "{\"record\":\"fact\",\"kind\":\"allocation\",\"provenance\":\"declared-and-checked\",\"value\":\"allocates from ")
+                    try text(out, parameter.name)
+                    if returns_pointer {
+                        try text(out, ": what it returns that can hold a pointer belongs to the caller's region of the arena, and dangles at a reset to a mark taken before the call\"}")
+                    } else {
+                        try text(out, ": nothing it returns holds a pointer\"}")
+                    }
+                } else {
+                    if parameter.ty.is_const {
+                        try text(out, "{\"record\":\"fact\",\"kind\":\"borrow\",\"provenance\":\"declared-and-checked\",\"value\":\"reads ")
+                        try text(out, parameter.name)
+                        try text(out, ": a const pointer; the argument is not written and the caller's views of it stand\"}")
+                    } else {
+                        if returns_pointer {
+                            try text(out, "{\"record\":\"fact\",\"kind\":\"borrow\",\"provenance\":\"declared-and-checked\",\"value\":\"borrows ")
+                            try text(out, parameter.name)
+                            try text(out, ": what it returns that can hold a pointer is a view of the argument, dangling when the argument is next mutated\"}")
+                        } else {
+                            try text(out, "{\"record\":\"fact\",\"kind\":\"mutation\",\"provenance\":\"declared-and-checked\",\"value\":\"mutates ")
+                            try text(out, parameter.name)
+                            try text(out, ": the caller's views of the argument dangle after this call (E-SAFETY-0014 at their next use)\"}")
+                        }
+                    }
+                }
+                try flush(out)
+                page.written += 1usize
+            } else {
+                if page.total > page.cursor { page.omitted += 1usize }
+            }
+        }
+        contract_at += 1usize
+    }
+    if returns_err {
+        page.total += 1usize
+        if page.total > page.cursor && page.written < page.budget {
+            if function.return_count > 1usize {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"errors\",\"provenance\":\"declared-and-checked\",\"value\":\"partial: returns err beside its other results, which stand only when the err is ok; the caller tests it before using them\"}")
+            } else {
+                try text(out, "{\"record\":\"fact\",\"kind\":\"errors\",\"provenance\":\"declared-and-checked\",\"value\":\"fallible: returns err; the caller tests it or propagates it with try\"}")
+            }
+            try flush(out)
+            page.written += 1usize
+        } else {
+            if page.total > page.cursor { page.omitted += 1usize }
+        }
+    }
+    // A thread started in the body (D365): what the call is given by address is
+    // that thread's until the join.
+    var starts_thread = false
+    var thread_scan = 0usize
+    while thread_scan < c.explain_count {
+        let e = c.explains[thread_scan]
+        if e.kind == 4u8 && !e.found && e.module_index == function.module_index && e.offset >= function.source_start && e.offset < function.source_end {
+            if e.function_index >= c.function_count && e.template_index < g.count && graph.same(g.modules[e.template_index].name, "e.os") && check.same(e.protocol, "thread_create") { starts_thread = true }
+            if e.function_index < c.function_count {
+                let callee = c.functions[e.function_index]
+                if callee.return_count != 0usize && callee.first_return < c.return_type_count {
+                    let handle = c.return_types[callee.first_return]
+                    if check.seeded_handle(c, handle) && check.same(handle.name, "Thread") { starts_thread = true }
+                }
+            }
+        }
+        thread_scan += 1usize
+    }
+    if starts_thread {
+        page.total += 1usize
+        if page.total > page.cursor && page.written < page.budget {
+            try text(out, "{\"record\":\"fact\",\"kind\":\"threads\",\"provenance\":\"compiler-proved\",\"value\":\"starts a thread: what the start is given by address is that thread's until the join (E-SAFETY-0016 at any other use); the handle is joined or detached on every exit\"}")
+            try flush(out)
+            page.written += 1usize
+        } else {
+            if page.total > page.cursor { page.omitted += 1usize }
+        }
+    }
+    // What the checker established for the body: the resource and region rules
+    // ran over it, or did not (an `@unsafe` function).
+    page.total += 1usize
+    if page.total > page.cursor && page.written < page.budget {
+        if manifest_is_unsafe(g.modules[function.module_index].text, function.source_start) {
+            try text(out, "{\"record\":\"fact\",\"kind\":\"boundary\",\"provenance\":\"declared-and-checked\",\"value\":\"@unsafe: the resource and region rules are not applied inside this function\"}")
+        } else {
+            try text(out, "{\"record\":\"fact\",\"kind\":\"resources\",\"provenance\":\"compiler-proved\",\"value\":\"every resource this function owns is consumed on every exit; no view outlives its region or its container's change\"}")
+        }
+        try flush(out)
+        page.written += 1usize
+    } else {
+        if page.total > page.cursor { page.omitted += 1usize }
+    }
+    ret ok
+}
+
+// The subject record of a context answer (D361): the snapshot's identity and the
+// function's declaration point.
+fn subject_record(out: *Out, subject: str, root: str, relative: str, path: str, source: str, digest: str, target_name: str, checks: str, declared_at: usize) -> err {
+    try text(out, "{\"record\":\"subject\",\"subject\":")
+    try quoted(out, subject)
+    try text(out, ",\"kind\":\"fn\",\"source\":")
+    try manifest_identity(out, root, relative)
+    try text(out, ",\"source_sha256\":")
+    try quoted(out, digest)
+    try text(out, ",\"target\":")
+    try quoted(out, target_name)
+    try text(out, ",\"checks\":")
+    try quoted(out, checks)
+    try text(out, ",\"grammar_revision\":3,\"span\":")
+    var declaration: lex.Token = zero
+    declaration.start = declared_at
+    declaration.end = declared_at
+    try point_span(out, root, path, source, declaration)
+    try byte(out, 125u8)
+    ret flush(out)
+}
+
+// `context-file PATH ROOT ARCH OS --json --module module.name [--budget N] [--cursor N]`
+// (D397, H11): the catalogue -- every declared, non-generic function of one module
+// in declaration order, each a `subject` record and its contract facts, under one
+// record budget that counts subjects and facts alike. A page may end inside a
+// function's facts; the next page continues them, and the last subject written
+// before the cut is theirs. The body's decisions are not listed here: `--symbol`
+// answers those for one function.
+fn catalog_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, module_name: str, budget: usize, cursor: usize, target_name: str, checks: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.signature_function_count * 1024usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "context")
+    var module_index = g.count
+    var scan = 0usize
+    while scan < g.count {
+        if graph.same(g.modules[scan].name, module_name) {
+            module_index = scan
+            break
+        }
+        scan += 1usize
+    }
+    if module_index == g.count {
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no module of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try flush(&out)
+        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"records\":0,\"omitted\":0,\"complete\":true}}")
+        ret flush(&out)
+    }
+    let module = g.modules[module_index]
+    let (root, relative) = source_identity_of(g, module.path)
+    let (path, path_error) = manifest_slashes(a, relative)
+    if path_error != ok { ret path_error }
+    let (digest, digest_error) = manifest_sha256(a, module.text)
+    if digest_error != ok { ret digest_error }
+    out.lines = module.lines
+    var page: Page = zero
+    page.cursor = cursor
+    page.budget = budget
+    let (subject_storage, subject_error) = mem.alloc[u8](a, 4096usize)
+    if subject_error != ok { ret subject_error }
+    var candidate = 0usize
+    while candidate < c.signature_function_count {
+        let function = c.functions[candidate]
+        if function.module_index == module_index && !function.generic && function.source_end > function.source_start {
+            page.total += 1usize
+            if page.total > page.cursor && page.written < page.budget {
+                var subject_at = nptest_copy(subject_storage, 0usize, module_name)
+                if subject_at < subject_storage.len { subject_storage[subject_at] = 46u8 }
+                subject_at = nptest_copy(subject_storage, subject_at + 1usize, function.name)
+                try subject_record(&out, subject_storage[0usize..subject_at], root, relative, path, module.text, digest, target_name, checks, function.source_start)
+                page.written += 1usize
+            } else {
+                if page.total > page.cursor { page.omitted += 1usize }
+            }
+            try contract_facts(&out, c, g, candidate, &page)
+        }
+        candidate += 1usize
+    }
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
+    try decimal(&out, page.written)
+    try text(&out, ",\"omitted\":")
+    try decimal(&out, page.omitted)
+    try text(&out, ",\"complete\":")
+    if page.omitted == 0usize { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, ",\"cursor\":")
+    try decimal(&out, page.cursor + page.written)
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
 fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, budget: usize, cursor: usize, target_name: str, checks: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
     if storage_error != ok { ret storage_error }
@@ -2240,194 +2518,15 @@ fn context_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str,
     let (digest, digest_error) = manifest_sha256(a, module.text)
     if digest_error != ok { ret digest_error }
     out.lines = module.lines
-    var written = 0usize
-    var omitted = 0usize
-    var total = 0usize
     // The subject record: identity of the snapshot and the subject, always written.
-    try text(&out, "{\"record\":\"subject\",\"subject\":")
-    try quoted(&out, subject)
-    try text(&out, ",\"kind\":\"fn\",\"source\":")
-    try manifest_identity(&out, root, relative)
-    try text(&out, ",\"source_sha256\":")
-    try quoted(&out, digest)
-    try text(&out, ",\"target\":")
-    try quoted(&out, target_name)
-    try text(&out, ",\"checks\":")
-    try quoted(&out, checks)
-    try text(&out, ",\"grammar_revision\":3,\"span\":")
-    var declaration: lex.Token = zero
-    declaration.start = function.source_start
-    declaration.end = function.source_start
-    try point_span(&out, root, path, module.text, declaration)
-    try byte(&out, 125u8)
-    try flush(&out)
-    // The facts, in a fixed order, each counted against the cursor and the budget.
-    // Signature.
-    total += 1usize
-    if total > cursor && written < budget {
-        try text(&out, "{\"record\":\"fact\",\"kind\":\"signature\",\"provenance\":\"declared-and-checked\",\"value\":\"fn ")
-        try text(&out, function.name)
-        try byte(&out, 40u8)
-        var parameter_at = 0usize
-        while parameter_at < function.parameter_count {
-            if parameter_at != 0usize { try text(&out, ", ") }
-            let parameter = c.parameters[function.first_parameter + parameter_at]
-            try text(&out, parameter.name)
-            try text(&out, ": ")
-            if parameter.own { try text(&out, "own ") }
-            try type_text(&out, c, g, parameter.ty, 0usize)
-            parameter_at += 1usize
-        }
-        try byte(&out, 41u8)
-        if function.return_count != 0usize {
-            try text(&out, " -> ")
-            if function.return_count > 1usize { try byte(&out, 40u8) }
-            var return_at = 0usize
-            while return_at < function.return_count {
-                if return_at != 0usize { try text(&out, ", ") }
-                try type_text(&out, c, g, c.return_types[function.first_return + return_at], 0usize)
-                return_at += 1usize
-            }
-            if function.return_count > 1usize { try byte(&out, 41u8) }
-        }
-        try text(&out, "\"}")
-        try flush(&out)
-        written += 1usize
-    } else {
-        if total > cursor { omitted += 1usize }
-    }
-    // Ownership: each `own` parameter is a transfer the caller makes.
-    var own_at = 0usize
-    while own_at < function.parameter_count {
-        let parameter = c.parameters[function.first_parameter + own_at]
-        if parameter.own {
-            total += 1usize
-            if total > cursor && written < budget {
-                try text(&out, "{\"record\":\"fact\",\"kind\":\"ownership\",\"provenance\":\"declared-and-checked\",\"value\":\"takes ")
-                try text(&out, parameter.name)
-                try text(&out, ": the caller's value moves in and this function owes its cleanup on every exit\"}")
-                try flush(&out)
-                written += 1usize
-            } else {
-                if total > cursor { omitted += 1usize }
-            }
-        }
-        own_at += 1usize
-    }
-    // The contract the signature declares and the checker applies at every caller
-    // (D396, H11): an arena parameter is an allocation, whose pointer-holding
-    // results belong to the caller's region; a `*T` parameter is a borrow when
-    // something holding a pointer comes back (a view of the argument) and a
-    // mutation otherwise (the caller's views of the argument dangle, D354); a
-    // `*const T` parameter is read alone; an `err` result is fallible, and partial
-    // when other results ride with it (D353).
-    var returns_pointer = false
-    var returns_err = false
-    var return_scan = 0usize
-    while return_scan < function.return_count {
-        let return_index = function.first_return + return_scan
-        if return_index < c.return_type_count {
-            if check.holds_pointer(c, c.return_types[return_index], 0usize) { returns_pointer = true }
-            if c.return_types[return_index].kind == .Err { returns_err = true }
-        }
-        return_scan += 1usize
-    }
-    var contract_at = 0usize
-    while contract_at < function.parameter_count {
-        let parameter = c.parameters[function.first_parameter + contract_at]
-        if parameter.ty.kind == .Pointer && parameter.ty.has_element && parameter.ty.element < c.type_count {
-            let pointee = c.types[parameter.ty.element]
-            total += 1usize
-            if total > cursor && written < budget {
-                if check.seeded_arena(c, pointee) {
-                    try text(&out, "{\"record\":\"fact\",\"kind\":\"allocation\",\"provenance\":\"declared-and-checked\",\"value\":\"allocates from ")
-                    try text(&out, parameter.name)
-                    if returns_pointer {
-                        try text(&out, ": what it returns that can hold a pointer belongs to the caller's region of the arena, and dangles at a reset to a mark taken before the call\"}")
-                    } else {
-                        try text(&out, ": nothing it returns holds a pointer\"}")
-                    }
-                } else {
-                    if parameter.ty.is_const {
-                        try text(&out, "{\"record\":\"fact\",\"kind\":\"borrow\",\"provenance\":\"declared-and-checked\",\"value\":\"reads ")
-                        try text(&out, parameter.name)
-                        try text(&out, ": a const pointer; the argument is not written and the caller's views of it stand\"}")
-                    } else {
-                        if returns_pointer {
-                            try text(&out, "{\"record\":\"fact\",\"kind\":\"borrow\",\"provenance\":\"declared-and-checked\",\"value\":\"borrows ")
-                            try text(&out, parameter.name)
-                            try text(&out, ": what it returns that can hold a pointer is a view of the argument, dangling when the argument is next mutated\"}")
-                        } else {
-                            try text(&out, "{\"record\":\"fact\",\"kind\":\"mutation\",\"provenance\":\"declared-and-checked\",\"value\":\"mutates ")
-                            try text(&out, parameter.name)
-                            try text(&out, ": the caller's views of the argument dangle after this call (E-SAFETY-0014 at their next use)\"}")
-                        }
-                    }
-                }
-                try flush(&out)
-                written += 1usize
-            } else {
-                if total > cursor { omitted += 1usize }
-            }
-        }
-        contract_at += 1usize
-    }
-    if returns_err {
-        total += 1usize
-        if total > cursor && written < budget {
-            if function.return_count > 1usize {
-                try text(&out, "{\"record\":\"fact\",\"kind\":\"errors\",\"provenance\":\"declared-and-checked\",\"value\":\"partial: returns err beside its other results, which stand only when the err is ok; the caller tests it before using them\"}")
-            } else {
-                try text(&out, "{\"record\":\"fact\",\"kind\":\"errors\",\"provenance\":\"declared-and-checked\",\"value\":\"fallible: returns err; the caller tests it or propagates it with try\"}")
-            }
-            try flush(&out)
-            written += 1usize
-        } else {
-            if total > cursor { omitted += 1usize }
-        }
-    }
-    // A thread started in the body (D365): what the call is given by address is
-    // that thread's until the join.
-    var starts_thread = false
-    var thread_scan = 0usize
-    while thread_scan < c.explain_count {
-        let e = c.explains[thread_scan]
-        if e.kind == 4u8 && !e.found && e.module_index == function.module_index && e.offset >= function.source_start && e.offset < function.source_end {
-            if e.function_index >= c.function_count && e.template_index < g.count && graph.same(g.modules[e.template_index].name, "e.os") && check.same(e.protocol, "thread_create") { starts_thread = true }
-            if e.function_index < c.function_count {
-                let callee = c.functions[e.function_index]
-                if callee.return_count != 0usize && callee.first_return < c.return_type_count {
-                    let handle = c.return_types[callee.first_return]
-                    if check.seeded_handle(c, handle) && check.same(handle.name, "Thread") { starts_thread = true }
-                }
-            }
-        }
-        thread_scan += 1usize
-    }
-    if starts_thread {
-        total += 1usize
-        if total > cursor && written < budget {
-            try text(&out, "{\"record\":\"fact\",\"kind\":\"threads\",\"provenance\":\"compiler-proved\",\"value\":\"starts a thread: what the start is given by address is that thread's until the join (E-SAFETY-0016 at any other use); the handle is joined or detached on every exit\"}")
-            try flush(&out)
-            written += 1usize
-        } else {
-            if total > cursor { omitted += 1usize }
-        }
-    }
-    // What the checker established for the body: the resource and region rules
-    // ran over it, or did not (an `@unsafe` function).
-    total += 1usize
-    if total > cursor && written < budget {
-        if manifest_is_unsafe(module.text, function.source_start) {
-            try text(&out, "{\"record\":\"fact\",\"kind\":\"boundary\",\"provenance\":\"declared-and-checked\",\"value\":\"@unsafe: the resource and region rules are not applied inside this function\"}")
-        } else {
-            try text(&out, "{\"record\":\"fact\",\"kind\":\"resources\",\"provenance\":\"compiler-proved\",\"value\":\"every resource this function owns is consumed on every exit; no view outlives its region or its container's change\"}")
-        }
-        try flush(&out)
-        written += 1usize
-    } else {
-        if total > cursor { omitted += 1usize }
-    }
+    try subject_record(&out, subject, root, relative, path, module.text, digest, target_name, checks, function.source_start)
+    var page: Page = zero
+    page.cursor = cursor
+    page.budget = budget
+    try contract_facts(&out, c, g, function_index, &page)
+    var written = page.written
+    var omitted = page.omitted
+    var total = page.total
     // The body's decisions, from the explain records inside the source range, in
     // source order; each a fact with its span.
     var last_offset = 0usize
