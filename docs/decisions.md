@@ -8662,7 +8662,9 @@ neither is written or addressed over the range; a proof over one base then
 covers an index into the other, through the equalities the block holds. The
 compiler's own build reports 544 checks elided, from 523; the fixture's `equal`
 and `equal_shifted` cases are the eliminated and the retained (`b[at + 1usize]`
-past the slack, which trips at the end).
+past the slack, which trips at the end). Measured (`h29-windows-d390.json`):
+the compiler cold 600 ms in release, warm 101 -- from D382's 772 and 177, with
+D383-D390 between -- and `sc500k` warm 148 from 305.
 
 Not yet: a length carried by a `let` (`let n = a.len`, then `while i < n`), and
 the two-locals bound; the field base stays out.

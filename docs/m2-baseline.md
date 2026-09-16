@@ -186,7 +186,9 @@ own byte loops, named in D383, with the proofs (D356-D385) as the way back; a pr
 then found a quadratic slot walk in the code generator (D386), and the compiler's
 cold release cell is 650 ms (+56%) in `h29-windows-d386.json`, 619 ms after the warm
 profile's byte-sink and proof changes (D387, `h29-windows-d387.json`), 603 ms cold and
-115 ms warm with the hash reading inline (D388, `h29-windows-d388.json`).
+115 ms warm with the hash reading inline (D388, `h29-windows-d388.json`), 600 cold and
+101 warm with the equal-length proof (D390, `h29-windows-d390.json`): from D382's 772
+and 177, a fifth and two fifths back, against the baseline's 416 and 53.
 
 ## What this baseline is not
 
