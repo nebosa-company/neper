@@ -560,7 +560,11 @@ is not enumerable by this pass and is the boundary the inventory does not list; 
 validation, rebuilt like a missing one), `compiler-changed` (written by another
 compiler executable, D398), `options-changed` (written by this compiler under
 another `--inline-cap`, which rides in the identity's top byte, D431) -- empty for
-a build that read no artifacts;
+a build that read no artifacts; an artifact whose recorded imports close a cycle
+-- naming a module that imports it, which no source can spell -- is `invalid-artifact`
+too (D472, H24): a kept module's imports are read from its artifact, so such an
+artifact is distrusted, its module parsed from source, and the build is the clean
+build's;
 `mode-changed` covers `--unchecked` too, whose artifacts share `.neper/release/`
 with checked ones and carry their own mode (D369);
 `options.checks` is the

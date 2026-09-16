@@ -1881,6 +1881,46 @@ for hot_mode in --release --time; do
     [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed
     cmp "$hot_exe" "$hot_clean"
+    # A cyclic artifact reference (D472, H24): distrusted, rebuilt as invalid-artifact, the clean image.
+    cycle_scratch="$test_build/cycle-scratch"
+    rm -rf "$cycle_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/artifact_cycle" "$cycle_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+    cycle_manifest="$cycle_scratch/.neper/$hot_manifest_mode/build-manifest.json"
+    cycle_ring="$cycle_scratch/.neper/$hot_manifest_mode/em/ring.x64-linux.em"
+    cycle_main="$cycle_scratch/.neper/$hot_manifest_mode/em/main.x64-linux.em"
+    python3 "$repo/benchmarks/fuzz/corrupt.py" cycle "$cycle_ring" e.os main
+    cycle_link_status=0
+    "$test_build/neper-self" link-em "$test_build/cycle-link$hot_mode" "$cycle_main" "$cycle_ring" >/dev/null 2>&1 || cycle_link_status=$?
+    [ "$cycle_link_status" -le 2 ]
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    cmp -s "$test_build/cycle$hot_mode" "$test_build/cycle-clean$hot_mode"
+    python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=kept:edges-hold' 'ring=rebuilt:invalid-artifact'
+    python3 "$repo/benchmarks/fuzz/corrupt.py" cycle "$cycle_main" ring main
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    cmp -s "$test_build/cycle$hot_mode" "$test_build/cycle-clean$hot_mode"
+    python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=rebuilt:invalid-artifact' 'ring=kept:stable'
+    # A cyclic artifact reference (D472, H24): distrusted, rebuilt as invalid-artifact, the clean image.
+    cycle_scratch="$test_build/cycle-scratch"
+    rm -rf "$cycle_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/artifact_cycle" "$cycle_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+    cycle_manifest="$cycle_scratch/.neper/$hot_manifest_mode/build-manifest.json"
+    cycle_ring="$cycle_scratch/.neper/$hot_manifest_mode/em/ring.x64-linux.em"
+    cycle_main="$cycle_scratch/.neper/$hot_manifest_mode/em/main.x64-linux.em"
+    python3 "$repo/benchmarks/fuzz/corrupt.py" cycle "$cycle_ring" e.os main
+    cycle_link_status=0
+    "$test_build/neper-self" link-em "$test_build/cycle-link$hot_mode" "$cycle_main" "$cycle_ring" >/dev/null 2>&1 || cycle_link_status=$?
+    [ "$cycle_link_status" -le 2 ]
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    cmp -s "$test_build/cycle$hot_mode" "$test_build/cycle-clean$hot_mode"
+    python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=kept:edges-hold' 'ring=rebuilt:invalid-artifact'
+    python3 "$repo/benchmarks/fuzz/corrupt.py" cycle "$cycle_main" ring main
+    [ "$("$test_build/neper-self" emit-executable "$cycle_scratch/src/main.e" "$repo" x64 linux "$test_build/cycle$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    cmp -s "$test_build/cycle$hot_mode" "$test_build/cycle-clean$hot_mode"
+    python3 "$repo/scripts/check_incremental.py" "$cycle_manifest" 'main=rebuilt:invalid-artifact' 'ring=kept:stable'
     # The unsafe inventory rides in the artifact (D457): warm and cold manifests agree.
     inventory_scratch="$test_build/inventory-scratch"
     rm -rf "$inventory_scratch"

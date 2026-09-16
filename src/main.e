@@ -5064,6 +5064,9 @@ type HotLoad = struct {
     // changed, 2 the mode changed, 3 stable, 4 unchanged with every edge holding,
     // 5 unchanged with an edge that did not hold; the manifest lists them.
     reason: []u8,
+    // An artifact whose recorded imports closed a cycle (D472, H24): its edges are
+    // not the source's, so it is read as no artifact at all (`invalid-artifact`).
+    distrust: []bool,
 }
 
 // A wave's artifacts on worker threads (D324): each worker reads its modules' artifacts
@@ -5267,6 +5270,12 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
         try load_wave_artifacts(a, loaded, hot, held, directory, mode_id, wave_start, wave_end, list)
         module_at = wave_start
         while module_at < wave_end {
+            // A distrusted artifact (D472) is no artifact: its module is parsed.
+            if hot.unchanged[module_at] && module_at < hot.distrust.len && hot.distrust[module_at] {
+                hot.unchanged[module_at] = false
+                hot.reason[module_at] = 6u8
+                held[module_at] = held[module_at][0usize..0usize]
+            }
             if hot.unchanged[module_at] {
                 let old = held[module_at]
                 if true {
@@ -5434,16 +5443,20 @@ fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: 
     if stable_error != ok { ret stable_error }
     let (reason, reason_error) = mem.alloc[u8](a, loaded.modules.len)
     if reason_error != ok { ret reason_error }
+    let (distrust, distrust_error) = mem.alloc[bool](a, loaded.modules.len)
+    if distrust_error != ok { ret distrust_error }
     var at = 0usize
     while at < loaded.modules.len {
         unchanged[at] = false
         stable[at] = false
         reason[at] = 0u8
+        distrust[at] = false
         at += 1usize
     }
     hot.unchanged = unchanged
     hot.stable = stable
     hot.reason = reason
+    hot.distrust = distrust
     ret ok
 }
 
@@ -5494,6 +5507,18 @@ fn load_graph_in(a: *mem.Arena, report: *Sink, loaded: *graph.Graph, hot: *HotLo
     var load_error = ok
     if hot.on {
         load_error = load_graph_hot(a, loaded, hot, held, path, root, arch, target_os, project_root)
+        // A cycle closed by an artifact's recorded imports (D472, H24): a kept
+        // module's imports come from its artifact, and an artifact that names a
+        // module which imports it is damaged or forged -- no source can spell that
+        // cycle. The artifact is distrusted and the load runs again with the module
+        // parsed, once per such artifact; a cycle the sources close is reported.
+        var retries = 0usize
+        while load_error == graph.ImportCycle && loaded.has_import_failure && loaded.failure_module < loaded.count && loaded.failure_module < hot.unchanged.len && hot.unchanged[loaded.failure_module] && retries < loaded.count {
+            hot.distrust[loaded.failure_module] = true
+            clear_held(held)
+            load_error = load_graph_hot(a, loaded, hot, held, path, root, arch, target_os, project_root)
+            retries += 1usize
+        }
     } else {
         load_error = graph.load(a, loaded, path, root, arch, target_os, project_root)
     }

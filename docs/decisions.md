@@ -10230,3 +10230,26 @@ what the program reads goes through `e.asset` everywhere.
 Not yet: all of it; `project.yaml` has no resources key and the linker has no
 section table beyond the two.
 
+
+## D472 -- A cyclic artifact reference is a damaged artifact
+
+H24 named cyclic artifact references as a fuzz target still to be aimed at.
+`corrupt.py cycle PATH FROM TO` rewrites a module name in an artifact for
+another of the same length -- `e.os` to `main` in the artifact of a module
+`main` imports -- so the artifact's recorded imports close a cycle no source
+can spell. Aimed, it found something: a warm build reads a kept module's
+imports from its artifact, so the forged edge reached the graph and the build
+failed with `use main` closes an import cycle at `ring.e:1:1` -- a diagnostic
+blaming a source that says no such thing, on a cache that D343 promised would
+be rebuilt to the clean image. When a cycle is closed by a module whose imports
+came from its artifact, the loader now distrusts that artifact -- it is read as
+none, reason `invalid-artifact` -- and loads again with the module parsed, once
+per such artifact and at most once per module; a cycle the sources close is
+reported as before. The fixture `link/artifact_cycle` (`main` imports `ring`,
+`ring` imports `e.os`) is forged both ways -- `ring` claiming `main`, and
+`main` claiming itself -- in both modes of both suites: the warm build is the
+clean build, the manifest says `invalid-artifact` for the forged module alone,
+and the linker over the forged set refuses without crashing.
+
+Not yet: content integrity for imported artifacts beyond the CRC, which is what
+would have caught the forgery before the graph did.

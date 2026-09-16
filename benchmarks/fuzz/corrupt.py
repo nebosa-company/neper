@@ -1,8 +1,12 @@
 # Corrupts an artifact for the suites' H24 cases (D343): `truncate` keeps the first
 # half; `flip` flips a byte every four kibibytes past the header and recomputes the
-# checksum, so the file passes the checksum and every reader past it sees the bytes.
+# checksum, so the file passes the checksum and every reader past it sees the bytes;
+# `cycle FROM TO` (D472) rewrites every occurrence of the module name FROM as TO, of the
+# same length, and recomputes the checksum -- an artifact whose edges name a module
+# that imports it, which no source can produce.
 #
 #   python benchmarks/fuzz/corrupt.py truncate|flip PATH
+#   python benchmarks/fuzz/corrupt.py cycle PATH FROM TO
 import sys
 
 mode, path = sys.argv[1], sys.argv[2]
@@ -10,8 +14,13 @@ data = bytearray(open(path, 'rb').read())
 if mode == 'truncate':
     data = data[:len(data) // 2]
 else:
-    for at in range(200, len(data), 4096):
-        data[at] ^= 0x5A
+    if mode == 'cycle':
+        old, new = sys.argv[3].encode(), sys.argv[4].encode()
+        assert len(old) == len(new), 'the names must have one length'
+        data = bytearray(bytes(data).replace(old, new))
+    else:
+        for at in range(200, len(data), 4096):
+            data[at] ^= 0x5A
     table = []
     for entry in range(256):
         crc = entry
