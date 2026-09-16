@@ -9011,3 +9011,21 @@ card carries what was checked.
 
 Not yet: examples that run (a `run --json` fence with an expected exit code),
 and the planned / present / verified marking of the API records.
+
+## D405 -- The manifest counts what a build did rather than kept
+
+H14 asks for the counts of what an incremental build rechecks and re-emits; the
+manifest said which modules were kept and why (D363) and nothing about the work
+behind a rebuilt one. Each crew worker now counts the modules whose bodies it
+checked and the functions it lowered (the one-at-a-time sweep counts its own),
+the driver sums them with the modules lowered, and the manifest gains `work`
+-- `bodies_checked`, `modules_lowered`, `functions_lowered` -- beside
+`options`; `--stats` prints the same three rows. On the incremental fixture: the
+cold build 4 / 4 / 125, the warm build 0 / 0 / 0, an edit inside `dep`'s body 1
+/ 1 / 2 with `main` kept as `edges-hold`. `check_incremental.py` asserts
+`work.<field>=N` beside the decisions, and both suites assert the warm build's
+three zeros; the schema requires the object.
+
+Not yet: the count of declarations rechecked -- every module with a tree is
+declared on every build, header trees included (D392), so the count would be
+the module count until declarations come from the Interface.

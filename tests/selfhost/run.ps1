@@ -1673,8 +1673,8 @@ foreach ($hotMode in @('--release', '--time')) {
     $hotManifestMode = 'debug'
     if ($hotMode -eq '--release') { $hotManifestMode = 'release' }
     $hotManifest = Join-Path $hotScratch ".neper\$hotManifestMode\build-manifest.json"
-    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable' 'e.os=kept:stable'
-    if ($LASTEXITCODE -ne 0) { throw "the warm hot build's manifest does not say every module was kept stable ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable' 'e.os=kept:stable' 'work.bodies_checked=0' 'work.modules_lowered=0' 'work.functions_lowered=0'
+    if ($LASTEXITCODE -ne 0) { throw "the warm hot build's manifest does not say every module was kept stable and no work was done ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build is not the clean build ($hotMode)" }
     # The compiler is an identity (D398, H15): a warm build by another compiler
     # executable -- this one with a byte appended -- rebuilds every module as

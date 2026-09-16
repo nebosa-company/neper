@@ -259,7 +259,7 @@
       "additionalProperties":false
     },
     "buildManifest": {
-      "type":"object","required":["schema","version","tool_version","language_version","grammar_revision","target","mode","root_module","inputs","dependencies","libraries","assets","artifacts","unsafe","incremental","options"],
+      "type":"object","required":["schema","version","tool_version","language_version","grammar_revision","target","mode","root_module","inputs","dependencies","libraries","assets","artifacts","unsafe","incremental","options","work"],
       "properties":{
         "schema":{"const":"neper-build-manifest"},"version":{"const":1},
         "tool_version":{"type":"string"},"language_version":{"type":"string"},
@@ -272,7 +272,8 @@
         "artifacts":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["path","kind","target","sha256"],"properties":{"path":{"type":"string"},"kind":{"type":"string"},"target":{"type":"string"},"sha256":{"$ref":"#/$defs/sha256"}}}},
         "unsafe":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["kind","provenance","module","function","line"],"properties":{"kind":{"enum":["unsafe","nocheck","extern","cast","bitcast","union"]},"provenance":{"enum":["declared","trusted"]},"module":{"type":"string"},"function":{"type":"string"},"line":{"type":"integer","minimum":0}}}},
         "incremental":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["module","decision","reason"],"properties":{"module":{"type":"string"},"decision":{"enum":["kept","rebuilt"]},"reason":{"enum":["no-artifact","invalid-artifact","source-changed","mode-changed","compiler-changed","stable","edges-hold","edge-changed"]}}}},
-        "options":{"type":"object","required":["checks"],"properties":{"checks":{"enum":["retained","off"]}}}
+        "options":{"type":"object","required":["checks"],"properties":{"checks":{"enum":["retained","off"]}}},
+        "work":{"type":"object","additionalProperties":false,"required":["bodies_checked","modules_lowered","functions_lowered"],"properties":{"bodies_checked":{"type":"integer","minimum":0},"modules_lowered":{"type":"integer","minimum":0},"functions_lowered":{"type":"integer","minimum":0}}}
       },
       "additionalProperties":false
     },

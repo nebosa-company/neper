@@ -420,7 +420,11 @@ compiler executable, D398) -- empty for a build that read no artifacts;
 with checked ones and carry their own mode (D369);
 `options.checks` is the
 check policy the image was built under, `retained` (spec section 11: every row
-kept in both modes). Arrays use the
+kept in both modes); `work` (D405, H14) is what the build did rather than kept --
+`bodies_checked` (modules whose function bodies were checked), `modules_lowered`
+and `functions_lowered` -- so a warm build over a stable cache reports zero of
+each, and a build after an edit the modules the edit reached; `--stats` prints
+the same three rows. Arrays use the
 deterministic order in which their corresponding compiler operation is specified,
 and object keys use the order listed here.
 

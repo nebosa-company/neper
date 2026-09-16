@@ -5431,6 +5431,7 @@ fn bodies_per_module(checker: *check.Checker, resolver: *resolve.Resolver, loade
             continue
         }
         try check.bodies_module(checker, resolver, loaded, loaded.order[order_at])
+        report.build.bodies_checked += 1usize
         if with_oracle {
             let oracle_error = lower.oracle_module(checker, loaded, oracle, signatures, bindings, entries, entry_count, loaded.order[order_at], &cursor, &defers)
             if oracle_error != ok {
@@ -5870,6 +5871,10 @@ type LowerWorker = struct {
     defers: lower.DeferState,
     elapsed_ns: usize,
     body_ns: usize,
+    // What the worker did (D405): the modules whose bodies it checked, the functions
+    // it lowered.
+    bodies_checked: usize,
+    functions_lowered: usize,
     second_ns: usize,
     lower_ns: usize,
     write_ns: usize,
@@ -6282,6 +6287,7 @@ fn body_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, from
                 stop_worker(w, at, check_error, 0usize)
                 ret
             }
+            w.bodies_checked += 1usize
         }
         if w.release && w.loaded.modules[module_index].has_tree {
             let oracle_error = lower.oracle_module(&w.checker, w.loaded, &w.oracle, &w.oracle_signatures, w.bindings, w.first_entries, &w.first_count, module_index, &w.cursor, &w.defers)
@@ -6378,6 +6384,7 @@ fn lower_worker_module(w: *LowerWorker, a: *mem.Arena, module_index: usize) -> e
     let lower_started = nptest_now()
     try lower.module(&w.checker, w.loaded, module_index, &w.builder, &w.signatures, w.bindings)
     w.lower_ns += nptest_now() - lower_started
+    w.functions_lowered += w.builder.function_count - first
     w.stage.count = 0usize
     w.relocation_count = 0usize
     w.line_count = 0usize
@@ -6937,9 +6944,14 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         }
         var done = 0usize
         while done < crew.workers[worker_at].count {
-            if lower_wanted(&crew.workers[worker_at], crew.workers[worker_at].modules[done]) { lowered[crew.workers[worker_at].modules[done]] = true }
+            if lower_wanted(&crew.workers[worker_at], crew.workers[worker_at].modules[done]) {
+                lowered[crew.workers[worker_at].modules[done]] = true
+                report.build.modules_lowered += 1usize
+            }
             done += 1usize
         }
+        report.build.bodies_checked += crew.workers[worker_at].bodies_checked
+        report.build.functions_lowered += crew.workers[worker_at].functions_lowered
         report.regalloc_ns = report.regalloc_ns +% crew.workers[worker_at].report.regalloc_ns
         report.codegen_ns = report.codegen_ns +% crew.workers[worker_at].report.codegen_ns
         builder.instruction_total += crew.workers[worker_at].builder.instruction_total
@@ -6947,6 +6959,8 @@ fn crew_emit(a: *mem.Arena, crew: *Crew, report: *Sink, loaded: *graph.Graph, ch
         worker_at += 1usize
     }
     if crew.generous_made {
+        report.build.bodies_checked += crew.workers[LOWER_WORKERS].bodies_checked
+        report.build.functions_lowered += crew.workers[LOWER_WORKERS].functions_lowered
         report.regalloc_ns = report.regalloc_ns +% crew.workers[LOWER_WORKERS].report.regalloc_ns
         report.codegen_ns = report.codegen_ns +% crew.workers[LOWER_WORKERS].report.codegen_ns
         builder.instruction_total += crew.workers[LOWER_WORKERS].builder.instruction_total
@@ -7972,6 +7986,10 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 // Every build writes `.neper/<mode>/build-manifest.json` under the project root
                 // (section 7, D254), with the executable it just wrote as the one artifact.
                 try fill_manifest_digests(a, &loaded, held)
+                // What the build did (D405, H14), for the manifest's `work`.
+                loaded.work_bodies_checked = report.build.bodies_checked
+                loaded.work_modules_lowered = report.build.modules_lowered
+                loaded.work_functions_lowered = report.build.functions_lowered
                 var no_reasons: []u8 = zero
                 var reasons = no_reasons
                 if hot_load.on { reasons = hot_load.reason[0usize..loaded.count] }

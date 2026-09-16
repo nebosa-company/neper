@@ -1832,7 +1832,7 @@ for hot_mode in --release --time; do
     hot_manifest_mode=debug
     [ "$hot_mode" = --release ] && hot_manifest_mode=release
     hot_manifest="$hot_scratch/.neper/$hot_manifest_mode/build-manifest.json"
-    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable work.bodies_checked=0 work.modules_lowered=0 work.functions_lowered=0
     cmp "$hot_exe" "$hot_clean"
     # The compiler is an identity (D398, H15): a warm build by another compiler
     # executable -- this one with a byte appended -- rebuilds every module as

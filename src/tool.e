@@ -3339,8 +3339,16 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try byte(out, 125u8)
         reason_at += 1usize
     }
-    if unchecked { ret text(out, "],\"options\":{\"checks\":\"off\"}}") }
-    ret text(out, "],\"options\":{\"checks\":\"retained\"}}")
+    if unchecked { try text(out, "],\"options\":{\"checks\":\"off\"}") } else { try text(out, "],\"options\":{\"checks\":\"retained\"}") }
+    // What the build did rather than kept (D405, H14): a warm build over a stable
+    // cache checks no body and lowers nothing, and the manifest says so.
+    try text(out, ",\"work\":{\"bodies_checked\":")
+    try decimal(out, g.work_bodies_checked)
+    try text(out, ",\"modules_lowered\":")
+    try decimal(out, g.work_modules_lowered)
+    try text(out, ",\"functions_lowered\":")
+    try decimal(out, g.work_functions_lowered)
+    ret text(out, "}}")
 }
 
 // Whether only spaces lie between the line's start and `at`.

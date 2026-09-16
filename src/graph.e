@@ -151,6 +151,11 @@ type Graph = struct {
     // The hash of this compiler's executable (D398, H15), written into every artifact
     // and compared on every incremental load; zero when it could not be read.
     compiler_identity: usize,
+    // What the build did (D405, H14), for the manifest: set by the driver once the
+    // phases are done.
+    work_bodies_checked: usize,
+    work_modules_lowered: usize,
+    work_functions_lowered: usize,
     scanned: usize,
     // `-j N` (D331): how many workers any phase may run, none asked is the phase's
     // own count; and `--perturb`, the schedule turned around so the harness can ask
