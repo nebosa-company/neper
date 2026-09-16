@@ -9400,3 +9400,18 @@ through `helper.twice`) and `nested.deep` changed (that test alone).
 
 Not yet: impact through a shared global or a type whose layout changed (edges
 are calls), and a query by file paths rather than module names.
+
+## D424 -- `test-file --only`: the tests an impact query named
+
+D423 tells a harness which tests an edit reaches; the runner ran every test of
+a module regardless. `test-file` takes `--only n1,n2,...` as its last two
+arguments: the discovered tests are filtered to the names before the runner is
+generated, so the others are neither compiled into it nor run; a name may be
+bare or `module.name` with any qualifier, the form the impact query uses, and a
+name the module does not declare is passed over, since a project-wide list
+names other modules' tests too. The rest of the arguments are as they were
+without the pair. The corpus gains `tools/test_only` -- two of the three tests
+of the test fixture, the crashing one left out.
+
+Not yet: `--only` on `test-project`, and a refusal for a bare name no module of
+the project declares.

@@ -330,6 +330,12 @@ pagination is deterministic for identical source, and a source change --
 visible as a different `source_sha256` -- invalidates the cursor. A subject no
 function of the program has is an `E-CLI-9999` diagnostic and exit 2.
 
+`test-file` takes `--only n1,n2,...` as its last two arguments (D424, H10): the
+tests to run, by name or as `module.name` with any qualifier -- the form
+`test-impact-file` names them in -- and the rest are not compiled into the
+runner; a name the module does not declare is passed over, since a project-wide
+list names other modules' tests too. `test-project` does not take it.
+
 ### Test impact
 
 `neper test-impact-file PATH ROOT ARCH OS --json --changed m1,m2,...` (D423, H10)

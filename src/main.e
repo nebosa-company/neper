@@ -2058,8 +2058,16 @@ fn nptest_stem(path: str) -> str {
 
 // `test-file PATH ROOT ARCH OS WORKDIR --json` (D240): compile a runner that carries the
 // operand's @test functions, run each in its own process, and report section 7's stream.
-fn test_command(a: *mem.Arena, args: []str) -> err {
+fn test_command(a: *mem.Arena, given: []str) -> err {
     var no_lines: [1]usize = zero
+    // `--only n1,n2,...` last (D424, H10): the tests to run, by name or by
+    // `module.name`; the rest of the arguments are as they were without it.
+    var only = ""
+    var args = given
+    if given.len >= 10usize && same(given[given.len - 2usize], "--only") {
+        only = given[given.len - 1usize]
+        args = given[0usize..given.len - 2usize]
+    }
     var report = stderr_sink()
     report.json = true
     report.file = os.stdout()
@@ -2077,8 +2085,22 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     var bad_kind = 0usize
     var main_name: lex.Token = zero
     var has_main = false
-    let (count, discover_error) = discover_tests(a, text, names, lines, &bad, &bad_kind, &main_name, &has_main)
+    let (discovered, discover_error) = discover_tests(a, text, names, lines, &bad, &bad_kind, &main_name, &has_main)
     if discover_error != ok { ret discover_error }
+    // The tests `--only` names, in discovery order (D424); every test without it.
+    var count = discovered
+    if only.len != 0usize {
+        count = 0usize
+        var kept_at = 0usize
+        while kept_at < discovered {
+            if only_names(only, names[kept_at]) {
+                names[count] = names[kept_at]
+                lines[count] = lines[kept_at]
+                count += 1usize
+            }
+            kept_at += 1usize
+        }
+    }
     // A `@test` that is not a test is E-TEST-9999 (D256): the header, the diagnostic at the
     // declaration, and a result that exits 2, the way a runner that fails to compile does.
     if bad_kind != 0usize {
@@ -2204,6 +2226,29 @@ fn test_command(a: *mem.Arena, args: []str) -> err {
     }
     if any { os.exit(1i32) }
     ret ok
+}
+
+// Whether a comma-separated list names the test (D424): as `name`, or as
+// `module.name` with any qualifier, since `test-impact-file` names tests that way.
+fn only_names(only: str, name: str) -> bool {
+    var start = 0usize
+    var at = 0usize
+    while at <= only.len {
+        if at == only.len || only[at] == 44u8 {
+            var item = only[start..at]
+            var last_dot = item.len
+            var scan = 0usize
+            while scan < item.len {
+                if item[scan] == 46u8 { last_dot = scan }
+                scan += 1usize
+            }
+            if last_dot != item.len { item = item[last_dot + 1usize..item.len] }
+            if same(item, name) { ret true }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    ret false
 }
 
 fn nptest_join(a: *mem.Arena, dir: str, name: str) -> (str, err) {
@@ -7662,6 +7707,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // DIR/src, one stream.
     if args.len == 8usize && same(args[1usize], "check-project") && same(args[7usize], "--json") { ret check_project_command(a, args) }
     if args.len == 7usize && same(args[1usize], "build-manifest-file") && same(args[6usize], "--json") { ret manifest_command(a, args) }
+    // `test-file ... --json [--path REL] --only n1,n2` (D424, H10): the named tests alone.
+    if args.len >= 10usize && same(args[1usize], "test-file") && same(args[args.len - 2usize], "--only") && (same(args[7usize], "--json") || same(args[8usize], "--json")) { ret test_command(a, args) }
     if args.len == 8usize && same(args[1usize], "test-file") && same(args[7usize], "--json") { ret test_command(a, args) }
     if args.len == 9usize && same(args[1usize], "test-file") && same(args[8usize], "--json") { ret test_command(a, args) }
     // `... --json --path REL` (D263): the operand's identity under its project's src.

@@ -2180,6 +2180,12 @@ test_short_status=0
 [ -f "$repo/.neper/debug/test/nptest-runner.e" ] || { printf '%s
 ' "the short test spelling did not work under .neper/debug/test/" >&2; exit 1; }
 sed -i -E 's/"duration_ms":[0-9]+/"duration_ms":0/g; s|[^" (]*nptest-runner\.e|nptest-runner.e|g' "$test_build/conformance-tools-test-short.jsonl"
+# `test --json --only n1,n2` (D424, H10): the named tests alone.
+test_only_status=0
+$test_build/neper-self test-file "$conformance_root/tools/test.e" "$repo" x64 linux "$test_build" --json --only arithmetic_holds,reports_a_failure > "$test_build/conformance-tools-test-only.jsonl" || test_only_status=$?
+[ "$test_only_status" -eq 1 ]
+sed -i 's/"duration_ms":[0-9]*/"duration_ms":0/g' "$test_build/conformance-tools-test-only.jsonl"
+cmp -s "$test_build/conformance-tools-test-only.jsonl" "$conformance_root/tools/test_only.expected.jsonl" || { echo "test --json --only differs from the conformance corpus" >&2; exit 1; }
 cmp -s "$test_build/conformance-tools-test-short.jsonl" "$conformance_root/tools/test.expected.jsonl" || { printf '%s
 ' "the short test spelling differs from the positional form" >&2; exit 1; }
 # `neper check` and `neper test` with no operand (D294): the project the current
