@@ -48,11 +48,12 @@
       "properties":{"span":{"$ref":"#/$defs/span"},"replacement":{"type":"string"}}
     },
     "fix": {
-      "type":"object","additionalProperties":false,"required":["message","applicability","edits"],
+      "type":"object","additionalProperties":false,"required":["message","applicability","edits","preconditions"],
       "properties":{
         "message":{"type":"string"},
         "applicability":{"enum":["machine","maybe"]},
-        "edits":{"type":"array","items":{"$ref":"#/$defs/edit"}}
+        "edits":{"type":"array","items":{"$ref":"#/$defs/edit"}},
+        "preconditions":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["source","sha256"],"properties":{"source":{"$ref":"#/$defs/source"},"sha256":{"$ref":"#/$defs/sha256"}}}}
       }
     },
     "header": {

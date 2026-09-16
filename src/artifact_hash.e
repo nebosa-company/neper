@@ -310,6 +310,16 @@ fn sha_hex_digit(value: usize) -> u8 {
 // executable of some megabytes widened to a slot per byte, twice, is what the
 // self-hosted compiler ran out of arena on (D254).
 fn sha256_hex(a: *mem.Arena, bytes: []const u8) -> (str, err) {
+    let (hex, hex_error) = mem.alloc[u8](a, 64usize)
+    if hex_error != ok { ret ("", hex_error) }
+    sha256_hex_into(bytes, hex)
+    ret (hex[..], ok)
+}
+
+// The digest as sixty-four hex digits into `hex` (D432): what `sha256_hex` writes,
+// for a caller with a buffer of its own and no arena.
+fn sha256_hex_into(bytes: []const u8, hex: []u8) {
+    if hex.len < 64usize { ret }
     var state = [8]usize{ 1779033703usize, 3144134277usize, 1013904242usize, 2773480762usize, 1359893119usize, 2600822924usize, 528734635usize, 1541459225usize }
     let k = sha_table()
     var block: [128]u8 = zero
@@ -344,8 +354,6 @@ fn sha256_hex(a: *mem.Arena, bytes: []const u8) -> (str, err) {
     }
     sha_compress(state[..], block[..], 0usize, k[..])
     if padded == 128usize { sha_compress(state[..], block[..], 64usize, k[..]) }
-    let (hex, hex_error) = mem.alloc[u8](a, 64usize)
-    if hex_error != ok { ret ("", hex_error) }
     var word = 0usize
     while word < 8usize {
         var shift = 0usize
@@ -357,7 +365,6 @@ fn sha256_hex(a: *mem.Arena, bytes: []const u8) -> (str, err) {
         }
         word += 1usize
     }
-    ret (hex[..], ok)
 }
 
 fn self_test() -> err {

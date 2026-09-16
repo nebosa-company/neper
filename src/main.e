@@ -3396,7 +3396,19 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
             }
             try write_all(report, ",\"replacement\":")
             try write_json_string(report, report.fix_text)
-            try write_all(report, "}]}]}")
+            // The fix's precondition (D432, H18): the hash of the source it was written
+            // against, as a plan's, so an applier refuses a file edited since.
+            var digest: [64]u8 = zero
+            artifact_hash.sha256_hex_into(text, digest[..])
+            try write_all(report, "}],\"preconditions\":[{\"source\":")
+            if report.operand_path.len != 0usize && is_operand {
+                try write_source_identity(report, "operand", report.operand_path)
+            } else {
+                try write_module_identity(report, path, is_operand)
+            }
+            try write_all(report, ",\"sha256\":\"")
+            try write_all(report, digest[..])
+            try write_all(report, "\"}]}]}")
         } else {
             try write_all(report, "[]}")
         }
@@ -3406,42 +3418,61 @@ fn emit_diagnostic(report: *Sink, path: str, text: str, lines: []const usize, to
     ret ok
 }
 
+// A source identity alone (D432): `{"root":R,"path":P}`, the shape a precondition and
+// a span's `source` share.
+fn write_source_identity(report: *Sink, root: str, identity: str) -> err {
+    try write_all(report, "{\"root\":\"")
+    try write_all(report, root)
+    try write_all(report, "\",\"path\":")
+    try write_json_string(report, identity)
+    ret write_all(report, "}")
+}
+
+// A module's identity by D427's rule, without a span.
+fn write_module_identity(report: *Sink, path: str, is_operand: bool) -> err {
+    let (root, relative, rooted) = module_identity(report, path, is_operand)
+    if rooted {
+        var slashed: [512]u8 = zero
+        var at_byte = 0usize
+        while at_byte < relative.len {
+            slashed[at_byte] = relative[at_byte]
+            if slashed[at_byte] == 92u8 { slashed[at_byte] = 47u8 }
+            at_byte += 1usize
+        }
+        ret write_source_identity(report, root, slashed[0usize..relative.len])
+    }
+    ret write_source_identity(report, "operand", basename(path))
+}
+
+// The root and relative path of a module that is not the operand (D427), and whether
+// one of the roots holds it; the operand and a module under no root answer false.
+fn module_identity(report: *Sink, path: str, is_operand: bool) -> (str, str, bool) {
+    if is_operand { ret ("", "", false) }
+    let (src_relative, under_src) = project.relative_under(path, report.project_root, "src")
+    if under_src && report.project_has_sources && src_relative.len <= 512usize { ret ("project-src", src_relative, true) }
+    let (lib_relative, under_lib) = project.relative_under(path, report.project_root, "lib")
+    if under_lib && report.project_has_sources && lib_relative.len <= 512usize { ret ("project-lib", lib_relative, true) }
+    let (toolchain_relative, under_toolchain) = project.relative_under(path, report.toolchain_root, "lib")
+    if under_toolchain && report.toolchain_root.len != 0usize && toolchain_relative.len <= 512usize { ret ("toolchain-lib", toolchain_relative, true) }
+    ret ("", "", false)
+}
+
 // A module's span (D427): the operand by its spelling, as before; any other module by
 // the identity the manifest gives it -- `project-src`, `project-lib` or `toolchain-lib`
 // with the path under that root, slashes forward -- so a diagnostic raised inside a
 // toolchain module names the file a harness can open, not a bare basename under
 // `operand`. A module under none of the roots keeps the basename under `operand`.
 fn write_module_span(report: *Sink, path: str, at: lex.Span, is_operand: bool) -> err {
-    if !is_operand {
-        var root = ""
-        var relative = ""
-        let (src_relative, under_src) = project.relative_under(path, report.project_root, "src")
-        let (lib_relative, under_lib) = project.relative_under(path, report.project_root, "lib")
-        let (toolchain_relative, under_toolchain) = project.relative_under(path, report.toolchain_root, "lib")
-        if under_src && report.project_has_sources {
-            root = "project-src"
-            relative = src_relative
-        } else {
-            if under_lib && report.project_has_sources {
-                root = "project-lib"
-                relative = lib_relative
-            } else {
-                if under_toolchain && report.toolchain_root.len != 0usize {
-                    root = "toolchain-lib"
-                    relative = toolchain_relative
-                }
-            }
+    let (root, relative, rooted) = module_identity(report, path, is_operand)
+    if rooted {
+        var slashed: [512]u8 = zero
+        var at_byte = 0usize
+        while at_byte < relative.len {
+            slashed[at_byte] = relative[at_byte]
+            if slashed[at_byte] == 92u8 { slashed[at_byte] = 47u8 }
+            at_byte += 1usize
         }
-        if root.len != 0usize && relative.len <= 512usize {
-            var slashed: [512]u8 = zero
-            var at_byte = 0usize
-            while at_byte < relative.len {
-                slashed[at_byte] = relative[at_byte]
-                if slashed[at_byte] == 92u8 { slashed[at_byte] = 47u8 }
-                at_byte += 1usize
-            }
-            ret write_rooted_span(report, root, slashed[0usize..relative.len], at, false)
-        }
+        ret write_rooted_span(report, root, slashed[0usize..relative.len], at, false)
     }
     ret write_span(report, basename(path), at, is_operand)
 }

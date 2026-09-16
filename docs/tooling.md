@@ -105,7 +105,8 @@ A diagnostic record is:
   "fixes":[{
     "message":"convert explicitly",
     "applicability":"maybe",
-    "edits":[{"span":{...},"replacement":"i32(value)"}]
+    "edits":[{"span":{...},"replacement":"i32(value)"}],
+    "preconditions":[{"source":{...},"sha256":"..."}]
   }]
 }
 ```
@@ -115,7 +116,10 @@ A diagnostic record is:
 `machine` only when applying all edits cannot change a valid program's behavior;
 otherwise it is `maybe`. Edits within one fix are non-overlapping and sorted by
 source then descending `byte_start`, so they can be applied without offset repair.
-Replacement text is normalized UTF-8 with LF endings.
+Replacement text is normalized UTF-8 with LF endings. A fix's `preconditions`
+(D432, H18) are the plans' (§5): the identity and SHA-256 of every source its edits
+touch, as the diagnostic saw it, so an applier refuses a file edited since -- an
+edit's byte offsets mean nothing against other bytes.
 
 Every diagnostic field is present: an error has `parent:null`, a location-free
 command diagnostic has `span:null`, and empty `related` or `fixes` arrays are `[]`.

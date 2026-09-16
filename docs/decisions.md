@@ -9556,3 +9556,18 @@ read it again and compare the image with the clean build.
 
 Not yet: CPU features in the identity, and `--arena`, which changes the image's
 patched word and nothing an artifact holds.
+
+## D432 -- A fix carries the plans' preconditions
+
+H18 lists a fix with expected-source preconditions; a `fix` was edits alone, byte
+offsets into a source the harness might have changed between the check and the
+apply, and the plans (H29) already refuse that with a file-hash precondition. A
+fix now carries `preconditions`: one per source its edits touch, the source's
+identity as the span spells it and its SHA-256 as the diagnostic saw the text --
+the plans' record without `record`. `artifact_hash.sha256_hex_into` writes the
+digest into a caller's buffer, since the diagnostic writer has no arena; the
+identity helpers of D427 are shared with the span writer. The four fix-bearing
+goldens are re-pinned, and the schema requires the field.
+
+Not yet: a fix over more than one source, and an applier for fixes beside
+`scripts/apply_plan.py`.
