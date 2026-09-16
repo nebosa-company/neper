@@ -227,6 +227,39 @@ fn main(a: *mem.Arena, args: []str) -> err {
         if guarded_shifted(values[..], args.len + 2usize) == 0u32 { ret mem.Exhausted }
         ret ok
     }
+    if str.eq(mode, "aliased") {
+        if aliased(values[..]) != 15u32 { ret mem.Exhausted }
+        ret ok
+    }
+    if str.eq(mode, "aliased_shifted") {
+        if aliased_shifted(values[..]) == 0u32 { ret mem.Exhausted }
+        ret ok
+    }
     if sum(values[..]) != 29u32 { ret mem.Exhausted }
     ret ok
+}
+
+// The second-local form (D452): `let n = x.len` then `while at < n` proves `x[at]`
+// as `while at < x.len` does; `aliased_shifted` reads `x[at + 1usize]` and keeps
+// its check, which trips at the end.
+fn aliased(items: []const u32) -> u32 {
+    let n = items.len
+    var total = 0u32
+    var at = 0usize
+    while at < n {
+        total = total +% items[at]
+        at += 1usize
+    }
+    ret total
+}
+
+fn aliased_shifted(items: []const u32) -> u32 {
+    let n = items.len
+    var total = 0u32
+    var at = 0usize
+    while at < n {
+        total = total +% items[at + 1usize]
+        at += 1usize
+    }
+    ret total
 }

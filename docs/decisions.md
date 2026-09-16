@@ -9874,3 +9874,22 @@ The corpus gains `tools/errors_project` (three values, one bare, two qualified) 
 uses golden and a per-host rename plan, applied and re-checked by both suites.
 
 Not yet: an error named through a `use` alias, and moves.
+
+## D452 -- The bounds proof through a second local
+
+H03's proofs read the length off `x.len` in the condition; `let n = x.len`
+followed by `while i < n` -- the shape a reader who names a length once
+writes -- kept every check. The lowering now collects, when a function is
+opened, every `let n = x.len` of the function as a length alias (the tokens of
+`n` and `x`, sixteen at most), and a condition whose length side is a name
+bound that way reads as `x.len` when no token of the function assigns `x` or
+takes its address -- the length `n` holds is then the length every access
+sees -- after which the proof's own rules apply unchanged: `i` not written
+before the access, `x` not written in the body. The bounds-proof fixture gains
+`aliased` (the check elided: the fixture's count rises from 74 to 76) and
+`aliased_shifted` (the shifted read keeps its check and trips), pinned by both
+suites. The compiler's own count stays at 553: its commonest guard is a field
+base, which is next.
+
+Not yet: `var n = x.len` (a `let` alone is never reassigned), a field base
+(`while i < s.items.len` proving `s.items[i]`), and an alias of a slack form.

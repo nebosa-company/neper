@@ -288,6 +288,12 @@ type Builder = struct {
     proof_addressed: [256]usize,
     proof_addressed_count: usize,
     proof_addressed_overflow: bool,
+    // The lengths held in a local (D452, H03): every `let n = x.len` of the function,
+    // as the token indices of `n` and `x`, collected when the function is opened, so
+    // `while i < n` reads as `while i < x.len` when `x` is never written.
+    proof_alias_name: [16]usize,
+    proof_alias_base: [16]usize,
+    proof_alias_count: usize,
     bounds_elided: usize,
     // By-value arguments copied for the call (D358, H05), and those passed by the
     // caller's own storage because nothing can write it during the call.

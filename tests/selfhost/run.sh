@@ -1666,6 +1666,15 @@ esac
 "$bounds_proof_path" width
 "$bounds_proof_path" slack
 "$bounds_proof_path" equal
+"$bounds_proof_path" aliased
+# The second-local form (D452): the shifted read past the aliased length traps.
+bounds_aliased_status=0
+bounds_aliased=$("$bounds_proof_path" aliased_shifted 2>&1) || bounds_aliased_status=$?
+[ "$bounds_aliased_status" -eq 134 ]
+case "$bounds_aliased" in
+    *'main.e:261:26: trap[bounds]: index 5 out of bounds for len 5'*) ;;
+    *) printf '%s\n' "the access past the aliased length did not trap: $bounds_aliased" >&2; exit 1 ;;
+esac
 bounds_equal_status=0
 bounds_equal=$("$bounds_proof_path" equal_shifted 2>&1) || bounds_equal_status=$?
 [ "$bounds_equal_status" -eq 134 ]

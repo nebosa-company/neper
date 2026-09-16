@@ -4272,6 +4272,30 @@ fn proof_token_writes(c: *check.Checker, at: usize, end: usize) -> bool {
     ret next == .PunctAssign || next == .PunctAddAssign || next == .PunctSubAssign || next == .PunctMulAssign || next == .PunctDivAssign || next == .PunctRemAssign || next == .PunctAddWrapAssign || next == .PunctSubWrapAssign || next == .PunctMulWrapAssign || next == .PunctShiftLeftAssign || next == .PunctShiftRightAssign || next == .PunctBitAndAssign || next == .PunctBitOrAssign || next == .PunctBitXorAssign
 }
 
+// The slice a length local stands for (D452): `x` of the function's `let n = x.len`
+// for `n`, provided no token of the function assigns `x` or takes its address --
+// the length `n` holds is then the length every access sees.
+fn proof_alias_base(c: *check.Checker, g: *graph.Graph, module_index: usize, builder: *nir.Builder, alias_name: str) -> (str, bool) {
+    let text = g.modules[module_index].text
+    var alias_at = 0usize
+    while alias_at < builder.proof_alias_count {
+        let name_token = c.tokens[builder.proof_alias_name[alias_at]]
+        if check.same(text[name_token.start..name_token.end], alias_name) {
+            let base_token = c.tokens[builder.proof_alias_base[alias_at]]
+            let base_name = text[base_token.start..base_token.end]
+            var scan = builder.proof_function_start
+            while scan < builder.proof_function_end && scan < c.token_count {
+                let token = c.tokens[scan]
+                if token.kind == .Identifier && check.same(text[token.start..token.end], base_name) && proof_token_writes(c, scan, builder.proof_function_end) { ret ("", false) }
+                scan += 1usize
+            }
+            ret (base_name, true)
+        }
+        alias_at += 1usize
+    }
+    ret ("", false)
+}
+
 // A `while i < x.len { ... }` with `i` and `x` locals opens a bounds proof (D356,
 // H03): inside the body, before the first token that assigns `i` or takes its
 // address, `x[i]` is in range -- provided no nested loop in the body assigns `i`
@@ -4352,12 +4376,28 @@ fn proof_open_over(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, module
     let (index_name, has_index) = proof_name(c, g, tree, module_index, index_side)
     if !has_index { ret false }
     let right = tree.nodes[length_side]
-    if right.kind != .FieldExpr { ret false }
-    let member = c.tokens[usize(right.token_end) - 1usize]
-    if member.kind != .Identifier || !check.same(g.modules[module_index].text[member.start..member.end], "len") { ret false }
-    let (base_node_index, has_base) = check.first_node_child(tree, right)
-    if !has_base { ret false }
-    let (base_name, has_base_name) = proof_name(c, g, tree, module_index, base_node_index)
+    var base_name = ""
+    var has_base_name = false
+    if right.kind == .NameExpr {
+        // The second-local form (D452): `n` bound by `let n = x.len` in this function
+        // stands for `x.len` when `x` is written nowhere in the function.
+        let (alias_name, has_alias_name) = proof_name(c, g, tree, module_index, length_side)
+        if !has_alias_name { ret false }
+        let (aliased, has_aliased) = proof_alias_base(c, g, module_index, builder, alias_name)
+        if !has_aliased { ret false }
+        base_name = aliased
+        has_base_name = true
+    } else {
+        if right.kind != .FieldExpr { ret false }
+        let member = c.tokens[usize(right.token_end) - 1usize]
+        if member.kind != .Identifier || !check.same(g.modules[module_index].text[member.start..member.end], "len") { ret false }
+        let (base_node_index, has_base) = check.first_node_child(tree, right)
+        if !has_base { ret false }
+        let (named, has_named) = proof_name(c, g, tree, module_index, base_node_index)
+        if !has_named { ret false }
+        base_name = named
+        has_base_name = true
+    }
     if !has_base_name { ret false }
     // Both are locals of this body: a global could change under another thread.
     let (index_binding, index_bound) = find_binding(bindings, binding_count, index_name)
@@ -5730,6 +5770,21 @@ fn lower_function_index(c: *check.Checker, g: *graph.Graph, tree: *parse.Tree, m
             }
         }
         addressed_scan += 1usize
+    }
+    // The lengths held in a local (D452): `let n = x.len` anywhere in the function.
+    builder.proof_alias_count = 0usize
+    var alias_scan = builder.proof_function_start
+    while alias_scan + 5usize < builder.proof_function_end && alias_scan + 5usize < c.token_count {
+        if c.tokens[alias_scan].kind == .KwLet && c.tokens[alias_scan + 1usize].kind == .Identifier && c.tokens[alias_scan + 2usize].kind == .PunctAssign && c.tokens[alias_scan + 3usize].kind == .Identifier && c.tokens[alias_scan + 4usize].kind == .PunctDot && c.tokens[alias_scan + 5usize].kind == .Identifier {
+            let member = c.tokens[alias_scan + 5usize]
+            let ends = alias_scan + 6usize >= c.token_count || c.tokens[alias_scan + 6usize].kind == .Newline || c.tokens[alias_scan + 6usize].kind == .PunctRBrace
+            if ends && check.same(text[member.start..member.end], "len") && builder.proof_alias_count < builder.proof_alias_name.len {
+                builder.proof_alias_name[builder.proof_alias_count] = alias_scan + 1usize
+                builder.proof_alias_base[builder.proof_alias_count] = alias_scan + 3usize
+                builder.proof_alias_count += 1usize
+            }
+        }
+        alias_scan += 1usize
     }
     c.failure_name = name
     c.failure_token = c.tokens[usize(node.token_start)]
