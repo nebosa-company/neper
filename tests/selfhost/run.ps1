@@ -2299,6 +2299,12 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainActual).Hash -ne (Get-F
 # `explain-file --json` over a program that does not check (D430, H06): the records
 # before the failure -- a dispatch that found nothing, with why and the foreign
 # candidate -- then the diagnostic and a result of exit 1.
+# The phase and the layouts (D463, H06): a settled `if` is a `phase` record per way it
+# folded, and the operand's aggregates end the stream with their layouts.
+$explainFoldActual = Join-Path $testBuild 'conformance-tools-explain-fold.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file explain_fold.e `"$repo`" x64 windows --json > `"$explainFoldActual`""
+if ($LASTEXITCODE -ne 0) { throw "explain-file --json on explain_fold.e failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $explainFoldActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/explain_fold.expected.jsonl')).Hash) { throw "the phase and layout records differ from the conformance corpus" }
 foreach ($explainNone in @(@('explain_none/src/main.e', 'explain_none'), @('explain_arm.e', 'explain_arm'))) {
     $explainNoneActual = Join-Path $testBuild "conformance-tools-$($explainNone[1]).jsonl"
     cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" explain-file $($explainNone[0]) `"$repo`" x64 windows --json > `"$explainNoneActual`""

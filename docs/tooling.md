@@ -274,6 +274,17 @@ the same way written once:
   call whose error is dropped), `deferred` (true under `defer`), and `span`, the
   binding. Dropping an error is an explicit source choice, and this is where a
   harness reads the choices a program made.
+- `phase` (D463, H06) — an `if` settled before the program runs (spec §9: one side
+  a `meta` question): `construct` (`if`), `phase` (`comptime`), `taken` (whether
+  the first arm is the one that stands; the other is not code), and `span`, the
+  `if`. A template's `if` that folds each way in different instances is two
+  records, `false` first.
+- `layout` (D463, H06) — after every site's record, one per aggregate the operand
+  module declares or instantiates, as the target lays it out: `type`
+  (`module.Name`), `kind` (`struct`, `union`, `tagged-union`, `enum`), `size`,
+  `align`, `fields` -- each with `name`, and for a struct or union `type`,
+  `offset` and `size` (a tagged union's arm without a payload has offset 0 and
+  size 0), for an enum `value` -- and `span`, the declaration.
 
 The stream ends with `{"record":"result","ok":true,"exit_code":0,"data":{"records":N}}`,
 with `"truncated":true` beside `records` when the checker's table overflowed. A

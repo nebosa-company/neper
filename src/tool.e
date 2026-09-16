@@ -2182,6 +2182,11 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
                 try text(&out, ",\"deferred\":")
                 if e.found { try text(&out, "true") } else { try text(&out, "false") }
             } else {
+            if e.kind == 8u8 {
+                // The phase (D463, H06): an `if` settled at compile time.
+                try text(&out, "{\"record\":\"phase\",\"construct\":\"if\",\"phase\":\"comptime\",\"taken\":")
+                if e.found { try text(&out, "true") } else { try text(&out, "false") }
+            } else {
             try text(&out, "{\"record\":\"instance\",\"template\":")
             try quoted_function(&out, c, g, e.template_index)
             try text(&out, ",\"arguments\":[")
@@ -2204,6 +2209,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
             }
             try byte(&out, 93u8)
             }
+            }
         }
         try text(&out, ",\"span\":")
         try point_span(&out, root, path, module.text, here)
@@ -2212,12 +2218,89 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
         written += 1usize
     }
     if failed { ret ok }
+    // The layouts (D463, H06): every aggregate the operand declares, and every
+    // instance of one, as the target lays it out -- size, alignment and each
+    // field's offset and size; an enum's members with their values.
+    var aggregate_at = 0usize
+    while aggregate_at < c.aggregate_count {
+        let aggregate = c.aggregates[aggregate_at]
+        // The seeded `target` enums have no token and are nobody's declaration.
+        if aggregate.module_index == 0usize && aggregate.token.end != 0usize && !(aggregate.generic && !aggregate.instance) {
+            try layout_json(a, &out, c, g, aggregate_at)
+            written += 1usize
+        }
+        aggregate_at += 1usize
+    }
     try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"records\":")
     try decimal(&out, written)
     if c.explain_overflow { try text(&out, ",\"truncated\":true") }
     try text(&out, "}}")
     try flush(&out)
     ret ok
+}
+
+// One aggregate's layout record (D463): the type, its kind, size and alignment,
+// and its fields with their offsets and sizes (an enum's with their values).
+fn layout_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph.Graph, aggregate_at: usize) -> err {
+    let aggregate = c.aggregates[aggregate_at]
+    var ty = check.make_type(.Named, aggregate.name, aggregate.module_index)
+    ty.has_element = true
+    ty.element = aggregate_at
+    try text(out, "{\"record\":\"layout\",\"type\":")
+    try quoted_type(out, c, g, ty)
+    try text(out, ",\"kind\":")
+    if aggregate.kind == .Struct { try text(out, "\"struct\"") }
+    if aggregate.kind == .Union { try text(out, "\"union\"") }
+    if aggregate.kind == .TaggedUnion { try text(out, "\"tagged-union\"") }
+    if aggregate.kind == .Enum { try text(out, "\"enum\"") }
+    let (info, info_error) = layout.type_info(c, ty)
+    if info_error != ok { ret info_error }
+    try text(out, ",\"size\":")
+    try decimal(out, info.size)
+    try text(out, ",\"align\":")
+    try decimal(out, info.alignment)
+    try text(out, ",\"fields\":[")
+    var field_at = 0usize
+    while field_at < aggregate.field_count {
+        if field_at != 0usize { try byte(out, 44u8) }
+        let member = c.aggregate_fields[aggregate.first_field + field_at]
+        try text(out, "{\"name\":")
+        try quoted(out, member.name)
+        if aggregate.kind == .Enum {
+            if member.has_enum_value {
+                try text(out, ",\"value\":")
+                if member.enum_negative { try byte(out, 45u8) }
+                try decimal(out, member.enum_value)
+            }
+        } else {
+        // A tagged union's arm without a payload has no bytes of its own.
+        if member.ty.kind == .Void || member.ty.kind == .Invalid {
+            try text(out, ",\"offset\":0,\"size\":0")
+        } else {
+            let (placed, placed_error) = layout.field(c, ty, member.name)
+            if placed_error != ok { ret placed_error }
+            let (field_info, field_info_error) = layout.type_info(c, member.ty)
+            if field_info_error != ok { ret field_info_error }
+            try text(out, ",\"type\":")
+            try quoted_type(out, c, g, member.ty)
+            try text(out, ",\"offset\":")
+            try decimal(out, placed.offset)
+            try text(out, ",\"size\":")
+            try decimal(out, field_info.size)
+        }
+        }
+        try byte(out, 125u8)
+        field_at += 1usize
+    }
+    try text(out, "],\"span\":")
+    let module = g.modules[aggregate.module_index]
+    let (root, relative) = source_identity_of(g, module.path)
+    let (path, path_error) = manifest_slashes(a, relative)
+    if path_error != ok { ret path_error }
+    out.lines = module.lines
+    try point_span(out, root, path, module.text, aggregate.token)
+    try byte(out, 125u8)
+    ret flush(out)
 }
 
 // A total order over the records: module, offset, kind, then what was decided --
@@ -4404,6 +4487,8 @@ fn explain_before(a: check.Explain, b: check.Explain) -> bool {
     if a.first_argument != b.first_argument { ret a.first_argument < b.first_argument }
     if a.template_index != b.template_index { ret a.template_index < b.template_index }
     if a.function_index != b.function_index { ret a.function_index < b.function_index }
+    // A template's settled `if` may fold each way in different instances (D463).
+    if a.found != b.found { ret !a.found }
     if a.receiver.module_index != b.receiver.module_index { ret a.receiver.module_index < b.receiver.module_index }
     ret text_before(a.receiver.name, b.receiver.name)
 }

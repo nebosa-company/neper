@@ -10051,3 +10051,24 @@ compiler's own count 552 -> 576.
 Not yet: the pointer form across a call, which is most of the compiler's loops;
 and `c.tokens[at]` under `if at >= c.token_count`, a count that is not the
 slice's length.
+
+## D463 -- The phase and the layout in the explain stream
+
+H06 asks that the target's layout and the runtime/comptime phase be exposed;
+`explain-file` said what was dispatched, instantiated and discarded and nothing
+of either. Two records join it. A `phase` record is written where the checker
+settles an `if` before the program runs (D138: one side a `meta` question) --
+`construct`, `phase`, `taken` and the site -- recorded as the checker folds, once
+per way a template's `if` folded across its instances, the record order telling
+the two apart. After every site's record, a `layout` record per aggregate the
+operand declares or instantiates gives the target's answer: kind, size,
+alignment, and each field's type, offset and size, an enum's members with their
+values, a tagged union's payload-less arm as no bytes; generic templates, which
+have no layout, and the seeded `target` enums, which are nobody's declaration,
+are left out. The corpus gains `explain_fold.e`, whose `width[T]` folds both
+ways and whose struct and tagged union are laid out, and `explain.e`'s golden
+gains its two layouts; both suites pin them. The records are target-independent
+on the two x64 hosts and the golden is one.
+
+Not yet: the phase of a `const` and of expressions the lowering folds, and the
+layouts of the instances a program makes of another module's generics.

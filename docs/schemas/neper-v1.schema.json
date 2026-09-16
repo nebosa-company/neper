@@ -197,6 +197,24 @@
         "span":{"$ref":"#/$defs/span"}
       }
     },
+    "phase": {
+      "type":"object","additionalProperties":false,
+      "required":["record","construct","phase","taken","span"],
+      "properties":{
+        "record":{"const":"phase"},"construct":{"enum":["if"]},"phase":{"enum":["comptime"]},"taken":{"type":"boolean"},
+        "span":{"$ref":"#/$defs/span"}
+      }
+    },
+    "layout": {
+      "type":"object","additionalProperties":false,
+      "required":["record","type","kind","size","align","fields","span"],
+      "properties":{
+        "record":{"const":"layout"},"type":{"type":"string"},"kind":{"enum":["struct","union","tagged-union","enum"]},
+        "size":{"type":"integer","minimum":0},"align":{"type":"integer","minimum":1},
+        "fields":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name"],"properties":{"name":{"type":"string"},"type":{"type":"string"},"offset":{"type":"integer","minimum":0},"size":{"type":"integer","minimum":0},"value":{"type":"integer"}}}},
+        "span":{"$ref":"#/$defs/span"}
+      }
+    },
     "instance": {
       "type":"object","additionalProperties":false,
       "required":["record","template","arguments","span"],
@@ -267,7 +285,7 @@
       "properties":{"record":{"const":"disassembly"},"symbol":{"type":"string"},"target":{"type":"string"},"text":{"type":"string"}}
     },
     "streamRecord": {
-      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/inline"},{"$ref":"#/$defs/instance_cost"},{"$ref":"#/$defs/progress"},{"$ref":"#/$defs/impact"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
+      "oneOf":[{"$ref":"#/$defs/header"},{"$ref":"#/$defs/diagnostic"},{"$ref":"#/$defs/token"},{"$ref":"#/$defs/syntax"},{"$ref":"#/$defs/symbol"},{"$ref":"#/$defs/reference"},{"$ref":"#/$defs/dispatch"},{"$ref":"#/$defs/instance"},{"$ref":"#/$defs/discard"},{"$ref":"#/$defs/phase"},{"$ref":"#/$defs/layout"},{"$ref":"#/$defs/subject"},{"$ref":"#/$defs/fact"},{"$ref":"#/$defs/use"},{"$ref":"#/$defs/root"},{"$ref":"#/$defs/precondition"},{"$ref":"#/$defs/planEdit"},{"$ref":"#/$defs/postcondition"},{"$ref":"#/$defs/result"},{"$ref":"#/$defs/info"},{"$ref":"#/$defs/inline"},{"$ref":"#/$defs/instance_cost"},{"$ref":"#/$defs/progress"},{"$ref":"#/$defs/impact"},{"$ref":"#/$defs/formatted"},{"$ref":"#/$defs/test"},{"$ref":"#/$defs/testSummary"},{"$ref":"#/$defs/run"},{"$ref":"#/$defs/disassembly"}]
     },
     "sourceMap": {
       "type":"object","required":["schema","version","generated","generated_sha256","mappings"],
