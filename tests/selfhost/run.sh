@@ -2198,6 +2198,10 @@ manifest_actual="$test_build/conformance-tools-manifest.jsonl"
 context_actual="$test_build/conformance-tools-context.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self context-file explain.e "$repo" x64 linux --json --symbol explain.main --budget 8 > "$context_actual")
 cmp -s "$context_actual" "$conformance_root/tools/context.x64-linux.expected.jsonl" || { printf '%s\n' "context-file --json differs from the conformance corpus" >&2; exit 1; }
+# `uses-file --json` (D362): every resolved use of one function.
+uses_actual="$test_build/conformance-tools-uses.jsonl"
+(cd "$conformance_root/tools" && $test_build/neper-self uses-file explain.e "$repo" x64 linux --json --symbol explain.same > "$uses_actual")
+cmp -s "$uses_actual" "$conformance_root/tools/uses.expected.jsonl" || { printf '%s\n' "uses-file --json differs from the conformance corpus" >&2; exit 1; }
 # `explain-file --json` (D359): every dispatch and instantiation the checker decided.
 explain_actual="$test_build/conformance-tools-explain.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self explain-file explain.e "$repo" x64 linux --json > "$explain_actual")

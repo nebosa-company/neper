@@ -2099,7 +2099,7 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph) -> err {
         let e = c.explains[best]
         first = false
         last = e
-        if e.module_index >= g.count || e.kind == 4u8 { continue }
+        if e.module_index >= g.count || e.kind == 4u8 || e.kind == 5u8 { continue }
         let module = g.modules[e.module_index]
         let (root, relative) = source_identity_of(g, module.path)
         let (path, path_error) = manifest_slashes(a, relative)
@@ -2436,6 +2436,154 @@ fn manifest_is_unsafe(text_bytes: str, offset: usize) -> bool {
     if at >= previous_end || text_bytes[at] != 64u8 { ret false }
     let word_end = manifest_word_end(text_bytes, at + 1usize)
     ret graph.same(text_bytes[at + 1usize..word_end], "unsafe")
+}
+
+// `uses-file PATH ROOT ARCH OS --json --symbol module.name` (D362, H17): every use
+// of one function across the program the checker resolved -- a call, a protocol
+// dispatch that chose it, an instantiation of it, its name taken as a value -- by
+// module then offset, each with its span and the function it lies in; then the
+// roots that keep it alive without a use here (`main`, a test, an export), and
+// whether the answer is complete: a call through a function value anywhere in the
+// program is a consumer no name can trace, so the answer says so.
+fn uses_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str) -> err {
+    let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
+    if storage_error != ok { ret storage_error }
+    var out: Out = zero
+    out.bytes = storage
+    try header(&out, "uses")
+    let (function_index, has_function) = uses_subject(c, g, subject)
+    if !has_function {
+        try text(&out, "{\"record\":\"diagnostic\",\"severity\":\"error\",\"code\":\"E-CLI-9999\",\"message\":\"the subject names no function of the program\",\"span\":null,\"parent\":null,\"related\":[],\"fixes\":[]}")
+        try flush(&out)
+        try text(&out, "{\"record\":\"result\",\"ok\":false,\"exit_code\":2,\"data\":{\"uses\":0,\"roots\":0,\"complete\":true}}")
+        ret flush(&out)
+    }
+    let function = c.functions[function_index]
+    var written = 0usize
+    var indirect_calls = 0usize
+    var last = c.explains[0usize]
+    var first = true
+    while true {
+        var best = c.explain_count
+        var at = 0usize
+        while at < c.explain_count {
+            let e = c.explains[at]
+            // A call of an instance is a call of its template.
+            var called = e.function_index == function_index
+            if !called && e.function_index < c.function_count && c.function_generics[e.function_index].instance && c.function_generics[e.function_index].template_index == function_index { called = true }
+            let targets = (e.kind == 4u8 && !e.found && called) || (e.kind == 1u8 && e.found && e.function_index == function_index) || (e.kind == 2u8 && e.template_index == function_index) || (e.kind == 5u8 && e.function_index == function_index)
+            if targets {
+                let after = first || explain_before(last, e)
+                if after && (best == c.explain_count || explain_before(e, c.explains[best])) { best = at }
+            }
+            at += 1usize
+        }
+        if best == c.explain_count { break }
+        let e = c.explains[best]
+        first = false
+        last = e
+        if e.module_index >= g.count { continue }
+        let module = g.modules[e.module_index]
+        let (root, relative) = source_identity_of(g, module.path)
+        let (path, path_error) = manifest_slashes(a, relative)
+        if path_error != ok { ret path_error }
+        out.lines = module.lines
+        var here: lex.Token = zero
+        here.start = e.offset
+        here.end = e.offset
+        try text(&out, "{\"record\":\"use\",\"relation\":")
+        if e.kind == 4u8 { try text(&out, "\"call\"") }
+        if e.kind == 1u8 { try text(&out, "\"dispatch\"") }
+        if e.kind == 2u8 { try text(&out, "\"instance\"") }
+        if e.kind == 5u8 { try text(&out, "\"value\"") }
+        try text(&out, ",\"provenance\":\"compiler-proved\",\"in\":")
+        try quoted_function(&out, c, g, enclosing_function(c, e.module_index, e.offset))
+        try text(&out, ",\"span\":")
+        try point_span(&out, root, path, module.text, here)
+        try byte(&out, 125u8)
+        try flush(&out)
+        written += 1usize
+    }
+    // Roots: what keeps the subject alive without a use above.
+    var roots = 0usize
+    if function.module_index < g.count && graph.same(function.name, "main") && function.module_index == 0usize {
+        try text(&out, "{\"record\":\"root\",\"kind\":\"entry\",\"value\":\"the program's entry point\"}")
+        try flush(&out)
+        roots += 1usize
+    }
+    if function.module_index < g.count && manifest_has_attribute(g.modules[function.module_index].text, function.source_start, "test") {
+        try text(&out, "{\"record\":\"root\",\"kind\":\"test\",\"value\":\"a @test the runner calls\"}")
+        try flush(&out)
+        roots += 1usize
+    }
+    if function.module_index < g.count && manifest_has_attribute(g.modules[function.module_index].text, function.source_start, "export") {
+        try text(&out, "{\"record\":\"root\",\"kind\":\"export\",\"value\":\"exported to foreign callers\"}")
+        try flush(&out)
+        roots += 1usize
+    }
+    // Completeness: a call through a value anywhere could reach a function whose
+    // name was taken as a value; the count says how many such calls the program has.
+    var at = 0usize
+    while at < c.explain_count {
+        if c.explains[at].kind == 4u8 && c.explains[at].found { indirect_calls += 1usize }
+        at += 1usize
+    }
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"uses\":")
+    try decimal(&out, written)
+    try text(&out, ",\"roots\":")
+    try decimal(&out, roots)
+    try text(&out, ",\"indirect_calls\":")
+    try decimal(&out, indirect_calls)
+    try text(&out, ",\"complete\":")
+    if !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, "}}")
+    ret flush(&out)
+}
+
+// The declared function `module.name` names, preferring the concrete one.
+fn uses_subject(c: *check.Checker, g: *graph.Graph, subject: str) -> (usize, bool) {
+    var dot = subject.len
+    var at = 0usize
+    while at < subject.len {
+        if subject[at] == 46u8 { dot = at }
+        at += 1usize
+    }
+    if dot == subject.len { ret (0usize, false) }
+    let module_name = subject[0usize..dot]
+    let name = subject[dot + 1usize..subject.len]
+    var candidate = 0usize
+    while candidate < c.signature_function_count {
+        let function = c.functions[candidate]
+        if function.module_index < g.count && graph.same(g.modules[function.module_index].name, module_name) && graph.same(function.name, name) { ret (candidate, true) }
+        candidate += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The declared function whose source range holds the offset in the module.
+fn enclosing_function(c: *check.Checker, module_index: usize, offset: usize) -> usize {
+    var at = 0usize
+    while at < c.signature_function_count {
+        let function = c.functions[at]
+        if function.module_index == module_index && offset >= function.source_start && offset < function.source_end { ret at }
+        at += 1usize
+    }
+    ret c.function_count
+}
+
+// Whether the declaration at `offset` carries `@name` on the line above it.
+fn manifest_has_attribute(text_bytes: str, offset: usize, name: str) -> bool {
+    var line_start = offset
+    while line_start > 0usize && text_bytes[line_start - 1usize] != 10u8 { line_start = line_start - 1usize }
+    if line_start == 0usize { ret false }
+    let previous_end = line_start - 1usize
+    var previous_start = previous_end
+    while previous_start > 0usize && text_bytes[previous_start - 1usize] != 10u8 { previous_start = previous_start - 1usize }
+    var at = previous_start
+    while at < previous_end && (text_bytes[at] == 32u8 || text_bytes[at] == 9u8) { at += 1usize }
+    if at >= previous_end || text_bytes[at] != 64u8 { ret false }
+    let word_end = manifest_word_end(text_bytes, at + 1usize)
+    ret graph.same(text_bytes[at + 1usize..word_end], name)
 }
 
 fn explain_before(a: check.Explain, b: check.Explain) -> bool {

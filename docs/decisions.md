@@ -7946,3 +7946,32 @@ as facts (the checker has them per body and does not keep them); effects and
 possible errors; dependency summary hashes; a byte budget beside the record
 budget; partial and broken sources (the command fails closed on a check error
 rather than answering what it could).
+
+## D362 -- `uses-file`: every resolved use of a function, and what a deletion has to know
+
+H17's first cut: compiler-backed search for the relation a rename or a deletion
+turns on. `uses-file PATH ROOT ARCH OS --json --symbol module.name` checks the
+program with the explain table open and lists every use the checker resolved --
+a direct call, of the function or of one of its instances; a protocol dispatch
+that chose it; an instantiation of it; its name taken as a function value, which
+the checker now records where it makes the pointer -- each with the function it
+lies in and its span, in module then offset order. Then the roots that keep the
+function alive without a use: the root module's `main`, a `@test`, an `@export`.
+And the count the closed-world claim cannot do without: how many calls through
+function values the program has, since a function whose name was taken as a
+value may be reached from any of them and no name says so; `complete` is false
+only when the checker's table overflowed. The tooling contract says what a
+safe-delete claim needs from the three numbers and what a rename plan may edit
+-- the use spans and the declaration, never comments, strings or registrations
+this command does not see. The corpus pins the uses of a generic helper: two
+calls and two instances.
+
+Also from this row: the three query commands share one pipeline in `main.e`,
+since a fourth block of locals in `main` had crossed the bootstrap's 256 per
+function -- a limit that truncates silently and blamed a line eight hundred
+lines away.
+
+Not yet, of H17: field reads and writes, address-taken edges, ownership and
+borrow uses, allocation and blocking as relations; plans with edits and
+validation obligations; move and error-rename compatibility; the fixtures for
+shadowed names, aliases and comptime-only references.

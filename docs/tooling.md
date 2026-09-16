@@ -254,6 +254,25 @@ pagination is deterministic for identical source, and a source change --
 visible as a different `source_sha256` -- invalidates the cursor. A subject no
 function of the program has is an `E-CLI-9999` diagnostic and exit 2.
 
+### Uses
+
+`neper uses-file PATH ROOT ARCH OS --json --symbol module.name` (D362, H17) checks
+the program and lists every use of one declared function the checker resolved,
+anywhere in the program, by module then byte offset: a `use` record with
+`relation` -- `call` (a direct call, of the function or of one of its instances),
+`dispatch` (a protocol call that chose it), `instance` (an instantiation of it),
+`value` (its name taken as a function value) -- `provenance` (`compiler-proved`),
+`in` (the function the use lies in), and `span`. Then a `root` record per reason
+the function is alive without a use: `entry` (`main` of the root module), `test`
+(`@test`), `export` (`@export`). The result carries `uses`, `roots`,
+`indirect_calls` -- how many calls through function values the program has, each a
+consumer no name can trace, so a function whose name was taken as a value may be
+called from any of them -- and `complete`, false only when the checker's table
+overflowed. A safe-delete claim needs `uses` and `roots` both zero and, when the
+function's name is taken as a value anywhere, `indirect_calls` zero as well; a
+rename plan edits every `use` span's spelling and the declaration, and nothing in
+comments, strings or generated registrations, which this command does not see.
+
 ## 6. Formatting contract
 
 `neper fmt` is a canonical **layout** formatter, not a semantic normalizer. It does

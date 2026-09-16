@@ -2017,6 +2017,11 @@ $contextActual = Join-Path $testBuild 'conformance-tools-context.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" context-file explain.e `"$repo`" x64 windows --json --symbol explain.main --budget 8 > `"$contextActual`""
 if ($LASTEXITCODE -ne 0) { throw "context-file --json failed" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $contextActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/context.x64-windows.expected.jsonl')).Hash) { throw "context-file --json differs from the conformance corpus" }
+# `uses-file --json` (D362): every resolved use of one function, target-independent.
+$usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""
+if ($LASTEXITCODE -ne 0) { throw "uses-file --json failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $usesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/uses.expected.jsonl')).Hash) { throw "uses-file --json differs from the conformance corpus" }
 # `dis --json` (D233): one record of hex bytes per emitted function, byte for byte per host.
 $disActual = Join-Path $testBuild 'conformance-tools-dis.jsonl'
 cmd /c "`"$compiler`" dis-file `"$(Join-Path $conformanceRoot 'tools/dis.e')`" `"$repo`" x64 windows --json > `"$disActual`""

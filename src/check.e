@@ -8570,6 +8570,19 @@ fn explain_function_index(c: *Checker, function: Function) -> usize {
     ret c.function_count
 }
 
+// A function named as a value (D362, H17): a root a deletion has to know about.
+fn record_explain_value(c: *Checker, module_index: usize, node: syntax.Node, function_index: usize) {
+    if c.explains.len == 0usize { ret }
+    if c.explain_count >= c.explains.len {
+        c.explain_overflow = true
+        ret
+    }
+    var offset = 0usize
+    if usize(node.token_start) < c.token_count { offset = c.tokens[usize(node.token_start)].start }
+    c.explains[c.explain_count] = Explain { kind: 5u8, module_index: module_index, offset: offset, protocol: "", receiver: invalid_type(), function_index: function_index, found: false, builtin: .None, template_index: 0usize, first_argument: 0usize, argument_count: 0usize }
+    c.explain_count += 1usize
+}
+
 fn record_explain_dispatch(c: *Checker, module_index: usize, node: syntax.Node, protocol: str, receiver: Type, function_index: usize, found: bool, builtin: ProtocolBuiltin) {
     if c.explains.len == 0usize { ret }
     if c.explain_count >= c.explains.len {
@@ -9599,6 +9612,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             if callee.generic || callee.intrinsic || callee.external { ret (invalid_type(), Unsupported) }
             let (pointer_type, pointer_error) = function_pointer_type(c, callee, module_index)
             if pointer_error != ok { ret (invalid_type(), pointer_error) }
+            record_explain_value(c, module_index, node, intrinsic_function)
             let (result_type, context_error) = apply_context(c, pointer_type, expected)
             ret (result_type, context_error)
         }
@@ -9664,6 +9678,7 @@ fn check_expr_uncached(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
                 if callee.generic || callee.intrinsic || callee.external { ret (invalid_type(), Unsupported) }
                 let (pointer_type, pointer_error) = function_pointer_type(c, callee, target_module)
                 if pointer_error != ok { ret (invalid_type(), pointer_error) }
+                record_explain_value(c, module_index, node, intrinsic_function)
                 let (result_type, context_error) = apply_context(c, pointer_type, expected)
                 ret (result_type, context_error)
             }
