@@ -1785,6 +1785,15 @@ fn report_phase(report: *Sink, name: str) -> err {
     ret stderr_text(line_storage[..line.count])
 }
 
+// A worker's deadline (D422): what it stops with between two modules once the
+// build's deadline has passed; the crew turns it into the build's cancellation.
+error Cancelled
+
+// Whether the build's deadline has passed, by a worker's copy of the report (D422).
+fn past_deadline(report: *Sink) -> bool {
+    ret report.deadline_set && nptest_now() - report.build.started >= report.deadline_ns
+}
+
 // The deadline passed (D399): one diagnostic naming the deadline and the phase that
 // finished last, a result of exit code 3 under `--json`, and the process ends. What
 // the phases built stays in the arena the exit reclaims; no image and no manifest
@@ -6336,6 +6345,12 @@ fn body_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, from
     var at = from
     while at < w.count {
         let module_index = w.modules[at]
+        // A checkpoint between modules (D422, H16): a worker past the build's
+        // deadline stops here, and the crew cancels the build.
+        if past_deadline(&w.report) {
+            stop_worker(w, at, Cancelled, 0usize)
+            ret
+        }
         // A kept module's bodies are not checked (D224); in release its inline
         // candidates are still lowered for the oracle (D391), which needs no body
         // check to have run: the candidates are small and call no instance.
@@ -6468,6 +6483,11 @@ fn lower_worker_run(w: *LowerWorker, a: *mem.Arena, program: *check.Checker, fro
     }
     var at = from
     while at < w.count {
+        // A checkpoint between modules (D422): as in the body sweep.
+        if past_deadline(&w.report) {
+            stop_worker(w, at, Cancelled, 3usize)
+            break
+        }
         if lower_wanted(w, w.modules[at]) {
             let module_error = lower_worker_module(w, a, w.modules[at])
             if module_error != ok {
@@ -6688,6 +6708,11 @@ fn crew_replace(a: *mem.Arena, crew: *Crew, worker_at: usize, in_sweep: bool, lo
 }
 
 fn crew_failure(report: *Sink, loaded: *graph.Graph, w: *LowerWorker) -> err {
+    // A worker that stopped at the deadline (D422): the build is cancelled, not failed.
+    if w.failure == Cancelled {
+        if w.failed_lowering { ret cancel_build(report, "lowering, between modules") }
+        ret cancel_build(report, "the body sweep, between modules")
+    }
     if w.failed_lowering {
         var builder = &w.builder
         if w.failed_builder == 1usize { builder = &w.oracle }

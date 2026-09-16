@@ -2229,6 +2229,14 @@ cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" emit-ex
 if ($LASTEXITCODE -ne 3) { throw "a build past its deadline did not exit 3 (got $LASTEXITCODE)" }
 if (Test-Path -LiteralPath $deadlineImage) { throw "a build past its deadline wrote an image" }
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $deadlineActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/deadline.expected.jsonl')).Hash) { throw "the cancelled build's stream differs from the conformance corpus" }
+# A deadline inside a phase (D422, H16): the compiler's own build under a deadline
+# it cannot meet is cancelled by a worker between two modules -- exit 3, no image.
+$deadlineInside = Join-Path $testBuild 'deadline-inside.exe'
+if (Test-Path -LiteralPath $deadlineInside) { Remove-Item -LiteralPath $deadlineInside }
+$deadlineOutput = & $compiler emit-executable (Join-Path $repo 'src/main.e') $repo 'x64' 'windows' $deadlineInside --release --deadline 150 --json 2>$null
+if ($LASTEXITCODE -ne 3) { throw "the compiler's build under a 150 ms deadline did not exit 3 (got $LASTEXITCODE)" }
+if (Test-Path -LiteralPath $deadlineInside) { throw 'a build cancelled inside a phase wrote an image' }
+if (($deadlineOutput -join "`n") -notmatch '"code":"E-CLI-0001"') { throw 'a build cancelled inside a phase did not say so' }
 # `uses-file --json` (D362): every resolved use of one function, target-independent.
 $usesActual = Join-Path $testBuild 'conformance-tools-uses.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" uses-file explain.e `"$repo`" x64 windows --json --symbol explain.same > `"$usesActual`""

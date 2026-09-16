@@ -9362,3 +9362,22 @@ Not yet: the oracle's own work over kept modules (46 ms of the same build, the
 candidates lowered again), which an oracle-entry cache in the artifacts would
 end; and `--stats`'s node count, which counts a header tree's nodes for a kept
 module.
+
+## D422 -- A worker checks the deadline between its modules
+
+D399's checkpoints were the phase boundaries, and the two long phases -- the
+body sweep and the lowering -- ran to their end however far past the deadline
+the build was; on the compiler a 150 ms deadline was noticed a quarter of a
+second late. Every crew worker now reads the build's deadline from its copy of
+the report before each module it holds, in both phases, and stops with
+`Cancelled` when it has passed; the crew's failure path turns that into D399's
+cancellation -- one `E-CLI-0001` naming the deadline and "the body sweep,
+between modules" or "lowering, between modules", exit code 3, no image and no
+manifest -- rather than a failed build. A cancellation now waits for the
+module in hand and no longer for the phase. Both suites build the compiler
+under a 150 ms deadline and read the exit status, the absence of an image and
+the diagnostic's code; which checkpoint catches it depends on the machine and
+is not pinned.
+
+Not yet: a checkpoint inside a module (a function at a time), and the query
+commands under a deadline.

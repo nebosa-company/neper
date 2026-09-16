@@ -2327,6 +2327,15 @@ deadline_status=0
 ' "a build past its deadline wrote an image" >&2; exit 1; }
 cmp -s "$deadline_actual" "$conformance_root/tools/deadline.expected.jsonl" || { printf '%s
 ' "the cancelled build's stream differs from the conformance corpus" >&2; exit 1; }
+# A deadline inside a phase (D422, H16): the compiler's own build under a deadline it
+# cannot meet is cancelled by a worker between two modules -- exit 3, no image.
+deadline_inside="$test_build/deadline-inside"
+rm -f "$deadline_inside"
+deadline_inside_status=0
+$test_build/neper-self emit-executable "$repo/src/main.e" "$repo" x64 linux "$deadline_inside" --release --deadline 150 --json > "$test_build/deadline-inside.jsonl" 2>/dev/null || deadline_inside_status=$?
+[ "$deadline_inside_status" = 3 ]
+[ ! -e "$deadline_inside" ]
+grep -q '"code":"E-CLI-0001"' "$test_build/deadline-inside.jsonl"
 # `uses-file --json` (D362): every resolved use of one function.
 uses_actual="$test_build/conformance-tools-uses.jsonl"
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file explain.e "$repo" x64 linux --json --symbol explain.same > "$uses_actual")
