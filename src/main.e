@@ -4900,8 +4900,11 @@ fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str) 
     if self_path.len == 0usize { ret }
     let (self_bytes, self_error) = source.load(a, self_path)
     if self_error != ok { ret }
-    let (self_hash, self_hash_error) = artifact_hash.xxhash64(self_bytes)
-    if self_hash_error == ok { loaded.compiler_identity = self_hash }
+    // CRC-32C of the bytes with the size above it (D411): the CRC32 instruction
+    // makes the eight megabytes of the compiler a fraction of a millisecond, where
+    // xxHash64 in its own code was a sixth of a warm build's CPU.
+    let (self_crc, self_crc_error) = artifact_hash.crc32c(self_bytes, 0usize, 0usize)
+    if self_crc_error == ok { loaded.compiler_identity = self_crc | (self_bytes.len << 32usize) }
 }
 
 fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: *graph.Graph, args: []str, on: bool, release: bool, unchecked: bool) -> err {

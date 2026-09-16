@@ -9147,3 +9147,22 @@ where it started (232 MB used, the snapshot).
 Not yet: eviction and pinning (there is one snapshot, held for the process), and
 the pages a request touched, which the arena commits and does not give back --
 `arena_used` is what is live, not what was reached.
+
+## D411 -- The compiler's identity is a CRC-32C, not an xxHash64
+
+D398 hashed the compiler's own executable with xxHash64 on every build that
+reads or writes artifacts and called the cost unmeasured; a profile of the warm
+build put `artifact_hash.read_u64` and `xxhash64` at a sixth of its CPU -- the
+8.5 MB of the compiler through a hash written in the compiler's own code -- and
+the warm build of the compiler measured 145 ms. The identity is now the
+CRC-32C of the executable with its size in the high word: `artifact_hash.crc32c`
+runs on the CRC32 instruction where the CPU has one (D332), and the eight
+megabytes are a fraction of a millisecond. Two builds of the compiler that
+collide on both a 32-bit CRC and their size would keep each other's artifacts
+-- one in four billion per pair of builds -- which is the identity a cache
+needs, not a signature. Measured with a stopwatch around the process (Git
+Bash's `date` adds thirty-five milliseconds to every launch it times, which
+the earlier figures carried): the warm build of the compiler is 116-118 ms,
+against 126-140 with the xxHash64 identity, the same artifacts and the same
+source. The artifact field, the manifest reason and both suites' checks are
+unchanged.
