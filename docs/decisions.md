@@ -10494,4 +10494,7 @@ had no folded `if` under a context subject, so nothing caught it. It is a
 `phase` fact now, saying which arm is taken. The schema's fact kinds gain
 `move` and `phase`; `context_moves.e` pins both per host, the second subject a
 generic instance whose body folds. `explain-file` leaves the move records to
-the context page. Not yet: borrow uses and address relations as facts.
+the context page. The `move` facts reach the existing corpus pages too --
+`explain.main` and `contract.main` consume a resource each -- so `context`,
+`contract` and `batch` are re-pinned on both hosts.
+Not yet: borrow uses and address relations as facts.
