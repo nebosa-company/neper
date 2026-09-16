@@ -2841,6 +2841,8 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph
     let (locals, locals_error) = mem.alloc[check.Local](a, sized(16384usize, largest, 16usize))
     if locals_error != ok { ret locals_error }
     report.build.pools[stats.POOL_CHECKER_LOCALS] = locals.len
+    let (resources, resources_error) = mem.alloc[check.Resource](a, locals.len)
+    if resources_error != ok { ret resources_error }
     let (types, types_error) = mem.alloc[check.Type](a, sized(65536usize, total, 64usize))
     if types_error != ok { ret types_error }
     report.build.pools[stats.POOL_TYPES] = types.len
@@ -2861,7 +2863,7 @@ fn init_cli_checker(a: *mem.Arena, checker: *check.Checker, loaded: *graph.Graph
     let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, sized(4096usize, total, 4096usize))
     if diagnostics_error != ok { ret diagnostics_error }
     report.build.pools[stats.POOL_DIAGNOSTICS] = diagnostics.len
-    try check.init(checker, functions, parameters, return_types, tokens, locals, types, aliases, constants, globals, constant_exprs, diagnostics)
+    try check.init(checker, functions, parameters, return_types, tokens, locals, resources, types, aliases, constants, globals, constant_exprs, diagnostics)
     let (call_cache, call_cache_error) = mem.alloc[check.CallCacheEntry](a, 4096usize)
     if call_cache_error != ok { ret call_cache_error }
     checker.call_cache = call_cache
@@ -5601,6 +5603,9 @@ fn fork_checker(a: *mem.Arena, into: *check.Checker, from: *check.Checker, share
     let (locals, locals_error) = mem.alloc[check.Local](a, from.locals.len)
     if locals_error != ok { ret locals_error }
     into.locals = locals
+    let (resources, resources_error) = mem.alloc[check.Resource](a, from.locals.len)
+    if resources_error != ok { ret resources_error }
+    into.resources = resources
     into.local_count = 0usize
     let (diagnostics, diagnostics_error) = mem.alloc[check.Diagnostic](a, from.diagnostics.len)
     if diagnostics_error != ok { ret diagnostics_error }

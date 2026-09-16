@@ -7673,3 +7673,29 @@ without a cleanup is; so an arena, and a declared `resource` without a cleanup, 
 never moved at all. A local now says whether it is a view (a field or element read,
 a borrowed producer's handle, a binding from one), and only a view or a borrow is
 exempt from moving.
+
+## D352 -- H01's cost measured and cut, and its closure record
+
+Measuring H01 against the D338 baseline, single-worker, found the check-bodies
+phase +16% on a workload that holds no resource at all: the first cut's hooks ran
+their O(locals) question per statement, a `try` or `ret` audited every local, a
+block's end walked its tree for a divergence, `resource_assign` looked every
+assignment's place up by name, and every field expression checked its base twice
+for the opacity rule. Now: the "is any local affine" answer is cached against the
+local count and invalidated by `add_local`; every hook that can do nothing without
+an affine local asks it first; the opacity check reads the base type the normal
+path already has; containment is memoised per aggregate once the signatures are
+in; the resource state lives in a `Resource` record beside each `Local`, so the
+name walk stays as short as it was; the state functions are constants (spelled in
+lower case: the bootstrap reads `NAME {` as an aggregate literal). Result: +11%
+debug, +6% release on `sc500k`, +16% on the compiler's own source, whose growth is
+part of it. The +10% budget is not met on the debug rows and is recorded as a
+breach, with `perf` putting the pass itself at 2% of the phase.
+
+The closure record is section 15 of `m25-h01-ownership.md`: design, alternatives,
+normative changes, implementation and fixtures, compatibility, the table above,
+and the limitations that remain -- reflection and codecs, arrays as wholes, the
+containers' borrowed inserts, `file_handle`, the `@unsafe` inventory,
+pointer-mediated moves, the lexical pin. Found on the way and recorded there for
+D340's follow-up: commit-on-touch makes every touched page resident, so peak RSS
+against the baseline is +73% on the compiler workload before H01 began.
