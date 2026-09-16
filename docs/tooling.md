@@ -253,18 +253,27 @@ channel. `dis --json` emits one `disassembly` record per function with `symbol`,
 Every build writes `.neper/<mode>/build-manifest.json`. It is one canonical JSON
 object with `schema:"neper-build-manifest"`, `version:1`, `tool_version`,
 `language_version`, `grammar_revision`, `target`, `mode`, `root_module`, `inputs`,
-`dependencies`, `libraries`, `assets`, `artifacts`, and `options`. Inputs and dependencies carry
+`dependencies`, `libraries`, `assets`, `artifacts`, `unsafe`, and `options`. Inputs and dependencies carry
 source identifiers and SHA-256 hashes; libraries carry the requested name, ordered
 search roots, resolved source identifier or absolute external path, and SHA-256;
 assets carry logical name, source identifier, media type, sorted attributes, byte
 size and SHA-256;
-artifacts carry project-relative paths, kind, target and SHA-256. Arrays use the
+artifacts carry project-relative paths, kind, target and SHA-256; `unsafe` is the
+inventory of the program's unsafe boundaries (D355, H03/H27) -- one entry per
+`@unsafe` function and `@nocheck` block the build checked, with `kind`, `module`,
+`function` and `line`, read off every module's tokens so a warm build lists them
+too, in module then line order; `options.checks` is the check policy the image
+was built under, `retained` (spec section 11: every row kept in both modes). Arrays use the
 deterministic order in which their corresponding compiler operation is specified,
 and object keys use the order listed here.
 
 Every JSON command ends with a `result` record containing `ok`, `exit_code`, and a
 `data` object holding command-specific counts or artifact identifiers. Exit statuses remain those in
 spec.md §13; the record and process status must agree.
+
+`emit-executable ... --release --unchecked` (D355) builds the release image with
+spec section 11's memory rows left out, which the manifest records as
+`options.checks: "off"`; without it a release build keeps them.
 
 ## 8. Generated source maps
 

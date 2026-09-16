@@ -1542,6 +1542,17 @@ $nocheckLoud = & $nocheckPath loud 2>&1
 if ($LASTEXITCODE -ne 134 -or ($nocheckLoud -join "`n") -notmatch 'main\.e:41:23: trap\[overflow\]: u8 \+ overflows') { throw "the check outside @nocheck did not fire: exit $LASTEXITCODE, $($nocheckLoud -join "`n")" }
 & $nocheckPath none 2>&1 | Out-Null
 if ($LASTEXITCODE -ne 0) { throw 'the nocheck fixture trapped on its ordinary path' }
+# The memory rows in a release build (D355, H03): bounds, null and tag trap with the
+# debug record, and `@nocheck` is the one way past them.
+$releaseChecksPath = Join-Path $testBuild 'release-checks-selfhost.exe'
+$releaseChecksWritten = & $compiler emit-executable (Join-Path $PSScriptRoot 'fixtures\link\release_checks\src\main.e') $repo 'x64' 'windows' $releaseChecksPath --release
+if ($LASTEXITCODE -ne 0 -or $releaseChecksWritten -ne 'executable written') { throw 'release checks fixture executable emission failed' }
+foreach ($releaseCheck in @(@('bounds', 'main\.e:22:9: trap\[bounds\]: index 9 out of bounds for len 8'), @('null', 'main\.e:26:16: trap\[null\]: nil dereferenced'), @('tag', 'main\.e:31:23: trap\[tag\]: Node\.Lit read while the tag is 0'))) {
+    $releaseCheckOutput = & $releaseChecksPath $releaseCheck[0] 2>&1
+    if ($LASTEXITCODE -ne 134 -or ($releaseCheckOutput -join "`n") -notmatch $releaseCheck[1]) { throw "the $($releaseCheck[0]) row did not trap in release: exit $LASTEXITCODE, $($releaseCheckOutput -join "`n")" }
+}
+$releaseChecksQuiet = & $releaseChecksPath quiet 2>&1
+if ($LASTEXITCODE -ne 0 -or ($releaseChecksQuiet -join "`n") -ne '') { throw "a check fired inside @nocheck in release: exit $LASTEXITCODE, $($releaseChecksQuiet -join "`n")" }
 # The release build: the same program traps on its first `+` in debug and, built with
 # `--release`, wraps, truncates, masks and saturates through to exit 0.
 $releaseSource = Join-Path $PSScriptRoot 'fixtures\link\release_build\src\main.e'
@@ -2605,7 +2616,7 @@ $moduleArtifactCopyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $moduleAr
 if ($moduleArtifactHash -ne $moduleArtifactCopyHash) { throw 'compiled-module output is not deterministic' }
 $moduleArtifactBytes = [IO.File]::ReadAllBytes($moduleArtifactPath)
 if ($moduleArtifactBytes.Length -lt 104 -or [Text.Encoding]::ASCII.GetString($moduleArtifactBytes[0..3]) -ne 'NEPM') { throw 'compiled-module header is invalid' }
-if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 8 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
+if ([BitConverter]::ToUInt16($moduleArtifactBytes, 4) -ne 9 -or [BitConverter]::ToUInt16($moduleArtifactBytes, 6) -ne 32) { throw 'compiled-module version or header size is invalid' }
 if ([BitConverter]::ToUInt32($moduleArtifactBytes, 20) -ne 8) { throw 'compiled-module section count is invalid' }
 if ([BitConverter]::ToUInt64($moduleArtifactBytes, 96) -le 4) { throw 'compiled-module omitted its foreign signature dependency' }
 $interfaceArtifactPath = Join-Path $testBuild 'interface.x64-windows.em'

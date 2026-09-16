@@ -7766,3 +7766,30 @@ D352's.
 Not delivered, and the design's section 7 says when: borrow summaries in the
 artifact, escape through structs, callbacks and threads, alias tracking,
 non-lexical liveness, build-then-freeze containers, generation-tagged handles.
+
+## D355 -- A release build is a checked build, and every unsafe boundary is listed
+
+H03's first cut (`m25-h03-checked-release.md`). Optimization and check removal
+part ways: `--release` keeps `bounds`, `null`, `tag` and `align` -- the rows that
+are one compare -- and gives the arithmetic rows their defined release results as
+before; `barrier` and `invalid` still come off. In the compiler, `nocheck` on the
+NIR builder was the release mode; now it is `@nocheck`'s and `--unchecked`'s
+alone, and the codegen reads `release` for the arithmetic rows. `@nocheck` is the
+explicit unchecked operation in every mode, `--unchecked` the same for a whole
+release image, and the build manifest lists both with every `@unsafe` function --
+`unsafe: [{kind, module, function, line}]`, read off the modules' bytes so a warm
+build lists them too, in module then line order -- and says `options.checks:
+"retained"` or `"off"`. The artifact format is 9, so caches made under the old
+policy are rebuilt. A fixture built with `--release` traps on an index past the
+end, a nil dereference and a wrong-tag read with the debug record, and passes an
+in-range unchecked index inside `@nocheck`.
+
+The cost, measured against the same compiler built without the rows: cold wall
++19-20% on `sc500k`, +27-34% on the compiler's own build, the release image +36%
+(it is now the debug image's size). The M2 budgets are not met and the breach is
+recorded; the way back is check elimination with proofs, which the design lists
+first among what is not yet done, and `--unchecked` reproduces the old numbers
+until then. Also found: a `[512]` array inside the `Checker` crashed the
+bootstrap-built compiler (its frames do not cover a struct that size), so the
+inventory that was to ride the checker rides the manifest writer instead, and is
+the more correct for it.

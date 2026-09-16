@@ -815,7 +815,7 @@ fn flags_known(args: []str) -> bool {
                     if same(args[at], "--inline-cap") && !decimal_ok(args[at + 1usize]) { ret false }
                     at += 1usize
                 } else {
-                    if !same(args[at], "--release") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") { ret false }
+                    if !same(args[at], "--release") && !same(args[at], "--unchecked") && !same(args[at], "--incremental") && !same(args[at], "--json") && !same(args[at], "--time") && !same(args[at], "--stats") && !same(args[at], "--stats-full") && !same(args[at], "--perturb") && !same(args[at], "--explain") { ret false }
                 }
             }
         }
@@ -1052,6 +1052,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
     var output = ""
     var has_output = false
     var release = false
+    var unchecked = false
     var json = false
     var check_only = false
     var project_dir = ""
@@ -1088,6 +1089,7 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
                                 at += 1usize
                             }
                             if same(args[at], "--release") { release = true }
+                            if same(args[at], "--unchecked") { unchecked = true }
                             if same(args[at], "--json") { json = true }
                             if same(args[at], "--check") { check_only = true }
                             if same(args[at], "--perturb") { perturb = true }
@@ -1127,6 +1129,10 @@ fn short_form(a: *mem.Arena, args: []str) -> ([]str, bool, err) {
         count += 5usize
         if release {
             long_form[count] = "--release"
+            count += 1usize
+        }
+        if unchecked {
+            long_form[count] = "--unchecked"
             count += 1usize
         }
         if json || is_run {
@@ -7014,6 +7020,10 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // on (D211); `emit-em-all` takes it too, and `--incremental` with it in any order.
     let trailing_flags = args.len >= 8usize && (args.len <= 16usize || has_dashdash(args)) && flags_known(args)
     let release_build = trailing_flags && (same(args[1usize], "emit-executable") || same(args[1usize], "emit-em-all") || same(args[1usize], "run")) && has_flag(args, "--release")
+    // `--unchecked` (D355, H03): section 11's memory rows left out of the whole image,
+    // an unsafe boundary the manifest records as `checks: off`; not the default of
+    // any mode.
+    let unchecked_build = release_build && has_flag(args, "--unchecked")
     // `run PATH ROOT ARCH OS OUTPUT [--release] [--arena SIZE] --json` (D231): a build, then
     // the program's whole output as one `run` record before the result.
     let running = trailing_flags && same(args[1usize], "run") && has_flag(args, "--json")
@@ -7258,7 +7268,9 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         if lowered_modules_error != ok { ret lowered_modules_error }
         let (kept_functions, kept_functions_error) = mem.alloc[bool](a, builder.functions.len + 1usize)
         if kept_functions_error != ok { ret kept_functions_error }
-        builder.nocheck = release_build
+        // A release build keeps section 11's memory rows (D355, H03): `nocheck` is
+        // `@nocheck`'s and `--unchecked`'s, and the arithmetic rows read `release`.
+        builder.nocheck = unchecked_build
         builder.release = release_build
         builder.arena_bytes = arena_flag(args)
         var oracle: nir.Builder = zero
@@ -7502,7 +7514,7 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
                 // Every build writes `.neper/<mode>/build-manifest.json` under the project root
                 // (section 7, D254), with the executable it just wrote as the one artifact.
                 try fill_manifest_digests(a, &loaded, held)
-                try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, args[6usize], packed)
+                try tool.manifest_file(a, &loaded, args[4usize], args[5usize], release_build, unchecked_build, args[6usize], packed)
                 try report_phase(&report, "manifest")
                 report.build.wall_ms = (nptest_now() - report.build.started) / 1000000usize
                 report.build.image_bytes = packed.len

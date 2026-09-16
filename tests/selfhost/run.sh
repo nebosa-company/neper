@@ -1623,6 +1623,26 @@ esac
 "$overflow_path" none
 # `@nocheck { ... }`: the debug-only rows elided inside, a release-mode row still
 # trapping inside, and the same operation trapping outside.
+# The memory rows in a release build (D355, H03): bounds, null and tag trap with the
+# debug record, and `@nocheck` is the one way past them.
+release_checks_path="$test_build/release-checks-selfhost"
+release_checks_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/release_checks/src/main.e" "$repo" x64 linux "$release_checks_path" --release)
+[ "$release_checks_written" = 'executable written' ]
+chmod +x "$release_checks_path"
+for release_check in 'bounds main.e:22:9: trap[bounds]: index 9 out of bounds for len 8' 'null main.e:26:16: trap[null]: nil dereferenced' 'tag main.e:31:23: trap[tag]: Node.Lit read while the tag is 0'; do
+    release_check_mode=${release_check%% *}
+    release_check_text=${release_check#* }
+    release_check_status=0
+    release_check_output=$("$release_checks_path" "$release_check_mode" 2>&1) || release_check_status=$?
+    [ "$release_check_status" -eq 134 ]
+    case "$release_check_output" in
+        *"$release_check_text"*) ;;
+        *) printf '%s
+' "the $release_check_mode row did not trap in release: $release_check_output" >&2; exit 1 ;;
+    esac
+done
+release_checks_quiet=$("$release_checks_path" quiet 2>&1)
+[ "$release_checks_quiet" = '' ]
 nocheck_path="$test_build/nocheck-selfhost"
 nocheck_written=$($test_build/neper-self emit-executable "$repo/tests/selfhost/fixtures/link/nocheck/src/main.e" "$repo" x64 linux "$nocheck_path")
 [ "$nocheck_written" = 'executable written' ]
@@ -2842,7 +2862,7 @@ module_artifact_copy_written=$($test_build/neper-self emit-em "$repo/tests/selfh
 [ "$module_artifact_copy_written" = 'compiled module written' ]
 cmp "$module_artifact_path" "$module_artifact_copy_path"
 [ "$(head -c 4 "$module_artifact_path")" = 'NEPM' ]
-[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '8' ]
+[ "$(od -An -tu2 -j4 -N2 "$module_artifact_path" | tr -d ' ')" = '9' ]
 [ "$(od -An -tu2 -j6 -N2 "$module_artifact_path" | tr -d ' ')" = '32' ]
 [ "$(od -An -tu4 -j20 -N4 "$module_artifact_path" | tr -d ' ')" = '8' ]
 [ "$(od -An -tu8 -j96 -N8 "$module_artifact_path" | tr -d ' ')" -gt 4 ]

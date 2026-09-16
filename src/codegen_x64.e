@@ -879,7 +879,7 @@ fn select_float_cast(builder: *nir.Builder, current: nir.Function, instruction: 
     if source_width == 0usize || instruction.ty.kind != .Integer { ret Unsupported }
     try emit_x64.move_to_float(output, 0usize, source, source_width == 64usize)
     var saturated = 0usize
-    if instruction.immediate == 0usize && !instruction.nocheck {
+    if instruction.immediate == 0usize && !instruction.nocheck && !builder.release {
         try emit_float_range_check(builder, current, instruction.site, instruction.path, instruction.ty, source_width == 64usize, context)
     } else {
         // Section 4's release result: the target's extreme for a value past its range,
@@ -2105,7 +2105,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     // 64-bit target the normalisation is a no-op, so a sign that would
                     // change is what is tested instead.
                     let sign_differs = signed_integer(source_type) != signed_integer(instruction.ty)
-                    let narrowing = source_type.kind == .Integer && instruction.immediate == 0usize && !instruction.nocheck && (integer_width(instruction.ty) < integer_width(source_type) || sign_differs)
+                    let narrowing = source_type.kind == .Integer && instruction.immediate == 0usize && !instruction.nocheck && !builder.release && (integer_width(instruction.ty) < integer_width(source_type) || sign_differs)
                     var kept = 10usize
                     if destination == 10usize { kept = 11usize }
                     if narrowing && source != kept { try emit_x64.mov_register(output, kept, source) }
@@ -2130,7 +2130,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     if destination != source { try emit_x64.mov_register(output, destination, source) }
                     if instruction.opcode == .Negate { try emit_x64.negate_register(output, destination) }
                     if instruction.opcode == .BitNot { try emit_x64.bit_not_register(output, destination) }
-                    let negated = instruction.opcode == .Negate && signed_integer(instruction.ty) && !instruction.nocheck
+                    let negated = instruction.opcode == .Negate && signed_integer(instruction.ty) && !instruction.nocheck && !builder.release
                     if negated { try emit_overflow_check(builder, current, instruction.site, instruction.path, instruction.ty, " unary - overflows", destination, context) }
                     if !(negated && integer_width(instruction.ty) != 64usize) { try emit_x64.normalize_integer(output, destination, destination, integer_width(instruction.ty), signed_integer(instruction.ty)) }
                 }
@@ -2156,7 +2156,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                 if right_error != ok { ret right_error }
                 if left != 10usize { try emit_x64.mov_register(output, 10usize, left) }
                 if right != 1usize { try emit_x64.mov_register(output, 1usize, right) }
-                if !instruction.nocheck { try emit_shift_check(builder, current, instruction.site, instruction.path, integer_width(left_type), context) }
+                if !instruction.nocheck && !builder.release { try emit_shift_check(builder, current, instruction.site, instruction.path, integer_width(left_type), context) }
                 try emit_x64.and_immediate8(output, 1usize, integer_width(left_type) - 1usize)
                 try emit_x64.shift_register(output, 10usize, instruction.opcode == .ShiftLeft, signed_integer(left_type))
                 try restore_live_registers(output, shift_mask, preserve_base, preserve_count)
@@ -2183,7 +2183,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     // An unsigned 64-bit `*` through `mul`: rdx:rax, and a nonzero high
                     // half is section 11's overflow (D202).
                     try emit_x64.multiply_unsigned_register(output, 11usize)
-                    if !instruction.nocheck {
+                    if !instruction.nocheck && !builder.release {
                         try emit_x64.test_register(output, 2usize)
                         let (fits, fits_error) = emit_x64.jump_condition(output, 4usize)
                         if fits_error != ok { ret fits_error }
@@ -2246,7 +2246,7 @@ fn function_body(builder: *nir.Builder, function_index: usize, stack_slots: usiz
                     if instruction.opcode == .BitAnd { try emit_x64.bit_and_register(output, destination, right) }
                     if instruction.opcode == .BitXor { try emit_x64.bit_xor_register(output, destination, right) }
                     if instruction.opcode == .BitOr { try emit_x64.bit_or_register(output, destination, right) }
-                    let checked = instruction.ty.kind == .Integer && !instruction.nocheck && (instruction.opcode == .Add || instruction.opcode == .Subtract || instruction.opcode == .Multiply)
+                    let checked = instruction.ty.kind == .Integer && !instruction.nocheck && !builder.release && (instruction.opcode == .Add || instruction.opcode == .Subtract || instruction.opcode == .Multiply)
                     if checked {
                         var operator = " + overflows"
                         if instruction.opcode == .Subtract { operator = " - overflows" }

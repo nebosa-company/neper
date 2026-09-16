@@ -179,7 +179,7 @@
       "additionalProperties":false
     },
     "buildManifest": {
-      "type":"object","required":["schema","version","tool_version","language_version","grammar_revision","target","mode","root_module","inputs","dependencies","libraries","assets","artifacts","options"],
+      "type":"object","required":["schema","version","tool_version","language_version","grammar_revision","target","mode","root_module","inputs","dependencies","libraries","assets","artifacts","unsafe","options"],
       "properties":{
         "schema":{"const":"neper-build-manifest"},"version":{"const":1},
         "tool_version":{"type":"string"},"language_version":{"type":"string"},
@@ -190,7 +190,8 @@
         "libraries":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["requested","search_roots","resolved","sha256"],"properties":{"requested":{"type":"string"},"search_roots":{"type":"array","items":{"type":"string"}},"resolved":{"oneOf":[{"$ref":"#/$defs/source"},{"type":"string"}]},"sha256":{"$ref":"#/$defs/sha256"}}}},
         "assets":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name","source","media_type","attributes","size","sha256"],"properties":{"name":{"type":"string"},"source":{"$ref":"#/$defs/source"},"media_type":{"type":"string"},"attributes":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["name","value"],"properties":{"name":{"type":"string"},"value":{"type":"string"}}}},"size":{"type":"integer","minimum":0},"sha256":{"$ref":"#/$defs/sha256"}}}},
         "artifacts":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["path","kind","target","sha256"],"properties":{"path":{"type":"string"},"kind":{"type":"string"},"target":{"type":"string"},"sha256":{"$ref":"#/$defs/sha256"}}}},
-        "options":{"type":"object"}
+        "unsafe":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["kind","module","function","line"],"properties":{"kind":{"enum":["unsafe","nocheck"]},"module":{"type":"string"},"function":{"type":"string"},"line":{"type":"integer","minimum":0}}}},
+        "options":{"type":"object","required":["checks"],"properties":{"checks":{"enum":["retained","off"]}}}
       },
       "additionalProperties":false
     },

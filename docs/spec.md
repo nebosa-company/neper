@@ -3361,9 +3361,9 @@ better arguments for compiling `@gpu` functions both ways (§13).
 
 | Check | kind | debug | release |
 |---|---|---|---|
-| Slice/array bounds | `bounds` | trap | off |
-| Null dereference | `null` | trap | off |
-| Tagged-union payload access against the wrong tag (§4) | `tag` | trap | off |
+| Slice/array bounds | `bounds` | trap | trap |
+| Null dereference | `null` | trap | trap |
+| Tagged-union payload access against the wrong tag (§4) | `tag` | trap | trap |
 | Integer overflow (`+ - *`, unary `-`) | `overflow` | trap | wrap |
 | Integer division by zero (`/` `%` on integers; float `/` is IEEE, below) | `divide` | trap | trap |
 | Integer division overflow (`MIN / -1`, `MIN % -1`) | `divide` | trap | trap |
@@ -3371,7 +3371,7 @@ better arguments for compiling `@gpu` functions both ways (§13).
 | Shift by a count `>=` the width (§6) | `shift` | trap | count masked to `width - 1` |
 | Integer-to-`enum` cast naming no member (§4) | `enum` | trap | trap |
 | Invalid value representation, arena/builder state or consumed debug-tracked handle where a section names an `invalid` check | `invalid` | trap | undefined behavior |
-| `simd.load_aligned`/`store_aligned` at an address not aligned to the vector width (§4) | `align` | trap | off |
+| `simd.load_aligned`/`store_aligned` at an address not aligned to the vector width (§4) | `align` | trap | trap |
 | `unreachable()` reached | `unreachable` | trap | trap |
 | Divergent control flow at `gpu.barrier()` or a subgroup builtin, or a non-uniform `lane` argument to a subgroup operation — the CPU build of a kernel only (§10) | `barrier` | trap | off |
 | Arena exhaustion (`mem.Exhausted`, §8) | — | `err` | `err` |
@@ -3384,16 +3384,24 @@ and nothing in those rows is undefined behaviour. Division by
 zero and `MIN / -1` trap in every mode because x64 raises `#DE` for them regardless,
 and on a target that does not (aarch64 yields `0`) the check is one compare — a
 release behaviour that varied by target would break the sentence above. The
-**memory/state rows** — `bounds`, `null`, `tag`, `align`, `barrier`, `invalid` — remove
-their check in release. The operation then does what the hardware does: an
-out-of-range write, a `nil` dereference, a wrong-member read or a misaligned vector
-access in a release build is **undefined behaviour**, as in C, and the debug build is
-where it is found. Arena exhaustion is an ordinary error in every mode, not a check —
-running out of memory is a normal condition.
+**memory rows** — `bounds`, `null`, `tag`, `align` — keep their check in release
+(D355, H03): an optimized build is a checked build, and an out-of-range write, a
+`nil` dereference, a wrong-member read or a misaligned vector access traps in it
+with the record a debug build writes. Only `barrier` (the CPU build of a kernel) and
+`invalid` come off in release, since their checks are not one compare. A check is
+left out only where a `@nocheck` block or `--unchecked` says so, and both are
+inventoried (§13's build manifest): no check is eliminated by the compiler's own
+reasoning yet, and when one is, its proof is the decision that removes it. Arena
+exhaustion is an ordinary error in every mode, not a check — running out of memory
+is a normal condition.
 
-`@nocheck { ... }` disables the debug-only rows for a block in debug builds, for the
-rare hot loop that needs it during development. It cannot disable the rows that trap
-in release.
+`@nocheck { ... }` leaves every row but the always-on ones — `divide`, `enum`,
+`unreachable` — out of a block, in every build mode: the block is an explicit
+unsafe operation, the one way to an unchecked index, dereference or payload read,
+and it appears in the manifest's `unsafe` inventory with its function and line.
+`--unchecked` on a release build does the same for the whole image, which the
+manifest records as `options.checks: "off"`; it is not the default of any mode,
+and a program built so is one unsafe boundary.
 
 ### Trap protocol
 
@@ -3809,7 +3817,7 @@ There is no separate build system and no package manager.
 
 ```
 neper build <file.e> [--target ARCH-OS|spv|ptx] [--gpu spv,ptx|none] [--cpu LEVEL]...
-                     [--release] [--g] [--linker=own|system] [--arena SIZE]
+                     [--release [--unchecked]] [--g] [--linker=own|system] [--arena SIZE]
                      [--libpath DIR] [--link LIB] [-j N] [-o PATH]
 neper run <file.e> [the build options] [-- ARGS...]
 neper fmt [--check] [FILE.e|-]

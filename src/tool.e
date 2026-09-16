@@ -2125,7 +2125,7 @@ fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (us
     if storage_error != ok { ret (2usize, storage_error) }
     var out: Out = zero
     out.bytes = storage
-    let build_error = manifest_write(a, &out, arch, os_name, g, "debug", "", "")
+    let build_error = manifest_write(a, &out, arch, os_name, g, "debug", false, "", "")
     if build_error != ok { ret (2usize, build_error) }
     let flush_error = flush(&out)
     if flush_error != ok { ret (2usize, flush_error) }
@@ -2134,7 +2134,7 @@ fn manifest_json(a: *mem.Arena, arch: str, os_name: str, g: *graph.Graph) -> (us
 
 // The object, into `out`, without a newline: the command flushes it as a record and a
 // build saves it as a file. An empty `artifact_path` is no artifact.
-fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, artifact_path: str, artifact_sha256: str) -> err {
+fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.Graph, mode: str, unchecked: bool, artifact_path: str, artifact_sha256: str) -> err {
     try text(out, "{\"schema\":\"neper-build-manifest\",\"version\":1,\"tool_version\":\"0.1.0\",\"language_version\":\"0.1\",\"grammar_revision\":3,\"target\":\"")
     try text(out, arch)
     try byte(out, 45u8)
@@ -2198,7 +2198,106 @@ fn manifest_write(a: *mem.Arena, out: *Out, arch: str, os_name: str, g: *graph.G
         try quoted(out, artifact_sha256)
         try byte(out, 125u8)
     }
-    ret text(out, "],\"options\":{}}")
+    // The unsafe boundaries (D355, H03/H27): every `@unsafe` function and `@nocheck`
+    // block in every module of the program, read off the tokens -- a warm build
+    // checks no body, and the inventory has to be whole either way -- in module
+    // then line order; and `checks`, the policy the image was built under: every
+    // row of section 11's table retained in both modes.
+    try text(out, "],\"unsafe\":[")
+    var written = 0usize
+    var module_at = 0usize
+    while module_at < g.count {
+        // An `@` first on its line (after spaces) opens an attribute or a `@nocheck`
+        // statement; one inside a comment or a string has `//` or `"` before it on
+        // the line. The bytes are scanned, not the tokens: a lex of every module
+        // cost fifty milliseconds on the compiler's own build, this costs two.
+        let text_bytes = g.modules[module_at].text
+        let lines = g.modules[module_at].lines
+        var byte_at = 0usize
+        while byte_at < text_bytes.len {
+            if text_bytes[byte_at] == 64u8 && manifest_line_opens(text_bytes, byte_at) {
+                let word_end = manifest_word_end(text_bytes, byte_at + 1usize)
+                let word = text_bytes[byte_at + 1usize..word_end]
+                if graph.same(word, "unsafe") || graph.same(word, "nocheck") {
+                    let line = lex.line_of(text_bytes, lines, byte_at)
+                    var function = ""
+                    if graph.same(word, "unsafe") {
+                        // The next `fn` after the attribute.
+                        let (name, found) = manifest_fn_after(text_bytes, word_end)
+                        if found { function = name }
+                        try manifest_unsafe_site(out, written, "unsafe", g.modules[module_at].name, function, line)
+                    } else {
+                        // The last `fn` before the block.
+                        let (name, found) = manifest_fn_before(text_bytes, byte_at)
+                        if found { function = name }
+                        try manifest_unsafe_site(out, written, "nocheck", g.modules[module_at].name, function, line)
+                    }
+                    written += 1usize
+                }
+                byte_at = word_end
+            } else {
+                byte_at += 1usize
+            }
+        }
+        module_at += 1usize
+    }
+    if unchecked { ret text(out, "],\"options\":{\"checks\":\"off\"}}") }
+    ret text(out, "],\"options\":{\"checks\":\"retained\"}}")
+}
+
+// Whether only spaces lie between the line's start and `at`.
+fn manifest_line_opens(text_bytes: str, at: usize) -> bool {
+    var back = at
+    while back > 0usize {
+        let b = text_bytes[back - 1usize]
+        if b == 10u8 { ret true }
+        if b != 32u8 && b != 9u8 { ret false }
+        back = back - 1usize
+    }
+    ret true
+}
+
+fn manifest_word_end(text_bytes: str, from: usize) -> usize {
+    var at = from
+    while at < text_bytes.len && ((text_bytes[at] >= 97u8 && text_bytes[at] <= 122u8) || (text_bytes[at] >= 65u8 && text_bytes[at] <= 90u8) || (text_bytes[at] >= 48u8 && text_bytes[at] <= 57u8) || text_bytes[at] == 95u8) { at += 1usize }
+    ret at
+}
+
+// The name of the first `fn` at a line's start after `from`.
+fn manifest_fn_after(text_bytes: str, from: usize) -> (str, bool) {
+    var at = from
+    while at + 3usize <= text_bytes.len {
+        if text_bytes[at] == 102u8 && text_bytes[at + 1usize] == 110u8 && text_bytes[at + 2usize] == 32u8 && (at == 0usize || text_bytes[at - 1usize] == 10u8) {
+            ret (text_bytes[at + 3usize..manifest_word_end(text_bytes, at + 3usize)], true)
+        }
+        at += 1usize
+    }
+    ret ("", false)
+}
+
+// The name of the last `fn` at a line's start before `at`.
+fn manifest_fn_before(text_bytes: str, at: usize) -> (str, bool) {
+    var back = at
+    while back >= 3usize {
+        back = back - 1usize
+        if text_bytes[back] == 102u8 && back + 2usize < text_bytes.len && text_bytes[back + 1usize] == 110u8 && text_bytes[back + 2usize] == 32u8 && (back == 0usize || text_bytes[back - 1usize] == 10u8) {
+            ret (text_bytes[back + 3usize..manifest_word_end(text_bytes, back + 3usize)], true)
+        }
+    }
+    ret ("", false)
+}
+
+fn manifest_unsafe_site(out: *Out, written: usize, kind: str, module_name: str, function: str, line: usize) -> err {
+    if written != 0usize { try byte(out, 44u8) }
+    try text(out, "{\"kind\":")
+    try quoted(out, kind)
+    try text(out, ",\"module\":")
+    try quoted(out, module_name)
+    try text(out, ",\"function\":")
+    try quoted(out, function)
+    try text(out, ",\"line\":")
+    try decimal(out, line)
+    ret byte(out, 125u8)
 }
 
 fn manifest_join(a: *mem.Arena, dir: str, name: str) -> (str, err) {
@@ -2285,7 +2384,7 @@ fn manifest_artifact_path(a: *mem.Arena, project_root: str, named: str) -> (str,
     ret (relative[0usize..at], ok)
 }
 
-fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, artifact_path: str, packed: []const u8) -> err {
+fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, release_mode: bool, unchecked: bool, artifact_path: str, packed: []const u8) -> err {
     var mode = "debug"
     if release_mode { mode = "release" }
     let (dot_dir, dot_error) = manifest_join(a, g.project.root, ".neper")
@@ -2303,7 +2402,7 @@ fn manifest_file(a: *mem.Arena, g: *graph.Graph, arch: str, os_name: str, releas
     out.bytes = storage
     let (relative_path, relative_error) = manifest_artifact_path(a, g.project.root, artifact_path)
     if relative_error != ok { ret relative_error }
-    try manifest_write(a, &out, arch, os_name, g, mode, relative_path, digest)
+    try manifest_write(a, &out, arch, os_name, g, mode, unchecked, relative_path, digest)
     try byte(&out, 10u8)
     // The file is opened once the text is ready (D345): every exit before this has
     // nothing to close.
