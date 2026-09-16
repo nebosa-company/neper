@@ -3570,7 +3570,10 @@ none becomes a trap:
   the join, or when the thread local is moved anywhere else, which a local's state
   cannot follow; a detached thread's never ends. The rule is per statement: a join
   and a read of the lent storage in one expression is refused, so the join is its
-  own statement. `m25-h04-concurrency.md` is the design and what is outside it.
+  own statement. A pointer local bound from `&x` is `x` by another name for this
+  rule (D393): a read or a store through it while `x` is lent is refused, and
+  `&p.field` is an address. `m25-h04-concurrency.md` is the design and what is
+  outside it.
 - A lock held as a value is a resource (D379): `sync.guard(&m)` returns a
   `sync.Guard` owed to `sync.release` on every exit, so the lock discipline is
   the resource discipline -- an early return with the lock held is

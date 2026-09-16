@@ -332,6 +332,10 @@ type Resource = struct {
     borrowed: bool,
     pinned: usize,
     pin_at: usize,
+    // A pointer local's target (D393, H02/H04): the local `&x` was taken of, plus
+    // one, when this local was bound from `&x`; a read or a store through it is a
+    // read or a store of `x`, which the lending rule then sees.
+    points_to: usize,
     view: bool,
     // H02's lexical subset (D354): a mark local's arena, as written; a region value's
     // mark, plus one; a view's container local, plus one; and why a value dangles
@@ -5582,7 +5586,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
     var no_fields: []u8 = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize, lent_to: 0usize, lent_at: 0usize, points_to: 0usize }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -12883,6 +12887,26 @@ fn producer_borrowed(c: *Checker, function: Function) -> bool {
     ret same(function.name, "stdin") || same(function.name, "stdout") || same(function.name, "stderr")
 }
 
+// The lent local a place reaches through a pointer alias (D393): the base name of
+// the place, a local bound from `&x`, with `x` lent to a running thread.
+fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    var base_index = node_index
+    while tree.nodes[base_index].kind == .FieldExpr || tree.nodes[base_index].kind == .BracketPostfix || tree.nodes[base_index].kind == .UnaryExpr {
+        let (deeper_index, has_deeper) = first_node_child(tree, tree.nodes[base_index])
+        if !has_deeper { break }
+        base_index = deeper_index
+    }
+    let base = tree.nodes[base_index]
+    if base.kind != .NameExpr { ret (0usize, false) }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret (0usize, false) }
+    let (pointer_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    if !found || c.resources[pointer_local].points_to == 0usize { ret (0usize, false) }
+    let pointed = c.resources[pointer_local].points_to - 1usize
+    if pointed >= c.local_count || c.resources[pointed].lent_to == 0usize { ret (0usize, false) }
+    ret (pointed, true)
+}
+
 fn resource_local_of(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
     let node = tree.nodes[node_index]
     if node.kind != .NameExpr { ret (0usize, false) }
@@ -12957,6 +12981,17 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     if node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctAmp {
         let (pointed, is_address) = address_argument_local(c, g, tree, module_index, node_index)
         if is_address && c.resources[pointed].lent_to != 0usize { ret ok }
+        // `&p.field` with `p` an alias of a lent local is an address too (D393).
+        if is_address && c.resources[pointed].points_to != 0usize && c.resources[pointed].points_to - 1usize < c.local_count && c.resources[c.resources[pointed].points_to - 1usize].lent_to != 0usize { ret ok }
+    }
+    // `*p`, `p.field`, `p[i]` with `p` bound from `&x` while `x` is lent to a thread
+    // (D393): a read or a store of `x` by another name.
+    if node.kind == .FieldExpr || node.kind == .BracketPostfix || (node.kind == .UnaryExpr && c.tokens[usize(node.token_start)].kind == .PunctStar) {
+        let (lent_local, through_alias) = alias_of_lent(c, g, tree, module_index, node_index)
+        if through_alias {
+            record_failure_related(c, module_index, node, .ThreadShared, c.locals[lent_local].name, line_detail(c, g, module_index, c.resources[lent_local].lent_at), c.resources[lent_local].lent_at)
+            ret ResourceViolation
+        }
     }
     if node.kind == .FieldExpr {
         let (local_index, at, is_field) = resource_field_of(c, g, tree, module_index, node_index)
@@ -13133,6 +13168,12 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         c.resources[local_index].mark_arena = call_argument_text(c, g, tree, module_index, tree.nodes[initializer_index], 0usize)
         c.affine_answer_valid = false
         ret ok
+    }
+    // `let p = &x` (D393): `p` points at `x` until it is bound again.
+    c.resources[local_index].points_to = 0usize
+    if has_initializer && c.locals[local_index].ty.kind == .Pointer {
+        let (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
+        if is_address && pointed != local_index { c.resources[local_index].points_to = pointed + 1usize }
     }
     let kind = affine_kind(c, c.locals[local_index].ty, 0usize)
     if kind == 0u8 { ret region_bind(c, g, tree, module_index, local_index, statement, initializer_index, has_initializer, from_call, call) }
@@ -13708,6 +13749,13 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
     }
     if lent_local != 0usize && c.resources[lent_local - 1usize].lent_to != 0usize {
         record_failure_related(c, module_index, statement, .ThreadShared, c.locals[lent_local - 1usize].name, line_detail(c, g, module_index, c.resources[lent_local - 1usize].lent_at), c.resources[lent_local - 1usize].lent_at)
+        c.consuming_store = 0usize
+        ret ResourceViolation
+    }
+    // A store through a pointer bound from `&x` while `x` is lent (D393).
+    let (aliased, through_alias) = alias_of_lent(c, g, tree, module_index, place_index)
+    if through_alias {
+        record_failure_related(c, module_index, statement, .ThreadShared, c.locals[aliased].name, line_detail(c, g, module_index, c.resources[aliased].lent_at), c.resources[aliased].lent_at)
         c.consuming_store = 0usize
         ret ResourceViolation
     }

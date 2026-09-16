@@ -72,8 +72,10 @@ view rule exists), cancellation.
 
 - A pointer to the frame taken before the thread starts and reached through the
   context indirectly (a callback environment, a struct of pointers).
-- Storage lent through a slice's elements or a pointer local -- what the parent
-  reads through another alias of the same storage.
+- Storage lent through a slice's elements -- what the parent reads through a
+  slice over the same storage. A pointer local bound from `&x` is followed
+  (D393): a read or a store through it while `x` is lent is refused, and `&p.f`
+  is an address like `&x.f`; a pointer that came from anywhere else is not.
 - Globals: a module-scope `var` read by both is not tracked; it is the program's
   to protect with an atomic or a lock.
 - Partial spawn failure: a loop that starts N threads and fails at the K-th owes

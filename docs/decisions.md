@@ -8741,3 +8741,22 @@ header or not, and every pass that reads bodies is one that only sees full trees
 Not yet: the lexer still scans every byte of the closure, which is now most of
 the phase (a header module is lexed whole); declarations from the Interface
 would spare that too, and is the larger H14 step this row does not take.
+
+## D393 -- A pointer bound from `&x` is `x` by another name to the lending rule
+
+H02 and H04 list aliases through pointer locals as what the lending rule (D365)
+did not see: `let p = &counter`, a thread started over `&counter`, then
+`p.hits = 5` before the join -- the store the rule refuses when spelled
+`counter.hits = 5`, written through the alias instead. The checker records, on
+a pointer local bound from `&x`, which local it points at (`points_to`, until
+the local is bound again); a `*p`, `p.field` or `p[i]` read, and a store to
+such a place, while `x` is lent to a running thread is E-SAFETY-0016 naming
+`x` and the start; `&p.field` is an address, as `&x.field` is, so an atomic
+through the alias stays the sanctioned reach. A pointer from anywhere else --
+a call's result, a field, a parameter -- is not followed: the alias the rule
+sees is the one the function itself wrote. The corpus gains
+`reject/safety_thread_alias`; the compiler and every fixture pass.
+
+Not yet: aliases through slices (`let s = x[..]`), pointers stored into
+aggregates, and the same following for the region and view rules (a `*p`
+into reset storage), which the `points_to` record now makes possible.
