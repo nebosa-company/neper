@@ -10351,3 +10351,19 @@ harness has: `index` lists no locals, so the rename reads `let`, `var`, `for`
 and the signature's `name:` pairs off the tokens itself.
 
 Not yet: renamed functions and types, reordered parameters.
+
+## D478 -- Metamorphic tests: renamed functions and types
+
+The third rename, and the first through the index rather than the tokens:
+`symbols` renames every function but `main` and every type of the root module
+to a name of the same length, at the declaration's `selection_span` and every
+`call`, `type` and `read` reference the `index-file` stream targets at it -- so
+a reference the index missed is a build that fails, which is the check H17's
+index never had. A protocol pair is kept as it is: `rec_cmp` is `Rec`'s `cmp`
+by its spelling, and the checker would look for `sfd_cmp`. The names reach the
+image -- `trap[null]: nil dereferenced as *Node`, the backtrace's function
+names -- so the renamed image is compared with the names put back, and is
+byte-identical in both modes over the four fixtures; the program behaves the
+same. Over these fixtures the index's references were complete.
+
+Not yet: reordered parameters, an expression extracted to a constant.

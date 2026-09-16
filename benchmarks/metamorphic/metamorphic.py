@@ -2,7 +2,7 @@
 
     python benchmarks/metamorphic/metamorphic.py COMPILER ROOT ARCH OS OUTDIR FIXTURE_MAIN...
 
-Four transformations that must not change what a program does, applied to each
+Five transformations that must not change what a program does, applied to each
 fixture's root module and checked against the untouched build:
 
 - `comments`: every comment is removed through the lossless token stream, the
@@ -17,6 +17,11 @@ fixture's root module and checked against the untouched build:
   so the columns are unchanged and the image must be byte-identical.
 - `fields` (D477): every `struct { ... }` has its fields reversed; the layout
   changes, so the image may differ, but the program must behave the same.
+- `symbols` (D478): every function but `main` and every type is renamed to a
+  name of the same length through the index's declaration and reference spans
+  (a protocol pair such as `Rec`/`rec_cmp` kept); the names reach the image in
+  its trap messages and backtraces, so with them put back it must be
+  byte-identical, and the program must behave the same.
 
 Exit 1 on the first fixture whose transformed build differs, with what differed.
 """
@@ -251,6 +256,78 @@ def fields_reversed(main, tokens_json_lines):
     return bytes(out)
 
 
+def index_of(main):
+    p = run([compiler, 'index-file', main, root, arch, host_os, '--json'])
+    if p.returncode != 0:
+        sys.exit('metamorphic: index-file of %s failed' % main)
+    return p.stdout.decode('utf-8').splitlines()
+
+
+def symbols_renamed(main, index_json_lines, keywords, spelled):
+    """Every function but `main` and every type of the root module renamed to a name
+    of the same length through the index's declaration and reference spans (D478,
+    H10). The names reach the image -- the trap messages and backtraces carry
+    them -- so it must be byte-identical once they are put back.
+    """
+    import json
+    text = open(main, 'rb').read()
+    symbols, spans = {}, []
+    for line in index_json_lines:
+        record = json.loads(line)
+        if record.get('record') == 'symbol' and record['kind'] in ('fn', 'type') and record['module'] == 'main' and record['name'] != 'main' and record.get('selection_span'):
+            symbols[record['id']] = (record['kind'], record['name'].encode())
+            s = record['selection_span']
+            spans.append((s['byte_start'], s['byte_end'], record['id']))
+        if record.get('record') == 'reference' and record.get('target_id') in symbols and record['role'] in ('call', 'type', 'read'):
+            s = record['source_span']
+            if text[s['byte_start']:s['byte_end']] == symbols[record['target_id']][1]:
+                spans.append((s['byte_start'], s['byte_end'], record['target_id']))
+    # A protocol function is named after its type (`rec_cmp` for `Rec`): the pair
+    # is a name the checker reads, so both keep theirs.
+    def snake(name):
+        out = bytearray()
+        for i, ch in enumerate(name):
+            if 65 <= ch <= 90:
+                if i:
+                    out.append(95)
+                out.append(ch + 32)
+            else:
+                out.append(ch)
+        return bytes(out)
+    bound = set()
+    for sid, (kind, name) in symbols.items():
+        if kind != 'type':
+            continue
+        for other, (other_kind, other_name) in symbols.items():
+            if other_kind == 'fn' and other_name.startswith(snake(name) + b'_'):
+                bound.add(sid)
+                bound.add(other)
+    new_names = {}
+    for sid, (kind, name) in symbols.items():
+        if sid in bound:
+            continue
+        for times in range(1, 26):
+            out = bytearray()
+            for ch in name:
+                if 97 <= ch <= 122:
+                    out.append((ch - 97 + times) % 26 + 97)
+                elif 65 <= ch <= 90:
+                    out.append((ch - 65 + times) % 26 + 65)
+                else:
+                    out.append(ch)
+            candidate = bytes(out)
+            if candidate != name and candidate.decode() not in keywords and candidate not in spelled:
+                spelled.add(candidate)
+                new_names[sid] = candidate
+                break
+    out = bytearray(text)
+    for s, e, sid in sorted(set(spans), reverse=True):
+        if sid in new_names:
+            out[s:e] = new_names[sid]
+    renames = {new: symbols[sid][1] for sid, new in new_names.items()}
+    return bytes(out), renames
+
+
 def variant_dir(fixture_dir, name):
     d = os.path.join(outdir, name)
     if os.path.exists(d):
@@ -306,4 +383,26 @@ for main in fixtures:
         ran_a, ran_b = run([a], cwd=outdir), run([b], cwd=outdir)
         if (ran_a.returncode, ran_a.stdout) != (ran_b.returncode, ran_b.stdout):
             sys.exit('metamorphic: %s with reversed fields behaves differently (%d vs %d)' % (name, ran_a.returncode, ran_b.returncode))
-    print('metamorphic: %s holds under comments, reorder, renamed and fields' % name)
+    # symbols: byte-identical images once the names are put back, the same behaviour.
+    text = open(original_main, 'rb').read()
+    spelled = set()
+    for line in tokens:
+        record = json.loads(line)
+        if record.get('record') == 'token' and record['kind'] == 'IDENTIFIER':
+            spelled.add(text[record['span']['byte_start']:record['span']['byte_end']])
+    resymbolled = variant_dir(fixture_dir, name + '-symbols')
+    resymbolled_main = os.path.join(resymbolled, 'src', 'main.e')
+    rewritten, renames = symbols_renamed(original_main, index_of(original_main), KEYWORDS, spelled)
+    open(resymbolled_main, 'wb').write(rewritten)
+    for release in (False, True):
+        a = os.path.join(outdir, '%s-original-%d%s' % (name, release, exe))
+        b = os.path.join(outdir, '%s-symbols-%d%s' % (name, release, exe))
+        image = build(resymbolled_main, b, release)
+        for new_name, old_name in renames.items():
+            image = image.replace(new_name, old_name)
+        if image != images[release]:
+            sys.exit('metamorphic: %s with renamed symbols builds a different %s image' % (name, 'release' if release else 'debug'))
+        ran_a, ran_b = run([a], cwd=outdir), run([b], cwd=outdir)
+        if (ran_a.returncode, ran_a.stdout) != (ran_b.returncode, ran_b.stdout):
+            sys.exit('metamorphic: %s with renamed symbols behaves differently (%d vs %d)' % (name, ran_a.returncode, ran_b.returncode))
+    print('metamorphic: %s holds under comments, reorder, renamed, fields and symbols' % name)
