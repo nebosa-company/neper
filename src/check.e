@@ -75,6 +75,7 @@ type DiagnosticKind = enum u8 {
     ResourceMovedWhileBorrowed,
     RegionReset,
     ViewMutated,
+    ThreadFrameEscape,
     AssignmentImmutable,
     IndexedArrayImmutable,
     IndexedElementsImmutable,
@@ -338,6 +339,9 @@ type Resource = struct {
     region: usize,
     view_of: usize,
     dangling: u8,
+    // A thread started over `&x` of this frame (D357, H04): the local `x`, plus one,
+    // or zero. Joined here, bound here, or stored where `x` outlives the store.
+    frame_borrow: usize,
 }
 
 type Alias = struct {
@@ -521,6 +525,12 @@ type Checker = struct {
     // Set while a consumption transfers ownership out of the function -- an `own`
     // argument, a `ret` -- which a borrowed value cannot do (D349).
     resource_transfer: bool,
+    // The consumption under way is a thread's join, or a binding in the same frame
+    // (D357): the two a frame-borrowing thread allows.
+    consuming_join: bool,
+    consuming_binding: bool,
+    // The store under way, when one is: the local the place is in, plus one.
+    consuming_store: usize,
     // How many blocks are open in the body being checked (D351), for the pins; and
     // the pointers the current statement took, pinned at its end when what the
     // statement made can hold one.
@@ -5478,7 +5488,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
     var no_fields: []u8 = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8 }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8, frame_borrow: 0usize }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -12100,6 +12110,7 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourceMovedWhileBorrowed { ret "E-SAFETY-0004" }
     if kind == .RegionReset { ret "E-SAFETY-0013" }
     if kind == .ViewMutated { ret "E-SAFETY-0014" }
+    if kind == .ThreadFrameEscape { ret "E-SAFETY-0015" }
     if kind == .TryInsideDefer || kind == .TryCast || kind == .TryNotFallible || kind == .TryNoPropagate { ret "E-ERROR-9999" }
     // docs/diagnostics.md: section 9's reflection and section 8's atomics under their
     // own categories (D215). A constant cycle stays E-TYPE-9999: the bootstrap says so
@@ -12212,6 +12223,11 @@ fn module_is_os(c: *Checker, module_index: usize) -> bool {
 fn module_is_mem(c: *Checker, module_index: usize) -> bool {
     if !c.has_graph || module_index >= c.graph.count { ret false }
     ret same(c.graph.modules[module_index].name, "e.mem")
+}
+
+fn module_is_thread(c: *Checker, module_index: usize) -> bool {
+    if !c.has_graph || module_index >= c.graph.count { ret false }
+    ret same(c.graph.modules[module_index].name, "e.thread")
 }
 
 // Why a moved value cannot be used: it was moved, its region was reset, or the
@@ -12844,6 +12860,15 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     if state == resource_null { ret ok }
     // What is borrowed cannot be given away: closed, handed to an `own` parameter,
     // or returned as the caller's to close.
+    // A thread over this frame's storage (D357) is joined here, or bound to another
+    // name here; detached, handed on, returned or stored, it would outlive what it
+    // reads.
+    let frame = c.resources[local_index].frame_borrow
+    let stored_inside = c.consuming_store != 0usize && c.consuming_store >= frame
+    if frame != 0usize && state == resource_owned && !c.consuming_join && !c.consuming_binding && !stored_inside {
+        record_failure(c, module_index, node, .ThreadFrameEscape, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+        ret ResourceViolation
+    }
     if c.resource_transfer && c.resources[local_index].borrowed && state == resource_owned {
         record_failure(c, module_index, node, .ResourceBorrowConsumed, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
         ret ResourceViolation
@@ -12877,6 +12902,7 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 fn resource_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, info: CallInfo) -> err {
     if !c.resources_on || info.is_cast || info.protocol_pending || !any_affine_local(c) { ret ok }
     region_call(c, g, tree, module_index, node, info)
+    c.consuming_join = (module_is_os(c, info.function.module_index) && same(info.function.name, "thread_join")) || (module_is_thread(c, info.function.module_index) && same(info.function.name, "join"))
     let end = usize(node.first_child) + usize(node.child_count)
     var at = usize(node.first_child)
     var child_position = 0usize
@@ -12892,6 +12918,7 @@ fn resource_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
         }
         at += 1usize
     }
+    c.consuming_join = false
     ret ok
 }
 
@@ -12917,6 +12944,7 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
     c.resources[local_index].obligated = kind == 2u8
     c.resources[local_index].borrowed = false
     c.resources[local_index].view = false
+    c.resources[local_index].frame_borrow = 0usize
     if contains_token(c, usize(statement.token_start), usize(statement.token_end), .KwUndef) {
         record_failure(c, module_index, statement, .ResourceUndef, c.locals[local_index].name, "")
         ret ResourceViolation
@@ -12927,6 +12955,18 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         ret resource_init_fields(c, local_index, resource_null)
     }
     if from_call {
+        // A thread started over the address of this frame's storage (D357): an
+        // argument `&x` where `x` is a local that is not a slice or a pointer.
+        if seeded_handle(c, c.locals[local_index].ty) && same(c.locals[local_index].ty.name, "Thread") {
+            var argument_at = 0usize
+            while c.resources[local_index].frame_borrow == 0usize {
+                let (argument_index, has_argument) = call_argument_node(tree, tree.nodes[initializer_index], argument_at)
+                if !has_argument { break }
+                let (pointed, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+                if is_address && c.locals[pointed].ty.kind != .Slice && c.locals[pointed].ty.kind != .Pointer { c.resources[local_index].frame_borrow = pointed + 1usize }
+                argument_at += 1usize
+            }
+        }
         if producer_borrowed(c, call.function) {
             c.resources[local_index].state = resource_owned
             c.resources[local_index].obligated = false
@@ -12967,12 +13007,16 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         }
         // The fields come across as they stood, before the source is moved whole.
         if source_is_resource { try resource_copy_fields(c, local_index, source_index) }
-        try resource_consume(c, g, tree, module_index, initializer_index)
+        c.consuming_binding = true
+        let bound = resource_consume(c, g, tree, module_index, initializer_index)
+        c.consuming_binding = false
+        if bound != ok { ret bound }
         c.resources[local_index].state = resource_owned
         if source_is_resource {
             if !c.resources[source_index].obligated { c.resources[local_index].obligated = false }
             if c.resources[source_index].borrowed { c.resources[local_index].borrowed = true }
             if c.resources[source_index].view { c.resources[local_index].view = true }
+            if c.resources[source_index].frame_borrow != 0usize { c.resources[local_index].frame_borrow = c.resources[source_index].frame_borrow }
         }
         if !source_is_resource { try resource_init_fields(c, local_index, resource_owned) }
         ret ok
@@ -13322,6 +13366,28 @@ fn resource_narrow_arm(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
 // names a resource local moves it, wherever it goes.
 fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, statement: syntax.Node, place_index: usize, initializer_index: usize, from_call: bool, call: CallInfo, tried: bool) -> err {
     if !any_affine_local(c) { ret ok }
+    // The local the place is in, for a thread over this frame (D357): a store into
+    // storage declared after what the thread reads is a store that dies first.
+    c.consuming_store = 0usize
+    var place_base = place_index
+    while tree.nodes[place_base].kind == .FieldExpr || tree.nodes[place_base].kind == .BracketPostfix {
+        let (inner_index, has_inner) = first_node_child(tree, tree.nodes[place_base])
+        if !has_inner { break }
+        place_base = inner_index
+    }
+    if place_base != place_index && tree.nodes[place_base].kind == .NameExpr {
+        let base_token = c.tokens[usize(tree.nodes[place_base].token_start)]
+        if base_token.kind == .Identifier {
+            let (base_local, base_found) = find_local(c, g.modules[module_index].text[base_token.start..base_token.end])
+            if base_found && c.locals[base_local].ty.kind != .Pointer { c.consuming_store = base_local + 1usize }
+        }
+    }
+    let assigned = resource_assign_inner(c, g, tree, module_index, statement, place_index, initializer_index, from_call, call, tried)
+    c.consuming_store = 0usize
+    ret assigned
+}
+
+fn resource_assign_inner(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, statement: syntax.Node, place_index: usize, initializer_index: usize, from_call: bool, call: CallInfo, tried: bool) -> err {
     let (field_local, field_at, is_field) = resource_field_of(c, g, tree, module_index, place_index)
     if is_field {
         // A store into a tracked struct's field: the field's old value cannot be owed.

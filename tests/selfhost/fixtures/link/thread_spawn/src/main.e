@@ -54,9 +54,11 @@ fn main(a: *mem.Arena) -> err {
     if atomic.load(&crossed.hits, .SeqCst) != 2000u32 { os.exit(34i32) }
 
     // --- Detached: accepted, and never joined. The work is not waited for, so it is not
-    // checked -- what is checked is that detaching is not an error.
-    var loose: Counter = zero
-    let (detached, detached_error) = thread.spawn[Counter](bump, &loose, 0usize)
+    // checked -- what is checked is that detaching is not an error. Its counter is
+    // arena storage (D357): a detached thread over this frame's would be refused.
+    let (loose, loose_error) = mem.alloc[Counter](a, 1usize)
+    if loose_error != ok { os.exit(39i32) }
+    let (detached, detached_error) = thread.spawn[Counter](bump, &loose[0usize], 0usize)
     if detached_error != ok { os.exit(40i32) }
     if thread.detach(detached) != ok { os.exit(41i32) }
     ret ok

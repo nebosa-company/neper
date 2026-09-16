@@ -3527,6 +3527,12 @@ none becomes a trap:
   Both are lexical and within one function: what is returned, stored, handed to a
   callback, an import or a thread, reached through a pointer local, or made by a
   cast is outside the rule, and `m25-h02-regions.md` says so.
+- A thread started over the address of this frame's storage -- `os.thread_create`
+  or `thread.spawn` given `&x` where `x` is a local that is not a slice or a
+  pointer -- is joined in this frame: it can be bound to another name here and
+  stored into storage declared after `x` (which dies first); detached, handed to
+  an `own` parameter, returned or stored elsewhere it would outlive what it reads
+  (`E-SAFETY-0015`, D357). A thread over arena storage does as it likes.
 - A container's insert -- `list.push`, `deque.push_back`, `heap.push`, `map.put`'s
   value, `channel.send` and the rest -- takes its element by `own`: what is pushed
   is the container's, and a handle closed after it was pushed is `E-SAFETY-0001`.

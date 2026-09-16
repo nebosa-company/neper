@@ -3993,6 +3993,13 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, "): it cannot be closed, moved to an `own` parameter or returned; `os.dup` makes one that can")
     }
+    if checker.failure_kind == .ThreadFrameEscape {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` was started at line ")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, " over the address of this frame's storage: it can be joined here, not detached, handed on, returned or stored; give it storage from an arena to do those")
+    }
     if checker.failure_kind == .ResourceMovedWhileBorrowed {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)

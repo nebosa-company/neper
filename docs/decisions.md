@@ -7816,3 +7816,23 @@ sites are not measurable against the noise, and the budgets stay breached.
 **Not yet:** a bound through a second local (`while at < count`, `count <=
 x.len`), a field base (`c.tokens[at]`), a prior check on the same operand -- the
 shapes the compiler's own hot loops have.
+
+## D357 -- A thread over this frame's storage is joined in this frame
+
+H04's first rule, the one its acceptance calls stack escape: a thread started with
+`&x` where `x` is a local of the frame -- not a slice or a pointer, whose storage
+is elsewhere -- reads that frame while it runs, and H01 already makes the thread
+owed a join or a detach at every exit of its block. What H01 did not say is that
+the detach is not an answer here: a detached thread reads a frame that is gone.
+Now the thread local remembers the local it was started over; it can be joined
+(`os.thread_join`, `thread.join`), bound to another name in the frame, or stored
+into storage declared after that local, which dies no later; detached, handed to
+an `own` parameter, returned or stored anywhere else is E-SAFETY-0015, naming the
+start. The compiler's own crews pass as written -- their workers are arena
+storage or arrays declared before the thread arrays -- and the two fixtures that
+detached a thread over a stack counter now give it arena storage, which is what
+a detached thread must have.
+
+Not yet, of H04: shared mutable aliases across threads, lock capabilities and
+guard escape, worker arena sharing, partial spawn failure; the design for those
+is not written.

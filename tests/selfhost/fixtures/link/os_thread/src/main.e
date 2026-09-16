@@ -30,9 +30,11 @@ fn main(a: *mem.Arena) -> err {
     if join_error != ok { ret join_error }
     if counter.value != 7usize { ret Failed }
 
-    // A detached thread is one nothing waits for, so it only has to be startable.
-    var spare: Counter = zero
-    let (loose, loose_error) = os.thread_create[Counter](bump, &spare, 1048576usize)
+    // A detached thread is one nothing waits for, so it only has to be startable --
+    // over storage that outlives this frame (D357), since nothing joins it here.
+    let (spares, spares_error) = mem.alloc[Counter](a, 1usize)
+    if spares_error != ok { ret spares_error }
+    let (loose, loose_error) = os.thread_create[Counter](bump, &spares[0usize], 1048576usize)
     if loose_error != ok { ret loose_error }
     let detach_error = os.thread_detach(loose)
     if detach_error != ok { ret detach_error }
