@@ -10553,3 +10553,20 @@ expression; an arithmetic expression still gets none. A call bound by a `let`
 never passes through `check_expr` -- `bind_return_types` holds its results to
 the declared type -- so the binding notes the call itself on a mismatch.
 `reject/type_mismatch_call` pins a call.
+
+## D492 -- A body's use of a constant is a value edge
+
+Looking for H14's comptime fixture found a wrong program from a warm build: a
+module folding `if dep.LIMIT > 2usize` was kept as `edges-hold` after `LIMIT`
+changed from 3 to 1, and the executable still took the old arm. The artifact's
+dependencies recorded a value edge to a foreign constant only where one of the
+module's own constants referenced it; a function body's `dep.LIMIT` -- whose
+value the lowering bakes in, folded or not -- recorded nothing, and the edge
+rule held. Now the module's tokens are read once for every `q.NAME` where `q`
+is an import qualifier and `NAME` a constant of that module, and each such
+constant is a value edge, so its body hash -- which carries the value -- must
+match or the module is rebuilt as `edge-changed`. The scan is syntactic, as
+the unsafe inventory is (D457): a field or member spelled like a constant marks
+an edge that holds, which costs nothing. `incremental_value` pins the fixture
+in both modes on both hosts: exit 8, the edit, `main=rebuilt:edge-changed`,
+exit 4, and the image the clean build's. Not yet: the fallback fixture.

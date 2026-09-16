@@ -1719,6 +1719,29 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:options-changed' 'dep=rebuilt:options-changed'
     if ($LASTEXITCODE -ne 0) { throw "the manifest after a capped build's artifacts does not say options-changed ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after an inline cap is not the clean build ($hotMode)" }
+    # A constant's value is a value edge (D492, H14): a warm build after the constant a
+    # module folds on changed rebuilds that module as `edge-changed`, exits the other way,
+    # and is the clean build of the edited tree. Before D492 the module was kept and the
+    # program kept the old value.
+    $valueScratch = Join-Path $testBuild 'value-scratch'
+    if (Test-Path -LiteralPath $valueScratch) { Remove-Item -LiteralPath $valueScratch -Recurse -Force }
+    Copy-Item -Recurse (Join-Path $repo 'tests\selfhost\fixtures\link\incremental_value') $valueScratch
+    $valueExe = Join-Path $testBuild "value$hotMode.exe"
+    $valueFirst = & $compiler emit-executable (Join-Path $valueScratch 'src\main.e') $repo 'x64' 'windows' $valueExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $valueFirst -ne 'executable written') { throw "the cold build of the value fixture failed ($hotMode)" }
+    & $valueExe
+    if ($LASTEXITCODE -ne 8) { throw "the value fixture did not exit 8 before the edit ($hotMode)" }
+    Copy-Item (Join-Path $valueScratch 'edits\dep_limit.e') (Join-Path $valueScratch 'src\dep.e') -Force
+    $valueSecond = & $compiler emit-executable (Join-Path $valueScratch 'src\main.e') $repo 'x64' 'windows' $valueExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $valueSecond -ne 'executable written') { throw "the warm build after the constant's edit failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') (Join-Path $valueScratch ".neper\$hotManifestMode\build-manifest.json") 'main=rebuilt:edge-changed' 'dep=rebuilt:source-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after a folded constant's edit does not say edge-changed ($hotMode)" }
+    & $valueExe
+    if ($LASTEXITCODE -ne 4) { throw "the value fixture did not exit 4 after the edit ($hotMode)" }
+    $valueClean = Join-Path $testBuild "value-clean$hotMode.exe"
+    $valueCleanWritten = & $compiler emit-executable (Join-Path $valueScratch 'src\main.e') $repo 'x64' 'windows' $valueClean $hotMode 2>$null
+    if ($LASTEXITCODE -ne 0 -or $valueCleanWritten -ne 'executable written') { throw "the clean build of the edited value fixture failed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $valueExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $valueClean).Hash) { throw "the warm build after a folded constant's edit is not the clean build ($hotMode)" }
     # A cyclic artifact reference (D472, H24): an artifact rewritten to import the module
     # that imports it is distrusted and rebuilt as `invalid-artifact`, the image is the
     # clean build's, and the linker over the forged set refuses or links without crashing.

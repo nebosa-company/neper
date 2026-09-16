@@ -1157,12 +1157,15 @@ fn collect_module_strings(c: *check.Checker, g: *graph.Graph, builder: *nir.Buil
         }
         constant_at += 1usize
     }
+    var string_marks: [8192]u8 = zero
+    mark_body_constant_uses(c, g, module_index, string_marks[..])
     constant_at = 0usize
     while constant_at < c.constant_count {
         let constant = c.constants[constant_at]
         if constant.module_index != module_index {
-            let (used, used_error) = foreign_constant_used_by_module(c, module_index, constant_at)
+            let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, constant_at)
             if used_error != ok { ret used_error }
+            let used = used_by_constant || (constant_at < string_marks.len && string_marks[constant_at] != 0u8)
             if used {
                 if constant.module_index >= g.count { ret InvalidArtifact }
                 let (target_module_name, target_module_name_error) = intern(table, g.modules[constant.module_index].name)
@@ -1673,6 +1676,41 @@ fn constant_expression_references(c: *check.Checker, expression_index: usize, mo
     ret (false, ok)
 }
 
+// A body's uses of foreign constants (D492, H14): every `q.NAME` in the module's
+// tokens where `q` is a qualifier of an imported module and `NAME` one of its
+// constants marks that constant used -- its value is baked into the body, so the
+// edge is a value edge and a change to it rebuilds this module. One pass over the
+// tokens; a program past `marks.len` constants records the rest as before.
+// ponytail: a struct literal field or a member spelled `q.NAME` marks a constant of
+// the same name too, an edge held to a value that did not change -- harmless.
+fn mark_body_constant_uses(c: *check.Checker, g: *graph.Graph, module_index: usize, marks: []u8) {
+    if module_index >= g.count { ret }
+    let module = g.modules[module_index]
+    let tokens = module.tokens
+    var token_at = 0usize
+    while token_at + 2usize < tokens.len {
+        if tokens[token_at].kind == .Identifier && tokens[token_at + 1usize].kind == .PunctDot && tokens[token_at + 2usize].kind == .Identifier {
+            let qualifier = module.text[tokens[token_at].start..tokens[token_at].end]
+            let name = module.text[tokens[token_at + 2usize].start..tokens[token_at + 2usize].end]
+            var import_at = module.first_import
+            let import_end = module.first_import + module.import_count
+            while import_at < import_end {
+                if same(g.imports[import_at].qualifier, qualifier) {
+                    let imported = g.imports[import_at].target
+                    let (first, end) = span_of(c, span_constants(), imported)
+                    var constant_at = first
+                    while constant_at < end {
+                        if constant_at < marks.len && c.constants[constant_at].module_index == imported && same(c.constants[constant_at].name, name) { marks[constant_at] = 1u8 }
+                        constant_at += 1usize
+                    }
+                }
+                import_at += 1usize
+            }
+        }
+        token_at += 1usize
+    }
+}
+
 fn foreign_constant_used_by_module(c: *check.Checker, module_index: usize, target_constant: usize) -> (bool, err) {
     if target_constant >= c.constant_count { ret (false, InvalidArtifact) }
     let target_item = c.constants[target_constant]
@@ -1757,13 +1795,15 @@ fn first_inlined(builder: *nir.Builder, module_index: usize, index: usize) -> bo
     ret builder.used_marks_valid && builder.used_marks_module == module_index && index < builder.inlined_marks.len && builder.inlined_marks[index] == 1u8
 }
 
-fn value_dependency_count(c: *check.Checker, module_index: usize) -> (usize, err) {
+fn value_dependency_count(c: *check.Checker, g: *graph.Graph, module_index: usize) -> (usize, err) {
+    var marks: [8192]u8 = zero
+    mark_body_constant_uses(c, g, module_index, marks[..])
     var count = 0usize
     var at = 0usize
     while at < c.constant_count {
-        let (used, used_error) = foreign_constant_used_by_module(c, module_index, at)
+        let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, at)
         if used_error != ok { ret (0usize, used_error) }
-        if used { count += 1usize }
+        if used_by_constant || (at < marks.len && marks[at] != 0u8) { count += 1usize }
         at += 1usize
     }
     ret (count, ok)
@@ -1771,7 +1811,7 @@ fn value_dependency_count(c: *check.Checker, module_index: usize) -> (usize, err
 
 fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder, module_index: usize, table: *StringTable, scratch: *binary.Buffer, output: *binary.Buffer) -> err {
     try mark_module_references(builder, c, module_index)
-    let (value_count, value_count_error) = value_dependency_count(c, module_index)
+    let (value_count, value_count_error) = value_dependency_count(c, g, module_index)
     if value_count_error != ok { ret value_count_error }
     try binary.little_u32(output, dependency_count(builder, c, module_index) + template_dependency_count(c, module_index) + value_count)
     var at = 0usize
@@ -1848,11 +1888,13 @@ fn write_dependencies(c: *check.Checker, g: *graph.Graph, builder: *nir.Builder,
         }
         at += 1usize
     }
+    var body_marks: [8192]u8 = zero
+    mark_body_constant_uses(c, g, module_index, body_marks[..])
     at = 0usize
     while at < c.constant_count {
-        let (used, used_error) = foreign_constant_used_by_module(c, module_index, at)
+        let (used_by_constant, used_error) = foreign_constant_used_by_module(c, module_index, at)
         if used_error != ok { ret used_error }
-        if used {
+        if used_by_constant || (at < body_marks.len && body_marks[at] != 0u8) {
             let constant = c.constants[at]
             if constant.module_index >= g.count { ret InvalidArtifact }
             let (hash, hash_error) = constant_body_hash(c, g, at, scratch)

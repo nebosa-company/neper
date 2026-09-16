@@ -1881,6 +1881,22 @@ for hot_mode in --release --time; do
     [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:options-changed dep=rebuilt:options-changed
     cmp "$hot_exe" "$hot_clean"
+    # A constant's value is a value edge (D492, H14): the module folding on it is rebuilt.
+    value_scratch="$test_build/value-scratch"
+    rm -rf "$value_scratch"
+    cp -r "$repo/tests/selfhost/fixtures/link/incremental_value" "$value_scratch"
+    [ "$("$test_build/neper-self" emit-executable "$value_scratch/src/main.e" "$repo" x64 linux "$test_build/value$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    value_status=0
+    "$test_build/value$hot_mode" || value_status=$?
+    [ "$value_status" -eq 8 ]
+    cp "$value_scratch/edits/dep_limit.e" "$value_scratch/src/dep.e"
+    [ "$("$test_build/neper-self" emit-executable "$value_scratch/src/main.e" "$repo" x64 linux "$test_build/value$hot_mode" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$value_scratch/.neper/$hot_manifest_mode/build-manifest.json" main=rebuilt:edge-changed dep=rebuilt:source-changed
+    value_status=0
+    "$test_build/value$hot_mode" || value_status=$?
+    [ "$value_status" -eq 4 ]
+    [ "$("$test_build/neper-self" emit-executable "$value_scratch/src/main.e" "$repo" x64 linux "$test_build/value-clean$hot_mode" $hot_mode 2>/dev/null)" = "executable written" ]
+    cmp "$test_build/value$hot_mode" "$test_build/value-clean$hot_mode"
     # A cyclic artifact reference (D472, H24): distrusted, rebuilt as invalid-artifact, the clean image.
     cycle_scratch="$test_build/cycle-scratch"
     rm -rf "$cycle_scratch"
