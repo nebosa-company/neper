@@ -8,6 +8,9 @@ use e.mem
 use e.os
 use e.str
 
+// Reading a reset region on purpose is what this fixture is for: the audited
+// exception to E-SAFETY-0013 (D354).
+@unsafe
 fn main(a: *mem.Arena, args: []str) -> err {
     let release = str.eq(args[args.len - 1usize], "release")
     let (first, first_error) = mem.alloc[u8](a, 64usize)

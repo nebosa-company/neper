@@ -3994,6 +3994,20 @@ fn write_check_message(file: *Sink, checker: *check.Checker, check_error: err) -
         try write_all(file, checker.failure_detail2)
         ret write_all(file, " that lives until this block ends, so it cannot be moved or closed here")
     }
+    if checker.failure_kind == .RegionReset {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` points into a region that was reset at line ")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, ", so it cannot be used here")
+    }
+    if checker.failure_kind == .ViewMutated {
+        try write_all(file, "`")
+        try write_all(file, checker.failure_detail)
+        try write_all(file, "` is a view of a container that was changed at line ")
+        try write_all(file, checker.failure_detail2)
+        ret write_all(file, ", so it cannot be used here; take the view again")
+    }
     if checker.failure_kind == .ResourceCopy {
         try write_all(file, "`")
         try write_all(file, checker.failure_detail)

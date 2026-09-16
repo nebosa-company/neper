@@ -3503,6 +3503,19 @@ none becomes a trap:
   returned beside a `bool` -- a container's `(T, bool)` -- is the same with `found`
   for `e == ok` and `!found` for `e != ok` (D353); `break` and `continue` are
   diverging arms.
+- A region and a view (D354, H02's lexical subset): `let m = mem.mark(a)` opens a
+  region; a slice, pointer or string bound after it from a call that took `a` --
+  `mem.alloc[T](a, n)` or any function with a `*mem.Arena` parameter -- and gives
+  back something that can hold a pointer belongs to that region, as does a binding
+  from such a value; `mem.reset(a, m)` ends the region and every value of it, and of
+  any later mark on `a`, is dangling: it cannot be read, passed, stored or returned
+  (`E-SAFETY-0013`); its `.len` may be read. A slice, pointer or string bound from a
+  call given `&c`, where `c` is a local and the call takes no arena, is a view of
+  `c`; a later call given `&c` through a `*T` parameter that gives back nothing
+  holding a pointer mutates `c`, and every view of it is dangling (`E-SAFETY-0014`).
+  Both are lexical and within one function: what is returned, stored, handed to a
+  callback, an import or a thread, reached through a pointer local, or made by a
+  cast is outside the rule, and `m25-h02-regions.md` says so.
 - A container's insert -- `list.push`, `deque.push_back`, `heap.push`, `map.put`'s
   value, `channel.send` and the rest -- takes its element by `own`: what is pushed
   is the container's, and a handle closed after it was pushed is `E-SAFETY-0001`.

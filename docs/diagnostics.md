@@ -41,6 +41,8 @@ Categories are `CLI`, `LEX`, `SYNTAX`, `NAME`, `TYPE`, `COMPTIME`, `ERROR`, `MEM
 | `E-SAFETY-0010` | a declared resource's field read outside its module | spec §11 |
 | `E-SAFETY-0011` | a resource declared outside a loop consumed inside it | spec §11 |
 | `E-SAFETY-0012` | a borrowed resource closed, moved to an `own` parameter, or returned | spec §11 |
+| `E-SAFETY-0013` | a value allocated in a region used after the region was reset | spec §11 |
+| `E-SAFETY-0014` | a view of a container used after the container was mutated | spec §11 |
 | `E-SAFETY-9999` | statically diagnosed safety-contract violation | spec §11 |
 | `E-MODULE-0001` | module is missing or defined by multiple roots | spec §2 |
 | `E-MODULE-0002` | import graph contains a cycle | spec §2 |

@@ -7729,3 +7729,40 @@ this revision touches. The alternative -- splitting the checker into modules --
 is the right shape eventually and a large refactor of a file two sessions edit;
 a capacity constant is not feature work on the bootstrap, and the recovery path
 (D95) is a tagged revision either way.
+
+## D354 -- H02's lexical subset: a region ends at its reset, a view at its container's change
+
+`m25-h02-regions.md` is the design: what H02 asks for, read against the language
+after H01, cut to what one function's text says. Two things dangle in checked code
+and neither trapped: a slice into a region after `mem.reset`, and a view of a
+container's items after it grew. Both are refused now, statically, within a
+function: a mark opened by `mem.mark(a)` is followed; a slice, pointer or string
+bound from a call that took `a` after the mark belongs to it, and `mem.reset(a, m)`
+makes every value of the region -- and of any later mark on `a` -- dangling
+(E-SAFETY-0013, naming the reset); a slice, pointer or string bound from a call given
+`&c` with no arena is a view of `c`, and a later call given `&c` through a `*T`
+parameter that returns nothing holding a pointer makes the views dangling
+(E-SAFETY-0014, naming the mutation). A dangling value cannot be read, passed,
+stored or returned; its length can be read; the arms of an `if` join as H01's
+states do, so a reset on one path is a reset. Everything else -- what escapes by
+return, store, callback, import or thread, aliases through pointer locals, a
+pointer from a cast -- is outside the rule and listed as such in the design's
+section 4, with the raw-pointer cases named rather than inferred.
+
+Implemented on H01's state per local: a mark and a tagged value are owned views,
+so the existing use, join and loop rules apply unchanged; the invalidations sit in
+the call hook. The sweep over the compiler, the library and every fixture found no
+true positive and four readings the design had not fixed: an arena-taking call
+allocates rather than views (`run_program(a, &report, ...)`); a view is a slice,
+pointer or string, not a struct (`json.parse_value(&p)`); `.len` of a dangling
+slice is no read; a view invalidated in a loop is not consumed there. One fixture,
+`debug_fills`, reads a reset region on purpose and is `@unsafe`. Fixtures: a
+slice read after the reset, a view read after a push, a reset on one arm (reject);
+the valid shapes -- reset after the last use, an allocation before the mark, a
+deferred reset, nested marks, a view retaken, `&const` -- accept. Cost: +4% on
+`sc500k`'s check-bodies phase, single-worker debug; the register's budget row is
+D352's.
+
+Not delivered, and the design's section 7 says when: borrow summaries in the
+artifact, escape through structs, callbacks and threads, alias tracking,
+non-lexical liveness, build-then-freeze containers, generation-tagged handles.

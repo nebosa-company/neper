@@ -73,6 +73,8 @@ type DiagnosticKind = enum u8 {
     ResourceBorrowConsumed,
     ResourceCopy,
     ResourceMovedWhileBorrowed,
+    RegionReset,
+    ViewMutated,
     AssignmentImmutable,
     IndexedArrayImmutable,
     IndexedElementsImmutable,
@@ -290,8 +292,10 @@ type Aggregate = struct {
     // `resource` (D348): affine; `cleanup` names the consuming function, or is empty.
     resource: bool,
     cleanup: str,
-    // The containment answer once asked (D352): 0 unasked, else `affine_kind` + 1.
+    // The containment answer once asked (D352): 0 unasked, else `affine_kind` + 1;
+    // and whether a value holds a pointer (D354), the same way.
     affine_memo: u8,
+    pointer_memo: u8,
 }
 
 type AggregateField = struct {
@@ -327,6 +331,13 @@ type Resource = struct {
     pinned: usize,
     pin_at: usize,
     view: bool,
+    // H02's lexical subset (D354): a mark local's arena, as written; a region value's
+    // mark, plus one; a view's container local, plus one; and why a value dangles
+    // -- 1 its region was reset, 2 its container was mutated -- once it is Moved.
+    mark_arena: str,
+    region: usize,
+    view_of: usize,
+    dangling: u8,
 }
 
 type Alias = struct {
@@ -2075,7 +2086,7 @@ fn register_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.G
     let (name, name_error) = declaration_name(c, g.modules[module_index].text, node)
     if name_error != ok { ret name_error }
     let aggregate_index = c.aggregate_count
-    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[usize(node.token_start)], resource: false, cleanup: "", affine_memo: 0u8 }
+    var aggregate = Aggregate { name: name, module_index: module_index, kind: kind, first_field: 0usize, field_count: 0usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: aggregate_index, first_argument: 0usize, generic: generic, instance: false, backing_type: invalid_type(), token: c.tokens[usize(node.token_start)], resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
     // `resource` and its cleanup sit between the `=` and the body (D348).
     let (is_resource, cleanup) = resource_declaration(c, g.modules[module_index].text, node, tree.nodes[body_index])
     aggregate.resource = is_resource
@@ -2251,7 +2262,7 @@ fn collect_aggregate_declaration(c: *Checker, r: *resolve.Resolver, g: *graph.Gr
 fn seed_target_enum(c: *Checker, name: str, members: []const str) -> err {
     if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + members.len > c.aggregate_fields.len { ret Capacity }
     let backing = make_type(.Integer, "u8", 0usize)
-    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero, resource: false, cleanup: "", affine_memo: 0u8 }
+    c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: 0usize, kind: .Enum, first_field: c.aggregate_field_count, field_count: members.len, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: backing, token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
     var at = 0usize
     while at < members.len {
         c.aggregate_fields[c.aggregate_field_count + at] = AggregateField { name: members[at], ty: backing, enum_value: at, enum_negative: false, has_enum_value: true, token: zero }
@@ -2301,7 +2312,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
     if has_memory {
         if c.aggregate_count == c.aggregates.len || c.aggregate_field_count + 2usize > c.aggregate_fields.len { ret Capacity }
         let usize_type = make_type(.Integer, "usize", memory_module)
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8 }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Stats", module_index: memory_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 2usize, first_comptime: c.comptime_parameter_count, comptime_count: 0usize, template_index: c.aggregate_count, first_argument: 0usize, generic: false, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "used", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_fields[c.aggregate_field_count + 1usize] = AggregateField { name: "capacity", ty: usize_type, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 2usize
@@ -2321,7 +2332,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
         var element = make_type(.TypeParameter, "T", atomic_module)
         element.element = parameter_index
         element.has_element = true
-        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8 }
+        c.aggregates[c.aggregate_count] = Aggregate { name: "Atomic", module_index: atomic_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 1usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
         c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "value", ty: element, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
         c.aggregate_field_count += 1usize
         c.aggregate_count += 1usize
@@ -2363,7 +2374,7 @@ fn seed_intrinsic_aggregates(c: *Checker, g: *graph.Graph) -> err {
             lanes.has_length = false
             var name = "Vec"
             if which == 1usize { name = "Mask" }
-            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8 }
+            c.aggregates[c.aggregate_count] = Aggregate { name: name, module_index: simd_module, kind: .Struct, first_field: c.aggregate_field_count, field_count: 1usize, first_comptime: parameter_index, comptime_count: 2usize, template_index: c.aggregate_count, first_argument: 0usize, generic: true, instance: false, backing_type: invalid_type(), token: zero, resource: false, cleanup: "", affine_memo: 0u8, pointer_memo: 0u8 }
             c.aggregate_fields[c.aggregate_field_count] = AggregateField { name: "lanes", ty: lanes, enum_value: 0usize, enum_negative: false, has_enum_value: false, token: zero }
             c.aggregate_field_count += 1usize
             c.aggregate_count += 1usize
@@ -5467,7 +5478,7 @@ fn add_local(c: *Checker, name: str, ty: Type, mutable: bool) -> err {
     if affine_kind(c, ty, 0usize) != 0u8 { state = 1u8 }
     var no_fields: []u8 = zero
     c.locals[c.local_count] = Local { name: name, ty: ty, mutable: mutable }
-    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false }
+    c.resources[c.local_count] = Resource { state: state, acquired: 0usize, obligated: false, bound_err: 0usize, has_bound_err: false, fields: no_fields, borrowed: false, pinned: 0usize, pin_at: 0usize, view: false, mark_arena: "", region: 0usize, view_of: 0usize, dangling: 0u8 }
     c.local_count += 1usize
     c.affine_answer_valid = false
     ret ok
@@ -12087,6 +12098,8 @@ fn diagnostic_code(kind: DiagnosticKind) -> str {
     if kind == .ResourceBorrowConsumed { ret "E-SAFETY-0012" }
     if kind == .ResourceCopy { ret "E-SAFETY-0005" }
     if kind == .ResourceMovedWhileBorrowed { ret "E-SAFETY-0004" }
+    if kind == .RegionReset { ret "E-SAFETY-0013" }
+    if kind == .ViewMutated { ret "E-SAFETY-0014" }
     if kind == .TryInsideDefer || kind == .TryCast || kind == .TryNotFallible || kind == .TryNoPropagate { ret "E-ERROR-9999" }
     // docs/diagnostics.md: section 9's reflection and section 8's atomics under their
     // own categories (D215). A constant cycle stays E-TYPE-9999: the bootstrap says so
@@ -12196,6 +12209,225 @@ fn module_is_os(c: *Checker, module_index: usize) -> bool {
     ret same(c.graph.modules[module_index].name, "e.os")
 }
 
+fn module_is_mem(c: *Checker, module_index: usize) -> bool {
+    if !c.has_graph || module_index >= c.graph.count { ret false }
+    ret same(c.graph.modules[module_index].name, "e.mem")
+}
+
+// Why a moved value cannot be used: it was moved, its region was reset, or the
+// container it viewed was mutated (D354).
+fn dangling_kind(c: *Checker, local_index: usize) -> DiagnosticKind {
+    if c.resources[local_index].dangling == 1u8 { ret .RegionReset }
+    if c.resources[local_index].dangling == 2u8 { ret .ViewMutated }
+    ret .ResourceUseAfterMove
+}
+
+// The text of a call's `position`th argument, as written; empty when there is none.
+fn call_argument_text(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, call: syntax.Node, position: usize) -> str {
+    let (argument_index, found) = call_argument_node(tree, call, position)
+    if !found { ret "" }
+    let argument = tree.nodes[argument_index]
+    if usize(argument.token_end) > c.token_count || argument.token_end <= argument.token_start { ret "" }
+    let first = c.tokens[usize(argument.token_start)]
+    let last = c.tokens[usize(argument.token_end) - 1usize]
+    ret g.modules[module_index].text[first.start..last.end]
+}
+
+// The node of a call's `position`th argument: the node children after the callee.
+fn call_argument_node(tree: *parse.Tree, call: syntax.Node, position: usize) -> (usize, bool) {
+    let end = usize(call.first_child) + usize(call.child_count)
+    var at = usize(call.first_child)
+    var seen = 0usize
+    while at < end {
+        if parse.child_is_node_at(tree, at) {
+            if seen == position + 1usize { ret (parse.child_index_at(tree, at), true) }
+            seen += 1usize
+        }
+        at += 1usize
+    }
+    ret (0usize, false)
+}
+
+// The local whose address an argument takes: `&x`, or `&x.f`/`&x[i]` down to `x`.
+fn address_argument_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, argument_index: usize) -> (usize, bool) {
+    let argument = tree.nodes[argument_index]
+    if argument.kind != .UnaryExpr || c.tokens[usize(argument.token_start)].kind != .PunctAmp { ret (0usize, false) }
+    let (inner_index, has_inner) = first_node_child(tree, argument)
+    if !has_inner { ret (0usize, false) }
+    var base_index = inner_index
+    while tree.nodes[base_index].kind == .FieldExpr || tree.nodes[base_index].kind == .BracketPostfix {
+        let (deeper_index, has_deeper) = first_node_child(tree, tree.nodes[base_index])
+        if !has_deeper { break }
+        base_index = deeper_index
+    }
+    let base = tree.nodes[base_index]
+    if base.kind != .NameExpr { ret (0usize, false) }
+    let token = c.tokens[usize(base.token_start)]
+    if token.kind != .Identifier { ret (0usize, false) }
+    let (local_index, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+    ret (local_index, found)
+}
+
+// Whether any of the call's results can hold a pointer: what makes a call an
+// accessor (a view comes back) rather than a mutation.
+fn call_returns_pointer(c: *Checker, info: CallInfo) -> bool {
+    if info.mem_alloc { ret true }
+    var at = 0usize
+    while at < info.function.return_count {
+        let return_index = info.function.first_return + at
+        if return_index < c.return_type_count && holds_pointer(c, c.return_types[return_index], 0usize) { ret true }
+        at += 1usize
+    }
+    ret false
+}
+
+// A plain local bound from a call (D354): a region value when the call took a
+// live mark's arena and gives back something that can hold a pointer; a view when
+// it took `&c` of a local; from another local, the same as that local.
+fn region_bind(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, statement: syntax.Node, initializer_index: usize, has_initializer: bool, from_call: bool, call: CallInfo) -> err {
+    c.resources[local_index].region = 0usize
+    c.resources[local_index].view_of = 0usize
+    c.resources[local_index].dangling = 0u8
+    c.resources[local_index].state = resource_plain
+    if !has_initializer || !holds_pointer(c, c.locals[local_index].ty, 0usize) { ret ok }
+    var source_index = initializer_index
+    var source = tree.nodes[source_index]
+    // `s[1..]`, `&s[0]`, `s.items`: what it came from.
+    while source.kind == .BracketPostfix || source.kind == .FieldExpr || (source.kind == .UnaryExpr && c.tokens[usize(source.token_start)].kind == .PunctAmp) {
+        let (inner_index, has_inner) = first_node_child(tree, source)
+        if !has_inner { break }
+        source_index = inner_index
+        source = tree.nodes[source_index]
+    }
+    if source.kind == .NameExpr {
+        // Only a tagged local -- an owned one -- has anything to hand on.
+        if !any_affine_local(c) { ret ok }
+        let token = c.tokens[usize(source.token_start)]
+        if token.kind != .Identifier { ret ok }
+        let (other, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
+        if !found || other == local_index { ret ok }
+        c.resources[local_index].region = c.resources[other].region
+        c.resources[local_index].view_of = c.resources[other].view_of
+        if c.resources[local_index].region != 0usize || c.resources[local_index].view_of != 0usize { region_tag(c, local_index, usize(statement.token_start)) }
+        ret ok
+    }
+    if !from_call || source.kind != .CallExpr || !call_returns_pointer(c, call) { ret ok }
+    // A view is a slice, a pointer or a string that came back from a call given
+    // `&c`; a call that takes an arena hands back an allocation instead.
+    let bound_kind = c.locals[local_index].ty.kind
+    let viewable = bound_kind == .Slice || bound_kind == .Pointer || bound_kind == .String
+    var address_at = 0usize
+    var has_address = false
+    while viewable && !has_address {
+        let (argument_index, has_argument) = call_argument_node(tree, source, address_at)
+        if !has_argument { break }
+        let argument = tree.nodes[argument_index]
+        if argument.kind == .UnaryExpr && c.tokens[usize(argument.token_start)].kind == .PunctAmp { has_address = true }
+        address_at += 1usize
+    }
+    if !has_address && !any_affine_local(c) { ret ok }
+    // The arena argument, if the callee takes one: `mem.alloc[T](a, n)` first, a
+    // declared function wherever its `*mem.Arena` parameter is.
+    var arena_text = ""
+    var allocates = call.mem_alloc
+    if call.mem_alloc {
+        arena_text = call_argument_text(c, g, tree, module_index, source, 0usize)
+    } else {
+        var parameter_at = 0usize
+        while parameter_at < call.function.parameter_count {
+            let parameter_index = call.function.first_parameter + parameter_at
+            if parameter_index < c.parameter_count {
+                let parameter_type = c.parameters[parameter_index].ty
+                if parameter_type.kind == .Pointer && parameter_type.has_element && parameter_type.element < c.type_count && seeded_arena(c, c.types[parameter_type.element]) {
+                    arena_text = call_argument_text(c, g, tree, module_index, source, parameter_at)
+                    allocates = true
+                    break
+                }
+            }
+            parameter_at += 1usize
+        }
+    }
+    if arena_text.len != 0usize && any_affine_local(c) {
+        // The innermost live mark of that arena.
+        var mark_at = c.local_count
+        while mark_at > 0usize {
+            mark_at = mark_at - 1usize
+            if mark_at != local_index && c.resources[mark_at].mark_arena.len != 0usize && c.resources[mark_at].state == resource_owned && same(c.resources[mark_at].mark_arena, arena_text) {
+                c.resources[local_index].region = mark_at + 1usize
+                break
+            }
+        }
+    }
+    var argument_at = 0usize
+    while !allocates && has_address && c.resources[local_index].view_of == 0usize {
+        let (argument_index, has_argument) = call_argument_node(tree, source, argument_at)
+        if !has_argument { break }
+        let (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+        if is_address && container != local_index { c.resources[local_index].view_of = container + 1usize }
+        argument_at += 1usize
+    }
+    if c.resources[local_index].region != 0usize || c.resources[local_index].view_of != 0usize { region_tag(c, local_index, usize(statement.token_start)) }
+    ret ok
+}
+
+// A region value or a view is followed as an owned view: read as wanted, moved by
+// nobody, owed nothing -- and dangling once its region or container goes.
+fn region_tag(c: *Checker, local_index: usize, token: usize) {
+    c.resources[local_index].state = resource_owned
+    c.resources[local_index].view = true
+    c.resources[local_index].obligated = false
+    c.resources[local_index].acquired = token
+    c.affine_answer_valid = false
+}
+
+// A call that ends a region or mutates a container (D354): `mem.reset(a, m)` makes
+// every region value of `m`, and of any later mark on the same arena, dangling; a
+// call given `&c` through a `*T` parameter that gives back nothing holding a
+// pointer makes every view of `c` dangling.
+fn region_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, info: CallInfo) {
+    if module_is_mem(c, info.function.module_index) && same(info.function.name, "reset") {
+        let (mark_argument, has_mark) = call_argument_node(tree, node, 1usize)
+        if !has_mark || tree.nodes[mark_argument].kind != .NameExpr { ret }
+        let mark_token = c.tokens[usize(tree.nodes[mark_argument].token_start)]
+        let (mark_index, mark_found) = find_local(c, g.modules[module_index].text[mark_token.start..mark_token.end])
+        if !mark_found || c.resources[mark_index].mark_arena.len == 0usize { ret }
+        var at = 0usize
+        while at < c.local_count {
+            let region = c.resources[at].region
+            if region != 0usize && region - 1usize >= mark_index && same(c.resources[region - 1usize].mark_arena, c.resources[mark_index].mark_arena) {
+                c.resources[at].state = resource_moved
+                c.resources[at].dangling = 1u8
+                c.resources[at].acquired = usize(node.token_start)
+            }
+            at += 1usize
+        }
+        ret
+    }
+    if call_returns_pointer(c, info) { ret }
+    var argument_at = 0usize
+    while argument_at < info.function.parameter_count {
+        let (argument_index, has_argument) = call_argument_node(tree, node, argument_at)
+        if !has_argument { break }
+        let parameter_index = info.function.first_parameter + argument_at
+        if parameter_index < c.parameter_count && c.parameters[parameter_index].ty.kind == .Pointer && !c.parameters[parameter_index].ty.is_const {
+            let (container, is_address) = address_argument_local(c, g, tree, module_index, argument_index)
+            if is_address {
+                var at = 0usize
+                while at < c.local_count {
+                    if c.resources[at].view_of == container + 1usize && c.resources[at].state == resource_owned {
+                        c.resources[at].state = resource_moved
+                        c.resources[at].dangling = 2u8
+                        c.resources[at].acquired = usize(node.token_start)
+                    }
+                    at += 1usize
+                }
+            }
+        }
+        argument_at += 1usize
+    }
+}
+
+
 // `mem.Arena` is affine and owed nothing (D351): an arena lives in one place, and
 // what it holds is reclaimed by the process, not a closer.
 fn seeded_arena(c: *Checker, ty: Type) -> bool {
@@ -12233,7 +12465,7 @@ fn resource_commit_pins(c: *Checker) {
 // aggregate or array holding any of them; a type parameter can be anything.
 fn holds_pointer(c: *Checker, ty: Type, depth: usize) -> bool {
     if depth > 6usize { ret true }
-    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .Function || ty.kind == .TypeParameter { ret true }
+    if ty.kind == .Pointer || ty.kind == .Slice || ty.kind == .String || ty.kind == .Function || ty.kind == .TypeParameter { ret true }
     if ty.kind == .Array {
         if !ty.has_element || ty.element >= c.type_count { ret true }
         ret holds_pointer(c, c.types[ty.element], depth + 1usize)
@@ -12242,13 +12474,19 @@ fn holds_pointer(c: *Checker, ty: Type, depth: usize) -> bool {
     let (aggregate_index, found) = aggregate_for_type(c, ty)
     if !found { ret true }
     let aggregate = c.aggregates[aggregate_index]
+    if aggregate.pointer_memo != 0u8 { ret aggregate.pointer_memo == 2u8 }
+    var holds = false
     var field_at = 0usize
-    while field_at < aggregate.field_count {
+    while !holds && field_at < aggregate.field_count {
         let field_index = aggregate.first_field + field_at
-        if field_index < c.aggregate_field_count && holds_pointer(c, c.aggregate_fields[field_index].ty, depth + 1usize) { ret true }
+        if field_index < c.aggregate_field_count && holds_pointer(c, c.aggregate_fields[field_index].ty, depth + 1usize) { holds = true }
         field_at += 1usize
     }
-    ret false
+    if c.signatures_ready {
+        c.aggregates[aggregate_index].pointer_memo = 1u8
+        if holds { c.aggregates[aggregate_index].pointer_memo = 2u8 }
+    }
+    ret holds
 }
 
 // 0: not affine; 2: affine and obligated (the type names a cleanup). The seeded
@@ -12534,11 +12772,14 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
             }
         }
         // A field of a tracked struct is its own question: the struct's whole state
-        // does not gate a read of one field, plain or affine, only its own does.
+        // does not gate a read of one field, plain or affine, only its own does. The
+        // length of a dangling slice reads no memory (D354).
         let (base_index, has_base) = first_node_child(tree, node)
         if has_base && tree.nodes[base_index].kind == .NameExpr {
             let (base_local, base_is_resource) = resource_local_of(c, g, tree, module_index, base_index)
             if base_is_resource && c.resources[base_local].fields.len != 0usize { ret ok }
+            let member = c.tokens[usize(node.token_end) - 1usize]
+            if base_is_resource && c.resources[base_local].dangling != 0u8 && same(g.modules[module_index].text[member.start..member.end], "len") { ret ok }
         }
     }
     if node.kind == .NameExpr {
@@ -12546,7 +12787,7 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         if !is_resource { ret ok }
         let state = c.resources[local_index].state
         if state == resource_moved || state == resource_maybe {
-            record_failure(c, module_index, node, .ResourceUseAfterMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+            record_failure(c, module_index, node, dangling_kind(c, local_index), c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
             ret ResourceViolation
         }
         // An unchecked value may be moved whole into another binding, which takes the
@@ -12611,7 +12852,7 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
     // -- owes nothing and is moved by nobody; it is read as often as wanted.
     if state == resource_owned && (c.resources[local_index].view || c.resources[local_index].borrowed) && c.resources[local_index].fields.len == 0usize { ret ok }
     if state != resource_owned {
-        record_failure(c, module_index, node, .ResourceUseAfterMove, c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
+        record_failure(c, module_index, node, dangling_kind(c, local_index), c.locals[local_index].name, line_detail(c, g, module_index, c.resources[local_index].acquired))
         ret ResourceViolation
     }
     // Consumed by a deferred call: reserved, and discharged at the block's exit.
@@ -12635,6 +12876,7 @@ fn resource_consume(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_inde
 // ran before, so `f(x, x)` fails at the second argument here, as a move of a moved.
 fn resource_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node: syntax.Node, info: CallInfo) -> err {
     if !c.resources_on || info.is_cast || info.protocol_pending || !any_affine_local(c) { ret ok }
+    region_call(c, g, tree, module_index, node, info)
     let end = usize(node.first_child) + usize(node.child_count)
     var at = usize(node.first_child)
     var child_position = 0usize
@@ -12658,9 +12900,19 @@ fn resource_call(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
 // nothing at all from a borrowed producer -- from another local, which is moved,
 // or from `zero`.
 fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, local_index: usize, statement: syntax.Node, initializer_index: usize, has_initializer: bool, from_call: bool, call: CallInfo, tried: bool, err_local: usize, has_err_local: bool) -> err {
-    if !any_affine_local(c) { ret ok }
+    if !c.resources_on { ret ok }
+    // `let m = mem.mark(a)` opens a region (D354): the mark is followed from here, and
+    // it is what makes the pass look at this body at all.
+    if from_call && !has_err_local && module_is_mem(c, call.function.module_index) && same(call.function.name, "mark") {
+        c.resources[local_index].state = resource_owned
+        c.resources[local_index].view = true
+        c.resources[local_index].acquired = usize(statement.token_start)
+        c.resources[local_index].mark_arena = call_argument_text(c, g, tree, module_index, tree.nodes[initializer_index], 0usize)
+        c.affine_answer_valid = false
+        ret ok
+    }
     let kind = affine_kind(c, c.locals[local_index].ty, 0usize)
-    if kind == 0u8 { ret ok }
+    if kind == 0u8 { ret region_bind(c, g, tree, module_index, local_index, statement, initializer_index, has_initializer, from_call, call) }
     c.resources[local_index].acquired = usize(statement.token_start)
     c.resources[local_index].obligated = kind == 2u8
     c.resources[local_index].borrowed = false
@@ -12926,7 +13178,9 @@ fn resource_join_states(c: *Checker, into: []u8, other: []const u8) {
 // The same state stays; nothing owned on either path -- moved, or null -- is moved;
 // anything else is Maybe, which no later use or exit accepts.
 fn resource_join_one(a: u8, b: u8) -> u8 {
+    // Plain is untracked: the other path's answer stands (a view made on one arm).
     if a == b || a == resource_plain { ret a }
+    if b == resource_plain { ret b }
     let a_gone = a == resource_moved || a == resource_null
     let b_gone = b == resource_moved || b == resource_null
     if a_gone && b_gone { ret resource_moved }
@@ -12963,7 +13217,8 @@ fn resource_loop_check(c: *Checker, g: *graph.Graph, module_index: usize, node: 
     var at = 0usize
     var cursor = 0usize
     while at < c.local_count && cursor < before.len {
-        if c.resources[at].state != before[cursor] && before[cursor] == resource_owned {
+        // A view invalidated in the body is not consumed: its next use is the error.
+        if c.resources[at].state != before[cursor] && before[cursor] == resource_owned && c.resources[at].dangling == 0u8 {
             record_failure(c, module_index, node, .ResourceMovedInLoop, c.locals[at].name, line_detail(c, g, module_index, c.resources[at].acquired))
             ret ResourceViolation
         }
