@@ -3819,8 +3819,10 @@ foreign symbol or protocol lookup, the exact observation it depended on:
   ignored.
 
 A module is recompiled when its own source hash changes, when any recorded edge no
-longer matches the current hash of its target, or when a protocol lookup produces a
-different presence or signature. Nothing else recompiles it. Modules
+longer matches the current hash of its target, when a protocol lookup produces a
+different presence or signature, or when the artifact was written by another
+compiler executable or under another build mode (the Debug section carries the
+writing compiler's hash, D398). Nothing else recompiles it. Modules
 compile in parallel; the edges of one build are the `Deps` of the next. Every edge
 follows a `use`, and the `use` graph is acyclic (§2), so no module's edges lead back
 to itself and the recompilation set of an edit is finite and ordered.

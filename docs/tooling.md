@@ -402,7 +402,8 @@ is not enumerable by this pass and is the boundary the inventory does not list; 
 `edges-hold` (source unchanged, every imported interface still as recorded),
 `edge-changed` (an imported interface differs), `source-changed`, `mode-changed`,
 `no-artifact`, `invalid-artifact` (a file that failed its checksum or layout
-validation, rebuilt like a missing one) -- empty for a build that read no artifacts;
+validation, rebuilt like a missing one), `compiler-changed` (written by another
+compiler executable, D398) -- empty for a build that read no artifacts;
 `mode-changed` covers `--unchecked` too, whose artifacts share `.neper/release/`
 with checked ones and carry their own mode (D369);
 `options.checks` is the

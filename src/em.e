@@ -2175,8 +2175,9 @@ fn write_debug(c: *check.Checker, g: *graph.Graph, module_index: usize, table: *
     if path_error != ok { ret path_error }
     try binary.little_u32(output, path_index)
     try binary.little_u64(output, source_hash)
-    try binary.little_u32(output, 0usize)
-    try binary.little_u32(output, 0usize)
+    // The compiler's own hash (D398, H15), in what were two reserved words: the
+    // driver learned it from its executable, or left zero.
+    try binary.little_u64(output, g.compiler_identity)
     // The manifest's digests (D323, format 7): the source's SHA-256 and its
     // interface's, as hex, so a build that does not parse this module still writes
     // its manifest line. Computed here when the module does not carry them yet.
@@ -3098,6 +3099,18 @@ fn artifact_source_hash(bytes: []const u8) -> (usize, err) {
     let (debug, found_debug, section_error) = find_section_unchecked(bytes, debug_kind())
     if section_error != ok || !found_debug || debug.length < 20usize { ret (0usize, InvalidArtifact) }
     let (hash, hash_error) = binary.read_u64(bytes, debug.offset + 4usize)
+    if hash_error != ok { ret (0usize, InvalidArtifact) }
+    ret (hash, ok)
+}
+
+// The compiler hash the Debug section carries (D398): zero in an artifact written
+// before the field or by a compiler that could not read itself.
+fn artifact_compiler_hash(bytes: []const u8) -> (usize, err) {
+    let validation_error = check_layout(bytes)
+    if validation_error != ok { ret (0usize, validation_error) }
+    let (debug, found_debug, section_error) = find_section_unchecked(bytes, debug_kind())
+    if section_error != ok || !found_debug || debug.length < 20usize { ret (0usize, InvalidArtifact) }
+    let (hash, hash_error) = binary.read_u64(bytes, debug.offset + 12usize)
     if hash_error != ok { ret (0usize, InvalidArtifact) }
     ret (hash, ok)
 }

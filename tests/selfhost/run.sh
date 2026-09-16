@@ -1834,6 +1834,18 @@ for hot_mode in --release --time; do
     hot_manifest="$hot_scratch/.neper/$hot_manifest_mode/build-manifest.json"
     python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=kept:stable dep=kept:stable e.os=kept:stable
     cmp "$hot_exe" "$hot_clean"
+    # The compiler is an identity (D398, H15): a warm build by another compiler
+    # executable -- this one with a byte appended -- rebuilds every module as
+    # `compiler-changed` and is the clean build; the original then rebuilds them back.
+    hot_other="$test_build/hot-other-compiler"
+    cp "$test_build/neper-self" "$hot_other"
+    printf 'x' >> "$hot_other"
+    [ "$("$hot_other" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:compiler-changed dep=rebuilt:compiler-changed e.os=rebuilt:compiler-changed
+    cmp "$hot_exe" "$hot_clean"
+    [ "$("$test_build/neper-self" emit-executable "$hot_main" "$repo" x64 linux "$hot_exe" $hot_mode --incremental 2>/dev/null)" = "executable written" ]
+    python3 "$repo/scripts/check_incremental.py" "$hot_manifest" main=rebuilt:compiler-changed dep=rebuilt:compiler-changed
+    cmp "$hot_exe" "$hot_clean"
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
     # or ignored, and the build is the clean build; the `.tmp` is never read.

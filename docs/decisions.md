@@ -8842,3 +8842,29 @@ A page may end inside a function's facts; the next page continues them and
 they belong to the last subject written. The alternative -- a function's
 records all or nothing -- would write nothing forever under a budget smaller
 than one function's facts, so the cut is documented instead.
+
+## D398 -- The compiler that wrote an artifact is part of its identity
+
+H15's remaining identity gap: a compiler rebuilt from changed sources read the
+artifacts its predecessor wrote as `stable` whenever their source hash and mode
+matched, and linked code the new compiler might no longer generate -- a version
+mismatch was a format-version miss, never a compiler one. Every artifact's
+Debug section now carries, in what were its two reserved words, the xxHash64 of
+the executable that wrote it; the driver learns its own hash once per process,
+for the commands that write or read artifacts (`emit-em`, `emit-em-all`,
+`emit-executable --incremental`), from the executable the command line named
+-- `os.executable_path` is outside the bootstrap's fixed surface -- and a
+compiler that cannot read itself that way writes zero and compares nothing,
+the behaviour before the field. On an incremental load a matching source and
+mode under a different compiler hash is `rebuilt: compiler-changed`, a new
+manifest reason; the three identity checks the driver had (a worker, its
+main-thread fallback) are one `artifact_identity`. Both suites build the hot
+fixture warm with a copy of the compiler that has a byte appended: every
+module `compiler-changed`, the image the clean one, and the original compiler
+rebuilds them back. Measured: the fixture's warm build is 59-61 ms wall over
+ten runs with the hash of the 8.5 MB compiler in it; the clean build 117-127.
+A warm build without the hash was not timed side by side, so the cost is
+bounded by the run-to-run spread, not measured to the millisecond.
+
+Not yet, of H15: `--inline-cap` and CPU features in the identity, in-memory
+overlays, snapshot identifiers on query results, the transaction boundary.

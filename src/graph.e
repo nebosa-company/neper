@@ -148,6 +148,9 @@ type Graph = struct {
     list: []usize,
     // Which modules the next front wave parses as headers only (D392); empty means none.
     want_headers: []bool,
+    // The hash of this compiler's executable (D398, H15), written into every artifact
+    // and compared on every incremental load; zero when it could not be read.
+    compiler_identity: usize,
     scanned: usize,
     // `-j N` (D331): how many workers any phase may run, none asked is the phase's
     // own count; and `--perturb`, the schedule turned around so the harness can ask

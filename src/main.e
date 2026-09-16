@@ -4483,32 +4483,40 @@ type ArtifactWorker = struct {
     unchanged: []bool,
     reason: []u8,
     mode_id: usize,
+    compiler_identity: usize,
     stopped: bool,
     stopped_at: usize,
 }
 
 fn artifact_worker_module(w: *ArtifactWorker, at: usize) -> err {
     let module_index = w.modules[at]
-    w.unchanged[module_index] = false
-    w.reason[module_index] = 0u8
     let (old, old_error) = load_artifact(&w.arena, w.paths[at])
     if old_error == mem.Exhausted { ret old_error }
-    // A file that is there and is not an artifact -- a failed checksum, a bad layout
-    // -- is rebuilt like a missing one, and the manifest says which (D368, H24).
-    if old_error == em.InvalidArtifact { w.reason[module_index] = 6u8 }
-    if old_error != ok { ret ok }
-    let (old_hash, old_hash_error) = em.artifact_source_hash(old)
-    let (new_hash, new_hash_error) = em.source_text_hash(w.texts[at])
-    let (old_mode, old_mode_error) = em.artifact_mode(old)
-    w.reason[module_index] = 1u8
-    if old_mode_error == ok && old_mode != w.mode_id { w.reason[module_index] = 2u8 }
-    if old_hash_error != ok || old_mode_error != ok { w.reason[module_index] = 6u8 }
-    if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == w.mode_id {
-        w.unchanged[module_index] = true
-        w.held[module_index] = old
-        w.reason[module_index] = 3u8
-    }
+    let (reason, unchanged) = artifact_identity(old, old_error, w.texts[at], w.mode_id, w.compiler_identity)
+    w.reason[module_index] = reason
+    w.unchanged[module_index] = unchanged
+    if unchanged { w.held[module_index] = old }
     ret ok
+}
+
+// Whether an artifact on disk is the module as it stands (D205, D211, D368, D398):
+// the reason code the manifest names, and whether the artifact is kept. A file that
+// is there and is not an artifact -- a failed checksum, a bad layout -- is rebuilt
+// like a missing one; a source, mode or compiler that differs is its own reason.
+fn artifact_identity(old: []const u8, old_error: err, text_now: str, mode_id: usize, compiler_identity: usize) -> (u8, bool) {
+    if old_error == em.InvalidArtifact { ret (6u8, false) }
+    if old_error != ok { ret (0u8, false) }
+    let (old_hash, old_hash_error) = em.artifact_source_hash(old)
+    let (new_hash, new_hash_error) = em.source_text_hash(text_now)
+    let (old_mode, old_mode_error) = em.artifact_mode(old)
+    let (old_compiler, old_compiler_error) = em.artifact_compiler_hash(old)
+    if old_hash_error != ok || old_mode_error != ok || old_compiler_error != ok || new_hash_error != ok { ret (6u8, false) }
+    if old_mode != mode_id { ret (2u8, false) }
+    if old_hash != new_hash { ret (1u8, false) }
+    // The compiler that wrote it is not this one (D398, H15): its code generation may
+    // differ, so the artifact is rebuilt, whatever its source says.
+    if compiler_identity != 0usize && old_compiler != compiler_identity { ret (7u8, false) }
+    ret (3u8, true)
 }
 
 fn artifact_worker_entry(w: *ArtifactWorker) {
@@ -4585,6 +4593,7 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
         workers[worker_at].unchanged = hot.unchanged
         workers[worker_at].reason = hot.reason
         workers[worker_at].mode_id = mode_id
+        workers[worker_at].compiler_identity = loaded.compiler_identity
         worker_at += 1usize
     }
     var threads: [8]os.Thread = zero
@@ -4617,23 +4626,12 @@ fn load_wave_artifacts(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held:
             var remaining = workers[worker_at].stopped_at
             while remaining < workers[worker_at].count {
                 let module_index = workers[worker_at].modules[remaining]
-                hot.unchanged[module_index] = false
-                hot.reason[module_index] = 0u8
                 let (old, old_error) = load_artifact(a, workers[worker_at].paths[remaining])
-                if old_error == em.InvalidArtifact { hot.reason[module_index] = 6u8 }
-                if old_error == ok {
-                    let (old_hash, old_hash_error) = em.artifact_source_hash(old)
-                    let (new_hash, new_hash_error) = em.source_text_hash(loaded.modules[module_index].text)
-                    let (old_mode, old_mode_error) = em.artifact_mode(old)
-                    hot.reason[module_index] = 1u8
-                    if old_mode_error == ok && old_mode != mode_id { hot.reason[module_index] = 2u8 }
-                    if old_hash_error != ok || old_mode_error != ok { hot.reason[module_index] = 6u8 }
-                    if old_hash_error == ok && new_hash_error == ok && old_hash == new_hash && old_mode_error == ok && old_mode == mode_id {
-                        hot.unchanged[module_index] = true
-                        held[module_index] = old
-                        hot.reason[module_index] = 3u8
-                    }
-                }
+                if old_error == mem.Exhausted { ret old_error }
+                let (reason, unchanged) = artifact_identity(old, old_error, loaded.modules[module_index].text, mode_id, loaded.compiler_identity)
+                hot.reason[module_index] = reason
+                hot.unchanged[module_index] = unchanged
+                if unchanged { held[module_index] = old }
                 remaining += 1usize
             }
         }
@@ -4779,6 +4777,20 @@ fn load_graph_hot(a: *mem.Arena, loaded: *graph.Graph, hot: *HotLoad, held: [][]
         queue_at += 1usize
     }
     ret graph.front_modules(a, loaded, list[0usize..unparsed])
+}
+
+// The compiler's own identity (D398, H15): the hash of its executable, written into
+// every artifact and compared on every incremental load, so a rebuilt compiler
+// rebuilds what it reads. The executable is found as the command line named it
+// (`os.executable_path` is outside the bootstrap's fixed surface); a compiler that
+// cannot find or read itself that way leaves zero, which compares as nothing -- the
+// behaviour before the field.
+fn learn_compiler_identity(a: *mem.Arena, loaded: *graph.Graph, self_path: str) {
+    if self_path.len == 0usize { ret }
+    let (self_bytes, self_error) = source.load(a, self_path)
+    if self_error != ok { ret }
+    let (self_hash, self_hash_error) = artifact_hash.xxhash64(self_bytes)
+    if self_hash_error == ok { loaded.compiler_identity = self_hash }
 }
 
 fn init_hot_load(a: *mem.Arena, hot: *HotLoad, scratch: *binary.Buffer, loaded: *graph.Graph, args: []str, on: bool, release: bool, unchecked: bool) -> err {
@@ -7356,6 +7368,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
         }
         var loaded: graph.Graph = zero
         try init_cli_graph(a, &loaded)
+        // Every command that writes or reads artifacts knows which compiler it is (D398).
+        if writes_em || writes_all_em || hot_build { learn_compiler_identity(a, &loaded, args[0usize]) }
         if trailing_flags {
             loaded.jobs = jobs_flag(args)
             loaded.perturb = has_flag(args, "--perturb")

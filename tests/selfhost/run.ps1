@@ -1676,6 +1676,22 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable' 'e.os=kept:stable'
     if ($LASTEXITCODE -ne 0) { throw "the warm hot build's manifest does not say every module was kept stable ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build is not the clean build ($hotMode)" }
+    # The compiler is an identity (D398, H15): a warm build by another compiler
+    # executable -- this one with a byte appended -- rebuilds every module as
+    # `compiler-changed` and is the clean build; the original then rebuilds them back.
+    $hotOther = Join-Path $testBuild 'hot-other-compiler.exe'
+    Copy-Item -LiteralPath $compiler -Destination $hotOther -Force
+    [IO.File]::AppendAllText($hotOther, 'x')
+    $hotOtherWarm = & $hotOther emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotOtherWarm -ne 'executable written') { throw "the warm hot build by another compiler failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:compiler-changed' 'dep=rebuilt:compiler-changed' 'e.os=rebuilt:compiler-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest of a build by another compiler does not say compiler-changed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build by another compiler is not the clean build ($hotMode)" }
+    $hotBack = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental 2>$null
+    if ($LASTEXITCODE -ne 0 -or $hotBack -ne 'executable written') { throw "the warm hot build after another compiler failed ($hotMode)" }
+    & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=rebuilt:compiler-changed' 'dep=rebuilt:compiler-changed'
+    if ($LASTEXITCODE -ne 0) { throw "the manifest after another compiler's artifacts does not say compiler-changed ($hotMode)" }
+    if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "the warm hot build after another compiler is not the clean build ($hotMode)" }
     # A damaged cache (D343, H24): a truncated artifact, a stray `.tmp` of a write that
     # died, and an artifact with bytes flipped behind a valid checksum are each rebuilt
     # or ignored, and the build is the clean build; the `.tmp` is never read.
