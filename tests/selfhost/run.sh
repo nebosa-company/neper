@@ -2463,7 +2463,7 @@ python3 "$repo/scripts/card_examples.py" "$test_build/neper-self" "$repo" x64 li
 # `plan-rename-file --json` (D376, H29): the plan byte for byte; applied to a copy it
 # re-checks, the new name has uses at the old sites, and a second apply is refused.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-rename-file explain.e "$repo" x64 linux --json --symbol explain.same --to alike > "$test_build/conformance-tools-plan-rename.jsonl")
-cmp -s "$test_build/conformance-tools-plan-rename.jsonl" "$conformance_root/tools/plan_rename.expected.jsonl" || { echo "plan-rename-file --json differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-plan-rename.jsonl" "$conformance_root/tools/plan_rename.x64-linux.expected.jsonl" || { echo "plan-rename-file --json differs from the conformance corpus" >&2; exit 1; }
 plan_scratch="$test_build/plan-scratch"
 rm -rf "$plan_scratch" && mkdir -p "$plan_scratch/src" && cp "$conformance_root/tools/explain.e" "$plan_scratch/src/"
 python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename.jsonl" --root "$plan_scratch/src" > /dev/null
@@ -2477,7 +2477,7 @@ python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename
 # `plan-replace-expression-file --json` (D414, H29): one expression's plan, applied and
 # checked; a span that is not one expression is refused with exit 2.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-replace-expression-file contract.e "$repo" x64 linux --json --span 693:703 --with 131072usize > "$test_build/conformance-tools-plan-replace.jsonl")
-cmp -s "$test_build/conformance-tools-plan-replace.jsonl" "$conformance_root/tools/plan_replace.expected.jsonl" || { echo "plan-replace-expression-file --json differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-plan-replace.jsonl" "$conformance_root/tools/plan_replace.x64-linux.expected.jsonl" || { echo "plan-replace-expression-file --json differs from the conformance corpus" >&2; exit 1; }
 replace_scratch="$test_build/plan-replace-scratch"
 rm -rf "$replace_scratch" && mkdir -p "$replace_scratch/src" && cp "$conformance_root/tools/contract.e" "$replace_scratch/src/"
 python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-replace.jsonl" --root "$replace_scratch/src" > /dev/null
@@ -2490,7 +2490,7 @@ cmp -s "$test_build/conformance-tools-plan-replace-refused.jsonl" "$conformance_
 # `plan-change-signature-file --json` (D415, H29): the parameters reordered, applied and
 # checked; a repeated index is refused with exit 2.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-change-signature-file signature.e "$repo" x64 linux --json --symbol signature.adjust --order 2,0,1 > "$test_build/conformance-tools-plan-signature.jsonl")
-cmp -s "$test_build/conformance-tools-plan-signature.jsonl" "$conformance_root/tools/plan_signature.expected.jsonl" || { echo "plan-change-signature-file --json differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-plan-signature.jsonl" "$conformance_root/tools/plan_signature.x64-linux.expected.jsonl" || { echo "plan-change-signature-file --json differs from the conformance corpus" >&2; exit 1; }
 signature_scratch="$test_build/plan-signature-scratch"
 rm -rf "$signature_scratch" && mkdir -p "$signature_scratch/src" && cp "$conformance_root/tools/signature.e" "$signature_scratch/src/"
 python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-signature.jsonl" --root "$signature_scratch/src" > /dev/null
@@ -2506,7 +2506,7 @@ cmp -s "$test_build/conformance-tools-plan-signature-refused.jsonl" "$conformanc
 (cd "$conformance_root/tools" && $test_build/neper-self uses-file contract.e "$repo" x64 linux --json --symbol contract.Counter.hits > "$test_build/conformance-tools-uses-field.jsonl")
 cmp -s "$test_build/conformance-tools-uses-field.jsonl" "$conformance_root/tools/uses_field.expected.jsonl" || { echo "uses-file --json on a field differs from the conformance corpus" >&2; exit 1; }
 (cd "$conformance_root/tools" && $test_build/neper-self plan-rename-file contract.e "$repo" x64 linux --json --symbol contract.Counter.hits --to count > "$test_build/conformance-tools-plan-rename-field.jsonl")
-cmp -s "$test_build/conformance-tools-plan-rename-field.jsonl" "$conformance_root/tools/plan_rename_field.expected.jsonl" || { echo "plan-rename-file --json on a field differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-plan-rename-field.jsonl" "$conformance_root/tools/plan_rename_field.x64-linux.expected.jsonl" || { echo "plan-rename-file --json on a field differs from the conformance corpus" >&2; exit 1; }
 field_scratch="$test_build/plan-rename-field-scratch"
 rm -rf "$field_scratch" && mkdir -p "$field_scratch/src" && cp "$conformance_root/tools/contract.e" "$field_scratch/src/"
 python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-rename-field.jsonl" --root "$field_scratch/src" > /dev/null
@@ -2522,7 +2522,7 @@ snapshot_after=$($test_build/neper-self context-file "$plan_scratch/src/explain.
 # applied to a copy it checks with the parameter last; a function named as a value is
 # refused with exit 2 and the diagnostic naming the site.
 (cd "$conformance_root/tools" && $test_build/neper-self plan-add-parameter-file contract.e "$repo" x64 linux --json --symbol contract.total --parameter 'scale: i64' --argument 1i64 > "$test_build/conformance-tools-plan-parameter.jsonl")
-cmp -s "$test_build/conformance-tools-plan-parameter.jsonl" "$conformance_root/tools/plan_parameter.expected.jsonl" || { echo "plan-add-parameter-file --json differs from the conformance corpus" >&2; exit 1; }
+cmp -s "$test_build/conformance-tools-plan-parameter.jsonl" "$conformance_root/tools/plan_parameter.x64-linux.expected.jsonl" || { echo "plan-add-parameter-file --json differs from the conformance corpus" >&2; exit 1; }
 parameter_scratch="$test_build/plan-parameter-scratch"
 rm -rf "$parameter_scratch" && mkdir -p "$parameter_scratch/src" && cp "$conformance_root/tools/contract.e" "$parameter_scratch/src/"
 python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-parameter.jsonl" --root "$parameter_scratch/src" > /dev/null

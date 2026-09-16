@@ -352,6 +352,12 @@ tests to run, by name or as `module.name` with any qualifier -- the form
 runner; a name the module does not declare is passed over, since a project-wide
 list names other modules' tests too. `test-project` does not take it.
 
+Every plan's `result.data` carries `snapshot` (D436, H29), the program identity
+a `context-file` subject names (D407): a harness that applies a plan against a
+tree whose snapshot differs applies edits computed for other sources, and the
+file-hash preconditions catch the file that changed while the snapshot says the
+program did.
+
 ### Test impact
 
 `neper test-impact-file PATH ROOT ARCH OS --json --changed m1,m2,...` (D423, H10)

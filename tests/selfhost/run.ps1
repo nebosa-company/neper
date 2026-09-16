@@ -2113,7 +2113,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $indexActual).Hash -ne (Get-Fil
 $planActual = Join-Path $testBuild 'conformance-tools-plan-rename.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-rename-file explain.e `"$repo`" x64 windows --json --symbol explain.same --to alike > `"$planActual`""
 if ($LASTEXITCODE -ne 0) { throw "plan-rename-file --json failed" }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $planActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename.expected.jsonl')).Hash) { throw "plan-rename-file --json differs from the conformance corpus" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $planActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename.x64-windows.expected.jsonl')).Hash) { throw "plan-rename-file --json differs from the conformance corpus" }
 $planScratch = Join-Path $testBuild 'plan-scratch'
 if (Test-Path -LiteralPath $planScratch) { Remove-Item -LiteralPath $planScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $planScratch 'src') | Out-Null
@@ -2131,7 +2131,7 @@ if ($LASTEXITCODE -eq 0) { throw 'a plan over changed files was applied' }
 $replaceActual = Join-Path $testBuild 'conformance-tools-plan-replace.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-replace-expression-file contract.e `"$repo`" x64 windows --json --span 693:703 --with 131072usize > `"$replaceActual`""
 if ($LASTEXITCODE -ne 0) { throw "plan-replace-expression-file --json failed" }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $replaceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_replace.expected.jsonl')).Hash) { throw "plan-replace-expression-file --json differs from the conformance corpus" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $replaceActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_replace.x64-windows.expected.jsonl')).Hash) { throw "plan-replace-expression-file --json differs from the conformance corpus" }
 $replaceScratch = Join-Path $testBuild 'plan-replace-scratch'
 if (Test-Path -LiteralPath $replaceScratch) { Remove-Item -LiteralPath $replaceScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $replaceScratch 'src') | Out-Null
@@ -2149,7 +2149,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $replaceRefused).Hash -ne (Get-
 $signatureActual = Join-Path $testBuild 'conformance-tools-plan-signature.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-change-signature-file signature.e `"$repo`" x64 windows --json --symbol signature.adjust --order 2,0,1 > `"$signatureActual`""
 if ($LASTEXITCODE -ne 0) { throw "plan-change-signature-file --json failed" }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $signatureActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_signature.expected.jsonl')).Hash) { throw "plan-change-signature-file --json differs from the conformance corpus" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $signatureActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_signature.x64-windows.expected.jsonl')).Hash) { throw "plan-change-signature-file --json differs from the conformance corpus" }
 $signatureScratch = Join-Path $testBuild 'plan-signature-scratch'
 if (Test-Path -LiteralPath $signatureScratch) { Remove-Item -LiteralPath $signatureScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $signatureScratch 'src') | Out-Null
@@ -2172,7 +2172,7 @@ if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fieldUsesActual).Hash -ne (Get
 $fieldPlanActual = Join-Path $testBuild 'conformance-tools-plan-rename-field.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-rename-file contract.e `"$repo`" x64 windows --json --symbol contract.Counter.hits --to count > `"$fieldPlanActual`""
 if ($LASTEXITCODE -ne 0) { throw "plan-rename-file --json on a field failed" }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fieldPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_field.expected.jsonl')).Hash) { throw "plan-rename-file --json on a field differs from the conformance corpus" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $fieldPlanActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_rename_field.x64-windows.expected.jsonl')).Hash) { throw "plan-rename-file --json on a field differs from the conformance corpus" }
 $fieldScratch = Join-Path $testBuild 'plan-rename-field-scratch'
 if (Test-Path -LiteralPath $fieldScratch) { Remove-Item -LiteralPath $fieldScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $fieldScratch 'src') | Out-Null
@@ -2193,7 +2193,7 @@ if ($snapshotBefore.Length -ne 16 -or $snapshotBefore -eq $snapshotAfter) { thro
 $parameterActual = Join-Path $testBuild 'conformance-tools-plan-parameter.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-add-parameter-file contract.e `"$repo`" x64 windows --json --symbol contract.total --parameter `"scale: i64`" --argument 1i64 > `"$parameterActual`""
 if ($LASTEXITCODE -ne 0) { throw "plan-add-parameter-file --json failed" }
-if ((Get-FileHash -Algorithm SHA256 -LiteralPath $parameterActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_parameter.expected.jsonl')).Hash) { throw "plan-add-parameter-file --json differs from the conformance corpus" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $parameterActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_parameter.x64-windows.expected.jsonl')).Hash) { throw "plan-add-parameter-file --json differs from the conformance corpus" }
 $parameterScratch = Join-Path $testBuild 'plan-parameter-scratch'
 if (Test-Path -LiteralPath $parameterScratch) { Remove-Item -LiteralPath $parameterScratch -Recurse -Force }
 New-Item -ItemType Directory -Force -Path (Join-Path $parameterScratch 'src') | Out-Null

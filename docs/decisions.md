@@ -9626,3 +9626,16 @@ image is the clean build's.
 
 Not yet: a fault in the manifest's own write, and a fault in the replace itself
 rather than before it.
+
+## D436 -- A plan's result names the program's snapshot
+
+H29's plans carried file-hash preconditions per edited source and nothing that
+named the program the plan was computed over; a `context-file` subject has
+named that program's `snapshot` since D407. Every plan's `result.data` --
+rename, rename of a field, add-parameter, change-signature, replace-expression
+-- now carries the same `snapshot`, so a harness pairs a plan with the context
+it read and refuses to apply one against another program even where the edited
+files happen to match. The plan goldens are re-pinned per host, as the context
+goldens are, since the target's `e.os` variant is part of the program.
+
+Not yet: an argument per call for the added parameter.

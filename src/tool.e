@@ -2712,7 +2712,9 @@ fn plan_replace_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, span_tex
     try flush(&out)
     try text(&out, "{\"record\":\"postcondition\",\"check\":\"check-file passes; the expression at the span has the type the replaced one had\"}")
     try flush(&out)
-    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":1,\"files\":1,\"complete\":true}}")
+    try text(&out, "{\"record\":\"result\",\"ok\":true,\"exit_code\":0,\"data\":{\"edits\":1,\"files\":1,\"complete\":true,\"snapshot\":")
+    try program_snapshot(&out, g)
+    try text(&out, "}}")
     ret flush(&out)
 }
 
@@ -3663,6 +3665,8 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
     try decimal(&out, files)
     try text(&out, ",\"complete\":")
     if !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, ",\"snapshot\":")
+    try program_snapshot(&out, g)
     try text(&out, "}}")
     ret flush(&out)
 }
@@ -3760,6 +3764,8 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
     try decimal(&out, files)
     try text(&out, ",\"complete\":")
     if !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, ",\"snapshot\":")
+    try program_snapshot(&out, g)
     try text(&out, "}}")
     ret flush(&out)
 }
@@ -3829,6 +3835,8 @@ fn plan_rename_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: 
     try decimal(&out, files)
     try text(&out, ",\"complete\":")
     if !c.explain_overflow { try text(&out, "true") } else { try text(&out, "false") }
+    try text(&out, ",\"snapshot\":")
+    try program_snapshot(&out, g)
     try text(&out, "}}")
     ret flush(&out)
 }
@@ -3928,6 +3936,8 @@ fn plan_rename_field_json(a: *mem.Arena, out: *Out, c: *check.Checker, g: *graph
     try decimal(out, files)
     try text(out, ",\"complete\":")
     if !c.explain_overflow { try text(out, "true") } else { try text(out, "false") }
+    try text(out, ",\"snapshot\":")
+    try program_snapshot(out, g)
     try text(out, "}}")
     ret flush(out)
 }
