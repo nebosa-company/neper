@@ -12448,6 +12448,13 @@ fn address_argument_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, modul
     if argument.kind != .UnaryExpr || c.tokens[usize(argument.token_start)].kind != .PunctAmp { ret (0usize, false) }
     let (inner_index, has_inner) = first_node_child(tree, argument)
     if !has_inner { ret (0usize, false) }
+    let (base_local, is_place) = place_base_local(c, g, tree, module_index, inner_index)
+    ret (base_local, is_place)
+}
+
+// The local at the base of a place -- `x`, `x.f`, `x[i]`, `x[a..b]` and their
+// nestings -- when there is one (D395).
+fn place_base_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, inner_index: usize) -> (usize, bool) {
     var base_index = inner_index
     while tree.nodes[base_index].kind == .FieldExpr || tree.nodes[base_index].kind == .BracketPostfix {
         let (deeper_index, has_deeper) = first_node_child(tree, tree.nodes[base_index])
@@ -13199,11 +13206,17 @@ fn resource_bind_local(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         c.affine_answer_valid = false
         ret ok
     }
-    // `let p = &x` (D393): `p` points at `x` until it is bound again.
+    // `let p = &x` (D393): `p` points at `x` until it is bound again. A slice bound
+    // from a place of `x` -- `x[a..b]`, `x.items`, `x` itself a slice -- views the
+    // same storage and is recorded the same way (D395).
     c.resources[local_index].points_to = 0usize
     if has_initializer && c.locals[local_index].ty.kind == .Pointer {
         let (pointed, is_address) = address_argument_local(c, g, tree, module_index, initializer_index)
         if is_address && pointed != local_index { c.resources[local_index].points_to = pointed + 1usize }
+    }
+    if has_initializer && c.locals[local_index].ty.kind == .Slice {
+        let (viewed, is_place) = place_base_local(c, g, tree, module_index, initializer_index)
+        if is_place && viewed != local_index && (c.locals[viewed].ty.kind == .Slice || c.locals[viewed].ty.kind == .Array || c.locals[viewed].ty.kind == .Named) { c.resources[local_index].points_to = viewed + 1usize }
     }
     let kind = affine_kind(c, c.locals[local_index].ty, 0usize)
     if kind == 0u8 { ret region_bind(c, g, tree, module_index, local_index, statement, initializer_index, has_initializer, from_call, call) }

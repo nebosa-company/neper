@@ -8776,3 +8776,20 @@ gains `reject/regions_alias`; the compiler and every fixture pass.
 
 Not yet: aliases through slices (`let s = x[..]`) and pointers stored into
 aggregates, which `points_to` does not record.
+
+## D395 -- A slice bound from a place of `x` is the same alias
+
+D393 and D394 followed a pointer local bound from `&x`; a slice local bound from
+a place of `x` -- `let head = counts.hits[0..2]`, `let s = x[..]`, `let items =
+c.items`, `let t = s` with `s` a slice -- views the same storage and was not
+followed: `head[0] = 5` while `counts` is lent to a running thread raced,
+unrefused, where `counts.hits[0] = 5` was E-SAFETY-0016. The binding records
+the base local of the place as `points_to` when that local is a slice, an
+array or a struct, and every rule that follows the pointer alias follows this
+one: the lending rule, the region rule and the view rule, `.len` excepted. A
+place through a pointer local (`p.items` with `p: *T`) is not recorded: its
+storage is not this frame's local. The corpus gains
+`reject/safety_thread_slice`; the compiler and every fixture pass.
+
+Not yet: pointers and slices stored into aggregates, and an alias whose target
+is rebound under it (`let s = x[..]; x = other`), which keeps pointing at `x`.
