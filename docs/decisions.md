@@ -10157,3 +10157,21 @@ host, over `generated_map.e`; both suites.
 
 Not yet: the nested map (D465) as an input too, and provenance through
 inlining.
+
+## D468 -- A `const`'s phase and value in the explain stream
+
+D463 exposed the phase of a settled `if` and left the `const`. Every `const`
+the operand module declares that the checker settled is now a `phase` record
+of `explain-file`, after the sites' records and before the layouts:
+`construct: "const"`, the symbol, the type the constant took and the value the
+checker computed -- a decimal, or `true`/`false` for a bool -- and the
+declaration's span. It is read off the checker's constant table when the
+stream is written, not recorded as the constant is evaluated, since the fact
+is the settled value and not the evaluation; a constant the checker put off
+or could not settle has no record. The seeded `target` constants are left out
+as the seeded enums are. `explain_fold.e` gains three constants -- a product,
+its negation and a comparison -- and the schema takes the fields; both suites.
+
+Not yet: the interpreter's step count per constant (the counter is reset per
+call and the checker has no field left for a total) and the phase of an
+expression the lowering folds.

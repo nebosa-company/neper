@@ -278,7 +278,11 @@ the same way written once:
   a `meta` question): `construct` (`if`), `phase` (`comptime`), `taken` (whether
   the first arm is the one that stands; the other is not code), and `span`, the
   `if`. A template's `if` that folds each way in different instances is two
-  records, `false` first.
+  records, `false` first. And, after every site's record (D468), one per `const`
+  the operand module declares and the checker settled: `construct` (`const`),
+  `phase` (`comptime`), `symbol` (`module.NAME`), `type`, `value` (a decimal, or
+  `true`/`false`) and `span`, the declaration -- what the source cannot show
+  without evaluating it.
 - `layout` (D463, H06) — after every site's record, one per aggregate the operand
   module declares or instantiates, as the target lays it out: `type`
   (`module.Name`), `kind` (`struct`, `union`, `tagged-union`, `enum`), `size`,

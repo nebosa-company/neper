@@ -2227,6 +2227,40 @@ fn explain_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, failed: bool)
         written += 1usize
     }
     if failed { ret ok }
+    // The constants' phase (D468, H06): every `const` the operand declares that the
+    // checker settled before the program runs, with its type and value -- what a
+    // reader of the source cannot see without evaluating it.
+    var constant_at = 0usize
+    while constant_at < c.constant_count {
+        let constant = c.constants[constant_at]
+        if constant.module_index == 0usize && constant.token.end != 0usize && constant.state == 2u8 {
+            try text(&out, "{\"record\":\"phase\",\"construct\":\"const\",\"phase\":\"comptime\",\"symbol\":")
+            try byte(&out, 34u8)
+            try text(&out, g.modules[0usize].name)
+            try byte(&out, 46u8)
+            try text(&out, constant.name)
+            try byte(&out, 34u8)
+            try text(&out, ",\"type\":")
+            try quoted_type(&out, c, g, constant.ty)
+            try text(&out, ",\"value\":\"")
+            if constant.ty.kind == .Bool {
+                if constant.value.magnitude != 0usize { try text(&out, "true") } else { try text(&out, "false") }
+            } else {
+                if constant.value.negative { try byte(&out, 45u8) }
+                try decimal(&out, constant.value.magnitude)
+            }
+            try text(&out, "\",\"span\":")
+            let (constant_root, constant_relative) = source_identity_of(g, g.modules[0usize].path)
+            let (constant_path, constant_path_error) = manifest_slashes(a, constant_relative)
+            if constant_path_error != ok { ret constant_path_error }
+            out.lines = g.modules[0usize].lines
+            try point_span(&out, constant_root, constant_path, g.modules[0usize].text, constant.token)
+            try byte(&out, 125u8)
+            try flush(&out)
+            written += 1usize
+        }
+        constant_at += 1usize
+    }
     // The layouts (D463, H06): every aggregate the operand declares, and every
     // instance of one, as the target lays it out -- size, alignment and each
     // field's offset and size; an enum's members with their values.

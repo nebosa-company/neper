@@ -199,9 +199,10 @@
     },
     "phase": {
       "type":"object","additionalProperties":false,
-      "required":["record","construct","phase","taken","span"],
+      "required":["record","construct","phase","span"],
       "properties":{
-        "record":{"const":"phase"},"construct":{"enum":["if"]},"phase":{"enum":["comptime"]},"taken":{"type":"boolean"},
+        "record":{"const":"phase"},"construct":{"enum":["if","const"]},"phase":{"enum":["comptime"]},"taken":{"type":"boolean"},
+        "symbol":{"type":"string"},"type":{"type":"string"},"value":{"type":"string"},
         "span":{"$ref":"#/$defs/span"}
       }
     },
