@@ -12890,6 +12890,14 @@ fn producer_borrowed(c: *Checker, function: Function) -> bool {
 // The lent local a place reaches through a pointer alias (D393): the base name of
 // the place, a local bound from `&x`, with `x` lent to a running thread.
 fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    let (pointed, has_target) = alias_target(c, g, tree, module_index, node_index)
+    if !has_target || c.resources[pointed].lent_to == 0usize { ret (0usize, false) }
+    ret (pointed, true)
+}
+
+// The target of a place's pointer alias (D393): the base name, a local bound from
+// `&x`, and `x`.
+fn alias_target(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
     var base_index = node_index
     while tree.nodes[base_index].kind == .FieldExpr || tree.nodes[base_index].kind == .BracketPostfix || tree.nodes[base_index].kind == .UnaryExpr {
         let (deeper_index, has_deeper) = first_node_child(tree, tree.nodes[base_index])
@@ -12903,7 +12911,16 @@ fn alias_of_lent(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: 
     let (pointer_local, found) = find_local(c, g.modules[module_index].text[token.start..token.end])
     if !found || c.resources[pointer_local].points_to == 0usize { ret (0usize, false) }
     let pointed = c.resources[pointer_local].points_to - 1usize
-    if pointed >= c.local_count || c.resources[pointed].lent_to == 0usize { ret (0usize, false) }
+    if pointed >= c.local_count { ret (0usize, false) }
+    ret (pointed, true)
+}
+
+// The alias's target when a region reset or a container's change made it dangle (D394).
+fn alias_of_dangling(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index: usize, node_index: usize) -> (usize, bool) {
+    let (pointed, has_target) = alias_target(c, g, tree, module_index, node_index)
+    if !has_target || c.resources[pointed].dangling == 0u8 { ret (0usize, false) }
+    let state = c.resources[pointed].state
+    if state != resource_moved && state != resource_maybe { ret (0usize, false) }
     ret (pointed, true)
 }
 
@@ -12990,6 +13007,19 @@ fn resource_uses_under(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_i
         let (lent_local, through_alias) = alias_of_lent(c, g, tree, module_index, node_index)
         if through_alias {
             record_failure_related(c, module_index, node, .ThreadShared, c.locals[lent_local].name, line_detail(c, g, module_index, c.resources[lent_local].lent_at), c.resources[lent_local].lent_at)
+            ret ResourceViolation
+        }
+        // The same alias into storage a region reset or a container's change took
+        // away (D394): the read is the local's, and refused as its own would be --
+        // except `.len`, which reads no memory (D354).
+        let (gone_local, through_gone) = alias_of_dangling(c, g, tree, module_index, node_index)
+        var reads_length = false
+        if through_gone && node.kind == .FieldExpr {
+            let (member, has_member) = field_expression_name(c, g.modules[module_index].text, tree, node)
+            reads_length = has_member && same(member, "len")
+        }
+        if through_gone && !reads_length {
+            record_failure_related(c, module_index, node, dangling_kind(c, gone_local), c.locals[gone_local].name, line_detail(c, g, module_index, c.resources[gone_local].acquired), c.resources[gone_local].acquired)
             ret ResourceViolation
         }
     }
@@ -13752,10 +13782,17 @@ fn resource_assign(c: *Checker, g: *graph.Graph, tree: *parse.Tree, module_index
         c.consuming_store = 0usize
         ret ResourceViolation
     }
-    // A store through a pointer bound from `&x` while `x` is lent (D393).
+    // A store through a pointer bound from `&x` while `x` is lent (D393), or after
+    // `x` was taken away by a reset or a container's change (D394).
     let (aliased, through_alias) = alias_of_lent(c, g, tree, module_index, place_index)
     if through_alias {
         record_failure_related(c, module_index, statement, .ThreadShared, c.locals[aliased].name, line_detail(c, g, module_index, c.resources[aliased].lent_at), c.resources[aliased].lent_at)
+        c.consuming_store = 0usize
+        ret ResourceViolation
+    }
+    let (gone, through_gone) = alias_of_dangling(c, g, tree, module_index, place_index)
+    if through_gone {
+        record_failure_related(c, module_index, statement, dangling_kind(c, gone), c.locals[gone].name, line_detail(c, g, module_index, c.resources[gone].acquired), c.resources[gone].acquired)
         c.consuming_store = 0usize
         ret ResourceViolation
     }

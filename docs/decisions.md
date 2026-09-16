@@ -8760,3 +8760,19 @@ sees is the one the function itself wrote. The corpus gains
 Not yet: aliases through slices (`let s = x[..]`), pointers stored into
 aggregates, and the same following for the region and view rules (a `*p`
 into reset storage), which the `points_to` record now makes possible.
+
+## D394 -- A pointer bound from `&x` reaches storage a reset took away
+
+D393 recorded which local a pointer local points at and let the lending rule
+follow it; the region and view rules (D354) did not, so `let first =
+&cells[0]`, a reset of the region `cells` came from, then `first.hits` read
+the storage the reset took away, unrefused, while `cells[0].hits` was
+E-SAFETY-0013. Now a `*p`, `p.field` or `p[i]` read, and a store to such a
+place, with `p` an alias of a local the reset or the container's change made
+dangle, is refused as the local's own use would be -- E-SAFETY-0013 or 0014 by
+the same `dangling_kind`, naming the local and its acquisition -- with `.len`
+excepted, as it is on the local (D354): a length reads no memory. The corpus
+gains `reject/regions_alias`; the compiler and every fixture pass.
+
+Not yet: aliases through slices (`let s = x[..]`) and pointers stored into
+aggregates, which `points_to` does not record.

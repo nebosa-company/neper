@@ -52,6 +52,11 @@ question, which this subset does not ask (section 5).
 The arms of an `if` join as H01's states do: a value reset on one path and not the
 other is dangling-maybe, which no use accepts.
 
+A pointer local bound from `&x` -- `let first = &cells[0]` -- is `x` by another
+name (D393, D394): once `x` dangles, `*first`, `first.field` and `first[i]`, read
+or stored to, are refused as `x`'s own use is, naming `x`; `first.len` is not,
+for the reason `x.len` is not. A pointer from anywhere else is not followed.
+
 ## 3. Views of containers
 
 A **view** is a local bound from a call that received `&c` -- the address of a
