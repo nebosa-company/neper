@@ -440,7 +440,11 @@ insertion point being the list's closing `)`; the postcondition says the signatu
 and the use count re-checking must find. A function named as a value (a thread
 entry, a callback) or chosen by a protocol cannot be migrated -- its type is its
 signature -- and the plan is refused with an `E-CLI-9999` naming the first such
-site and exit 2, so no half-migration is emitted. `neper
+site and exit 2, so no half-migration is emitted. `--arguments FILE` in place of
+`--argument EXPR` (D455, H29) gives each call its own argument: one `LINE:COL
+EXPR` line per call, the position the call's name as `uses-file` spells it, and
+a `* EXPR` line for every other call; a call the file leaves out with no `*`
+line refuses the plan, naming the call's line. `neper
 plan-replace-expression-file PATH ROOT ARCH OS --json --span START:END --with EXPR`
 (D414, H29) plans one expression's replacement: the bytes START..END of the
 operand must be exactly one expression node of its tree, else the plan is

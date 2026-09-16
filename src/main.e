@@ -7599,7 +7599,18 @@ fn query_file(a: *mem.Arena, report: *Sink, args: []str, kind: usize) -> err {
     }
     if kind == 3usize { query_error = tool.uses_json(a, &checker, &loaded, args[8usize]) }
     if kind == 4usize { query_error = tool.plan_rename_json(a, &checker, &loaded, args[8usize], args[10usize]) }
-    if kind == 6usize { query_error = tool.plan_parameter_json(a, &checker, &loaded, args[8usize], args[10usize], args[12usize]) }
+    if kind == 6usize {
+        var argument = args[12usize]
+        var overrides = ""
+        if same(args[11usize], "--arguments") {
+            // The file of per-call arguments (D455): the `*` line is the default.
+            let (overrides_text, overrides_error) = source.load(a, args[12usize])
+            if overrides_error != ok { ret overrides_error }
+            overrides = overrides_text
+            argument = ""
+        }
+        query_error = tool.plan_parameter_json(a, &checker, &loaded, args[8usize], args[10usize], argument, overrides)
+    }
     // The batch (D409, H16): one program loaded, resolved and checked, and every
     // line of the batch file answered from it as its own stream, in order.
     if kind == 7usize { query_error = query_batch(a, &checker, &loaded, args[8usize], target_text) }
@@ -7994,7 +8005,8 @@ fn dispatch(a: *mem.Arena, args: []str) -> err {
     // `query-batch PATH ROOT ARCH OS --json --batch FILE` (D409, H16): many queries, one check.
     if args.len == 9usize && same(args[1usize], "query-batch") && same(args[6usize], "--json") && same(args[7usize], "--batch") { ret query_file(a, &report, args, 7usize) }
     // `plan-add-parameter-file PATH ROOT ARCH OS --json --symbol module.name --parameter "name: T" --argument EXPR` (D406, H17).
-    if args.len == 13usize && same(args[1usize], "plan-add-parameter-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--parameter") && same(args[11usize], "--argument") && args[10usize].len != 0usize && args[12usize].len != 0usize { ret query_file(a, &report, args, 6usize) }
+    // `--argument EXPR` for every call, or `--arguments FILE` per call (D455, H29).
+    if args.len == 13usize && same(args[1usize], "plan-add-parameter-file") && same(args[6usize], "--json") && same(args[7usize], "--symbol") && same(args[9usize], "--parameter") && (same(args[11usize], "--argument") || same(args[11usize], "--arguments")) && args[10usize].len != 0usize && args[12usize].len != 0usize { ret query_file(a, &report, args, 6usize) }
     // `check-file PATH ROOT ARCH OS [--json]`: with `--json`, the stream of docs/tooling.md
     // -- header, a diagnostic record each, the result -- on stdout (D228).
     if args.len >= 6usize && same(args[1usize], "check-file") && check_flags(a, &report, args) {

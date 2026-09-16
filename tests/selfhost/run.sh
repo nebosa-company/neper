@@ -2585,6 +2585,9 @@ python3 "$repo/scripts/apply_plan.py" "$test_build/conformance-tools-plan-parame
 parameter_checked=$($test_build/neper-self check-file "$parameter_scratch/src/contract.e" "$repo" x64 linux)
 [ "$parameter_checked" = 'module check ok' ]
 grep -q 'fn total(c: \*const Counter, scale: i64) -> i64' "$parameter_scratch/src/contract.e"
+# An argument per call (D455, H29).
+(cd "$conformance_root/tools" && $test_build/neper-self plan-add-parameter-file contract.e "$repo" x64 linux --json --symbol contract.total --parameter "scale: i64" --arguments parameter_sites.txt > "$test_build/conformance-tools-plan-parameter-sites.jsonl")
+cmp -s "$test_build/conformance-tools-plan-parameter-sites.jsonl" "$conformance_root/tools/plan_parameter_sites.x64-linux.expected.jsonl" || { echo "plan-add-parameter-file --arguments differs from the conformance corpus" >&2; exit 1; }
 parameter_refused=0
 (cd "$conformance_root/tools" && $test_build/neper-self plan-add-parameter-file contract.e "$repo" x64 linux --json --symbol contract.bump --parameter 'by: i64' --argument 1i64 > "$test_build/conformance-tools-plan-parameter-refused.jsonl") || parameter_refused=$?
 [ "$parameter_refused" -eq 2 ]

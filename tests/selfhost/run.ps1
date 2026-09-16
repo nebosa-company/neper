@@ -2258,6 +2258,12 @@ if ($LASTEXITCODE -ne 0) { throw 'the add-parameter plan did not apply' }
 $parameterChecked = & $compiler check-file (Join-Path $parameterScratch 'src/contract.e') $repo 'x64' 'windows'
 if ($LASTEXITCODE -ne 0 -or $parameterChecked -ne 'module check ok') { throw "the program with the added parameter does not check: $parameterChecked" }
 if (-not (Select-String -LiteralPath (Join-Path $parameterScratch 'src/contract.e') -Pattern 'fn total\(c: \*const Counter, scale: i64\) -> i64' -Quiet)) { throw 'the added parameter is not last in the declaration' }
+# An argument per call (D455, H29): `--arguments FILE` names the call at 28:17 and a
+# default for the rest; the plan carries `2i64` at that call.
+$parameterSitesActual = Join-Path $testBuild 'conformance-tools-plan-parameter-sites.jsonl'
+cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-add-parameter-file contract.e `"$repo`" x64 windows --json --symbol contract.total --parameter `"scale: i64`" --arguments parameter_sites.txt > `"$parameterSitesActual`""
+if ($LASTEXITCODE -ne 0) { throw "plan-add-parameter-file --arguments failed" }
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $parameterSitesActual).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $conformanceRoot 'tools/plan_parameter_sites.x64-windows.expected.jsonl')).Hash) { throw "plan-add-parameter-file --arguments differs from the conformance corpus" }
 $parameterRefused = Join-Path $testBuild 'conformance-tools-plan-parameter-refused.jsonl'
 cmd /c "cd /d `"$(Join-Path $conformanceRoot 'tools')`" && `"$compiler`" plan-add-parameter-file contract.e `"$repo`" x64 windows --json --symbol contract.bump --parameter `"by: i64`" --argument 1i64 > `"$parameterRefused`""
 if ($LASTEXITCODE -ne 2) { throw "a plan over a function named as a value did not exit 2 (got $LASTEXITCODE)" }

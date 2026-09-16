@@ -9925,3 +9925,18 @@ without setting one. Both suites build the contract fixture under the flags,
 find the lowering's record, and validate the stream against the schema.
 
 Not yet: progress inside a phase (a worker's modules), and sequence numbers.
+
+## D455 -- An argument per call for the added parameter
+
+H29's add-parameter plan gave every call the one `--argument`; a migration
+whose calls want different values had to be planned and then edited by hand.
+`plan-add-parameter-file ... --arguments FILE` takes a file of `LINE:COL EXPR`
+lines -- the call's name as `uses-file` spells its span -- and one `* EXPR`
+line for the rest; a call the file leaves out with no `*` line refuses the
+plan, naming the call's line, since a migration half done is the wrong kind
+of edit. `--argument EXPR` stays as it was. The corpus gains
+`tools/parameter_sites`: `2i64` at the one call of `contract.total`, `1i64`
+for the rest, per host.
+
+Not yet: the arguments by the call's expression rather than its position,
+which a source edit between the query and the apply moves.

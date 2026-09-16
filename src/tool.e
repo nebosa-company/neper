@@ -3850,7 +3850,47 @@ fn plan_signature_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
     ret flush(&out)
 }
 
-fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, parameter: str, argument: str) -> err {
+// The argument for one call site (D455, H29): the line of `overrides` -- the text
+// of `--arguments FILE`, one `LINE:COL EXPR` per line and `* EXPR` for the rest --
+// whose position is the call's, else the `*` line, else `argument`; the position is
+// the call's name as `uses-file` spells it.
+fn site_argument(overrides: str, line: usize, column: usize, argument: str) -> (str, bool) {
+    if overrides.len == 0usize { ret (argument, true) }
+    var fallback = ""
+    var has_fallback = false
+    var start = 0usize
+    var at = 0usize
+    while at <= overrides.len {
+        if at == overrides.len || overrides[at] == 10u8 {
+            var item = overrides[start..at]
+            if item.len != 0usize && item[item.len - 1usize] == 13u8 { item = item[0usize..item.len - 1usize] }
+            var space = 0usize
+            while space < item.len && item[space] != 32u8 { space += 1usize }
+            if space < item.len {
+                let key = item[0usize..space]
+                let value = item[space + 1usize..item.len]
+                if key.len == 1usize && key[0usize] == 42u8 {
+                    fallback = value
+                    has_fallback = true
+                } else {
+                    var colon = 0usize
+                    while colon < key.len && key[colon] != 58u8 { colon += 1usize }
+                    if colon < key.len {
+                        let (key_line, line_ok) = plan_decimal(key[0usize..colon])
+                        let (key_column, column_ok) = plan_decimal(key[colon + 1usize..key.len])
+                        if line_ok && column_ok && key_line == line && key_column == column { ret (value, true) }
+                    }
+                }
+            }
+            start = at + 1usize
+        }
+        at += 1usize
+    }
+    if has_fallback { ret (fallback, true) }
+    ret ("", false)
+}
+
+fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subject: str, parameter: str, argument: str, overrides: str) -> err {
     let (storage, storage_error) = mem.alloc[u8](a, c.explain_count * 512usize + 65536usize)
     if storage_error != ok { ret storage_error }
     var out: Out = zero
@@ -3921,7 +3961,36 @@ fn plan_parameter_json(a: *mem.Arena, c: *check.Checker, g: *graph.Graph, subjec
         var replacement_storage: [512]u8 = zero
         var replacement_at = 0usize
         if !empty { replacement_at = nptest_copy(replacement_storage[..], replacement_at, ", ") }
-        if sites.kinds[site] == 0u8 { replacement_at = nptest_copy(replacement_storage[..], replacement_at, parameter) } else { replacement_at = nptest_copy(replacement_storage[..], replacement_at, argument) }
+        if sites.kinds[site] == 0u8 {
+            replacement_at = nptest_copy(replacement_storage[..], replacement_at, parameter)
+        } else {
+            // The call's own argument (D455): by the call's line and column, else the default.
+            var name_token: lex.Token = zero
+            name_token.start = sites.offsets[site]
+            name_token.end = sites.offsets[site]
+            let name_at = lex.span_of(module.text, module.lines, name_token)
+            let (site_text, has_site_text) = site_argument(overrides, name_at.line, name_at.column, argument)
+            if !has_site_text {
+                var message_storage: [256]u8 = zero
+                var message_at = nptest_copy(message_storage[..], 0usize, "no argument for the call at line ")
+                var digits: [24]u8 = zero
+                var digit_at = digits.len
+                var rest = name_at.line
+                if rest == 0usize {
+                    digit_at = digit_at - 1usize
+                    digits[digit_at] = 48u8
+                }
+                while rest > 0usize {
+                    digit_at = digit_at - 1usize
+                    digits[digit_at] = 48u8 + u8(rest % 10usize)
+                    rest = rest / 10usize
+                }
+                message_at = nptest_copy(message_storage[..], message_at, digits[digit_at..digits.len])
+                message_at = nptest_copy(message_storage[..], message_at, " and no `*` line: no change is planned")
+                ret plan_refused(&out, message_storage[0usize..message_at])
+            }
+            replacement_at = nptest_copy(replacement_storage[..], replacement_at, site_text)
+        }
         try quoted(&out, replacement_storage[0usize..replacement_at])
         try byte(&out, 125u8)
         try flush(&out)
