@@ -9166,3 +9166,15 @@ the earlier figures carried): the warm build of the compiler is 116-118 ms,
 against 126-140 with the xxHash64 identity, the same artifacts and the same
 source. The artifact field, the manifest reason and both suites' checks are
 unchanged.
+
+## D412 -- `--stats` after a warm build
+
+`--stats` on a warm incremental build ended in `E-TOOL-9999: parse.InvalidSyntax`
+after the executable was written: the stats count nodes by walking every
+module's tree, and a module the hot loader kept was neither lexed nor parsed
+(D322), so the parse over its empty token list failed. The counts are the
+program's, so the stats front-end such a module themselves -- lines, tokens,
+tree, on the main thread, for `--stats` alone -- and the rows come out: 35
+files, 331,946 nodes, `bodies checked` 0, `modules lowered` 0, wall 91 ms for
+the compiler's own warm build. Both suites run one warm build under `--stats`
+and read the zero.

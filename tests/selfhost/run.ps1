@@ -1676,6 +1676,10 @@ foreach ($hotMode in @('--release', '--time')) {
     & python (Join-Path $repo 'scripts/check_incremental.py') $hotManifest 'main=kept:stable' 'dep=kept:stable' 'e.os=kept:stable' 'work.bodies_checked=0' 'work.modules_lowered=0' 'work.functions_lowered=0'
     if ($LASTEXITCODE -ne 0) { throw "the warm hot build's manifest does not say every module was kept stable and no work was done ($hotMode)" }
     if ((Get-FileHash -Algorithm SHA256 -LiteralPath $hotExe).Hash -ne (Get-FileHash -Algorithm SHA256 -LiteralPath $hotClean).Hash) { throw "a warm hot build is not the clean build ($hotMode)" }
+    # `--stats` on a warm build (D412): the kept modules are parsed for the counts, and
+    # the work rows say nothing was done.
+    $hotStats = & $compiler emit-executable $hotMain $repo 'x64' 'windows' $hotExe $hotMode --incremental --stats 2>&1
+    if ($LASTEXITCODE -ne 0 -or ($hotStats -join "`n") -notmatch 'bodies checked \| 0') { throw "--stats on a warm build failed or did not report zero bodies checked ($hotMode)" }
     # The compiler is an identity (D398, H15): a warm build by another compiler
     # executable -- this one with a byte appended -- rebuilds every module as
     # `compiler-changed` and is the clean build; the original then rebuilds them back.

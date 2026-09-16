@@ -240,10 +240,16 @@ type Counts = struct {
 }
 
 // Every module parsed once more, for what only the tree knows.
-fn count_nodes(r: *resolve.Resolver, g: *graph.Graph) -> (Counts, err) {
+fn count_nodes(a: *mem.Arena, r: *resolve.Resolver, g: *graph.Graph) -> (Counts, err) {
     var counts: Counts = zero
     var module_index = 0usize
     while module_index < g.count {
+        // A module a hot build kept was neither lexed nor parsed (D322); the counts
+        // are the program's, so it is here (D412), for `--stats` alone.
+        if !g.modules[module_index].has_tree && g.modules[module_index].tokens.len == 0usize {
+            let front_error = graph.scan_and_parse(a, g, module_index)
+            if front_error != ok { ret (counts, front_error) }
+        }
         var tree: parse.Tree = zero
         let parse_error = graph.parse_module(g, module_index, &tree)
         if parse_error != ok { ret (counts, parse_error) }
@@ -317,7 +323,7 @@ fn print(a: *mem.Arena, b: *Build, g: *graph.Graph, r: *resolve.Resolver, c: *ch
         if r.symbols[symbol_at].kind == .Error { errors += 1usize }
         symbol_at += 1usize
     }
-    let (counts, counts_error) = count_nodes(r, g)
+    let (counts, counts_error) = count_nodes(a, r, g)
     if counts_error != ok { ret counts_error }
 
     try out("Metric | Value\n")
