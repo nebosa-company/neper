@@ -1,0 +1,641 @@
+{
+ "grammar_revision": 3,
+ "grammar_sha256": "2a843af7026f992f6024d41babf8e32700fe359f20ef75c92548f92ab902bab3",
+ "schema": "neper-tokenizer-profile",
+ "tokenizer": {
+  "encoding": "o200k_base",
+  "library": "tiktoken",
+  "vocabulary_size": 200019
+ },
+ "version": 1,
+ "vocabulary": {
+  "!": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "!=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "\"": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "\"#": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "\"##": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "\"###": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "\"####": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "\"#####": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "\"######": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "\"#######": {
+   "after_space": 3,
+   "line_start": 3
+  },
+  "\"########": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "%": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "%=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "&": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "&&": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "&=": {
+   "after_space": 1,
+   "line_start": 2
+  },
+  "'": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "(": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  ")": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "*": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "*%": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "*%=": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "*=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "*const": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "*mem.Arena": {
+   "after_space": 4,
+   "line_start": 4
+  },
+  "+": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "+%": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "+%=": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "+=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  ",": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "-": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "-%": {
+   "after_space": 2,
+   "line_start": 1
+  },
+  "-%=": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "-=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "->": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "-> (i32, err)": {
+   "after_space": 7,
+   "line_start": 7
+  },
+  "-> err": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  ".": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "..": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "...": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  ".len": {
+   "after_space": 2,
+   "line_start": 1
+  },
+  "/": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "//": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "///": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "/=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "0b": {
+   "after_space": 3,
+   "line_start": 2
+  },
+  "0o": {
+   "after_space": 3,
+   "line_start": 2
+  },
+  "0usize": {
+   "after_space": 3,
+   "line_start": 2
+  },
+  "0x": {
+   "after_space": 3,
+   "line_start": 2
+  },
+  "1usize": {
+   "after_space": 3,
+   "line_start": 2
+  },
+  ":": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "<": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "<<": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "<<=": {
+   "after_space": 1,
+   "line_start": 2
+  },
+  "<=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "==": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  ">": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  ">=": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  ">>": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  ">>=": {
+   "after_space": 1,
+   "line_start": 2
+  },
+  "@": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "@nocheck {": {
+   "after_space": 4,
+   "line_start": 4
+  },
+  "@unsafe": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "E": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "[": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "[..]": {
+   "after_space": 3,
+   "line_start": 2
+  },
+  "[]const u8": {
+   "after_space": 4,
+   "line_start": 4
+  },
+  "[]u8": {
+   "after_space": 3,
+   "line_start": 3
+  },
+  "\\\"": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "\\'": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "\\0": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "\\\\": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "\\n": {
+   "after_space": 2,
+   "line_start": 1
+  },
+  "\\r": {
+   "after_space": 2,
+   "line_start": 1
+  },
+  "\\t": {
+   "after_space": 2,
+   "line_start": 1
+  },
+  "\\x": {
+   "after_space": 2,
+   "line_start": 1
+  },
+  "]": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "^": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "^=": {
+   "after_space": 1,
+   "line_start": 2
+  },
+  "_": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "as": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "bf16": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "bool": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "break": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "case": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "const": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "continue": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "default": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "defer": {
+   "after_space": 1,
+   "line_start": 2
+  },
+  "e": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "else": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "enum": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "err": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "error": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "extern": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "f16": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "f32": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "f64": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "false": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "fn": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "fn main(a: *mem.Arena, args: []str) -> err {": {
+   "after_space": 17,
+   "line_start": 17
+  },
+  "for": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "i16": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "i32": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "i64": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "i8": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "if": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "in": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "isize": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "let": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "let (": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "mem.alloc[u8](a, n)": {
+   "after_space": 9,
+   "line_start": 9
+  },
+  "nil": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "nocheck": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "ok": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "own": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "r\"": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "r#\"": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "r##\"": {
+   "after_space": 3,
+   "line_start": 3
+  },
+  "r###\"": {
+   "after_space": 3,
+   "line_start": 3
+  },
+  "r####\"": {
+   "after_space": 3,
+   "line_start": 3
+  },
+  "r#####\"": {
+   "after_space": 3,
+   "line_start": 3
+  },
+  "r######\"": {
+   "after_space": 3,
+   "line_start": 3
+  },
+  "r#######\"": {
+   "after_space": 4,
+   "line_start": 4
+  },
+  "r########\"": {
+   "after_space": 3,
+   "line_start": 3
+  },
+  "resource": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "ret": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "ret (": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "ret ok": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "shared": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "str": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "struct": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "switch": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "true": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "try": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "type": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "u16": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "u32": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "u64": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "u8": {
+   "after_space": 2,
+   "line_start": 2
+  },
+  "undef": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "union": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "union enum u8": {
+   "after_space": 4,
+   "line_start": 4
+  },
+  "unreachable": {
+   "after_space": 1,
+   "line_start": 2
+  },
+  "use": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "usize": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "var": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "when": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "while": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "zero": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "{": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "|": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "|=": {
+   "after_space": 1,
+   "line_start": 2
+  },
+  "||": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "}": {
+   "after_space": 1,
+   "line_start": 1
+  },
+  "~": {
+   "after_space": 1,
+   "line_start": 1
+  }
+ }
+}

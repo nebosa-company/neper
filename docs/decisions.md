@@ -8301,3 +8301,44 @@ carry the signatures and the resource facts; a card-shaped projection is the
 next step); planned/present/verified marking of APIs (`modules.json` knows it,
 the card does not); examples compiled by the suite (the card's examples are
 prose today); a card per language version once there are two.
+
+## D375 -- The tokenizer profile: what the vocabulary costs, versioned with the grammar
+
+H26 asks for a grammar-versioned tokenizer profile per supported model family --
+a documented BPE extension where one is deployable, otherwise a canonical
+vocabulary table -- so that token cost is a design input rather than a number
+measured after the fact, and so that the R03 report reproduces its numbers from
+the profile and the frozen corpus. No BPE extension is deployable: the families
+in reach have fixed public tokenizers. So the profile is the table.
+
+`benchmarks/tokens/profile.py` writes `profile-<encoding>.json` for the tokenizers
+tiktoken publishes -- `cl100k_base` (the GPT-4 family) and `o200k_base` (GPT-4o
+and after); a family without a public tokenizer gets no invented profile -- each
+carrying the grammar revision and the grammar's SHA-256, the tokenizer identity
+and, for every terminal of the grammar's productions plus the composite forms a
+generator writes most, the model-token cost of that spelling at a line start and
+after a space. `--measure` tokenizes a corpus, counts the compiler's lexical
+tokens over it, and reports model tokens per lexical token, per non-comment line
+and per byte, and the share of the corpus the profile's vocabulary accounts for.
+
+The numbers, on the conformance `accept` corpus (six files, 2,053 lexical
+tokens): 1.27 model tokens per lexical token in both families, 9.8 per
+non-comment line, 0.30 per byte; 69% of the lexical tokens are profile
+vocabulary and cost 58% of the model tokens. On `lib/e` (112 files, 311k lexical
+tokens): 2.47 per lexical token and 21.7 per line, the difference being comments
+and data tables. What the table says about the design: every keyword is one
+token in both families (`fn`, `ret`, `try`, `let`, `var`, `err`, `ok`, `zero`,
+`undef`, `resource`, `unreachable`, `usize`, `bool`, `str`); the fixed-width
+type names are two (`u8`, `u32`, `i32`, `f32` -- the digits split), so
+`[]const u8` is four and `union enum u8` four; a typed integer literal is three
+(`0usize`, `1usize`), which every index loop pays twice per line; `@unsafe` is
+two and `@nocheck {` four. The spellings are not changed for it -- the
+verification plan's rule stands that a spelling is not called cheaper unless the
+same tasks improve total tokens across the supported families -- but the cost is
+on the page now, and a future revision that considers an untyped index literal
+or a shorter attribute form has its number.
+
+Not yet, of H26: a profile for the Claude and Gemini families (no public
+tokenizer; the numbers there are measured through the API in the R03 report, not
+predicted); the profile stamped into the build manifest; the per-form table in
+the language card.
